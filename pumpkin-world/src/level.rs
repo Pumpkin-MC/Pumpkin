@@ -11,8 +11,8 @@ use tokio::{
 
 use crate::{
     chunk::{
-        anvil::AnvilChunkFormat, ChunkData, ChunkParsingError, ChunkReader, ChunkReadingError,
-        ChunkWriter,
+        anvil::AnvilChunkFormat, ChunkBlocks, ChunkData, ChunkParsingError, ChunkReader,
+        ChunkReadingError, ChunkWriter,
     },
     generation::{get_world_gen, Seed, WorldGenerator},
     lock::{anvil::AnvilLevelLocker, LevelLocker},
@@ -281,7 +281,11 @@ impl Level {
                             }
                         }
                         .unwrap_or_else(|| {
-                            Arc::new(RwLock::new(world_gen.generate_chunk(chunk_pos)))
+                            // Arc::new(RwLock::new(world_gen.generate_chunk(chunk_pos)))
+                            Arc::new(RwLock::new(ChunkData {
+                                blocks: ChunkBlocks::default(),
+                                position: chunk_pos,
+                            }))
                         });
 
                     if let Some(data) = loaded_chunks.get(&chunk_pos) {
