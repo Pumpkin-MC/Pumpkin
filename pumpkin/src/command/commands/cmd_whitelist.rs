@@ -1,4 +1,5 @@
 use crate::command::tree_builder::literal;
+use crate::data::player_profile::PlayerProfile;
 use crate::data::whitelist_data::WHITELIST_CONFIG;
 use crate::server::Server;
 use crate::{
@@ -11,7 +12,6 @@ use crate::{
     data::{ReloadJSONConfiguration, SaveJSONConfiguration},
 };
 use async_trait::async_trait;
-use pumpkin_config::player_profile::PlayerProfile;
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_core::text::TextComponent;
 use pumpkin_core::PermissionLvl;

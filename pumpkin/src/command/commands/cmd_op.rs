@@ -1,3 +1,4 @@
+use crate::data::op::Op;
 use crate::{
     command::{
         args::{arg_players::PlayersArgumentConsumer, Arg, ConsumedArgs},
@@ -8,7 +9,7 @@ use crate::{
     data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
 };
 use async_trait::async_trait;
-use pumpkin_config::{op::Op, BASIC_CONFIG};
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_core::text::TextComponent;
 use CommandError::InvalidConsumption;
 

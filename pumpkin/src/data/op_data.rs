@@ -1,9 +1,10 @@
 use std::{path::Path, sync::LazyLock};
 
-use pumpkin_config::op;
 use serde::{Deserialize, Serialize};
 
 use super::{LoadJSONConfiguration, SaveJSONConfiguration};
+
+use crate::data::op;
 
 pub static OPERATOR_CONFIG: LazyLock<tokio::sync::RwLock<OperatorConfig>> =
     LazyLock::new(|| tokio::sync::RwLock::new(OperatorConfig::load()));

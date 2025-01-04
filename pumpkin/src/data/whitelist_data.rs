@@ -1,9 +1,10 @@
 use std::{path::Path, sync::LazyLock};
 
-use pumpkin_config::player_profile;
 use serde::{Deserialize, Serialize};
 
 use super::{LoadJSONConfiguration, ReloadJSONConfiguration, SaveJSONConfiguration};
+
+use crate::data::player_profile;
 
 pub static WHITELIST_CONFIG: LazyLock<tokio::sync::RwLock<WhitelistConfig>> =
     LazyLock::new(|| tokio::sync::RwLock::new(WhitelistConfig::load()));

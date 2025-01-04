@@ -5,7 +5,9 @@ use pumpkin_config::BASIC_CONFIG;
 use pumpkin_core::math::boundingbox::{BoundingBox, BoundingBoxSize};
 use pumpkin_core::math::position::WorldPosition;
 use pumpkin_core::math::vector2::Vector2;
+use pumpkin_core::text::TextComponent;
 use pumpkin_core::GameMode;
+use pumpkin_core::PermissionLvl;
 use pumpkin_entity::entity_type::EntityType;
 use pumpkin_entity::EntityId;
 use pumpkin_inventory::drag_handler::DragHandler;
@@ -31,6 +33,7 @@ use uuid::Uuid;
 
 use crate::block::block_manager::BlockManager;
 use crate::block::default_block_manager;
+use crate::data::whitelist_data::WHITELIST_CONFIG;
 use crate::entity::living::LivingEntity;
 use crate::entity::Entity;
 use crate::net::EncryptionError;
@@ -171,6 +174,7 @@ impl Server {
         let world = &self.worlds[0];
 
         let player = Arc::new(Player::new(client, world.clone(), entity_id, gamemode).await);
+        self.check_whitelist(player.clone()).await;
         world
             .add_player(player.gameprofile.id, player.clone())
             .await;
@@ -183,6 +187,23 @@ impl Server {
         }
 
         (player, world.clone())
+    }
+
+    pub async fn check_whitelist(&self, player: Arc<Player>) {
+        // If the whitelist is enabled, check if the player is whitelisted
+        if *self.white_list.read().await {
+            let whitelist_config = WHITELIST_CONFIG.read().await;
+            let is_whitelisted = whitelist_config
+                .whitelist
+                .iter()
+                .any(|p| p.uuid == player.gameprofile.id);
+            let is_op = player.permission_lvl.load() >= PermissionLvl::Three;
+            if !is_whitelisted && !is_op {
+                player
+                    .kick(TextComponent::text("You are not whitelisted!"))
+                    .await;
+            }
+        }
     }
 
     pub async fn remove_player(&self) {

@@ -8,6 +8,7 @@ pub struct PlayerProfile {
 }
 
 impl PlayerProfile {
+    #[must_use]
     pub fn new(uuid: Uuid, name: String) -> Self {
         Self { uuid, name }
     }

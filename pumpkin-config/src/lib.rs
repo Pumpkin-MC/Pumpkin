@@ -29,8 +29,6 @@ pub use server_links::ServerLinksConfig;
 mod commands;
 pub mod compression;
 mod lan_broadcast;
-pub mod op;
-pub mod player_profile;
 mod pvp;
 mod rcon;
 mod server_links;

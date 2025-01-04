@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 const DATA_FOLDER: &str = "data/";
 
+pub mod op;
 pub mod op_data;
+pub mod player_profile;
 pub mod whitelist_data;
 
 pub trait LoadJSONConfiguration {
