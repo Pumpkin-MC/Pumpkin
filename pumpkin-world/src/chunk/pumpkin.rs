@@ -223,7 +223,7 @@ impl ChunkWriter for PumpkinChunkFormat {
     }
 }
 
-fn block_bit_size<T>(palette: &Vec<T>) -> usize {
+fn block_bit_size<T>(palette: &[T]) -> usize {
     if palette.len() < 16 {
         4
     } else {
