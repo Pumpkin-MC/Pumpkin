@@ -11,7 +11,6 @@ use crate::{
     server::Server,
     world::player_chunker,
 };
-use num_traits::FromPrimitive;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_core::math::{boundingbox::BoundingBox, position::WorldPosition};
 use pumpkin_core::{
@@ -51,10 +50,6 @@ use pumpkin_world::{
     item::item_registry::get_spawn_egg,
 };
 use thiserror::Error;
-
-fn modulus(a: f32, b: f32) -> f32 {
-    ((a % b) + b) % b
-}
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -229,8 +224,8 @@ impl Player {
         let entity_id = entity.entity_id;
         let Vector3 { x, y, z } = pos;
 
-        let yaw = modulus(entity.yaw.load() * 256.0 / 360.0, 256.0);
-        let pitch = modulus(entity.pitch.load() * 256.0 / 360.0, 256.0);
+        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
         let world = &entity.world;
 
@@ -291,8 +286,8 @@ impl Player {
         );
         // send new position to all other players
         let entity_id = entity.entity_id;
-        let yaw = modulus(entity.yaw.load() * 256.0 / 360.0, 256.0);
-        let pitch = modulus(entity.pitch.load() * 256.0 / 360.0, 256.0);
+        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
         let world = &entity.world;
@@ -442,7 +437,7 @@ impl Player {
             return;
         }
 
-        if let Some(action) = Action::from_i32(command.action.0) {
+        if let Ok(action) = Action::try_from(command.action.0) {
             let living_entity = &self
                 .get_living_entity()
                 .expect("Player has no living entity");
@@ -574,9 +569,9 @@ impl Player {
         self: &Arc<Self>,
         client_information: SClientInformationPlay,
     ) {
-        if let (Some(main_hand), Some(chat_mode)) = (
-            Hand::from_i32(client_information.main_hand.into()),
-            ChatMode::from_i32(client_information.chat_mode.into()),
+        if let (Ok(main_hand), Ok(chat_mode)) = (
+            Hand::try_from(client_information.main_hand.0),
+            ChatMode::try_from(client_information.chat_mode.0),
         ) {
             if client_information.view_distance <= 0 {
                 self.kick(TextComponent::text(
@@ -677,7 +672,7 @@ impl Player {
         if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
             entity.set_sneaking(sneaking).await;
         }
-        let Some(action) = ActionType::from_i32(interact.typ.0) else {
+        let Ok(action) = ActionType::try_from(interact.typ.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
             return;
         };
@@ -735,8 +730,8 @@ impl Player {
     }
 
     pub async fn handle_player_action(&self, player_action: SPlayerAction, server: &Server) {
-        match Status::from_i32(player_action.status.0) {
-            Some(status) => match status {
+        match Status::try_from(player_action.status.0) {
+            Ok(status) => match status {
                 Status::StartedDigging => {
                     if !self.can_interact_with_block_at(&player_action.location, 1.0) {
                         log::warn!(
@@ -818,7 +813,7 @@ impl Player {
                     log::debug!("todo");
                 }
             },
-            None => self.kick(TextComponent::text("Invalid status")).await,
+            Err(_) => self.kick(TextComponent::text("Invalid status")).await,
         }
 
         let client = &self.get_client().expect("Player has no client");
@@ -878,7 +873,7 @@ impl Player {
             return Err(BlockPlacingError::BlockOutOfReach.into());
         }
 
-        if let Some(face) = BlockFace::from_i32(use_item_on.face.0) {
+        if let Ok(face) = BlockFace::try_from(use_item_on.face.0) {
             let mut inventory = self.inventory().lock().await;
             let living_entity = &self
                 .get_living_entity()

@@ -560,11 +560,17 @@ impl World {
         )
         .await;
 
-        log::debug!("Sending player entities to {}", player.get_gameprofile().name);
+        log::debug!(
+            "Sending player entities to {}",
+            player.get_gameprofile().name
+        );
 
         player_chunker::player_join(player).await;
 
-        log::debug!("Sending player metadata to {}", player.get_gameprofile().name);
+        log::debug!(
+            "Sending player metadata to {}",
+            player.get_gameprofile().name
+        );
         self.broadcast_packet_all(&entity_metadata_packet).await;
         // update commands
 
