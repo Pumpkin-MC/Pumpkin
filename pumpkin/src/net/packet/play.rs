@@ -2,8 +2,8 @@ use std::num::NonZeroU8;
 use std::sync::Arc;
 
 use crate::block::block_manager::BlockActionResult;
+use crate::entity::mob;
 use crate::net::PlayerConfig;
-use crate::world::World;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -664,7 +664,7 @@ impl Player {
                         return;
                     }
                     entity_victim.kill().await;
-                    World::remove_living_entity(entity_victim, world.clone()).await;
+                    world.clone().remove_mob_entity(entity_victim).await;
                     // TODO: block entities should be checked here (signs)
                 } else {
                     log::error!(
@@ -1006,19 +1006,24 @@ impl Player {
         if let Some(spawn_item_name) = get_entity_id(&item_t) {
             let head_yaw = 10.0;
             let world_pos = WorldPosition(location.0 + face.to_offset());
+            let pos = Vector3::new(
+                f64::from(world_pos.0.x),
+                f64::from(world_pos.0.y),
+                f64::from(world_pos.0.z),
+            );
 
             // TODO: this should not be hardcoded
-            let (mob, _world, uuid) = server.add_living_entity(EntityType::Chicken).await;
+            let (mob, uuid) = mob::from_type(EntityType::Zombie, server, pos, self.world()).await;
 
             let opposite_yaw = self.living_entity.entity.yaw.load() + 180.0;
             server
                 .broadcast_packet_all(&CSpawnEntity::new(
-                    VarInt(mob.entity.entity_id),
+                    VarInt(mob.living_entity.entity.entity_id),
                     uuid,
                     VarInt((*spawn_item_name).into()),
-                    f64::from(world_pos.0.x) + f64::from(cursor_pos.x),
-                    f64::from(world_pos.0.y),
-                    f64::from(world_pos.0.z) + f64::from(cursor_pos.z),
+                    pos.x + f64::from(cursor_pos.x),
+                    pos.y,
+                    pos.z + f64::from(cursor_pos.z),
                     10.0,
                     head_yaw,
                     opposite_yaw,
@@ -1075,7 +1080,7 @@ impl Player {
 
         let block_bounding_box = BoundingBox::from_block(&world_pos);
         let mut intersects = false;
-        for player in world.get_nearby_players(entity.pos.load(), 20).await {
+        for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();
             if bounding_box.intersects(&block_bounding_box) {
                 intersects = true;

@@ -158,6 +158,7 @@ impl Player {
                     entity_id,
                     player_uuid,
                     world,
+                    Vector3::new(0.0, 0.0, 0.0),
                     EntityType::Player,
                     1.62,
                     AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),

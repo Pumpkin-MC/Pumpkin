@@ -12,7 +12,7 @@ use pumpkin_core::math::{
 };
 use pumpkin_entity::{entity_type::EntityType, pose::EntityPose, EntityId};
 use pumpkin_protocol::{
-    client::play::{CSetEntityMetadata, CTeleportEntity, Metadata},
+    client::play::{CHeadRot, CSetEntityMetadata, CTeleportEntity, CUpdateEntityRot, Metadata},
     codec::var_int::VarInt,
 };
 
@@ -67,23 +67,29 @@ pub struct Entity {
 }
 
 impl Entity {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         entity_id: EntityId,
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
+        position: Vector3<f64>,
         entity_type: EntityType,
         standing_eye_height: f32,
         bounding_box: AtomicCell<BoundingBox>,
         bounding_box_size: AtomicCell<BoundingBoxSize>,
     ) -> Self {
+        let floor_x = position.x.floor() as i32;
+        let floor_y = position.y.floor() as i32;
+        let floor_z = position.z.floor() as i32;
+
         Self {
             entity_id,
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
-            pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
-            block_pos: AtomicCell::new(WorldPosition(Vector3::new(0, 0, 0))),
-            chunk_pos: AtomicCell::new(Vector2::new(0, 0)),
+            pos: AtomicCell::new(position),
+            block_pos: AtomicCell::new(WorldPosition(Vector3::new(floor_x, floor_y, floor_z))),
+            chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
             world,
             // TODO: Load this from previous instance
@@ -141,7 +147,7 @@ impl Entity {
     }
 
     /// Changes this entity's pitch and yaw to look at target
-    pub fn look_at(&self, target: Vector3<f64>) {
+    pub async fn look_at(&self, target: Vector3<f64>) {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
@@ -149,6 +155,21 @@ impl Entity {
         let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / f32::consts::PI) - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
+
+        // send packet
+        let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
+        self.world
+            .broadcast_packet_all(&CUpdateEntityRot::new(
+                self.entity_id.into(),
+                yaw as u8,
+                pitch as u8,
+                self.on_ground.load(std::sync::atomic::Ordering::Relaxed),
+            ))
+            .await;
+        self.world
+            .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), yaw as u8))
+            .await;
     }
 
     pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
