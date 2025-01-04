@@ -53,6 +53,7 @@ use thiserror::Error;
 
 use pumpkin_inventory::container_click::{Click, ClickType, DropType, MouseClick, MouseDragState, MouseDragType, KeyClick};
 use pumpkin_inventory::OptionallyCombinedContainer;
+use pumpkin_inventory::container_click;
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
