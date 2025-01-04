@@ -55,7 +55,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Time
   - [x] Scoreboard
   - [x] World Borders
-  - [ ] World Saving
+  - [x] World Saving
+  - [ ] World Saving in anvil format
 - Player
   - [x] Player Skins
   - [x] Player Client brand
