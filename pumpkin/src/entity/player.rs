@@ -377,6 +377,7 @@ impl Player {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn get_awaiting_teleport(&self) -> Option<&Mutex<Option<(VarInt, Vector3<f64>)>>> {
         match self {
             Self::Offline { .. } => None,

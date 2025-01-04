@@ -534,7 +534,7 @@ impl World {
         {
             let player_config = &player.get_config().expect("Player has no config");
             skin_parts = player_config.lock().await.skin_parts;
-        }
+        };
 
         let entity_metadata_packet =
             CSetEntityMetadata::new(entity_id.into(), Metadata::new(17, VarInt(0), &skin_parts));
