@@ -188,12 +188,12 @@ impl CommandExecutor for WhitelistReloadExecutor {
         // kick all players that are not whitelisted or operator if the whitelist is enforced
         if *server.white_list.read().await && BASIC_CONFIG.enforce_whitelist {
             for player in server.get_all_players().await {
-                if !whitelist_config
+                let is_whitelisted = whitelist_config
                     .whitelist
                     .iter()
-                    .any(|p| p.uuid == player.gameprofile.id)
-                    && player.permission_lvl.load() < PermissionLvl::Three
-                {
+                    .any(|p| p.uuid == player.gameprofile.id);
+                let is_op = player.permission_lvl.load() >= PermissionLvl::Three;
+                if !is_whitelisted && !is_op {
                     let msg = TextComponent::text("You are not whitelisted anymore.");
                     player.kick(msg).await;
                 }
