@@ -25,8 +25,6 @@ pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
 
 mod commands;
-pub mod compression;
-mod lan_broadcast;
 mod pvp;
 mod server_links;
 
