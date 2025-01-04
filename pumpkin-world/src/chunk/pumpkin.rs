@@ -165,10 +165,8 @@ impl ChunkWriter for PumpkinChunkFormat {
         at: &pumpkin_core::math::vector2::Vector2<i32>,
     ) -> Result<(), super::ChunkWritingError> {
         let mut file = OpenOptions::new()
-            .read(true)
             .write(true)
             .create(true)
-            .truncate(false)
             .open(
                 level_folder
                     .region_folder
