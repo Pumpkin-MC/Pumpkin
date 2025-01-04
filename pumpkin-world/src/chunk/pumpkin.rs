@@ -139,7 +139,7 @@ impl ChunkWriter for PumpkinChunkFormat {
             }
         }
 
-        file.write_all(&bits.as_raw_slice().to_vec()).unwrap();
+        file.write_all(bits.as_raw_slice()).unwrap();
 
         Ok(())
     }
