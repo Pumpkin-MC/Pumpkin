@@ -11,9 +11,70 @@ use pumpkin_core::math::ceil_log2;
 use crate::{chunk::ChunkWritingError, level::LevelFolder, WORLD_HEIGHT};
 
 use super::{
-    ChunkBlocks, ChunkData, ChunkReader, ChunkReadingError, ChunkWriter, CHUNK_VOLUME,
-    SUBCHUNK_VOLUME,
+    ChunkBlocks, ChunkData, ChunkReader, ChunkReadingError, ChunkWriter, CompressionError,
+    CHUNK_VOLUME, SUBCHUNK_VOLUME,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Compression {
+    LZ4 = 1,
+    Zstd = 2,
+    Lzma = 3,
+}
+
+impl Compression {
+    fn from_byte(byte: u8) -> Option<Self> {
+        if byte == 0 {
+            None
+        } else {
+            Some(match byte {
+                1 => Compression::LZ4,
+                2 => Compression::Zstd,
+                _ => todo!(),
+            })
+        }
+    }
+
+    fn compress_data(
+        &self,
+        uncompressed_data: &[u8],
+        compression_level: u32,
+    ) -> Result<Vec<u8>, CompressionError> {
+        match self {
+            Compression::LZ4 => {
+                let mut compressed_data = Vec::new();
+                let mut encoder = lz4::EncoderBuilder::new()
+                    .level(compression_level)
+                    .build(&mut compressed_data)
+                    .map_err(CompressionError::LZ4Error)?;
+                if let Err(err) = encoder.write_all(uncompressed_data) {
+                    return Err(CompressionError::LZ4Error(err));
+                }
+                if let (_output, Err(err)) = encoder.finish() {
+                    return Err(CompressionError::LZ4Error(err));
+                }
+                Ok(compressed_data)
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn decompress_data(&self, compressed_data: &[u8]) -> Result<Vec<u8>, CompressionError> {
+        match self {
+            Compression::LZ4 => {
+                let mut decoder =
+                    lz4::Decoder::new(compressed_data).map_err(CompressionError::LZ4Error)?;
+                let mut decompressed_data = Vec::new();
+                decoder
+                    .read_to_end(&mut decompressed_data)
+                    .map_err(CompressionError::LZ4Error)?;
+                Ok(decompressed_data)
+            }
+            _ => todo!(),
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct PumpkinChunkFormat;
@@ -38,6 +99,13 @@ impl ChunkReader for PumpkinChunkFormat {
 
         let mut data = Vec::new();
         file.read_to_end(&mut data).unwrap();
+
+        if let Some(compression) = Compression::from_byte(data.remove(0)) {
+            data = compression
+                .decompress_data(&data)
+                .map_err(ChunkReadingError::Compression)?;
+        }
+
         let mut data: BitVec<u8, order::Lsb0> = BitVec::from_vec(data);
 
         let mut blocks = Vec::with_capacity(CHUNK_VOLUME);
@@ -139,7 +207,17 @@ impl ChunkWriter for PumpkinChunkFormat {
             }
         }
 
-        file.write_all(bits.as_raw_slice()).unwrap();
+        // TODO: Config
+        let compression = Compression::LZ4;
+
+        file.write_all(&[compression as u8])
+            .map_err(|e| ChunkWritingError::IoError(e.kind()))?;
+        file.write_all(
+            &compression
+                .compress_data(bits.as_raw_slice(), 10)
+                .map_err(ChunkWritingError::Compression)?,
+        )
+        .map_err(|e| ChunkWritingError::IoError(e.kind()))?;
 
         Ok(())
     }
