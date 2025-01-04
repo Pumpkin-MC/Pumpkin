@@ -167,6 +167,7 @@ impl ChunkWriter for PumpkinChunkFormat {
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(
                 level_folder
                     .region_folder
