@@ -50,7 +50,7 @@ fn get_player_names(players: Vec<Arc<Player>>) -> String {
         if !names.is_empty() {
             names.push_str(", ");
         }
-        names.push_str(&player.gameprofile.name);
+        names.push_str(&player.get_gameprofile().name);
     }
     names
 }

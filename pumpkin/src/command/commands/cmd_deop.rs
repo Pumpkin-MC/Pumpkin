@@ -37,7 +37,7 @@ impl CommandExecutor for DeopExecutor {
         if let Some(op_index) = config
             .ops
             .iter()
-            .position(|o| o.uuid == player.gameprofile.id)
+            .position(|o| o.uuid == player.get_gameprofile().id)
         {
             config.ops.remove(op_index);
         }
@@ -50,7 +50,7 @@ impl CommandExecutor for DeopExecutor {
             )
             .await;
 
-        let player_name = &player.gameprofile.name;
+        let player_name = &player.get_gameprofile().name;
         let message = format!("Revoked {player_name}'s server operator status.");
         let msg = TextComponent::text(message);
         sender.send_message(msg).await;

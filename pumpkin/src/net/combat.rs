@@ -25,7 +25,10 @@ pub enum AttackType {
 
 impl AttackType {
     pub async fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
-        let entity = &player.living_entity.entity;
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
 
         let sprinting = entity.sprinting.load(std::sync::atomic::Ordering::Relaxed);
         let on_ground = entity.on_ground.load(std::sync::atomic::Ordering::Relaxed);
@@ -91,7 +94,8 @@ pub async fn handle_knockback(
         .store(velocity.multiply(0.6, 1.0, 0.6));
 
     victim_entity.velocity.store(saved_velo);
-    victim.client.send_packet(packet).await;
+    let client = &victim.get_client().expect("Player has no client");
+    client.send_packet(packet).await;
 }
 
 pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {

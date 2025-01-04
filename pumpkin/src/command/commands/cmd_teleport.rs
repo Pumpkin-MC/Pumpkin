@@ -61,13 +61,25 @@ impl CommandExecutor for TpEntitiesToEntityExecutor {
     ) -> Result<(), CommandError> {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-        let pos = destination.living_entity.entity.pos.load();
+        let destination_living_entity = &destination
+            .get_living_entity()
+            .expect("Destination has no living entity");
+        let pos = destination_living_entity.entity.pos.load();
 
         for target in targets {
-            let yaw = target.living_entity.entity.yaw.load();
-            let pitch = target.living_entity.entity.pitch.load();
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            let living_entity = &target
+                .get_living_entity()
+                .expect("Target has no living entity");
+            let yaw = living_entity.entity.yaw.load();
+            let pitch = living_entity.entity.pitch.load();
+            living_entity.entity.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -86,13 +98,22 @@ impl CommandExecutor for TpEntitiesToPosFacingPosExecutor {
     ) -> Result<(), CommandError> {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
         let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
 
         for target in targets {
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            let living_entity = &target
+                .get_living_entity()
+                .expect("Target has no living entity");
+            living_entity.entity.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -111,15 +132,25 @@ impl CommandExecutor for TpEntitiesToPosFacingEntityExecutor {
     ) -> Result<(), CommandError> {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-        let facing_entity = &EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?
-            .living_entity
-            .entity;
-        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
+        let facing_entity = &EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
+        let facing_living_entity = &facing_entity
+            .get_living_entity()
+            .expect("Facing entity has no living entity");
+        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_living_entity.entity.pos.load());
 
         for target in targets {
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            let living_entity = &target
+                .get_living_entity()
+                .expect("Target has no living entity");
+            living_entity.entity.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -138,12 +169,21 @@ impl CommandExecutor for TpEntitiesToPosWithRotationExecutor {
     ) -> Result<(), CommandError> {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
         let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
         for target in targets {
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            let living_entity = &target
+                .get_living_entity()
+                .expect("Target has no living entity");
+            living_entity.entity.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -162,12 +202,21 @@ impl CommandExecutor for TpEntitiesToPosExecutor {
     ) -> Result<(), CommandError> {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
         for target in targets {
-            let yaw = target.living_entity.entity.yaw.load();
-            let pitch = target.living_entity.entity.pitch.load();
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            let living_entity = &target
+                .get_living_entity()
+                .expect("Target has no living entity");
+            let yaw = living_entity.entity.yaw.load();
+            let pitch = living_entity.entity.pitch.load();
+            living_entity.entity.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -185,13 +234,26 @@ impl CommandExecutor for TpSelfToEntityExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-        let pos = destination.living_entity.entity.pos.load();
+        if !destination.is_online() {
+            return Err(CommandError::GeneralCommandIssue(
+                "Destination is not online".to_string(),
+            ));
+        }
+        let Some(destination_living_entity) = &destination.get_living_entity() else {
+            return Err(CommandError::GeneralCommandIssue(
+                "Destination has no living entity".to_string(),
+            ));
+        };
+        let pos = destination_living_entity.entity.pos.load();
 
         match sender {
             CommandSender::Player(player) => {
-                let yaw = player.living_entity.entity.yaw.load();
-                let pitch = player.living_entity.entity.pitch.load();
-                player.living_entity.entity.teleport(pos, yaw, pitch).await;
+                let living_entity = &player
+                    .get_living_entity()
+                    .expect("Player has no living entity");
+                let yaw = living_entity.entity.yaw.load();
+                let pitch = living_entity.entity.pitch.load();
+                living_entity.entity.teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender
@@ -218,10 +280,13 @@ impl CommandExecutor for TpSelfToPosExecutor {
     ) -> Result<(), CommandError> {
         match sender {
             CommandSender::Player(player) => {
+                let living_entity = &player
+                    .get_living_entity()
+                    .expect("Player has no living entity");
                 let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-                let yaw = player.living_entity.entity.yaw.load();
-                let pitch = player.living_entity.entity.pitch.load();
-                player.living_entity.entity.teleport(pos, yaw, pitch).await;
+                let yaw = living_entity.entity.yaw.load();
+                let pitch = living_entity.entity.pitch.load();
+                living_entity.entity.teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender

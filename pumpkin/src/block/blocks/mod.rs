@@ -23,7 +23,10 @@ pub async fn standard_on_broken_with_container(
         for individual_id in all_container_ids {
             if let Some(container) = open_containers.get_mut(&u64::from(individual_id)) {
                 container.clear_all_slots().await;
-                player.open_container.store(None);
+                let open_container = &player
+                    .get_open_container()
+                    .expect("Player has no open container");
+                open_container.store(None);
                 close_all_in_container(player, container).await;
                 container.clear_all_players();
             }
@@ -33,7 +36,7 @@ pub async fn standard_on_broken_with_container(
 
 /// The standard open container creates a new container if a container of the same block
 /// type does not exist at the selected block location. If a container of the same type exists, the player
-/// is added to the currently connected players to that container.  
+/// is added to the currently connected players to that container.
 pub async fn standard_open_container<C: Container + Default + 'static>(
     block: &Block,
     player: &Player,
@@ -48,7 +51,10 @@ pub async fn standard_open_container<C: Container + Default + 'static>(
         log::debug!("Using previous standard container ID: {}", container_id);
         if let Some(container) = open_containers.get_mut(&u64::from(container_id)) {
             container.add_player(entity_id);
-            player.open_container.store(Some(container_id.into()));
+            let open_container = &player
+                .get_open_container()
+                .expect("Player has no open container");
+            open_container.store(Some(container_id.into()));
         }
     } else {
         let mut open_containers = server.open_containers.write().await;
@@ -57,7 +63,10 @@ pub async fn standard_open_container<C: Container + Default + 'static>(
         let open_container =
             OpenContainer::new_empty_container::<C>(entity_id, Some(location), Some(block.clone()));
         open_containers.insert(new_id.into(), open_container);
-        player.open_container.store(Some(new_id.into()));
+        let open_container = &player
+            .get_open_container()
+            .expect("Player has no open container");
+        open_container.store(Some(new_id.into()));
     }
     player.open_container(server, window_type).await;
 }
@@ -90,15 +99,19 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
         open_containers.insert(new_id.into(), open_container);
 
-        player.open_container.store(Some(new_id.into()));
+        let open_container = &player
+            .get_open_container()
+            .expect("Player has no open container");
+        open_container.store(Some(new_id.into()));
     } else {
         log::debug!("Using previous unqiue container ID: {}", id_to_use);
         if let Some(unique_container) = open_containers.get_mut(&(id_to_use as u64)) {
             unique_container.set_location(Some(location)).await;
             unique_container.add_player(entity_id);
-            player
-                .open_container
-                .store(Some(id_to_use.try_into().unwrap()));
+            let open_container = &player
+                .get_open_container()
+                .expect("Player has no open container");
+            open_container.store(Some(id_to_use.try_into().unwrap()));
         }
     }
     drop(open_containers);

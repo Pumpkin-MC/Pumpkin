@@ -38,12 +38,13 @@ fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> Text
     match targets {
         [target] if item_count == 0 => TextComponent::text(format!(
             "No items were found on player {}",
-            target.gameprofile.name
+            target.get_gameprofile().name
         ))
         .color_named(NamedColor::Red),
         [target] => TextComponent::text(format!(
             "Removed {} item(s) on player {}",
-            item_count, target.gameprofile.name
+            item_count,
+            target.get_gameprofile().name
         )),
         targets if item_count == 0 => {
             TextComponent::text(format!("No items were found on {} players", targets.len()))
@@ -69,6 +70,12 @@ impl CommandExecutor for ClearExecutor {
         let Some(Arg::Entities(targets)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
+
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
 
         let mut item_count = 0;
         for target in targets {

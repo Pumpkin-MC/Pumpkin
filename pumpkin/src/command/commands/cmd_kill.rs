@@ -28,10 +28,19 @@ impl CommandExecutor for KillExecutor {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let target_count = targets.len();
 
         for target in targets {
-            target.living_entity.kill().await;
+            let living_entity = &target
+                .get_living_entity()
+                .expect("Player has no living entity");
+            living_entity.kill().await;
         }
 
         let msg = if target_count == 1 {
@@ -58,7 +67,13 @@ impl CommandExecutor for KillSelfExecutor {
     ) -> Result<(), CommandError> {
         let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
 
-        target.living_entity.kill().await;
+        let living_entity = &target
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.kill().await;
+
+        let msg = TextComponent::text("You have been killed.");
+        sender.send_message(msg.color_named(NamedColor::Blue)).await;
 
         Ok(())
     }

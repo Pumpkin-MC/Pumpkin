@@ -64,7 +64,7 @@ use crate::{
     data::op_data::OPERATOR_CONFIG,
     net::{
         combat::{self, player_attack_sound, AttackType},
-        Client, PlayerConfig,
+        offline_uuid, Client, PlayerConfig,
     },
     server::Server,
     world::World,
@@ -76,57 +76,72 @@ use super::living::LivingEntity;
 /// Represents a Minecraft player entity.
 ///
 /// A `Player` is a special type of entity that represents a human player connected to the server.
-pub struct Player {
-    /// The underlying living entity object that represents the player.
-    pub living_entity: LivingEntity<PlayerInventory>,
-    /// The player's game profile information, including their username and UUID.
-    pub gameprofile: GameProfile,
-    /// The client connection associated with the player.
-    pub client: Arc<Client>,
-    /// The player's configuration settings. Changes when the Player changes their settings.
-    pub config: Mutex<PlayerConfig>,
-    /// The player's current gamemode (e.g., Survival, Creative, Adventure).
-    pub gamemode: AtomicCell<GameMode>,
-    /// The player's hunger level.
-    pub food: AtomicI32,
-    /// The player's food saturation level.
-    pub food_saturation: AtomicCell<f32>,
-    /// The ID of the currently open container (if any).
-    pub open_container: AtomicCell<Option<u64>>,
-    /// The item currently being held by the player.
-    pub carried_item: AtomicCell<Option<ItemStack>>,
+pub enum Player {
+    /// Represents an offline player with basic data.
+    Offline {
+        /// The player's game profile information, including their username and UUID.
+        gameprofile: GameProfile,
+        /// The player's permission level.
+        permission_lvl: AtomicCell<PermissionLvl>,
+    },
+    /// Represents an online player with full data and functionality.
+    Online {
+        /// The underlying living entity object that represents the player.
+        living_entity: LivingEntity<PlayerInventory>,
+        /// The player's game profile information, including their username and UUID.
+        gameprofile: GameProfile,
+        /// The client connection associated with the player.
+        client: Arc<Client>,
+        /// The player's configuration settings. Changes when the Player changes their settings.
+        config: Mutex<PlayerConfig>,
+        /// The player's current gamemode (e.g., Survival, Creative, Adventure).
+        gamemode: AtomicCell<GameMode>,
+        /// The player's hunger level.
+        food: AtomicI32,
+        /// The player's food saturation level.
+        food_saturation: AtomicCell<f32>,
+        /// The ID of the currently open container (if any).
+        open_container: AtomicCell<Option<u64>>,
+        /// The item currently being held by the player.
+        carried_item: AtomicCell<Option<ItemStack>>,
 
-    /// send `send_abilities_update` when changed
-    /// The player's abilities and special powers.
-    ///
-    /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
-    ///
-    /// **Note:** When the `abilities` field is updated, the server should send a `send_abilities_update` packet to the client to notify them of the changes.
-    pub abilities: Mutex<Abilities>,
+        /// send `send_abilities_update` when changed
+        /// The player's abilities and special powers.
+        ///
+        /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
+        ///
+        /// **Note:** When the `abilities` field is updated, the server should send a `send_abilities_update` packet to the client to notify them of the changes.
+        abilities: Mutex<Abilities>,
 
-    /// The current stage of the block the player is breaking.
-    pub current_block_destroy_stage: AtomicU8,
-    /// A counter for teleport IDs used to track pending teleports.
-    pub teleport_id_count: AtomicI32,
-    /// The pending teleport information, including the teleport ID and target location.
-    pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
-    /// The coordinates of the chunk section the player is currently watching.
-    pub watched_section: AtomicCell<Cylindrical>,
-    /// Did we send a keep alive Packet and wait for the response?
-    pub wait_for_keep_alive: AtomicBool,
-    /// Whats the keep alive packet payload we send, The client should responde with the same id
-    pub keep_alive_id: AtomicI64,
-    /// Last time we send a keep alive
-    pub last_keep_alive_time: AtomicCell<Instant>,
-    /// Amount of ticks since last attack
-    pub last_attacked_ticks: AtomicU32,
-    /// The players op permission level
-    pub permission_lvl: AtomicCell<PermissionLvl>,
-    /// Tell tasks to stop if we are closing
-    cancel_tasks: Notify,
+        /// The current stage of the block the player is breaking.
+        current_block_destroy_stage: AtomicU8,
+        /// A counter for teleport IDs used to track pending teleports.
+        teleport_id_count: AtomicI32,
+        /// The pending teleport information, including the teleport ID and target location.
+        awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
+        /// The coordinates of the chunk section the player is currently watching.
+        watched_section: AtomicCell<Cylindrical>,
+        /// Did we send a keep alive Packet and wait for the response?
+        wait_for_keep_alive: AtomicBool,
+        /// Whats the keep alive packet payload we send, The client should responde with the same id
+        keep_alive_id: AtomicI64,
+        /// Last time we send a keep alive
+        last_keep_alive_time: AtomicCell<Instant>,
+        /// Amount of ticks since last attack
+        last_attacked_ticks: AtomicU32,
+        /// The players op permission level
+        permission_lvl: AtomicCell<PermissionLvl>,
+        /// Tell tasks to stop if we are closing
+        cancel_tasks: Notify,
+    },
 }
 
 impl Player {
+    /// Checks if the player is online.
+    pub fn is_online(&self) -> bool {
+        matches!(self, Self::Online { .. })
+    }
+
     pub async fn new(
         client: Arc<Client>,
         world: Arc<World>,
@@ -154,7 +169,7 @@ impl Player {
             height: 1.8,
         };
 
-        Self {
+        Self::Online {
             living_entity: LivingEntity::new_with_container(
                 Entity::new(
                     entity_id,
@@ -207,8 +222,217 @@ impl Player {
         }
     }
 
+    pub async fn new_offline(name: String) -> Option<Self> {
+        let (player_uuid, player_name) = if BASIC_CONFIG.online_mode {
+            let client = reqwest::Client::new();
+            let url = format!("https://api.mojang.com/users/profiles/minecraft/{name}");
+            let response = client.get(&url).send().await.unwrap();
+
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                return None;
+            }
+
+            let profile: serde_json::Value = response.json().await.unwrap();
+            let player_uuid_string = profile["id"].as_str().unwrap_or_default().to_string();
+            let player_uuid = uuid::Uuid::parse_str(&player_uuid_string).unwrap();
+            let player_name = profile["name"].as_str().unwrap_or_default().to_string();
+            (player_uuid, player_name)
+        } else {
+            (
+                offline_uuid(&name).expect("This is very not safe and bad"),
+                name,
+            )
+        };
+
+        let gameprofile = GameProfile {
+            id: player_uuid,
+            name: player_name,
+            properties: vec![],
+            profile_actions: None,
+        };
+
+        let gameprofile_clone = gameprofile.clone();
+
+        Some(Self::Offline {
+            gameprofile,
+            permission_lvl: OPERATOR_CONFIG
+                .read()
+                .await
+                .ops
+                .iter()
+                .find(|op| op.uuid == gameprofile_clone.id)
+                .map_or(
+                    AtomicCell::new(ADVANCED_CONFIG.commands.default_op_level),
+                    |op| AtomicCell::new(op.level),
+                ),
+        })
+    }
+
+    pub fn get_gameprofile(&self) -> &GameProfile {
+        match self {
+            Self::Online { gameprofile, .. } | Self::Offline { gameprofile, .. } => gameprofile
+        }
+    }
+
+    pub fn get_permission_lvl(&self) -> &AtomicCell<PermissionLvl> {
+        match self {
+            Self::Offline { permission_lvl, .. } | Self::Online { permission_lvl, .. } => permission_lvl
+        }
+    }
+
+    pub fn get_gamemode(&self) -> Option<&AtomicCell<GameMode>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { gamemode, .. } => Some(gamemode),
+        }
+    }
+
+    pub fn get_living_entity(&self) -> Option<&LivingEntity<PlayerInventory>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { living_entity, .. } => Some(living_entity),
+        }
+    }
+
+    pub fn get_client(&self) -> Option<&Arc<Client>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { client, .. } => Some(client),
+        }
+    }
+
+    pub fn get_open_container(&self) -> Option<&AtomicCell<Option<u64>>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { open_container, .. } => Some(open_container),
+        }
+    }
+
+    pub fn get_cancel_tasks(&self) -> Option<&Notify> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { cancel_tasks, .. } => Some(cancel_tasks),
+        }
+    }
+
+    pub fn get_watched_section(&self) -> Option<&AtomicCell<Cylindrical>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                watched_section, ..
+            } => Some(watched_section),
+        }
+    }
+
+    pub fn get_last_attacked_ticks(&self) -> Option<&AtomicU32> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                last_attacked_ticks,
+                ..
+            } => Some(last_attacked_ticks),
+        }
+    }
+
+    pub fn get_last_keep_alive_time(&self) -> Option<&AtomicCell<Instant>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                last_keep_alive_time,
+                ..
+            } => Some(last_keep_alive_time),
+        }
+    }
+
+    pub fn get_wait_for_keep_alive(&self) -> Option<&AtomicBool> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                wait_for_keep_alive,
+                ..
+            } => Some(wait_for_keep_alive),
+        }
+    }
+
+    pub fn get_keep_alive_id(&self) -> Option<&AtomicI64> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { keep_alive_id, .. } => Some(keep_alive_id),
+        }
+    }
+
+    pub fn get_abilities(&self) -> Option<&Mutex<Abilities>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { abilities, .. } => Some(abilities),
+        }
+    }
+
+    pub fn get_teleport_id_count(&self) -> Option<&AtomicI32> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                teleport_id_count, ..
+            } => Some(teleport_id_count),
+        }
+    }
+
+    pub fn get_awaiting_teleport(&self) -> Option<&Mutex<Option<(VarInt, Vector3<f64>)>>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                awaiting_teleport, ..
+            } => Some(awaiting_teleport),
+        }
+    }
+
+    pub fn get_food(&self) -> Option<&AtomicI32> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { food, .. } => Some(food),
+        }
+    }
+
+    pub fn get_food_saturation(&self) -> Option<&AtomicCell<f32>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                food_saturation, ..
+            } => Some(food_saturation),
+        }
+    }
+
+    pub fn get_config(&self) -> Option<&Mutex<PlayerConfig>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { config, .. } => Some(config),
+        }
+    }
+
+    pub fn get_current_block_destroy_stage(&self) -> Option<&AtomicU8> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online {
+                current_block_destroy_stage,
+                ..
+            } => Some(current_block_destroy_stage),
+        }
+    }
+
+    pub fn get_carried_item(&self) -> Option<&AtomicCell<Option<ItemStack>>> {
+        match self {
+            Self::Offline { .. } => None,
+            Self::Online { carried_item, .. } => Some(carried_item),
+        }
+    }
+}
+
+impl Player {
     pub fn inventory(&self) -> &Mutex<PlayerInventory> {
-        self.living_entity
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity
             .inventory
             .as_ref()
             .expect("Player always has inventory")
@@ -218,20 +442,27 @@ impl Player {
     #[allow(unused_variables)]
     pub async fn remove(&self) {
         let world = self.world();
-        self.cancel_tasks.notify_waiters();
+        let cancel_tasks = &self.get_cancel_tasks().expect("Player has no cancel tasks");
+        cancel_tasks.notify_waiters();
 
         world.remove_player(self).await;
 
-        let cylindrical = self.watched_section.load();
+        let watched_section = &self
+            .get_watched_section()
+            .expect("Player has no watched section");
+
+        let cylindrical = watched_section.load();
 
         // Radial chunks are all of the chunks the player is theoretically viewing
         // Giving enough time, all of these chunks will be in memory
         let radial_chunks = cylindrical.all_chunks_within();
 
+        let client = &self.get_client().expect("Player has no client");
+
         log::debug!(
             "Removing player {} ({}), unwatching {} chunks",
-            self.gameprofile.name,
-            self.client.id,
+            self.get_gameprofile().name,
+            client.id,
             radial_chunks.len()
         );
 
@@ -245,8 +476,8 @@ impl Player {
 
         log::debug!(
             "Removed player id {} ({}) ({} chunks remain cached)",
-            self.gameprofile.name,
-            self.client.id,
+            self.get_gameprofile().name,
+            client.id,
             self.world().level.loaded_chunk_count()
         );
 
@@ -255,8 +486,12 @@ impl Player {
 
     pub async fn attack(&self, victim: &Arc<Self>) {
         let world = self.world();
-        let victim_entity = &victim.living_entity.entity;
-        let attacker_entity = &self.living_entity.entity;
+        let victim_entity = &victim
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let attacker_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
         let config = &ADVANCED_CONFIG.pvp;
 
         let inventory = self.inventory().lock().await;
@@ -292,8 +527,10 @@ impl Player {
         let attack_speed = base_attack_speed + add_speed;
 
         let attack_cooldown_progress = self.get_attack_cooldown_progress(0.5, attack_speed);
-        self.last_attacked_ticks
-            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let last_attacked_ticks = &self
+            .get_last_attacked_ticks()
+            .expect("Player has no last attacked ticks");
+        last_attacked_ticks.store(0, std::sync::atomic::Ordering::Relaxed);
 
         // only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced same way just without the square
@@ -303,10 +540,11 @@ impl Player {
         // modify added damage based on multiplier
         let mut damage = base_damage + add_damage * damage_multiplier;
 
-        let pos = victim_entity.pos.load();
+        let pos = victim_entity.entity.pos.load();
 
-        if (config.protect_creative && victim.gamemode.load() == GameMode::Creative)
-            || !victim.living_entity.check_damage(damage as f32)
+        let gamemode = &victim.get_gamemode().expect("Player has no gamemode");
+        if (config.protect_creative && gamemode.load() == GameMode::Creative)
+            || !victim_entity.check_damage(damage as f32)
         {
             world
                 .play_sound(
@@ -330,8 +568,7 @@ impl Player {
             damage *= 1.5;
         }
 
-        victim
-            .living_entity
+        victim_entity
             .damage(damage as f32, 34) // PlayerAttack
             .await;
 
@@ -339,20 +576,28 @@ impl Player {
         match attack_type {
             AttackType::Knockback => knockback_strength += 1.0,
             AttackType::Sweeping => {
-                combat::spawn_sweep_particle(attacker_entity, world, &pos).await;
+                combat::spawn_sweep_particle(&attacker_entity.entity, world, &pos).await;
             }
             _ => {}
         };
 
         if config.knockback {
-            combat::handle_knockback(attacker_entity, victim, victim_entity, knockback_strength)
-                .await;
+            combat::handle_knockback(
+                &attacker_entity.entity,
+                victim,
+                &victim_entity.entity,
+                knockback_strength,
+            )
+            .await;
         }
 
         if config.hurt_animation {
-            let entity_id = VarInt(victim_entity.entity_id);
+            let entity_id = VarInt(victim_entity.entity.entity_id);
             world
-                .broadcast_packet_all(&CHurtAnimation::new(&entity_id, attacker_entity.yaw.load()))
+                .broadcast_packet_all(&CHurtAnimation::new(
+                    &entity_id,
+                    attacker_entity.entity.yaw.load(),
+                ))
                 .await;
         }
 
@@ -360,66 +605,82 @@ impl Player {
     }
 
     pub async fn await_cancel(&self) {
-        self.cancel_tasks.notified().await;
+        let cancel_tasks = &self.get_cancel_tasks().expect("Player has no cancel tasks");
+        cancel_tasks.notified().await;
     }
 
     pub async fn tick(&self) {
-        if self
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        let client = &self.get_client().expect("Player has no client");
+        if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
         let now = Instant::now();
-        self.last_attacked_ticks
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let last_attacked_ticks = &self
+            .get_last_attacked_ticks()
+            .expect("Player has no last attacked ticks");
+        last_attacked_ticks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        self.living_entity.tick();
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.tick();
 
-        if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
+        let last_keep_alive_time = &self
+            .get_last_keep_alive_time()
+            .expect("Player has no last keep alive time");
+        if now.duration_since(last_keep_alive_time.load()) >= Duration::from_secs(15) {
             // We never got a response from our last keep alive we send
-            if self
-                .wait_for_keep_alive
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            let wait_for_keep_alive = &self
+                .get_wait_for_keep_alive()
+                .expect("Player has no wait for keep alive");
+            // FIXME: When kicking because of timeout, the player gets kicked, but the tick still runs (probably because the player is never removed from the world)
+            if wait_for_keep_alive.load(std::sync::atomic::Ordering::Relaxed) {
                 self.kick(TextComponent::text("Timeout")).await;
                 return;
             }
-            self.wait_for_keep_alive
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-            self.last_keep_alive_time.store(now);
+            wait_for_keep_alive.store(true, std::sync::atomic::Ordering::Relaxed);
+            last_keep_alive_time.store(now);
             let id = now.elapsed().as_millis() as i64;
-            self.keep_alive_id
-                .store(id, std::sync::atomic::Ordering::Relaxed);
-            self.client.send_packet(&CKeepAlive::new(id)).await;
+            let keep_alive_id = &self
+                .get_keep_alive_id()
+                .expect("Player has no keep alive id");
+            keep_alive_id.store(id, std::sync::atomic::Ordering::Relaxed);
+            client.send_packet(&CKeepAlive::new(id)).await;
         }
     }
 
     pub fn get_attack_cooldown_progress(&self, base_time: f64, attack_speed: f64) -> f64 {
+        let last_attacked_ticks = &self
+            .get_last_attacked_ticks()
+            .expect("Player has no last attacked ticks");
         #[allow(clippy::cast_precision_loss)]
-        let x = f64::from(
-            self.last_attacked_ticks
-                .load(std::sync::atomic::Ordering::Acquire),
-        ) + base_time;
+        let x =
+            f64::from(last_attacked_ticks.load(std::sync::atomic::Ordering::Acquire)) + base_time;
 
         let progress_per_tick = f64::from(BASIC_CONFIG.tps) / attack_speed;
         let progress = x / progress_per_tick;
         progress.clamp(0.0, 1.0)
     }
 
-    pub const fn entity_id(&self) -> EntityId {
-        self.living_entity.entity.entity_id
+    pub fn entity_id(&self) -> EntityId {
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.entity.entity_id
     }
 
-    pub const fn world(&self) -> &Arc<World> {
-        &self.living_entity.entity.world
+    pub fn world(&self) -> &Arc<World> {
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        &living_entity.entity.world
     }
 
     /// Updates the current abilities the Player has
     pub async fn send_abilities_update(&self) {
         let mut b = 0i8;
-        let abilities = &self.abilities.lock().await;
+        let player_abilities = &self.get_abilities().expect("Player has no abilities");
+        let abilities = player_abilities.lock().await;
 
         if abilities.invulnerable {
             b |= 1;
@@ -433,7 +694,9 @@ impl Player {
         if abilities.creative {
             b |= 8;
         }
-        self.client
+
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CPlayerAbilities::new(
                 b,
                 abilities.fly_speed,
@@ -444,10 +707,11 @@ impl Player {
 
     /// syncs the players permission level with the client
     pub async fn send_permission_lvl_update(&self) {
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CEntityStatus::new(
                 self.entity_id(),
-                24 + self.permission_lvl.load() as i8,
+                24 + self.get_permission_lvl().load() as i8,
             ))
             .await;
     }
@@ -458,7 +722,7 @@ impl Player {
         lvl: PermissionLvl,
         command_dispatcher: &RwLock<CommandDispatcher>,
     ) {
-        self.permission_lvl.store(lvl);
+        self.get_permission_lvl().store(lvl);
         self.send_permission_lvl_update().await;
         client_cmd_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
@@ -466,7 +730,8 @@ impl Player {
     /// Sends the world time to just the player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CUpdateTime::new(
                 l_world.world_age,
                 l_world.time_of_day,
@@ -482,15 +747,23 @@ impl Player {
         // this is the ultra special magic code used to create the teleport id
         // This returns the old value
         // This operation wraps around on overflow.
-        let i = self
-            .teleport_id_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let teleport_id_count = &self
+            .get_teleport_id_count()
+            .expect("Player has no teleport id count");
+        let i = teleport_id_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let teleport_id = i + 1;
-        self.living_entity.set_pos(position);
-        let entity = &self.living_entity.entity;
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.set_pos(position);
+        let entity = &living_entity.entity;
         entity.set_rotation(yaw, pitch);
-        *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
-        self.client
+        let awaiting_teleport = &self
+            .get_awaiting_teleport()
+            .expect("Player has no awaiting teleport");
+        *awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CPlayerPosition::new(
                 teleport_id.into(),
                 position,
@@ -504,7 +777,8 @@ impl Player {
     }
 
     pub fn block_interaction_range(&self) -> f64 {
-        if self.gamemode.load() == GameMode::Creative {
+        let gamemode = &self.get_gamemode().expect("Player has no gamemode");
+        if gamemode.load() == GameMode::Creative {
             5.0
         } else {
             4.5
@@ -514,8 +788,11 @@ impl Player {
     pub fn can_interact_with_block_at(&self, pos: &WorldPosition, additional_range: f64) -> bool {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(pos);
-        let entity_pos = self.living_entity.entity.pos.load();
-        let standing_eye_height = self.living_entity.entity.standing_eye_height;
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity_pos = living_entity.entity.pos.load();
+        let standing_eye_height = living_entity.entity.standing_eye_height;
         box_pos.squared_magnitude(Vector3 {
             x: entity_pos.x,
             y: entity_pos.y + f64::from(standing_eye_height),
@@ -525,44 +802,49 @@ impl Player {
 
     /// Kicks the Client with a reason depending on the connection state
     pub async fn kick(&self, reason: TextComponent) {
-        if self
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            log::debug!(
-                "Tried to kick id {} but connection is closed!",
-                self.client.id
-            );
+        let client = &self.get_client().expect("Player has no client");
+        if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            log::debug!("Tried to kick id {} but connection is closed!", client.id);
             return;
         }
 
-        self.client
+        client
             .try_send_packet(&CPlayDisconnect::new(&reason))
             .await
-            .unwrap_or_else(|_| self.client.close());
+            .unwrap_or_else(|_| client.close());
         log::info!(
             "Kicked Player {} ({}) for {}",
-            self.gameprofile.name,
-            self.client.id,
+            self.get_gameprofile().name,
+            client.id,
             reason.to_pretty_console()
         );
-        self.client.close();
+        client.close();
     }
 
     pub async fn set_health(&self, health: f32, food: i32, food_saturation: f32) {
-        self.living_entity.set_health(health).await;
-        self.food.store(food, std::sync::atomic::Ordering::Relaxed);
-        self.food_saturation.store(food_saturation);
-        self.client
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.set_health(health).await;
+        let player_food = &self.get_food().expect("Player has no food");
+        player_food.store(food, std::sync::atomic::Ordering::Relaxed);
+        let player_food_saturation = &self
+            .get_food_saturation()
+            .expect("Player has no food saturation");
+        player_food_saturation.store(food_saturation);
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CSetHealth::new(health, food.into(), food_saturation))
             .await;
     }
 
     pub async fn kill(&self) {
-        self.living_entity.kill().await;
-
-        self.client
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.kill().await;
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CCombatDeath::new(
                 self.entity_id().into(),
                 &TextComponent::text("noob"),
@@ -572,15 +854,17 @@ impl Player {
 
     pub async fn set_gamemode(&self, gamemode: GameMode) {
         // We could send the same gamemode without problems. But why waste bandwidth ?
+        let player_gamemode = &self.get_gamemode().expect("Player has no gamemode");
         assert_ne!(
-            self.gamemode.load(),
+            player_gamemode.load(),
             gamemode,
             "Setting the same gamemode as already is"
         );
-        self.gamemode.store(gamemode);
+        player_gamemode.store(gamemode);
         {
             // use another scope so we instantly unlock abilities
-            let mut abilities = self.abilities.lock().await;
+            let player_abilities = &self.get_abilities().expect("Player has no abilities");
+            let mut abilities = player_abilities.lock().await;
             match gamemode {
                 GameMode::Undefined | GameMode::Survival | GameMode::Adventure => {
                     abilities.flying = false;
@@ -602,19 +886,23 @@ impl Player {
             }
         }
         self.send_abilities_update().await;
-        self.living_entity
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity
             .entity
             .world
             .broadcast_packet_all(&CPlayerInfoUpdate::new(
                 0x04,
                 &[pumpkin_protocol::client::play::Player {
-                    uuid: self.gameprofile.id,
+                    uuid: self.get_gameprofile().id,
                     actions: vec![PlayerAction::UpdateGameMode((gamemode as i32).into())],
                 }],
             ))
             .await;
+        let client = &self.get_client().expect("Player has no client");
         #[allow(clippy::cast_precision_loss)]
-        self.client
+        client
             .send_packet(&CGameEvent::new(
                 GameEvent::ChangeGameMode,
                 gamemode as i32 as f32,
@@ -624,7 +912,8 @@ impl Player {
 
     /// Send skin layers and used hand to all players
     pub async fn update_client_information(&self) {
-        let config = self.config.lock().await;
+        let player_config = &self.get_config().expect("Player has no config");
+        let config = player_config.lock().await;
         let world = self.world();
         world
             .broadcast_packet_all(&CSetEntityMetadata::new(
@@ -641,7 +930,8 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CSystemChatMessage::new(text, false))
             .await;
     }
@@ -649,7 +939,8 @@ impl Player {
 
 impl Player {
     pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
-        let mut packets = self.client.client_packets_queue.lock().await;
+        let client = &self.get_client().expect("Player has no client");
+        let mut packets = client.client_packets_queue.lock().await;
         while let Some(mut packet) = packets.pop_back() {
             tokio::select! {
                 () = self.await_cancel() => {

@@ -58,10 +58,10 @@ impl CommandExecutor for TransferTargetSelf {
         };
 
         if let CommandSender::Player(player) = sender {
-            let name = &player.gameprofile.name;
+            let name = &player.get_gameprofile().name;
             log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
-            player
-                .client
+            let client = &player.get_client().expect("Player has no client");
+            client
                 .send_packet(&CTransfer::new(hostname, &VarInt(port)))
                 .await;
             Ok(())
@@ -103,13 +103,20 @@ impl CommandExecutor for TransferTargetPlayer {
             return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
         };
 
+        if players.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         for p in players {
-            p.client
+            let client = &p.get_client().expect("Player has no client");
+            client
                 .send_packet(&CTransfer::new(hostname, &VarInt(port)))
                 .await;
             log::info!(
                 "[{sender}: Transferring {} to {hostname}:{port}]",
-                p.gameprofile.name
+                p.get_gameprofile().name
             );
         }
 

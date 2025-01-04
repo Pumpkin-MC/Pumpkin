@@ -22,7 +22,12 @@ impl CommandExecutor for PumpkinExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let seed = match sender {
-            CommandSender::Player(player) => player.living_entity.entity.world.level.seed.0,
+            CommandSender::Player(player) => {
+                let living_entity = &player
+                    .get_living_entity()
+                    .expect("Player has no living entity");
+                living_entity.entity.world.level.seed.0
+            }
             _ => match server.worlds.first() {
                 Some(world) => world.level.seed.0,
                 None => {

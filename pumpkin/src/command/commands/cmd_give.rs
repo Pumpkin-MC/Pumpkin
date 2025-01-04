@@ -51,6 +51,12 @@ impl CommandExecutor for GiveExecutor {
             }
         };
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         for target in targets {
             target.give_items(item, item_count as u32).await;
         }
@@ -59,7 +65,8 @@ impl CommandExecutor for GiveExecutor {
             .send_message(TextComponent::text(match targets {
                 [target] => format!(
                     "Gave {item_count} {} to {}",
-                    item_name, target.gameprofile.name
+                    item_name,
+                    target.get_gameprofile().name
                 ),
                 _ => format!(
                     "Gave {item_count} {} to {} players",

@@ -22,7 +22,10 @@ impl PumpkinBlock for JukeboxBlock {
         _server: &Server,
     ) {
         // For now just stop the music at this position
-        let world = &player.living_entity.entity.world;
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let world = &living_entity.entity.world;
 
         world.stop_record(location).await;
     }
@@ -35,7 +38,10 @@ impl PumpkinBlock for JukeboxBlock {
         item: &Item,
         _server: &Server,
     ) -> BlockActionResult {
-        let world = &player.living_entity.entity.world;
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let world = &living_entity.entity.world;
 
         let Some(jukebox_playable) = &item.components.jukebox_playable else {
             return BlockActionResult::Continue;
@@ -65,7 +71,10 @@ impl PumpkinBlock for JukeboxBlock {
         _server: &Server,
     ) {
         // For now just stop the music at this position
-        let world = &player.living_entity.entity.world;
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let world = &living_entity.entity.world;
 
         world.stop_record(location).await;
     }

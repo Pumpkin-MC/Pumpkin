@@ -123,7 +123,9 @@ impl CommandExecutor for BossbarGetExecuter {
                 .await;
                 return Ok(());
             }
-            CommandValueGet::Players => {}
+            CommandValueGet::Players => {
+                // TODO: implement
+            }
             CommandValueGet::Value => {
                 send_prefix_success_message(
                     sender,
@@ -360,8 +362,15 @@ impl CommandExecutor for BossbarSetExecuter {
 
                 //TODO: Confirm that this is the vanilla way
                 let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-                let players: Vec<Uuid> =
-                    targets.iter().map(|player| player.gameprofile.id).collect();
+                // require that all players are online and throw an error if not
+                if targets.iter().any(|player| !player.is_online()) {
+                    send_error_message(sender, "All players must be online".to_string()).await;
+                    return Ok(());
+                }
+                let players: Vec<Uuid> = targets
+                    .iter()
+                    .map(|player| player.get_gameprofile().id)
+                    .collect();
                 let count = players.len();
 
                 match server
@@ -380,7 +389,7 @@ impl CommandExecutor for BossbarSetExecuter {
 
                 let player_names: Vec<String> = targets
                     .iter()
-                    .map(|player| player.gameprofile.name.clone())
+                    .map(|player| player.get_gameprofile().name.clone())
                     .collect();
 
                 send_prefix_success_message(

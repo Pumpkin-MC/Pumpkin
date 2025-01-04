@@ -11,28 +11,33 @@ use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use crate::entity::player::Player;
 
 pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
-    player.config.lock().await.view_distance.clamp(
+    let config = &player.get_config().expect("Player has no config");
+    config.lock().await.view_distance.clamp(
         unsafe { NonZeroU8::new_unchecked(2) },
         BASIC_CONFIG.view_distance,
     )
 }
 
 pub async fn player_join(player: &Arc<Player>) {
-    let chunk_pos = player.living_entity.entity.chunk_pos.load();
+    let living_entity = &player
+        .get_living_entity()
+        .expect("Player has no living entity");
+    let chunk_pos = living_entity.entity.chunk_pos.load();
 
-    log::debug!("Sending center chunk to {}", player.gameprofile.name);
-    player
-        .client
+    log::debug!("Sending center chunk to {}", player.get_gameprofile().name);
+    let client = &player.get_client().expect("Player has no client");
+    client
         .send_packet(&CCenterChunk {
             chunk_x: chunk_pos.x.into(),
             chunk_z: chunk_pos.z.into(),
         })
         .await;
+    log::debug!("Sending view distance to {}", player.get_gameprofile().name);
     let view_distance = get_view_distance(player).await;
     log::debug!(
         "Player {} ({}) joined with view distance: {}",
-        player.gameprofile.name,
-        player.client.id,
+        player.get_gameprofile().name,
+        client.id,
         view_distance
     );
 
@@ -40,24 +45,31 @@ pub async fn player_join(player: &Arc<Player>) {
 }
 
 pub async fn update_position(player: &Arc<Player>) {
-    if !player.abilities.lock().await.flying {
-        player
-            .living_entity
-            .update_fall_distance(player.gamemode.load() == GameMode::Creative)
+    let abilities = &player.get_abilities().expect("Player has no abilities");
+    let living_entity = &player
+        .get_living_entity()
+        .expect("Player has no living entity");
+    if !abilities.lock().await.flying {
+        let gamemode = &player.get_gamemode().expect("Player has no gamemode");
+        living_entity
+            .update_fall_distance(gamemode.load() == GameMode::Creative)
             .await;
     }
 
-    let entity = &player.living_entity.entity;
+    let entity = &living_entity.entity;
 
     let view_distance = get_view_distance(player).await;
     let new_chunk_center = entity.chunk_pos.load();
 
-    let old_cylindrical = player.watched_section.load();
+    let watched_section = &player
+        .get_watched_section()
+        .expect("Player has no watched section");
+    let old_cylindrical = watched_section.load();
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        player
-            .client
+        let client = &player.get_client().expect("Player has no client");
+        client
             .send_packet(&CCenterChunk {
                 chunk_x: new_chunk_center.x.into(),
                 chunk_z: new_chunk_center.z.into(),
@@ -87,13 +99,14 @@ pub async fn update_position(player: &Arc<Player>) {
             .world
             .level
             .mark_chunks_as_not_watched(&unloading_chunks);
-        player.watched_section.store(new_cylindrical);
+        watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {
             entity.world.level.clean_chunks(&chunks_to_clean);
 
             // This can take a little if we are sending a bunch of packets, queue it up :p
-            let client = player.client.clone();
+            let client = &player.get_client().expect("Player has no client").clone();
+            let client = client.clone();
             tokio::spawn(async move {
                 for chunk in unloading_chunks {
                     if client.closed.load(std::sync::atomic::Ordering::Relaxed) {

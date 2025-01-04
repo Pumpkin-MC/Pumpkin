@@ -100,11 +100,17 @@ impl PumpkinError for BlockPlacingError {
 /// NEVER TRUST THE CLIENT. HANDLE EVERY ERROR, UNWRAP/EXPECT ARE FORBIDDEN
 impl Player {
     pub async fn handle_confirm_teleport(&self, confirm_teleport: SConfirmTeleport) {
-        let mut awaiting_teleport = self.awaiting_teleport.lock().await;
+        let player_awaiting_teleport = &self
+            .get_awaiting_teleport()
+            .expect("Player has no awaiting teleport");
+        let mut awaiting_teleport = player_awaiting_teleport.lock().await;
         if let Some((id, position)) = awaiting_teleport.as_ref() {
             if id == &confirm_teleport.teleport_id {
                 // we should set the pos now to that we requested in the teleport packet, Is may fixed issues when the client sended position packets while being teleported
-                self.living_entity.set_pos(*position);
+                let player_living_entity = &self
+                    .get_living_entity()
+                    .expect("Player has no living entity");
+                player_living_entity.set_pos(*position);
 
                 *awaiting_teleport = None;
             } else {
@@ -138,11 +144,14 @@ impl Player {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
-        let entity = &self.living_entity.entity;
-        self.living_entity.set_pos(position);
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
+        living_entity.set_pos(position);
 
         let pos = entity.pos.load();
-        let last_pos = self.living_entity.last_pos.load();
+        let last_pos = living_entity.last_pos.load();
 
         entity
             .on_ground
@@ -167,7 +176,7 @@ impl Player {
         // send new position to all other players
         world
             .broadcast_packet_except(
-                &[self.gameprofile.id],
+                &[self.get_gameprofile().id],
                 &CUpdateEntityPos::new(
                     entity_id.into(),
                     Vector3::new(
@@ -199,11 +208,14 @@ impl Player {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
-        let entity = &self.living_entity.entity;
-        self.living_entity.set_pos(position);
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
+        living_entity.set_pos(position);
 
         let pos = entity.pos.load();
-        let last_pos = self.living_entity.last_pos.load();
+        let last_pos = living_entity.last_pos.load();
 
         entity
             .on_ground
@@ -238,7 +250,7 @@ impl Player {
 
         world
             .broadcast_packet_except(
-                &[self.gameprofile.id],
+                &[self.get_gameprofile().id],
                 &CUpdateEntityPosRot::new(
                     entity_id.into(),
                     Vector3::new(
@@ -254,7 +266,7 @@ impl Player {
             .await;
         world
             .broadcast_packet_except(
-                &[self.gameprofile.id],
+                &[self.get_gameprofile().id],
                 &CHeadRot::new(entity_id.into(), yaw as u8),
             )
             .await;
@@ -266,7 +278,10 @@ impl Player {
             self.kick(TextComponent::text("Invalid rotation")).await;
             return;
         }
-        let entity = &self.living_entity.entity;
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
         entity
             .on_ground
             .store(rotation.ground, std::sync::atomic::Ordering::Relaxed);
@@ -284,11 +299,11 @@ impl Player {
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
-            .broadcast_packet_except(&[self.gameprofile.id], &packet)
+            .broadcast_packet_except(&[self.get_gameprofile().id], &packet)
             .await;
         let packet = CHeadRot::new(entity_id.into(), yaw as u8);
         world
-            .broadcast_packet_except(&[self.gameprofile.id], &packet)
+            .broadcast_packet_except(&[self.get_gameprofile().id], &packet)
             .await;
     }
 
@@ -308,14 +323,17 @@ impl Player {
         if ADVANCED_CONFIG.commands.log_console {
             log::info!(
                 "Player ({}): executed command /{}",
-                self.gameprofile.name,
+                self.get_gameprofile().name,
                 command.command
             );
         }
     }
 
     pub fn handle_player_ground(&self, ground: &SSetPlayerGround) {
-        self.living_entity
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity
             .entity
             .on_ground
             .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
@@ -329,7 +347,8 @@ impl Player {
     ) {
         inventory.state_id += 1;
         let dest_packet = CSetContainerSlot::new(0, inventory.state_id as i32, slot, &slot_data);
-        self.client.send_packet(&dest_packet).await;
+        let client = &self.get_client().expect("Player has no client");
+        client.send_packet(&dest_packet).await;
 
         if inventory
             .set_slot(slot, slot_data.to_item(), false)
@@ -364,7 +383,8 @@ impl Player {
         };
 
         // Early return if no source slot and not in creative mode
-        if source_slot.is_none() && self.gamemode.load() != GameMode::Creative {
+        let gamemode = self.get_gamemode().expect("Player has no gamemode");
+        if source_slot.is_none() && gamemode.load() != GameMode::Creative {
             return;
         }
 
@@ -388,7 +408,7 @@ impl Player {
                 self.update_single_slot(&mut inventory, slot_index, dest_slot_data)
                     .await;
             }
-            None if self.gamemode.load() == GameMode::Creative => {
+            None if gamemode.load() == GameMode::Creative => {
                 // Case where item is not present, if in creative mode create the item
                 let item_stack = ItemStack::new(1, block.item_id);
                 let slot_data = Slot::from(&item_stack);
@@ -407,7 +427,8 @@ impl Player {
 
         // Update held item
         inventory.set_selected(dest_slot);
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CSetHeldItem::new(dest_slot as i8))
             .await;
     }
@@ -422,7 +443,10 @@ impl Player {
         }
 
         if let Some(action) = Action::from_i32(command.action.0) {
-            let entity = &self.living_entity.entity;
+            let living_entity = &self
+                .get_living_entity()
+                .expect("Player has no living entity");
+            let entity = &living_entity.entity;
             match action {
                 pumpkin_protocol::server::play::Action::StartSneaking => {
                     if !entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
@@ -477,7 +501,8 @@ impl Player {
             }
         };
         // Invert hand if player is left handed
-        let animation = match self.config.lock().await.main_hand {
+        let config = &self.get_config().expect("Player has no config");
+        let animation = match config.lock().await.main_hand {
             Hand::Left => match animation {
                 Animation::SwingMainArm => Animation::SwingOffhand,
                 Animation::SwingOffhand => Animation::SwingMainArm,
@@ -490,7 +515,7 @@ impl Player {
         let world = self.world();
         world
             .broadcast_packet_except(
-                &[self.gameprofile.id],
+                &[self.get_gameprofile().id],
                 &CEntityAnimation::new(id.into(), animation as u8),
             )
             .await;
@@ -509,10 +534,13 @@ impl Player {
             return;
         }
 
-        let gameprofile = &self.gameprofile;
+        let gameprofile = &self.get_gameprofile();
         log::info!("<chat>{}: {}", gameprofile.name, message);
 
-        let entity = &self.living_entity.entity;
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
         let world = &entity.world;
         world
             .broadcast_packet_all(&CPlayerChatMessage::new(
@@ -559,7 +587,8 @@ impl Player {
             }
 
             let (update_skin, update_watched) = {
-                let mut config = self.config.lock().await;
+                let config = &self.get_config().expect("Player has no config");
+                let mut config = config.lock().await;
                 let update_skin = config.main_hand != main_hand
                     || config.skin_parts != client_information.skin_parts;
 
@@ -569,10 +598,11 @@ impl Player {
                     if old_view_distance.get() == client_information.view_distance as u8 {
                         false
                     } else {
+                        let client = &self.get_client().expect("Player has no client");
                         log::debug!(
                             "Player {} ({}) updated render distance: {} -> {}.",
-                            self.gameprofile.name,
-                            self.client.id,
+                            self.get_gameprofile().name,
+                            client.id,
                             old_view_distance,
                             client_information.view_distance
                         );
@@ -601,10 +631,11 @@ impl Player {
             }
 
             if update_skin {
+                let client = &self.get_client().expect("Player has no client");
                 log::debug!(
                     "Player {} ({}) updated their skin.",
-                    self.gameprofile.name,
-                    self.client.id,
+                    self.get_gameprofile().name,
+                    client.id,
                 );
                 self.update_client_information().await;
             }
@@ -617,7 +648,10 @@ impl Player {
     pub async fn handle_client_status(self: &Arc<Self>, client_status: SClientCommand) {
         match client_status.action_id.0 {
             0 => {
-                if self.living_entity.health.load() > 0.0 {
+                let living_entity = &self
+                    .get_living_entity()
+                    .expect("Player has no living entity");
+                if living_entity.health.load() > 0.0 {
                     return;
                 }
                 self.world().respawn_player(self, false).await;
@@ -636,7 +670,10 @@ impl Player {
 
     pub async fn handle_interact(&self, interact: SInteract) {
         let sneaking = interact.sneaking;
-        let entity = &self.living_entity.entity;
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
         if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
             entity.set_sneaking(sneaking).await;
         }
@@ -658,7 +695,10 @@ impl Player {
                 let player_victim = world.get_player_by_entityid(entity_id.0).await;
                 let entity_victim = world.get_living_entity_by_entityid(entity_id.0).await;
                 if let Some(player_victim) = player_victim {
-                    if player_victim.living_entity.health.load() <= 0.0 {
+                    let living_entity = &player_victim
+                        .get_living_entity()
+                        .expect("Player has no living entity");
+                    if living_entity.health.load() <= 0.0 {
                         // you can trigger this from a non-modded / innocent client client,
                         // so we shouldn't kick the player
                         return;
@@ -701,17 +741,21 @@ impl Player {
                     if !self.can_interact_with_block_at(&player_action.location, 1.0) {
                         log::warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
-                            self.gameprofile.name,
+                            self.get_gameprofile().name,
                             player_action.location
                         );
                         return;
                     }
                     // TODO: do validation
                     // TODO: Config
-                    if self.gamemode.load() == GameMode::Creative {
+                    let gamemode = self.get_gamemode().expect("Player has no gamemode");
+                    if gamemode.load() == GameMode::Creative {
                         let location = player_action.location;
                         // Block break & block break sound
-                        let entity = &self.living_entity.entity;
+                        let living_entity = &self
+                            .get_living_entity()
+                            .expect("Player has no living entity");
+                        let entity = &living_entity.entity;
                         let world = &entity.world;
                         let block = world.get_block(location).await;
 
@@ -729,13 +773,15 @@ impl Player {
                     if !self.can_interact_with_block_at(&player_action.location, 1.0) {
                         log::warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
-                            self.gameprofile.name,
+                            self.get_gameprofile().name,
                             player_action.location
                         );
                         return;
                     }
-                    self.current_block_destroy_stage
-                        .store(0, std::sync::atomic::Ordering::Relaxed);
+                    let current_block_destroy_stage = self
+                        .get_current_block_destroy_stage()
+                        .expect("Player has no current block destroy stage");
+                    current_block_destroy_stage.store(0, std::sync::atomic::Ordering::Relaxed);
                 }
                 Status::FinishedDigging => {
                     // TODO: do validation
@@ -743,13 +789,16 @@ impl Player {
                     if !self.can_interact_with_block_at(&location, 1.0) {
                         log::warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
-                            self.gameprofile.name,
+                            self.get_gameprofile().name,
                             player_action.location
                         );
                         return;
                     }
                     // Block break & block break sound
-                    let entity = &self.living_entity.entity;
+                    let living_entity = &self
+                        .get_living_entity()
+                        .expect("Player has no living entity");
+                    let entity = &living_entity.entity;
                     let world = &entity.world;
                     let block = world.get_block(location).await;
 
@@ -772,40 +821,46 @@ impl Player {
             None => self.kick(TextComponent::text("Invalid status")).await,
         }
 
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
             .await;
     }
 
     pub async fn handle_keep_alive(&self, keep_alive: SKeepAlive) {
-        if self
-            .wait_for_keep_alive
-            .load(std::sync::atomic::Ordering::Relaxed)
-            && keep_alive.keep_alive_id
-                == self
-                    .keep_alive_id
-                    .load(std::sync::atomic::Ordering::Relaxed)
+        let wait_for_keep_alive = self
+            .get_wait_for_keep_alive()
+            .expect("Player has no wait for keep alive");
+        let keep_alive_id = self
+            .get_keep_alive_id()
+            .expect("Player has no keep alive id");
+        if wait_for_keep_alive.load(std::sync::atomic::Ordering::Relaxed)
+            && keep_alive.keep_alive_id == keep_alive_id.load(std::sync::atomic::Ordering::Relaxed)
         {
-            self.wait_for_keep_alive
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+            wait_for_keep_alive.store(false, std::sync::atomic::Ordering::Relaxed);
         } else {
             self.kick(TextComponent::text("Timeout")).await;
         }
     }
 
     pub async fn handle_player_abilities(&self, player_abilities: SPlayerAbilities) {
-        let mut abilities = self.abilities.lock().await;
+        let abilities = self.get_abilities().expect("Player has no abilities");
+        let mut abilities = abilities.lock().await;
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
         if flying {
-            self.living_entity.fall_distance.store(0.0);
+            let living_entity = &self
+                .get_living_entity()
+                .expect("Player has no living entity");
+            living_entity.fall_distance.store(0.0);
         }
         abilities.flying = flying;
     }
 
     pub async fn handle_play_ping_request(&self, request: SPlayPingRequest) {
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CPingResponse::new(request.payload))
             .await;
     }
@@ -825,7 +880,10 @@ impl Player {
 
         if let Some(face) = BlockFace::from_i32(use_item_on.face.0) {
             let mut inventory = self.inventory().lock().await;
-            let entity = &self.living_entity.entity;
+            let living_entity = &self
+                .get_living_entity()
+                .expect("Player has no living entity");
+            let entity = &living_entity.entity;
             let world = &entity.world;
             let slot_id = inventory.get_selected();
             let cursor_pos = use_item_on.cursor_pos;
@@ -865,7 +923,8 @@ impl Player {
                 if should_try_decrement {
                     // TODO: Config
                     // Decrease Block count
-                    if self.gamemode.load() != GameMode::Creative {
+                    let gamemode = self.get_gamemode().expect("Player has no gamemode");
+                    if gamemode.load() != GameMode::Creative {
                         // This should never be possible
                         let Some(item_stack) = item_slot else {
                             return Err(BlockPlacingError::InventoryInvalid.into());
@@ -912,7 +971,8 @@ impl Player {
         &self,
         packet: SSetCreativeSlot,
     ) -> Result<(), InventoryError> {
-        if self.gamemode.load() != GameMode::Creative {
+        let gamemode = self.get_gamemode().expect("Player has no gamemode");
+        if gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
         let valid_slot = packet.slot >= 0 && packet.slot <= 45;
@@ -941,7 +1001,10 @@ impl Player {
         let mut inventory = self.inventory().lock().await;
 
         inventory.state_id = 0;
-        let open_container = self.open_container.load();
+        let player_open_container = self
+            .get_open_container()
+            .expect("Player has no open container");
+        let open_container = player_open_container.load();
         if let Some(id) = open_container {
             let mut open_containers = server.open_containers.write().await;
             if let Some(container) = open_containers.get_mut(&id) {
@@ -957,7 +1020,7 @@ impl Player {
                 // Remove the player from the container
                 container.remove_player(self.entity_id());
             }
-            self.open_container.store(None);
+            player_open_container.store(None);
         }
     }
 
@@ -986,7 +1049,8 @@ impl Player {
             suggestions,
         );
 
-        self.client.send_packet(&response).await;
+        let client = &self.get_client().expect("Player has no client");
+        client.send_packet(&response).await;
     }
 
     pub fn handle_cookie_response(&self, packet: SPCookieResponse) {
@@ -1015,7 +1079,10 @@ impl Player {
             // TODO: this should not be hardcoded
             let (mob, _world, uuid) = server.add_living_entity(EntityType::Chicken).await;
 
-            let opposite_yaw = self.living_entity.entity.yaw.load() + 180.0;
+            let living_entity = &self
+                .get_living_entity()
+                .expect("Player has no living entity");
+            let opposite_yaw = living_entity.entity.yaw.load() + 180.0;
             server
                 .broadcast_packet_all(&CSpawnEntity::new(
                     VarInt(mob.entity.entity_id),
@@ -1051,7 +1118,10 @@ impl Player {
         location: WorldPosition,
         face: &BlockFace,
     ) -> Result<bool, Box<dyn PumpkinError>> {
-        let entity = &self.living_entity.entity;
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
         let world = &entity.world;
 
         let clicked_world_pos = WorldPosition(location.0);
@@ -1072,7 +1142,8 @@ impl Player {
 
         //check max world build height
         if world_pos.0.y > 319 {
-            self.client
+            let client = &self.get_client().expect("Player has no client");
+            client
                 .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
                 .await;
             return Err(BlockPlacingError::BlockOutOfWorld.into());
@@ -1081,7 +1152,11 @@ impl Player {
         let block_bounding_box = BoundingBox::from_block(&world_pos);
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20).await {
-            let bounding_box = player.1.living_entity.entity.bounding_box.load();
+            let living_entity = &player
+                .1
+                .get_living_entity()
+                .expect("Player has no living entity");
+            let bounding_box = living_entity.entity.bounding_box.load();
             if bounding_box.intersects(&block_bounding_box) {
                 intersects = true;
             }
@@ -1095,7 +1170,8 @@ impl Player {
                 .on_placed(&block, self, world_pos, server)
                 .await;
         }
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
             .await;
         Ok(true)

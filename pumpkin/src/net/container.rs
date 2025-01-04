@@ -24,7 +24,7 @@ impl Player {
         let mut inventory = self.inventory().lock().await;
         inventory.state_id = 0;
         inventory.total_opened_containers += 1;
-        let mut container = self.get_open_container(server).await;
+        let mut container = self.fetch_open_container(server).await;
         let mut container = match container.as_mut() {
             Some(container) => Some(container.lock().await),
             None => None,
@@ -35,7 +35,8 @@ impl Player {
         );
         let title = TextComponent::text(window_title);
 
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&COpenScreen::new(
                 inventory.total_opened_containers.into(),
                 VarInt(window_type as i32),
@@ -64,8 +65,8 @@ impl Player {
             .map(Slot::from)
             .collect();
 
-        let carried_item = self
-            .carried_item
+        let player_carried_item = self.get_carried_item().expect("Player has no carried item");
+        let carried_item = player_carried_item
             .load()
             .as_ref()
             .map_or_else(Slot::empty, std::convert::Into::into);
@@ -77,7 +78,8 @@ impl Player {
             &slots,
             &carried_item,
         );
-        self.client.send_packet(&packet).await;
+        let client = &self.get_client().expect("Player has no client");
+        client.send_packet(&packet).await;
     }
 
     /// The official Minecraft client is weird, and will always just close *any* window that is opened when this gets sent
@@ -85,7 +87,8 @@ impl Player {
     pub async fn close_container(&self) {
         let mut inventory = self.inventory().lock().await;
         inventory.total_opened_containers += 1;
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CCloseContainer::new(
                 inventory.total_opened_containers.into(),
             ))
@@ -97,7 +100,8 @@ impl Player {
         window_property: WindowProperty<T>,
     ) {
         let (id, value) = window_property.into_tuple();
-        self.client
+        let client = &self.get_client().expect("Player has no client");
+        client
             .send_packet(&CSetContainerProperty::new(
                 self.inventory().lock().await.total_opened_containers.into(),
                 id,
@@ -111,7 +115,7 @@ impl Player {
         server: &Arc<Server>,
         packet: SClickContainer,
     ) -> Result<(), InventoryError> {
-        let opened_container = self.get_open_container(server).await;
+        let opened_container = self.fetch_open_container(server).await;
         let mut opened_container = match opened_container.as_ref() {
             Some(container) => Some(container.lock().await),
             None => None,
@@ -212,7 +216,8 @@ impl Player {
         let slot = Slot::from(item_stack);
         *state_id += 1;
         let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, &slot);
-        self.client.send_packet(&packet).await;
+        let client = &self.get_client().expect("Player has no client");
+        client.send_packet(&packet).await;
         Ok(())
     }
 
@@ -290,14 +295,16 @@ impl Player {
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
         match slot {
             container_click::Slot::Normal(slot) => {
-                let mut carried_item = self.carried_item.load();
+                let player_carried_item =
+                    &self.get_carried_item().expect("Player has no carried item");
+                let mut carried_item = player_carried_item.load();
                 let res = container.handle_item_change(
                     &mut carried_item,
                     slot,
                     mouse_click,
                     taking_crafted,
                 );
-                self.carried_item.store(carried_item);
+                player_carried_item.store(carried_item);
                 res
             }
             container_click::Slot::OutsideInventory => Ok(()),
@@ -381,13 +388,15 @@ impl Player {
         opened_container: Option<&mut Box<dyn Container>>,
         slot: usize,
     ) -> Result<(), InventoryError> {
-        if self.gamemode.load() != GameMode::Creative {
+        let gamemode = &self.get_gamemode().expect("Player has no gamemode");
+        if gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
         if let Some(Some(item)) = container.all_slots().get_mut(slot) {
-            self.carried_item.store(Some(item.to_owned()));
+            let player_carried_item = &self.get_carried_item().expect("Player has no carried item");
+            player_carried_item.store(Some(item.to_owned()));
         }
         Ok(())
     }
@@ -426,7 +435,8 @@ impl Player {
                 }
             }
         }
-        self.carried_item.store(Some(carried_item));
+        let player_carried_item = &self.get_carried_item().expect("Player has no carried item");
+        player_carried_item.store(Some(carried_item));
         Ok(())
     }
 
@@ -444,8 +454,8 @@ impl Player {
             });
         match mouse_drag_state {
             MouseDragState::Start(drag_type) => {
-                if drag_type == MouseDragType::Middle && self.gamemode.load() != GameMode::Creative
-                {
+                let gamemode = &self.get_gamemode().expect("Player has no gamemode");
+                if drag_type == MouseDragType::Middle && gamemode.load() != GameMode::Creative {
                     Err(InventoryError::PermissionError)?;
                 }
                 drag_handler
@@ -459,11 +469,13 @@ impl Player {
                 let mut inventory = self.inventory().lock().await;
                 let mut container =
                     OptionallyCombinedContainer::new(&mut inventory, opened_container);
-                let mut carried_item = self.carried_item.load();
+                let player_carried_item =
+                    &self.get_carried_item().expect("Player has no carried item");
+                let mut carried_item = player_carried_item.load();
                 let res = drag_handler
                     .apply_drag(&mut carried_item, &mut container, &container_id, player_id)
                     .await;
-                self.carried_item.store(carried_item);
+                player_carried_item.store(carried_item);
                 res
             }
         }
@@ -472,21 +484,26 @@ impl Player {
     async fn get_current_players_in_container(&self, server: &Server) -> Vec<Arc<Self>> {
         let player_ids: Vec<i32> = {
             let open_containers = server.open_containers.read().await;
+            let player_open_container = &self
+                .get_open_container()
+                .expect("Player has no open container");
             open_containers
-                .get(&self.open_container.load().unwrap())
+                .get(&player_open_container.load().unwrap())
                 .unwrap()
                 .all_player_ids()
                 .into_iter()
                 .filter(|player_id| *player_id != self.entity_id())
                 .collect()
         };
-        let player_token = self.gameprofile.id;
+        let player_token = self.get_gameprofile().id;
 
         // TODO: Figure out better way to get only the players from player_ids
         // Also refactor out a better method to get individual advanced state ids
 
-        let players = self
-            .living_entity
+        let living_entity = &self
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let players = living_entity
             .entity
             .world
             .current_players
@@ -523,7 +540,8 @@ impl Player {
                 slot_index,
                 &slot,
             );
-            player.client.send_packet(&packet).await;
+            let client = &player.get_client().expect("Player has no client");
+            client.send_packet(&packet).await;
         }
         Ok(())
     }
@@ -532,7 +550,7 @@ impl Player {
         let players = self.get_current_players_in_container(server).await;
 
         for player in players {
-            let container = player.get_open_container(server).await;
+            let container = player.fetch_open_container(server).await;
             let mut container = match container.as_ref() {
                 Some(container) => Some(container.lock().await),
                 None => None,
@@ -542,11 +560,14 @@ impl Player {
         Ok(())
     }
 
-    pub async fn get_open_container(
+    pub async fn fetch_open_container(
         &self,
         server: &Server,
     ) -> Option<Arc<tokio::sync::Mutex<Box<dyn Container>>>> {
-        match self.open_container.load() {
+        let open_container = &self
+            .get_open_container()
+            .expect("Player has no open container");
+        match open_container.load() {
             Some(id) => server.try_get_container(self.entity_id(), id).await,
             None => None,
         }

@@ -238,12 +238,9 @@ async fn main() {
                     .await;
 
                 // poll Player
-                while !player
-                    .client
-                    .closed
-                    .load(core::sync::atomic::Ordering::Relaxed)
-                {
-                    let open = player.client.poll().await;
+                let client = &player.get_client().expect("Player has no client");
+                while !client.closed.load(core::sync::atomic::Ordering::Relaxed) {
+                    let open = client.poll().await;
                     if open {
                         player.process_packets(&server).await;
                     };

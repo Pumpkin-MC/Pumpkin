@@ -38,7 +38,8 @@ impl CommandExecutor for GamemodeTargetSelf {
         };
 
         if let Player(target) = sender {
-            if target.gamemode.load() == gamemode {
+            let player_gamemode = &target.get_gamemode().expect("Player has no gamemode");
+            if player_gamemode.load() == gamemode {
                 target
                     .send_system_message(&TextComponent::text(format!(
                         "You already in {gamemode:?} gamemode"
@@ -76,15 +77,23 @@ impl CommandExecutor for GamemodeTargetPlayer {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
+        if targets.iter().any(|player| !player.is_online()) {
+            return Err(CommandError::GeneralCommandIssue(String::from(
+                "All players must be online",
+            )));
+        }
+
         let target_count = targets.len();
 
         for target in targets {
-            if target.gamemode.load() == gamemode {
+            let player_gamemode = &target.get_gamemode().expect("Player has no gamemode");
+            if player_gamemode.load() == gamemode {
                 if target_count == 1 {
                     sender
                         .send_message(TextComponent::text(format!(
                             "{} is already in {:?} gamemode",
-                            target.gameprofile.name, gamemode
+                            target.get_gameprofile().name,
+                            gamemode
                         )))
                         .await;
                 }
@@ -94,7 +103,8 @@ impl CommandExecutor for GamemodeTargetPlayer {
                     sender
                         .send_message(TextComponent::text(format!(
                             "{}'s Game mode was set to {:?}",
-                            target.gameprofile.name, gamemode
+                            target.get_gameprofile().name,
+                            gamemode
                         )))
                         .await;
                 }

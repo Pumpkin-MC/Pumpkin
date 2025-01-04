@@ -51,7 +51,8 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
     let root_node_index = root.build(&mut proto_nodes);
 
     let packet = CCommands::new(proto_nodes, root_node_index.into());
-    player.client.send_packet(&packet).await;
+    let client = &player.get_client().expect("Player has no client");
+    client.send_packet(&packet).await;
 }
 
 #[derive(Debug)]

@@ -40,7 +40,7 @@ impl fmt::Display for CommandSender<'_> {
             match self {
                 CommandSender::Console => "Server",
                 CommandSender::Rcon(_) => "Rcon",
-                CommandSender::Player(p) => &p.gameprofile.name,
+                CommandSender::Player(p) => &p.get_gameprofile().name,
             }
         )
     }
@@ -77,7 +77,7 @@ impl<'a> CommandSender<'a> {
     pub fn permission_lvl(&self) -> PermissionLvl {
         match self {
             CommandSender::Console | CommandSender::Rcon(_) => PermissionLvl::Four,
-            CommandSender::Player(p) => p.permission_lvl.load(),
+            CommandSender::Player(p) => p.get_permission_lvl().load(),
         }
     }
 
@@ -85,7 +85,7 @@ impl<'a> CommandSender<'a> {
     pub fn has_permission_lvl(&self, lvl: PermissionLvl) -> bool {
         match self {
             CommandSender::Console | CommandSender::Rcon(_) => true,
-            CommandSender::Player(p) => p.permission_lvl.load().ge(&lvl),
+            CommandSender::Player(p) => p.get_permission_lvl().load().ge(&lvl),
         }
     }
 
@@ -93,7 +93,10 @@ impl<'a> CommandSender<'a> {
     pub fn position(&self) -> Option<Vector3<f64>> {
         match self {
             CommandSender::Console | CommandSender::Rcon(..) => None,
-            CommandSender::Player(p) => Some(p.living_entity.entity.pos.load()),
+            CommandSender::Player(p) => {
+                let living_entity = &p.get_living_entity().expect("Player has no living entity");
+                Some(living_entity.entity.pos.load())
+            }
         }
     }
 
@@ -102,7 +105,10 @@ impl<'a> CommandSender<'a> {
         match self {
             // TODO: maybe return first world when console
             CommandSender::Console | CommandSender::Rcon(..) => None,
-            CommandSender::Player(p) => Some(&p.living_entity.entity.world),
+            CommandSender::Player(p) => {
+                let living_entity = &p.get_living_entity().expect("Player has no living entity");
+                Some(&living_entity.entity.world)
+            }
         }
     }
 }

@@ -170,10 +170,11 @@ impl Server {
 
         let player = Arc::new(Player::new(client, world.clone(), entity_id, gamemode).await);
         world
-            .add_player(player.gameprofile.id, player.clone())
+            .add_player(player.get_gameprofile().id, player.clone())
             .await;
         // TODO: Config if we want increase online
-        if let Some(config) = player.client.config.lock().await.as_ref() {
+        let client = &player.get_client().expect("Player has no client");
+        if let Some(config) = client.config.lock().await.as_ref() {
             // TODO: Config so we can also just ignore this hehe
             if config.server_listing {
                 self.server_listing.lock().await.add_player();
@@ -316,6 +317,27 @@ impl Server {
     }
 
     /// Searches for a player by their username across all worlds.
+    /// If the player is online, it returns the online player.
+    /// If the player is offline, it creates a new offline player.
+    pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
+        if let Some(player) = self.get_online_player_by_name(name).await {
+            return Some(player);
+        }
+
+        // TODO: Use world cache of offline players
+
+        let offline_player = Player::new_offline(name.to_string()).await;
+
+        // TODO: Cache data retreived from the Mojang API
+
+        if let Some(offline_player) = offline_player {
+            return Some(Arc::new(offline_player));
+        }
+
+        None
+    }
+
+    /// Searches for a player by their username across all worlds.
     ///
     /// This function iterates through each world managed by the server and attempts to find a player with the specified username.
     /// If a player is found in any world, it returns an `Arc<Player>` reference to that player. Otherwise, it returns `None`.
@@ -327,12 +349,13 @@ impl Server {
     /// # Returns
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not found.
-    pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
+    pub async fn get_online_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
         for world in &self.worlds {
             if let Some(player) = world.get_player_by_name(name).await {
                 return Some(player);
             }
         }
+
         None
     }
 

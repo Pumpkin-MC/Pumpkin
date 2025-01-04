@@ -136,7 +136,9 @@ impl World {
     {
         let current_players = self.current_players.lock().await;
         for player in current_players.values() {
-            player.client.send_packet(packet).await;
+            if let Some(client) = player.get_client() {
+                client.send_packet(packet).await;
+            }
         }
     }
 
@@ -151,7 +153,9 @@ impl World {
     {
         let current_players = self.current_players.lock().await;
         for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
-            player.client.send_packet(packet).await;
+            if let Some(client) = player.get_client() {
+                client.send_packet(packet).await;
+            }
         }
     }
 
@@ -237,16 +241,17 @@ impl World {
 
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
-        let gamemode = player.gamemode.load();
+        let player_gamemode = player.get_gamemode().expect("Player has no gamemode");
+        let gamemode = player_gamemode.load();
         log::debug!(
             "spawning player {}, entity id {}",
-            player.gameprofile.name,
+            player.get_gameprofile().name,
             entity_id
         );
 
         // login packet for our new player
-        player
-            .client
+        let client = &player.get_client().expect("Player has no client");
+        client
             .send_packet(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
@@ -283,15 +288,24 @@ impl World {
             .await;
         position.y = f64::from(top + 1);
 
-        log::debug!("Sending player teleport to {}", player.gameprofile.name);
+        log::debug!(
+            "Sending player teleport to {}",
+            player.get_gameprofile().name
+        );
         player.request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.last_pos.store(position);
 
-        let gameprofile = &player.gameprofile;
+        let gameprofile = &player.get_gameprofile();
         // first send info update to our new player, So he can see his Skin
         // also send his info to everyone else
-        log::debug!("Broadcasting player info for {}", player.gameprofile.name);
+        log::debug!(
+            "Broadcasting player info for {}",
+            player.get_gameprofile().name
+        );
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
             0x01 | 0x08,
             &[pumpkin_protocol::client::play::Player {
@@ -314,9 +328,9 @@ impl World {
             let current_players = self.current_players.lock().await;
             for (_, playerr) in current_players
                 .iter()
-                .filter(|(c, _)| **c != player.gameprofile.id)
+                .filter(|(c, _)| **c != player.get_gameprofile().id)
             {
-                let gameprofile = &playerr.gameprofile;
+                let gameprofile = &playerr.get_gameprofile();
                 entries.push(pumpkin_protocol::client::play::Player {
                     uuid: gameprofile.id,
                     actions: vec![
@@ -328,19 +342,22 @@ impl World {
                     ],
                 });
             }
-            log::debug!("Sending player info to {}", player.gameprofile.name);
-            player
-                .client
+            log::debug!("Sending player info to {}", player.get_gameprofile().name);
+            let client = &player.get_client().expect("Player has no client");
+            client
                 .send_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
                 .await;
         };
 
-        let gameprofile = &player.gameprofile;
+        let gameprofile = &player.get_gameprofile();
 
-        log::debug!("Broadcasting player spawn for {}", player.gameprofile.name);
+        log::debug!(
+            "Broadcasting player spawn for {}",
+            player.get_gameprofile().name
+        );
         // spawn player for every client
         self.broadcast_packet_except(
-            &[player.gameprofile.id],
+            &[player.get_gameprofile().id],
             // TODO: add velo
             &CSpawnEntity::new(
                 entity_id.into(),
@@ -360,7 +377,7 @@ impl World {
         )
         .await;
         // spawn players for our client
-        let id = player.gameprofile.id;
+        let id = player.get_gameprofile().id;
         for (_, existing_player) in self
             .current_players
             .lock()
@@ -368,12 +385,18 @@ impl World {
             .iter()
             .filter(|c| c.0 != &id)
         {
-            let entity = &existing_player.living_entity.entity;
+            let living_entity = &existing_player
+                .get_living_entity()
+                .expect("Player has no living entity");
+            let entity = &living_entity.entity;
             let pos = entity.pos.load();
-            let gameprofile = &existing_player.gameprofile;
-            log::debug!("Sending player entities to {}", player.gameprofile.name);
-            player
-                .client
+            let gameprofile = &existing_player.get_gameprofile();
+            log::debug!(
+                "Sending player entities to {}",
+                player.get_gameprofile().name
+            );
+            let client = &player.get_client().expect("Player has no client");
+            client
                 .send_packet(&CSpawnEntity::new(
                     existing_player.entity_id().into(),
                     gameprofile.id,
@@ -393,27 +416,27 @@ impl World {
         }
         // entity meta data
         // set skin parts
-        if let Some(config) = player.client.config.lock().await.as_ref() {
+        let client = &player.get_client().expect("Player has no client");
+        if let Some(config) = client.config.lock().await.as_ref() {
             let packet = CSetEntityMetadata::new(
                 entity_id.into(),
                 Metadata::new(17, VarInt(0), config.skin_parts),
             );
-            log::debug!("Broadcasting skin for {}", player.gameprofile.name);
+            log::debug!("Broadcasting skin for {}", player.get_gameprofile().name);
             self.broadcast_packet_all(&packet).await;
         }
 
         // Start waiting for level chunks, Sets the "Loading Terrain" screen
-        log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
-        player
-            .client
+        log::debug!(
+            "Sending waiting chunks to {}",
+            player.get_gameprofile().name
+        );
+        let client = &player.get_client().expect("Player has no client");
+        client
             .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
 
-        self.worldborder
-            .lock()
-            .await
-            .init_client(&player.client)
-            .await;
+        self.worldborder.lock().await.init_client(client).await;
 
         // Sends initial time
         player.send_time(self).await;
@@ -429,7 +452,10 @@ impl World {
     }
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
-        let last_pos = player.living_entity.last_pos.load();
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let last_pos = living_entity.last_pos.load();
         let death_dimension = player.world().dimension_type.name();
         let death_location = WorldPosition(Vector3::new(
             last_pos.x.round() as i32,
@@ -441,14 +467,15 @@ impl World {
 
         // TODO: switch world in player entity to new world
 
-        player
-            .client
+        let client = &player.get_client().expect("Player has no client");
+        let gamemode = &player.get_gamemode().expect("Player has no gamemode");
+        client
             .send_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
                 0, // seed
-                player.gamemode.load() as u8,
-                player.gamemode.load() as i8,
+                gamemode.load() as u8,
+                gamemode.load() as i8,
                 false,
                 false,
                 Some((death_dimension, death_location)),
@@ -458,7 +485,10 @@ impl World {
             ))
             .await;
 
-        log::debug!("Sending player abilities to {}", player.gameprofile.name);
+        log::debug!(
+            "Sending player abilities to {}",
+            player.get_gameprofile().name
+        );
         player.send_abilities_update().await;
 
         player.send_permission_lvl_update().await;
@@ -473,39 +503,48 @@ impl World {
             .await;
         position.y = f64::from(top + 1);
 
-        log::debug!("Sending player teleport to {}", player.gameprofile.name);
+        log::debug!(
+            "Sending player teleport to {}",
+            player.get_gameprofile().name
+        );
         player.request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        living_entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
-        self.worldborder
-            .lock()
-            .await
-            .init_client(&player.client)
-            .await;
+        self.worldborder.lock().await.init_client(client).await;
 
         // TODO: world spawn (compass stuff)
 
-        player
-            .client
+        client
             .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
 
-        let entity = &player.living_entity.entity;
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        let entity = &living_entity.entity;
         let entity_id = entity.entity_id;
 
-        let skin_parts = player.config.lock().await.skin_parts;
+        let skin_parts;
+        {
+            let player_config = &player.get_config().expect("Player has no config");
+            skin_parts = player_config.lock().await.skin_parts;
+        }
+
         let entity_metadata_packet =
             CSetEntityMetadata::new(entity_id.into(), Metadata::new(17, VarInt(0), &skin_parts));
 
         self.broadcast_packet_except(
-            &[player.gameprofile.id],
+            &[player.get_gameprofile().id],
             // TODO: add velo
             &CSpawnEntity::new(
                 entity.entity_id.into(),
-                player.gameprofile.id,
+                player.get_gameprofile().id,
                 (EntityType::Player as i32).into(),
                 position.x,
                 position.y,
@@ -521,11 +560,19 @@ impl World {
         )
         .await;
 
+        log::debug!("Sending player entities to {}", player.get_gameprofile().name);
+
         player_chunker::player_join(player).await;
+
+        log::debug!("Sending player metadata to {}", player.get_gameprofile().name);
         self.broadcast_packet_all(&entity_metadata_packet).await;
         // update commands
 
+        log::debug!("Setting health for {}", player.get_gameprofile().name);
+
         player.set_health(20.0, 20, 20.0).await;
+
+        log::debug!("Respawned player {}", player.get_gameprofile().name);
     }
 
     /// IMPORTANT: Chunks have to be non-empty
@@ -535,11 +582,8 @@ impl World {
         chunks: Vec<Vector2<i32>>,
         center_chunk: Vector2<i32>,
     ) {
-        if player
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        let client = &player.get_client().expect("Player has no client");
+        if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
             log::info!("The connection has closed before world chunks were spawned",);
             return;
         }
@@ -583,12 +627,9 @@ impl World {
                     continue;
                 }
 
-                if !player
-                    .client
-                    .closed
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    player.client.send_packet(&packet).await;
+                let client = &player.get_client().expect("Player has no client");
+                if !client.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                    client.send_packet(&packet).await;
                 }
             }
 
@@ -620,7 +661,7 @@ impl World {
     /// Gets a Player by username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
         for player in self.current_players.lock().await.values() {
-            if player.gameprofile.name == name {
+            if player.get_gameprofile().name == name {
                 return Some(player.clone());
             }
         }
@@ -661,7 +702,10 @@ impl World {
             .await
             .iter()
             .filter_map(|(uuid, player)| {
-                let player_block_pos = player.living_entity.entity.block_pos.load().0;
+                let living_entity = &player
+                    .get_living_entity()
+                    .expect("Player has no living entity");
+                let player_block_pos = living_entity.entity.block_pos.load().0;
                 (position.0.x == player_block_pos.x
                     && position.0.y == player_block_pos.y
                     && position.0.z == player_block_pos.z)
@@ -688,7 +732,11 @@ impl World {
 
         let mut found_players = HashMap::new();
         for player in self.current_players.lock().await.iter() {
-            let player_pos = player.1.living_entity.entity.pos.load();
+            let living_entity = &player
+                .1
+                .get_living_entity()
+                .expect("Player has no living entity");
+            let player_pos = living_entity.entity.pos.load();
 
             let diff = Vector3::new(
                 player_pos.x - pos.x,
@@ -721,7 +769,10 @@ impl World {
 
         // Handle join message
         // TODO: Config
-        let msg_txt = format!("{} joined the game.", player.gameprofile.name.as_str());
+        let msg_txt = format!(
+            "{} joined the game.",
+            player.get_gameprofile().name.as_str()
+        );
         let msg_comp = TextComponent::text(msg_txt).color_named(NamedColor::Yellow);
         for player in current_players.values() {
             player.send_system_message(&msg_comp).await;
@@ -751,19 +802,22 @@ impl World {
         self.current_players
             .lock()
             .await
-            .remove(&player.gameprofile.id)
+            .remove(&player.get_gameprofile().id)
             .unwrap();
-        let uuid = player.gameprofile.id;
+        let uuid = player.get_gameprofile().id;
         self.broadcast_packet_except(
-            &[player.gameprofile.id],
+            &[player.get_gameprofile().id],
             &CRemovePlayerInfo::new(1.into(), &[uuid]),
         )
         .await;
-        self.remove_entity(&player.living_entity.entity).await;
+        let living_entity = &player
+            .get_living_entity()
+            .expect("Player has no living entity");
+        self.remove_entity(&living_entity.entity).await;
 
         // Send disconnect message / quit message to players in the same world
         // TODO: Config
-        let disconn_msg_txt = format!("{} left the game.", player.gameprofile.name.as_str());
+        let disconn_msg_txt = format!("{} left the game.", player.get_gameprofile().name.as_str());
         let disconn_msg_cmp = TextComponent::text(disconn_msg_txt).color_named(NamedColor::Yellow);
         for player in self.current_players.lock().await.values() {
             player.send_system_message(&disconn_msg_cmp).await;
@@ -864,7 +918,7 @@ impl World {
 
         match cause {
             Some(player) => {
-                self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
+                self.broadcast_packet_except(&[player.get_gameprofile().id], &particles_packet)
                     .await;
             }
             None => self.broadcast_packet_all(&particles_packet).await,

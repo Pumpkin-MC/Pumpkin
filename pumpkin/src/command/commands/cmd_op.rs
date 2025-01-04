@@ -42,13 +42,13 @@ impl CommandExecutor for OpExecutor {
         if let Some(op) = config
             .ops
             .iter_mut()
-            .find(|o| o.uuid == player.gameprofile.id)
+            .find(|o| o.uuid == player.get_gameprofile().id)
         {
             op.level = new_level;
         } else {
             let op_entry = Op::new(
-                player.gameprofile.id,
-                player.gameprofile.name.clone(),
+                player.get_gameprofile().id,
+                player.get_gameprofile().name.clone(),
                 new_level,
                 false,
             );
@@ -57,17 +57,21 @@ impl CommandExecutor for OpExecutor {
 
         config.save();
 
-        player
-            .set_permission_lvl(new_level, &server.command_dispatcher)
-            .await;
+        if player.is_online() {
+            player
+                .set_permission_lvl(new_level, &server.command_dispatcher)
+                .await;
+        }
 
-        let player_name = &player.gameprofile.name;
+        let player_name = &player.get_gameprofile().name;
         let message = format!("Made {player_name} a server operator.");
         let msg = TextComponent::text(message);
         sender.send_message(msg).await;
-        player
-            .send_system_message(&TextComponent::text("You are now a server operator."))
-            .await;
+        if player.is_online() {
+            player
+                .send_system_message(&TextComponent::text("You are now a server operator."))
+                .await;
+        }
 
         Ok(())
     }
