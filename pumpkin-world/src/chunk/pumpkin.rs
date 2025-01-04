@@ -2,18 +2,17 @@ use std::{
     collections::HashSet,
     fs::OpenOptions,
     hash::RandomState,
-    io::{Read, Write},
+    io::{ErrorKind, Read, Write},
 };
 
 use bitvec::{bits, order, vec::BitVec, view::BitView};
 use pumpkin_core::math::ceil_log2;
-use serde::de::Error;
 
-use crate::{chunk::ChunkWritingError, level::LevelFolder};
+use crate::{chunk::ChunkWritingError, level::LevelFolder, WORLD_HEIGHT};
 
 use super::{
-    ChunkBlocks, ChunkData, ChunkReader, ChunkReadingError, ChunkSerializingError, ChunkWriter,
-    CHUNK_VOLUME, SUBCHUNK_VOLUME,
+    ChunkBlocks, ChunkData, ChunkReader, ChunkReadingError, ChunkWriter, CHUNK_VOLUME,
+    SUBCHUNK_VOLUME,
 };
 
 #[derive(Clone, Default)]
@@ -43,9 +42,7 @@ impl ChunkReader for PumpkinChunkFormat {
 
         let mut blocks = Vec::with_capacity(CHUNK_VOLUME);
 
-        let mut i = 0;
-
-        while i != 24 {
+        for _ in 0..WORLD_HEIGHT / 16 {
             let palette = {
                 let mut palette = Vec::new();
 
@@ -64,11 +61,7 @@ impl ChunkReader for PumpkinChunkFormat {
                 palette
             };
 
-            let block_bit_size = if palette.len() < 16 {
-                4
-            } else {
-                ceil_log2(palette.len() as u32).max(4)
-            } as usize;
+            let block_bit_size = block_bit_size(&palette);
 
             let subchunk_blocks: BitVec<u8, order::Lsb0> =
                 data.drain(..SUBCHUNK_VOLUME * block_bit_size).collect();
@@ -82,7 +75,6 @@ impl ChunkReader for PumpkinChunkFormat {
                     )
                     .unwrap_or(&0)
             }));
-            i += 1;
         }
 
         Ok(ChunkData {
@@ -116,18 +108,6 @@ impl ChunkWriter for PumpkinChunkFormat {
             )
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        let raw_bytes = self
-            .to_bytes(chunk_data)
-            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
-
-        file.write_all(&raw_bytes).unwrap();
-
-        Ok(())
-    }
-}
-
-impl PumpkinChunkFormat {
-    pub fn to_bytes(&self, chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
         let mut bits: BitVec<u8, order::Lsb0> = BitVec::new();
 
         for blocks in chunk_data.blocks.blocks.chunks(SUBCHUNK_VOLUME) {
@@ -136,11 +116,7 @@ impl PumpkinChunkFormat {
                 .collect();
             palette.sort();
 
-            let block_bit_size = if palette.len() < 16 {
-                4
-            } else {
-                ceil_log2(palette.len() as u32).max(4)
-            } as usize;
+            let block_bit_size = block_bit_size(&palette);
 
             bits.extend_from_bitslice(
                 BitVec::<u8, order::Lsb0>::from_vec(
@@ -157,17 +133,23 @@ impl PumpkinChunkFormat {
                 bits.extend_from_bitslice(
                     &palette
                         .binary_search(&block)
-                        .map_err(|_| {
-                            ChunkSerializingError::ErrorSerializingChunk(
-                                fastnbt::error::Error::custom("block not found"),
-                            )
-                        })?
+                        .map_err(|_| ChunkWritingError::IoError(ErrorKind::NotFound))?
                         .view_bits::<order::Lsb0>()[..block_bit_size],
                 );
             }
         }
 
-        Ok(bits.as_raw_slice().to_vec())
+        file.write_all(&bits.as_raw_slice().to_vec()).unwrap();
+
+        Ok(())
+    }
+}
+
+fn block_bit_size<T>(palette: &Vec<T>) -> usize {
+    if palette.len() < 16 {
+        4
+    } else {
+        ceil_log2(palette.len() as u32).max(4) as usize
     }
 }
 
@@ -178,14 +160,14 @@ mod tests {
     use pumpkin_core::math::vector2::Vector2;
 
     use crate::{
-        chunk::{anvil::AnvilChunkFormat, ChunkReader, ChunkReadingError},
+        chunk::{pumpkin::PumpkinChunkFormat, ChunkReader, ChunkReadingError},
         level::LevelFolder,
     };
 
     #[test]
     fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let result = AnvilChunkFormat.read_chunk(
+        let result = PumpkinChunkFormat.read_chunk(
             &LevelFolder {
                 root_folder: PathBuf::from(""),
                 region_folder: region_path,

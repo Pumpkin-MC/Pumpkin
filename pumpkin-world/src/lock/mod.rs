@@ -3,6 +3,7 @@ use thiserror::Error;
 use crate::level::LevelFolder;
 
 pub mod anvil;
+pub mod pumpkin;
 
 // Gets unlocked when dropped
 pub trait LevelLocker<T>: Send + Sync {
