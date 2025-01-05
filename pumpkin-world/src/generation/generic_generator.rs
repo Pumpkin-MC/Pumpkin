@@ -2,7 +2,7 @@ use noise::{NoiseFn, Perlin};
 use pumpkin_core::math::vector2::Vector2;
 
 use crate::{
-    chunk::{ChunkBlocks, ChunkData},
+    chunk::{ChunkData, Subchunks},
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
     WORLD_LOWEST_Y,
 };
@@ -34,7 +34,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: PerlinTerrainGenerator + GeneratorIni
 
 impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGenerator<B, T> {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut blocks = ChunkBlocks::default();
+        let mut subchunks = Subchunks::Single(0);
         self.terrain_generator.prepare_chunk(&at, &self.perlin);
         let noise_value = self.perlin.get([at.x as f64 / 16.0, at.z as f64 / 16.0]);
 
@@ -64,7 +64,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
                     self.terrain_generator.generate_block(
                         coordinates,
                         coordinates.with_chunk_coordinates(at),
-                        &mut blocks,
+                        &mut subchunks,
                         chunk_height,
                         biome,
                     );
@@ -73,7 +73,8 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
         }
 
         ChunkData {
-            blocks,
+            subchunks,
+            heightmap: Default::default(),
             position: at,
         }
     }

@@ -2,7 +2,10 @@ use crate::{bytebuf::ByteBufMut, codec::bit_set::BitSet, ClientPacket, VarInt};
 
 use bytes::{BufMut, BytesMut};
 use pumpkin_macros::client_packet;
-use pumpkin_world::{chunk::ChunkData, DIRECT_PALETTE_BITS};
+use pumpkin_world::{
+    chunk::{ChunkData, SUBCHUNKS_COUNT},
+    DIRECT_PALETTE_BITS,
+};
 
 #[client_packet("play:level_chunk_with_light")]
 pub struct CChunkData<'a>(pub &'a ChunkData);
@@ -14,19 +17,18 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         buf.put_i32(self.0.position.z);
 
-        let heightmap_nbt =
-            pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.blocks.heightmap).unwrap();
+        let heightmap_nbt = pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap).unwrap();
         // Heightmaps
         buf.put_slice(&heightmap_nbt);
 
         let mut data_buf = BytesMut::new();
-        self.0.blocks.iter_subchunks().for_each(|chunk| {
-            let block_count = chunk.len() as i16;
+        self.0.subchunks.array_iter().for_each(|subchunk| {
+            let block_count = subchunk.len() as i16;
             // Block count
             data_buf.put_i16(block_count);
             //// Block states
 
-            let palette = chunk;
+            let palette = &subchunk;
             // TODO: make dynamic block_size work
             // TODO: make direct block_size work
             enum PaletteType {
@@ -58,11 +60,11 @@ impl ClientPacket for CChunkData<'_> {
                         data_buf.put_var_int(&VarInt(*id as i32));
                     });
                     // Data array length
-                    let data_array_len = chunk.len().div_ceil(64 / block_size as usize);
+                    let data_array_len = subchunk.len().div_ceil(64 / block_size as usize);
                     data_buf.put_var_int(&VarInt(data_array_len as i32));
 
                     data_buf.reserve(data_array_len * 8);
-                    for block_clump in chunk.chunks(64 / block_size as usize) {
+                    for block_clump in subchunk.chunks(64 / block_size as usize) {
                         let mut out_long: i64 = 0;
                         for block in block_clump.iter().rev() {
                             let index = palette
@@ -78,11 +80,11 @@ impl ClientPacket for CChunkData<'_> {
                     // Bits per entry
                     data_buf.put_u8(DIRECT_PALETTE_BITS as u8);
                     // Data array length
-                    let data_array_len = chunk.len().div_ceil(64 / DIRECT_PALETTE_BITS as usize);
+                    let data_array_len = subchunk.len().div_ceil(64 / DIRECT_PALETTE_BITS as usize);
                     data_buf.put_var_int(&VarInt(data_array_len as i32));
 
                     data_buf.reserve(data_array_len * 8);
-                    for block_clump in chunk.chunks(64 / DIRECT_PALETTE_BITS as usize) {
+                    for block_clump in subchunk.chunks(64 / DIRECT_PALETTE_BITS as usize) {
                         let mut out_long: i64 = 0;
                         let mut shift = 0;
                         for block in block_clump {
@@ -121,8 +123,8 @@ impl ClientPacket for CChunkData<'_> {
         // Empty Block Light Mask
         buf.put_bit_set(&BitSet(VarInt(1), vec![0]));
 
-        buf.put_var_int(&VarInt(self.0.blocks.subchunks_len() as i32));
-        self.0.blocks.iter_subchunks().for_each(|chunk| {
+        buf.put_var_int(&VarInt(SUBCHUNKS_COUNT as i32));
+        self.0.subchunks.array_iter().for_each(|chunk| {
             let mut chunk_light = [0u8; 2048];
             for (i, _) in chunk.iter().enumerate() {
                 // if !block .is_air() {

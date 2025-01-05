@@ -5,7 +5,7 @@ use rand::Rng;
 
 use crate::{
     biome::Biome,
-    chunk::ChunkBlocks,
+    chunk::Subchunks,
     coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates, XZBlockCoordinates},
     generation::{
         generator::{BiomeGenerator, GeneratorInit, PerlinTerrainGenerator},
@@ -46,7 +46,7 @@ impl PerlinTerrainGenerator for PlainsTerrainGenerator {
         &self,
         coordinates: ChunkRelativeBlockCoordinates,
         at: BlockCoordinates,
-        blocks: &mut ChunkBlocks,
+        subchunks: &mut Subchunks,
         chunk_height: i16,
         _: Biome,
     ) {
@@ -55,13 +55,13 @@ impl PerlinTerrainGenerator for PlainsTerrainGenerator {
 
         let y = *at.y;
         if y == -64 {
-            blocks.set_block(coordinates, block_state!("bedrock").state_id);
+            subchunks.set_block(coordinates, block_state!("bedrock").state_id);
         } else if y >= -63 && y <= begin_stone_height {
-            blocks.set_block(coordinates, block_state!("stone").state_id);
+            subchunks.set_block(coordinates, block_state!("stone").state_id);
         } else if y >= begin_stone_height && y < begin_dirt_height {
-            blocks.set_block(coordinates, block_state!("dirt").state_id);
+            subchunks.set_block(coordinates, block_state!("dirt").state_id);
         } else if y == chunk_height - 2 {
-            blocks.set_block(coordinates, block_state!("grass_block").state_id);
+            subchunks.set_block(coordinates, block_state!("grass_block").state_id);
         } else if y == chunk_height - 1 {
             // TODO: generate flowers and grass
             let grass: u8 = rand::thread_rng().gen_range(0..7);
@@ -70,24 +70,24 @@ impl PerlinTerrainGenerator for PlainsTerrainGenerator {
                 if flower == 6 {
                     match rand::thread_rng().gen_range(0..4) {
                         0 => {
-                            blocks.set_block(coordinates, block_state!("dandelion").state_id);
+                            subchunks.set_block(coordinates, block_state!("dandelion").state_id);
                         }
                         1 => {
-                            blocks.set_block(coordinates, block_state!("oxeye_daisy").state_id);
+                            subchunks.set_block(coordinates, block_state!("oxeye_daisy").state_id);
                         }
                         2 => {
-                            blocks.set_block(coordinates, block_state!("cornflower").state_id);
+                            subchunks.set_block(coordinates, block_state!("cornflower").state_id);
                         }
                         3 => {
-                            blocks.set_block(coordinates, block_state!("poppy").state_id);
+                            subchunks.set_block(coordinates, block_state!("poppy").state_id);
                         }
                         _ => {
-                            blocks.set_block(coordinates, block_state!("azure_bluet").state_id);
+                            subchunks.set_block(coordinates, block_state!("azure_bluet").state_id);
                         }
                     }
                 } else {
                     // TODO: Tall grass, Tall grass data called `half`, There is `upper` and `lower`
-                    blocks.set_block(coordinates, block_state!("short_grass").state_id);
+                    subchunks.set_block(coordinates, block_state!("short_grass").state_id);
                 }
             }
         }

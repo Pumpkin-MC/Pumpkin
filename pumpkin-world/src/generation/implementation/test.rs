@@ -10,7 +10,7 @@ use pumpkin_core::math::{vector2::Vector2, vector3::Vector3};
 use crate::{
     biome::Biome,
     block::block_state::BlockState,
-    chunk::{ChunkBlocks, ChunkData},
+    chunk::{ChunkData, Subchunks},
     coordinates::{
         ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates, XZBlockCoordinates,
     },
@@ -40,7 +40,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: TerrainGenerator + GeneratorInit> Gen
 
 impl<B: BiomeGenerator, T: TerrainGenerator> WorldGenerator for TestGenerator<B, T> {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut blocks = ChunkBlocks::default();
+        let mut subchunks = Subchunks::Single(0);
         self.terrain_generator.prepare_chunk(&at);
 
         for x in 0..16u8 {
@@ -68,14 +68,15 @@ impl<B: BiomeGenerator, T: TerrainGenerator> WorldGenerator for TestGenerator<B,
                     );
 
                     //println!("{:?}: {:?}", coordinates, block);
-                    blocks.set_block(coordinates, block.state_id);
+                    subchunks.set_block(coordinates, block.state_id);
                 }
             }
         }
 
         self.terrain_generator.clean_chunk(&at);
         ChunkData {
-            blocks,
+            subchunks,
+            heightmap: Default::default(),
             position: at,
         }
     }
