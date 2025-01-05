@@ -9,10 +9,14 @@ use crate::{
     world::World,
 };
 use connection_cache::{CachedBranding, CachedStatus};
+use crossbeam::atomic::AtomicCell;
 use key_store::KeyStore;
 use pumpkin_config::BASIC_CONFIG;
+use pumpkin_core::math::boundingbox::{BoundingBox, BoundingBoxSize};
 use pumpkin_core::math::vector2::Vector2;
+use pumpkin_core::math::vector3::Vector3;
 use pumpkin_core::GameMode;
+use pumpkin_entity::entity_type::EntityType;
 use pumpkin_entity::EntityId;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, ContainerHolder};
@@ -20,6 +24,7 @@ use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{client::config::CPluginMessage, ClientPacket};
 use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_world::dimension::Dimension;
+use pumpkin_world::entity::entity_registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::sync::atomic::AtomicU32;
 use std::{
@@ -32,6 +37,9 @@ use std::{
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
+use crate::entity::living::LivingEntity;
+use crate::entity::mob::MobEntity;
+use crate::entity::Entity;
 mod connection_cache;
 mod key_store;
 pub mod ticker;
@@ -181,6 +189,66 @@ impl Server {
         for world in &self.worlds {
             world.save().await;
         }
+    }
+
+    pub async fn add_mob_entity(
+        &self,
+        entity_type: EntityType,
+        position: Vector3<f64>,
+        world: &Arc<World>,
+    ) -> (Arc<MobEntity>, Uuid) {
+        let (living_entity, uuid) = self.add_living_entity(position, entity_type, world);
+
+        let mob = Arc::new(MobEntity {
+            living_entity,
+            goals: Mutex::new(vec![]),
+        });
+        world.add_mob_entity(uuid, mob.clone()).await;
+        (mob, uuid)
+    }
+    /// Adds a new living entity to the server. This does not Spawn the entity
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    ///
+    /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
+    /// - `Arc<World>`: A reference to the world that the living entity was added to.
+    /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
+    fn add_living_entity(
+        &self,
+        position: Vector3<f64>,
+        entity_type: EntityType,
+        world: &Arc<World>,
+    ) -> (Arc<LivingEntity>, Uuid) {
+        let entity_id = self.new_entity_id();
+
+        // TODO: this should be resolved to a integer using a macro when calling this function
+        let bounding_box_size = get_entity_by_id(entity_type.clone() as u16).map_or(
+            BoundingBoxSize {
+                width: 0.6,
+                height: 1.8,
+            },
+            |entity| BoundingBoxSize {
+                width: f64::from(entity.dimension[0]),
+                height: f64::from(entity.dimension[1]),
+            },
+        );
+
+        // TODO: standing eye height should be per mob
+        let new_uuid = uuid::Uuid::new_v4();
+        let mob = Arc::new(LivingEntity::new(Entity::new(
+            entity_id,
+            new_uuid,
+            world.clone(),
+            position,
+            entity_type,
+            1.62,
+            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            AtomicCell::new(bounding_box_size),
+        )));
+
+        (mob, new_uuid)
     }
 
     pub async fn try_get_container(

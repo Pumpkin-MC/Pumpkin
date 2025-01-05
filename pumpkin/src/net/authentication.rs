@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use base64::{engine::general_purpose, Engine};
-use pumpkin_config::{auth::TextureConfig, ADVANCED_CONFIG};
+use pumpkin_config::{networking::auth::TextureConfig, ADVANCED_CONFIG};
 use pumpkin_protocol::Property;
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
@@ -43,15 +43,20 @@ const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.moj
 /// 2. Mojang's servers verify the client's credentials and add the player to the their Servers
 /// 3. Now our server will send a Request to the Session servers and check if the Player has joined the Session Server .
 ///
-/// See <https://snowiiii.github.io/Pumpkin-Website/developer/authentication.html>
+/// See <https://pumpkinmc.org/developer/authentication.html>
 pub async fn authenticate(
     username: &str,
     server_hash: &str,
     ip: &IpAddr,
     auth_client: &reqwest::Client,
 ) -> Result<GameProfile, AuthError> {
-    let address = if ADVANCED_CONFIG.authentication.prevent_proxy_connections {
+    let address = if ADVANCED_CONFIG
+        .networking
+        .authentication
+        .prevent_proxy_connections
+    {
         let auth_url = ADVANCED_CONFIG
+            .networking
             .authentication
             .prevent_proxy_connection_auth_url
             .as_deref()
@@ -63,6 +68,7 @@ pub async fn authenticate(
             .replace("{ip}", &ip.to_string())
     } else {
         let auth_url = ADVANCED_CONFIG
+            .networking
             .authentication
             .auth_url
             .as_deref()
