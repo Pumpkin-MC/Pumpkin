@@ -10,11 +10,10 @@ use std::{
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
-use pumpkin_data::{
-    entity::EntityType,
-    sound::{Sound, SoundCategory},
-};
-use pumpkin_inventory::player::PlayerInventory;
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::SoundCategory;
+use pumpkin_inventory::{player::PlayerInventory, Container};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     bytebuf::packet_id::Packet,
@@ -265,9 +264,9 @@ impl Player {
         //self.world().level.list_cached();
     }
 
-    pub async fn attack(&self, victim: &Arc<Self>) {
+    pub async fn attack(&self, victim: &LivingEntity) {
         let world = self.world();
-        let victim_entity = &victim.living_entity.entity;
+        let victim_entity = &victim.entity;
         let attacker_entity = &self.living_entity.entity;
         let config = &ADVANCED_CONFIG.pvp;
 
@@ -317,21 +316,22 @@ impl Player {
 
         let pos = victim_entity.pos.load();
 
-        if (config.protect_creative && victim.gamemode.load() == GameMode::Creative)
-            || !victim.living_entity.check_damage(damage as f32)
-        {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &pos,
-                )
-                .await;
-            return;
-        }
+        // if (config.protect_creative && victim.gamemode.load() == GameMode::Creative)
+        //     || !victim.living_entity.check_damage(damage as f32)
+        // {
+        //     world
+        //         .play_sound(
+        //             Sound::EntityPlayerAttackNodamage,
+        //             SoundCategory::Players,
+        //             &pos,
+        //         )
+        //         .await;
+        //     return;
+        // }
 
+        // change
         world
-            .play_sound(Sound::EntityPlayerHurt, SoundCategory::Players, &pos)
+            .play_sound(Sound::EntityPlayerHurt, SoundCategory::Neutral, &pos)
             .await;
 
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
@@ -343,7 +343,6 @@ impl Player {
         }
 
         victim
-            .living_entity
             .damage(damage as f32, 34) // PlayerAttack
             .await;
 
@@ -357,8 +356,7 @@ impl Player {
         };
 
         if config.knockback {
-            combat::handle_knockback(attacker_entity, victim, victim_entity, knockback_strength)
-                .await;
+            combat::handle_knockback(attacker_entity, victim, victim_entity, knockback_strength);
         }
 
         if config.hurt_animation {
@@ -880,7 +878,10 @@ impl Player {
                 self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
                     .await?;
             }
-            SUseItem::PACKET_ID => self.handle_use_item(&SUseItem::read(bytebuf)?),
+            SUseItem::PACKET_ID => {
+                self.handle_use_item(&SUseItem::read(bytebuf)?, server)
+                    .await
+            }
             SCommandSuggestion::PACKET_ID => {
                 self.handle_command_suggestion(SCommandSuggestion::read(bytebuf)?, server)
                     .await;

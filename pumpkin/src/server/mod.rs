@@ -6,6 +6,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_protocol::client::login::CEncryptionRequest;
+use pumpkin_protocol::client::play::CLevelEvent;
 use pumpkin_protocol::{client::config::CPluginMessage, ClientPacket};
 use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::math::boundingbox::{BoundingBox, BoundingBoxSize};
@@ -259,6 +260,66 @@ impl Server {
             .get(&container_id)?
             .try_open(player_id)
             .cloned()
+    }
+
+    // TODO: refactor
+    pub async fn add_potion_entity(
+        &self,
+        entity_type: EntityType,
+        location: Vector3<f64>,
+        pitch: f32,
+        yaw: f32,
+    ) -> (Arc<Entity>, Arc<World>, Uuid) {
+        let world = &self.worlds.read().await[0];
+        let new_uuid = uuid::Uuid::new_v4();
+        let entity_id = self.new_entity_id();
+
+        let bounding_box_size = BoundingBoxSize {
+            width: 0.6,
+            height: 1.8,
+        };
+
+        let entity = Arc::new(Entity::new(
+            entity_id,
+            new_uuid,
+            world.clone(),
+            location,
+            entity_type,
+            1.62,
+            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            AtomicCell::new(bounding_box_size),
+        ));
+
+        entity.set_pos(location);
+
+        let entity_direction = Vector3::new_from_euler(yaw, pitch);
+
+        world.add_entity(&entity.clone(), entity_direction).await;
+
+        let threaded_entity = entity.clone();
+        let threaded_location = location;
+        let threaded_world = world.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+            // TODO: calculate position of final block, should be based on ticks no separate thread
+            let landed_block_position = BlockPos(Vector3 {
+                x: threaded_location.x as i32,
+                y: (threaded_location.y - 1.62) as i32,
+                z: threaded_location.z as i32,
+            });
+            threaded_world
+                .broadcast_packet_all(&CLevelEvent::new(
+                    2007,
+                    landed_block_position,
+                    8_364_543,
+                    false,
+                ))
+                .await;
+            threaded_entity.remove().await;
+            // current_living_entities.remove(&living_entity.entity.entity_uuid);
+        });
+
+        (entity, world.clone(), new_uuid)
     }
 
     /// Returns the first id with a matching location and block type. If this is used with unique

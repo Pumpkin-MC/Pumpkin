@@ -4,6 +4,7 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_inventory::Container;
 use pumpkin_protocol::{
     client::play::{CEntityVelocity, CParticle},
     codec::var_int::VarInt,
@@ -12,7 +13,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 
 use crate::{
-    entity::{player::Player, Entity},
+    entity::{living::LivingEntity, player::Player, Entity},
     world::World,
 };
 
@@ -63,9 +64,9 @@ impl AttackType {
     }
 }
 
-pub async fn handle_knockback(
+pub fn handle_knockback(
     attacker_entity: &Entity,
-    victim: &Player,
+    victim: &LivingEntity,
     victim_entity: &Entity,
     strength: f64,
 ) {
@@ -93,7 +94,7 @@ pub async fn handle_knockback(
         .store(velocity.multiply(0.6, 1.0, 0.6));
 
     victim_entity.velocity.store(saved_velo);
-    victim.client.send_packet(packet).await;
+    // victim.client.send_packet(packet).await;
 }
 
 pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {

@@ -1,3 +1,4 @@
+use crate::codec::slot_components::PotionContents;
 use crate::VarInt;
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeSeq;
@@ -14,6 +15,36 @@ pub struct Slot {
     num_components_to_remove: Option<VarInt>,
     components_to_add: Option<Vec<(VarInt, ())>>, // The second type depends on the varint
     components_to_remove: Option<Vec<VarInt>>,
+}
+
+macro_rules! back_to_enum {
+    ($(#[$meta:meta])* $vis:vis enum $name:ident {
+        $($(#[$vmeta:meta])* $vname:ident $(= $val:expr)?,)*
+    }) => {
+        $(#[$meta])*
+        $vis enum $name {
+            $($(#[$vmeta])* $vname $(= $val)?,)*
+        }
+
+        impl std::convert::TryFrom<i32> for $name {
+            type Error = ();
+
+            fn try_from(v: i32) -> Result<Self, Self::Error> {
+                match v {
+                    $(x if x == $name::$vname as i32 => Ok($name::$vname),)*
+                    _ => Err(()),
+                }
+            }
+        }
+    }
+}
+back_to_enum! {
+    pub enum StructuredComponentType {
+        CustomData,
+        // TODO: Implement all
+        PotionContents = 41,
+
+    }
 }
 
 impl<'de> Deserialize<'de> for Slot {
@@ -55,11 +86,42 @@ impl<'de> Deserialize<'de> for Slot {
                 let num_components_to_remove = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
-                if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
-                    return Err(de::Error::custom(
-                        "Slot components are currently unsupported",
-                    ));
+
+                for _ in 0..num_components_to_add.0 {
+                    let component_type = seq
+                        .next_element::<VarInt>()?
+                        .ok_or(de::Error::custom("Failed to decode VarInt!!"))?;
+                    log::info!("dat: {:?}", component_type);
+                    // let s: StructuredComponentType = component_type.into();
+                    match component_type.0.try_into() {
+                        Ok(StructuredComponentType::PotionContents) => {
+                            log::info!("yesir");
+                            let has_potion_id = seq
+                                .next_element::<PotionContents>()?
+                                .ok_or(de::Error::custom("Failed to decode potion"))?;
+                            // let potion_id = seq
+                            //     .next_element::<VarInt>()?
+                            //     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
+                        }
+                        Ok(StructuredComponentType::CustomData) => {
+                            log::info!("uhhuh")
+                        }
+                        Err(_) => log::error!("nooooo"),
+                        // _ => {
+                        //     log::error!("nooooo")
+                        // }
+                    }
+                    // let component_data = seq
+                    //     .next_element::<Slot>()?
+                    //     .ok_or(de::Error::custom("Unable to parse item"))?;
+                    // array_of_changed_slots.push((slot_number, slot));
                 }
+
+                // if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
+                //     return Err(de::Error::custom(
+                //         "Slot components are currently unsupported",
+                //     ));
+                // }
 
                 Ok(Slot {
                     item_count,

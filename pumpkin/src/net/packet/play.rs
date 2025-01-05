@@ -14,6 +14,7 @@ use crate::{
 };
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::entity::{EntityPose, EntityType};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
@@ -727,7 +728,7 @@ impl Player {
                         // so we shouldn't kick the player
                         return;
                     }
-                    self.attack(&player_victim).await;
+                    self.attack(&player_victim.living_entity).await;
                 } else if let Some(entity_victim) = entity_victim {
                     // Checks if victim is a living entity
                     if let Some(entity_victim) = entity_victim.get_living_entity() {
@@ -735,8 +736,9 @@ impl Player {
                             return;
                         }
                         entity_victim.entity.set_pose(EntityPose::Dying).await;
-                        entity_victim.kill().await;
-                        world.clone().remove_entity(&entity_victim.entity).await;
+                        self.attack(entity_victim).await;
+                        // entity_victim.kill().await;
+                        // world.clone().remove_entity(&entity_victim.entity).await;
                     }
                     // TODO: block entities should be checked here (signs)
                 } else {
@@ -996,12 +998,38 @@ impl Player {
         Ok(())
     }
 
-    pub fn handle_use_item(&self, _use_item: &SUseItem) {
+    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Arc<Server>) {
         if !self.has_client_loaded() {
             return;
         }
         // TODO: handle packet correctly
-        log::error!("An item was used(SUseItem), but the packet is not implemented yet");
+        // log::error!("An item was used(SUseItem), but the packet is not implemented yet");
+        self.world()
+            .play_sound(
+                Sound::EntitySplashPotionThrow,
+                pumpkin_data::sound::SoundCategory::Players,
+                &self.living_entity.entity.pos.load(),
+            )
+            .await;
+
+        let entity_position = self.living_entity.entity.pos.load();
+        let pitch = self.living_entity.entity.pitch.load();
+        let yaw = self.living_entity.entity.yaw.load();
+        let head = self.living_entity.entity.head_yaw.load();
+        log::info!("pitch: {}", pitch);
+        log::info!("yaw: {}", yaw);
+        log::info!("head: {}", head);
+        log::info!("before: {:?}", entity_position.y);
+        log::info!("seh: {:?}", self.living_entity.entity.standing_eye_height);
+        let offset_position = entity_position.add_indv(
+            0.0,
+            f64::from(self.living_entity.entity.standing_eye_height),
+            0.0,
+        );
+        log::info!("after: {:?}", offset_position.y);
+        server
+            .add_potion_entity(EntityType::Potion, offset_position, pitch, yaw)
+            .await;
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {

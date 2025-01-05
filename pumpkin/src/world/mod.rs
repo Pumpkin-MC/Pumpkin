@@ -21,8 +21,11 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
+use pumpkin_protocol::{
+    client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent},
+    codec::var_int::VarInt,
+};
 use pumpkin_protocol::{
     client::play::{
         CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
@@ -843,6 +846,32 @@ impl World {
             .await;
         let mut current_living_entities = self.entities.lock().await;
         current_living_entities.insert(uuid, entity);
+    }
+
+    pub async fn add_entity(&self, entity: &Entity, direction: Vector3<f32>) {
+        // TODO: add to list
+
+        log::info!("x: {}", direction.x);
+        log::info!("y: {}", direction.y);
+        log::info!("z: {}", direction.z);
+
+        let po = entity.pos.load();
+        self.broadcast_packet_all(&CSpawnEntity::new(
+            VarInt(entity.entity_id),
+            entity.entity_uuid,
+            VarInt(EntityType::Potion as i32),
+            po.x, // + f64::from(cursor_pos.x),
+            po.y,
+            po.z, // + f64::from(cursor_pos.z),
+            10.0,
+            0.0, // head_yaw,
+            0.0, // opposite_yaw,
+            0.into(),
+            direction.x,
+            direction.y,
+            direction.z,
+        ))
+        .await;
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {
