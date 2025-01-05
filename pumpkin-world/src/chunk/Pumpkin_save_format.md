@@ -23,4 +23,4 @@ packed_data:
 array of `subchunk` with len of 24.
 
 subchunk:
-`palette``2_separation_bits``block_array`
+`palette``2_separation_bytes``block_array`
