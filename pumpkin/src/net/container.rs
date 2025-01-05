@@ -21,7 +21,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 impl Player {
-    pub async fn open_container(&self, server: &Server, window_type: &'static WindowType) {
+    pub async fn open_container(&self, server: &Server, window_type: WindowType) {
         let mut inventory = self.inventory().lock().await;
         inventory.state_id = 0;
         inventory.total_opened_containers += 1;
@@ -39,7 +39,7 @@ impl Player {
         self.client
             .send_packet(&COpenScreen::new(
                 inventory.total_opened_containers.into(),
-                VarInt(*window_type as i32),
+                VarInt(window_type as i32),
                 &title,
             ))
             .await;

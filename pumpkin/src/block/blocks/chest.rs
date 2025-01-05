@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::info;
 use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::Chest;
 use pumpkin_macros::{pumpkin_block, sound};
@@ -27,6 +28,7 @@ impl PumpkinBlock for ChestBlock {
         location: WorldPosition,
         server: &Server,
     ) {
+        info!("hello opening");
         self.open(block, player, location, server).await;
         self.play_chest_action(player, location, server).await;
     }
@@ -39,6 +41,7 @@ impl PumpkinBlock for ChestBlock {
         _item: &Item,
         server: &Server,
     ) -> BlockActionResult {
+        info!("hello opening with use");
         self.open(block, player, location, server).await;
         BlockActionResult::Consume
     }

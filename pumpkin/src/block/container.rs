@@ -23,25 +23,25 @@ pub trait ContainerBlock<C: Container> {
                 .await;
             drop(open_containers);
             player.open_container.store(Some(id));
-            player.open_container(server, window_type).await;
+            player.open_container(server, *window_type).await;
         } else {
             let player_id = player.gameprofile.id;
             let mut open_containers = server.open_containers.write().await;
             let opened_container = open_containers.get_mut_by_location(&location);
 
-            #[allow(clippy::option_if_let_else)]
-            let container = match opened_container {
-                Some(container) => container,
-                None => open_containers
+            let container = if let Some(container) = opened_container {
+                container
+            } else {
+                open_containers
                     .new_by_location::<C>(location, Some(block.clone()))
-                    .unwrap(),
+                    .unwrap()
             };
 
             container.add_player(player_id);
             player.open_container.store(Some(container.id));
-            player
-                .open_container(server, container.window_type().await)
-                .await;
+            let window_type = *container.window_type().await;
+            drop(open_containers);
+            player.open_container(server, window_type).await;
         }
     }
 
