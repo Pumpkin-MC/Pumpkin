@@ -1,13 +1,14 @@
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     fs::OpenOptions,
-    io::{Read, Seek, SeekFrom, Write}, os::linux::raw,
+    io::{Read, Seek, SeekFrom, Write},
 };
 
 use bytes::*;
 use fastnbt::LongArray;
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use fs2::FileExt;
+use indexmap::IndexMap;
 use pumpkin_core::math::ceil_log2;
 
 use crate::{
@@ -139,8 +140,6 @@ impl ChunkReader for AnvilChunkFormat {
     ) -> Result<super::ChunkData, ChunkReadingError> {
         let region = (at.x >> 5, at.z >> 5);
 
-        let log = at.x == 1 && at.z == 0;
-
         let mut region_file = OpenOptions::new()
             .read(true)
             .open(
@@ -182,13 +181,9 @@ impl ChunkReader for AnvilChunkFormat {
 
         // Read the file using the offset and size
         let mut file_buf = {
-            let v = region_file
+            region_file
                 .seek(std::io::SeekFrom::Start(offset_at))
                 .map_err(|_| ChunkReadingError::RegionIsInvalid)?;
-            if log {
-                dbg!(v);
-                dbg!(&region_file.stream_position());
-            }
             let mut out = vec![0; size_at];
             region_file
                 .read_exact(&mut out)
@@ -196,35 +191,13 @@ impl ChunkReader for AnvilChunkFormat {
             out
         };
 
-        if log {
-            println!("{:?}", file_buf.to_vec());
-        }
         let mut header: Bytes = file_buf.drain(0..5).collect();
-        if log {
-            dbg!(header.to_vec());
-        }
-
         if header.remaining() != 5 {
             return Err(ChunkReadingError::InvalidHeader);
         }
 
         let size = header.get_u32();
         let compression = header.get_u8();
-
-        if log {
-            dbg!(
-                "[...",
-                compression,
-                offset_at,
-                size,
-                size_at,
-                table_entry,
-                chunk_x,
-                chunk_z,
-                file_buf.len() + 5,
-                "..]"
-            );
-        }
 
         let compression = Compression::from_byte(compression)
             .map_err(|_| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
@@ -254,7 +227,6 @@ impl ChunkWriter for AnvilChunkFormat {
         // return Ok(()); // REMOVE
         // TODO: update timestamp
         let region = (at.x >> 5, at.z >> 5);
-        let _log = region == (0, 0);
 
         let mut region_file = OpenOptions::new()
             .read(true)
@@ -324,11 +296,13 @@ impl ChunkWriter for AnvilChunkFormat {
             u32::from_be_bytes([0, chunk_location[0], chunk_location[1], chunk_location[2]]) as u64
                 * 4096;
         let sector_size = chunk_location[3] as usize * 4096;
-        if length as usize > sector_size {
-            panic!("AAAAAAAAAAAAAHHHHHHHHHHHHH!!");
-        }
+
         // TODO: move shit
-        
+        assert!(
+            length as usize >= sector_size,
+            "AAAAAAAAAAAAAHHHHHHHHHHHHH!!"
+        );
+
         // Write new location and timestamp table
         region_file.seek(SeekFrom::Start(0)).unwrap();
         region_file
@@ -337,7 +311,7 @@ impl ChunkWriter for AnvilChunkFormat {
 
         // Seek to where the chunk is located
         region_file.seek(SeekFrom::Start(location_offset)).unwrap();
-        
+
         // Write header and payload
         region_file
             .write_all(&chunk_payload)
@@ -361,25 +335,26 @@ impl AnvilChunkFormat {
     pub fn to_bytes(&self, chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
         let mut sections = Vec::new();
 
-        for (i, blocks) in chunk_data.blocks.blocks.chunks(16 * 16 * 16).enumerate() {
+        for (i, blocks) in chunk_data.blocks.iter_subchunks().enumerate() {
             // get unique blocks
-            let mut palette = HashMap::new();
-            for block in blocks {
-                let len = palette.len();
-                palette.entry(*block).or_insert_with(|| {
-                    let registry_str = BLOCK_ID_TO_REGISTRY_ID
-                        .get(block)
-                        .expect("Tried saving a block which does not exist.")
-                        .as_str();
-                    (registry_str, len)
-                });
-            }
+            let unique_blocks: HashSet<_> = blocks.iter().collect();
 
+            let palette: IndexMap<_, _> = unique_blocks
+                .into_iter()
+                .enumerate()
+                .map(|(i, block)| {
+                    let name = BLOCK_ID_TO_REGISTRY_ID.get(block).unwrap().as_str();
+                    (block, (name, i))
+                })
+                .collect();
+
+            // Determine the number of bits needed to represent the largest index in the palette
             let block_bit_size = if palette.len() < 16 {
                 4
             } else {
                 ceil_log2(palette.len() as u32).max(4)
             };
+            // Calculate how many blocks can be packed into a single 64-bit integer
             let _blocks_in_pack = 64 / block_bit_size;
 
             let mut section_longs = Vec::new();
@@ -391,6 +366,7 @@ impl AnvilChunkFormat {
                 current_pack_long |= (index as i64) << bits_used_in_pack;
                 bits_used_in_pack += block_bit_size as u32;
 
+                // If the current 64-bit integer is full, push it to the section_longs and start a new one
                 if bits_used_in_pack >= 64 {
                     section_longs.push(current_pack_long);
                     current_pack_long = 0;
@@ -398,12 +374,13 @@ impl AnvilChunkFormat {
                 }
             }
 
+            // Push the last 64-bit integer if it contains any data
             if bits_used_in_pack > 0 {
                 section_longs.push(current_pack_long);
             }
 
             sections.push(ChunkSection {
-                y: i as i8,
+                y: i as i8 - 1,
                 block_states: Some(ChunkSectionBlockStates {
                     data: Some(LongArray::new(section_longs)),
                     palette: palette
@@ -426,9 +403,7 @@ impl AnvilChunkFormat {
             sections,
         };
 
-        let bytes = fastnbt::to_bytes(&nbt);
-
-        bytes.map_err(ChunkSerializingError::ErrorSerializingChunk)
+        fastnbt::to_bytes(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)
     }
 }
 
