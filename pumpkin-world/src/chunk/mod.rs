@@ -85,7 +85,7 @@ pub enum Subchunks {
 /// subchunk, what filled only air or only water.
 ///
 /// Multi means a normal subchunk, what contains 4096 blocks.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Subchunk {
     Single(u16),
     // The packet relies on this ordering -> leave it like this for performance
