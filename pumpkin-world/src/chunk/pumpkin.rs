@@ -31,6 +31,7 @@ impl Compression {
             Some(match byte {
                 1 => Compression::LZ4,
                 2 => Compression::Zstd,
+                3 => Compression::Lzma,
                 _ => todo!(),
             })
         }
