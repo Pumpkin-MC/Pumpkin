@@ -2,7 +2,7 @@ use fastnbt::LongArray;
 use pumpkin_core::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::{cmp::max, mem::MaybeUninit};
+use std::cmp::max;
 use thiserror::Error;
 
 use crate::{
