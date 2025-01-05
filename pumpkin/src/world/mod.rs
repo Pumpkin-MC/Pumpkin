@@ -626,7 +626,7 @@ impl World {
     /// Gets a Player by username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
         for player in self.current_players.lock().await.values() {
-            if player.gameprofile.name == name {
+            if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
                 return Some(player.clone());
             }
         }
