@@ -54,17 +54,37 @@ pub enum CompressionError {
 }
 
 pub struct ChunkData {
+    /// See description in `Subchunks`
     pub subchunks: Subchunks,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
 }
 
+/// # Subchunks
+/// Subchunks - its an areas in chunk, what are 16 blocks in height.
+/// Current amouth is 24.
+///
+/// Subchunks can be single and multi.
+///
+/// Single means a single block in all chunk, like
+/// chunk, what filled only air or only water.
+///
+/// Multi means a normal chunk, what contains 24 subchunks.
 pub enum Subchunks {
     Single(u16),
     Multi(Box<[Subchunk; SUBCHUNKS_COUNT]>),
 }
 
+/// # Subchunk
+/// Subchunk - its an area in chunk, what are 16 blocks in height
+///
+/// Subchunk can be single and multi.
+///
+/// Single means a single block in all subchunk, like
+/// subchunk, what filled only air or only water.
+///
+/// Multi means a normal subchunk, what contains 4096 blocks.
 #[derive(Clone, PartialEq)]
 pub enum Subchunk {
     Single(u16),
