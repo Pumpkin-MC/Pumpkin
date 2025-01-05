@@ -31,18 +31,20 @@ impl CommandExecutor for SayExecutor {
             return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
         };
 
-        let chat_type = SYNCED_REGISTRIES.chat_type.get("say_command")
-                                .expect("Incomplete chat type registry, missing say_command");
+        let chat_type = SYNCED_REGISTRIES
+            .chat_type
+            .get("say_command")
+            .expect("Incomplete chat type registry, missing say_command");
 
         server
             .broadcast_packet_all(&CSystemChatMessage::new(
-                &TextComponent { 
+                &TextComponent {
                     content: TextContent::Translate {
                         translate: chat_type.chat.translation_key.clone().into(),
                         with: vec![
                             TextComponent::text(sender.to_string()),
                             TextComponent::text(msg.to_string()),
-                        ]
+                        ],
                     },
                     style: chat_type.chat.style.clone().unwrap_or_default(),
                     extra: vec![],

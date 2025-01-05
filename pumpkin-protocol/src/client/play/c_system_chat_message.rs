@@ -14,7 +14,7 @@ impl CSystemChatMessage {
     pub fn new(content: &TextComponent, overlay: bool) -> Self {
         Self {
             content: content.to_nbt(),
-            overlay
+            overlay,
         }
     }
 }

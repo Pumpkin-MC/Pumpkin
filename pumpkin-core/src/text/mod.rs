@@ -225,8 +225,8 @@ pub enum TextContent {
 
 #[cfg(test)]
 mod test {
-    use crate::text::style::Style;
     use super::{TextComponent, TextContent};
+    use crate::text::style::Style;
 
     #[test]
     fn text_component_json() {
@@ -236,15 +236,16 @@ mod test {
         let component = TextComponent {
             content: TextContent::Translate {
                 translate: text.into(),
-                with: vec![
-                    TextComponent::text(value.to_string()),
-                ],
+                with: vec![TextComponent::text(value.to_string())],
             },
             style: Style::default(),
             extra: vec![],
         };
 
         let json_text = &serde_json::to_string(&component).unwrap();
-        assert_eq!(json_text, "{\"translate\":\"%s is cool!\",\"with\":[{\"text\":\"testing\"}]}");
+        assert_eq!(
+            json_text,
+            "{\"translate\":\"%s is cool!\",\"with\":[{\"text\":\"testing\"}]}"
+        );
     }
 }

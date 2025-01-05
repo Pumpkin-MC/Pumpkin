@@ -11,6 +11,8 @@ pub struct CPlayDisconnect {
 
 impl<'a> CPlayDisconnect {
     pub fn new(reason: &TextComponent) -> Self {
-        Self { reason: reason.to_nbt() }
+        Self {
+            reason: reason.to_nbt(),
+        }
     }
 }
