@@ -13,3 +13,4 @@ num-traits = "0.2"
 
 colored = "2"
 md5 = "0.7.0"
+serde_json.workspace = true

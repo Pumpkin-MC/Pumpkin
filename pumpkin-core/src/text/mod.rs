@@ -233,6 +233,7 @@ mod test {
         let text = "%s is cool!";
         let value = "testing";
 
+        // when using the TextContent::Translate
         let component = TextComponent {
             content: TextContent::Translate {
                 translate: text.into(),
@@ -242,6 +243,7 @@ mod test {
             extra: vec![],
         };
 
+        // then the serialization should only be called once
         let json_text = &serde_json::to_string(&component).unwrap();
         assert_eq!(
             json_text,
