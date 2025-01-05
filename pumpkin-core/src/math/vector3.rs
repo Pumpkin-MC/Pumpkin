@@ -42,6 +42,17 @@ impl<T: Math + Copy> Vector3<T> {
             z: self.z * z,
         }
     }
+
+    pub fn squared_distance_to_vec(&self, other: Self) -> T {
+        self.squared_distance_to(other.x, other.y, other.z)
+    }
+
+    pub fn squared_distance_to(&self, x: T, y: T, z: T) -> T {
+        let delta_x = self.x - x;
+        let delta_y = self.y - y;
+        let delta_z = self.z - z;
+        delta_x * delta_x + delta_y * delta_y + delta_z * delta_z
+    }
 }
 
 impl<T: Math + Copy + Float> Vector3<T> {

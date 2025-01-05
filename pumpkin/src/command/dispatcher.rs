@@ -160,7 +160,9 @@ impl CommandDispatcher {
         let raw_args: Vec<&str> = parts.rev().collect();
 
         let Some(permission) = self.permissions.get(key) else {
-            return Err(GeneralCommandIssue("Command not found".to_string()));
+            return Err(GeneralCommandIssue(
+                "Permission for Command not found".to_string(),
+            ));
         };
 
         if !src.has_permission_lvl(*permission) {
@@ -302,6 +304,7 @@ impl CommandDispatcher {
         for name in names {
             self.commands
                 .insert(name.to_string(), Command::Alias(primary_name.to_string()));
+            self.permissions.insert(name.to_string(), permission);
         }
 
         self.permissions

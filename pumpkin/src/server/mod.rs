@@ -5,6 +5,7 @@ use pumpkin_config::BASIC_CONFIG;
 use pumpkin_core::math::boundingbox::{BoundingBox, BoundingBoxSize};
 use pumpkin_core::math::position::WorldPosition;
 use pumpkin_core::math::vector2::Vector2;
+use pumpkin_core::math::vector3::Vector3;
 use pumpkin_core::GameMode;
 use pumpkin_entity::entity_type::EntityType;
 use pumpkin_entity::EntityId;
@@ -32,6 +33,7 @@ use uuid::Uuid;
 use crate::block::block_manager::BlockManager;
 use crate::block::default_block_manager;
 use crate::entity::living::LivingEntity;
+use crate::entity::mob::MobEntity;
 use crate::entity::Entity;
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
@@ -194,7 +196,22 @@ impl Server {
         }
     }
 
-    /// Adds a new living entity to the server.
+    pub async fn add_mob_entity(
+        &self,
+        entity_type: EntityType,
+        position: Vector3<f64>,
+        world: &Arc<World>,
+    ) -> (Arc<MobEntity>, Uuid) {
+        let (living_entity, uuid) = self.add_living_entity(position, entity_type, world);
+
+        let mob = Arc::new(MobEntity {
+            living_entity,
+            goals: Mutex::new(vec![]),
+        });
+        world.add_mob_entity(uuid, mob.clone()).await;
+        (mob, uuid)
+    }
+    /// Adds a new living entity to the server. This does not Spawn the entity
     ///
     /// # Returns
     ///
@@ -203,27 +220,25 @@ impl Server {
     /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
     /// - `Arc<World>`: A reference to the world that the living entity was added to.
     /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
-    pub async fn add_living_entity(
+    fn add_living_entity(
         &self,
+        position: Vector3<f64>,
         entity_type: EntityType,
-    ) -> (Arc<LivingEntity>, Arc<World>, Uuid) {
+        world: &Arc<World>,
+    ) -> (Arc<LivingEntity>, Uuid) {
         let entity_id = self.new_entity_id();
-        // TODO: select current
-        let world = &self.worlds[0];
 
         // TODO: this should be resolved to a integer using a macro when calling this function
-        let bounding_box_size: BoundingBoxSize;
-        if let Some(entity) = get_entity_by_id(entity_type.clone() as u16) {
-            bounding_box_size = BoundingBoxSize {
-                width: f64::from(entity.dimension[0]),
-                height: f64::from(entity.dimension[1]),
-            };
-        } else {
-            bounding_box_size = BoundingBoxSize {
+        let bounding_box_size = get_entity_by_id(entity_type.clone() as u16).map_or(
+            BoundingBoxSize {
                 width: 0.6,
                 height: 1.8,
-            };
-        }
+            },
+            |entity| BoundingBoxSize {
+                width: f64::from(entity.dimension[0]),
+                height: f64::from(entity.dimension[1]),
+            },
+        );
 
         // TODO: standing eye height should be per mob
         let new_uuid = uuid::Uuid::new_v4();
@@ -231,15 +246,14 @@ impl Server {
             entity_id,
             new_uuid,
             world.clone(),
+            position,
             entity_type,
             1.62,
             AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
             AtomicCell::new(bounding_box_size),
         )));
 
-        world.add_living_entity(new_uuid, mob.clone()).await;
-
-        (mob, world.clone(), new_uuid)
+        (mob, new_uuid)
     }
 
     pub async fn try_get_container(

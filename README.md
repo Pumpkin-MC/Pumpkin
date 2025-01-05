@@ -70,7 +70,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Players
   - [x] Mobs
   - [x] Animals
-  - [ ] Entity AI
+  - [x] Entity AI
   - [ ] Boss
 - Server
   - [ ] Plugins

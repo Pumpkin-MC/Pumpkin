@@ -5,7 +5,7 @@ pub mod player_chunker;
 
 use crate::{
     command::client_cmd_suggestions,
-    entity::{living::LivingEntity, player::Player, Entity},
+    entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity},
     error::PumpkinError,
     server::Server,
 };
@@ -94,6 +94,8 @@ pub struct World {
     pub level: Arc<Level>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub current_players: Arc<Mutex<HashMap<uuid::Uuid, Arc<Player>>>>,
+    /// A map of active mob entities within the world, keyed by their unique UUID.
+    pub current_living_mobs: Arc<Mutex<HashMap<uuid::Uuid, Arc<MobEntity>>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -102,8 +104,6 @@ pub struct World {
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in
     pub dimension_type: DimensionType,
-    /// A map of active entities within the world, keyed by their unique UUID.
-    pub current_living_entities: Arc<Mutex<HashMap<uuid::Uuid, Arc<LivingEntity>>>>,
     // TODO: entities
 }
 
@@ -113,11 +113,11 @@ impl World {
         Self {
             level: Arc::new(level),
             current_players: Arc::new(Mutex::new(HashMap::new())),
+            current_living_mobs: Arc::new(Mutex::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
-            current_living_entities: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -198,15 +198,20 @@ impl World {
 
     pub async fn tick(&self) {
         // world ticks
-        let mut level_time = self.level_time.lock().await;
-        level_time.tick_time();
-        if level_time.world_age % 20 == 0 {
-            level_time.send_time(self).await;
+        {
+            let mut level_time = self.level_time.lock().await;
+            level_time.tick_time();
+            if level_time.world_age % 20 == 0 {
+                level_time.send_time(self).await;
+            }
         }
         // player ticks
-        let current_players = self.current_players.lock().await;
-        for player in current_players.values() {
+        for player in self.current_players.lock().await.values() {
             player.tick().await;
+        }
+        // entites tick
+        for entity in self.current_living_mobs.lock().await.values() {
+            entity.tick().await;
         }
     }
 
@@ -609,7 +614,8 @@ impl World {
 
     /// Gets a Living Entity by entity id
     pub async fn get_living_entity_by_entityid(&self, id: EntityId) -> Option<Arc<LivingEntity>> {
-        for living_entity in self.current_living_entities.lock().await.values() {
+        for mob_entity in self.current_living_mobs.lock().await.values() {
+            let living_entity = &mob_entity.living_entity;
             if living_entity.entity_id() == id {
                 return Some(living_entity.clone());
             }
@@ -682,27 +688,42 @@ impl World {
     pub async fn get_nearby_players(
         &self,
         pos: Vector3<f64>,
-        radius: u16,
+        radius: f64,
     ) -> HashMap<uuid::Uuid, Arc<Player>> {
-        let radius_squared = (f64::from(radius)).powi(2);
+        let radius_squared = radius.powi(2);
 
-        let mut found_players = HashMap::new();
-        for player in self.current_players.lock().await.iter() {
-            let player_pos = player.1.living_entity.entity.pos.load();
+        self.current_players
+            .lock()
+            .await
+            .iter()
+            .filter_map(|(id, player)| {
+                let player_pos = player.living_entity.entity.pos.load();
+                (player_pos.squared_distance_to_vec(pos) <= radius_squared)
+                    .then(|| (*id, player.clone()))
+            })
+            .collect()
+    }
 
-            let diff = Vector3::new(
-                player_pos.x - pos.x,
-                player_pos.y - pos.y,
-                player_pos.z - pos.z,
-            );
-
-            let distance_squared = diff.x.powi(2) + diff.y.powi(2) + diff.z.powi(2);
-            if distance_squared <= radius_squared {
-                found_players.insert(*player.0, player.1.clone());
-            }
-        }
-
-        found_players
+    pub async fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
+        let players = self.get_nearby_players(pos, radius).await;
+        players
+            .iter()
+            .min_by(|a, b| {
+                a.1.living_entity
+                    .entity
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(pos)
+                    .partial_cmp(
+                        &b.1.living_entity
+                            .entity
+                            .pos
+                            .load()
+                            .squared_distance_to_vec(pos),
+                    )
+                    .unwrap()
+            })
+            .map(|p| p.1.clone())
     }
 
     /// Adds a player to the world and broadcasts a join message if enabled.
@@ -780,19 +801,19 @@ impl World {
     ///
     /// * `uuid`: The unique UUID of the living entity to add.
     /// * `living_entity`: A `Arc<LivingEntity>` reference to the living entity object.
-    pub async fn add_living_entity(&self, uuid: uuid::Uuid, living_entity: Arc<LivingEntity>) {
-        let mut current_living_entities = self.current_living_entities.lock().await;
+    pub async fn add_mob_entity(&self, uuid: uuid::Uuid, living_entity: Arc<MobEntity>) {
+        let mut current_living_entities = self.current_living_mobs.lock().await;
         current_living_entities.insert(uuid, living_entity);
     }
 
-    pub async fn remove_living_entity(living_entity: Arc<LivingEntity>, world: Arc<Self>) {
-        let mut current_living_entities = world.current_living_entities.lock().await.clone();
+    pub async fn remove_mob_entity(self: Arc<Self>, living_entity: Arc<LivingEntity>) {
+        let mut current_living_entities = self.current_living_mobs.lock().await.clone();
+        current_living_entities.remove(&living_entity.entity.entity_uuid);
         // TODO: does this work with collisions?
         living_entity.entity.set_pose(EntityPose::Dying).await;
         tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            world.remove_entity(&living_entity.entity).await;
-            current_living_entities.remove(&living_entity.entity.entity_uuid);
+            self.remove_entity(&living_entity.entity).await;
         });
     }
 
