@@ -422,5 +422,5 @@ pub enum ChunkParsingError {
 
 fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
     // % works for negative numbers as intended.
-    index.y.get_absolute() as usize * CHUNK_AREA + *index.z as usize * 16 + *index.x as usize
+    (index.y.get_absolute() % 16) as usize * CHUNK_AREA + *index.z as usize * 16 + *index.x as usize
 }
