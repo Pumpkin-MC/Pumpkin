@@ -2,7 +2,6 @@ use fastnbt::LongArray;
 use pumpkin_core::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ops::Index;
 use std::{cmp::max, mem::MaybeUninit};
 use thiserror::Error;
 
@@ -216,8 +215,7 @@ impl Subchunks {
             Self::Single(block) => Some(*block),
             Self::Multi(subchunks) => subchunks
                 .get((position.y.get_absolute() / 16) as usize)
-                .map(|subchunk| subchunk.get_block(position))
-                .flatten(),
+                .and_then(|subchunk| subchunk.get_block(position)),
         }
     }
 
@@ -248,8 +246,8 @@ impl Subchunks {
                         MaybeUninit::uninit().assume_init()
                     };
 
-                    for i in 0..SUBCHUNKS_COUNT {
-                        subchunks[i] = MaybeUninit::new(Subchunk::Single(*block));
+                    for subchunk in subchunks.iter_mut().take(SUBCHUNKS_COUNT) {
+                        *subchunk = MaybeUninit::new(Subchunk::Single(*block));
                     }
 
                     // SAFETY:
