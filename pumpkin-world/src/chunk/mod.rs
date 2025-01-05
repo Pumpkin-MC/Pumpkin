@@ -1,8 +1,8 @@
 use fastnbt::LongArray;
 use pumpkin_core::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::cmp::max;
+use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
