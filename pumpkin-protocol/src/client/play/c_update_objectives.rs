@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use pumpkin_core::text::TextComponent;
+use pumpkin_core::text::{TextComponent, TextComponentNbt};
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, NumberFormat, VarInt};
@@ -8,7 +8,7 @@ use crate::{bytebuf::ByteBufMut, ClientPacket, NumberFormat, VarInt};
 pub struct CUpdateObjectives<'a> {
     objective_name: &'a str,
     mode: u8,
-    display_name: TextComponent,
+    display_name: TextComponentNbt,
     render_type: VarInt,
     number_format: Option<NumberFormat>,
 }
@@ -17,14 +17,14 @@ impl<'a> CUpdateObjectives<'a> {
     pub fn new(
         objective_name: &'a str,
         mode: Mode,
-        display_name: TextComponent,
+        display_name: &'a TextComponent,
         render_type: RenderType,
         number_format: Option<NumberFormat>,
     ) -> Self {
         Self {
             objective_name,
             mode: mode as u8,
-            display_name,
+            display_name: display_name.to_nbt(),
             render_type: VarInt(render_type as i32),
             number_format,
         }

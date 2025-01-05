@@ -36,7 +36,7 @@ impl Scoreboard {
             .broadcast_packet_all(&CUpdateObjectives::new(
                 objective.name,
                 pumpkin_protocol::client::play::Mode::Add,
-                objective.display_name,
+                &objective.display_name,
                 objective.render_type,
                 objective.number_format,
             ))

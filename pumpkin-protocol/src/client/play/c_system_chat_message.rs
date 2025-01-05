@@ -1,17 +1,20 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_core::text::{TextComponent, TextComponentNbt};
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
 #[client_packet("play:system_chat")]
-pub struct CSystemChatMessage<'a> {
-    content: &'a TextComponent,
+pub struct CSystemChatMessage {
+    content: TextComponentNbt,
     overlay: bool,
 }
 
-impl<'a> CSystemChatMessage<'a> {
-    pub fn new(content: &'a TextComponent, overlay: bool) -> Self {
-        Self { content, overlay }
+impl CSystemChatMessage {
+    pub fn new(content: &TextComponent, overlay: bool) -> Self {
+        Self {
+            content: content.to_nbt(),
+            overlay
+        }
     }
 }

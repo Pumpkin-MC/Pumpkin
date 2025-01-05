@@ -1,4 +1,4 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_core::text::{TextComponent, TextComponentNbt};
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
@@ -17,11 +17,11 @@ pub struct CPlayerChatMessage<'a> {
     salt: i64,
     previous_messages_count: VarInt,
     previous_messages: &'a [PreviousMessage<'a>], // max 20
-    unsigned_content: Option<TextComponent>,
+    unsigned_content: Option<TextComponentNbt>,
     filter_type: FilterType,
     chat_type: VarInt,
-    sender_name: TextComponent,
-    target_name: Option<TextComponent>,
+    sender_name: TextComponentNbt,
+    target_name: Option<TextComponentNbt>,
 }
 
 impl<'a> CPlayerChatMessage<'a> {
@@ -34,11 +34,11 @@ impl<'a> CPlayerChatMessage<'a> {
         timestamp: i64,
         salt: i64,
         previous_messages: &'a [PreviousMessage<'a>],
-        unsigned_content: Option<TextComponent>,
+        unsigned_content: Option<&'a TextComponent>,
         filter_type: FilterType,
         chat_type: VarInt,
-        sender_name: TextComponent,
-        target_name: Option<TextComponent>,
+        sender_name: &'a TextComponent,
+        target_name: Option<&'a TextComponent>,
     ) -> Self {
         Self {
             sender,
@@ -49,11 +49,11 @@ impl<'a> CPlayerChatMessage<'a> {
             salt,
             previous_messages_count: previous_messages.len().into(),
             previous_messages,
-            unsigned_content,
+            unsigned_content: unsigned_content.map(TextComponent::to_nbt),
             filter_type,
             chat_type,
-            sender_name,
-            target_name,
+            sender_name: sender_name.to_nbt(),
+            target_name: target_name.map(TextComponent::to_nbt),
         }
     }
 }

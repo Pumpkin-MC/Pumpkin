@@ -49,7 +49,7 @@ pub struct Registry {
 pub struct SyncedRegistry {
     #[serde(rename = "worldgen/biome")]
     biome: IndexMap<String, Biome>,
-    chat_type: IndexMap<String, ChatType>,
+    pub chat_type: IndexMap<String, ChatType>,
     trim_pattern: IndexMap<String, TrimPattern>,
     trim_material: IndexMap<String, TrimMaterial>,
     wolf_variant: IndexMap<String, WolfVariant>,

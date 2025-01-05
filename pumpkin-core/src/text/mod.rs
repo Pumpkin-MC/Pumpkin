@@ -15,7 +15,7 @@ pub mod hover;
 pub mod style;
 
 /// Represents a Text component
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct TextComponent {
     /// The actual text
@@ -28,6 +28,38 @@ pub struct TextComponent {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Extra text components
     pub extra: Vec<TextComponent>,
+}
+
+pub struct TextComponentNbt {
+    pub wrappee: TextComponent,
+}
+
+impl TextComponentNbt {
+    pub fn new(wrappee: TextComponent) -> Self {
+        Self { wrappee }
+    }
+
+    pub fn encode(&self) -> bytes::BytesMut {
+        self.wrappee.encode()
+    }
+}
+
+impl serde::Serialize for TextComponentNbt {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // NBT-encode the underlying component, then
+        // pass the bytes to `serializer`.
+        let bytes = self.wrappee.encode();
+        serializer.serialize_bytes(&bytes)
+    }
+}
+
+impl TextComponent {
+    pub fn to_nbt(&self) -> TextComponentNbt {
+        TextComponentNbt::new(self.clone())
+    }
 }
 
 impl TextComponent {
@@ -84,15 +116,6 @@ impl TextComponent {
             text += &*child.to_pretty_console();
         }
         text
-    }
-}
-
-impl serde::Serialize for TextComponent {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(&self.encode())
     }
 }
 
@@ -174,40 +197,7 @@ impl TextComponent {
     }
 
     pub fn encode(&self) -> bytes::BytesMut {
-        // TODO: Somehow fix this ugly mess
-        #[derive(serde::Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct TempStruct<'a> {
-            #[serde(flatten)]
-            text: &'a TextContent,
-            #[serde(flatten)]
-            style: &'a Style,
-            #[serde(default, skip_serializing_if = "Vec::is_empty")]
-            #[serde(rename = "extra")]
-            extra: Vec<TempStruct<'a>>,
-        }
-        fn convert_extra(extra: &[TextComponent]) -> Vec<TempStruct<'_>> {
-            extra
-                .iter()
-                .map(|x| TempStruct {
-                    text: &x.content,
-                    style: &x.style,
-                    extra: convert_extra(&x.extra),
-                })
-                .collect()
-        }
-
-        let temp_extra = convert_extra(&self.extra);
-        let astruct = TempStruct {
-            text: &self.content,
-            style: &self.style,
-            extra: temp_extra,
-        };
-        // dbg!(&serde_json::to_string(&astruct));
-        // dbg!(pumpkin_nbt::serializer::to_bytes_unnamed(&astruct).unwrap().to_vec());
-
-        // TODO
-        pumpkin_nbt::serializer::to_bytes_unnamed(&astruct).unwrap()
+        pumpkin_nbt::serializer::to_bytes_unnamed(&self).unwrap()
     }
 }
 
@@ -231,4 +221,30 @@ pub enum TextContent {
     /// A keybind identifier
     /// https://minecraft.wiki/w/Controls#Configurable_controls
     Keybind { keybind: Cow<'static, str> },
+}
+
+#[cfg(test)]
+mod test {
+    use crate::text::style::Style;
+    use super::{TextComponent, TextContent};
+
+    #[test]
+    fn text_component_json() {
+        let text = "%s is cool!";
+        let value = "testing";
+
+        let component = TextComponent {
+            content: TextContent::Translate {
+                translate: text.into(),
+                with: vec![
+                    TextComponent::text(value.to_string()),
+                ],
+            },
+            style: Style::default(),
+            extra: vec![],
+        };
+
+        let json_text = &serde_json::to_string(&component).unwrap();
+        assert_eq!(json_text, "{\"translate\":\"%s is cool!\",\"with\":[{\"text\":\"testing\"}]}");
+    }
 }
