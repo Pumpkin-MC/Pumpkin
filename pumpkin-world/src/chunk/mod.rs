@@ -258,27 +258,9 @@ impl Subchunks {
         match self {
             Self::Single(block) => {
                 if *block != new_block {
-                    // SAFETY:
-                    // This is fully safe, because after creating i fill
-                    // with same constant len
-                    let mut subchunks: [MaybeUninit<Subchunk>; SUBCHUNKS_COUNT] = unsafe {
-                        // Create an uninitialized array
-                        MaybeUninit::uninit().assume_init()
-                    };
+                    let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
 
-                    for subchunk in subchunks.iter_mut().take(SUBCHUNKS_COUNT) {
-                        *subchunk = MaybeUninit::new(Subchunk::Single(*block));
-                    }
-
-                    // SAFETY:
-                    // MaybeUninit has a same memory layout
-                    let mut subchunks: [Subchunk; SUBCHUNKS_COUNT] =
-                        unsafe { std::mem::transmute::<_, [Subchunk; SUBCHUNKS_COUNT]>(subchunks) };
-
-                    subchunks[(position.y.get_absolute() / 16) as usize]
-                        .set_block(position, new_block);
-
-                    *self = Self::Multi(Box::new(subchunks))
+                    *self = Self::Multi(Box::new(subchunks.try_into().unwrap()))
                 }
             }
             Self::Multi(subchunks) => {
