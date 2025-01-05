@@ -1,4 +1,5 @@
 pub mod gamemode;
+pub mod lang;
 pub mod math;
 pub mod permission;
 pub mod random;

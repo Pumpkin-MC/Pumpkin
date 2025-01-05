@@ -8,9 +8,9 @@ pumpkin-nbt = { path = "../pumpkin-nbt" }
 serde.workspace = true
 bytes.workspace = true
 uuid.workspace = true
+serde_json.workspace = true
 
 num-traits = "0.2"
 
 colored = "2"
 md5 = "0.7.0"
-serde_json.workspace = true

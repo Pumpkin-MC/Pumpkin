@@ -13,6 +13,7 @@ use crate::{
 };
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_core::math::{boundingbox::BoundingBox, position::WorldPosition};
+use pumpkin_core::text::Text;
 use pumpkin_core::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
@@ -522,7 +523,7 @@ impl Player {
                 FilterType::PassThrough,
                 1.into(),
                 &TextComponent::text(gameprofile.name.clone()),
-                None,
+                None::<Text>,
             ))
             .await;
 

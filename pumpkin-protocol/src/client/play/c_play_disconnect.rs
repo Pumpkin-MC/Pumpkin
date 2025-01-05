@@ -1,4 +1,4 @@
-use pumpkin_core::text::{TextComponent, TextComponentNbt};
+use pumpkin_core::text::Text;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
@@ -6,13 +6,13 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[client_packet("play:disconnect")]
 pub struct CPlayDisconnect {
-    reason: TextComponentNbt,
+    reason: Text,
 }
 
-impl<'a> CPlayDisconnect {
-    pub fn new(reason: &TextComponent) -> Self {
+impl CPlayDisconnect {
+    pub fn new(reason: impl Into<Text>) -> Self {
         Self {
-            reason: reason.to_nbt(),
+            reason: reason.into(),
         }
     }
 }

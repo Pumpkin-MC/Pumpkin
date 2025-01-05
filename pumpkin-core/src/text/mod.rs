@@ -1,7 +1,10 @@
 use core::str;
 use std::borrow::Cow;
 
-use crate::text::color::ARGBColor;
+use crate::{
+    lang::{format_with_vec, get_translation},
+    text::color::ARGBColor,
+};
 use click::ClickEvent;
 use color::Color;
 use colored::Colorize;
@@ -30,35 +33,30 @@ pub struct TextComponent {
     pub extra: Vec<TextComponent>,
 }
 
-pub struct TextComponentNbt {
-    pub wrappee: TextComponent,
+// Wrapper for `TextComponent` used for NBT serialization
+pub struct Text(pub TextComponent);
+
+impl From<&TextComponent> for Text {
+    fn from(value: &TextComponent) -> Self {
+        Text(value.clone())
+    }
 }
 
-impl TextComponentNbt {
-    pub fn new(wrappee: TextComponent) -> Self {
-        Self { wrappee }
-    }
-
+impl Text {
     pub fn encode(&self) -> bytes::BytesMut {
-        self.wrappee.encode()
+        self.0.encode()
     }
 }
 
-impl serde::Serialize for TextComponentNbt {
+impl serde::Serialize for Text {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         // NBT-encode the underlying component, then
         // pass the bytes to `serializer`.
-        let bytes = self.wrappee.encode();
+        let bytes = self.0.encode();
         serializer.serialize_bytes(&bytes)
-    }
-}
-
-impl TextComponent {
-    pub fn to_nbt(&self) -> TextComponentNbt {
-        TextComponentNbt::new(self.clone())
     }
 }
 
@@ -79,12 +77,17 @@ impl TextComponent {
         self
     }
 
-    pub fn to_pretty_console(self) -> String {
-        let style = self.style;
+    pub fn to_pretty_console(&self) -> String {
+        let style = &self.style;
         let color = style.color;
-        let mut text = match self.content {
+        let mut text = match self.content.clone() {
             TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with: _ } => translate.into_owned(),
+            TextContent::Translate { translate, with } => {
+                let format_str: String = get_translation(translate.into_owned());
+                let args: Vec<String> = with.iter().map(|x| x.to_pretty_console()).collect();
+
+                format_with_vec(&format_str, &args)
+            }
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -107,13 +110,13 @@ impl TextComponent {
             text = text.strikethrough().to_string();
         }
         if style.click_event.is_some() {
-            if let Some(ClickEvent::OpenUrl(url)) = style.click_event {
+            if let Some(ClickEvent::OpenUrl(url)) = &style.click_event {
                 //TODO: check if term supports hyperlinks before
                 text = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text).to_string()
             }
         }
-        for child in self.extra {
-            text += &*child.to_pretty_console();
+        for child in &self.extra {
+            text += &child.to_pretty_console();
         }
         text
     }
@@ -249,5 +252,27 @@ mod test {
             json_text,
             "{\"translate\":\"%s is cool!\",\"with\":[{\"text\":\"testing\"}]}"
         );
+    }
+
+    #[test]
+    fn translate_to_pretty_console() {
+        let translation_key = "chat.type.announcement";
+        let sender = "Server";
+        let message = "My first message";
+
+        let component = TextComponent {
+            content: TextContent::Translate {
+                translate: translation_key.into(),
+                with: vec![
+                    TextComponent::text(sender.to_string()),
+                    TextComponent::text(message.to_string()),
+                ],
+            },
+            style: Style::default(),
+            extra: vec![],
+        };
+
+        let pretty = component.to_pretty_console();
+        assert_eq!(pretty, format!("[{}] {}", sender, message));
     }
 }

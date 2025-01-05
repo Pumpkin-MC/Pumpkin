@@ -36,22 +36,26 @@ impl CommandExecutor for SayExecutor {
             .get("say_command")
             .expect("Incomplete chat type registry, missing say_command");
 
+        let translation_key = chat_type.chat.translation_key.clone().into();
+
+        let text_component = &TextComponent {
+            content: TextContent::Translate {
+                translate: translation_key,
+                with: vec![
+                    TextComponent::text(sender.to_string()),
+                    TextComponent::text(msg.to_string()),
+                ],
+            },
+            style: chat_type.chat.style.clone().unwrap_or_default(),
+            extra: vec![],
+        };
+
+        log::info!("{}", text_component.to_pretty_console());
+
         server
-            .broadcast_packet_all(&CSystemChatMessage::new(
-                &TextComponent {
-                    content: TextContent::Translate {
-                        translate: chat_type.chat.translation_key.clone().into(),
-                        with: vec![
-                            TextComponent::text(sender.to_string()),
-                            TextComponent::text(msg.to_string()),
-                        ],
-                    },
-                    style: chat_type.chat.style.clone().unwrap_or_default(),
-                    extra: vec![],
-                },
-                false,
-            ))
+            .broadcast_packet_all(&CSystemChatMessage::new(text_component, false))
             .await;
+
         Ok(())
     }
 }
