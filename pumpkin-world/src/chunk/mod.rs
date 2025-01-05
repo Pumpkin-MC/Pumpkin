@@ -258,7 +258,7 @@ impl Subchunks {
         match self {
             Self::Single(block) => {
                 if *block != new_block {
-                    let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
+                    let subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
 
                     *self = Self::Multi(Box::new(subchunks.try_into().unwrap()))
                 }
