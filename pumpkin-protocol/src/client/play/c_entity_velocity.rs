@@ -1,4 +1,3 @@
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 use crate::VarInt;
