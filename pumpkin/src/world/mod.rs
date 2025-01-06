@@ -116,11 +116,8 @@ impl World {
         Self {
             level: Arc::new(level),
             current_players: Arc::new(Mutex::new(HashMap::new())),
-<<<<<<< HEAD
             current_living_mobs: Arc::new(Mutex::new(HashMap::new())),
-=======
             items: Arc::new(Mutex::new(HashMap::new())),
->>>>>>> origin/item-dropping
             scoreboard: Mutex::new(Scoreboard::new()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
