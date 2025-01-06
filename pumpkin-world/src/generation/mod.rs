@@ -30,8 +30,7 @@ pub fn get_world_gen(seed: Seed) -> Box<dyn WorldGenerator> {
         Generator::Test => {
             Box::new(TestGenerator::<TestBiomeGenerator, TestTerrainGenerator>::new(seed))
         }
-        Generator::Plains => Box::new(PlainsGenerator::new(seed)),
-        Generator::Void => todo!(),
+        Generator::BeautifulPlains => Box::new(PlainsGenerator::new(seed)),
         _ => todo!(),
     }
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub enum Generator {
     Test,
-    Plains,
+    BeautifulPlains,
     Superflat,
     Void,
     Custom,
