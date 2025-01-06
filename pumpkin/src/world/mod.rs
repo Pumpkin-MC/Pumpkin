@@ -823,7 +823,12 @@ impl World {
     }
 
     /// Sets a block
-    pub async fn set_block_state(&self, position: WorldPosition, block_state_id: u16, compressed: bool) -> u16 {
+    pub async fn set_block_state(
+        &self,
+        position: WorldPosition,
+        block_state_id: u16,
+        compressed: bool,
+    ) -> u16 {
         let (chunk_coordinate, relative_coordinates) = position.chunk_and_chunk_relative_position();
 
         // Since we divide by 16 remnant can never exceed u8

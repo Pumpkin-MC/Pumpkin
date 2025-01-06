@@ -210,6 +210,7 @@ impl Subchunk {
     ///
     /// Only use this if you know you don't need to update the heightmap
     /// or if you manually set the heightmap in `empty_with_heightmap`
+    #[allow(clippy::useless_conversion)]
     pub fn set_block_no_heightmap_update(
         &mut self,
         position: ChunkRelativeBlockCoordinates,
@@ -252,6 +253,7 @@ impl Subchunk {
         }
     }
 
+    #[allow(clippy::useless_conversion)]
     pub fn optimize(&mut self) {
         match self {
             Self::Multi(blocks) => {

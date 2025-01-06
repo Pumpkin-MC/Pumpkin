@@ -22,4 +22,3 @@ impl Default for ChunkOptimizationConfig {
 #[serde(default)]
 #[derive(Default)]
 pub struct RleCompression {}
-
