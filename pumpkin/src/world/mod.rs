@@ -32,16 +32,12 @@ use pumpkin_protocol::{
     },
     ClientPacket,
 };
-<<<<<<< HEAD
 use pumpkin_registry::DimensionType;
-=======
-use pumpkin_world::block::block_registry::get_block_by_id;
->>>>>>> origin/item-dropping
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
 use pumpkin_world::{
     block::block_registry::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+        get_block_and_state_by_state_id, get_block_by_id, get_block_by_state_id, get_state_by_state_id,
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
