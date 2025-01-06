@@ -258,11 +258,12 @@ impl Subchunks {
         match self {
             Self::Single(block) => {
                 if *block != new_block {
-                    *self = Self::Multi(
-                        vec![Subchunk::Single(0); SUBCHUNKS_COUNT]
-                            .try_into()
-                            .unwrap(),
-                    )
+                    let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
+
+                    subchunks[(position.y.get_absolute() / 16) as usize]
+                        .set_block(position, new_block);
+
+                    *self = Self::Multi(subchunks.try_into().unwrap());
                 }
             }
             Self::Multi(subchunks) => {
