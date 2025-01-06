@@ -5,11 +5,7 @@ use crate::math::vector2::Vector2;
 use num_traits::Euclid;
 use serde::{Deserialize, Serialize};
 
-<<<<<<< HEAD
 #[derive(Clone, Copy, PartialEq, Eq)]
-=======
-#[derive(Clone, Copy, Default)]
->>>>>>> origin/item-dropping
 /// Aka Block Position
 pub struct WorldPosition(pub Vector3<i32>);
 
