@@ -13,11 +13,7 @@ pub struct CEntityVelocity<'a> {
 }
 
 impl<'a> CEntityVelocity<'a> {
-<<<<<<< HEAD
     pub fn new(entity_id: &'a VarInt, velocity_x: f64, velocity_y: f64, velocity_z: f64) -> Self {
-=======
-    pub fn new(entity_id: &'a VarInt, velocity: Vector3<f64>) -> Self {
->>>>>>> origin/item-dropping
         Self {
             entity_id,
             velocity_x: (velocity.x.clamp(-3.9, 3.9) * 8000.0) as i16,
