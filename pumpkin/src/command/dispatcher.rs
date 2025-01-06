@@ -158,14 +158,11 @@ impl CommandDispatcher {
             .next()
             .ok_or(GeneralCommandIssue("Empty Command".to_string()))?;
         let raw_args: Vec<&str> = parts.rev().collect();
-	
-	if let None = self.commands.get(key) {
-            return Err(GeneralCommandIssue(
-                format!("Command {key} does not exist"),
-            ));
 
-	}
-	
+        if !self.commands.contains_key(key) {
+            return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
+        }
+
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
                 "Permission for Command not found".to_string(),
