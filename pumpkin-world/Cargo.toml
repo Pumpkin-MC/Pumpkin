@@ -21,7 +21,7 @@ dashmap = "6.1.0"
 
 num-traits = "0.2"
 
-# Compression   
+# Compression
 flate2 = "1.0"
 lz4 = "1.28.0"
 

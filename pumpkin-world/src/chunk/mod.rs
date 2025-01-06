@@ -1,5 +1,5 @@
 use fastnbt::LongArray;
-use pumpkin_core::math::vector2::Vector2;
+use pumpkin_core::{math::vector2::Vector2, rle_vec::RleVec};
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::collections::HashMap;
@@ -88,6 +88,7 @@ pub enum Subchunks {
 #[derive(Clone, PartialEq, Debug)]
 pub enum Subchunk {
     Single(u16),
+    Rle(RleVec<u16>),
     // The packet relies on this ordering -> leave it like this for performance
     /// Ordering: yzx (y being the most significant)
     Multi(Box<[u16; SUBCHUNK_VOLUME]>),
@@ -181,6 +182,7 @@ impl Subchunk {
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
             Self::Single(block) => Some(*block),
+            Self::Rle(blocks) => blocks.get(convert_index(position)).copied(),
             Self::Multi(blocks) => blocks.get(convert_index(position)).copied(),
         }
     }
@@ -210,6 +212,13 @@ impl Subchunk {
                     *self = Self::Multi(blocks)
                 }
             }
+            Self::Rle(blocks) => {
+                blocks.set(convert_index(position), new_block);
+
+                if blocks.iter().all(|b| *b == new_block) {
+                    *self = Self::Single(new_block)
+                }
+            }
             Self::Multi(blocks) => {
                 blocks[convert_index(position)] = new_block;
 
@@ -223,6 +232,7 @@ impl Subchunk {
     pub fn clone_as_array(&self) -> Box<[u16; SUBCHUNK_VOLUME]> {
         match &self {
             Self::Single(block) => Box::new([*block; SUBCHUNK_VOLUME]),
+            Self::Rle(blocks) => blocks.to_vec().try_into().unwrap(),
             Self::Multi(blocks) => blocks.clone(),
         }
     }

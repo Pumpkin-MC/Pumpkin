@@ -1,6 +1,7 @@
 pub mod gamemode;
 pub mod math;
 pub mod permission;
+pub mod rle_vec;
 pub mod random;
 pub mod text;
 
