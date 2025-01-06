@@ -80,11 +80,14 @@ pub enum Subchunks {
 /// # Subchunk
 /// Subchunk - its an area in chunk, what are 16 blocks in height
 ///
-/// Subchunk can be single and multi.
+/// Subchunk can be single, rle and multi.
 ///
 /// Single means a single block in all subchunk, like
 /// subchunk, what filled only air or only water.
-///
+/// 
+/// Rle means what a subchunk is rle compressed.
+/// Like aaabbccccc becomes a3b2c5
+/// 
 /// Multi means a normal subchunk, what contains 4096 blocks.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Subchunk {
