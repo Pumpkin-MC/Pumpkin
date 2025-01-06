@@ -8,13 +8,17 @@ use zombie::Zombie;
 
 use crate::{server::Server, world::World};
 
-use super::{ai::goal::Goal, living::LivingEntity};
+use super::{
+    ai::{goal::Goal, path::Navigator},
+    living::LivingEntity,
+};
 
 pub mod zombie;
 
 pub struct MobEntity {
     pub living_entity: Arc<LivingEntity>,
     pub goals: Mutex<Vec<(Arc<dyn Goal>, bool)>>,
+    pub navigator: Mutex<Navigator>,
 }
 
 impl MobEntity {
@@ -31,6 +35,8 @@ impl MobEntity {
                 *running = goal.can_start(self).await;
             }
         }
+        let mut navigator = self.navigator.lock().await;
+        navigator.tick(&self.living_entity).await;
     }
 }
 

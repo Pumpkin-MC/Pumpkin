@@ -32,6 +32,7 @@ use uuid::Uuid;
 
 use crate::block::block_manager::BlockManager;
 use crate::block::default_block_manager;
+use crate::entity::ai::path::Navigator;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::MobEntity;
 use crate::entity::Entity;
@@ -207,6 +208,7 @@ impl Server {
         let mob = Arc::new(MobEntity {
             living_entity,
             goals: Mutex::new(vec![]),
+            navigator: Mutex::new(Navigator::default()),
         });
         world.add_mob_entity(uuid, mob.clone()).await;
         (mob, uuid)
