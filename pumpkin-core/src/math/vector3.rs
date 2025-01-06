@@ -3,7 +3,7 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::Float;
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 pub struct Vector3<T> {
     pub x: T,
     pub y: T,
