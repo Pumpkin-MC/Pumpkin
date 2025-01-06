@@ -2,12 +2,9 @@ use async_trait::async_trait;
 use pumpkin_core::text::color::{Color, NamedColor};
 use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CTransfer;
-<<<<<<< HEAD
 use pumpkin_protocol::codec::var_int::VarInt;
-=======
 use pumpkin_protocol::VarInt;
 use std::sync::Arc;
->>>>>>> origin/item-dropping
 
 use crate::command::args::arg_bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::arg_players::PlayersArgumentConsumer;
