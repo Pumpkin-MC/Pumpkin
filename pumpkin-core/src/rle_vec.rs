@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Examples:
 /// ```
-/// # use rle_vec::RleVec;
+/// # use pumpkin_core::rle_vec::RleVec;
 /// let mut rle = RleVec::new();
 ///
 /// rle.push(10);
@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 /// `RleVec` can be constructed from `Iterators` and be iterated over just like a `Vec`.
 ///
 /// ```
-/// # use rle_vec::RleVec;
+/// # use pumpkin_core::rle_vec::RleVec;
 /// let v = vec![0,0,0,1,1,1,1,2,2,3,4,5,4,4,4];
 ///
 /// let mut rle: RleVec<_> = v.into_iter().collect();
@@ -63,7 +63,7 @@ use serde::{Deserialize, Serialize};
 /// value at an index.
 ///
 /// ```
-/// # use rle_vec::RleVec;
+/// # use pumpkin_core::rle_vec::RleVec;
 /// let v = vec![0,0,0,1,1,1,1,2,2,3];
 /// let mut rle: RleVec<_> = v.into_iter().collect();
 ///
@@ -81,7 +81,7 @@ use serde::{Deserialize, Serialize};
 /// `Index` trait. An example will be more explicit:
 ///
 /// ```
-/// # use rle_vec::RleVec;
+/// # use pumpkin_core::rle_vec::RleVec;
 /// let v = vec![0, 2, 4, 6];
 /// let rle: RleVec<_> = v.into_iter().collect();
 ///
@@ -92,7 +92,7 @@ use serde::{Deserialize, Serialize};
 /// your software will panic! You cannot do this:
 ///
 /// ```ignore
-/// # use rle_vec::RleVec;
+/// # use pumpkin_core::rle_vec::RleVec;
 /// let v = vec![0, 2, 4, 6];
 /// let rle: RleVec<_> = v.into_iter().collect();
 ///
@@ -127,7 +127,7 @@ pub struct RleVec<T> {
 /// # Example
 ///
 /// ```
-/// # use rle_vec::{RleVec, Run};
+/// # use pumpkin_core::rle_vec::{RleVec, Run};
 /// let rle = RleVec::from(&[1, 1, 1, 1, 2, 2, 3][..]);
 ///
 /// let mut iterator = rle.runs();
@@ -157,7 +157,7 @@ impl<T> RleVec<T> {
     /// # Examples
     ///
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let rle = RleVec::<i32>::new();
     /// ```
     pub const fn new() -> RleVec<T> {
@@ -170,7 +170,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::with_capacity(10);
     ///
     /// // The rle_vector contains no items, even though it has capacity for more
@@ -200,7 +200,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     /// rle.push(1);
     /// rle.push(1);
@@ -219,7 +219,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     /// assert!(rle.is_empty());
     ///
@@ -236,7 +236,7 @@ impl<T> RleVec<T> {
     ///
     /// # Examples
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::from(&[1, 1, 1, 1, 2, 2, 3][..]);
     ///
     /// rle.clear();
@@ -250,7 +250,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let rle = RleVec::from(&[10, 10, 40, 40, 30][..]);
     /// assert_eq!(rle.last(), Some(&30));
     ///
@@ -268,7 +268,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::{RleVec, Run};
+    /// # use pumpkin_core::rle_vec::{RleVec, Run};
     /// let mut rle = RleVec::new();
     ///
     /// assert_eq!(rle.last_run(), None);
@@ -303,7 +303,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     /// assert_eq!(rle.runs_len(), 0);
     ///
@@ -323,7 +323,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     /// rle.push(1);
     /// rle.push(1);
@@ -357,7 +357,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     /// rle.push(1);
     /// rle.push(1);
@@ -386,7 +386,7 @@ impl<T> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::{RleVec, Run};
+    /// # use pumpkin_core::rle_vec::{RleVec, Run};
     /// let mut rle = RleVec::new();
     /// rle.push(1);
     /// rle.push(1);
@@ -441,7 +441,7 @@ impl<T: Eq> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     /// rle.push(1);
     /// assert_eq!(rle[0], 1);
@@ -458,7 +458,7 @@ impl<T: Eq> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::new();
     ///
     /// // Push 10 times a 2
@@ -488,7 +488,7 @@ impl<T: Clone> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let slice = &[0, 0, 0, 1, 1, 99, 9];
     /// let rle = RleVec::from(&slice[..]);
     /// let vec = rle.to_vec();
@@ -517,7 +517,7 @@ impl<T: Eq + Clone> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::from(&[1, 1, 1, 1, 2, 2, 3][..]);
     ///
     /// assert_eq!(rle[2], 1);
@@ -593,7 +593,7 @@ impl<T: Eq + Clone> RleVec<T> {
     ///
     /// # Examples
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::from(&[1, 1, 1, 1, 2, 1, 1, 4, 4][..]);
     ///
     /// assert_eq!(rle.remove(4), 2);
@@ -629,7 +629,7 @@ impl<T: Eq + Clone> RleVec<T> {
     ///
     /// # Example
     /// ```
-    /// # use rle_vec::RleVec;
+    /// # use pumpkin_core::rle_vec::RleVec;
     /// let mut rle = RleVec::from(&[1, 1, 1, 1, 2, 2, 3][..]);
     ///
     /// assert_eq!(rle[2], 1);
@@ -830,7 +830,7 @@ impl io::Write for RleVec<u8> {
 ///
 /// # Example
 /// ```
-/// # use rle_vec::RleVec;
+/// # use pumpkin_core::rle_vec::RleVec;
 /// let rle = RleVec::from(&[1, 1, 1, 1, 2, 2, 3][..]);
 ///
 /// let mut iterator = rle.iter();
@@ -933,7 +933,7 @@ impl<'a, T: 'a> DoubleEndedIterator for Iter<'a, T> {
 ///
 /// # Example
 /// ```
-/// # use rle_vec::{RleVec, Run};
+/// # use pumpkin_core::rle_vec::{RleVec, Run};
 /// let rle = RleVec::from(&[1, 1, 1, 1, 2, 2, 3][..]);
 ///
 /// let mut iterator = rle.runs();
