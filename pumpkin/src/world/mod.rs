@@ -600,9 +600,8 @@ impl World {
                     let chunk_ref = chunk_data_ref.clone();
 
                     tokio::spawn(async move {
+                        // TODO: config
                         tokio::time::sleep(Duration::from_millis(100)).await;
-
-                        log::info!("trying optimize and not get deadlock");
                         chunk_ref.write().await.compress();
                     });
                 }
