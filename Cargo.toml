@@ -31,6 +31,9 @@ debug = true
 inherits = "release"
 debug = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [workspace.dependencies]
 log = "0.4"
 tokio = { version = "1.42", features = [
