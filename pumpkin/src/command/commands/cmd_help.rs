@@ -104,13 +104,8 @@ impl CommandExecutor for BaseHelpExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-<<<<<<< HEAD
         server: &Server,
         args: &ConsumedArgs<'a>,
-=======
-        server: &Arc<Server>,
-        _args: &ConsumedArgs<'a>,
->>>>>>> origin/item-dropping
     ) -> Result<(), CommandError> {
         let page_number = match page_number_consumer().find_arg_default_name(args) {
             Err(_) => 1,
