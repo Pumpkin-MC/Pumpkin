@@ -1,3 +1,4 @@
+use generator::Generator;
 use log::warn;
 use logging::LoggingConfig;
 use pumpkin_core::{Difficulty, GameMode, PermissionLvl};
@@ -25,6 +26,7 @@ pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
 
 mod commands;
+pub mod generator;
 
 pub mod op;
 mod pvp;
@@ -63,6 +65,8 @@ pub struct BasicConfiguration {
     pub server_address: SocketAddr,
     /// The seed for world generation.
     pub seed: String,
+    /// The world generator for generation.
+    pub generator: Generator,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
     /// The maximum view distance for players.
@@ -99,6 +103,7 @@ impl Default for BasicConfiguration {
         Self {
             server_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
             seed: "".to_string(),
+            generator: Generator::Test,
             max_players: 100000,
             view_distance: NonZeroU8::new(10).unwrap(),
             simulation_distance: NonZeroU8::new(10).unwrap(),

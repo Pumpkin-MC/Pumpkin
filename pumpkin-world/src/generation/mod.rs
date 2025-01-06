@@ -17,16 +17,23 @@ mod seed;
 pub use generator::WorldGenerator;
 use implementation::{
     //overworld::biome::plains::PlainsGenerator,
+    overworld::biome::plains::PlainsGenerator,
     test::{TestBiomeGenerator, TestGenerator, TestTerrainGenerator},
 };
+use pumpkin_config::{generator::Generator, BASIC_CONFIG};
 pub use seed::Seed;
 
 use generator::GeneratorInit;
 
 pub fn get_world_gen(seed: Seed) -> Box<dyn WorldGenerator> {
-    // TODO decide which WorldGenerator to pick based on config.
-    //Box::new(PlainsGenerator::new(seed))
-    Box::new(TestGenerator::<TestBiomeGenerator, TestTerrainGenerator>::new(seed))
+    match BASIC_CONFIG.generator {
+        Generator::Test => {
+            Box::new(TestGenerator::<TestBiomeGenerator, TestTerrainGenerator>::new(seed))
+        }
+        Generator::Plains => Box::new(PlainsGenerator::new(seed)),
+        Generator::Void => todo!(),
+        _ => todo!(),
+    }
 }
 
 pub mod section_coords {
