@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 // TODO make this dynamic
 #[derive(Clone)]
-=======
-// TODO
-#[derive(Clone, Copy)]
->>>>>>> origin/item-dropping
 #[repr(i32)]
 pub enum EntityType {
     AcaciaBoat = 0,
