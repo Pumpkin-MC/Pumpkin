@@ -31,9 +31,6 @@ debug = true
 inherits = "release"
 debug = true
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [workspace.dependencies]
 log = "0.4"
 tokio = { version = "1.42", features = [
@@ -53,10 +50,9 @@ bytes = "1.9"
 rayon = "1.10.0"
 parking_lot = { version = "0.12.3", features = ["send_guard"] }
 crossbeam = "0.8.4"
+itertools = "0.13.0"
 
 uuid = { version = "1.11.0", features = ["serde", "v3", "v4"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-itertools = "0.14.0"
