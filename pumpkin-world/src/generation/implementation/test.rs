@@ -68,7 +68,7 @@ impl<B: BiomeGenerator, T: TerrainGenerator> WorldGenerator for TestGenerator<B,
                     );
 
                     //println!("{:?}: {:?}", coordinates, block);
-                    subchunks.set_block(coordinates, block.state_id);
+                    subchunks.set_block(coordinates, block.state_id, false);
                 }
             }
         }

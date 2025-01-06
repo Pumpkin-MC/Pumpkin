@@ -247,6 +247,27 @@ impl Subchunk {
         }
     }
 
+    pub fn optimize(&mut self) {
+        match self {
+            Self::Multi(blocks) => {
+                if blocks.iter().all(|b| b == blocks.first().unwrap()) {
+                    *self = Self::Single(*blocks.first().unwrap())
+                } else {
+                    *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
+                }
+            }
+            Self::Rle(blocks) => {
+                let mut runs = blocks.runs();
+                let first_run = runs.next().unwrap();
+
+                if runs.all(|r| r == first_run) {
+                    *self = Self::Single(*first_run.value)
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn clone_as_array(&self) -> Box<[u16; SUBCHUNK_VOLUME]> {
         match &self {
             Self::Single(block) => Box::new([*block; SUBCHUNK_VOLUME]),
