@@ -36,6 +36,10 @@ pub fn get_spawn_egg(item_id: u16) -> Option<String> {
     None
 }
 
+pub fn get_item_by_id(id: u16) -> Option<&'static Item> {
+    ITEMS.values().find(|item| item.id == id)
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct Item {
     pub id: u16,

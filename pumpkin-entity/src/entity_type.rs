@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 // TODO make this dynamic
 #[derive(Clone)]
+=======
+// TODO
+#[derive(Clone, Copy)]
+>>>>>>> origin/item-dropping
 #[repr(i32)]
 pub enum EntityType {
     AcaciaBoat = 0,
@@ -151,4 +156,14 @@ pub enum EntityType {
     ZombifiedPiglin = 146,
     Player = 147,
     FishingBobber = 148,
+}
+
+impl EntityType {
+    pub const fn gravity(&self) -> f64 {
+        use EntityType::*;
+        match self {
+            Item => 0.04,
+            _ => todo!(),
+        }
+    }
 }

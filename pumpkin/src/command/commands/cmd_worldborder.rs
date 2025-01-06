@@ -6,6 +6,7 @@ use pumpkin_core::{
         TextComponent,
     },
 };
+use std::sync::Arc;
 
 use crate::{
     command::{
@@ -54,7 +55,7 @@ impl CommandExecutor for WorldborderGetExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -80,7 +81,7 @@ impl CommandExecutor for WorldborderSetExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -129,7 +130,7 @@ impl CommandExecutor for WorldborderSetTimeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -201,7 +202,7 @@ impl CommandExecutor for WorldborderAddExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -252,7 +253,7 @@ impl CommandExecutor for WorldborderAddTimeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -326,7 +327,7 @@ impl CommandExecutor for WorldborderCenterExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -354,7 +355,7 @@ impl CommandExecutor for WorldborderDamageAmountExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -405,7 +406,7 @@ impl CommandExecutor for WorldborderDamageBufferExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -456,7 +457,7 @@ impl CommandExecutor for WorldborderWarningDistanceExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server
@@ -507,7 +508,7 @@ impl CommandExecutor for WorldborderWarningTimeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &Server,
+        server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = server

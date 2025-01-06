@@ -153,6 +153,7 @@ impl Player {
         };
 
         Self {
+<<<<<<< HEAD
             living_entity: LivingEntity::new_with_container(
                 Entity::new(
                     entity_id,
@@ -166,6 +167,17 @@ impl Player {
                 ),
                 PlayerInventory::new(),
             ),
+=======
+            living_entity: LivingEntity::new(Entity::new(
+                entity_id,
+                gameprofile.id,
+                world,
+                EntityType::Player,
+                1.62,
+                AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+                AtomicCell::new(bounding_box_size),
+            )),
+>>>>>>> origin/item-dropping
             config: Mutex::new(config),
             gameprofile,
             client,
@@ -738,7 +750,11 @@ impl Player {
                     .await;
             }
             SPlayerAction::PACKET_ID => {
+<<<<<<< HEAD
                 self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
+=======
+                self.handle_player_action(server, SPlayerAction::read(bytebuf)?)
+>>>>>>> origin/item-dropping
                     .await;
             }
             SPlayerCommand::PACKET_ID => {
@@ -758,7 +774,7 @@ impl Player {
                     .await;
             }
             SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
+                self.handle_set_creative_slot(server, SSetCreativeSlot::read(bytebuf)?)
                     .await?;
             }
             SSwingArm::PACKET_ID => {
