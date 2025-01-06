@@ -383,6 +383,7 @@ impl Player {
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
                 self.kick(TextComponent::text("Timeout")).await;
+                self.cancel_tasks.notify_waiters();
                 return;
             }
             self.wait_for_keep_alive
