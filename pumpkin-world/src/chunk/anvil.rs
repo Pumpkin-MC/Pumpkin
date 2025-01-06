@@ -264,6 +264,9 @@ impl ChunkWriter for AnvilChunkFormat {
         // Payload
         chunk_payload.put_slice(&compressed_data);
 
+        // Calculate sector size
+        let sector_size = chunk_payload.len().div_ceil(4096);
+
         // Region file header tables
         let mut location_table = [0u8; 4096];
         let mut timestamp_table = [0u8; 4096];
@@ -283,25 +286,32 @@ impl ChunkWriter for AnvilChunkFormat {
                 .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
         }
 
+
+
         let chunk_x = at.x & 0x1F;
         let chunk_z = at.z & 0x1F;
 
         let table_index = (chunk_x as usize + chunk_z as usize * 32) * 4;
 
+        let mut chunk_data_location: u64;
+
         // | 0 1 2  |      3       |
         // | offset | sector count |
-        let chunk_location = &mut location_table[table_index..table_index + 4];
+        let chunk_location = &location_table[table_index..table_index + 4];
+        if chunk_location[3] >= sector_size as u8 {
+            chunk_data_location = u32::from_be_bytes([0, chunk_location[0], chunk_location[1], chunk_location[2]]) as u64;
+        } else {
+            chunk_data_location = self.find_free_sector(&location_table, sector_size) as u64;
+        }
 
-        let location_offset =
-            u32::from_be_bytes([0, chunk_location[0], chunk_location[1], chunk_location[2]]) as u64
-                * 4096;
-        let sector_size = chunk_location[3] as usize * 4096;
+        assert!(chunk_data_location < 10000 * 4096, "There are way to many sections wtf. Do you wanna blow up your disc?");
+        assert!(chunk_data_location > 1, "Nah won't let your overwrite my header. Not cool");
 
-        // TODO: move shit
-        assert!(
-            length as usize >= sector_size,
-            "AAAAAAAAAAAAAHHHHHHHHHHHHH!!"
-        );
+        // Construct location header
+        location_table[table_index] = (chunk_data_location >> 16) as u8;
+        location_table[table_index + 1] = (chunk_data_location >> 8) as u8;
+        location_table[table_index + 2] = (chunk_data_location >> 0) as u8;
+        location_table[table_index + 3] = sector_size as u8;
 
         // Write new location and timestamp table
         region_file.seek(SeekFrom::Start(0)).unwrap();
@@ -310,7 +320,7 @@ impl ChunkWriter for AnvilChunkFormat {
             .map_err(|e| ChunkWritingError::IoError(e.kind()))?;
 
         // Seek to where the chunk is located
-        region_file.seek(SeekFrom::Start(location_offset)).unwrap();
+        region_file.seek(SeekFrom::Start(chunk_data_location * 4096)).unwrap();
 
         // Write header and payload
         region_file
@@ -318,7 +328,7 @@ impl ChunkWriter for AnvilChunkFormat {
             .expect("Failed to write header");
 
         // length of compression type + payload and 4 for length
-        let padding = (4096 - ((length + 4) & 0xFFF)) & 0xFFF;
+        let padding = ((sector_size * 4096) as u32 - ((length + 4) & 0xFFF)) & 0xFFF;
 
         region_file
             .write_all(&vec![0u8; padding as usize])
@@ -380,7 +390,7 @@ impl AnvilChunkFormat {
             }
 
             sections.push(ChunkSection {
-                y: i as i8 - 1,
+                y: i as i8 - 4,
                 block_states: Some(ChunkSectionBlockStates {
                     data: Some(LongArray::new(section_longs)),
                     palette: palette
@@ -404,6 +414,38 @@ impl AnvilChunkFormat {
         };
 
         fastnbt::to_bytes(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)
+    }
+
+    /// Returns the next free writable sector
+    /// The sector is absolute which means it always has a spacing of 2 sectors
+    fn find_free_sector(&self, location_table: &[u8; 4096], sector_size: usize) -> usize {
+        let mut used_sectors: Vec<u16> = Vec::new();
+        for i in 0..1024 {
+            let entry_offset = i * 4;
+            let location_offset =
+                u32::from_be_bytes([0, location_table[entry_offset], location_table[entry_offset + 1], location_table[entry_offset + 2]]) as u64;
+            let length = location_table[entry_offset + 3] as u64;
+            let sector_count = location_offset;
+            for used_sector in sector_count..sector_count + length {
+                used_sectors.push(used_sector as u16);
+            }
+        }
+
+        if used_sectors.is_empty() {
+            return 3;
+        }
+
+        used_sectors.sort();
+
+        let mut prev_sector = &used_sectors[0];
+        for sector in used_sectors[1..].iter() { // Iterate over consecutive pairs
+            if sector - prev_sector > sector_size as u16 {
+                return (prev_sector + 1) as usize;
+            }
+            prev_sector = sector;
+        }
+
+        (used_sectors.last().unwrap().clone() + 1) as usize
     }
 }
 

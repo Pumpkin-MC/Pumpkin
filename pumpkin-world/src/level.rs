@@ -246,7 +246,7 @@ impl Level {
             let chunk_reader = self.chunk_reader.clone();
             let chunk_writer = self.chunk_writer.clone();
             let level_folder = self.level_folder.clone();
-            let _world_gen = self.world_gen.clone();
+            let world_gen = self.world_gen.clone();
             let chunk_pos = *at;
 
             let chunk = loaded_chunks
@@ -281,11 +281,11 @@ impl Level {
                             }
                         }
                         .unwrap_or_else(|| {
-                            // Arc::new(RwLock::new(world_gen.generate_chunk(chunk_pos)))
-                            Arc::new(RwLock::new(ChunkData {
-                                blocks: ChunkBlocks::default(),
-                                position: chunk_pos,
-                            }))
+                            Arc::new(RwLock::new(world_gen.generate_chunk(chunk_pos)))
+                            // Arc::new(RwLock::new(ChunkData {
+                            //     blocks: ChunkBlocks::default(),
+                            //     position: chunk_pos,
+                            // }))
                         });
 
                     if let Some(data) = loaded_chunks.get(&chunk_pos) {
