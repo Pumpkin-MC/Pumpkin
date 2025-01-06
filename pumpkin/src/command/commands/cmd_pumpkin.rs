@@ -3,11 +3,8 @@ use pumpkin_core::text::click::ClickEvent;
 use pumpkin_core::text::hover::HoverEvent;
 use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
-<<<<<<< HEAD
 use std::borrow::Cow;
-=======
 use std::sync::Arc;
->>>>>>> origin/item-dropping
 
 use crate::{
     command::{
