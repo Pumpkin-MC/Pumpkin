@@ -74,9 +74,9 @@ impl<T: Math + Copy + std::iter::Sum + Default> std::iter::Sum for Vector3<T> {
         let mut y = T::default();
         let mut z = T::default();
         for vec in iter {
-            x = x + vec.x;
-            y = y + vec.y;
-            z = z + vec.z;
+            x += vec.x
+            y += vec.y
+            z += vec.z
         }
         Vector3 { x, y, z }
     }
