@@ -6,17 +6,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct ChunkOptimizationConfig {
     pub rle_compression: Option<RleCompression>,
 }
 
-impl Default for ChunkOptimizationConfig {
-    fn default() -> Self {
-        Self {
-            rle_compression: Some(Default::default()),
-        }
-    }
-}
 
 #[derive(Deserialize, Serialize)]
 #[serde(default)]

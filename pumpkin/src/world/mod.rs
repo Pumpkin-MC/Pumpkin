@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub mod level_time;
 pub mod player_chunker;
@@ -597,7 +597,14 @@ impl World {
                 }
 
                 if ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some() {
-                    chunk_data_ref.write().await.optimize();
+                    let chunk_ref = chunk_data_ref.clone();
+
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+
+                        log::info!("trying optimize and not get deadlock");
+                        chunk_ref.write().await.compress();
+                    });
                 }
             }
 

@@ -236,38 +236,35 @@ impl Subchunk {
             Self::Rle(blocks) => {
                 blocks.set(convert_index(position), new_block);
 
-                if blocks.iter().all(|b| *b == new_block) {
-                    *self = Self::Single(new_block)
-                } else if !compressed {
-                    *self = Self::Multi(blocks.to_vec().try_into().unwrap())
+                if compressed {
+                    self.compress();
                 }
             }
             Self::Multi(blocks) => {
                 blocks[convert_index(position)] = new_block;
 
-                if blocks.iter().all(|b| *b == new_block) {
-                    *self = Self::Single(new_block)
-                } else if compressed && ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some()
-                {
-                    *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
+                if compressed {
+                    self.compress();
                 }
             }
         }
     }
 
     #[allow(clippy::useless_conversion)]
-    pub fn optimize(&mut self) {
+    pub fn compress(&mut self) {
         match self {
             Self::Multi(blocks) => {
                 if blocks.iter().all(|b| b == blocks.first().unwrap()) {
                     *self = Self::Single(*blocks.first().unwrap())
                 } else if ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some() {
+                    log::info!("converting to rle");
                     *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
                 }
             }
             Self::Rle(blocks) => {
                 let mut runs = blocks.runs();
                 let first_run = runs.next().unwrap();
+                log::info!("trying convert rle to single");
 
                 if runs.all(|r| r == first_run) {
                     *self = Self::Single(*first_run.value)
@@ -344,10 +341,11 @@ impl Subchunks {
         }
     }
 
-    pub fn optimize(&mut self) {
+    pub fn compress(&mut self) {
         if let Self::Multi(subchunks) = self {
+            log::info!("optimize started");
             for subchunk in subchunks.iter_mut() {
-                subchunk.optimize();
+                subchunk.compress();
             }
         }
     }
@@ -397,8 +395,8 @@ impl ChunkData {
             .set_block_no_heightmap_update(position, block, compressed);
     }
 
-    pub fn optimize(&mut self) {
-        self.subchunks.optimize();
+    pub fn compress(&mut self) {
+        self.subchunks.compress();
     }
 
     #[expect(dead_code)]
