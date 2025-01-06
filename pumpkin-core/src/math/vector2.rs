@@ -4,10 +4,19 @@ use num_traits::Float;
 
 use super::vector3::Vector3;
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 pub struct Vector2<T> {
     pub x: T,
     pub z: T,
+}
+
+impl<T: Math + Default> Default for Vector2<T> {
+    fn default() -> Self {
+        Self {
+            x: T::default(),
+            z: T::default(),
+        }
+    }
 }
 
 impl<T: Math + Copy> Vector2<T> {

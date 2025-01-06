@@ -3,11 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 pub mod level_time;
 pub mod player_chunker;
 
+use crate::entity::item::ItemEntity;
+use crate::server::Server;
 use crate::{
     command::client_cmd_suggestions,
     entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity},
     error::PumpkinError,
-    server::Server,
 };
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
@@ -26,7 +27,7 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{
     client::play::{
         CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-        CSetEntityMetadata, CSpawnEntity, GameEvent, Metadata, PlayerAction,
+        CSetEntityMetadata, GameEvent, Metadata, PlayerAction,
     },
     ClientPacket,
 };
@@ -35,7 +36,7 @@ use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
 use pumpkin_world::{
     block::block_registry::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+        get_block_and_state_by_state_id, get_block_by_id, get_block_by_state_id, get_state_by_state_id,
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
@@ -105,6 +106,7 @@ pub struct World {
     /// The type of dimension the world is in
     pub dimension_type: DimensionType,
     // TODO: entities
+    pub items: Arc<Mutex<HashMap<i32, Arc<ItemEntity>>>>, // TODO: entities
 }
 
 impl World {
@@ -114,6 +116,7 @@ impl World {
             level: Arc::new(level),
             current_players: Arc::new(Mutex::new(HashMap::new())),
             current_living_mobs: Arc::new(Mutex::new(HashMap::new())),
+            items: Arc::new(Mutex::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
@@ -340,28 +343,12 @@ impl World {
                 .await;
         };
 
-        let gameprofile = &player.gameprofile;
-
         log::debug!("Broadcasting player spawn for {}", player.gameprofile.name);
         // spawn player for every client
         self.broadcast_packet_except(
             &[player.gameprofile.id],
             // TODO: add velo
-            &CSpawnEntity::new(
-                entity_id.into(),
-                gameprofile.id,
-                (EntityType::Player as i32).into(),
-                position.x,
-                position.y,
-                position.z,
-                pitch,
-                yaw,
-                yaw,
-                0.into(),
-                0.0,
-                0.0,
-                0.0,
-            ),
+            &player.living_entity.entity.get_spawn_entity_packet(None),
         )
         .await;
         // spawn players for our client
@@ -374,26 +361,9 @@ impl World {
             .filter(|c| c.0 != &id)
         {
             let entity = &existing_player.living_entity.entity;
-            let pos = entity.pos.load();
-            let gameprofile = &existing_player.gameprofile;
-            log::debug!("Sending player entities to {}", player.gameprofile.name);
             player
                 .client
-                .send_packet(&CSpawnEntity::new(
-                    existing_player.entity_id().into(),
-                    gameprofile.id,
-                    (EntityType::Player as i32).into(),
-                    pos.x,
-                    pos.y,
-                    pos.z,
-                    entity.yaw.load(),
-                    entity.pitch.load(),
-                    entity.head_yaw.load(),
-                    0.into(),
-                    0.0,
-                    0.0,
-                    0.0,
-                ))
+                .send_packet(&entity.get_spawn_entity_packet(None))
                 .await;
         }
         // entity meta data
@@ -877,12 +847,27 @@ impl World {
         chunk
     }
 
-    pub async fn break_block(&self, position: WorldPosition, cause: Option<&Player>) {
+    pub async fn break_block(
+        self: &Arc<Self>,
+        position: WorldPosition,
+        cause: Option<&Player>,
+        server: Arc<Server>,
+    ) {
         let broken_block_state_id = self.set_block_state(position, 0).await;
 
         let particles_packet =
             CWorldEvent::new(2001, &position, broken_block_state_id.into(), false);
 
+        if let Some(item) = get_block_by_id(broken_block_state_id).map(|block| block.to_item(1)) {
+            ItemEntity::spawn(
+                Vector3::default(),
+                Vector3::default(),
+                self.clone(),
+                item,
+                server,
+            )
+            .await;
+        }
         match cause {
             Some(player) => {
                 self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)

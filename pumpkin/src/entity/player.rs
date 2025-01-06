@@ -758,7 +758,7 @@ impl Player {
                     .await;
             }
             SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
+                self.handle_set_creative_slot(server, SSetCreativeSlot::read(bytebuf)?)
                     .await?;
             }
             SSwingArm::PACKET_ID => {

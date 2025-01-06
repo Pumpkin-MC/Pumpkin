@@ -1,5 +1,4 @@
 use crate::InventoryError;
-use pumpkin_protocol::server::play::SlotActionType;
 use pumpkin_world::item::ItemStack;
 
 pub struct Click {
@@ -8,22 +7,23 @@ pub struct Click {
 }
 
 impl Click {
-    pub fn new(mode: SlotActionType, button: i8, slot: i16) -> Result<Self, InventoryError> {
+    pub fn new(mode: u8, button: i8, slot: i16) -> Result<Self, InventoryError> {
         match mode {
-            SlotActionType::Pickup => Self::new_normal_click(button, slot),
+            0 => Self::new_normal_click(button, slot),
             // Both buttons do the same here, so we omit it
-            SlotActionType::QuickMove => Self::new_shift_click(slot),
-            SlotActionType::Swap => Self::new_key_click(button, slot),
-            SlotActionType::Clone => Ok(Self {
+            1 => Self::new_shift_click(slot),
+            2 => Self::new_key_click(button, slot),
+            3 => Ok(Self {
                 click_type: ClickType::CreativePickItem,
                 slot: Slot::Normal(slot.try_into().or(Err(InventoryError::InvalidSlot))?),
             }),
-            SlotActionType::Throw => Self::new_drop_item(button),
-            SlotActionType::QuickCraft => Self::new_drag_item(button, slot),
-            SlotActionType::PickupAll => Ok(Self {
+            4 => Self::new_drop_item(button, slot),
+            5 => Self::new_drag_item(button, slot),
+            6 => Ok(Self {
                 click_type: ClickType::DoubleClick,
                 slot: Slot::Normal(slot.try_into().or(Err(InventoryError::InvalidSlot))?),
             }),
+            _ => Err(InventoryError::InvalidPacket),
         }
     }
 
@@ -66,15 +66,18 @@ impl Click {
         })
     }
 
-    fn new_drop_item(button: i8) -> Result<Self, InventoryError> {
+    fn new_drop_item(button: i8, slot: i16) -> Result<Self, InventoryError> {
         let drop_type = match button {
             0 => DropType::SingleItem,
             1 => DropType::FullStack,
             _ => Err(InventoryError::InvalidPacket)?,
         };
+        if slot == -999 {
+            return Err(InventoryError::InvalidPacket);
+        }
         Ok(Self {
             click_type: ClickType::DropType(drop_type),
-            slot: Slot::OutsideInventory,
+            slot: Slot::Normal(slot.try_into().or(Err(InventoryError::InvalidPacket))?),
         })
     }
 

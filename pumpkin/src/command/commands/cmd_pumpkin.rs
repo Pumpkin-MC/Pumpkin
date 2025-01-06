@@ -4,6 +4,7 @@ use pumpkin_core::text::hover::HoverEvent;
 use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::{
     command::{
@@ -27,7 +28,7 @@ impl CommandExecutor for PumpkinExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &crate::server::Server,
+        _server: &Arc<crate::server::Server>,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         sender

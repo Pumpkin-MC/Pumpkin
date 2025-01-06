@@ -152,3 +152,13 @@ pub enum EntityType {
     Player = 147,
     FishingBobber = 148,
 }
+
+impl EntityType {
+    pub const fn gravity(&self) -> f64 {
+        use EntityType::*;
+        match self {
+            Item => 0.04,
+            _ => todo!(),
+        }
+    }
+}

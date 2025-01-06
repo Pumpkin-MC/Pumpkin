@@ -3,6 +3,8 @@ use pumpkin_core::text::color::{Color, NamedColor};
 use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::VarInt;
+use std::sync::Arc;
 
 use crate::command::args::arg_bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::arg_players::PlayersArgumentConsumer;
@@ -36,7 +38,7 @@ impl CommandExecutor for TransferTargetSelf {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &crate::server::Server,
+        _server: &Arc<crate::server::Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
@@ -78,7 +80,7 @@ impl CommandExecutor for TransferTargetPlayer {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &crate::server::Server,
+        _server: &Arc<crate::server::Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {

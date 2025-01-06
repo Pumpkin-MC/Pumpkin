@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use pumpkin_core::text::click::ClickEvent;
 use pumpkin_core::text::color::{Color, NamedColor};
 use pumpkin_core::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::args::arg_bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::arg_command::CommandTreeArgumentConsumer;
@@ -32,7 +33,7 @@ impl CommandExecutor for CommandHelpExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &Server,
+        _server: &Arc<Server>,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let Some(Arg::CommandTree(tree)) = args.get(&ARG_COMMAND) else {

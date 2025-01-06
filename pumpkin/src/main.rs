@@ -46,6 +46,8 @@ use tokio::signal::unix::{signal, SignalKind};
 
 use std::sync::Arc;
 
+use itertools::Itertools;
+
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_core::text::{color::NamedColor, TextComponent};

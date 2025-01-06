@@ -13,6 +13,7 @@ use crate::error::PumpkinError;
 use crate::server::Server;
 use pumpkin_core::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub(crate) enum CommandError {
@@ -63,7 +64,7 @@ impl CommandDispatcher {
     pub async fn handle_command<'a>(
         &'a self,
         sender: &mut CommandSender<'a>,
-        server: &'a Server,
+        server: &'a Arc<Server>,
         cmd: &'a str,
     ) {
         if let Err(e) = self.dispatch(sender, server, cmd).await {
@@ -149,7 +150,7 @@ impl CommandDispatcher {
     pub(crate) async fn dispatch<'a>(
         &'a self,
         src: &mut CommandSender<'a>,
-        server: &'a Server,
+        server: &'a Arc<Server>,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
         // Other languages dont use the ascii whitespace
@@ -208,7 +209,7 @@ impl CommandDispatcher {
 
     async fn try_is_fitting_path<'a>(
         src: &mut CommandSender<'a>,
-        server: &'a Server,
+        server: &'a Arc<Server>,
         path: &[usize],
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,

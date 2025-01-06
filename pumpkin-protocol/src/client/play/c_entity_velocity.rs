@@ -1,6 +1,5 @@
 use pumpkin_macros::client_packet;
 use serde::Serialize;
-
 use crate::VarInt;
 
 #[derive(Serialize)]
