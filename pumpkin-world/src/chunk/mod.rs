@@ -257,14 +257,12 @@ impl Subchunk {
                 if blocks.iter().all(|b| b == blocks.first().unwrap()) {
                     *self = Self::Single(*blocks.first().unwrap())
                 } else if ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some() {
-                    log::info!("converting to rle");
                     *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
                 }
             }
             Self::Rle(blocks) => {
                 let mut runs = blocks.runs();
                 let first_run = runs.next().unwrap();
-                log::info!("trying convert rle to single");
 
                 if runs.all(|r| r == first_run) {
                     *self = Self::Single(*first_run.value)
@@ -343,7 +341,6 @@ impl Subchunks {
 
     pub fn compress(&mut self) {
         if let Self::Multi(subchunks) = self {
-            log::info!("optimize started");
             for subchunk in subchunks.iter_mut() {
                 subchunk.compress();
             }

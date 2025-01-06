@@ -11,7 +11,6 @@ pub struct ChunkOptimizationConfig {
     pub rle_compression: Option<RleCompression>,
 }
 
-
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 #[derive(Default)]
