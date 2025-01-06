@@ -10,7 +10,7 @@ use crate::{
     server::Server,
 };
 use level_time::LevelTime;
-use pumpkin_config::BasicConfiguration;
+use pumpkin_config::{BasicConfiguration, ADVANCED_CONFIG};
 use pumpkin_core::math::vector2::Vector2;
 use pumpkin_core::math::{position::WorldPosition, vector3::Vector3};
 use pumpkin_core::text::{color::NamedColor, TextComponent};
@@ -563,8 +563,8 @@ impl World {
         let level = self.level.clone();
 
         tokio::spawn(async move {
-            while let Some(chunk_data) = receiver.recv().await {
-                let chunk_data = chunk_data.read().await;
+            while let Some(chunk_data_ref) = receiver.recv().await {
+                let chunk_data = chunk_data_ref.read().await;
                 let packet = CChunkData(&chunk_data);
                 #[cfg(debug_assertions)]
                 if chunk_data.position == (0, 0).into() {
@@ -594,6 +594,10 @@ impl World {
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
                     player.client.send_packet(&packet).await;
+                }
+
+                if ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some() {
+                    chunk_data_ref.write().await.optimize();
                 }
             }
 

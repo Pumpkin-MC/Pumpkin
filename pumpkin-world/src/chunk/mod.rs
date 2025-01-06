@@ -1,4 +1,5 @@
 use fastnbt::LongArray;
+use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_core::{math::vector2::Vector2, rle_vec::RleVec};
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
@@ -220,7 +221,7 @@ impl Subchunk {
         match self {
             Self::Single(block) => {
                 if *block != new_block {
-                    if compressed {
+                    if compressed && ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some() {
                         let mut blocks = RleVec::new();
                         blocks.push_n(SUBCHUNK_VOLUME, *block);
                         blocks.set(convert_index(position), new_block);
@@ -246,7 +247,8 @@ impl Subchunk {
 
                 if blocks.iter().all(|b| *b == new_block) {
                     *self = Self::Single(new_block)
-                } else if compressed {
+                } else if compressed && ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some()
+                {
                     *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
                 }
             }
@@ -259,7 +261,7 @@ impl Subchunk {
             Self::Multi(blocks) => {
                 if blocks.iter().all(|b| b == blocks.first().unwrap()) {
                     *self = Self::Single(*blocks.first().unwrap())
-                } else {
+                } else if ADVANCED_CONFIG.chunk_optimization.rle_compression.is_some() {
                     *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
                 }
             }
@@ -342,6 +344,14 @@ impl Subchunks {
         }
     }
 
+    pub fn optimize(&mut self) {
+        if let Self::Multi(subchunks) = self {
+            for subchunk in subchunks.iter_mut() {
+                subchunk.optimize();
+            }
+        }
+    }
+
     //TODO: Needs optimizations
     pub fn array_iter(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
         match self {
@@ -385,6 +395,10 @@ impl ChunkData {
     ) {
         self.subchunks
             .set_block_no_heightmap_update(position, block, compressed);
+    }
+
+    pub fn optimize(&mut self) {
+        self.subchunks.optimize();
     }
 
     #[expect(dead_code)]
