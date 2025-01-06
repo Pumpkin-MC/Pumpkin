@@ -9,7 +9,6 @@ use crate::{
     command::client_cmd_suggestions,
     entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity},
     error::PumpkinError,
-    server::Server,
 };
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
