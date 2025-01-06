@@ -1,15 +1,12 @@
-<<<<<<< HEAD
 use core::f32;
 use std::sync::{atomic::AtomicBool, Arc};
 
 use crossbeam::atomic::AtomicCell;
-=======
 use crate::server::Server;
 use crossbeam::atomic::AtomicCell;
 use itertools::Itertools;
 use num_derive::FromPrimitive;
 use num_traits::real::Real;
->>>>>>> origin/item-dropping
 use pumpkin_core::math::{
     boundingbox::{BoundingBox, BoundingBoxSize},
     get_section_cord,
@@ -32,13 +29,10 @@ use uuid::Uuid;
 
 use crate::world::World;
 
-<<<<<<< HEAD
 pub mod ai;
 pub mod mob;
 
-=======
 pub mod item;
->>>>>>> origin/item-dropping
 pub mod living;
 pub mod player;
 
@@ -46,12 +40,9 @@ pub mod player;
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: EntityId,
-<<<<<<< HEAD
     /// A persistant, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
-=======
     pub uuid: Uuid,
->>>>>>> origin/item-dropping
     /// The type of entity (e.g., player, zombie, item)
     pub entity_type: EntityType,
     /// The world in which the entity exists.
@@ -94,11 +85,8 @@ impl Entity {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         entity_id: EntityId,
-<<<<<<< HEAD
         entity_uuid: uuid::Uuid,
-=======
         uuid: Uuid,
->>>>>>> origin/item-dropping
         world: Arc<World>,
         position: Vector3<f64>,
         entity_type: EntityType,
@@ -112,11 +100,8 @@ impl Entity {
 
         Self {
             entity_id,
-<<<<<<< HEAD
             entity_uuid,
-=======
             uuid,
->>>>>>> origin/item-dropping
             entity_type,
             in_ground: AtomicBool::new(false),
             on_ground: AtomicBool::new(false),
