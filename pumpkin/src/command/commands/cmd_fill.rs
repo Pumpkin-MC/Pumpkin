@@ -68,7 +68,7 @@ impl CommandExecutor for SetblockExecutor {
                         for z in start_z..=end_z {
                             let block_position = WorldPosition(Vector3 { x, y, z });
                             world.break_block(block_position, None).await;
-                            world.set_block_state(block_position, block_state_id).await;
+                            world.set_block_state(block_position, block_state_id, false).await;
                             placed_blocks += 1;
                         }
                     }
@@ -79,7 +79,7 @@ impl CommandExecutor for SetblockExecutor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = WorldPosition(Vector3 { x, y, z });
-                            world.set_block_state(block_position, block_state_id).await;
+                            world.set_block_state(block_position, block_state_id, false).await;
                             placed_blocks += 1;
                         }
                     }
@@ -92,7 +92,7 @@ impl CommandExecutor for SetblockExecutor {
                             let block_position = WorldPosition(Vector3 { x, y, z });
                             match world.get_block_state(block_position).await {
                                 Ok(old_state) if old_state.air => {
-                                    world.set_block_state(block_position, block_state_id).await;
+                                    world.set_block_state(block_position, block_state_id, false).await;
                                     placed_blocks += 1;
                                 }
                                 _ => {}
@@ -113,9 +113,9 @@ impl CommandExecutor for SetblockExecutor {
                                 || z == start_z
                                 || z == end_z;
                             if is_edge {
-                                world.set_block_state(block_position, block_state_id).await;
+                                world.set_block_state(block_position, block_state_id, false).await;
                             } else {
-                                world.set_block_state(block_position, 0).await;
+                                world.set_block_state(block_position, 0, false).await;
                             }
                             placed_blocks += 1;
                         }
@@ -134,7 +134,7 @@ impl CommandExecutor for SetblockExecutor {
                                 || z == start_z
                                 || z == end_z;
                             if is_edge {
-                                world.set_block_state(block_position, block_state_id).await;
+                                world.set_block_state(block_position, block_state_id, false).await;
                                 placed_blocks += 1;
                             }
                         }

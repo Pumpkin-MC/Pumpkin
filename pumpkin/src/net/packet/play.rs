@@ -1088,7 +1088,7 @@ impl Player {
         }
         if !intersects {
             world
-                .set_block_state(world_pos, block.default_state_id)
+                .set_block_state(world_pos, block.default_state_id, true)
                 .await;
             server
                 .block_manager

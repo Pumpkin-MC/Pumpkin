@@ -20,10 +20,6 @@ impl Default for ChunkOptimizationConfig {
 
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct RleCompression {}
 
-impl Default for RleCompression {
-    fn default() -> Self {
-        Self {}
-    }
-}

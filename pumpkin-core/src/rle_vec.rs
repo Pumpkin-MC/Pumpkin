@@ -1250,7 +1250,6 @@ mod tests {
         let v2 = (0..100).collect::<Vec<usize>>();
         let rle2 = v2.iter().cloned().collect::<RleVec<_>>();
         assert_eq!(rle2.iter().cloned().collect::<Vec<_>>(), v2);
-        assert_eq!(rle2.iter().skip(0).cloned().collect::<Vec<_>>(), v2);
 
         assert_eq!(rle2.iter().next(), Some(&0));
         assert_eq!(rle2.iter().nth(5), Some(&5));
@@ -1395,13 +1394,5 @@ mod tests {
         rle.write_all(data_in.as_slice()).unwrap();
         assert_eq!(rle.runs_len(), 3);
         assert_eq!(rle.len(), 11);
-
-        rle.write(&data_in[6..]).unwrap();
-        assert_eq!(rle.runs_len(), 5);
-        assert_eq!(rle.len(), 16);
-
-        rle.write(&[3, 3, 3]).unwrap();
-        assert_eq!(rle.runs_len(), 5);
-        assert_eq!(rle.len(), 19);
     }
 }

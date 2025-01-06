@@ -195,9 +195,14 @@ impl Subchunk {
     }
 
     /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16, optimized: bool) {
+    pub fn set_block(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        block_id: u16,
+        compressed: bool,
+    ) {
         // TODO @LUK_ESC? update the heightmap
-        self.set_block_no_heightmap_update(position, block_id, optimized)
+        self.set_block_no_heightmap_update(position, block_id, compressed)
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -209,12 +214,12 @@ impl Subchunk {
         &mut self,
         position: ChunkRelativeBlockCoordinates,
         new_block: u16,
-        optimized: bool
+        compressed: bool,
     ) {
         match self {
             Self::Single(block) => {
                 if *block != new_block {
-                    if optimized {
+                    if compressed {
                         let mut blocks = RleVec::new();
                         blocks.push_n(SUBCHUNK_VOLUME, *block);
                         blocks.set(convert_index(position), new_block);
@@ -231,7 +236,7 @@ impl Subchunk {
 
                 if blocks.iter().all(|b| *b == new_block) {
                     *self = Self::Single(new_block)
-                } else if !optimized {
+                } else if !compressed {
                     *self = Self::Multi(blocks.to_vec().try_into().unwrap())
                 }
             }
@@ -240,7 +245,7 @@ impl Subchunk {
 
                 if blocks.iter().all(|b| *b == new_block) {
                     *self = Self::Single(new_block)
-                } else if optimized {
+                } else if compressed {
                     *self = Self::Rle(RleVec::from_iter(blocks.into_iter()))
                 }
             }
@@ -289,9 +294,14 @@ impl Subchunks {
     }
 
     /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16, optimized: bool) {
+    pub fn set_block(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        block_id: u16,
+        compressed: bool,
+    ) {
         // TODO @LUK_ESC? update the heightmap
-        self.set_block_no_heightmap_update(position, block_id, optimized)
+        self.set_block_no_heightmap_update(position, block_id, compressed)
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -303,7 +313,7 @@ impl Subchunks {
         &mut self,
         position: ChunkRelativeBlockCoordinates,
         new_block: u16,
-        optimized: bool,
+        compressed: bool,
     ) {
         match self {
             Self::Single(block) => {
@@ -311,13 +321,14 @@ impl Subchunks {
                     let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
 
                     subchunks[(position.y.get_absolute() / 16) as usize]
-                        .set_block(position, new_block, optimized);
+                        .set_block(position, new_block, compressed);
 
                     *self = Self::Multi(subchunks.try_into().unwrap());
                 }
             }
             Self::Multi(subchunks) => {
-                subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block, optimized);
+                subchunks[(position.y.get_absolute() / 16) as usize]
+                    .set_block(position, new_block, compressed);
 
                 if subchunks
                     .iter()
@@ -349,9 +360,14 @@ impl ChunkData {
     }
 
     /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16, optimized: bool) {
+    pub fn set_block(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        block_id: u16,
+        compressed: bool,
+    ) {
         // TODO @LUK_ESC? update the heightmap
-        self.subchunks.set_block(position, block_id, optimized);
+        self.subchunks.set_block(position, block_id, compressed);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -363,10 +379,10 @@ impl ChunkData {
         &mut self,
         position: ChunkRelativeBlockCoordinates,
         block: u16,
-        optimized: bool,
+        compressed: bool,
     ) {
         self.subchunks
-            .set_block_no_heightmap_update(position, block, optimized);
+            .set_block_no_heightmap_update(position, block, compressed);
     }
 
     #[expect(dead_code)]
@@ -437,7 +453,7 @@ impl ChunkData {
                     // this is fine because we initialized the heightmap of `blocks`
                     // from the cached value in the world file
                     //
-                    // TODO add option to load optimized or not
+                    // TODO add option to load compressed or not
                     subchunks.set_block_no_heightmap_update(
                         ChunkRelativeBlockCoordinates {
                             z: ((block_index % CHUNK_AREA) / 16).into(),
@@ -445,7 +461,7 @@ impl ChunkData {
                             x: (block_index % 16).into(),
                         },
                         block.get_id(),
-                        false
+                        false,
                     );
 
                     block_index += 1;

@@ -70,19 +70,35 @@ impl PerlinTerrainGenerator for PlainsTerrainGenerator {
                 if flower == 6 {
                     match rand::thread_rng().gen_range(0..4) {
                         0 => {
-                            subchunks.set_block(coordinates, block_state!("dandelion").state_id, false);
+                            subchunks.set_block(
+                                coordinates,
+                                block_state!("dandelion").state_id,
+                                false,
+                            );
                         }
                         1 => {
-                            subchunks.set_block(coordinates, block_state!("oxeye_daisy").state_id, false);
+                            subchunks.set_block(
+                                coordinates,
+                                block_state!("oxeye_daisy").state_id,
+                                false,
+                            );
                         }
                         2 => {
-                            subchunks.set_block(coordinates, block_state!("cornflower").state_id, false);
+                            subchunks.set_block(
+                                coordinates,
+                                block_state!("cornflower").state_id,
+                                false,
+                            );
                         }
                         3 => {
                             subchunks.set_block(coordinates, block_state!("poppy").state_id, false);
                         }
                         _ => {
-                            subchunks.set_block(coordinates, block_state!("azure_bluet").state_id, false);
+                            subchunks.set_block(
+                                coordinates,
+                                block_state!("azure_bluet").state_id,
+                                false,
+                            );
                         }
                     }
                 } else {

@@ -48,16 +48,16 @@ impl CommandExecutor for SetblockExecutor {
         let success = match mode {
             Mode::Destroy => {
                 world.break_block(pos, None).await;
-                world.set_block_state(pos, block_state_id).await;
+                world.set_block_state(pos, block_state_id, true).await;
                 true
             }
             Mode::Replace => {
-                world.set_block_state(pos, block_state_id).await;
+                world.set_block_state(pos, block_state_id, true).await;
                 true
             }
             Mode::Keep => match world.get_block_state(pos).await {
                 Ok(old_state) if old_state.air => {
-                    world.set_block_state(pos, block_state_id).await;
+                    world.set_block_state(pos, block_state_id, true).await;
                     true
                 }
                 Ok(_) => false,

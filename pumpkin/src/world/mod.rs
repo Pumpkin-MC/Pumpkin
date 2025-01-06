@@ -823,7 +823,7 @@ impl World {
     }
 
     /// Sets a block
-    pub async fn set_block_state(&self, position: WorldPosition, block_state_id: u16) -> u16 {
+    pub async fn set_block_state(&self, position: WorldPosition, block_state_id: u16, compressed: bool) -> u16 {
         let (chunk_coordinate, relative_coordinates) = position.chunk_and_chunk_relative_position();
 
         // Since we divide by 16 remnant can never exceed u8
@@ -835,7 +835,7 @@ impl World {
             .write()
             .await
             .subchunks
-            .set_block(relative, block_state_id);
+            .set_block(relative, block_state_id, compressed);
 
         self.broadcast_packet_all(&CBlockUpdate::new(
             &position,
@@ -879,7 +879,7 @@ impl World {
     }
 
     pub async fn break_block(&self, position: WorldPosition, cause: Option<&Player>) {
-        let broken_block_state_id = self.set_block_state(position, 0).await;
+        let broken_block_state_id = self.set_block_state(position, 0, true).await;
 
         let particles_packet =
             CWorldEvent::new(2001, &position, broken_block_state_id.into(), false);
