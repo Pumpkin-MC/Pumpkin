@@ -79,16 +79,12 @@ pub async fn handle_knockback(
     let entity_id = VarInt(victim_entity.entity_id);
     let victim_velocity = victim_entity.velocity.load();
 
-<<<<<<< HEAD:pumpkin/src/net/combat.rs
     let packet = &CEntityVelocity::new(
         &entity_id,
         victim_velocity.x,
         victim_velocity.y,
         victim_velocity.z,
     );
-=======
-    let packet = &CEntityVelocity::new(&entity_id, victim_velocity);
->>>>>>> origin/item-dropping:pumpkin/src/client/combat.rs
     let velocity = attacker_entity.velocity.load();
     attacker_entity
         .velocity
