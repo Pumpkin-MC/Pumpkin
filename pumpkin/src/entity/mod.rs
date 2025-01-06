@@ -3,7 +3,6 @@ use std::sync::{atomic::AtomicBool, Arc};
 
 use crossbeam::atomic::AtomicCell;
 use crate::server::Server;
-use crossbeam::atomic::AtomicCell;
 use itertools::Itertools;
 use num_derive::FromPrimitive;
 use num_traits::real::Real;
