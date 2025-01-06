@@ -1,81 +1,60 @@
-use std::collections::HashMap;
+use super::block_registry::{get_block, get_state_by_state_id};
 
-use thiserror::Error;
-
-use super::block_registry::{Block, BlockCategory, BLOCKS};
-
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, Eq)]
 pub struct BlockState {
-    state_id: u16,
-    block: Block,
-    category: BlockCategory,
+    pub state_id: u16,
+    pub block_id: u16,
+}
+
+impl PartialEq for BlockState {
+    fn eq(&self, other: &Self) -> bool {
+        self.state_id == other.state_id
+    }
 }
 
 impl BlockState {
     pub const AIR: BlockState = BlockState {
         state_id: 0,
-        block: Block::Air,
-        category: BlockCategory::Air,
+        block_id: 0,
     };
 
-    pub fn new(
-        registry_id: &str,
-        properties: Option<&HashMap<String, String>>,
-    ) -> Result<Self, BlockStateError> {
-        let block_registry = BLOCKS
-            .get(registry_id)
-            .ok_or(BlockStateError::BlockIdentifierNotFound)?;
-        let mut block_states = block_registry.states.iter();
-
-        let block_state = match properties {
-            Some(properties) => block_states
-                .find(|state| &state.properties == properties)
-                .ok_or(BlockStateError::BlockStateIdNotFound)?,
-            None => block_states
-                .find(|state| state.is_default)
-                .expect("Every Block should have at least 1 default state"),
-        };
-
-        Ok(Self {
-            state_id: block_state.id.data,
-            block: Block::from_registry_id(registry_id),
-            category: BlockCategory::from_registry_id(&block_registry.definition.category),
+    /// Get a Block from the Vanilla Block registry at Runtime
+    pub fn new(registry_id: &str) -> Option<Self> {
+        let block = get_block(registry_id);
+        block.map(|block| Self {
+            state_id: block.default_state_id,
+            block_id: block.id,
         })
-    }
-
-    pub const fn new_unchecked(state_id: u16, block: Block, category: BlockCategory) -> Self {
-        Self {
-            state_id,
-            block,
-            category,
-        }
-    }
-
-    pub fn is_air(&self) -> bool {
-        self.category == BlockCategory::Air
     }
 
     pub fn get_id(&self) -> u16 {
         self.state_id
     }
 
-    pub fn get_id_mojang_repr(&self) -> i32 {
-        self.state_id as i32
+    #[inline]
+    pub fn is_air(&self) -> bool {
+        get_state_by_state_id(self.state_id).unwrap().air
     }
 
-    pub fn of_block(&self, block: Block) -> bool {
-        self.block == block
-    }
-
-    pub fn of_category(&self, category: BlockCategory) -> bool {
-        self.category == category
+    #[inline]
+    pub fn of_block(&self, block_id: u16) -> bool {
+        self.block_id == block_id
     }
 }
 
-#[derive(Error, Debug)]
-pub enum BlockStateError {
-    #[error("The requested block identifier does not exist")]
-    BlockIdentifierNotFound,
-    #[error("The requested block state id does not exist")]
-    BlockStateIdNotFound,
+#[cfg(test)]
+mod tests {
+    use super::BlockState;
+
+    #[test]
+    fn not_existing() {
+        let result = BlockState::new("this_block_does_not_exist");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn does_exist() {
+        let result = BlockState::new("dirt");
+        assert!(result.is_some());
+    }
 }

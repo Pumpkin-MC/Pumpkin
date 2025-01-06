@@ -4,6 +4,12 @@ version = "0.1.0-dev"
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition = "2021"
 
+[package.metadata.tauri-winres]
+# FileDescription is handled as the Program name by Windows!
+FileDescription = "Pumpkin"
+OriginalFilename = "pumpkin.exe"
+LegalCopyright = "Copyright © 2025 Aleksander Medvedev"
+
 [dependencies]
 # pumpkin
 pumpkin-core = { path = "../pumpkin-core" }
@@ -13,29 +19,31 @@ pumpkin-world = { path = "../pumpkin-world" }
 pumpkin-entity = { path = "../pumpkin-entity" }
 pumpkin-protocol = { path = "../pumpkin-protocol" }
 pumpkin-registry = { path = "../pumpkin-registry" }
+pumpkin-macros = { path = "../pumpkin-macros" }
 
-itertools.workspace = true
+log.workspace = true
+crossbeam.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
 
 # config
 serde.workspace = true
-serde_json = "1.0"
+serde_json.workspace = true
 
-bytes = "1.7"
+bytes.workspace = true
 
 rand = "0.8.5"
 
-num-traits = "0.2"
-num-derive = "0.4"
 num-bigint = "0.4"
 
-ctrlc = "3.4"
-
 # encryption
-rsa = "0.9.6"
+rsa = "0.9.7"
 rsa-der = "0.3.0"
 
 # authentication
-reqwest = { version = "0.12.7", default-features = false, features = [
+reqwest = { version = "0.12.12", default-features = false, features = [
     "http2",
     "json",
     "macos-system-configuration",
@@ -43,27 +51,24 @@ reqwest = { version = "0.12.7", default-features = false, features = [
 ] }
 
 sha1 = "0.10.6"
-digest = "=0.11.0-pre.9"
 
 # velocity en
 hmac = "0.12.1"
 sha2 = "0.10.8"
 
-thiserror = "1.0"
+base64 = "0.22.1"
 
 # icon loading
-base64 = "0.22.1"
-png = "0.17.14" 
+png = "0.17.15"
 
 # logging
 simple_logger = { version = "5.0.0", features = ["threads"] }
-log.workspace = true
+time = "0.3.37"
 
-# networking
-mio = { version = "1.0.2", features = ["net", "os-poll"] }
-
-parking_lot.workspace = true
-crossbeam.workspace = true
-uuid.workspace = true
-tokio.workspace = true
-rayon.workspace = true
+# commands
+async-trait = "0.1.83"
+[build-dependencies]
+git-version = "0.3.9"
+# This makes it so the entire project doesn't recompile on each build on linux.
+[target.'cfg(target_os = "windows")'.build-dependencies]
+tauri-winres= "0.1.1"

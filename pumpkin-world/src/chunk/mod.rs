@@ -1,16 +1,15 @@
-use std::cmp::max;
-use std::collections::HashMap;
-use std::ops::Index;
-
 use fastnbt::LongArray;
 use pumpkin_core::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
+use std::collections::HashMap;
+use std::ops::Index;
 use thiserror::Error;
 
 use crate::{
-    block::{block_state::BlockStateError, BlockId, BlockState},
+    block::BlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
-    level::SaveFile,
+    level::LevelFolder,
     WORLD_HEIGHT,
 };
 
@@ -23,8 +22,8 @@ const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
 pub trait ChunkReader: Sync + Send {
     fn read_chunk(
         &self,
-        save_file: &SaveFile,
-        at: Vector2<i32>,
+        save_file: &LevelFolder,
+        at: &Vector2<i32>,
     ) -> Result<ChunkData, ChunkReadingError>;
 }
 
@@ -58,15 +57,14 @@ pub struct ChunkData {
     pub blocks: ChunkBlocks,
     pub position: Vector2<i32>,
 }
-
 pub struct ChunkBlocks {
     // TODO make this a Vec that doesn't store the upper layers that only contain air
 
     // The packet relies on this ordering -> leave it like this for performance
     /// Ordering: yzx (y being the most significant)
-    blocks: Box<[BlockId; CHUNK_VOLUME]>,
+    blocks: Box<[u16; CHUNK_VOLUME]>,
 
-    /// See `https://minecraft.fandom.com/wiki/Heightmap` for more info
+    /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
 }
 
@@ -74,11 +72,12 @@ pub struct ChunkBlocks {
 #[serde(rename_all = "PascalCase")]
 struct PaletteEntry {
     name: String,
-    properties: Option<HashMap<String, String>>,
+    _properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 struct ChunkSectionBlockStates {
+    //  #[serde(with = "LongArray")]
     data: Option<LongArray>,
     palette: Vec<PaletteEntry>,
 }
@@ -86,7 +85,9 @@ struct ChunkSectionBlockStates {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
+    // #[serde(with = "LongArray")]
     motion_blocking: LongArray,
+    // #[serde(with = "LongArray")]
     world_surface: LongArray,
 }
 
@@ -127,16 +128,14 @@ enum ChunkStatus {
     Surface,
     #[serde(rename = "minecraft:carvers")]
     Carvers,
-    #[serde(rename = "minecraft:liquid_carvers")]
-    LiquidCarvers,
     #[serde(rename = "minecraft:features")]
     Features,
     #[serde(rename = "minecraft:initialize_light")]
+    InitLight,
+    #[serde(rename = "minecraft:light")]
     Light,
     #[serde(rename = "minecraft:spawn")]
     Spawn,
-    #[serde(rename = "minecraft:heightmaps")]
-    Heightmaps,
     #[serde(rename = "minecraft:full")]
     Full,
 }
@@ -155,33 +154,41 @@ impl Default for ChunkHeightmaps {
 impl Default for ChunkBlocks {
     fn default() -> Self {
         Self {
-            blocks: Box::new([BlockId::default(); CHUNK_VOLUME]),
+            blocks: Box::new([0; CHUNK_VOLUME]),
             heightmap: ChunkHeightmaps::default(),
         }
     }
 }
 
 impl ChunkBlocks {
+    pub const fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
+
+    pub const fn subchunks_len(&self) -> usize {
+        self.blocks.len().div_ceil(SUBCHUNK_VOLUME)
+    }
+
     pub fn empty_with_heightmap(heightmap: ChunkHeightmaps) -> Self {
         Self {
-            blocks: Box::new([BlockId::default(); CHUNK_VOLUME]),
+            blocks: Box::new([0; CHUNK_VOLUME]),
             heightmap,
         }
     }
 
     /// Gets the given block in the chunk
-    pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> BlockId {
-        self.blocks[Self::convert_index(position)]
+    pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
+        self.blocks.get(Self::convert_index(position)).copied()
     }
 
     /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(
-        &mut self,
-        position: ChunkRelativeBlockCoordinates,
-        block: BlockId,
-    ) -> BlockId {
+    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) -> u16 {
         // TODO @LUK_ESC? update the heightmap
-        self.set_block_no_heightmap_update(position, block)
+        self.set_block_no_heightmap_update(position, block_id)
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -192,12 +199,12 @@ impl ChunkBlocks {
     pub fn set_block_no_heightmap_update(
         &mut self,
         position: ChunkRelativeBlockCoordinates,
-        block: BlockId,
-    ) -> BlockId {
+        block: u16,
+    ) -> u16 {
         std::mem::replace(&mut self.blocks[Self::convert_index(position)], block)
     }
 
-    pub fn iter_subchunks(&self) -> impl Iterator<Item = &[BlockId; SUBCHUNK_VOLUME]> {
+    pub fn iter_subchunks(&self) -> impl Iterator<Item = &[u16; SUBCHUNK_VOLUME]> {
         self.blocks
             .chunks(SUBCHUNK_VOLUME)
             .map(|subchunk| subchunk.try_into().unwrap())
@@ -217,7 +224,7 @@ impl ChunkBlocks {
 }
 
 impl Index<ChunkRelativeBlockCoordinates> for ChunkBlocks {
-    type Output = BlockId;
+    type Output = u16;
 
     fn index(&self, index: ChunkRelativeBlockCoordinates) -> &Self::Output {
         &self.blocks[Self::convert_index(index)]
@@ -225,14 +232,15 @@ impl Index<ChunkRelativeBlockCoordinates> for ChunkBlocks {
 }
 
 impl ChunkData {
-    pub fn from_bytes(chunk_data: Vec<u8>, at: Vector2<i32>) -> Result<Self, ChunkParsingError> {
-        if fastnbt::from_bytes::<ChunkStatus>(&chunk_data).expect("Failed reading chunk status.")
+    pub fn from_bytes(chunk_data: &[u8], at: Vector2<i32>) -> Result<Self, ChunkParsingError> {
+        if fastnbt::from_bytes::<ChunkStatus>(chunk_data)
+            .map_err(|_| ChunkParsingError::FailedReadStatus)?
             != ChunkStatus::Full
         {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data.as_slice())
+        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         // this needs to be boxed, otherwise it will cause a stack-overflow
@@ -248,14 +256,12 @@ impl ChunkData {
             let palette = block_states
                 .palette
                 .iter()
-                .map(
-                    |entry| match BlockState::new(&entry.name, entry.properties.as_ref()) {
-                        Err(e) => Err(e),
-                        Ok(state) => Ok(state.into()),
-                    },
-                )
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(ChunkParsingError::BlockStateError)?;
+                .map(|entry| match BlockState::new(&entry.name) {
+                    // Block not found, Often the case when World has an newer or older version then block registry
+                    None => BlockState::AIR,
+                    Some(state) => state,
+                })
+                .collect::<Vec<_>>();
 
             let block_data = match block_states.data {
                 None => {
@@ -265,25 +271,24 @@ impl ChunkData {
                     continue;
                 }
                 Some(d) => d,
-            }
-            .into_inner();
+            };
 
-            // How many bits each block has in one of the pallete u64s
+            // How many bits each block has in one of the palette u64s
             let block_bit_size = {
                 let size = 64 - (palette.len() as i64 - 1).leading_zeros();
                 max(4, size)
             };
-            // How many blocks there are in one of the palletes u64s
-            let blocks_in_pallete = 64 / block_bit_size;
+            // How many blocks there are in one of the palettes u64s
+            let blocks_in_palette = 64 / block_bit_size;
 
             let mask = (1 << block_bit_size) - 1;
             'block_loop: for block in block_data.iter() {
-                for i in 0..blocks_in_pallete {
+                for i in 0..blocks_in_palette {
                     let index = (block >> (i * block_bit_size)) & mask;
-                    let block = palette[index as usize];
+                    let block = &palette[index as usize];
 
                     // TODO allow indexing blocks directly so we can just use block_index and save some time?
-                    // this is fine because we initalized the heightmap of `blocks`
+                    // this is fine because we initialized the heightmap of `blocks`
                     // from the cached value in the world file
                     blocks.set_block_no_heightmap_update(
                         ChunkRelativeBlockCoordinates {
@@ -291,12 +296,12 @@ impl ChunkData {
                             y: Height::from_absolute((block_index / CHUNK_AREA) as u16),
                             x: (block_index % 16).into(),
                         },
-                        block,
+                        block.get_id(),
                     );
 
                     block_index += 1;
 
-                    // if `SUBCHUNK_VOLUME `is not divisible by `blocks_in_pallete` the block_data
+                    // if `SUBCHUNK_VOLUME `is not divisible by `blocks_in_palette` the block_data
                     // can sometimes spill into other subchunks. We avoid that by aborting early
                     if (block_index % SUBCHUNK_VOLUME) == 0 {
                         break 'block_loop;
@@ -314,8 +319,8 @@ impl ChunkData {
 
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
-    #[error("BlockState error: {0}")]
-    BlockStateError(BlockStateError),
+    #[error("Failed reading chunk status")]
+    FailedReadStatus,
     #[error("The chunk isn't generated yet")]
     ChunkNotGenerated,
     #[error("Error deserializing chunk: {0}")]

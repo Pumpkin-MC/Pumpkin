@@ -16,28 +16,42 @@ members = [
 version = "0.1.0"
 edition = "2021"
 
+
+[profile.dev]
+opt-level = 1
+
 [profile.release]
 lto = true
 codegen-units = 1
 
+[profile.bench]
+debug = true
+
+[profile.profiling]
+inherits = "release"
+debug = true
+
 [workspace.dependencies]
 log = "0.4"
-tokio = { version = "1.40", features = [
-    "fs",
-    "io-util",
+tokio = { version = "1.42", features = [
     "macros",
     "net",
     "rt-multi-thread",
     "sync",
+    "io-std",
+    "signal",
 ] }
+
+thiserror = "2"
+
+bytes = "1.9"
 
 # Concurrency/Parallelism and Synchronization
 rayon = "1.10.0"
-parking_lot = "0.12.3"
+parking_lot = { version = "0.12.3", features = ["send_guard"] }
 crossbeam = "0.8.4"
 
-uuid = { version = "1.10.0", features = ["serde", "v3", "v4"] }
+uuid = { version = "1.11.0", features = ["serde", "v3", "v4"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
-
-itertools = "0.13.0"
+serde_json = "1.0"

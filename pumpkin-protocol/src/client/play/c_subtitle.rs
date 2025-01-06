@@ -1,15 +1,16 @@
 use pumpkin_core::text::TextComponent;
-use pumpkin_macros::packet;
+
+use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[packet(0x63)]
+#[client_packet("play:set_subtitle_text")]
 pub struct CSubtitle<'a> {
-    subtitle: TextComponent<'a>,
+    subtitle: &'a TextComponent,
 }
 
 impl<'a> CSubtitle<'a> {
-    pub fn new(subtitle: TextComponent<'a>) -> Self {
+    pub fn new(subtitle: &'a TextComponent) -> Self {
         Self { subtitle }
     }
 }

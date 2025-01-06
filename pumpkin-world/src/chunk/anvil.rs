@@ -4,12 +4,12 @@ use std::{
 };
 
 use flate2::bufread::{GzDecoder, ZlibDecoder};
-use itertools::Itertools;
 
-use crate::level::SaveFile;
+use crate::level::LevelFolder;
 
 use super::{ChunkData, ChunkReader, ChunkReadingError, CompressionError};
 
+#[derive(Clone)]
 pub struct AnvilChunkReader {}
 
 impl Default for AnvilChunkReader {
@@ -87,13 +87,10 @@ impl Compression {
 impl ChunkReader for AnvilChunkReader {
     fn read_chunk(
         &self,
-        save_file: &SaveFile,
-        at: pumpkin_core::math::vector2::Vector2<i32>,
+        save_file: &LevelFolder,
+        at: &pumpkin_core::math::vector2::Vector2<i32>,
     ) -> Result<super::ChunkData, ChunkReadingError> {
-        let region = (
-            ((at.x as f32) / 32.0).floor() as i32,
-            ((at.z as f32) / 32.0).floor() as i32,
-        );
+        let region = (at.x >> 5, at.z >> 5);
 
         let mut region_file = OpenOptions::new()
             .read(true)
@@ -118,9 +115,8 @@ impl ChunkReader for AnvilChunkReader {
             .read_exact(&mut timestamp_table)
             .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
-        let modulus = |a: i32, b: i32| ((a % b) + b) % b;
-        let chunk_x = modulus(at.x, 32) as u32;
-        let chunk_z = modulus(at.z, 32) as u32;
+        let chunk_x = at.x.rem_euclid(32) as u32;
+        let chunk_z = at.z.rem_euclid(32) as u32;
         let table_entry = (chunk_x + chunk_z * 32) * 4;
 
         let mut offset = vec![0u8];
@@ -145,19 +141,45 @@ impl ChunkReader for AnvilChunkReader {
         };
 
         // TODO: check checksum to make sure chunk is not corrupted
-        let header = file_buf.drain(0..5).collect_vec();
+        let header: Vec<u8> = file_buf.drain(0..5).collect();
 
-        let compression = Compression::from_byte(header[4])
-            .ok_or_else(|| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
+        let compression = Compression::from_byte(header[4]).ok_or(
+            ChunkReadingError::Compression(CompressionError::UnknownCompression),
+        )?;
 
         let size = u32::from_be_bytes(header[..4].try_into().unwrap());
 
         // size includes the compression scheme byte, so we need to subtract 1
-        let chunk_data = file_buf.drain(0..size as usize - 1).collect_vec();
+        let chunk_data = file_buf.drain(0..size as usize - 1).collect();
         let decompressed_chunk = compression
             .decompress_data(chunk_data)
             .map_err(ChunkReadingError::Compression)?;
 
-        ChunkData::from_bytes(decompressed_chunk, at).map_err(ChunkReadingError::ParsingError)
+        ChunkData::from_bytes(&decompressed_chunk, *at).map_err(ChunkReadingError::ParsingError)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use pumpkin_core::math::vector2::Vector2;
+
+    use crate::{
+        chunk::{anvil::AnvilChunkReader, ChunkReader, ChunkReadingError},
+        level::LevelFolder,
+    };
+
+    #[test]
+    fn not_existing() {
+        let region_path = PathBuf::from("not_existing");
+        let result = AnvilChunkReader::new().read_chunk(
+            &LevelFolder {
+                root_folder: PathBuf::from(""),
+                region_folder: region_path,
+            },
+            &Vector2::new(0, 0),
+        );
+        assert!(matches!(result, Err(ChunkReadingError::ChunkNotExist)));
     }
 }

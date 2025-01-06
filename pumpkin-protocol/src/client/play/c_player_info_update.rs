@@ -1,10 +1,11 @@
-use pumpkin_macros::packet;
+use bytes::BufMut;
+use pumpkin_macros::client_packet;
 
-use crate::{bytebuf::ByteBuffer, ClientPacket, Property};
+use crate::{bytebuf::ByteBufMut, ClientPacket, Property};
 
 use super::PlayerAction;
 
-#[packet(0x3E)]
+#[client_packet("play:player_info_update")]
 pub struct CPlayerInfoUpdate<'a> {
     pub actions: i8,
     pub players: &'a [Player<'a>],
@@ -21,8 +22,8 @@ impl<'a> CPlayerInfoUpdate<'a> {
     }
 }
 
-impl<'a> ClientPacket for CPlayerInfoUpdate<'a> {
-    fn write(&self, bytebuf: &mut ByteBuffer) {
+impl ClientPacket for CPlayerInfoUpdate<'_> {
+    fn write(&self, bytebuf: &mut impl BufMut) {
         bytebuf.put_i8(self.actions);
         bytebuf.put_list::<Player>(self.players, |p, v| {
             p.put_uuid(&v.uuid);
@@ -41,6 +42,7 @@ impl<'a> ClientPacket for CPlayerInfoUpdate<'a> {
                     PlayerAction::UpdateListed(listed) => p.put_bool(*listed),
                     PlayerAction::UpdateLatency(_) => todo!(),
                     PlayerAction::UpdateDisplayName(_) => todo!(),
+                    PlayerAction::UpdateListOrder => todo!(),
                 }
             }
         });

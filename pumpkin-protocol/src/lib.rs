@@ -1,156 +1,44 @@
-use bytebuf::{packet_id::Packet, ByteBuffer, DeserializerError};
-use bytes::Buf;
-use serde::{Deserialize, Serialize};
-use std::io::{self, Write};
-use thiserror::Error;
+use std::num::NonZeroU16;
+
+use bytebuf::{packet_id::Packet, ReadingError};
+use bytes::{Buf, BufMut, Bytes};
+use codec::{identifier::Identifier, var_int::VarInt};
+use pumpkin_core::text::{style::Style, TextComponent};
+use serde::{Deserialize, Serialize, Serializer};
 
 pub mod bytebuf;
+#[cfg(feature = "clientbound")]
 pub mod client;
+pub mod codec;
 pub mod packet_decoder;
 pub mod packet_encoder;
+#[cfg(feature = "query")]
+pub mod query;
+#[cfg(feature = "serverbound")]
 pub mod server;
-pub mod slot;
 
 /// To current Minecraft protocol
 /// Don't forget to change this when porting
-pub const CURRENT_MC_PROTOCOL: u32 = 767;
+pub const CURRENT_MC_PROTOCOL: NonZeroU16 = unsafe { NonZeroU16::new_unchecked(769) };
 
-pub const MAX_PACKET_SIZE: i32 = 2097152;
+pub const MAX_PACKET_SIZE: usize = 2097152;
 
-/// usally uses a namespace like "minecraft:thing"
-pub type Identifier = String;
-pub type VarIntType = i32;
-pub type VarLongType = i64;
 pub type FixedBitSet = bytes::Bytes;
 
-pub struct BitSet<'a>(pub VarInt, pub &'a [i64]);
+/// Represents a compression threshold.
+///
+/// The threshold determines the minimum size of data that should be compressed.
+/// Data smaller than the threshold will not be compressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompressionThreshold(pub u32);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VarInt(pub VarIntType);
-
-impl VarInt {
-    /// The maximum number of bytes a `VarInt` could occupy when read from and
-    /// written to the Minecraft protocol.
-    pub const MAX_SIZE: usize = 5;
-
-    /// Returns the exact number of bytes this varint will write when
-    /// [`Encode::encode`] is called, assuming no error occurs.
-    pub const fn written_size(self) -> usize {
-        match self.0 {
-            0 => 1,
-            n => (31 - n.leading_zeros() as usize) / 7 + 1,
-        }
-    }
-
-    pub fn decode_partial(r: &mut &[u8]) -> Result<i32, VarIntDecodeError> {
-        let mut val = 0;
-        for i in 0..Self::MAX_SIZE {
-            if !r.has_remaining() {
-                return Err(VarIntDecodeError::Incomplete);
-            }
-            let byte = r.get_u8();
-            val |= (i32::from(byte) & 0b01111111) << (i * 7);
-            if byte & 0b10000000 == 0 {
-                return Ok(val);
-            }
-        }
-
-        Err(VarIntDecodeError::TooLarge)
-    }
-
-    pub fn encode(&self, mut w: impl Write) -> Result<(), io::Error> {
-        let mut x = self.0 as u64;
-        loop {
-            let byte = (x & 0x7F) as u8;
-            x >>= 7;
-            if x == 0 {
-                w.write_all(&[byte])?;
-                break;
-            }
-            w.write_all(&[byte | 0x80])?;
-        }
-        Ok(())
-    }
-
-    pub fn decode(r: &mut &[u8]) -> Result<Self, VarIntDecodeError> {
-        let mut val = 0;
-        for i in 0..Self::MAX_SIZE {
-            if !r.has_remaining() {
-                return Err(VarIntDecodeError::Incomplete);
-            }
-            let byte = r.get_u8();
-            val |= (i32::from(byte) & 0b01111111) << (i * 7);
-            if byte & 0b10000000 == 0 {
-                return Ok(VarInt(val));
-            }
-        }
-        Err(VarIntDecodeError::TooLarge)
-    }
-}
-
-impl From<i32> for VarInt {
-    fn from(value: i32) -> Self {
-        VarInt(value)
-    }
-}
-
-impl From<u32> for VarInt {
-    fn from(value: u32) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<u8> for VarInt {
-    fn from(value: u8) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<usize> for VarInt {
-    fn from(value: usize) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<VarInt> for i32 {
-    fn from(value: VarInt) -> Self {
-        value.0
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Error)]
-pub enum VarIntDecodeError {
-    #[error("incomplete VarInt decode")]
-    Incomplete,
-    #[error("VarInt is too large")]
-    TooLarge,
-}
-
-#[derive(Error, Debug)]
-pub enum PacketError {
-    #[error("failed to decode packet ID")]
-    DecodeID,
-    #[error("failed to encode packet ID")]
-    EncodeID,
-    #[error("failed to encode packet Length")]
-    EncodeLength,
-    #[error("failed to encode packet data")]
-    EncodeData,
-    #[error("failed to write encoded packet")]
-    EncodeFailedWrite,
-    #[error("failed to write into decoder")]
-    FailedWrite,
-    #[error("failed to flush decoder")]
-    FailedFinish,
-    #[error("failed to write encoded packet to connection")]
-    ConnectionWrite,
-    #[error("packet exceeds maximum length")]
-    TooLong,
-    #[error("packet length is out of bounds")]
-    OutOfBounds,
-    #[error("malformed packet length VarInt")]
-    MalformedLength,
-}
+/// Represents a compression level.
+///
+/// The level controls the amount of compression applied to the data.
+/// Higher levels generally result in higher compression ratios but also
+/// increase CPU usage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompressionLevel(pub u32);
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ConnectionState {
@@ -161,32 +49,58 @@ pub enum ConnectionState {
     Config,
     Play,
 }
+pub struct InvalidConnectionState;
 
-impl From<VarInt> for ConnectionState {
-    fn from(value: VarInt) -> Self {
+impl TryFrom<VarInt> for ConnectionState {
+    type Error = InvalidConnectionState;
+
+    fn try_from(value: VarInt) -> Result<Self, Self::Error> {
         let value = value.0;
         match value {
-            1 => Self::Status,
-            2 => Self::Login,
-            3 => Self::Transfer,
-            _ => {
-                log::info!("Unexpected Status {}", value);
-                Self::Status
-            }
+            1 => Ok(Self::Status),
+            2 => Ok(Self::Login),
+            3 => Ok(Self::Transfer),
+            _ => Err(InvalidConnectionState),
         }
     }
 }
+
+pub enum SoundCategory {
+    Master,
+    Music,
+    Records,
+    Weather,
+    Blocks,
+    Hostile,
+    Neutral,
+    Players,
+    Ambient,
+    Voice,
+}
+
+#[derive(Serialize)]
+pub struct IDOrSoundEvent {
+    pub id: VarInt,
+    pub sound_event: Option<SoundEvent>,
+}
+
+#[derive(Serialize)]
+pub struct SoundEvent {
+    pub sound_name: Identifier,
+    pub range: Option<f32>,
+}
+
 pub struct RawPacket {
     pub id: VarInt,
-    pub bytebuf: ByteBuffer,
+    pub bytebuf: Bytes,
 }
 
 pub trait ClientPacket: Packet {
-    fn write(&self, bytebuf: &mut ByteBuffer);
+    fn write(&self, bytebuf: &mut impl BufMut);
 }
 
 pub trait ServerPacket: Packet + Sized {
-    fn read(bytebuf: &mut ByteBuffer) -> Result<Self, DeserializerError>;
+    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError>;
 }
 
 #[derive(Serialize)]
@@ -204,7 +118,7 @@ pub struct StatusResponse {
 }
 #[derive(Serialize)]
 pub struct Version {
-    /// The current name of the Version (e.g. 1.21.1)
+    /// The current name of the Version (e.g. 1.21.4)
     pub name: String,
     /// The current Protocol Version (e.g. 767)
     pub protocol: u32,
@@ -243,4 +157,117 @@ pub struct KnownPack<'a> {
     pub namespace: &'a str,
     pub id: &'a str,
     pub version: &'a str,
+}
+
+#[derive(Serialize)]
+pub enum NumberFormat {
+    /// Show nothing
+    Blank,
+    /// The styling to be used when formatting the score number
+    Styled(Style),
+    /// The text to be used as placeholder.
+    Fixed(TextComponent),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum PositionFlag {
+    X,
+    Y,
+    Z,
+    YRot,
+    XRot,
+    DeltaX,
+    DeltaY,
+    DeltaZ,
+    RotateDelta,
+}
+
+impl PositionFlag {
+    fn get_mask(&self) -> i32 {
+        match self {
+            PositionFlag::X => 1 << 0,
+            PositionFlag::Y => 1 << 1,
+            PositionFlag::Z => 1 << 2,
+            PositionFlag::YRot => 1 << 3,
+            PositionFlag::XRot => 1 << 4,
+            PositionFlag::DeltaX => 1 << 5,
+            PositionFlag::DeltaY => 1 << 6,
+            PositionFlag::DeltaZ => 1 << 7,
+            PositionFlag::RotateDelta => 1 << 8,
+        }
+    }
+
+    pub fn get_bitfield(flags: &[PositionFlag]) -> i32 {
+        flags.iter().fold(0, |acc, flag| acc | flag.get_mask())
+    }
+}
+
+pub enum Label {
+    BuiltIn(LinkType),
+    TextComponent(TextComponent),
+}
+
+impl Serialize for Label {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Label::BuiltIn(link_type) => link_type.serialize(serializer),
+            Label::TextComponent(component) => component.serialize(serializer),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct Link<'a> {
+    pub is_built_in: bool,
+    pub label: Label,
+    pub url: &'a String,
+}
+
+impl<'a> Link<'a> {
+    pub fn new(label: Label, url: &'a String) -> Self {
+        Self {
+            is_built_in: match label {
+                Label::BuiltIn(_) => true,
+                Label::TextComponent(_) => false,
+            },
+            label,
+            url,
+        }
+    }
+}
+
+pub enum LinkType {
+    BugReport,
+    CommunityGuidelines,
+    Support,
+    Status,
+    Feedback,
+    Community,
+    Website,
+    Forums,
+    News,
+    Announcements,
+}
+
+impl Serialize for LinkType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            LinkType::BugReport => VarInt(0).serialize(serializer),
+            LinkType::CommunityGuidelines => VarInt(1).serialize(serializer),
+            LinkType::Support => VarInt(2).serialize(serializer),
+            LinkType::Status => VarInt(3).serialize(serializer),
+            LinkType::Feedback => VarInt(4).serialize(serializer),
+            LinkType::Community => VarInt(5).serialize(serializer),
+            LinkType::Website => VarInt(6).serialize(serializer),
+            LinkType::Forums => VarInt(7).serialize(serializer),
+            LinkType::News => VarInt(8).serialize(serializer),
+            LinkType::Announcements => VarInt(9).serialize(serializer),
+        }
+    }
 }

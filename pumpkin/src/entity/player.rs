@@ -1,44 +1,73 @@
-use std::sync::{
-    atomic::{AtomicI32, AtomicU8},
-    Arc,
+use std::{
+    num::NonZeroU8,
+    sync::{
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU8},
+        Arc,
+    },
+    time::{Duration, Instant},
 };
 
 use crossbeam::atomic::AtomicCell;
-use num_derive::FromPrimitive;
-use num_traits::ToPrimitive;
-use parking_lot::Mutex;
+use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_core::{
-    math::{boundingbox::BoundingBox, position::WorldPosition, vector3::Vector3},
+    math::{
+        boundingbox::{BoundingBox, BoundingBoxSize},
+        position::WorldPosition,
+        vector2::Vector2,
+        vector3::Vector3,
+    },
+    permission::PermissionLvl,
     text::TextComponent,
     GameMode,
 };
 use pumpkin_entity::{entity_type::EntityType, EntityId};
 use pumpkin_inventory::player::PlayerInventory;
+use pumpkin_macros::sound;
+use pumpkin_protocol::server::play::{
+    SCloseContainer, SCookieResponse as SPCookieResponse, SPlayPingRequest,
+};
 use pumpkin_protocol::{
     bytebuf::packet_id::Packet,
     client::play::{
-        CGameEvent, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CSetHealth,
-        CSyncPlayerPosition, CSystemChatMessage, GameEvent, PlayerAction,
+        CCombatDeath, CEntityStatus, CGameEvent, CHurtAnimation, CKeepAlive, CPlayDisconnect,
+        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CSetHealth, CSystemChatMessage,
+        GameEvent, PlayerAction,
     },
     server::play::{
-        SChatCommand, SChatMessage, SClickContainer, SClientInformationPlay, SConfirmTeleport,
-        SInteract, SPlayPingRequest, SPlayerAction, SPlayerCommand, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-        SSwingArm, SUseItem, SUseItemOn,
+        SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
+        SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock, SPlayerAbilities,
+        SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUseItem,
+        SUseItemOn,
     },
-    RawPacket, ServerPacket, VarInt,
+    RawPacket, ServerPacket, SoundCategory,
 };
-
-use pumpkin_protocol::server::play::{SCloseContainer, SKeepAlive};
-use pumpkin_world::item::ItemStack;
+use pumpkin_protocol::{client::play::CUpdateTime, codec::var_int::VarInt};
+use pumpkin_protocol::{
+    client::play::{CSetEntityMetadata, Metadata},
+    server::play::{SClickContainer, SKeepAlive},
+};
+use pumpkin_world::{
+    cylindrical_chunk_iterator::Cylindrical,
+    item::{
+        item_registry::{get_item_by_id, Operation},
+        ItemStack,
+    },
+};
+use tokio::sync::{Mutex, Notify, RwLock};
 
 use super::Entity;
-use crate::error::PumpkinError;
 use crate::{
-    client::{authentication::GameProfile, Client, PlayerConfig},
+    command::{client_cmd_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    net::{
+        combat::{self, player_attack_sound, AttackType},
+        Client, PlayerConfig,
+    },
     server::Server,
     world::World,
 };
+use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
 
@@ -47,7 +76,7 @@ use super::living::LivingEntity;
 /// A `Player` is a special type of entity that represents a human player connected to the server.
 pub struct Player {
     /// The underlying living entity object that represents the player.
-    pub living_entity: LivingEntity,
+    pub living_entity: LivingEntity<PlayerInventory>,
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
@@ -60,24 +89,18 @@ pub struct Player {
     pub food: AtomicI32,
     /// The player's food saturation level.
     pub food_saturation: AtomicCell<f32>,
-    /// The player's inventory, containing items and equipment.
-    pub inventory: Mutex<PlayerInventory>,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
     pub carried_item: AtomicCell<Option<ItemStack>>,
 
-    /// send `send_abilties_update` when changed
+    /// send `send_abilities_update` when changed
     /// The player's abilities and special powers.
     ///
     /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
     ///
     /// **Note:** When the `abilities` field is updated, the server should send a `send_abilities_update` packet to the client to notify them of the changes.
-    pub abilities: PlayerAbilities,
-    /// The player's last known position.
-    ///
-    /// This field is used to calculate the player's movement delta for network synchronization and other purposes.
-    pub last_position: AtomicCell<Vector3<f64>>,
+    pub abilities: Mutex<Abilities>,
 
     /// The current stage of the block the player is breaking.
     pub current_block_destroy_stage: AtomicU8,
@@ -85,38 +108,64 @@ pub struct Player {
     pub teleport_id_count: AtomicI32,
     /// The pending teleport information, including the teleport ID and target location.
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
-
     /// The coordinates of the chunk section the player is currently watching.
-    pub watched_section: AtomicCell<Vector3<i32>>,
+    pub watched_section: AtomicCell<Cylindrical>,
+    /// Did we send a keep alive Packet and wait for the response?
+    pub wait_for_keep_alive: AtomicBool,
+    /// Whats the keep alive packet payload we send, The client should responde with the same id
+    pub keep_alive_id: AtomicI64,
+    /// Last time we send a keep alive
+    pub last_keep_alive_time: AtomicCell<Instant>,
+    /// Amount of ticks since last attack
+    pub last_attacked_ticks: AtomicU32,
+    /// The players op permission level
+    pub permission_lvl: AtomicCell<PermissionLvl>,
+    /// Tell tasks to stop if we are closing
+    cancel_tasks: Notify,
 }
 
 impl Player {
-    pub fn new(
+    pub async fn new(
         client: Arc<Client>,
         world: Arc<World>,
         entity_id: EntityId,
         gamemode: GameMode,
     ) -> Self {
-        let gameprofile = client.gameprofile.lock().clone().map_or_else(
+        let player_uuid = uuid::Uuid::new_v4();
+        let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
             || {
-                log::error!("No gameprofile?. Impossible");
+                log::error!("Client {} has no game profile!", client.id);
                 GameProfile {
-                    id: uuid::Uuid::new_v4(),
-                    name: "".to_string(),
+                    id: player_uuid,
+                    name: String::new(),
                     properties: vec![],
                     profile_actions: None,
                 }
             },
             |profile| profile,
         );
-        let config = client.config.lock().clone().unwrap_or_default();
+
+        let gameprofile_clone = gameprofile.clone();
+        let config = client.config.lock().await.clone().unwrap_or_default();
+        let bounding_box_size = BoundingBoxSize {
+            width: 0.6,
+            height: 1.8,
+        };
+
         Self {
-            living_entity: LivingEntity::new(Entity::new(
-                entity_id,
-                world,
-                EntityType::Player,
-                1.62,
-            )),
+            living_entity: LivingEntity::new_with_container(
+                Entity::new(
+                    entity_id,
+                    player_uuid,
+                    world,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    EntityType::Player,
+                    1.62,
+                    AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+                    AtomicCell::new(bounding_box_size),
+                ),
+                PlayerInventory::new(),
+            ),
             config: Mutex::new(config),
             gameprofile,
             client,
@@ -125,30 +174,251 @@ impl Player {
             food: AtomicI32::new(20),
             food_saturation: AtomicCell::new(20.0),
             current_block_destroy_stage: AtomicU8::new(0),
-            inventory: Mutex::new(PlayerInventory::new()),
             open_container: AtomicCell::new(None),
             carried_item: AtomicCell::new(None),
             teleport_id_count: AtomicI32::new(0),
-            abilities: PlayerAbilities::default(),
+            abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
-            watched_section: AtomicCell::new(Vector3::new(0, 0, 0)),
-            last_position: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            // We want this to be an impossible watched section so that `player_chunker::update_position`
+            // will mark chunks as watched for a new join rather than a respawn
+            // (We left shift by one so we can search around that chunk)
+            watched_section: AtomicCell::new(Cylindrical::new(
+                Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+                unsafe { NonZeroU8::new_unchecked(1) },
+            )),
+            wait_for_keep_alive: AtomicBool::new(false),
+            keep_alive_id: AtomicI64::new(0),
+            last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
+            last_attacked_ticks: AtomicU32::new(0),
+            cancel_tasks: Notify::new(),
+            // Minecraft has no why to change the default permission level of new players.
+            // Minecrafts default permission level is 0
+            permission_lvl: OPERATOR_CONFIG
+                .read()
+                .await
+                .ops
+                .iter()
+                .find(|op| op.uuid == gameprofile_clone.id)
+                .map_or(
+                    AtomicCell::new(ADVANCED_CONFIG.commands.default_op_level),
+                    |op| AtomicCell::new(op.level),
+                ),
         }
     }
 
+    pub fn inventory(&self) -> &Mutex<PlayerInventory> {
+        self.living_entity
+            .inventory
+            .as_ref()
+            .expect("Player always has inventory")
+    }
+
     /// Removes the Player out of the current World
+    #[allow(unused_variables)]
     pub async fn remove(&self) {
-        self.living_entity.entity.world.remove_player(self);
+        let world = self.world();
+        self.cancel_tasks.notify_waiters();
+
+        world.remove_player(self).await;
+
+        let cylindrical = self.watched_section.load();
+
+        // Radial chunks are all of the chunks the player is theoretically viewing
+        // Giving enough time, all of these chunks will be in memory
+        let radial_chunks = cylindrical.all_chunks_within();
+
+        log::debug!(
+            "Removing player {} ({}), unwatching {} chunks",
+            self.gameprofile.name,
+            self.client.id,
+            radial_chunks.len()
+        );
+
+        // Decrement value of watched chunks
+        let chunks_to_clean = world.level.mark_chunks_as_not_watched(&radial_chunks);
+
+        // Remove chunks with no watchers from the cache
+        world.level.clean_chunks(&chunks_to_clean);
+        // Remove left over entries from all possiblily loaded chunks
+        world.level.clean_memory(&radial_chunks);
+
+        log::debug!(
+            "Removed player id {} ({}) ({} chunks remain cached)",
+            self.gameprofile.name,
+            self.client.id,
+            self.world().level.loaded_chunk_count()
+        );
+
+        //self.world().level.list_cached();
+    }
+
+    pub async fn attack(&self, victim: &Arc<Self>) {
+        let world = self.world();
+        let victim_entity = &victim.living_entity.entity;
+        let attacker_entity = &self.living_entity.entity;
+        let config = &ADVANCED_CONFIG.pvp;
+
+        let inventory = self.inventory().lock().await;
+        let item_slot = inventory.held_item();
+
+        let base_damage = 1.0;
+        let base_attack_speed = 4.0;
+
+        let mut damage_multiplier = 1.0;
+        let mut add_damage = 0.0;
+        let mut add_speed = 0.0;
+
+        // get attack damage
+        if let Some(item_stack) = item_slot {
+            if let Some(item) = get_item_by_id(item_stack.item_id) {
+                // TODO: this should be cached in memory
+                if let Some(modifiers) = &item.components.attribute_modifiers {
+                    for item_mod in &modifiers.modifiers {
+                        if item_mod.operation == Operation::AddValue {
+                            if item_mod.id == "minecraft:base_attack_damage" {
+                                add_damage = item_mod.amount;
+                            }
+                            if item_mod.id == "minecraft:base_attack_speed" {
+                                add_speed = item_mod.amount;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        drop(inventory);
+
+        let attack_speed = base_attack_speed + add_speed;
+
+        let attack_cooldown_progress = self.get_attack_cooldown_progress(0.5, attack_speed);
+        self.last_attacked_ticks
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+
+        // only reduce attack damage if in cooldown
+        // TODO: Enchantments are reduced same way just without the square
+        if attack_cooldown_progress < 1.0 {
+            damage_multiplier = 0.2 + attack_cooldown_progress.powi(2) * 0.8;
+        }
+        // modify added damage based on multiplier
+        let mut damage = base_damage + add_damage * damage_multiplier;
+
+        let pos = victim_entity.pos.load();
+
+        if (config.protect_creative && victim.gamemode.load() == GameMode::Creative)
+            || !victim.living_entity.check_damage(damage as f32)
+        {
+            world
+                .play_sound(
+                    sound!("entity.player.attack.nodamage"),
+                    SoundCategory::Players,
+                    &pos,
+                )
+                .await;
+            return;
+        }
+
+        world
+            .play_sound(sound!("entity.player.hurt"), SoundCategory::Players, &pos)
+            .await;
+
+        let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
+
+        player_attack_sound(&pos, world, attack_type).await;
+
+        if matches!(attack_type, AttackType::Critical) {
+            damage *= 1.5;
+        }
+
+        victim
+            .living_entity
+            .damage(damage as f32, 34) // PlayerAttack
+            .await;
+
+        let mut knockback_strength = 1.0;
+        match attack_type {
+            AttackType::Knockback => knockback_strength += 1.0,
+            AttackType::Sweeping => {
+                combat::spawn_sweep_particle(attacker_entity, world, &pos).await;
+            }
+            _ => {}
+        };
+
+        if config.knockback {
+            combat::handle_knockback(attacker_entity, victim, victim_entity, knockback_strength)
+                .await;
+        }
+
+        if config.hurt_animation {
+            let entity_id = VarInt(victim_entity.entity_id);
+            world
+                .broadcast_packet_all(&CHurtAnimation::new(&entity_id, attacker_entity.yaw.load()))
+                .await;
+        }
+
+        if config.swing {}
+    }
+
+    pub async fn await_cancel(&self) {
+        self.cancel_tasks.notified().await;
+    }
+
+    pub async fn tick(&self) {
+        if self
+            .client
+            .closed
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
+        let now = Instant::now();
+        self.last_attacked_ticks
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        self.living_entity.tick();
+
+        if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
+            // We never got a response from our last keep alive we send
+            if self
+                .wait_for_keep_alive
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                self.kick(TextComponent::text("Timeout")).await;
+                return;
+            }
+            self.wait_for_keep_alive
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            self.last_keep_alive_time.store(now);
+            let id = now.elapsed().as_millis() as i64;
+            self.keep_alive_id
+                .store(id, std::sync::atomic::Ordering::Relaxed);
+            self.client.send_packet(&CKeepAlive::new(id)).await;
+        }
+    }
+
+    pub fn get_attack_cooldown_progress(&self, base_time: f64, attack_speed: f64) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        let x = f64::from(
+            self.last_attacked_ticks
+                .load(std::sync::atomic::Ordering::Acquire),
+        ) + base_time;
+
+        let progress_per_tick = f64::from(BASIC_CONFIG.tps) / attack_speed;
+        let progress = x / progress_per_tick;
+        progress.clamp(0.0, 1.0)
     }
 
     pub const fn entity_id(&self) -> EntityId {
         self.living_entity.entity.entity_id
     }
 
+    pub const fn world(&self) -> &Arc<World> {
+        &self.living_entity.entity.world
+    }
+
     /// Updates the current abilities the Player has
-    pub fn send_abilties_update(&mut self) {
+    pub async fn send_abilities_update(&self) {
         let mut b = 0i8;
-        let abilities = &self.abilities;
+        let abilities = &self.abilities.lock().await;
 
         if abilities.invulnerable {
             b |= 1;
@@ -162,37 +432,74 @@ impl Player {
         if abilities.creative {
             b |= 8;
         }
-        self.client.send_packet(&CPlayerAbilities::new(
-            b,
-            abilities.fly_speed,
-            abilities.walk_speed_fov,
-        ));
+        self.client
+            .send_packet(&CPlayerAbilities::new(
+                b,
+                abilities.fly_speed,
+                abilities.walk_speed_fov,
+            ))
+            .await;
     }
 
-    pub fn teleport(&self, x: f64, y: f64, z: f64, yaw: f32, pitch: f32) {
+    /// syncs the players permission level with the client
+    pub async fn send_permission_lvl_update(&self) {
+        self.client
+            .send_packet(&CEntityStatus::new(
+                self.entity_id(),
+                24 + self.permission_lvl.load() as i8,
+            ))
+            .await;
+    }
+
+    /// sets the players permission level and syncs it with the client
+    pub async fn set_permission_lvl(
+        self: &Arc<Self>,
+        lvl: PermissionLvl,
+        command_dispatcher: &RwLock<CommandDispatcher>,
+    ) {
+        self.permission_lvl.store(lvl);
+        self.send_permission_lvl_update().await;
+        client_cmd_suggestions::send_c_commands_packet(self, command_dispatcher).await;
+    }
+
+    /// Sends the world time to just the player.
+    pub async fn send_time(&self, world: &World) {
+        let l_world = world.level_time.lock().await;
+        self.client
+            .send_packet(&CUpdateTime::new(
+                l_world.world_age,
+                l_world.time_of_day,
+                true,
+            ))
+            .await;
+    }
+
+    /// Yaw and Pitch in degrees
+    /// Rarly used, For example when waking up player from bed or first time spawn. Otherwise entity teleport is used
+    /// Player should respond with the `SConfirmTeleport` packet
+    pub async fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
         // this is the ultra special magic code used to create the teleport id
         // This returns the old value
+        // This operation wraps around on overflow.
         let i = self
             .teleport_id_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if i + 2 == i32::MAX {
-            self.teleport_id_count
-                .store(0, std::sync::atomic::Ordering::Relaxed);
-        }
         let teleport_id = i + 1;
+        self.living_entity.set_pos(position);
         let entity = &self.living_entity.entity;
-        entity.set_pos(x, y, z);
         entity.set_rotation(yaw, pitch);
-        *self.awaiting_teleport.lock() = Some((teleport_id.into(), Vector3::new(x, y, z)));
-        self.client.send_packet(&CSyncPlayerPosition::new(
-            x,
-            y,
-            z,
-            yaw,
-            pitch,
-            0,
-            teleport_id.into(),
-        ));
+        *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+        self.client
+            .send_packet(&CPlayerPosition::new(
+                teleport_id.into(),
+                position,
+                Vector3::new(0.0, 0.0, 0.0),
+                yaw,
+                pitch,
+                // TODO
+                &[],
+            ))
+            .await;
     }
 
     pub fn block_interaction_range(&self) -> f64 {
@@ -210,47 +517,90 @@ impl Player {
         let standing_eye_height = self.living_entity.entity.standing_eye_height;
         box_pos.squared_magnitude(Vector3 {
             x: entity_pos.x,
-            y: entity_pos.y + standing_eye_height as f64,
+            y: entity_pos.y + f64::from(standing_eye_height),
             z: entity_pos.z,
         }) < d * d
     }
 
     /// Kicks the Client with a reason depending on the connection state
-    pub fn kick(&self, reason: TextComponent) {
-        assert!(!self
+    pub async fn kick(&self, reason: TextComponent) {
+        if self
             .client
             .closed
-            .load(std::sync::atomic::Ordering::Relaxed));
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            log::debug!(
+                "Tried to kick id {} but connection is closed!",
+                self.client.id
+            );
+            return;
+        }
 
         self.client
             .try_send_packet(&CPlayDisconnect::new(&reason))
+            .await
             .unwrap_or_else(|_| self.client.close());
         log::info!(
-            "Kicked {} for {}",
+            "Kicked Player {} ({}) for {}",
             self.gameprofile.name,
+            self.client.id,
             reason.to_pretty_console()
         );
-        self.client.close()
+        self.client.close();
     }
 
-    pub fn set_health(&self, health: f32, food: i32, food_saturation: f32) {
-        self.living_entity.set_health(health);
+    pub async fn set_health(&self, health: f32, food: i32, food_saturation: f32) {
+        self.living_entity.set_health(health).await;
         self.food.store(food, std::sync::atomic::Ordering::Relaxed);
         self.food_saturation.store(food_saturation);
         self.client
-            .send_packet(&CSetHealth::new(health, food.into(), food_saturation));
+            .send_packet(&CSetHealth::new(health, food.into(), food_saturation))
+            .await;
     }
 
-    pub fn set_gamemode(&self, gamemode: GameMode) {
+    pub async fn kill(&self) {
+        self.living_entity.kill().await;
+
+        self.client
+            .send_packet(&CCombatDeath::new(
+                self.entity_id().into(),
+                &TextComponent::text("noob"),
+            ))
+            .await;
+    }
+
+    pub async fn set_gamemode(&self, gamemode: GameMode) {
         // We could send the same gamemode without problems. But why waste bandwidth ?
-        let current_gamemode = self.gamemode.load();
-        assert!(
-            current_gamemode != gamemode,
+        assert_ne!(
+            self.gamemode.load(),
+            gamemode,
             "Setting the same gamemode as already is"
         );
         self.gamemode.store(gamemode);
-        // So a little story time. I actually made an abilties_from_gamemode function. I looked at vanilla and they always send the abilties from the gamemode. But the funny thing actually is. That the client
-        // does actually use the same method and set the abilties when receiving the CGameEvent gamemode packet. Just Mojang nonsense
+        {
+            // use another scope so we instantly unlock abilities
+            let mut abilities = self.abilities.lock().await;
+            match gamemode {
+                GameMode::Undefined | GameMode::Survival | GameMode::Adventure => {
+                    abilities.flying = false;
+                    abilities.allow_flying = false;
+                    abilities.creative = false;
+                    abilities.invulnerable = false;
+                }
+                GameMode::Creative => {
+                    abilities.allow_flying = true;
+                    abilities.creative = true;
+                    abilities.invulnerable = true;
+                }
+                GameMode::Spectator => {
+                    abilities.flying = true;
+                    abilities.allow_flying = true;
+                    abilities.creative = false;
+                    abilities.invulnerable = true;
+                }
+            }
+        }
+        self.send_abilities_update().await;
         self.living_entity
             .entity
             .world
@@ -260,150 +610,190 @@ impl Player {
                     uuid: self.gameprofile.id,
                     actions: vec![PlayerAction::UpdateGameMode((gamemode as i32).into())],
                 }],
-            ));
-        self.client.send_packet(&CGameEvent::new(
-            GameEvent::ChangeGameMode,
-            gamemode.to_f32().unwrap(),
-        ));
+            ))
+            .await;
+        #[allow(clippy::cast_precision_loss)]
+        self.client
+            .send_packet(&CGameEvent::new(
+                GameEvent::ChangeGameMode,
+                gamemode as i32 as f32,
+            ))
+            .await;
     }
 
-    pub fn send_system_message(&self, text: TextComponent) {
+    /// Send skin layers and used hand to all players
+    pub async fn update_client_information(&self) {
+        let config = self.config.lock().await;
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CSetEntityMetadata::new(
+                self.entity_id().into(),
+                Metadata::new(17, 0.into(), config.skin_parts),
+            ))
+            .await;
+        world
+            .broadcast_packet_all(&CSetEntityMetadata::new(
+                self.entity_id().into(),
+                Metadata::new(18, 0.into(), config.main_hand as u8),
+            ))
+            .await;
+    }
+
+    pub async fn send_system_message(&self, text: &TextComponent) {
         self.client
-            .send_packet(&CSystemChatMessage::new(text, false));
+            .send_packet(&CSystemChatMessage::new(text, false))
+            .await;
     }
 }
 
 impl Player {
-    pub async fn process_packets(&self, server: &Arc<Server>) {
-        let mut packets = self.client.client_packets_queue.lock();
-        while let Some(mut packet) = packets.pop() {
-            match self.handle_play_packet(server, &mut packet).await {
-                Ok(_) => {}
-                Err(e) => {
-                    if e.is_kick() {
-                        if let Some(kick_reason) = e.client_kick_reason() {
-                            self.kick(TextComponent::text(&kick_reason))
-                        } else {
-                            self.kick(TextComponent::text(&format!(
-                                "Error while reading incoming packet {}",
-                                e
-                            )));
+    pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
+        let mut packets = self.client.client_packets_queue.lock().await;
+        while let Some(mut packet) = packets.pop_back() {
+            tokio::select! {
+                () = self.await_cancel() => {
+                    log::debug!("Canceling player packet processing");
+                    return;
+                },
+                packet_result = self.handle_play_packet(server, &mut packet) => {
+                    match packet_result {
+                        Ok(()) => {}
+                        Err(e) => {
+                            if e.is_kick() {
+                                if let Some(kick_reason) = e.client_kick_reason() {
+                                    self.kick(TextComponent::text(kick_reason)).await;
+                                } else {
+                                    self.kick(TextComponent::text(format!(
+                                        "Error while reading incoming packet {e}"
+                                    )))
+                                    .await;
+                                }
+                            }
+                            e.log();
                         }
-                    }
-                    e.log();
+                    };
                 }
-            };
+            }
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_play_packet(
-        &self,
+        self: &Arc<Self>,
         server: &Arc<Server>,
         packet: &mut RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
         let bytebuf = &mut packet.bytebuf;
         match packet.id.0 {
             SConfirmTeleport::PACKET_ID => {
-                self.handle_confirm_teleport(SConfirmTeleport::read(bytebuf)?);
-                Ok(())
+                self.handle_confirm_teleport(SConfirmTeleport::read(bytebuf)?)
+                    .await;
             }
             SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, SChatCommand::read(bytebuf)?);
-                Ok(())
+                self.handle_chat_command(server, SChatCommand::read(bytebuf)?)
+                    .await;
+            }
+            SChatMessage::PACKET_ID => {
+                self.handle_chat_message(SChatMessage::read(bytebuf)?).await;
+            }
+            SClientInformationPlay::PACKET_ID => {
+                self.handle_client_information(SClientInformationPlay::read(bytebuf)?)
+                    .await;
+            }
+            SClientCommand::PACKET_ID => {
+                self.handle_client_status(SClientCommand::read(bytebuf)?)
+                    .await;
+            }
+            SPlayerInput::PACKET_ID => {
+                // TODO
+            }
+            SInteract::PACKET_ID => {
+                self.handle_interact(SInteract::read(bytebuf)?).await;
+            }
+            SKeepAlive::PACKET_ID => {
+                self.handle_keep_alive(SKeepAlive::read(bytebuf)?).await;
+            }
+            SClientTickEnd::PACKET_ID => {
+                // TODO
             }
             SPlayerPosition::PACKET_ID => {
                 self.handle_position(SPlayerPosition::read(bytebuf)?).await;
-                Ok(())
             }
             SPlayerPositionRotation::PACKET_ID => {
                 self.handle_position_rotation(SPlayerPositionRotation::read(bytebuf)?)
                     .await;
-                Ok(())
             }
             SPlayerRotation::PACKET_ID => {
                 self.handle_rotation(SPlayerRotation::read(bytebuf)?).await;
-                Ok(())
             }
             SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(SSetPlayerGround::read(bytebuf)?);
-                Ok(())
+                self.handle_player_ground(&SSetPlayerGround::read(bytebuf)?);
+            }
+            SPickItemFromBlock::PACKET_ID => {
+                self.handle_pick_item_from_block(SPickItemFromBlock::read(bytebuf)?)
+                    .await;
+            }
+            SPlayerAbilities::PACKET_ID => {
+                self.handle_player_abilities(SPlayerAbilities::read(bytebuf)?)
+                    .await;
+            }
+            SPlayerAction::PACKET_ID => {
+                self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
+                    .await;
             }
             SPlayerCommand::PACKET_ID => {
                 self.handle_player_command(SPlayerCommand::read(bytebuf)?)
                     .await;
-                Ok(())
-            }
-            SSwingArm::PACKET_ID => {
-                self.handle_swing_arm(SSwingArm::read(bytebuf)?).await;
-                Ok(())
-            }
-            SChatMessage::PACKET_ID => {
-                self.handle_chat_message(SChatMessage::read(bytebuf)?).await;
-                Ok(())
-            }
-            SClientInformationPlay::PACKET_ID => {
-                self.handle_client_information_play(SClientInformationPlay::read(bytebuf)?);
-                Ok(())
-            }
-            SInteract::PACKET_ID => {
-                self.handle_interact(server, SInteract::read(bytebuf)?)
-                    .await;
-                Ok(())
-            }
-            SPlayerAction::PACKET_ID => {
-                self.handle_player_action(SPlayerAction::read(bytebuf)?)
-                    .await;
-                Ok(())
-            }
-            SUseItemOn::PACKET_ID => {
-                self.handle_use_item_on(SUseItemOn::read(bytebuf)?).await;
-                Ok(())
-            }
-            SUseItem::PACKET_ID => {
-                self.handle_use_item(SUseItem::read(bytebuf)?);
-                Ok(())
-            }
-            SSetHeldItem::PACKET_ID => {
-                self.handle_set_held_item(SSetHeldItem::read(bytebuf)?);
-                Ok(())
-            }
-            SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)?;
-                Ok(())
             }
             SPlayPingRequest::PACKET_ID => {
-                self.handle_play_ping_request(SPlayPingRequest::read(bytebuf)?);
-                Ok(())
+                self.handle_play_ping_request(SPlayPingRequest::read(bytebuf)?)
+                    .await;
             }
             SClickContainer::PACKET_ID => {
                 self.handle_click_container(server, SClickContainer::read(bytebuf)?)
                     .await?;
-                Ok(())
+            }
+            SSetHeldItem::PACKET_ID => {
+                self.handle_set_held_item(SSetHeldItem::read(bytebuf)?)
+                    .await;
+            }
+            SSetCreativeSlot::PACKET_ID => {
+                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
+                    .await?;
+            }
+            SSwingArm::PACKET_ID => {
+                self.handle_swing_arm(SSwingArm::read(bytebuf)?).await;
+            }
+            SUseItemOn::PACKET_ID => {
+                self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
+                    .await?;
+            }
+            SUseItem::PACKET_ID => self.handle_use_item(&SUseItem::read(bytebuf)?),
+            SCommandSuggestion::PACKET_ID => {
+                self.handle_command_suggestion(SCommandSuggestion::read(bytebuf)?, server)
+                    .await;
+            }
+            SPCookieResponse::PACKET_ID => {
+                self.handle_cookie_response(SPCookieResponse::read(bytebuf)?);
             }
             SCloseContainer::PACKET_ID => {
-                self.handle_close_container(server, SCloseContainer::read(bytebuf)?);
-                Ok(())
-            }
-            SKeepAlive::PACKET_ID => {
-                self.client
-                    .keep_alive_sender
-                    .send(SKeepAlive::read(bytebuf)?.keep_alive_id)
-                    .await
-                    .unwrap();
-                Ok(())
+                self.handle_close_container(server, SCloseContainer::read(bytebuf)?)
+                    .await;
             }
             _ => {
-                log::error!("Failed to handle player packet id {:#04x}", packet.id.0);
-                Ok(())
+                log::warn!("Failed to handle player packet id {}", packet.id.0);
+                // TODO: We give an error if all play packets are implemented
+                //  return Err(Box::new(DeserializerError::UnknownPacket));
             }
-        }
+        };
+        Ok(())
     }
 }
 
 /// Represents a player's abilities and special powers.
 ///
 /// This struct contains information about the player's current abilities, such as flight, invulnerability, and creative mode.
-pub struct PlayerAbilities {
+pub struct Abilities {
     /// Indicates whether the player is invulnerable to damage.
     pub invulnerable: bool,
     /// Indicates whether the player is currently flying.
@@ -418,30 +808,45 @@ pub struct PlayerAbilities {
     pub walk_speed_fov: f32,
 }
 
-impl Default for PlayerAbilities {
+impl Default for Abilities {
     fn default() -> Self {
         Self {
             invulnerable: false,
             flying: false,
             allow_flying: false,
             creative: false,
-            fly_speed: 0.5,
+            fly_speed: 0.05,
             walk_speed_fov: 0.1,
         }
     }
 }
 
 /// Represents the player's dominant hand.
-#[derive(FromPrimitive, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Hand {
-    /// The player's primary hand (usually the right hand).
-    Main,
-    /// The player's off-hand (usually the left hand).
-    Off,
+    /// Usually the player's off-hand.
+    Left,
+    /// Usually the player's primary hand.
+    Right,
+}
+
+pub struct InvalidHand;
+
+impl TryFrom<i32> for Hand {
+    type Error = InvalidHand;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Left),
+            1 => Ok(Self::Right),
+            _ => Err(InvalidHand),
+        }
+    }
 }
 
 /// Represents the player's chat mode settings.
-#[derive(FromPrimitive, Clone)]
+#[derive(Debug, Clone)]
 pub enum ChatMode {
     /// Chat is enabled for the player.
     Enabled,
@@ -449,4 +854,19 @@ pub enum ChatMode {
     CommandsOnly,
     /// All messages should be hidden
     Hidden,
+}
+
+pub struct InvalidChatMode;
+
+impl TryFrom<i32> for ChatMode {
+    type Error = InvalidChatMode;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Enabled),
+            1 => Ok(Self::CommandsOnly),
+            2 => Ok(Self::Hidden),
+            _ => Err(InvalidChatMode),
+        }
+    }
 }

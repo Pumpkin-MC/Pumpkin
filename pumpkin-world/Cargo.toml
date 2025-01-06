@@ -4,34 +4,44 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+pumpkin-nbt = { path = "../pumpkin-nbt" }
 pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 
-fastnbt = { git = "https://github.com/owengage/fastnbt.git" }
 tokio.workspace = true
 rayon.workspace = true
 derive_more.workspace = true
-itertools.workspace = true
-thiserror = "1.0"
-futures = "0.3"
-
-
-# Compression
-flate2 = "1.0"
-lz4 = "1.11.1"
-
+thiserror.workspace = true
 serde.workspace = true
-serde_json = "1.0"
-enum_dispatch = "0.3.13"
-derive-getters = "0.5.0"
-
+serde_json.workspace = true
 log.workspace = true
 
-parking_lot.workspace = true
+dashmap = "6.1.0"
+
+num-traits = "0.2"
+
+# Compression   
+flate2 = "1.0"
+lz4 = "1.28.0"
+
+file-guard = "0.2.0"
+
+enum_dispatch = "0.3.13"
+
+fastnbt = { git = "https://github.com/owengage/fastnbt.git" }
 
 noise = "0.9.0"
 
 rand = "0.8.5"
 
-num-traits = "0.2"
-num-derive = "0.4"
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
+[[bench]]
+name = "chunk_noise"
+harness = false
+
+[[bench]]
+name = "chunk_noise_populate"
+harness = false

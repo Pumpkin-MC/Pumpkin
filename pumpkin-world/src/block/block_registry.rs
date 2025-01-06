@@ -1,81 +1,126 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use super::BlockState;
-
-pub static BLOCKS: LazyLock<HashMap<String, RegistryBlockType>> = LazyLock::new(|| {
+pub static BLOCKS: LazyLock<TopLevel> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../assets/blocks.json"))
-        .expect("Could not parse block.json registry.")
+        .expect("Could not parse blocks.json registry.")
 });
 
-pumpkin_macros::blocks_enum!();
-pumpkin_macros::block_categories_enum!();
-
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RegistryBlockDefinition {
-    /// e.g. minecraft:door or minecraft:button
-    #[serde(rename = "type")]
-    pub category: String,
-
-    /// Specifies the variant of the blocks category.
-    /// e.g. minecraft:iron_door has the variant iron
-    #[serde(rename = "block_set_type")]
-    pub variant: Option<String>,
-}
-
-/// One possible state of a Block.
-/// This could e.g. be an extended piston facing left.
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RegistryBlockState {
-    pub id: BlockId,
-
-    /// Whether this is the default state of the Block
-    #[serde(default, rename = "default")]
-    pub is_default: bool,
-
-    /// The propertise active for this `BlockState`.
-    #[serde(default)]
-    pub properties: HashMap<String, String>,
-}
-
-/// A fully-fledged block definition.
-/// Stores the category, variant, all of the possible states and all of the possible properties.
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RegistryBlockType {
-    pub definition: RegistryBlockDefinition,
-    pub states: Vec<RegistryBlockState>,
-
-    // TODO is this safe to remove? It's currently not used in the Project. @lukas0008 @Snowiiii
-    /// A list of valid property keys/values for a block.
-    #[serde(default, rename = "properties")]
-    valid_properties: HashMap<String, Vec<String>>,
-}
-
-#[derive(Default, Copy, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
-#[serde(transparent)]
-pub struct BlockId {
-    pub data: u16,
-}
-
-impl BlockId {
-    pub fn is_air(&self) -> bool {
-        self.data == 0 || self.data == 12959 || self.data == 12958
+pub static BLOCKS_BY_ID: LazyLock<HashMap<u16, Block>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    for block in &BLOCKS.blocks {
+        map.insert(block.id, block.clone());
     }
+    map
+});
 
-    pub fn get_id_mojang_repr(&self) -> i32 {
-        self.data as i32
+pub static BLOCK_ID_BY_REGISTRY_ID: LazyLock<HashMap<String, u16>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    for block in &BLOCKS.blocks {
+        map.insert(block.name.clone(), block.id);
     }
+    map
+});
 
-    pub fn get_id(&self) -> u16 {
-        self.data
-    }
-}
-
-impl From<BlockState> for BlockId {
-    fn from(value: BlockState) -> Self {
-        Self {
-            data: value.get_id(),
+pub static BLOCK_ID_BY_STATE_ID: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    for block in &BLOCKS.blocks {
+        for state in &block.states {
+            map.insert(state.id, block.id);
         }
     }
+    map
+});
+
+pub static STATE_INDEX_BY_STATE_ID: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    for block in &BLOCKS.blocks {
+        for (index, state) in block.states.iter().enumerate() {
+            map.insert(state.id, index as u16);
+        }
+    }
+    map
+});
+
+pub static BLOCK_ID_BY_ITEM_ID: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    for block in &BLOCKS.blocks {
+        map.insert(block.item_id, block.id);
+    }
+    map
+});
+
+pub fn get_block(registry_id: &str) -> Option<&Block> {
+    let id = BLOCK_ID_BY_REGISTRY_ID.get(&registry_id.replace("minecraft:", ""))?;
+    BLOCKS_BY_ID.get(id)
+}
+
+pub fn get_block_by_id<'a>(id: u16) -> Option<&'a Block> {
+    BLOCKS_BY_ID.get(&id)
+}
+
+pub fn get_state_by_state_id<'a>(id: u16) -> Option<&'a State> {
+    get_block_and_state_by_state_id(id).map(|(_, state)| state)
+}
+
+pub fn get_block_by_state_id<'a>(id: u16) -> Option<&'a Block> {
+    let block_id = BLOCK_ID_BY_STATE_ID.get(&id)?;
+    BLOCKS_BY_ID.get(block_id)
+}
+
+pub fn get_block_and_state_by_state_id<'a>(id: u16) -> Option<(&'a Block, &'a State)> {
+    let block_id = BLOCK_ID_BY_STATE_ID.get(&id)?;
+    let block = BLOCKS_BY_ID.get(block_id)?;
+    let state_index = STATE_INDEX_BY_STATE_ID.get(&id)?;
+    let state = block.states.get(*state_index as usize)?;
+    Some((block, state))
+}
+
+pub fn get_block_by_item<'a>(item_id: u16) -> Option<&'a Block> {
+    let block_id = BLOCK_ID_BY_ITEM_ID.get(&item_id)?;
+    BLOCKS_BY_ID.get(block_id)
+}
+#[expect(dead_code)]
+#[derive(Deserialize, Clone, Debug)]
+pub struct TopLevel {
+    block_entity_types: Vec<String>,
+    shapes: Vec<Shape>,
+    pub blocks: Vec<Block>,
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct Block {
+    pub id: u16,
+    pub item_id: u16,
+    pub hardness: f32,
+    pub wall_variant_id: Option<u16>,
+    pub translation_key: String,
+    pub name: String,
+    pub properties: Vec<Property>,
+    pub default_state_id: u16,
+    pub states: Vec<State>,
+}
+#[expect(dead_code)]
+#[derive(Deserialize, Clone, Debug)]
+pub struct Property {
+    name: String,
+    values: Vec<String>,
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct State {
+    pub id: u16,
+    pub air: bool,
+    pub luminance: u8,
+    pub burnable: bool,
+    pub opacity: Option<u32>,
+    pub replaceable: bool,
+    pub collision_shapes: Vec<u16>,
+    pub block_entity_type: Option<u32>,
+}
+#[expect(dead_code)]
+#[derive(Deserialize, Clone, Debug)]
+struct Shape {
+    min: [f32; 3],
+    max: [f32; 3],
 }
