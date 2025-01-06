@@ -37,15 +37,6 @@ impl Goal for TargetGoal {
             .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
             .await;
 
-        if let Some(target) = target.as_ref() {
-            let mut navigator = mob.navigator.lock().await;
-            let target_player = target.living_entity.entity.pos.load();
-
-            navigator.set_progress(NavigatorGoal {
-                current_progress: mob.living_entity.entity.pos.load(),
-                destination: target_player,
-            });
-        }
         target.is_some()
     }
     async fn should_continue(&self, mob: &MobEntity) -> bool {
@@ -57,5 +48,16 @@ impl Goal for TargetGoal {
         }
         false
     }
-    async fn tick(&self, mob: &MobEntity) {}
+    async fn tick(&self, mob: &MobEntity) {
+        if let Some(target) = self.target.lock().await.as_ref() {
+            let mut navigator = mob.navigator.lock().await;
+            let target_player = target.living_entity.entity.pos.load();
+
+            navigator.set_progress(NavigatorGoal {
+                current_progress: mob.living_entity.entity.pos.load(),
+                destination: target_player,
+                speed: 0.1,
+            });
+        }
+    }
 }

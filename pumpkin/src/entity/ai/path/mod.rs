@@ -3,6 +3,7 @@ use pumpkin_protocol::client::play::CUpdateEntityPos;
 
 use crate::entity::living::LivingEntity;
 
+#[derive(Default)]
 pub struct Navigator {
     current_goal: Option<NavigatorGoal>,
 }
@@ -10,13 +11,10 @@ pub struct Navigator {
 pub struct NavigatorGoal {
     pub current_progress: Vector3<f64>,
     pub destination: Vector3<f64>,
+    pub speed: f64,
 }
 
 impl Navigator {
-    pub fn new() -> Self {
-        Self { current_goal: None }
-    }
-
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.current_goal = Some(goal);
     }
@@ -34,44 +32,42 @@ impl Navigator {
                 return;
             }
 
-            // lets figuire out that is less expensive, minus or plus x
-            let mut current_expense = f64::MAX;
-            let mut pos = 0;
-            for x in -1..2 {
-                let node = Node::new(Vector3::new(
-                    x as f64,
-                    goal.current_progress.y,
-                    goal.current_progress.z,
-                ));
-                let expense = node.get_expense(goal.destination);
-                if expense <= current_expense {
-                    current_expense = expense;
-                    pos = x;
+            // A star algorithm
+            let mut best_move = Vector3::new(0.0, 0.0, 0.0);
+            let mut lowest_cost = f64::MAX;
+
+            for x in -1..=1 {
+                for z in -1..=1 {
+                    let x = f64::from(x);
+                    let z = f64::from(z);
+                    let potential_pos = Vector3::new(
+                        goal.current_progress.x + x,
+                        goal.current_progress.y,
+                        goal.current_progress.z + z,
+                    );
+                    let node = Node::new(potential_pos);
+                    let cost = node.get_expense(goal.destination);
+
+                    if cost < lowest_cost {
+                        lowest_cost = cost;
+                        best_move = Vector3::new(x, 0.0, z);
+                    }
                 }
             }
-            dbg!(pos);
-            let mut current_expense = f64::MAX;
-            goal.current_progress.x += pos as f64;
-            
-            for z in -1..2 {
-                let node = Node::new(Vector3::new(
-                    goal.current_progress.x as f64,
-                    goal.current_progress.y,
-                    z as f64,
-                ));
-                let expense = node.get_expense(goal.destination);
-                if expense <= current_expense {
-                    current_expense = expense;
-                    pos = z;
-                }
+
+            // this is important, first this saves us many packets when we don't actually move, and secound this prevents division using zero
+            // when normalize
+            if best_move.x == 0.0 && best_move.z == 0.0 {
+                return;
             }
-            
-            goal.current_progress.z += pos as f64;
+            // Update current progress based on the best move
+            goal.current_progress += best_move.normalize() * goal.speed;
 
             // now lets move
             entity.set_pos(goal.current_progress);
             let pos = entity.entity.pos.load();
             let last_pos = entity.last_pos.load();
+
             entity
                 .entity
                 .world
@@ -97,12 +93,14 @@ pub struct Node {
 }
 
 impl Node {
+    #[must_use]
     pub fn new(location: Vector3<f64>) -> Self {
         Self { location }
     }
     /// How expensive is it to go to a location
     ///
     /// Returns a f64, Higher = More Expensive
+    #[must_use]
     pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
         self.location.squared_distance_to_vec(end).sqrt()
     }

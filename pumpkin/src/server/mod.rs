@@ -208,7 +208,7 @@ impl Server {
         let mob = Arc::new(MobEntity {
             living_entity,
             goals: Mutex::new(vec![]),
-            navigator: Mutex::new(Navigator::new()),
+            navigator: Mutex::new(Navigator::default()),
         });
         world.add_mob_entity(uuid, mob.clone()).await;
         (mob, uuid)
