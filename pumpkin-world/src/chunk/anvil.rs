@@ -470,16 +470,16 @@ impl AnvilChunkFormat {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
-    use pumpkin_core::math::vector2::Vector2;
 
+    use crate::chunk::ChunkWriter;
+    use crate::generation::{get_world_gen, Seed};
     use crate::{
         chunk::{anvil::AnvilChunkFormat, ChunkReader, ChunkReadingError},
         level::LevelFolder,
     };
-    use crate::chunk::ChunkWriter;
-    use crate::generation::{get_world_gen, Seed};
 
     #[test]
     fn not_existing() {
@@ -519,17 +519,29 @@ mod tests {
         for i in 0..5 {
             println!("Iteration {}", i + 1);
             for (at, chunk) in &chunks {
-                AnvilChunkFormat.write_chunk(chunk, &level_folder, at).expect("Failed to write chunk");
+                AnvilChunkFormat
+                    .write_chunk(chunk, &level_folder, at)
+                    .expect("Failed to write chunk");
             }
 
             let mut read_chunks = vec![];
             for (at, _chunk) in &chunks {
-                read_chunks.push(AnvilChunkFormat.read_chunk(&level_folder, at).expect("Could not read chunk"));
+                read_chunks.push(
+                    AnvilChunkFormat
+                        .read_chunk(&level_folder, at)
+                        .expect("Could not read chunk"),
+                );
             }
 
             for (at, chunk) in &chunks {
-                let read_chunk = read_chunks.iter().find(|chunk| chunk.position == *at).expect("Missing chunk");
-                assert_eq!(chunk.blocks.blocks, read_chunk.blocks.blocks, "Chunks don't match");
+                let read_chunk = read_chunks
+                    .iter()
+                    .find(|chunk| chunk.position == *at)
+                    .expect("Missing chunk");
+                assert_eq!(
+                    chunk.blocks.blocks, read_chunk.blocks.blocks,
+                    "Chunks don't match"
+                );
             }
         }
 
