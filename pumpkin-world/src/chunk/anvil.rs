@@ -286,31 +286,33 @@ impl ChunkWriter for AnvilChunkFormat {
                 .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
         }
 
-
-
         let chunk_x = at.x & 0x1F;
         let chunk_z = at.z & 0x1F;
 
         let table_index = (chunk_x as usize + chunk_z as usize * 32) * 4;
 
-        let mut chunk_data_location: u64;
-
         // | 0 1 2  |      3       |
         // | offset | sector count |
         let chunk_location = &location_table[table_index..table_index + 4];
-        if chunk_location[3] >= sector_size as u8 {
-            chunk_data_location = u32::from_be_bytes([0, chunk_location[0], chunk_location[1], chunk_location[2]]) as u64;
+        let chunk_data_location: u64 = if chunk_location[3] >= sector_size as u8 {
+            u32::from_be_bytes([0, chunk_location[0], chunk_location[1], chunk_location[2]]) as u64
         } else {
-            chunk_data_location = self.find_free_sector(&location_table, sector_size) as u64;
-        }
+            self.find_free_sector(&location_table, sector_size) as u64
+        };
 
-        assert!(chunk_data_location < 10000 * 4096, "There are way to many sections wtf. Do you wanna blow up your disc?");
-        assert!(chunk_data_location > 1, "Nah won't let your overwrite my header. Not cool");
+        assert!(
+            chunk_data_location < 10000 * 4096,
+            "There are way to many sections wtf. Do you wanna blow up your disc?"
+        );
+        assert!(
+            chunk_data_location > 1,
+            "Nah won't let your overwrite my header. Not cool"
+        );
 
         // Construct location header
         location_table[table_index] = (chunk_data_location >> 16) as u8;
         location_table[table_index + 1] = (chunk_data_location >> 8) as u8;
-        location_table[table_index + 2] = (chunk_data_location >> 0) as u8;
+        location_table[table_index + 2] = chunk_data_location as u8;
         location_table[table_index + 3] = sector_size as u8;
 
         // Write new location and timestamp table
@@ -320,7 +322,9 @@ impl ChunkWriter for AnvilChunkFormat {
             .map_err(|e| ChunkWritingError::IoError(e.kind()))?;
 
         // Seek to where the chunk is located
-        region_file.seek(SeekFrom::Start(chunk_data_location * 4096)).unwrap();
+        region_file
+            .seek(SeekFrom::Start(chunk_data_location * 4096))
+            .unwrap();
 
         // Write header and payload
         region_file
@@ -371,8 +375,7 @@ impl AnvilChunkFormat {
             let mut current_pack_long: i64 = 0;
             let mut bits_used_in_pack: u32 = 0;
 
-            if palette.len() != 0 {
-
+            if !palette.is_empty() {
                 for block in blocks {
                     // Push if next bit does not fit
                     if bits_used_in_pack + block_bit_size as u32 > 64 {
@@ -433,8 +436,12 @@ impl AnvilChunkFormat {
         let mut used_sectors: Vec<u16> = Vec::new();
         for i in 0..1024 {
             let entry_offset = i * 4;
-            let location_offset =
-                u32::from_be_bytes([0, location_table[entry_offset], location_table[entry_offset + 1], location_table[entry_offset + 2]]) as u64;
+            let location_offset = u32::from_be_bytes([
+                0,
+                location_table[entry_offset],
+                location_table[entry_offset + 1],
+                location_table[entry_offset + 2],
+            ]) as u64;
             let length = location_table[entry_offset + 3] as u64;
             let sector_count = location_offset;
             for used_sector in sector_count..sector_count + length {
@@ -449,14 +456,15 @@ impl AnvilChunkFormat {
         used_sectors.sort();
 
         let mut prev_sector = &used_sectors[0];
-        for sector in used_sectors[1..].iter() { // Iterate over consecutive pairs
+        for sector in used_sectors[1..].iter() {
+            // Iterate over consecutive pairs
             if sector - prev_sector > sector_size as u16 {
                 return (prev_sector + 1) as usize;
             }
             prev_sector = sector;
         }
 
-        (used_sectors.last().unwrap().clone() + 1) as usize
+        (*used_sectors.last().unwrap() + 1) as usize
     }
 }
 

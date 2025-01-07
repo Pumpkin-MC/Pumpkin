@@ -11,8 +11,8 @@ use tokio::{
 
 use crate::{
     chunk::{
-        anvil::AnvilChunkFormat, ChunkBlocks, ChunkData, ChunkParsingError, ChunkReader,
-        ChunkReadingError, ChunkWriter,
+        anvil::AnvilChunkFormat, ChunkData, ChunkParsingError, ChunkReader, ChunkReadingError,
+        ChunkWriter,
     },
     generation::{get_world_gen, Seed, WorldGenerator},
     lock::{anvil::AnvilLevelLocker, LevelLocker},
