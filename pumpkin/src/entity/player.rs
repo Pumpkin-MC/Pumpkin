@@ -1,8 +1,10 @@
 use std::{
-    num::NonZeroU8, sync::{
+    num::NonZeroU8,
+    sync::{
         atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU8},
         Arc,
-    }, time::{Duration, Instant}
+    },
+    time::{Duration, Instant},
 };
 
 use crossbeam::atomic::AtomicCell;
