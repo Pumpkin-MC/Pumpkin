@@ -404,7 +404,7 @@ impl Player {
 
     pub fn has_client_loaded(&self) -> bool {
         self.client_loaded.load(Ordering::Relaxed)
-            || self.client_loaded_timeout.load(Ordering::Relaxed) <= 0
+            || self.client_loaded_timeout.load(Ordering::Relaxed) == 0
     }
 
     pub fn set_client_loaded(&self, loaded: bool) {
