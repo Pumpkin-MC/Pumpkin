@@ -1,15 +1,14 @@
+use bytes::*;
+use fastnbt::LongArray;
+use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+use indexmap::IndexMap;
+use pumpkin_core::math::ceil_log2;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::HashSet,
     fs::OpenOptions,
     io::{Read, Seek, SeekFrom, Write},
 };
-
-use bytes::*;
-use fastnbt::LongArray;
-use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
-use fs2::FileExt;
-use indexmap::IndexMap;
-use pumpkin_core::math::ceil_log2;
 
 use crate::{
     block::block_registry::BLOCK_ID_TO_REGISTRY_ID, chunk::ChunkWritingError, level::LevelFolder,
@@ -152,8 +151,6 @@ impl ChunkReader for AnvilChunkFormat {
                 kind => ChunkReadingError::IoError(kind),
             })?;
 
-        region_file.lock_exclusive().unwrap();
-
         let mut location_table: [u8; 4096] = [0; 4096];
         let mut timestamp_table: [u8; 4096] = [0; 4096];
 
@@ -224,8 +221,6 @@ impl ChunkWriter for AnvilChunkFormat {
         level_folder: &LevelFolder,
         at: &pumpkin_core::math::vector2::Vector2<i32>,
     ) -> Result<(), super::ChunkWritingError> {
-        // return Ok(()); // REMOVE
-        // TODO: update timestamp
         let region = (at.x >> 5, at.z >> 5);
 
         let mut region_file = OpenOptions::new()
@@ -240,28 +235,26 @@ impl ChunkWriter for AnvilChunkFormat {
             )
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        region_file.lock_exclusive().unwrap();
-
         // Serialize chunk data
         let raw_bytes = self
             .to_bytes(chunk_data)
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
+        // Compress chunk data
         let compression = Compression::ZLib;
         let compressed_data = compression
             .compress_data(&raw_bytes, 6)
             .map_err(ChunkWritingError::Compression)?;
 
-        // comppressed data + compression type
+        // Length of compressed data + compression type
         let length = compressed_data.len() as u32 + 1;
 
         // | 0 1 2 3 |        4         |        5..      |
         // | length  | compression type | compressed data |
         let mut chunk_payload = BytesMut::with_capacity(5);
-        // Header
+        // Payload Header + Body
         chunk_payload.put_u32(length);
         chunk_payload.put_u8(compression as u8);
-        // Payload
         chunk_payload.put_slice(&compressed_data);
 
         // Calculate sector size
@@ -276,7 +269,7 @@ impl ChunkWriter for AnvilChunkFormat {
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
         // The header consists of 8 KiB of data
-        // fill the location and timestamp tables if they exist
+        // Try to fill the location and timestamp tables if they already exist
         if file_meta.len() >= 8192 {
             region_file
                 .read_exact(&mut location_table)
@@ -286,27 +279,27 @@ impl ChunkWriter for AnvilChunkFormat {
                 .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
         }
 
+        // Get location table index
         let chunk_x = at.x & 0x1F;
         let chunk_z = at.z & 0x1F;
-
         let table_index = (chunk_x as usize + chunk_z as usize * 32) * 4;
 
         // | 0 1 2  |      3       |
         // | offset | sector count |
+        // Get the entry from the current location table and check
+        // if the new chunk fits in the space of the old chunk
         let chunk_location = &location_table[table_index..table_index + 4];
         let chunk_data_location: u64 = if chunk_location[3] >= sector_size as u8 {
+            // Return old chunk location
             u32::from_be_bytes([0, chunk_location[0], chunk_location[1], chunk_location[2]]) as u64
         } else {
+            // Retrieve next writable sector
             self.find_free_sector(&location_table, sector_size) as u64
         };
 
         assert!(
-            chunk_data_location < 10000 * 4096,
-            "There are way to many sections wtf. Do you wanna blow up your disc?"
-        );
-        assert!(
             chunk_data_location > 1,
-            "Nah won't let your overwrite my header. Not cool"
+            "This should never happen. The header would be corrupted"
         );
 
         // Construct location header
@@ -314,6 +307,18 @@ impl ChunkWriter for AnvilChunkFormat {
         location_table[table_index + 1] = (chunk_data_location >> 8) as u8;
         location_table[table_index + 2] = chunk_data_location as u8;
         location_table[table_index + 3] = sector_size as u8;
+
+        // Get epoch may result in errors if after the year 2106 :(
+        let epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
+
+        // Construct timestamp header
+        timestamp_table[table_index] = (epoch >> 24) as u8;
+        timestamp_table[table_index + 1] = (epoch >> 16) as u8;
+        timestamp_table[table_index + 2] = (epoch >> 8) as u8;
+        timestamp_table[table_index + 3] = epoch as u8;
 
         // Write new location and timestamp table
         region_file.seek(SeekFrom::Start(0)).unwrap();
@@ -324,22 +329,25 @@ impl ChunkWriter for AnvilChunkFormat {
         // Seek to where the chunk is located
         region_file
             .seek(SeekFrom::Start(chunk_data_location * 4096))
-            .unwrap();
+            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
         // Write header and payload
         region_file
             .write_all(&chunk_payload)
-            .expect("Failed to write header");
+            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        // length of compression type + payload and 4 for length
+        // Calculate padding to fill the sectors
+        // (length + 4) 3 bits for length and 1 for compression type + payload length
         let padding = ((sector_size * 4096) as u32 - ((length + 4) & 0xFFF)) & 0xFFF;
 
+        // Write padding
         region_file
             .write_all(&vec![0u8; padding as usize])
-            .expect("Failed to add padding");
+            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        region_file.flush().unwrap();
-        region_file.unlock().unwrap();
+        region_file
+            .flush()
+            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
         Ok(())
     }
@@ -368,33 +376,32 @@ impl AnvilChunkFormat {
             } else {
                 ceil_log2(palette.len() as u32).max(4)
             };
-            // Calculate how many blocks can be packed into a single 64-bit integer
-            let _blocks_in_pack = 64 / block_bit_size;
 
             let mut section_longs = Vec::new();
             let mut current_pack_long: i64 = 0;
             let mut bits_used_in_pack: u32 = 0;
 
-            if !palette.is_empty() {
-                for block in blocks {
-                    // Push if next bit does not fit
-                    if bits_used_in_pack + block_bit_size as u32 > 64 {
-                        section_longs.push(current_pack_long);
-                        current_pack_long = 0;
-                        bits_used_in_pack = 0;
-                    }
-                    let index = palette.get(block).expect("Just added all unique").1;
-                    current_pack_long |= (index as i64) << bits_used_in_pack;
-                    bits_used_in_pack += block_bit_size as u32;
+            // Empty data if the palette only contains one index https://minecraft.fandom.com/wiki/Chunk_format
+            // if palette.len() > 1 {}
+            // TODO: Update to write empty data. Rn or read does not handle this elegantly
+            for block in blocks {
+                // Push if next bit does not fit
+                if bits_used_in_pack + block_bit_size as u32 > 64 {
+                    section_longs.push(current_pack_long);
+                    current_pack_long = 0;
+                    bits_used_in_pack = 0;
+                }
+                let index = palette.get(block).expect("Just added all unique").1;
+                current_pack_long |= (index as i64) << bits_used_in_pack;
+                bits_used_in_pack += block_bit_size as u32;
 
-                    assert!(bits_used_in_pack <= 64);
+                assert!(bits_used_in_pack <= 64);
 
-                    // If the current 64-bit integer is full, push it to the section_longs and start a new one
-                    if bits_used_in_pack >= 64 {
-                        section_longs.push(current_pack_long);
-                        current_pack_long = 0;
-                        bits_used_in_pack = 0;
-                    }
+                // If the current 64-bit integer is full, push it to the section_longs and start a new one
+                if bits_used_in_pack >= 64 {
+                    section_longs.push(current_pack_long);
+                    current_pack_long = 0;
+                    bits_used_in_pack = 0;
                 }
             }
 
@@ -450,7 +457,7 @@ impl AnvilChunkFormat {
         }
 
         if used_sectors.is_empty() {
-            return 3;
+            return 2;
         }
 
         used_sectors.sort();
