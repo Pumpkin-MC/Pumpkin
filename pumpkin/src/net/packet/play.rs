@@ -121,7 +121,14 @@ impl Player {
         pos.clamp(-2.0E7, 2.0E7)
     }
 
+    pub fn handle_player_loaded(self: &Arc<Self>) {
+        self.set_client_loaded(true);
+    }
+
     pub async fn handle_position(self: &Arc<Self>, packet: SPlayerPosition) {
+        if !self.has_client_loaded() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -178,6 +185,9 @@ impl Player {
     }
 
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
+        if !self.has_client_loaded() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -257,6 +267,9 @@ impl Player {
     }
 
     pub async fn handle_rotation(&self, rotation: SPlayerRotation) {
+        if !self.has_client_loaded() {
+            return;
+        }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.kick(TextComponent::text("Invalid rotation")).await;
             return;
@@ -413,6 +426,9 @@ impl Player {
 
     pub async fn handle_player_command(&self, command: SPlayerCommand) {
         if command.entity_id != self.entity_id().into() {
+            return;
+        }
+        if !self.has_client_loaded() {
             return;
         }
 
@@ -630,6 +646,10 @@ impl Player {
     }
 
     pub async fn handle_interact(&self, interact: SInteract) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         let sneaking = interact.sneaking;
         let entity = &self.living_entity.entity;
         if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
@@ -690,6 +710,10 @@ impl Player {
     }
 
     pub async fn handle_player_action(&self, player_action: SPlayerAction, server: &Server) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         match Status::try_from(player_action.status.0) {
             Ok(status) => match status {
                 Status::StartedDigging => {
@@ -810,6 +834,10 @@ impl Player {
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), Box<dyn PumpkinError>> {
+        if !self.has_client_loaded() {
+            return Ok(());
+        }
+
         let location = use_item_on.location;
         let mut should_try_decrement = false;
 
@@ -890,6 +918,9 @@ impl Player {
     }
 
     pub fn handle_use_item(&self, _use_item: &SUseItem) {
+        if !self.has_client_loaded() {
+            return;
+        }
         // TODO: handle packet correctly
         log::error!("An item was used(SUseItem), but the packet is not implemented yet");
     }
