@@ -287,19 +287,23 @@ impl Player {
             .await;
     }
 
-    pub async fn handle_chat_command(
-        self: &Arc<Self>,
-        server: &Arc<Server>,
-        command: SChatCommand,
-    ) {
-        let dispatcher = server.command_dispatcher.read().await;
-        dispatcher
-            .handle_command(
-                &mut CommandSender::Player(self.clone()),
-                server,
-                &command.command,
-            )
-            .await;
+    pub fn handle_chat_command(self: &Arc<Self>, server: &Arc<Server>, command: &SChatCommand) {
+        let player_clone = self.clone();
+        let server_clone = server.clone();
+        let command_clone = command.command.clone();
+        // Some commands can take a long time to execute. If they do, they block packet processing for the player
+        // Thats why we will spawn a task instead
+        tokio::spawn(async move {
+            let dispatcher = server_clone.command_dispatcher.read().await;
+            dispatcher
+                .handle_command(
+                    &mut CommandSender::Player(player_clone),
+                    &server_clone,
+                    &command_clone,
+                )
+                .await;
+        });
+
         if ADVANCED_CONFIG.commands.log_console {
             log::info!(
                 "Player ({}): executed command /{}",

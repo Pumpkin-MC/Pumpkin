@@ -1,10 +1,8 @@
 use std::{
-    num::NonZeroU8,
-    sync::{
+    num::NonZeroU8, sync::{
         atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU8},
         Arc,
-    },
-    time::{Duration, Instant},
+    }, time::{Duration, Instant}
 };
 
 use crossbeam::atomic::AtomicCell;
@@ -383,7 +381,6 @@ impl Player {
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
                 self.kick(TextComponent::text("Timeout")).await;
-                self.cancel_tasks.notify_waiters();
                 return;
             }
             self.wait_for_keep_alive
@@ -691,8 +688,7 @@ impl Player {
                     .await;
             }
             SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, SChatCommand::read(bytebuf)?)
-                    .await;
+                self.handle_chat_command(server, &(SChatCommand::read(bytebuf)?));
             }
             SChatMessage::PACKET_ID => {
                 self.handle_chat_message(SChatMessage::read(bytebuf)?).await;
