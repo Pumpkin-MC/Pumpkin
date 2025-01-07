@@ -52,7 +52,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Bossbar
   - [x] Chunk Loading
   - [x] Chunk Generation
-  - [ ] Chunk Saving
+  - [x] Chunk Saving
   - [x] World Time
   - [x] Scoreboard
   - [x] World Borders
