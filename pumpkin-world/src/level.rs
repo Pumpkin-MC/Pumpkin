@@ -89,10 +89,12 @@ impl Level {
     pub async fn save(&self) {
         log::info!("Saving level...");
         // lets first save all chunks
+        let mut chunks_to_clean = vec![];
         for chunk in self.loaded_chunks.iter() {
             let chunk = chunk.read().await;
-            self.clean_chunk(&chunk.position).await;
+            chunks_to_clean.push(chunk.position);
         }
+        self.clean_chunks(&chunks_to_clean).await;
         // then lets save the world info
         self.world_info_writer
             .write_world_info(self.level_info.clone(), &self.level_folder)
