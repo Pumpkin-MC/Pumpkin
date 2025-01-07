@@ -470,14 +470,16 @@ impl AnvilChunkFormat {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
-
     use pumpkin_core::math::vector2::Vector2;
 
     use crate::{
         chunk::{anvil::AnvilChunkFormat, ChunkReader, ChunkReadingError},
         level::LevelFolder,
     };
+    use crate::chunk::ChunkWriter;
+    use crate::generation::{get_world_gen, Seed};
 
     #[test]
     fn not_existing() {
@@ -490,5 +492,49 @@ mod tests {
             &Vector2::new(0, 0),
         );
         assert!(matches!(result, Err(ChunkReadingError::ChunkNotExist)));
+    }
+
+    #[test]
+    fn test_writing() {
+        let generator = get_world_gen(Seed(0));
+        let level_folder = LevelFolder {
+            root_folder: PathBuf::from("./tmp"),
+            region_folder: PathBuf::from("./tmp/region"),
+        };
+        if fs::exists(&level_folder.root_folder).unwrap() {
+            fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
+        }
+
+        fs::create_dir_all(&level_folder.region_folder).expect("Could not create directory");
+
+        // Generate chunks
+        let mut chunks = vec![];
+        for x in -5..5 {
+            for y in -5..5 {
+                let position = Vector2::new(x, y);
+                chunks.push((position, generator.generate_chunk(position.clone())));
+            }
+        }
+
+        for i in 0..5 {
+            println!("Iteration {}", i + 1);
+            for (at, chunk) in &chunks {
+                AnvilChunkFormat.write_chunk(chunk, &level_folder, at).expect("Failed to write chunk");
+            }
+
+            let mut read_chunks = vec![];
+            for (at, _chunk) in &chunks {
+                read_chunks.push(AnvilChunkFormat.read_chunk(&level_folder, at).expect("Could not read chunk"));
+            }
+
+            for (at, chunk) in &chunks {
+                let read_chunk = read_chunks.iter().find(|chunk| chunk.position == *at).expect("Missing chunk");
+                assert_eq!(chunk.blocks.blocks, read_chunk.blocks.blocks, "Chunks don't match");
+            }
+        }
+
+        fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
+
+        println!("Checked chunks successfully");
     }
 }
