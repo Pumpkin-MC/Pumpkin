@@ -2,8 +2,8 @@ use std::num::NonZeroU8;
 use std::sync::Arc;
 
 use crate::block::block_manager::BlockActionResult;
+use crate::entity::mob;
 use crate::net::PlayerConfig;
-use crate::world::World;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -11,7 +11,6 @@ use crate::{
     server::Server,
     world::player_chunker,
 };
-use num_traits::FromPrimitive;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_core::math::{boundingbox::BoundingBox, position::WorldPosition};
 use pumpkin_core::{
@@ -51,10 +50,6 @@ use pumpkin_world::{
     item::item_registry::get_spawn_egg,
 };
 use thiserror::Error;
-
-fn modulus(a: f32, b: f32) -> f32 {
-    ((a % b) + b) % b
-}
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -217,8 +212,8 @@ impl Player {
         let entity_id = entity.entity_id;
         let Vector3 { x, y, z } = pos;
 
-        let yaw = modulus(entity.yaw.load() * 256.0 / 360.0, 256.0);
-        let pitch = modulus(entity.pitch.load() * 256.0 / 360.0, 256.0);
+        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
         let world = &entity.world;
 
@@ -276,8 +271,8 @@ impl Player {
         );
         // send new position to all other players
         let entity_id = entity.entity_id;
-        let yaw = modulus(entity.yaw.load() * 256.0 / 360.0, 256.0);
-        let pitch = modulus(entity.pitch.load() * 256.0 / 360.0, 256.0);
+        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
         let world = &entity.world;
@@ -421,7 +416,7 @@ impl Player {
             return;
         }
 
-        if let Some(action) = Action::from_i32(command.action.0) {
+        if let Ok(action) = Action::try_from(command.action.0) {
             let entity = &self.living_entity.entity;
             match action {
                 pumpkin_protocol::server::play::Action::StartSneaking => {
@@ -523,10 +518,10 @@ impl Player {
                 chat_message.timestamp,
                 chat_message.salt,
                 &[],
-                Some(TextComponent::text(&message)),
+                Some(TextComponent::text(message.clone())),
                 FilterType::PassThrough,
                 1.into(),
-                TextComponent::text(&gameprofile.name),
+                TextComponent::text(gameprofile.name.clone()),
                 None,
             ))
             .await;
@@ -546,9 +541,9 @@ impl Player {
         self: &Arc<Self>,
         client_information: SClientInformationPlay,
     ) {
-        if let (Some(main_hand), Some(chat_mode)) = (
-            Hand::from_i32(client_information.main_hand.into()),
-            ChatMode::from_i32(client_information.chat_mode.into()),
+        if let (Ok(main_hand), Ok(chat_mode)) = (
+            Hand::try_from(client_information.main_hand.0),
+            ChatMode::try_from(client_information.chat_mode.0),
         ) {
             if client_information.view_distance <= 0 {
                 self.kick(TextComponent::text(
@@ -640,7 +635,7 @@ impl Player {
         if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
             entity.set_sneaking(sneaking).await;
         }
-        let Some(action) = ActionType::from_i32(interact.typ.0) else {
+        let Ok(action) = ActionType::try_from(interact.typ.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
             return;
         };
@@ -669,7 +664,7 @@ impl Player {
                         return;
                     }
                     entity_victim.kill().await;
-                    World::remove_living_entity(entity_victim, world.clone()).await;
+                    world.clone().remove_mob_entity(entity_victim).await;
                     // TODO: block entities should be checked here (signs)
                 } else {
                     log::error!(
@@ -695,8 +690,8 @@ impl Player {
     }
 
     pub async fn handle_player_action(&self, player_action: SPlayerAction, server: &Server) {
-        match Status::from_i32(player_action.status.0) {
-            Some(status) => match status {
+        match Status::try_from(player_action.status.0) {
+            Ok(status) => match status {
                 Status::StartedDigging => {
                     if !self.can_interact_with_block_at(&player_action.location, 1.0) {
                         log::warn!(
@@ -761,10 +756,6 @@ impl Player {
                             .on_broken(block, self, location, server)
                             .await;
                     }
-                    // TODO: Send this every tick
-                    self.client
-                        .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
-                        .await;
                 }
                 Status::DropItemStack
                 | Status::DropItem
@@ -773,8 +764,12 @@ impl Player {
                     log::debug!("todo");
                 }
             },
-            None => self.kick(TextComponent::text("Invalid status")).await,
+            Err(_) => self.kick(TextComponent::text("Invalid status")).await,
         }
+
+        self.client
+            .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
+            .await;
     }
 
     pub async fn handle_keep_alive(&self, keep_alive: SKeepAlive) {
@@ -823,12 +818,11 @@ impl Player {
             return Err(BlockPlacingError::BlockOutOfReach.into());
         }
 
-        if let Some(face) = BlockFace::from_i32(use_item_on.face.0) {
+        if let Ok(face) = BlockFace::try_from(use_item_on.face.0) {
             let mut inventory = self.inventory().lock().await;
             let entity = &self.living_entity.entity;
             let world = &entity.world;
             let slot_id = inventory.get_selected();
-            let cursor_pos = use_item_on.cursor_pos;
             let mut state_id = inventory.state_id;
             let item_slot = inventory.held_item_mut();
 
@@ -858,7 +852,7 @@ impl Player {
                 // check if item is a spawn egg
                 if let Some(item_t) = get_spawn_egg(item_stack.item_id) {
                     should_try_decrement = self
-                        .run_is_spawn_egg(item_t, server, location, cursor_pos, &face)
+                        .run_is_spawn_egg(item_t, server, location, &face)
                         .await?;
                 };
 
@@ -1004,26 +998,31 @@ impl Player {
         item_t: String,
         server: &Server,
         location: WorldPosition,
-        cursor_pos: Vector3<f32>,
         face: &BlockFace,
     ) -> Result<bool, Box<dyn PumpkinError>> {
         // checks if spawn egg has a corresponding entity name
         if let Some(spawn_item_name) = get_entity_id(&item_t) {
             let head_yaw = 10.0;
             let world_pos = WorldPosition(location.0 + face.to_offset());
+            // align position like Vanilla does
+            let pos = Vector3::new(
+                f64::from(world_pos.0.x) + 0.5,
+                f64::from(world_pos.0.y),
+                f64::from(world_pos.0.z) + 0.5,
+            );
 
             // TODO: this should not be hardcoded
-            let (mob, _world, uuid) = server.add_living_entity(EntityType::Chicken).await;
+            let (mob, uuid) = mob::from_type(EntityType::Zombie, server, pos, self.world()).await;
 
             let opposite_yaw = self.living_entity.entity.yaw.load() + 180.0;
             server
                 .broadcast_packet_all(&CSpawnEntity::new(
-                    VarInt(mob.entity.entity_id),
+                    VarInt(mob.living_entity.entity.entity_id),
                     uuid,
                     VarInt((*spawn_item_name).into()),
-                    f64::from(world_pos.0.x) + f64::from(cursor_pos.x),
-                    f64::from(world_pos.0.y),
-                    f64::from(world_pos.0.z) + f64::from(cursor_pos.z),
+                    pos.x,
+                    pos.y,
+                    pos.z,
                     10.0,
                     head_yaw,
                     opposite_yaw,
@@ -1080,7 +1079,7 @@ impl Player {
 
         let block_bounding_box = BoundingBox::from_block(&world_pos);
         let mut intersects = false;
-        for player in world.get_nearby_players(entity.pos.load(), 20).await {
+        for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();
             if bounding_box.intersects(&block_bounding_box) {
                 intersects = true;

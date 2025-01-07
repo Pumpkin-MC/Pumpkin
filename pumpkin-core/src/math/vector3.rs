@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::Float;
 
@@ -42,6 +42,17 @@ impl<T: Math + Copy> Vector3<T> {
             z: self.z * z,
         }
     }
+
+    pub fn squared_distance_to_vec(&self, other: Self) -> T {
+        self.squared_distance_to(other.x, other.y, other.z)
+    }
+
+    pub fn squared_distance_to(&self, x: T, y: T, z: T) -> T {
+        let delta_x = self.x - x;
+        let delta_y = self.y - y;
+        let delta_z = self.z - z;
+        delta_x * delta_x + delta_y * delta_y + delta_z * delta_z
+    }
 }
 
 impl<T: Math + Copy + Float> Vector3<T> {
@@ -81,6 +92,14 @@ impl<T: Math + Copy> Add for Vector3<T> {
     }
 }
 
+impl<T: Math + Copy> AddAssign for Vector3<T> {
+    fn add_assign(&mut self, other: Self) {
+        self.x += other.x;
+        self.y += other.y;
+        self.z += other.z;
+    }
+}
+
 /*
 impl<T: Math + Copy> Neg for Vector3<T> {
     type Output = Self;
@@ -113,6 +132,7 @@ pub trait Math:
     Mul<Output = Self>
     //+ Neg<Output = Self>
     + Add<Output = Self>
+    + AddAssign<>
     + Div<Output = Self>
     + Sub<Output = Self>
     + Sized

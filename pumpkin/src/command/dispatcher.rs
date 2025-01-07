@@ -71,7 +71,7 @@ impl CommandDispatcher {
                 Ok(err) => {
                     sender
                         .send_message(
-                            TextComponent::text_string(err)
+                            TextComponent::text(err)
                                 .color_named(pumpkin_core::text::color::NamedColor::Red),
                         )
                         .await;
@@ -94,7 +94,7 @@ impl CommandDispatcher {
         src: &mut CommandSender<'a>,
         server: &'a Server,
         cmd: &'a str,
-    ) -> Vec<CommandSuggestion<'a>> {
+    ) -> Vec<CommandSuggestion> {
         let mut parts = cmd.split_whitespace();
         let Some(key) = parts.next() else {
             return Vec::new();
@@ -159,8 +159,14 @@ impl CommandDispatcher {
             .ok_or(GeneralCommandIssue("Empty Command".to_string()))?;
         let raw_args: Vec<&str> = parts.rev().collect();
 
+        if !self.commands.contains_key(key) {
+            return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
+        }
+
         let Some(permission) = self.permissions.get(key) else {
-            return Err(GeneralCommandIssue("Command not found".to_string()));
+            return Err(GeneralCommandIssue(
+                "Permission for Command not found".to_string(),
+            ));
         };
 
         if !src.has_permission_lvl(*permission) {
@@ -254,7 +260,7 @@ impl CommandDispatcher {
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError> {
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
         let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
@@ -302,6 +308,7 @@ impl CommandDispatcher {
         for name in names {
             self.commands
                 .insert(name.to_string(), Command::Alias(primary_name.to_string()));
+            self.permissions.insert(name.to_string(), permission);
         }
 
         self.permissions
