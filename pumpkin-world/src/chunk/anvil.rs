@@ -371,16 +371,27 @@ impl AnvilChunkFormat {
             let mut current_pack_long: i64 = 0;
             let mut bits_used_in_pack: u32 = 0;
 
-            for block in blocks {
-                let index = palette.get(block).expect("Just added all unique").1;
-                current_pack_long |= (index as i64) << bits_used_in_pack;
-                bits_used_in_pack += block_bit_size as u32;
+            if palette.len() != 0 {
 
-                // If the current 64-bit integer is full, push it to the section_longs and start a new one
-                if bits_used_in_pack >= 64 {
-                    section_longs.push(current_pack_long);
-                    current_pack_long = 0;
-                    bits_used_in_pack = 0;
+                for block in blocks {
+                    // Push if next bit does not fit
+                    if bits_used_in_pack + block_bit_size as u32 > 64 {
+                        section_longs.push(current_pack_long);
+                        current_pack_long = 0;
+                        bits_used_in_pack = 0;
+                    }
+                    let index = palette.get(block).expect("Just added all unique").1;
+                    current_pack_long |= (index as i64) << bits_used_in_pack;
+                    bits_used_in_pack += block_bit_size as u32;
+
+                    assert!(bits_used_in_pack <= 64);
+
+                    // If the current 64-bit integer is full, push it to the section_longs and start a new one
+                    if bits_used_in_pack >= 64 {
+                        section_longs.push(current_pack_long);
+                        current_pack_long = 0;
+                        bits_used_in_pack = 0;
+                    }
                 }
             }
 
