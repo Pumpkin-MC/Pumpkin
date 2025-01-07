@@ -512,7 +512,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                chunks.push((position, generator.generate_chunk(position.clone())));
+                chunks.push((position, generator.generate_chunk(position)));
             }
         }
 
