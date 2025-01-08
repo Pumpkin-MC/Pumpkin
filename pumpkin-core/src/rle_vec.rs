@@ -547,42 +547,48 @@ impl<T: Eq + Clone> RleVec<T> {
             // can we join the next run?
             if p < self.runs.len() - 1 && self.runs[p + 1].value == value {
                 self.runs.remove(p);
-                return;
+            } else {
+                // only one size-1 run in Rle replace its value
+                self.runs[p].value = value;
             }
-            // only one size-1 run in Rle replace its value
-            self.runs[p].value = value;
             return;
         }
 
-        // run size > 1, new value can split current run or maybe merge with previous or next
         if index == start {
-            // compare to previous run
-            if p > 0 {
-                if self.runs[p - 1].value == value {
-                    self.runs[p - 1].end += 1;
-                } else {
-                    self.runs.insert(p, InternalRun { value, end: start });
+            // Compare to previous run
+            if let Some(prev_run) = self.runs.get_mut(p.saturating_sub(1)) {
+                if prev_run.value == value {
+                    prev_run.end += 1;
+                    return;
                 }
-            } else {
-                self.runs.insert(0, InternalRun { value, end: 0 });
             }
+
+            // Insert new run at the beginning
+            self.runs.insert(p, InternalRun { value, end: start });
         } else if index == end {
-            // decrease current run length
+            // Decrease current run length
             self.runs[p].end -= 1;
 
-            // compare to next run
-            if p < self.runs.len() - 1 && self.runs[p + 1].value == value {
-            } else {
-                self.runs.insert(p + 1, InternalRun { value, end });
+            // Compare to next run
+            if let Some(next_run) = self.runs.get(p + 1) {
+                if next_run.value == value {
+                    return;
+                }
             }
+
+            // Insert new run at the end
+            self.runs.insert(p + 1, InternalRun { value, end });
         } else {
-            // split current run
+            // Split current run
             self.runs[p].end = index - 1;
-            let v = self.runs[p].value.clone();
-            // this might be more efficient using split_off, push and extend?
-            // this implementation has complexity O((log n) + 2n)
             self.runs.insert(p + 1, InternalRun { value, end: index });
-            self.runs.insert(p + 2, InternalRun { value: v, end });
+            self.runs.insert(
+                p + 2,
+                InternalRun {
+                    value: self.runs[p].value.clone(),
+                    end,
+                },
+            );
         }
     }
 
