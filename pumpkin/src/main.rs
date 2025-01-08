@@ -308,10 +308,13 @@ fn setup_console(server: Arc<Server>) {
                 .expect("Failed to read console line");
 
             if !out.is_empty() {
-                let dispatcher = server.command_dispatcher.read().await;
-                dispatcher
-                    .handle_command(&mut command::CommandSender::Console, &server, &out)
-                    .await;
+                let server_clone = server.clone();
+                tokio::spawn(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(&mut command::CommandSender::Console, &server_clone, &out)
+                        .await;
+                });
             }
         }
     });

@@ -103,15 +103,22 @@ impl RCONClient {
             }
             ServerboundPacket::ExecCommand => {
                 if self.logged_in {
-                    let output = tokio::sync::Mutex::new(Vec::new());
-                    let dispatcher = server.command_dispatcher.read().await;
-                    dispatcher
-                        .handle_command(
-                            &mut crate::command::CommandSender::Rcon(&output),
-                            server,
-                            packet.get_body(),
-                        )
-                        .await;
+                    let output = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+
+                    let server_clone = server.clone();
+                    let output_clone = output.clone();
+                    let packet_body = packet.get_body().to_owned();
+                    tokio::spawn(async move {
+                        let dispatcher = server_clone.command_dispatcher.read().await;
+                        dispatcher
+                            .handle_command(
+                                &mut crate::command::CommandSender::Rcon(&output_clone),
+                                &server_clone,
+                                &packet_body,
+                            )
+                            .await;
+                    });
+
                     let output = output.lock().await;
                     for line in output.iter() {
                         if config.logging.log_commands {
