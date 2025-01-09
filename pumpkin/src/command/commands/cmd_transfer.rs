@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use pumpkin_core::text::color::{Color, NamedColor};
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::arg_players::PlayersArgumentConsumer;

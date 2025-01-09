@@ -1,5 +1,5 @@
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::{Container, OpenContainer, WindowType};
+use pumpkin_util::math::position::WorldPosition;
 use pumpkin_world::block::block_registry::Block;
 
 use crate::{entity::player::Player, server::Server};

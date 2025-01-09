@@ -1,4 +1,4 @@
-use pumpkin_core::ProfileAction;
+use pumpkin_util::ProfileAction;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]

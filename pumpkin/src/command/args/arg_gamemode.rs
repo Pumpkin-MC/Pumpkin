@@ -1,10 +1,10 @@
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use pumpkin_core::GameMode;
 use pumpkin_protocol::client::play::{
     CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
 };
+use pumpkin_util::GameMode;
 
 use crate::{
     command::{dispatcher::CommandError, tree::RawArgs, CommandSender},

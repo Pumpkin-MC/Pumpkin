@@ -1,5 +1,5 @@
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_macros::server_packet;
+use pumpkin_util::math::position::WorldPosition;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

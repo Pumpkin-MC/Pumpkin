@@ -1,6 +1,6 @@
 use bytes::Buf;
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_macros::server_packet;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     bytebuf::{ByteBuf, ReadingError},

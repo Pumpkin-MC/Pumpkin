@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_core::text::color::NamedColor;
-use pumpkin_core::text::TextComponent;
 use pumpkin_inventory::Container;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};

@@ -1,6 +1,6 @@
 use std::num::NonZeroU8;
 
-use pumpkin_core::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vector2;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cylindrical {
@@ -87,7 +87,7 @@ mod test {
     use std::num::NonZeroU8;
 
     use super::Cylindrical;
-    use pumpkin_core::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vector2;
 
     #[test]
     fn test_bounds() {

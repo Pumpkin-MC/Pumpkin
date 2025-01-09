@@ -1,4 +1,4 @@
-use pumpkin_core::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
     block::BlockState,
@@ -216,7 +216,7 @@ impl ProtoChunk {
 mod test {
     use std::{fs, path::Path};
 
-    use pumpkin_core::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vector2;
 
     use crate::read_data_from_file;
 

@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_protocol::client::play::{
     CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
 };
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;

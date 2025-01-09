@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{

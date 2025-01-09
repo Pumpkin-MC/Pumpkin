@@ -5,7 +5,7 @@ use generation::{
     noise::{config::NoiseConfig, router::OVERWORLD_NOISE_ROUTER},
     proto_chunk::{ProtoChunk, StandardChunkFluidLevelSampler},
 };
-use pumpkin_core::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
 pub mod block;

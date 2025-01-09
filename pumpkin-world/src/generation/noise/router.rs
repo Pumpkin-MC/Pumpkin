@@ -470,7 +470,7 @@ fn create_caves(sloped_cheese: SharedComponentReference) -> SharedComponentRefer
 mod test {
     use std::{fs, path::Path, sync::Arc};
 
-    use pumpkin_core::{
+    use pumpkin_util::{
         assert_eq_delta,
         random::{legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomDeriver, RandomImpl},
     };

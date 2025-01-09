@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use pumpkin_core::text::click::ClickEvent;
-use pumpkin_core::text::hover::HoverEvent;
-use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::borrow::Cow;
 
 use crate::{

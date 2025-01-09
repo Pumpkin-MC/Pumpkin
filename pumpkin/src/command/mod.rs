@@ -14,9 +14,9 @@ use commands::{
     cmd_op, cmd_pumpkin, cmd_say, cmd_setblock, cmd_stop, cmd_teleport, cmd_time, cmd_worldborder,
 };
 use dispatcher::CommandError;
-use pumpkin_core::math::vector3::Vector3;
-use pumpkin_core::permission::PermissionLvl;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::text::TextComponent;
 
 pub mod args;
 pub mod client_cmd_suggestions;

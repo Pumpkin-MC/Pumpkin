@@ -15,7 +15,6 @@ use crate::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
-use pumpkin_core::{text::TextComponent, ProfileAction};
 use pumpkin_protocol::{
     bytebuf::{packet_id::Packet, ReadingError},
     client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
@@ -36,6 +35,7 @@ use pumpkin_protocol::{
     ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
     ServerPacket,
 };
+use pumpkin_util::{text::TextComponent, ProfileAction};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;

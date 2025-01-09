@@ -1,7 +1,6 @@
 use std::sync::LazyLock;
 
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::{
     client::{
         config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks},
@@ -11,6 +10,7 @@ use pumpkin_protocol::{
     server::login::{SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart},
     ConnectionState, KnownPack, Label, Link, LinkType,
 };
+use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
 use crate::{

@@ -1,6 +1,6 @@
 use bytes::BufMut;
-use pumpkin_core::text::TextComponent;
 use pumpkin_macros::client_packet;
+use pumpkin_util::text::TextComponent;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, NumberFormat, VarInt};
 

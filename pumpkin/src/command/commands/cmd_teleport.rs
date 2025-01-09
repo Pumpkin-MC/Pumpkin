@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_core::math::vector3::Vector3;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_entities::EntitiesArgumentConsumer;
 use crate::command::args::arg_entity::EntityArgumentConsumer;

@@ -1,7 +1,7 @@
 pub mod block_registry;
 pub mod block_state;
 
-use pumpkin_core::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vector3;
 
 pub use block_state::BlockState;
 

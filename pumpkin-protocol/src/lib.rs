@@ -3,7 +3,7 @@ use std::num::NonZeroU16;
 use bytebuf::{packet_id::Packet, ReadingError};
 use bytes::{Buf, BufMut, Bytes};
 use codec::{identifier::Identifier, var_int::VarInt};
-use pumpkin_core::text::{style::Style, TextComponent};
+use pumpkin_util::text::{style::Style, TextComponent};
 use serde::{Deserialize, Serialize, Serializer};
 
 pub mod bytebuf;

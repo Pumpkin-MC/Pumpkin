@@ -1,10 +1,10 @@
 use std::sync::atomic::AtomicI32;
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_entity::EntityId;
 use pumpkin_inventory::{Container, EmptyContainer};
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
+use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
 
 use super::Entity;

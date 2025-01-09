@@ -12,7 +12,7 @@ LegalCopyright = "Copyright © 2025 Aleksander Medvedev"
 
 [dependencies]
 # pumpkin
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-inventory = { path = "../pumpkin-inventory" }
 pumpkin-world = { path = "../pumpkin-world" }

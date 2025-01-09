@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::{Chest, OpenContainer, WindowType};
 use pumpkin_macros::{pumpkin_block, sound};
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
+use pumpkin_util::math::position::WorldPosition;
 use pumpkin_world::{
     block::block_registry::{get_block, Block},
     item::item_registry::Item,

@@ -1,6 +1,6 @@
-use pumpkin_core::permission::PermissionLvl;
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CommandSuggestion;
+use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::text::TextComponent;
 
 use super::args::ConsumedArgs;
 
@@ -11,7 +11,7 @@ use crate::command::tree::{Command, CommandTree, NodeType, RawArgs};
 use crate::command::CommandSender;
 use crate::error::PumpkinError;
 use crate::server::Server;
-use pumpkin_core::text::color::{Color, NamedColor};
+use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
@@ -72,7 +72,7 @@ impl CommandDispatcher {
                     sender
                         .send_message(
                             TextComponent::text(err)
-                                .color_named(pumpkin_core::text::color::NamedColor::Red),
+                                .color_named(pumpkin_util::text::color::NamedColor::Red),
                         )
                         .await;
                 }
@@ -158,6 +158,10 @@ impl CommandDispatcher {
             .next()
             .ok_or(GeneralCommandIssue("Empty Command".to_string()))?;
         let raw_args: Vec<&str> = parts.rev().collect();
+
+        if !self.commands.contains_key(key) {
+            return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
+        }
 
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
@@ -317,7 +321,7 @@ impl CommandDispatcher {
 #[cfg(test)]
 mod test {
     use crate::command::{default_dispatcher, tree::CommandTree};
-    use pumpkin_core::permission::PermissionLvl;
+    use pumpkin_util::permission::PermissionLvl;
     #[test]
     fn test_dynamic_command() {
         let mut dispatcher = default_dispatcher();

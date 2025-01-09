@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_entity::entity_type::EntityType;
+use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::{

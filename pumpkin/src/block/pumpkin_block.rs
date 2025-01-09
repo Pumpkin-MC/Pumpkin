@@ -2,8 +2,8 @@ use crate::block::block_manager::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::OpenContainer;
+use pumpkin_util::math::position::WorldPosition;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 

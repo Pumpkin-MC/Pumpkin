@@ -1,8 +1,8 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::OpenContainer;
+use pumpkin_util::math::position::WorldPosition;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 use std::collections::HashMap;

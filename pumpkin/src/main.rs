@@ -48,8 +48,8 @@ use std::sync::Arc;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
-use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 

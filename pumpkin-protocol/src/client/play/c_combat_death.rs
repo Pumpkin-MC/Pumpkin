@@ -1,5 +1,5 @@
-use pumpkin_core::text::TextComponent;
 use pumpkin_macros::client_packet;
+use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 
 use crate::VarInt;

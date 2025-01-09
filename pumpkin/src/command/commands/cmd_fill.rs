@@ -6,9 +6,9 @@ use crate::command::tree_builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_core::math::vector3::Vector3;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::math::position::WorldPosition;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["fill"];
 

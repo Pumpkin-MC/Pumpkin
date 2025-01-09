@@ -2,18 +2,18 @@ use core::f32;
 use std::sync::{atomic::AtomicBool, Arc};
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_core::math::{
+use pumpkin_entity::{entity_type::EntityType, pose::EntityPose, EntityId};
+use pumpkin_protocol::{
+    client::play::{CHeadRot, CSetEntityMetadata, CTeleportEntity, CUpdateEntityRot, Metadata},
+    codec::var_int::VarInt,
+};
+use pumpkin_util::math::{
     boundingbox::{BoundingBox, BoundingBoxSize},
     get_section_cord,
     position::WorldPosition,
     vector2::Vector2,
     vector3::Vector3,
     wrap_degrees,
-};
-use pumpkin_entity::{entity_type::EntityType, pose::EntityPose, EntityId};
-use pumpkin_protocol::{
-    client::play::{CHeadRot, CSetEntityMetadata, CTeleportEntity, CUpdateEntityRot, Metadata},
-    codec::var_int::VarInt,
 };
 
 use crate::world::World;

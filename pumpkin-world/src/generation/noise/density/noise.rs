@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use pumpkin_core::random::{xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl};
+use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl};
 
 use crate::{
     generation::noise::{

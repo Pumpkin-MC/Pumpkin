@@ -11,9 +11,6 @@ use crate::{
 };
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_core::math::vector2::Vector2;
-use pumpkin_core::math::{position::WorldPosition, vector3::Vector3};
-use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_entity::{entity_type::EntityType, pose::EntityPose, EntityId};
 use pumpkin_protocol::{
     client::play::CLevelEvent,
@@ -31,6 +28,9 @@ use pumpkin_protocol::{
     ClientPacket,
 };
 use pumpkin_registry::DimensionType;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::WorldPosition, vector3::Vector3};
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
 use pumpkin_world::{
@@ -584,7 +584,7 @@ impl World {
                         "Received chunk {:?}, but it is no longer watched... cleaning",
                         &chunk_data.position
                     );
-                    level.clean_chunk(&chunk_data.position);
+                    level.clean_chunk(&chunk_data.position).await;
                     continue;
                 }
 
@@ -830,10 +830,11 @@ impl World {
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
         let chunk = self.receive_chunk(chunk_coordinate).await;
-        let replaced_block_state_id = chunk
+        let replaced_block_state_id = chunk.read().await.subchunks.get_block(relative).unwrap();
+        chunk
             .write()
             .await
-            .blocks
+            .subchunks
             .set_block(relative, block_state_id);
 
         self.broadcast_packet_all(&CBlockUpdate::new(
@@ -871,7 +872,7 @@ impl World {
                 "Received chunk {:?}, but it is not watched... cleaning",
                 chunk_pos
             );
-            self.level.clean_chunk(&chunk_pos);
+            self.level.clean_chunk(&chunk_pos).await;
         }
 
         chunk
@@ -898,7 +899,7 @@ impl World {
         let chunk = self.receive_chunk(chunk).await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
-        let Some(id) = chunk.blocks.get_block(relative) else {
+        let Some(id) = chunk.subchunks.get_block(relative) else {
             return Err(GetBlockError::BlockOutOfWorldBounds);
         };
 

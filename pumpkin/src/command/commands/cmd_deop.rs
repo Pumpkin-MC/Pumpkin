@@ -8,7 +8,7 @@ use crate::{
     data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
 };
 use async_trait::async_trait;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::TextComponent;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["deop"];
@@ -45,7 +45,7 @@ impl CommandExecutor for DeopExecutor {
 
         player
             .set_permission_lvl(
-                pumpkin_core::PermissionLvl::Zero,
+                pumpkin_util::PermissionLvl::Zero,
                 &server.command_dispatcher,
             )
             .await;

@@ -79,7 +79,7 @@ pub mod built_in_density_function {
     use crate::generation::noise::built_in_noise_params::{self};
     use crate::generation::positions::{MAX_COLUMN_HEIGHT, MIN_HEIGHT};
 
-    use pumpkin_core::math::floor_div;
+    use pumpkin_util::math::floor_div;
 
     use super::{apply_blending, noise_in_range, vertical_range_choice};
 
@@ -875,7 +875,7 @@ pub fn lerp_density_static_start(
 mod test {
     use std::sync::Arc;
 
-    use pumpkin_core::random::{
+    use pumpkin_util::random::{
         legacy_rand::LegacyRand, RandomDeriver, RandomDeriverImpl, RandomImpl,
     };
 

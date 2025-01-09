@@ -1,5 +1,5 @@
 [package]
-name = "pumpkin-core"
+name = "pumpkin-util"
 version.workspace = true
 edition.workspace = true
 

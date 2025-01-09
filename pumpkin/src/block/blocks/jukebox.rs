@@ -3,9 +3,9 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
+use pumpkin_util::math::position::WorldPosition;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 

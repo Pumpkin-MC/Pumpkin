@@ -1,12 +1,12 @@
 use std::f32::consts::PI;
 
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_macros::{particle, sound};
 use pumpkin_protocol::{
     client::play::{CEntityVelocity, CParticle},
     codec::var_int::VarInt,
     SoundCategory,
 };
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 
 use crate::{

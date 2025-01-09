@@ -1,8 +1,8 @@
 use std::{collections::HashMap, hash::Hash, mem, num::Wrapping, ops::AddAssign, sync::Arc};
 
 use num_traits::Zero;
-use pumpkin_core::math::{floor_div, vector2::Vector2, vector3::Vector3};
 use pumpkin_macros::block_state;
+use pumpkin_util::math::{floor_div, vector2::Vector2, vector3::Vector3};
 
 use crate::{
     block::BlockState,
@@ -1377,7 +1377,7 @@ impl ChunkNoiseGenerator {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_core::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vector2;
 
     use crate::generation::{
         aquifer_sampler::{FluidLevel, FluidLevelSampler},

@@ -1,4 +1,4 @@
-use pumpkin_core::text::style::Style;
+use pumpkin_util::text::style::Style;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

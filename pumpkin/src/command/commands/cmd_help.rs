@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use pumpkin_core::text::click::ClickEvent;
-use pumpkin_core::text::color::{Color, NamedColor};
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::arg_command::CommandTreeArgumentConsumer;

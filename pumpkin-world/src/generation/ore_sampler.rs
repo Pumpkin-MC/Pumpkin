@@ -1,4 +1,4 @@
-use pumpkin_core::random::RandomDeriver;
+use pumpkin_util::random::RandomDeriver;
 
 use crate::block::BlockState;
 

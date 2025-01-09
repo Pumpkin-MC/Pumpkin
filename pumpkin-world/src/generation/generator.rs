@@ -1,10 +1,10 @@
 use noise::Perlin;
-use pumpkin_core::math::vector2::Vector2;
-use pumpkin_core::math::vector3::Vector3;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::biome::Biome;
 use crate::block::block_state::BlockState;
-use crate::chunk::{ChunkBlocks, ChunkData};
+use crate::chunk::{ChunkData, Subchunks};
 use crate::coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates, XZBlockCoordinates};
 use crate::generation::Seed;
 
@@ -46,7 +46,7 @@ pub(crate) trait PerlinTerrainGenerator: Sync + Send {
         &self,
         coordinates: ChunkRelativeBlockCoordinates,
         at: BlockCoordinates,
-        blocks: &mut ChunkBlocks,
+        subchunks: &mut Subchunks,
         chunk_height: i16,
         biome: Biome,
     );

@@ -1,4 +1,4 @@
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_util::math::position::WorldPosition;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;

@@ -1,5 +1,5 @@
-use pumpkin_core::math::{position::WorldPosition, vector3::Vector3};
 use pumpkin_macros::server_packet;
+use pumpkin_util::math::{position::WorldPosition, vector3::Vector3};
 use serde::Deserialize;
 
 use crate::VarInt;
