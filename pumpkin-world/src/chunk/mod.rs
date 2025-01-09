@@ -1,7 +1,7 @@
 use fastnbt::LongArray;
 use pumpkin_core::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::repeat_with};
 use thiserror::Error;
 
 use crate::{
@@ -91,6 +91,7 @@ pub struct ChunkData {
 /// chunk, what filled only air or only water.
 ///
 /// Multi means a normal chunk, what contains 24 subchunks.
+#[derive(PartialEq, Debug)]
 pub enum Subchunks {
     Single(u16),
     Multi(Box<[Subchunk; SUBCHUNKS_COUNT]>),
@@ -306,7 +307,7 @@ impl Subchunks {
     pub fn array_iter(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
         match self {
             Self::Single(block) => {
-                Box::new(vec![Box::new([*block; SUBCHUNK_VOLUME]); SUBCHUNKS_COUNT].into_iter())
+                Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
             }
             Self::Multi(blocks) => {
                 Box::new(blocks.iter().map(|subchunk| subchunk.clone_as_array()))
@@ -456,7 +457,6 @@ impl ChunkData {
             heightmap: chunk_data.heightmaps,
             position,
         })
-
     }
 }
 
