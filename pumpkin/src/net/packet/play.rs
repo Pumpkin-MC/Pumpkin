@@ -121,7 +121,14 @@ impl Player {
         pos.clamp(-2.0E7, 2.0E7)
     }
 
+    pub fn handle_player_loaded(self: &Arc<Self>) {
+        self.set_client_loaded(true);
+    }
+
     pub async fn handle_position(self: &Arc<Self>, packet: SPlayerPosition) {
+        if !self.has_client_loaded() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -178,6 +185,9 @@ impl Player {
     }
 
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
+        if !self.has_client_loaded() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -257,6 +267,9 @@ impl Player {
     }
 
     pub async fn handle_rotation(&self, rotation: SPlayerRotation) {
+        if !self.has_client_loaded() {
+            return;
+        }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.kick(TextComponent::text("Invalid rotation")).await;
             return;
@@ -413,6 +426,9 @@ impl Player {
 
     pub async fn handle_player_command(&self, command: SPlayerCommand) {
         if command.entity_id != self.entity_id().into() {
+            return;
+        }
+        if !self.has_client_loaded() {
             return;
         }
 
@@ -630,6 +646,10 @@ impl Player {
     }
 
     pub async fn handle_interact(&self, interact: SInteract) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         let sneaking = interact.sneaking;
         let entity = &self.living_entity.entity;
         if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
@@ -690,6 +710,10 @@ impl Player {
     }
 
     pub async fn handle_player_action(&self, player_action: SPlayerAction, server: &Server) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         match Status::try_from(player_action.status.0) {
             Ok(status) => match status {
                 Status::StartedDigging => {
@@ -810,6 +834,10 @@ impl Player {
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), Box<dyn PumpkinError>> {
+        if !self.has_client_loaded() {
+            return Ok(());
+        }
+
         let location = use_item_on.location;
         let mut should_try_decrement = false;
 
@@ -823,7 +851,6 @@ impl Player {
             let entity = &self.living_entity.entity;
             let world = &entity.world;
             let slot_id = inventory.get_selected();
-            let cursor_pos = use_item_on.cursor_pos;
             let mut state_id = inventory.state_id;
             let item_slot = inventory.held_item_mut();
 
@@ -853,7 +880,7 @@ impl Player {
                 // check if item is a spawn egg
                 if let Some(item_t) = get_spawn_egg(item_stack.item_id) {
                     should_try_decrement = self
-                        .run_is_spawn_egg(item_t, server, location, cursor_pos, &face)
+                        .run_is_spawn_egg(item_t, server, location, &face)
                         .await?;
                 };
 
@@ -890,6 +917,9 @@ impl Player {
     }
 
     pub fn handle_use_item(&self, _use_item: &SUseItem) {
+        if !self.has_client_loaded() {
+            return;
+        }
         // TODO: handle packet correctly
         log::error!("An item was used(SUseItem), but the packet is not implemented yet");
     }
@@ -999,17 +1029,17 @@ impl Player {
         item_t: String,
         server: &Server,
         location: WorldPosition,
-        cursor_pos: Vector3<f32>,
         face: &BlockFace,
     ) -> Result<bool, Box<dyn PumpkinError>> {
         // checks if spawn egg has a corresponding entity name
         if let Some(spawn_item_name) = get_entity_id(&item_t) {
             let head_yaw = 10.0;
             let world_pos = WorldPosition(location.0 + face.to_offset());
+            // align position like Vanilla does
             let pos = Vector3::new(
-                f64::from(world_pos.0.x),
+                f64::from(world_pos.0.x) + 0.5,
                 f64::from(world_pos.0.y),
-                f64::from(world_pos.0.z),
+                f64::from(world_pos.0.z) + 0.5,
             );
 
             // TODO: this should not be hardcoded
@@ -1021,9 +1051,9 @@ impl Player {
                     VarInt(mob.living_entity.entity.entity_id),
                     uuid,
                     VarInt((*spawn_item_name).into()),
-                    pos.x + f64::from(cursor_pos.x),
+                    pos.x,
                     pos.y,
-                    pos.z + f64::from(cursor_pos.z),
+                    pos.z,
                     10.0,
                     head_yaw,
                     opposite_yaw,

@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::Float;
 
@@ -92,6 +92,14 @@ impl<T: Math + Copy> Add for Vector3<T> {
     }
 }
 
+impl<T: Math + Copy> AddAssign for Vector3<T> {
+    fn add_assign(&mut self, other: Self) {
+        self.x += other.x;
+        self.y += other.y;
+        self.z += other.z;
+    }
+}
+
 /*
 impl<T: Math + Copy> Neg for Vector3<T> {
     type Output = Self;
@@ -124,6 +132,7 @@ pub trait Math:
     Mul<Output = Self>
     //+ Neg<Output = Self>
     + Add<Output = Self>
+    + AddAssign<>
     + Div<Output = Self>
     + Sub<Output = Self>
     + Sized

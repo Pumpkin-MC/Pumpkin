@@ -157,6 +157,7 @@ impl Entity {
         self.yaw.store(yaw);
 
         // send packet
+        // TODO: do caching, only send packet when needed
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
         self.world

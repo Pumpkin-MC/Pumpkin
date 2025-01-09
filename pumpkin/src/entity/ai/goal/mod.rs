@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::entity::mob::MobEntity;
 
 pub mod look_at_entity;
+pub mod target_goal;
 
 #[async_trait]
 pub trait Goal: Send + Sync {

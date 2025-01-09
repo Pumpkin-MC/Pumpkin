@@ -1,7 +1,6 @@
 use fastnbt::LongArray;
-use pumpkin_core::math::vector2::Vector2;
+use pumpkin_core::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::cmp::max;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -27,10 +26,21 @@ pub trait ChunkReader: Sync + Send {
     ) -> Result<ChunkData, ChunkReadingError>;
 }
 
+pub trait ChunkWriter: Send + Sync {
+    fn write_chunk(
+        &self,
+        chunk: &ChunkData,
+        level_folder: &LevelFolder,
+        at: &Vector2<i32>,
+    ) -> Result<(), ChunkWritingError>;
+}
+
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
     #[error("Io error: {0}")]
     IoError(std::io::ErrorKind),
+    #[error("Invalid header")]
+    InvalidHeader,
     #[error("Region is invalid")]
     RegionIsInvalid,
     #[error("Compression error {0}")]
@@ -39,6 +49,16 @@ pub enum ChunkReadingError {
     ChunkNotExist,
     #[error("Failed to parse Chunk from bytes: {0}")]
     ParsingError(ChunkParsingError),
+}
+
+#[derive(Error, Debug)]
+pub enum ChunkWritingError {
+    #[error("Io error: {0}")]
+    IoError(std::io::ErrorKind),
+    #[error("Compression error {0}")]
+    Compression(CompressionError),
+    #[error("Chunk serializing error: {0}")]
+    ChunkSerializingError(String),
 }
 
 #[derive(Error, Debug)]
@@ -93,18 +113,12 @@ pub enum Subchunk {
     Multi(Box<[u16; SUBCHUNK_VOLUME]>),
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 struct PaletteEntry {
+    // block name
     name: String,
-    _properties: Option<HashMap<String, String>>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-struct ChunkSectionBlockStates {
-    //  #[serde(with = "LongArray")]
-    data: Option<LongArray>,
-    palette: Vec<PaletteEntry>,
+    properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -116,28 +130,37 @@ pub struct ChunkHeightmaps {
     world_surface: LongArray,
 }
 
-#[derive(Deserialize, Debug)]
-#[expect(dead_code)]
+#[derive(Serialize, Deserialize, Debug)]
 struct ChunkSection {
     #[serde(rename = "Y")]
-    y: i32,
+    y: i8,
     block_states: Option<ChunkSectionBlockStates>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ChunkSectionBlockStates {
+    //  #[serde(with = "LongArray")]
+    data: Option<LongArray>,
+    palette: Vec<PaletteEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 struct ChunkNbt {
-    #[expect(dead_code)]
-    data_version: usize,
-
+    data_version: i32,
+    #[serde(rename = "xPos")]
+    x_pos: i32,
+    // #[serde(rename = "yPos")]
+    //y_pos: i32,
+    #[serde(rename = "zPos")]
+    z_pos: i32,
+    status: ChunkStatus,
     #[serde(rename = "sections")]
     sections: Vec<ChunkSection>,
-
     heightmaps: ChunkHeightmaps,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
-#[serde(tag = "Status")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 enum ChunkStatus {
     #[serde(rename = "minecraft:empty")]
     Empty,
@@ -326,10 +349,21 @@ impl ChunkData {
     }
 }
 
+// I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ChunkStatusWrapper {
+    status: ChunkStatus,
+}
+
 impl ChunkData {
-    pub fn from_bytes(chunk_data: &[u8], at: Vector2<i32>) -> Result<Self, ChunkParsingError> {
-        if fastnbt::from_bytes::<ChunkStatus>(chunk_data)
+    pub fn from_bytes(
+        chunk_data: &[u8],
+        position: Vector2<i32>,
+    ) -> Result<Self, ChunkParsingError> {
+        if fastnbt::from_bytes::<ChunkStatusWrapper>(chunk_data)
             .map_err(|_| ChunkParsingError::FailedReadStatus)?
+            .status
             != ChunkStatus::Full
         {
             return Err(ChunkParsingError::ChunkNotGenerated);
@@ -337,6 +371,17 @@ impl ChunkData {
 
         let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+
+        if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
+            log::error!(
+                "Expected chunk at {}:{}, but got {}:{}",
+                position.x,
+                position.z,
+                chunk_data.x_pos,
+                chunk_data.z_pos
+            );
+            // lets still continue
+        }
 
         // this needs to be boxed, otherwise it will cause a stack-overflow
         let mut subchunks = Subchunks::Single(0);
@@ -369,9 +414,10 @@ impl ChunkData {
             };
 
             // How many bits each block has in one of the palette u64s
-            let block_bit_size = {
-                let size = 64 - (palette.len() as i64 - 1).leading_zeros();
-                max(4, size)
+            let block_bit_size = if palette.len() < 16 {
+                4
+            } else {
+                ceil_log2(palette.len() as u32).max(4)
             };
             // How many blocks there are in one of the palettes u64s
             let blocks_in_palette = 64 / block_bit_size;
@@ -408,8 +454,9 @@ impl ChunkData {
         Ok(ChunkData {
             subchunks,
             heightmap: chunk_data.heightmaps,
-            position: at,
+            position,
         })
+
     }
 }
 
@@ -426,4 +473,9 @@ pub enum ChunkParsingError {
 fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
     // % works for negative numbers as intended.
     (index.y.get_absolute() % 16) as usize * CHUNK_AREA + *index.z as usize * 16 + *index.x as usize
+}
+#[derive(Error, Debug)]
+pub enum ChunkSerializingError {
+    #[error("Error serializing chunk: {0}")]
+    ErrorSerializingChunk(fastnbt::error::Error),
 }

@@ -137,7 +137,7 @@ trait LoadConfiguration {
 
             toml::from_str(&file_content).unwrap_or_else(|err| {
                 panic!(
-                    "Couldn't parse config at {:?}. Reason: {}. This is is proberbly caused by an Config update, Just delete the old Config and start Pumpkin again",
+                    "Couldn't parse config at {:?}. Reason: {}. This is is probably caused by an Config update, Just delete the old Config and start Pumpkin again",
                     &path,
                     err.message()
                 )
@@ -147,7 +147,7 @@ trait LoadConfiguration {
 
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 warn!(
-                    "Couldn't write default config to {:?}. Reason: {}. This is is proberbly caused by an Config update, Just delete the old Config and start Pumpkin again",
+                    "Couldn't write default config to {:?}. Reason: {}. This is is probably caused by an Config update, Just delete the old Config and start Pumpkin again",
                     &path, err
                 );
             }

@@ -9,6 +9,9 @@ pumpkin-core = { path = "../pumpkin-core" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 
+bytes.workspace = true
+
+
 tokio.workspace = true
 rayon.workspace = true
 derive_more.workspace = true
@@ -26,6 +29,7 @@ flate2 = "1.0"
 lz4 = "1.28.0"
 
 file-guard = "0.2.0"
+indexmap = "2.7.0"
 
 enum_dispatch = "0.3.13"
 
