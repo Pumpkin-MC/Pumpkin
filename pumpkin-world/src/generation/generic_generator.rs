@@ -34,7 +34,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: PerlinTerrainGenerator + GeneratorIni
 
 impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGenerator<B, T> {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut subchunks = Subchunks::Single(0);
+        let mut subchunks = Subchunks::Block(0);
         self.terrain_generator.prepare_chunk(&at, &self.perlin);
         let noise_value = self.perlin.get([at.x as f64 / 16.0, at.z as f64 / 16.0]);
 

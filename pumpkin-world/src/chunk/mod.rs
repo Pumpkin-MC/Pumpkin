@@ -86,33 +86,48 @@ pub struct ChunkData {
 /// Subchunks - its an areas in chunk, what are 16 blocks in height.
 /// Current amouth is 24.
 ///
-/// Subchunks can be single and multi.
+/// Subchunks can be block, blockstate and multi.
 ///
-/// Single means a single block in all chunk, like
+/// Block means a single block in all chunk, like
 /// chunk, what filled only air or only water.
+///
+/// Blockstate means like a block, but its includes a state.
 ///
 /// Multi means a normal chunk, what contains 24 subchunks.
 #[derive(PartialEq, Debug)]
 pub enum Subchunks {
-    Single(u16),
+    Block(u16),
+    BlockState(BlockState),
     Multi(Box<[Subchunk; SUBCHUNKS_COUNT]>),
 }
 
 /// # Subchunk
 /// Subchunk - its an area in chunk, what are 16 blocks in height
 ///
-/// Subchunk can be single and multi.
+/// Subchunk can be block, blockstate and multi.
 ///
-/// Single means a single block in all subchunk, like
+/// Block means a single block in all subchunk, like
 /// subchunk, what filled only air or only water.
 ///
-/// Multi means a normal subchunk, what contains 4096 blocks.
+/// Blockstate means like a block, but its includes a state.
+///
+/// MultiBlock means a normal subchunk, what contains 4096 blocks.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Subchunk {
-    Single(u16),
+    Block(u16),
+    BlockState(BlockState),
     // The packet relies on this ordering -> leave it like this for performance
     /// Ordering: yzx (y being the most significant)
-    Multi(Box<[u16; SUBCHUNK_VOLUME]>),
+    MultiBlock(Box<[u16; SUBCHUNK_VOLUME]>),
+
+    // ----------------- WARNING! ------------------
+    // | In future we need to use bitvec crate,    |
+    // | or something like this.                   |
+    // | We need optimizations for multiblockstate,|
+    // | because its a very big memory consume.    |
+    // ---------------------------------------------
+    /// Ordering: yzx (y being the most significant)
+    MultiBlockState(Box<[BlockState; SUBCHUNK_VOLUME]>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -177,15 +192,42 @@ impl Subchunk {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
-            Self::Single(block) => Some(*block),
-            Self::Multi(blocks) => blocks.get(convert_index(position)).copied(),
+            Self::Block(block) => Some(*block),
+            Self::BlockState(blockstate) => Some(blockstate.block_id),
+            Self::MultiBlock(blocks) => blocks.get(convert_index(position)).copied(),
+            Self::MultiBlockState(blocks) => blocks
+                .get(convert_index(position))
+                .map(|s| &s.block_id)
+                .copied(),
         }
     }
 
-    /// Sets the given block in the chunk, returning the old block
+    /// Gets the given blockstate in the chunk
+    pub fn get_blockstate(&self, position: ChunkRelativeBlockCoordinates) -> Option<BlockState> {
+        match &self {
+            Self::Block(block) => BlockState::from_block(*block),
+            Self::BlockState(blockstate) => Some(*blockstate),
+            Self::MultiBlock(blocks) => blocks
+                .get(convert_index(position))
+                .and_then(|b| BlockState::from_block(*b)),
+            Self::MultiBlockState(blockstates) => blockstates.get(convert_index(position)).copied(),
+        }
+    }
+
+    /// Sets the given block in the chunk
     pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
         // TODO @LUK_ESC? update the heightmap
         self.set_block_no_heightmap_update(position, block_id)
+    }
+
+    /// Sets the given blockstate in the chunk
+    pub fn set_blockstate(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        blockstate: BlockState,
+    ) {
+        // TODO @LUK_ESC? update the heightmap
+        self.set_blockstate_no_heightmap_update(position, blockstate);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -199,28 +241,95 @@ impl Subchunk {
         new_block: u16,
     ) {
         match self {
-            Self::Single(block) => {
+            Self::Block(block) => {
                 if *block != new_block {
                     let mut blocks = Box::new([*block; SUBCHUNK_VOLUME]);
                     blocks[convert_index(position)] = new_block;
 
-                    *self = Self::Multi(blocks)
+                    *self = Self::MultiBlock(blocks)
                 }
             }
-            Self::Multi(blocks) => {
+            Self::BlockState(blockstate) => {
+                if blockstate.block_id != new_block {
+                    if let Some(new_blockstate) = BlockState::from_block(new_block) {
+                        let mut blockstates = Box::new([*blockstate; SUBCHUNK_VOLUME]);
+                        blockstates[convert_index(position)] = new_blockstate;
+
+                        *self = Self::MultiBlockState(blockstates)
+                    }
+                }
+            }
+            Self::MultiBlock(blocks) => {
                 blocks[convert_index(position)] = new_block;
 
                 if blocks.iter().all(|b| *b == new_block) {
-                    *self = Self::Single(new_block)
+                    *self = Self::Block(new_block)
+                }
+            }
+            Self::MultiBlockState(blockstates) => {
+                if let Some(new_blockstate) = BlockState::from_block(new_block) {
+                    blockstates[convert_index(position)] = new_blockstate;
+
+                    if blockstates.iter().all(|b| b.block_id == new_block) {
+                        *self = Self::Block(new_block)
+                    } else if blockstates.iter().all(|b| *b == new_blockstate) {
+                        *self = Self::BlockState(new_blockstate)
+                    }
                 }
             }
         }
     }
 
-    pub fn clone_as_array(&self) -> Box<[u16; SUBCHUNK_VOLUME]> {
+    /// Sets the given blockstate in the chunk
+    /// Contrary to `set_blockstate` this does not update the heightmap.
+    ///
+    /// Only use this if you know you don't need to update the heightmap
+    /// or if you manually set the heightmap in `empty_with_heightmap`
+    pub fn set_blockstate_no_heightmap_update(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        new_blockstate: BlockState,
+    ) {
+        match self {
+            Self::Block(block) => {
+                if let Some(blockstate) = BlockState::from_block(*block) {
+                    let mut blockstates = Box::new([blockstate; SUBCHUNK_VOLUME]);
+                    blockstates[convert_index(position)] = new_blockstate;
+
+                    *self = Self::MultiBlockState(blockstates)
+                }
+            }
+            Self::BlockState(blockstate) => {
+                if *blockstate != new_blockstate {
+                    let mut blockstates = Box::new([*blockstate; SUBCHUNK_VOLUME]);
+                    blockstates[convert_index(position)] = new_blockstate;
+
+                    *self = Self::MultiBlockState(blockstates)
+                }
+            }
+            Self::MultiBlock(blocks) => {
+                let mut blockstates =
+                    Box::new(blocks.map(|block| BlockState::from_block(block).unwrap()));
+                blockstates[convert_index(position)] = new_blockstate;
+
+                *self = Self::MultiBlockState(blockstates)
+            }
+            Self::MultiBlockState(blockstates) => {
+                blockstates[convert_index(position)] = new_blockstate;
+
+                if blockstates.iter().all(|b| *b == new_blockstate) {
+                    *self = Self::BlockState(new_blockstate)
+                }
+            }
+        }
+    }
+
+    pub fn clone_as_blockstates(&self) -> Box<[i32; SUBCHUNK_VOLUME]> {
         match &self {
-            Self::Single(block) => Box::new([*block; SUBCHUNK_VOLUME]),
-            Self::Multi(blocks) => blocks.clone(),
+            Self::Block(block) => Box::new([*block as i32; SUBCHUNK_VOLUME]),
+            Self::BlockState(blockstate) => Box::new([blockstate.as_i32(); SUBCHUNK_VOLUME]),
+            Self::MultiBlock(blocks) => Box::new(blocks.map(|b| b as i32)),
+            Self::MultiBlockState(blockstates) => Box::new(blockstates.map(|s| s.as_i32())),
         }
     }
 }
@@ -229,10 +338,22 @@ impl Subchunks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
-            Self::Single(block) => Some(*block),
+            Self::Block(block) => Some(*block),
+            Self::BlockState(blockstate) => Some(blockstate.block_id),
             Self::Multi(subchunks) => subchunks
                 .get((position.y.get_absolute() / 16) as usize)
                 .and_then(|subchunk| subchunk.get_block(position)),
+        }
+    }
+
+    /// Gets the given block in the chunk
+    pub fn get_blockstate(&self, position: ChunkRelativeBlockCoordinates) -> Option<BlockState> {
+        match &self {
+            Self::Block(block) => BlockState::from_block(*block),
+            Self::BlockState(blockstate) => Some(*blockstate),
+            Self::Multi(subchunks) => subchunks
+                .get((position.y.get_absolute() / 16) as usize)
+                .and_then(|subchunk| subchunk.get_blockstate(position)),
         }
     }
 
@@ -240,6 +361,16 @@ impl Subchunks {
     pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
         // TODO @LUK_ESC? update the heightmap
         self.set_block_no_heightmap_update(position, block_id)
+    }
+
+    /// Sets the given block in the chunk, returning the old block
+    pub fn set_blockstate(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        blockstate: BlockState,
+    ) {
+        // TODO @LUK_ESC? update the heightmap
+        self.set_blockstate_no_heightmap_update(position, blockstate)
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -253,9 +384,9 @@ impl Subchunks {
         new_block: u16,
     ) {
         match self {
-            Self::Single(block) => {
+            Self::Block(block) => {
                 if *block != new_block {
-                    let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
+                    let mut subchunks = vec![Subchunk::Block(*block); SUBCHUNKS_COUNT];
 
                     subchunks[(position.y.get_absolute() / 16) as usize]
                         .set_block(position, new_block);
@@ -263,28 +394,82 @@ impl Subchunks {
                     *self = Self::Multi(subchunks.try_into().unwrap());
                 }
             }
+            Self::BlockState(blockstate) => {
+                let mut subchunks = vec![Subchunk::BlockState(*blockstate); SUBCHUNKS_COUNT];
+
+                subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block);
+
+                *self = Self::Multi(subchunks.try_into().unwrap());
+            }
             Self::Multi(subchunks) => {
                 subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block);
 
                 if subchunks
                     .iter()
-                    .all(|subchunk| *subchunk == Subchunk::Single(new_block))
+                    .all(|subchunk| *subchunk == Subchunk::Block(new_block))
                 {
-                    *self = Self::Single(new_block)
+                    *self = Self::Block(new_block)
+                }
+            }
+        }
+    }
+
+    /// Sets the given block in the chunk, returning the old block
+    /// Contrary to `set_block` this does not update the heightmap.
+    ///
+    /// Only use this if you know you don't need to update the heightmap
+    /// or if you manually set the heightmap in `empty_with_heightmap`
+    pub fn set_blockstate_no_heightmap_update(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        new_blockstate: BlockState,
+    ) {
+        match self {
+            Self::Block(block) => {
+                let mut subchunks = vec![Subchunk::Block(*block); SUBCHUNKS_COUNT];
+
+                subchunks[(position.y.get_absolute() / 16) as usize]
+                    .set_block(position, new_blockstate.block_id);
+
+                *self = Self::Multi(subchunks.try_into().unwrap());
+            }
+            Self::BlockState(blockstate) => {
+                let mut subchunks = vec![Subchunk::BlockState(*blockstate); SUBCHUNKS_COUNT];
+
+                subchunks[(position.y.get_absolute() / 16) as usize]
+                    .set_blockstate(position, new_blockstate);
+
+                *self = Self::Multi(subchunks.try_into().unwrap());
+            }
+            Self::Multi(subchunks) => {
+                subchunks[(position.y.get_absolute() / 16) as usize]
+                    .set_blockstate(position, new_blockstate);
+
+                if subchunks
+                    .iter()
+                    .all(|subchunk| *subchunk == Subchunk::BlockState(new_blockstate))
+                {
+                    *self = Self::BlockState(new_blockstate)
                 }
             }
         }
     }
 
     //TODO: Needs optimizations
-    pub fn array_iter(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
+    pub fn array_iter(&self) -> Box<dyn Iterator<Item = Box<[i32; SUBCHUNK_VOLUME]>> + '_> {
         match self {
-            Self::Single(block) => {
-                Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
-            }
-            Self::Multi(blocks) => {
-                Box::new(blocks.iter().map(|subchunk| subchunk.clone_as_array()))
-            }
+            Self::Block(block) => Box::new(
+                repeat_with(|| Box::new([*block as i32; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT),
+            ),
+            Self::BlockState(blockstate) => Box::new(
+                repeat_with(|| Box::new([blockstate.as_i32(); SUBCHUNK_VOLUME]))
+                    .take(SUBCHUNKS_COUNT),
+            ),
+            Self::Multi(subchunks) => Box::new(
+                subchunks
+                    .iter()
+                    .map(|subchunk| subchunk.clone_as_blockstates()),
+            ),
         }
     }
 }
@@ -358,7 +543,7 @@ impl ChunkData {
         }
 
         // this needs to be boxed, otherwise it will cause a stack-overflow
-        let mut subchunks = Subchunks::Single(0);
+        let mut subchunks = Subchunks::Block(0);
         let mut block_index = 0; // which block we're currently at
 
         for section in chunk_data.sections.into_iter() {

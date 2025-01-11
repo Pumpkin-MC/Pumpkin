@@ -365,7 +365,10 @@ impl AnvilChunkFormat {
                 .into_iter()
                 .enumerate()
                 .map(|(i, block)| {
-                    let name = BLOCK_ID_TO_REGISTRY_ID.get(block).unwrap().as_str();
+                    let name = BLOCK_ID_TO_REGISTRY_ID
+                        .get(&(*block as u16))
+                        .unwrap()
+                        .as_str();
                     (block, (name, i))
                 })
                 .collect();

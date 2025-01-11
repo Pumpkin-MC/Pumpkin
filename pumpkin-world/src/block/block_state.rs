@@ -1,4 +1,4 @@
-use super::block_registry::{get_block, get_state_by_state_id};
+use super::block_registry::{get_block, get_block_by_id, get_state_by_state_id};
 
 #[derive(Clone, Copy, Debug, Eq)]
 pub struct BlockState {
@@ -27,6 +27,15 @@ impl BlockState {
         })
     }
 
+    pub fn from_block(block_id: u16) -> Option<Self> {
+        let block = get_block_by_id(block_id);
+
+        block.map(|block| Self {
+            state_id: block.default_state_id,
+            block_id: block.id,
+        })
+    }
+
     pub fn get_id(&self) -> u16 {
         self.state_id
     }
@@ -39,6 +48,16 @@ impl BlockState {
     #[inline]
     pub fn of_block(&self, block_id: u16) -> bool {
         self.block_id == block_id
+    }
+
+    #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        ((self.block_id as u32) << 16) | (self.state_id as u32)
+    }
+
+    #[inline]
+    pub const fn as_i32(&self) -> i32 {
+        ((self.block_id as i32) << 16) | (self.state_id as i32)
     }
 }
 

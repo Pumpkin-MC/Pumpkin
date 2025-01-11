@@ -58,7 +58,7 @@ impl ClientPacket for CChunkData<'_> {
 
                     palette.iter().for_each(|id| {
                         // Palette
-                        data_buf.put_var_int(&VarInt(*id as i32));
+                        data_buf.put_var_int(&VarInt(*id));
                     });
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / block_size as usize);

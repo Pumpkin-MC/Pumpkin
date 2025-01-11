@@ -40,7 +40,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: TerrainGenerator + GeneratorInit> Gen
 
 impl<B: BiomeGenerator, T: TerrainGenerator> WorldGenerator for TestGenerator<B, T> {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut subchunks = Subchunks::Single(0);
+        let mut subchunks = Subchunks::Block(0);
         self.terrain_generator.prepare_chunk(&at);
 
         for x in 0..16u8 {
