@@ -38,7 +38,10 @@ impl BlockState {
         })
     }
 
-    pub fn from_block_and_props(_block_id: u16, _properties: HashMap<String, String>) -> Option<Self> {
+    pub fn from_block_and_props(
+        _block_id: u16,
+        _properties: HashMap<String, String>,
+    ) -> Option<Self> {
         todo!()
     }
 
