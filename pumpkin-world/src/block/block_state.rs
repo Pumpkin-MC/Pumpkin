@@ -61,12 +61,12 @@ impl BlockState {
 
     #[inline]
     pub const fn as_u32(&self) -> u32 {
-        ((self.block_id as u32) << 16) | (self.state_id as u32)
+        (self.block_id as u32) | (self.state_id as u32)
     }
 
     #[inline]
     pub const fn as_i32(&self) -> i32 {
-        ((self.block_id as i32) << 16) | (self.state_id as i32)
+        (self.block_id as i32) | (self.state_id as i32)
     }
 }
 
