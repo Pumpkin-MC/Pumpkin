@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::block_registry::{get_block, get_block_by_id, get_state_by_state_id};
 
 #[derive(Clone, Copy, Debug, Eq)]
@@ -34,6 +36,10 @@ impl BlockState {
             state_id: block.default_state_id,
             block_id: block.id,
         })
+    }
+
+    pub fn from_block_and_props(_block_id: u16, _properties: HashMap<String, String>) -> Option<Self> {
+        todo!()
     }
 
     pub fn get_id(&self) -> u16 {
