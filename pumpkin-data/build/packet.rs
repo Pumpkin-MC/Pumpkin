@@ -13,7 +13,7 @@ pub struct Packets {
 }
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/packets.json");
+    println!("cargo:rerun-if-changed=../assets/packets.json");
 
     let packets: Packets = serde_json::from_str(include_str!("../../assets/packets.json"))
         .expect("Failed to parse packets.json");

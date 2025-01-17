@@ -7,7 +7,7 @@ use quote::quote;
 use crate::ident;
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/world_event.json");
+    println!("cargo:rerun-if-changed=../assets/world_event.json");
 
     let events: HashMap<String, u16> =
         serde_json::from_str(include_str!("../../assets/world_event.json"))

@@ -5,7 +5,7 @@ use quote::quote;
 use crate::ident;
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/chunk_status.json");
+    println!("cargo:rerun-if-changed=../assets/chunk_status.json");
 
     let chunk_status: Vec<String> =
         serde_json::from_str(include_str!("../../assets/chunk_status.json"))

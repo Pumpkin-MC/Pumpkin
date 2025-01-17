@@ -13,7 +13,7 @@ pub struct DoublePerlinNoiseParameters {
 }
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/noise_parameters.json");
+    println!("cargo:rerun-if-changed=../assets/noise_parameters.json");
 
     let json: HashMap<String, DoublePerlinNoiseParameters> =
         serde_json::from_str(include_str!("../../assets/noise_parameters.json"))

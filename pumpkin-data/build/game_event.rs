@@ -4,7 +4,7 @@ use quote::quote;
 use crate::array_to_tokenstream;
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/game_event.json");
+    println!("cargo:rerun-if-changed=../assets/game_event.json");
 
     let game_events: Vec<String> =
         serde_json::from_str(include_str!("../../assets/game_event.json"))

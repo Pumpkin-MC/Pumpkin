@@ -13,7 +13,7 @@ pub struct JSONStruct {
 }
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/entities.json");
+    println!("cargo:rerun-if-changed=../assets/entities.json");
 
     let json: HashMap<String, JSONStruct> =
         serde_json::from_str(include_str!("../../assets/entities.json"))

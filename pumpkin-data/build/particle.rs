@@ -4,7 +4,7 @@ use quote::quote;
 use crate::array_to_tokenstream;
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=assets/particles.json");
+    println!("cargo:rerun-if-changed=../assets/particles.json");
 
     let particle: Vec<String> = serde_json::from_str(include_str!("../../assets/particles.json"))
         .expect("Failed to parse particles.json");
