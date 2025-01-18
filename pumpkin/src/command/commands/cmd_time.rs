@@ -22,9 +22,17 @@ fn arg_number() -> BoundedNumArgumentConsumer<i32> {
 }
 
 #[derive(Clone, Copy)]
+enum PresetTime {
+    Day,
+    Noon,
+    Night,
+    Midnight,
+}
+
+#[derive(Clone, Copy)]
 enum Mode {
     Add,
-    Set,
+    Set(Option<PresetTime>),
 }
 
 #[derive(Clone, Copy)]
@@ -81,17 +89,26 @@ impl CommandExecutor for TimeChangeExecutor {
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let time_count = match arg_number().find_arg_default_name(args) {
-            Err(_) => 1,
-            Ok(Ok(count)) => count,
-            Ok(Err(())) => {
-                sender
-                    .send_message(
-                        TextComponent::text("Time is too large or too small.")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-                return Ok(());
+        let time_count = if let Mode::Set(Some(preset)) = &self.0 {
+            match preset {
+                PresetTime::Day => 1000,
+                PresetTime::Noon => 6000,
+                PresetTime::Night => 13000,
+                PresetTime::Midnight => 18000,
+            }
+        } else {
+            match arg_number().find_arg_default_name(args) {
+                Err(_) => 1,
+                Ok(Ok(count)) => count,
+                Ok(Err(())) => {
+                    sender
+                        .send_message(
+                            TextComponent::text("Time is too large or too small.")
+                                .color(Color::Named(NamedColor::Red)),
+                        )
+                        .await;
+                    return Ok(());
+                }
             }
         };
         let mode = self.0;
@@ -109,7 +126,7 @@ impl CommandExecutor for TimeChangeExecutor {
                 let curr_time = level_time.query_daytime();
                 format!("Added {time_count} time for result: {curr_time}")
             }
-            Mode::Set => {
+            Mode::Set(_) => {
                 // set
                 level_time.set_time(time_count.into());
                 level_time.send_time(world).await;
@@ -136,8 +153,24 @@ pub fn init_command_tree() -> CommandTree {
                 .with_child(literal("day").execute(TimeQueryExecutor(QueryMode::Day))),
         )
         .with_child(
-            literal("set").with_child(
-                argument_default_name(arg_number()).execute(TimeChangeExecutor(Mode::Set)),
-            ),
+            literal("set")
+                .with_child(
+                    literal("day").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Day)))),
+                )
+                .with_child(
+                    literal("noon").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Noon)))),
+                )
+                .with_child(
+                    literal("night")
+                        .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Night)))),
+                )
+                .with_child(
+                    literal("midnight")
+                        .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Midnight)))),
+                )
+                .with_child(
+                    argument_default_name(arg_number())
+                        .execute(TimeChangeExecutor(Mode::Set(None))),
+                ),
         )
 }
