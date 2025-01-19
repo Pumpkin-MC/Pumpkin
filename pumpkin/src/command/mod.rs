@@ -11,8 +11,8 @@ use args::ConsumedArgs;
 use async_trait::async_trait;
 use commands::{
     cmd_ban, cmd_banip, cmd_banlist, cmd_clear, cmd_deop, cmd_fill, cmd_gamemode, cmd_give,
-    cmd_help, cmd_kick, cmd_kill, cmd_list, cmd_op, cmd_pumpkin, cmd_say, cmd_setblock, cmd_stop,
-    cmd_teleport, cmd_time, cmd_worldborder,
+    cmd_help, cmd_kick, cmd_kill, cmd_list, cmd_op, cmd_pardon, cmd_pardonip, cmd_pumpkin, cmd_say,
+    cmd_setblock, cmd_stop, cmd_teleport, cmd_time, cmd_worldborder,
 };
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
@@ -135,6 +135,8 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(cmd_ban::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(cmd_banip::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(cmd_banlist::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(cmd_pardon::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(cmd_pardonip::init_command_tree(), PermissionLvl::Three);
 
     dispatcher
 }
