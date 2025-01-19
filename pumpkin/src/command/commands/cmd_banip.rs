@@ -22,10 +22,10 @@ const DESCRIPTION: &str = "bans a player-ip";
 const ARG_TARGET: &str = "ip";
 const ARG_REASON: &str = "reason";
 
-struct BanIpExecutorNoReason;
+struct BanIpNoReasonExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanIpExecutorNoReason {
+impl CommandExecutor for BanIpNoReasonExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -40,10 +40,10 @@ impl CommandExecutor for BanIpExecutorNoReason {
     }
 }
 
-struct BanIpExecutorReason;
+struct BanIpReasonExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanIpExecutorReason {
+impl CommandExecutor for BanIpReasonExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -123,7 +123,7 @@ async fn ban_ip(
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).with_child(
         argument(ARG_TARGET, IpConsumer)
-            .execute(BanIpExecutorNoReason)
-            .with_child(argument(ARG_REASON, MsgArgConsumer).execute(BanIpExecutorReason)),
+            .execute(BanIpNoReasonExecutor)
+            .with_child(argument(ARG_REASON, MsgArgConsumer).execute(BanIpReasonExecutor)),
     )
 }

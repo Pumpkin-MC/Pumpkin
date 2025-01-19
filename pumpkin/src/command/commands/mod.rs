@@ -1,5 +1,6 @@
 pub mod cmd_ban;
 pub mod cmd_banip;
+pub mod cmd_banlist;
 pub mod cmd_bossbar;
 pub mod cmd_clear;
 pub mod cmd_deop;
