@@ -1,8 +1,10 @@
 use std::net::IpAddr;
 
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Local};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::net::GameProfile;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BannedPlayerEntry {
@@ -16,6 +18,25 @@ pub struct BannedPlayerEntry {
     pub reason: String,
 }
 
+impl BannedPlayerEntry {
+    #[must_use]
+    pub fn new(
+        profile: &GameProfile,
+        source: String,
+        expires: Option<DateTime<FixedOffset>>,
+        reason: String,
+    ) -> Self {
+        Self {
+            uuid: profile.id,
+            name: profile.name.clone(),
+            created: Local::now().fixed_offset(),
+            source,
+            expires,
+            reason,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BannedIpEntry {
     pub ip: IpAddr,
@@ -25,6 +46,24 @@ pub struct BannedIpEntry {
     #[serde(with = "format::option_date")]
     pub expires: Option<DateTime<FixedOffset>>,
     pub reason: String,
+}
+
+impl BannedIpEntry {
+    #[must_use]
+    pub fn new(
+        ip: IpAddr,
+        source: String,
+        expires: Option<DateTime<FixedOffset>>,
+        reason: String,
+    ) -> Self {
+        Self {
+            ip,
+            created: Local::now().fixed_offset(),
+            source,
+            expires,
+            reason,
+        }
+    }
 }
 
 mod format {

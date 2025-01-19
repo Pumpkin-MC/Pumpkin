@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use arg_bounded_num::{NotInBounds, Number};
@@ -28,6 +29,7 @@ pub(crate) mod arg_command;
 pub(crate) mod arg_entities;
 pub(crate) mod arg_entity;
 pub(crate) mod arg_gamemode;
+pub(crate) mod arg_ip;
 pub(crate) mod arg_item;
 pub(crate) mod arg_message;
 pub(crate) mod arg_players;
@@ -84,6 +86,7 @@ pub(crate) enum Arg<'a> {
     GameMode(GameMode),
     CommandTree(CommandTree),
     Item(&'a str),
+    Ip(IpAddr),
     ResourceLocation(&'a str),
     Block(&'a str),
     BossbarColor(BossbarColor),

@@ -646,8 +646,8 @@ impl Client {
     }
 }
 
-// Returns none if ban has expired and should be removed
-fn ban_reason(reason: &str, expires: Option<DateTime<FixedOffset>>) -> Option<String> {
+/// Returns none if ban has expired and should be removed
+pub(crate) fn ban_reason(reason: &str, expires: Option<DateTime<FixedOffset>>) -> Option<String> {
     match expires {
         Some(datetime) => {
             if Local::now().fixed_offset() > datetime {
