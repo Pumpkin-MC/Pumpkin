@@ -15,8 +15,11 @@ pub struct BannedIpList {
 
 impl BannedIpList {
     #[must_use]
-    pub fn is_banned(&self, ip: &IpAddr) -> bool {
-        self.banned_ips.iter().any(|entry| &entry.ip == ip)
+    pub fn get_entry(&mut self, ip: &IpAddr) -> Option<(usize, &BannedIpEntry)> {
+        self.banned_ips
+            .iter()
+            .enumerate()
+            .find(|(_, entry)| &entry.ip == ip)
     }
 }
 

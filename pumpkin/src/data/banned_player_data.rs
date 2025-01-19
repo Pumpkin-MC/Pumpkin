@@ -17,10 +17,11 @@ pub struct BannedPlayerList {
 
 impl BannedPlayerList {
     #[must_use]
-    pub fn is_banned(&self, profile: &GameProfile) -> bool {
+    pub fn get_entry(&self, profile: &GameProfile) -> Option<(usize, &BannedPlayerEntry)> {
         self.banned_players
             .iter()
-            .any(|entry| entry.name == profile.name && entry.uuid == profile.id)
+            .enumerate()
+            .find(|(_, entry)| entry.name == profile.name && entry.uuid == profile.id)
     }
 }
 

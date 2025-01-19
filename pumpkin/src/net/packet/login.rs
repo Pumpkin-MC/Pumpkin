@@ -157,8 +157,8 @@ impl Client {
 
         drop(gameprofile);
 
-        if !self.can_join().await {
-            self.kick("Banned").await;
+        if let Some(reason) = self.can_not_join().await {
+            self.kick(&reason).await;
         }
     }
 

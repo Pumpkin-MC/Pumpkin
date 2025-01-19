@@ -9,11 +9,15 @@ use std::{
 };
 
 use crate::{
-    data::{banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST},
+    data::{
+        banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
+        SaveJSONConfiguration,
+    },
     entity::player::{ChatMode, Hand},
     server::Server,
 };
 
+use chrono::{DateTime, FixedOffset, Local};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
@@ -595,25 +599,35 @@ impl Client {
     }
 
     /// Checks if the client can join the server.
-    pub async fn can_join(&self) -> bool {
-        let profile = self.gameprofile.lock().await;
+    pub async fn can_not_join(&self) -> Option<String> {
+        let profile: tokio::sync::MutexGuard<'_, Option<GameProfile>> =
+            self.gameprofile.lock().await;
 
         let Some(profile) = profile.as_ref() else {
-            return false;
+            return Some("GameProfile missing".to_string());
         };
 
-        let banned_players = BANNED_PLAYER_LIST.read().await;
-        if banned_players.is_banned(profile) {
-            return false;
+        let mut banned_players = BANNED_PLAYER_LIST.write().await;
+        if let Some((idx, entry)) = banned_players.get_entry(profile) {
+            return ban_reason(&entry.reason, entry.expires).or_else(|| {
+                banned_players.banned_players.remove(idx);
+                banned_players.save();
+                None
+            });
         }
+        drop(banned_players);
 
-        let banned_ips = BANNED_IP_LIST.read().await;
+        let mut banned_ips = BANNED_IP_LIST.write().await;
         let address = self.address.lock().await;
-        if banned_ips.is_banned(&address.ip()) {
-            return false;
+        if let Some((idx, entry)) = banned_ips.get_entry(&address.ip()) {
+            return ban_reason(&entry.reason, entry.expires).or_else(|| {
+                banned_ips.banned_ips.remove(idx);
+                banned_ips.save();
+                None
+            });
         }
 
-        true
+        None
     }
 
     /// Closes the connection to the client.
@@ -629,6 +643,25 @@ impl Client {
         self.closed
             .store(true, std::sync::atomic::Ordering::Relaxed);
         log::debug!("Closed connection for {}", self.id);
+    }
+}
+
+// Returns none if ban has expired and should be removed
+fn ban_reason(reason: &str, expires: Option<DateTime<FixedOffset>>) -> Option<String> {
+    match expires {
+        Some(datetime) => {
+            if Local::now().fixed_offset() > datetime {
+                return None;
+            }
+            Some(format!("You are banned from this server.\nReason: {reason}\nYour ban will be removed on {} at {} {}",
+                datetime.format("%Y-%m-%d"),
+                datetime.format("%H:%M:%S"),
+                datetime.offset()
+            ))
+        }
+        None => Some(format!(
+            "You are banned from this server.\nReason: {reason}",
+        )),
     }
 }
 

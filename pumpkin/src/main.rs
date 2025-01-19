@@ -145,7 +145,7 @@ async fn main() {
         .await
         .expect("Failed to start TcpListener");
     // In the event the user puts 0 for their port, this will allow us to know what port it is running on
-    let addr = listener
+    let server_addr = listener
         .local_addr()
         .expect("Unable to get the address of server!");
 
@@ -156,7 +156,10 @@ async fn main() {
     let mut ticker = Ticker::new(BASIC_CONFIG.tps);
 
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
-    log::info!("You now can connect to the server, Listening on {}", addr);
+    log::info!(
+        "You now can connect to the server, Listening on {}",
+        server_addr
+    );
 
     if use_console {
         setup_console(server.clone());
@@ -170,12 +173,12 @@ async fn main() {
 
     if ADVANCED_CONFIG.networking.query.enabled {
         log::info!("Query protocol enabled. Starting...");
-        tokio::spawn(query::start_query_handler(server.clone(), addr));
+        tokio::spawn(query::start_query_handler(server.clone(), server_addr));
     }
 
     if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
         log::info!("LAN broadcast enabled. Starting...");
-        tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
+        tokio::spawn(lan_broadcast::start_lan_broadcast(server_addr));
     }
 
     {
@@ -188,7 +191,7 @@ async fn main() {
     let mut master_client_id: u16 = 0;
     loop {
         // Asynchronously wait for an inbound socket.
-        let (connection, address) = listener.accept().await.unwrap();
+        let (connection, client_addr) = listener.accept().await.unwrap();
 
         if let Err(e) = connection.set_nodelay(true) {
             log::warn!("failed to set TCP_NODELAY {e}");
@@ -199,11 +202,11 @@ async fn main() {
 
         log::info!(
             "Accepted connection from: {} (id {})",
-            scrub_address(&format!("{address}")),
+            scrub_address(&format!("{client_addr}")),
             id
         );
 
-        let client = Arc::new(Client::new(connection, addr, id));
+        let client = Arc::new(Client::new(connection, client_addr, id));
 
         let server = server.clone();
         tokio::spawn(async move {
