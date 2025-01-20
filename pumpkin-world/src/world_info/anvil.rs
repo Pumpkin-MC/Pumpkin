@@ -1,11 +1,10 @@
 use std::{
     fs::OpenOptions,
-    io::{Cursor, Read, Write},
+    io::{Read, Write},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use pumpkin_nbt::deserializer::from_bytes_unnamed;
 use serde::{Deserialize, Serialize};
 
 use crate::level::LevelFolder;
