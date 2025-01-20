@@ -15,7 +15,9 @@ use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::entity::EntityType;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
-use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem, CSpawnEntity};
+use pumpkin_protocol::client::play::{
+    CSetContainerSlot, CSetHeldItem, CSpawnEntity, CSystemChatMessage,
+};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SCookieResponse as SPCookieResponse;
@@ -36,6 +38,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
@@ -49,6 +52,7 @@ use pumpkin_world::{
     entity::entity_registry::get_entity_id,
     item::item_registry::get_spawn_egg,
 };
+use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -1097,6 +1101,32 @@ impl Player {
         let entity = &self.living_entity.entity;
         let world = &entity.world;
 
+        // check block under the world
+        if location.0.y + face.to_offset().y < WORLD_LOWEST_Y.into() {
+            self.client
+                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld.into());
+        }
+
+        //check max world build height
+        if location.0.y + face.to_offset().y >= WORLD_MAX_Y.into() {
+            self.client
+                .send_packet(&CSystemChatMessage::new(
+                    &TextComponent::translate(
+                        "build.tooHigh",
+                        vec![TextComponent::text(WORLD_MAX_Y.to_string())],
+                    )
+                    .color_named(NamedColor::Red),
+                    true,
+                ))
+                .await;
+            self.client
+                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld.into());
+        }
+
         let clicked_world_pos = BlockPos(location.0);
         let clicked_block_state = world.get_block_state(&clicked_world_pos).await?;
 
@@ -1112,14 +1142,6 @@ impl Player {
 
             world_pos
         };
-
-        //check max world build height
-        if world_pos.0.y > 319 {
-            self.client
-                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
-                .await;
-            return Err(BlockPlacingError::BlockOutOfWorld.into());
-        }
 
         let block_bounding_box = BoundingBox::from_block(&world_pos);
         let mut intersects = false;

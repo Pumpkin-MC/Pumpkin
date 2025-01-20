@@ -42,6 +42,20 @@ impl TextComponent {
         }
     }
 
+    pub fn translate<P>(key: P, with: Vec<TextComponent>) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
+        Self {
+            content: TextContent::Translate {
+                translate: key.into(),
+                with,
+            },
+            style: Style::default(),
+            extra: vec![],
+        }
+    }
+
     pub fn add_child(mut self, child: TextComponent) -> Self {
         self.extra.push(child);
         self
