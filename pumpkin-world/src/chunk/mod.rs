@@ -344,7 +344,7 @@ impl ChunkData {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = from_bytes_unnamed::<ChunkNbt>(&mut a)
+        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
