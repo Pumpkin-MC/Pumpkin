@@ -62,6 +62,7 @@ pub enum BlockPlacingError {
     BlockOutOfWorld,
     InventoryInvalid,
     InvalidGamemode,
+    NoBaseBlock,
 }
 
 impl std::fmt::Display for BlockPlacingError {
@@ -74,7 +75,7 @@ impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
-            Self::InvalidBlockFace | Self::InventoryInvalid => true,
+            Self::InvalidBlockFace | Self::InventoryInvalid | Self::NoBaseBlock => true,
         }
     }
 
@@ -83,7 +84,8 @@ impl PumpkinError for BlockPlacingError {
             Self::BlockOutOfReach
             | Self::BlockOutOfWorld
             | Self::InvalidBlockFace
-            | Self::InvalidGamemode => log::Level::Warn,
+            | Self::InvalidGamemode
+            | Self::NoBaseBlock => log::Level::Warn,
             Self::InventoryInvalid => log::Level::Error,
         }
     }
@@ -93,6 +95,7 @@ impl PumpkinError for BlockPlacingError {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
             Self::InventoryInvalid => Some("Held item invalid".into()),
+            Self::NoBaseBlock => Some("No base block".into()),
         }
     }
 }
@@ -856,77 +859,95 @@ impl Player {
             return Err(BlockPlacingError::BlockOutOfReach.into());
         }
 
-        if let Ok(face) = BlockFace::try_from(use_item_on.face.0) {
-            let mut inventory = self.inventory().lock().await;
-            let entity = &self.living_entity.entity;
-            let world = &entity.world;
-            let slot_id = inventory.get_selected();
-            let mut state_id = inventory.state_id;
-            let item_slot = *inventory.held_item_mut();
-            drop(inventory);
+        let Ok(face) = BlockFace::try_from(use_item_on.face.0) else {
+            return Err(BlockPlacingError::InvalidBlockFace.into());
+        };
 
-            if let Some(item_stack) = item_slot {
-                // check if block is interactive
-                if let Some(item) = get_item_by_id(item_stack.item_id) {
-                    if let Ok(block) = world.get_block(&location).await {
-                        let result = server
-                            .block_manager
-                            .on_use_with_item(block, self, location, item, server)
-                            .await;
-                        match result {
-                            BlockActionResult::Continue => {}
-                            BlockActionResult::Consume => {
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
+        let mut inventory = self.inventory().lock().await;
+        let entity = &self.living_entity.entity;
+        let world = &entity.world;
+        let slot_id = inventory.get_selected();
+        let mut state_id = inventory.state_id;
+        let item_slot = *inventory.held_item_mut();
+        drop(inventory);
 
-                // check if item is a block, Because Not every item can be placed :D
-                if let Some(block) = get_block_by_item(item_stack.item_id) {
-                    should_try_decrement = self
-                        .run_is_block_place(block.clone(), server, use_item_on, location, &face)
-                        .await?;
-                }
-                // check if item is a spawn egg
-                if let Some(item_t) = get_spawn_egg(item_stack.item_id) {
-                    should_try_decrement = self
-                        .run_is_spawn_egg(item_t, server, location, &face)
-                        .await?;
-                };
+        let Ok(block) = world.get_block(&location).await else {
+            return Err(BlockPlacingError::NoBaseBlock.into());
+        };
 
-                if should_try_decrement {
-                    // TODO: Config
-                    // Decrease Block count
-                    if self.gamemode.load() != GameMode::Creative {
-                        let mut inventory = self.inventory().lock().await;
-                        let item_slot = inventory.held_item_mut();
-                        // This should never be possible
-                        let Some(item_stack) = item_slot else {
-                            return Err(BlockPlacingError::InventoryInvalid.into());
-                        };
-                        item_stack.item_count -= 1;
-                        if item_stack.item_count == 0 {
-                            *item_slot = None;
-                        }
+        let Some(stack) = item_slot else {
+            if !self
+                .living_entity
+                .entity
+                .sneaking
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                // Using block with empty hand
+                server
+                    .block_manager
+                    .on_use(block, self, location, server)
+                    .await;
+            }
+            return Ok(());
+        };
+        let Some(item) = get_item_by_id(stack.item_id) else {
+            // If there is an item stack, there should be an item
+            return Err(BlockPlacingError::InventoryInvalid.into());
+        };
 
-                        // TODO: this should be by use item on not currently selected as they might be different
-                        let _ = self
-                            .handle_decrease_item(
-                                server,
-                                slot_id as i16,
-                                item_slot.as_ref(),
-                                &mut state_id,
-                            )
-                            .await;
-                    }
+        if !self
+            .living_entity
+            .entity
+            .sneaking
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let action_result = server
+                .block_manager
+                .on_use_with_item(block, self, location, item, server)
+                .await;
+            match action_result {
+                BlockActionResult::Continue => {}
+                BlockActionResult::Consume => {
+                    return Ok(());
                 }
             }
-
-            Ok(())
-        } else {
-            Err(BlockPlacingError::InvalidBlockFace.into())
         }
+        // check if item is a block, Because Not every item can be placed :D
+        if let Some(block) = get_block_by_item(stack.item_id) {
+            should_try_decrement = self
+                .run_is_block_place(block.clone(), server, use_item_on, location, &face)
+                .await?;
+        }
+        // check if item is a spawn egg
+        if let Some(item_t) = get_spawn_egg(stack.item_id) {
+            should_try_decrement = self
+                .run_is_spawn_egg(item_t, server, location, &face)
+                .await?;
+        };
+
+        if should_try_decrement {
+            // TODO: Config
+            // Decrease Block count
+            if self.gamemode.load() != GameMode::Creative {
+                let mut inventory = self.inventory().lock().await;
+                let item_slot = inventory.held_item_mut();
+                // This should never be possible
+                let Some(item_stack) = item_slot else {
+                    return Err(BlockPlacingError::InventoryInvalid.into());
+                };
+                item_stack.item_count -= 1;
+                if item_stack.item_count == 0 {
+                    *item_slot = None;
+                }
+
+                // TODO: this should be by use item on not currently selected as they might be different
+                let _ = self
+                    .handle_decrease_item(server, slot_id as i16, item_slot.as_ref(), &mut state_id)
+                    .await;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn handle_use_item(&self, _use_item: &SUseItem) {
