@@ -1,6 +1,5 @@
 use fastnbt::LongArray;
 use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_nbt::deserializer::from_bytes_unnamed;
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, iter::repeat_with};
