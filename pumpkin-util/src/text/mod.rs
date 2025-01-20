@@ -42,7 +42,7 @@ impl TextComponent {
         }
     }
 
-    pub fn translate<P>(key: P, with: Vec<TextComponent>) -> Self
+    pub fn translate<P>(key: P, with: Vec<Cow<'static, str>>) -> Self
     where
         P: Into<Cow<'static, str>>,
     {
@@ -234,7 +234,8 @@ pub enum TextContent {
     Translate {
         translate: Cow<'static, str>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        with: Vec<TextComponent>,
+        // TODO: ReIntroduce TextComponent, changed due to circular encoding
+        with: Vec<Cow<'static, str>>,
     },
     /// Displays the name of one or more entities found by a selector.
     EntityNames {

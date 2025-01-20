@@ -1115,7 +1115,7 @@ impl Player {
                 .send_packet(&CSystemChatMessage::new(
                     &TextComponent::translate(
                         "build.tooHigh",
-                        vec![TextComponent::text(WORLD_MAX_Y.to_string())],
+                        vec![(WORLD_MAX_Y - 1).to_string().into()],
                     )
                     .color_named(NamedColor::Red),
                     true,
