@@ -1,7 +1,7 @@
-use std::sync::Arc;
-
 use num_traits::Pow;
-use pumpkin_core::random::RandomGenerator;
+use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+use pumpkin_util::random::RandomGenerator;
+use std::sync::Arc;
 
 use super::{lerp3, GRADIENTS};
 
@@ -293,30 +293,6 @@ impl OctavePerlinNoiseSampler {
     }
 }
 
-pub struct DoublePerlinNoiseParameters {
-    first_octave: i32,
-    amplitudes: &'static [f64],
-    id: &'static str,
-}
-
-impl DoublePerlinNoiseParameters {
-    pub(crate) const fn new(
-        first_octave: i32,
-        amplitudes: &'static [f64],
-        id: &'static str,
-    ) -> Self {
-        Self {
-            first_octave,
-            amplitudes,
-            id,
-        }
-    }
-
-    pub fn id(&self) -> &'static str {
-        self.id
-    }
-}
-
 #[derive(Clone)]
 pub struct DoublePerlinNoiseSampler {
     first_sampler: Arc<OctavePerlinNoiseSampler>,
@@ -377,11 +353,11 @@ impl DoublePerlinNoiseSampler {
 
 #[cfg(test)]
 mod double_perlin_noise_sampler_test {
-    use pumpkin_core::random::{
+    use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+    use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+    use pumpkin_util::random::{
         legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl,
     };
-
-    use crate::generation::noise::perlin::{DoublePerlinNoiseParameters, DoublePerlinNoiseSampler};
 
     #[test]
     fn sample_legacy() {
@@ -582,7 +558,7 @@ mod double_perlin_noise_sampler_test {
 
 #[cfg(test)]
 mod octave_perline_noise_sampler_test {
-    use pumpkin_core::random::{
+    use pumpkin_util::random::{
         legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl,
     };
 
@@ -755,7 +731,7 @@ mod octave_perline_noise_sampler_test {
 mod perlin_noise_sampler_test {
     use std::{fs, path::Path};
 
-    use pumpkin_core::{
+    use pumpkin_util::{
         assert_eq_delta,
         random::{xoroshiro128::Xoroshiro, RandomDeriverImpl, RandomGenerator, RandomImpl},
     };

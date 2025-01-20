@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CSystemChatMessage;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     args::{arg_message::MsgArgConsumer, Arg, ConsumedArgs},

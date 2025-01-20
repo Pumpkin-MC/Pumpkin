@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 serde.workspace = true
 log.workspace = true
 uuid.workspace = true

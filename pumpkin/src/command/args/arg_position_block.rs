@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_core::math::vector3::Vector3;
 use pumpkin_protocol::client::play::{
     CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
 };
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
@@ -67,8 +67,8 @@ impl MaybeRelativeBlockPos {
         ))
     }
 
-    fn try_to_absolute(self, origin: Option<Vector3<f64>>) -> Option<WorldPosition> {
-        Some(WorldPosition(Vector3::new(
+    fn try_to_absolute(self, origin: Option<Vector3<f64>>) -> Option<BlockPos> {
+        Some(BlockPos(Vector3::new(
             self.0.into_absolute(origin.map(|o| o.x))?,
             self.1.into_absolute(origin.map(|o| o.y))?,
             self.2.into_absolute(origin.map(|o| o.z))?,
@@ -83,7 +83,7 @@ impl DefaultNameArgConsumer for BlockPosArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for BlockPosArgumentConsumer {
-    type Data = WorldPosition;
+    type Data = BlockPos;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

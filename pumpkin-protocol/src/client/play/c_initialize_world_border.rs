@@ -1,10 +1,11 @@
+use pumpkin_data::packet::clientbound::PLAY_INITIALIZE_BORDER;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 use crate::{codec::var_long::VarLong, VarInt};
 
 #[derive(Serialize)]
-#[client_packet("play:initialize_border")]
+#[client_packet(PLAY_INITIALIZE_BORDER)]
 pub struct CInitializeWorldBorder {
     x: f64,
     z: f64,

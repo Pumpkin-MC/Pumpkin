@@ -68,7 +68,7 @@ where
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
 }
-
+/// Serializes struct using Serde Serializer to unamed NBT
 pub fn to_writer_unnamed<T, W>(value: &T, mut writer: W) -> Result<()>
 where
     T: Serialize,
@@ -112,7 +112,6 @@ impl ser::Serializer for &mut Serializer {
     type SerializeStruct = Self;
     type SerializeStructVariant = Impossible<(), Error>;
 
-    // NBT doesn't have bool type, but it's most commonly represented as a byte
     fn serialize_bool(self, v: bool) -> Result<()> {
         self.serialize_i8(v as i8)?;
         Ok(())
@@ -202,7 +201,7 @@ impl ser::Serializer for &mut Serializer {
         Ok(())
     }
 
-    // Just skip serializing, if value is none
+    // Just skip serializing if value is none
     fn serialize_none(self) -> Result<()> {
         Ok(())
     }

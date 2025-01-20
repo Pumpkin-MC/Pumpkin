@@ -1,4 +1,5 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_DISGUISED_CHAT;
+use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
@@ -6,7 +7,7 @@ use serde::Serialize;
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:disguised_chat")]
+#[client_packet(PLAY_DISGUISED_CHAT)]
 pub struct CDisguisedChatMessage<'a> {
     message: &'a TextComponent,
     chat_type: VarInt,

@@ -951,17 +951,15 @@ impl<E: DensityFunctionEnvironment> ComponentReference<E> for MutableComponentRe
 mod test {
     use std::sync::Arc;
 
-    use pumpkin_core::random::{legacy_rand::LegacyRand, RandomDeriver, RandomImpl};
+    use pumpkin_util::random::{legacy_rand::LegacyRand, RandomDeriver, RandomImpl};
 
-    use crate::generation::noise::{
-        built_in_noise_params,
-        density::{
-            noise::{InternalNoise, NoiseFunction},
-            spline::{FloatAmplifier, ImmutableSplineRef, SplineBuilder, SplineFunction},
-            test::{FakeEnvironment, OwnedConverter, TestConverter},
-            NoisePos, UnblendedNoisePos,
-        },
+    use crate::generation::noise::density::{
+        noise::{InternalNoise, NoiseFunction},
+        spline::{FloatAmplifier, ImmutableSplineRef, SplineBuilder, SplineFunction},
+        test::{FakeEnvironment, OwnedConverter, TestConverter},
+        NoisePos, UnblendedNoisePos,
     };
+    use pumpkin_data::chunk::*;
 
     use super::{ComponentReference, NoEnvironment, SharedComponentReference};
 
@@ -969,10 +967,7 @@ mod test {
     fn test_owned_minimal_conversion_spline() {
         let minimal_spline = SplineBuilder::new(
             NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::NETHER_WART,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&NETHER_WART, None)),
                 0.2f64,
                 1.1f64,
             )
@@ -1017,10 +1012,7 @@ mod test {
     fn test_nested_minimal_conversion_spline() {
         let minimal_spline = SplineBuilder::new(
             NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::NETHER_WART,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&NETHER_WART, None)),
                 0.2f64,
                 1.1f64,
             )
@@ -1031,10 +1023,7 @@ mod test {
             0f32,
             SplineBuilder::new(
                 NoiseFunction::new(
-                    Arc::new(InternalNoise::new(
-                        &built_in_noise_params::NETHER_WART,
-                        None,
-                    )),
+                    Arc::new(InternalNoise::new(&NETHER_WART, None)),
                     0.2f64,
                     1.1f64,
                 )

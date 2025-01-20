@@ -1,8 +1,8 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::OpenContainer;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ impl BlockManager {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -42,7 +42,7 @@ impl BlockManager {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         item: &Item,
         server: &Server,
     ) -> BlockActionResult {
@@ -59,7 +59,7 @@ impl BlockManager {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -74,7 +74,7 @@ impl BlockManager {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -89,7 +89,7 @@ impl BlockManager {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
         container: &mut OpenContainer,
     ) {

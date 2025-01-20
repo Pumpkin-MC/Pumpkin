@@ -28,7 +28,7 @@ impl NbtCompound {
             let name = get_nbt_string(bytes).map_err(|_| Error::Cesu8DecodingError)?;
 
             if let Ok(tag) = NbtTag::deserialize_data(bytes, tag_id) {
-                compound.put(name, tag);
+                compound.put(&name, tag);
             } else {
                 break;
             }
@@ -59,10 +59,42 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn put(&mut self, name: String, value: impl Into<NbtTag>) {
+    pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
+        let name = name.to_string();
         if !self.child_tags.iter().any(|(key, _)| key == &name) {
             self.child_tags.push((name, value.into()));
         }
+    }
+
+    pub fn put_byte(&mut self, name: &str, value: i8) {
+        self.put(name, NbtTag::Byte(value));
+    }
+
+    pub fn put_bool(&mut self, name: &str, value: bool) {
+        self.put(name, NbtTag::Byte(if value { 1 } else { 0 }));
+    }
+
+    pub fn put_short(&mut self, name: &str, value: i16) {
+        self.put(name, NbtTag::Short(value));
+    }
+
+    pub fn put_int(&mut self, name: &str, value: i32) {
+        self.put(name, NbtTag::Int(value));
+    }
+    pub fn put_long(&mut self, name: &str, value: i64) {
+        self.put(name, NbtTag::Long(value));
+    }
+
+    pub fn put_float(&mut self, name: &str, value: f32) {
+        self.put(name, NbtTag::Float(value));
+    }
+
+    pub fn put_double(&mut self, name: &str, value: f64) {
+        self.put(name, NbtTag::Double(value));
+    }
+
+    pub fn put_component(&mut self, name: &str, value: NbtCompound) {
+        self.put(name, NbtTag::Compound(value));
     }
 
     pub fn get_byte(&self, name: &str) -> Option<i8> {
@@ -134,7 +166,7 @@ impl FromIterator<(String, NbtTag)> for NbtCompound {
     fn from_iter<T: IntoIterator<Item = (String, NbtTag)>>(iter: T) -> Self {
         let mut compound = NbtCompound::new();
         for (key, value) in iter {
-            compound.put(key, value);
+            compound.put(&key, value);
         }
         compound
     }

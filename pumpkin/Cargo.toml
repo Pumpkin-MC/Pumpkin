@@ -3,20 +3,22 @@ name = "pumpkin"
 version = "0.1.0-dev"
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition = "2021"
+rust-version = "1.83"
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
 FileDescription = "Pumpkin"
 OriginalFilename = "pumpkin.exe"
-LegalCopyright = "Copyright © 2024 Aleksander Medvedev"
+LegalCopyright = "Copyright © 2025 Aleksander Medvedev"
 
 [dependencies]
 # pumpkin
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-nbt = { path = "../pumpkin-nbt" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-inventory = { path = "../pumpkin-inventory" }
 pumpkin-world = { path = "../pumpkin-world" }
-pumpkin-entity = { path = "../pumpkin-entity" }
+pumpkin-data = { path = "../pumpkin-data" }
 pumpkin-protocol = { path = "../pumpkin-protocol" }
 pumpkin-registry = { path = "../pumpkin-registry" }
 pumpkin-macros = { path = "../pumpkin-macros" }
@@ -27,9 +29,6 @@ uuid.workspace = true
 tokio.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
-
-num-traits.workspace = true
-num-derive.workspace = true
 
 # config
 serde.workspace = true
@@ -46,7 +45,7 @@ rsa = "0.9.7"
 rsa-der = "0.3.0"
 
 # authentication
-reqwest = { version = "0.12.10", default-features = false, features = [
+reqwest = { version = "0.12.12", default-features = false, features = [
     "http2",
     "json",
     "macos-system-configuration",
@@ -74,4 +73,4 @@ async-trait = "0.1.83"
 git-version = "0.3.9"
 # This makes it so the entire project doesn't recompile on each build on linux.
 [target.'cfg(target_os = "windows")'.build-dependencies]
-tauri-winres= "0.1.1"
+tauri-winres= "0.2.0"

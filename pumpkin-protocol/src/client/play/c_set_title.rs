@@ -1,10 +1,11 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_SET_TITLE_TEXT;
+use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet("play:set_title_text")]
+#[client_packet(PLAY_SET_TITLE_TEXT)]
 pub struct CTitleText<'a> {
     title: &'a TextComponent,
 }

@@ -1,5 +1,6 @@
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_inventory::{Container, OpenContainer, WindowType};
+use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::{Container, OpenContainer};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::block_registry::Block;
 
 use crate::{entity::player::Player, server::Server};
@@ -14,7 +15,7 @@ pub(crate) mod jukebox;
 pub async fn standard_on_broken_with_container(
     block: &Block,
     player: &Player,
-    location: WorldPosition,
+    location: BlockPos,
     server: &Server,
 ) {
     // TODO: drop all items and back to players inventory if in motion
@@ -37,7 +38,7 @@ pub async fn standard_on_broken_with_container(
 pub async fn standard_open_container<C: Container + Default + 'static>(
     block: &Block,
     player: &Player,
-    location: WorldPosition,
+    location: BlockPos,
     server: &Server,
     window_type: WindowType,
 ) {
@@ -65,43 +66,47 @@ pub async fn standard_open_container<C: Container + Default + 'static>(
 pub async fn standard_open_container_unique<C: Container + Default + 'static>(
     block: &Block,
     player: &Player,
-    location: WorldPosition,
+    location: BlockPos,
     server: &Server,
     window_type: WindowType,
 ) {
-    let entity_id = player.entity_id();
-    let mut open_containers = server.open_containers.write().await;
-    let mut id_to_use = -1;
+    {
+        let entity_id = player.entity_id();
+        let mut open_containers = server.open_containers.write().await;
+        let mut id_to_use = -1;
 
-    // TODO: we can do better than brute force
-    for (id, container) in open_containers.iter() {
-        if let Some(a_block) = container.get_block() {
-            if a_block.id == block.id && container.all_player_ids().is_empty() {
-                id_to_use = *id as i64;
+        // TODO: we can do better than brute force
+        for (id, container) in open_containers.iter() {
+            if let Some(a_block) = container.get_block() {
+                if a_block.id == block.id && container.all_player_ids().is_empty() {
+                    id_to_use = *id as i64;
+                }
+            }
+        }
+
+        if id_to_use == -1 {
+            let new_id = server.new_container_id();
+            log::debug!("Creating new unqiue container ID: {}", new_id);
+            let open_container = OpenContainer::new_empty_container::<C>(
+                entity_id,
+                Some(location),
+                Some(block.clone()),
+            );
+
+            open_containers.insert(new_id.into(), open_container);
+
+            player.open_container.store(Some(new_id.into()));
+        } else {
+            log::debug!("Using previous unqiue container ID: {}", id_to_use);
+            if let Some(unique_container) = open_containers.get_mut(&(id_to_use as u64)) {
+                unique_container.set_location(Some(location)).await;
+                unique_container.add_player(entity_id);
+                player
+                    .open_container
+                    .store(Some(id_to_use.try_into().unwrap()));
             }
         }
     }
-
-    if id_to_use == -1 {
-        let new_id = server.new_container_id();
-        log::debug!("Creating new unqiue container ID: {}", new_id);
-        let open_container =
-            OpenContainer::new_empty_container::<C>(entity_id, Some(location), Some(block.clone()));
-
-        open_containers.insert(new_id.into(), open_container);
-
-        player.open_container.store(Some(new_id.into()));
-    } else {
-        log::debug!("Using previous unqiue container ID: {}", id_to_use);
-        if let Some(unique_container) = open_containers.get_mut(&(id_to_use as u64)) {
-            unique_container.set_location(Some(location)).await;
-            unique_container.add_player(entity_id);
-            player
-                .open_container
-                .store(Some(id_to_use.try_into().unwrap()));
-        }
-    }
-    drop(open_containers);
     player.open_container(server, window_type).await;
 }
 

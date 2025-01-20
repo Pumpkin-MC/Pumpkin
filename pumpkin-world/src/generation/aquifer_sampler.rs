@@ -1,6 +1,6 @@
 use enum_dispatch::enum_dispatch;
 use num_traits::PrimInt;
-use pumpkin_core::{
+use pumpkin_util::{
     math::{floor_div, vector2::Vector2, vector3::Vector3},
     random::RandomDeriver,
 };
@@ -657,7 +657,7 @@ pub trait AquiferSamplerImpl {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_core::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
         block::BlockState,

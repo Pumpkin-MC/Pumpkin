@@ -6,9 +6,9 @@ use crate::command::tree_builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_core::math::vector3::Vector3;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["fill"];
 
@@ -66,9 +66,9 @@ impl CommandExecutor for SetblockExecutor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = WorldPosition(Vector3 { x, y, z });
-                            world.break_block(block_position, None).await;
-                            world.set_block_state(block_position, block_state_id).await;
+                            let block_position = BlockPos(Vector3 { x, y, z });
+                            world.break_block(&block_position, None).await;
+                            world.set_block_state(&block_position, block_state_id).await;
                             placed_blocks += 1;
                         }
                     }
@@ -78,8 +78,8 @@ impl CommandExecutor for SetblockExecutor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = WorldPosition(Vector3 { x, y, z });
-                            world.set_block_state(block_position, block_state_id).await;
+                            let block_position = BlockPos(Vector3 { x, y, z });
+                            world.set_block_state(&block_position, block_state_id).await;
                             placed_blocks += 1;
                         }
                     }
@@ -89,10 +89,10 @@ impl CommandExecutor for SetblockExecutor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = WorldPosition(Vector3 { x, y, z });
-                            match world.get_block_state(block_position).await {
+                            let block_position = BlockPos(Vector3 { x, y, z });
+                            match world.get_block_state(&block_position).await {
                                 Ok(old_state) if old_state.air => {
-                                    world.set_block_state(block_position, block_state_id).await;
+                                    world.set_block_state(&block_position, block_state_id).await;
                                     placed_blocks += 1;
                                 }
                                 _ => {}
@@ -105,7 +105,7 @@ impl CommandExecutor for SetblockExecutor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = WorldPosition(Vector3::new(x, y, z));
+                            let block_position = BlockPos(Vector3::new(x, y, z));
                             let is_edge = x == start_x
                                 || x == end_x
                                 || y == start_y
@@ -113,9 +113,9 @@ impl CommandExecutor for SetblockExecutor {
                                 || z == start_z
                                 || z == end_z;
                             if is_edge {
-                                world.set_block_state(block_position, block_state_id).await;
+                                world.set_block_state(&block_position, block_state_id).await;
                             } else {
-                                world.set_block_state(block_position, 0).await;
+                                world.set_block_state(&block_position, 0).await;
                             }
                             placed_blocks += 1;
                         }
@@ -126,7 +126,7 @@ impl CommandExecutor for SetblockExecutor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = WorldPosition(Vector3::new(x, y, z));
+                            let block_position = BlockPos(Vector3::new(x, y, z));
                             let is_edge = x == start_x
                                 || x == end_x
                                 || y == start_y
@@ -134,7 +134,7 @@ impl CommandExecutor for SetblockExecutor {
                                 || z == start_z
                                 || z == end_z;
                             if is_edge {
-                                world.set_block_state(block_position, block_state_id).await;
+                                world.set_block_state(&block_position, block_state_id).await;
                                 placed_blocks += 1;
                             }
                         }

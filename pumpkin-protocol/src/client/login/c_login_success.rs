@@ -1,9 +1,10 @@
 use bytes::BufMut;
+use pumpkin_data::packet::clientbound::LOGIN_LOGIN_FINISHED;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, Property};
 
-#[client_packet("login:login_finished")]
+#[client_packet(LOGIN_LOGIN_FINISHED)]
 pub struct CLoginSuccess<'a> {
     pub uuid: &'a uuid::Uuid,
     pub username: &'a str, // 16

@@ -2,8 +2,8 @@ use crate::block::block_manager::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::OpenContainer;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 
@@ -21,7 +21,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
     ) {
     }
@@ -29,7 +29,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _item: &Item,
         _server: &Server,
     ) -> BlockActionResult {
@@ -40,7 +40,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
     ) {
     }
@@ -49,7 +49,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
     ) {
     }
@@ -58,7 +58,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
         _container: &mut OpenContainer,
     ) {

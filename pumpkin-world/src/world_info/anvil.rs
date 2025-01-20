@@ -72,7 +72,11 @@ impl WorldInfoWriter for AnvilLevelInfo {
 
         // open file
         let path = level_folder.root_folder.join(LEVEL_DAT_FILE_NAME);
-        let mut world_info_file = OpenOptions::new().write(true).open(path)?;
+        let mut world_info_file = OpenOptions::new()
+            .truncate(true)
+            .create(true)
+            .write(true)
+            .open(path)?;
         // write compressed data into file
         world_info_file.write_all(&compressed_data).unwrap();
 

@@ -1,4 +1,4 @@
-use pumpkin_core::random::{legacy_rand::LegacyRand, RandomImpl};
+use pumpkin_util::random::{legacy_rand::LegacyRand, RandomImpl};
 
 use crate::generation::noise::simplex::SimplexNoiseSampler;
 

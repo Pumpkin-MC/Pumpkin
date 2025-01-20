@@ -48,8 +48,8 @@ use std::sync::Arc;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
-use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -85,26 +85,15 @@ fn init_logger() {
             logger = logger.without_timestamps();
         }
 
-        if ADVANCED_CONFIG.logging.env {
-            logger = logger.env();
-        }
-
-        logger = logger.with_level(convert_logger_filter(ADVANCED_CONFIG.logging.level));
+        // default
+        logger = logger.with_level(LevelFilter::Info);
 
         logger = logger.with_colors(ADVANCED_CONFIG.logging.color);
         logger = logger.with_threads(ADVANCED_CONFIG.logging.threads);
-        logger.init().unwrap();
-    }
-}
 
-const fn convert_logger_filter(level: pumpkin_config::logging::LevelFilter) -> LevelFilter {
-    match level {
-        pumpkin_config::logging::LevelFilter::Off => LevelFilter::Off,
-        pumpkin_config::logging::LevelFilter::Error => LevelFilter::Error,
-        pumpkin_config::logging::LevelFilter::Warn => LevelFilter::Warn,
-        pumpkin_config::logging::LevelFilter::Info => LevelFilter::Info,
-        pumpkin_config::logging::LevelFilter::Debug => LevelFilter::Debug,
-        pumpkin_config::logging::LevelFilter::Trace => LevelFilter::Trace,
+        logger = logger.env();
+
+        logger.init().unwrap();
     }
 }
 
@@ -161,7 +150,7 @@ async fn main() {
         .expect("Unable to get the address of server!");
 
     let use_console = ADVANCED_CONFIG.commands.use_console;
-    let rcon = ADVANCED_CONFIG.rcon.clone();
+    let rcon = ADVANCED_CONFIG.networking.rcon.clone();
 
     let server = Arc::new(Server::new());
     let mut ticker = Ticker::new(BASIC_CONFIG.tps);
@@ -179,12 +168,12 @@ async fn main() {
         });
     }
 
-    if ADVANCED_CONFIG.query.enabled {
+    if ADVANCED_CONFIG.networking.query.enabled {
         log::info!("Query protocol enabled. Starting...");
         tokio::spawn(query::start_query_handler(server.clone(), addr));
     }
 
-    if ADVANCED_CONFIG.lan_broadcast.enabled {
+    if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
         log::info!("LAN broadcast enabled. Starting...");
         tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
     }
@@ -307,10 +296,13 @@ fn setup_console(server: Arc<Server>) {
                 .expect("Failed to read console line");
 
             if !out.is_empty() {
-                let dispatcher = server.command_dispatcher.read().await;
-                dispatcher
-                    .handle_command(&mut command::CommandSender::Console, &server, &out)
-                    .await;
+                let server_clone = server.clone();
+                tokio::spawn(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(&mut command::CommandSender::Console, &server_clone, &out)
+                        .await;
+                });
             }
         }
     });

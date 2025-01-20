@@ -1,7 +1,6 @@
 use crate::container_click::MouseClick;
 use crate::player::PlayerInventory;
-use num_derive::FromPrimitive;
-use pumpkin_macros::screen;
+use pumpkin_data::screen::WindowType;
 use pumpkin_world::item::ItemStack;
 
 pub mod container_click;
@@ -15,45 +14,6 @@ pub mod window_property;
 pub use error::InventoryError;
 pub use open_container::*;
 
-#[derive(Debug, FromPrimitive, Clone, Copy, Eq, PartialEq)]
-#[repr(u8)]
-pub enum WindowType {
-    // not used
-    Generic9x1 = screen!("generic_9x1"),
-    // not used
-    Generic9x2 = screen!("generic_9x2"),
-    // General-purpose 3-row inventory. Used by Chest, minecart with chest, ender chest, and barrel
-    Generic9x3 = screen!("generic_9x3"),
-    // not used
-    Generic9x4 = screen!("generic_9x4"),
-    // not used
-    Generic9x5 = screen!("generic_9x5"),
-    // Used by large chests
-    Generic9x6 = screen!("generic_9x6"),
-    // General-purpose 3-by-3 square inventory, used by Dispenser and Dropper
-    Generic3x3 = screen!("generic_3x3"),
-    // General-purpose 3-by-3 square inventory, used by the Crafter
-    Craft3x3 = screen!("crafter_3x3"),
-    Anvil = screen!("anvil"),
-    Beacon = screen!("beacon"),
-    BlastFurnace = screen!("blast_furnace"),
-    BrewingStand = screen!("brewing_stand"),
-    CraftingTable = screen!("crafting"),
-    EnchantmentTable = screen!("enchantment"),
-    Furnace = screen!("furnace"),
-    Grindstone = screen!("grindstone"),
-    // Hopper or minecart with hopper
-    Hopper = screen!("hopper"),
-    Lectern = screen!("lectern"),
-    Loom = screen!("loom"),
-    // Villager, Wandering Trader
-    Merchant = screen!("merchant"),
-    ShulkerBox = screen!("shulker_box"),
-    SmithingTable = screen!("smithing"),
-    Smoker = screen!("smoker"),
-    CartographyTable = screen!("cartography_table"),
-    Stonecutter = screen!("stonecutter"),
-}
 pub struct ContainerStruct<const SLOTS: usize>([Option<ItemStack>; SLOTS]);
 
 // Container needs Sync + Send to be able to be in async Server

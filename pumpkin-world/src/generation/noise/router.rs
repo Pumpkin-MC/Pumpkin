@@ -13,26 +13,23 @@ use crate::generation::{
     },
     ore_sampler::vein_type,
 };
+use pumpkin_data::chunk::*;
 
-use super::{
-    built_in_noise_params,
-    density::{
-        basic::{ConstantFunction, WrapperFunction, WrapperType, YClampedFunction},
-        built_in_density_function::{
-            CAVES_PILLARS_OVERWORLD, CAVES_SPAGHETTI_2D_OVERWORLD,
-            CAVES_SPAGHETTI_ROUGHNESS_FUNCTION_OVERWORLD, DEPTH_OVERWORLD,
-            DEPTH_OVERWORLD_AMPLIFIED, DEPTH_OVERWORLD_LARGE_BIOME, FACTOR_OVERWORLD,
-            FACTOR_OVERWORLD_AMPLIFIED, FACTOR_OVERWORLD_LARGE_BIOME, SHIFT_X, SHIFT_Z,
-            SLOPED_CHEESE_OVERWORLD, SLOPED_CHEESE_OVERWORLD_AMPLIFIED,
-            SLOPED_CHEESE_OVERWORLD_LARGE_BIOME, ZERO,
-        },
-        component_functions::{
-            ComponentReference, ComponentReferenceMap, ComponentReferenceMath, ConverterImpl,
-            DensityFunctionEnvironment, NoEnvironment, SharedComponentReference,
-        },
-        lerp_density_static_start,
-        noise::{InternalNoise, NoiseFunction, ShiftedNoiseFunction},
+use super::density::{
+    basic::{ConstantFunction, WrapperFunction, WrapperType, YClampedFunction},
+    built_in_density_function::{
+        CAVES_PILLARS_OVERWORLD, CAVES_SPAGHETTI_2D_OVERWORLD,
+        CAVES_SPAGHETTI_ROUGHNESS_FUNCTION_OVERWORLD, DEPTH_OVERWORLD, DEPTH_OVERWORLD_AMPLIFIED,
+        DEPTH_OVERWORLD_LARGE_BIOME, FACTOR_OVERWORLD, FACTOR_OVERWORLD_AMPLIFIED,
+        FACTOR_OVERWORLD_LARGE_BIOME, SHIFT_X, SHIFT_Z, SLOPED_CHEESE_OVERWORLD,
+        SLOPED_CHEESE_OVERWORLD_AMPLIFIED, SLOPED_CHEESE_OVERWORLD_LARGE_BIOME, ZERO,
     },
+    component_functions::{
+        ComponentReference, ComponentReferenceMap, ComponentReferenceMath, ConverterImpl,
+        DensityFunctionEnvironment, NoEnvironment, SharedComponentReference,
+    },
+    lerp_density_static_start,
+    noise::{InternalNoise, NoiseFunction, ShiftedNoiseFunction},
 };
 
 pub static OVERWORLD_NOISE_ROUTER: LazyLock<BaseRouter> =
@@ -153,37 +150,25 @@ impl BaseRouter {
         assert!(!(large_biomes && amplified));
 
         let aquifier_barrier = NoiseFunction::new(
-            Arc::new(InternalNoise::new(
-                &built_in_noise_params::AQUIFER_BARRIER,
-                None,
-            )),
+            Arc::new(InternalNoise::new(&AQUIFER_BARRIER, None)),
             1f64,
             0.5f64,
         );
 
         let aquifier_fluid_level_floodedness = NoiseFunction::new(
-            Arc::new(InternalNoise::new(
-                &built_in_noise_params::AQUIFER_FLUID_LEVEL_FLOODEDNESS,
-                None,
-            )),
+            Arc::new(InternalNoise::new(&AQUIFER_FLUID_LEVEL_FLOODEDNESS, None)),
             1f64,
             0.67f64,
         );
 
         let aquifer_fluid_level_spread = NoiseFunction::new(
-            Arc::new(InternalNoise::new(
-                &built_in_noise_params::AQUIFER_FLUID_LEVEL_SPREAD,
-                None,
-            )),
+            Arc::new(InternalNoise::new(&AQUIFER_FLUID_LEVEL_SPREAD, None)),
             1f64,
             0.7142857142857143f64,
         );
 
         let aquifer_lava = NoiseFunction::new(
-            Arc::new(InternalNoise::new(
-                &built_in_noise_params::AQUIFER_LAVA,
-                None,
-            )),
+            Arc::new(InternalNoise::new(&AQUIFER_LAVA, None)),
             1f64,
             1f64,
         );
@@ -201,9 +186,9 @@ impl BaseRouter {
             0f64,
             Arc::new(InternalNoise::new(
                 if large_biomes {
-                    &built_in_noise_params::TEMPERATURE_LARGE
+                    &TEMPERATURE_LARGE
                 } else {
-                    &built_in_noise_params::TEMPERATURE
+                    &TEMPERATURE
                 },
                 None,
             )),
@@ -222,9 +207,9 @@ impl BaseRouter {
             0f64,
             Arc::new(InternalNoise::new(
                 if large_biomes {
-                    &built_in_noise_params::VEGETATION_LARGE
+                    &VEGETATION_LARGE
                 } else {
-                    &built_in_noise_params::VEGETATION
+                    &VEGETATION
                 },
                 None,
             )),
@@ -295,10 +280,7 @@ impl BaseRouter {
         let ore_veininess = vertical_range_choice(
             Y.clone(),
             NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::ORE_VEININESS,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&ORE_VEININESS, None)),
                 1.5f64,
                 1.5f64,
             )
@@ -310,12 +292,7 @@ impl BaseRouter {
 
         let ore_vein_a = vertical_range_choice(
             Y.clone(),
-            NoiseFunction::new(
-                Arc::new(InternalNoise::new(&built_in_noise_params::ORE_VEIN_A, None)),
-                4f64,
-                4f64,
-            )
-            .into(),
+            NoiseFunction::new(Arc::new(InternalNoise::new(&ORE_VEIN_A, None)), 4f64, 4f64).into(),
             i,
             j,
             0,
@@ -324,12 +301,7 @@ impl BaseRouter {
 
         let ore_vein_b = vertical_range_choice(
             Y.clone(),
-            NoiseFunction::new(
-                Arc::new(InternalNoise::new(&built_in_noise_params::ORE_VEIN_B, None)),
-                4f64,
-                4f64,
-            )
-            .into(),
+            NoiseFunction::new(Arc::new(InternalNoise::new(&ORE_VEIN_B, None)), 4f64, 4f64).into(),
             i,
             j,
             0,
@@ -338,11 +310,7 @@ impl BaseRouter {
 
         let ore_vein = ConstantFunction::new(-0.08f32 as f64).add(ore_vein_a.max(ore_vein_b));
 
-        let ore_gap = NoiseFunction::new(
-            Arc::new(InternalNoise::new(&built_in_noise_params::ORE_GAP, None)),
-            1f64,
-            1f64,
-        );
+        let ore_gap = NoiseFunction::new(Arc::new(InternalNoise::new(&ORE_GAP, None)), 1f64, 1f64);
 
         Self {
             barrier: aquifier_barrier.into(),
@@ -423,17 +391,11 @@ fn apply_slides(
 }
 
 fn create_caves(sloped_cheese: SharedComponentReference) -> SharedComponentReference {
-    let cave_layer = NoiseFunction::new(
-        Arc::new(InternalNoise::new(&built_in_noise_params::CAVE_LAYER, None)),
-        1f64,
-        8f64,
-    );
+    let cave_layer =
+        NoiseFunction::new(Arc::new(InternalNoise::new(&CAVE_LAYER, None)), 1f64, 8f64);
     let scaled_cave_layer = ConstantFunction::new(4f64).mul(cave_layer.square());
     let cave_cheese = NoiseFunction::new(
-        Arc::new(InternalNoise::new(
-            &built_in_noise_params::CAVE_CHEESE,
-            None,
-        )),
+        Arc::new(InternalNoise::new(&CAVE_CHEESE, None)),
         1f64,
         0.6666666666666666f64,
     );
@@ -470,7 +432,7 @@ fn create_caves(sloped_cheese: SharedComponentReference) -> SharedComponentRefer
 mod test {
     use std::{fs, path::Path, sync::Arc};
 
-    use pumpkin_core::{
+    use pumpkin_util::{
         assert_eq_delta,
         random::{legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomDeriver, RandomImpl},
     };

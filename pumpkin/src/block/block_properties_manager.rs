@@ -1,8 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_world::block::{block_registry::{Block, BLOCKS}, BlockFace};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::{
+    block_registry::{Block, BLOCKS},
+    BlockFace,
+};
 
 use crate::world::World;
 
@@ -10,8 +13,20 @@ use super::properties::slab::SlabBehavior;
 
 #[async_trait]
 pub trait BlockBehavior: Send + Sync {
-    async fn map_state_id(&self, world: &World, block: &Block, face: &BlockFace, world_pos: &WorldPosition) -> u16;
-    async fn is_updateable(&self, world: &World, block: &Block, face: &BlockFace, world_pos: &WorldPosition) -> bool;
+    async fn map_state_id(
+        &self,
+        world: &World,
+        block: &Block,
+        face: &BlockFace,
+        world_pos: &BlockPos,
+    ) -> u16;
+    async fn is_updateable(
+        &self,
+        world: &World,
+        block: &Block,
+        face: &BlockFace,
+        world_pos: &BlockPos,
+    ) -> bool;
 }
 
 #[derive(Clone, Debug)]
@@ -62,14 +77,26 @@ impl BlockPropertiesManager {
         }
     }
 
-    pub async fn get_state_id(&self, world: &World, block: &Block, face: &BlockFace, world_pos: &WorldPosition) -> u16 {
+    pub async fn get_state_id(
+        &self,
+        world: &World,
+        block: &Block,
+        face: &BlockFace,
+        world_pos: &BlockPos,
+    ) -> u16 {
         if let Some(behaviour) = self.properties_registry.get(&block.id) {
             return behaviour.map_state_id(world, block, face, world_pos).await;
         }
         block.default_state_id
     }
 
-    pub async fn is_updateable(&self, world: &World, block: &Block, face: &BlockFace, world_pos: &WorldPosition) -> bool {
+    pub async fn is_updateable(
+        &self,
+        world: &World,
+        block: &Block,
+        face: &BlockFace,
+        world_pos: &BlockPos,
+    ) -> bool {
         if let Some(behaviour) = self.properties_registry.get(&block.id) {
             return behaviour.is_updateable(world, block, face, world_pos).await;
         }

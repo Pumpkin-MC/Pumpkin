@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_core::text::color::NamedColor;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_block::BlockArgumentConsumer;
 use crate::command::args::arg_position_block::BlockPosArgumentConsumer;
@@ -47,17 +47,17 @@ impl CommandExecutor for SetblockExecutor {
 
         let success = match mode {
             Mode::Destroy => {
-                world.break_block(pos, None).await;
-                world.set_block_state(pos, block_state_id).await;
+                world.break_block(&pos, None).await;
+                world.set_block_state(&pos, block_state_id).await;
                 true
             }
             Mode::Replace => {
-                world.set_block_state(pos, block_state_id).await;
+                world.set_block_state(&pos, block_state_id).await;
                 true
             }
-            Mode::Keep => match world.get_block_state(pos).await {
+            Mode::Keep => match world.get_block_state(&pos).await {
                 Ok(old_state) if old_state.air => {
-                    world.set_block_state(pos, block_state_id).await;
+                    world.set_block_state(&pos, block_state_id).await;
                     true
                 }
                 Ok(_) => false,

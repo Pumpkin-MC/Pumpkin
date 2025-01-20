@@ -1,9 +1,10 @@
 use bytes::BufMut;
+use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, VarInt};
 
-#[client_packet("play:commands")]
+#[client_packet(PLAY_COMMANDS)]
 pub struct CCommands<'a> {
     pub nodes: Vec<ProtoNode<'a>>,
     pub root_node_index: VarInt,

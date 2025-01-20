@@ -2,7 +2,7 @@ use crate::command::args::GetCloned;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::TextComponent;
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;

@@ -1,24 +1,32 @@
+use core::f32;
 use std::sync::{atomic::AtomicBool, Arc};
 
+use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use num_derive::FromPrimitive;
-use pumpkin_core::math::{
+use pumpkin_data::entity::{EntityPose, EntityType};
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_protocol::{
+    client::play::{CHeadRot, CSetEntityMetadata, CTeleportEntity, CUpdateEntityRot, Metadata},
+    codec::var_int::VarInt,
+};
+use pumpkin_util::math::{
     boundingbox::{BoundingBox, BoundingBoxSize},
     get_section_cord,
-    position::WorldPosition,
+    position::BlockPos,
     vector2::Vector2,
     vector3::Vector3,
-};
-use pumpkin_entity::{entity_type::EntityType, pose::EntityPose, EntityId};
-use pumpkin_protocol::{
-    client::play::{CSetEntityMetadata, CTeleportEntity, Metadata},
-    codec::var_int::VarInt,
+    wrap_degrees,
 };
 
 use crate::world::World;
 
+pub mod ai;
+pub mod mob;
+
 pub mod living;
 pub mod player;
+
+pub type EntityId = i32;
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -33,7 +41,7 @@ pub struct Entity {
     /// The entity's current position in the world
     pub pos: AtomicCell<Vector3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
-    pub block_pos: AtomicCell<WorldPosition>,
+    pub block_pos: AtomicCell<BlockPos>,
     /// The chunk coordinates of the entity's current position
     pub chunk_pos: AtomicCell<Vector2<i32>>,
     /// Indicates whether the entity is sneaking
@@ -63,23 +71,29 @@ pub struct Entity {
 }
 
 impl Entity {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         entity_id: EntityId,
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
+        position: Vector3<f64>,
         entity_type: EntityType,
         standing_eye_height: f32,
         bounding_box: AtomicCell<BoundingBox>,
         bounding_box_size: AtomicCell<BoundingBoxSize>,
     ) -> Self {
+        let floor_x = position.x.floor() as i32;
+        let floor_y = position.y.floor() as i32;
+        let floor_z = position.z.floor() as i32;
+
         Self {
             entity_id,
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
-            pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
-            block_pos: AtomicCell::new(WorldPosition(Vector3::new(0, 0, 0))),
-            chunk_pos: AtomicCell::new(Vector2::new(0, 0)),
+            pos: AtomicCell::new(position),
+            block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
+            chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
             world,
             // TODO: Load this from previous instance
@@ -121,7 +135,7 @@ impl Entity {
                 || floor_z != block_pos_vec.z
             {
                 let new_block_pos = Vector3::new(floor_x, floor_y, floor_z);
-                self.block_pos.store(WorldPosition(new_block_pos));
+                self.block_pos.store(BlockPos(new_block_pos));
 
                 let chunk_pos = self.chunk_pos.load();
                 if get_section_cord(floor_x) != chunk_pos.x
@@ -134,6 +148,33 @@ impl Entity {
                 }
             }
         }
+    }
+
+    /// Changes this entity's pitch and yaw to look at target
+    pub async fn look_at(&self, target: Vector3<f64>) {
+        let position = self.pos.load();
+        let delta = target.sub(&position);
+        let root = delta.x.hypot(delta.z);
+        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / f32::consts::PI);
+        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / f32::consts::PI) - 90.0);
+        self.pitch.store(pitch);
+        self.yaw.store(yaw);
+
+        // send packet
+        // TODO: do caching, only send packet when needed
+        let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
+        self.world
+            .broadcast_packet_all(&CUpdateEntityRot::new(
+                self.entity_id.into(),
+                yaw as u8,
+                pitch as u8,
+                self.on_ground.load(std::sync::atomic::Ordering::Relaxed),
+            ))
+            .await;
+        self.world
+            .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), yaw as u8))
+            .await;
     }
 
     pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
@@ -243,7 +284,64 @@ impl Entity {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, FromPrimitive)]
+#[async_trait]
+impl NBTStorage for Entity {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        let position = self.pos.load();
+        nbt.put(
+            "Pos",
+            NbtTag::List(vec![
+                position.x.into(),
+                position.y.into(),
+                position.z.into(),
+            ]),
+        );
+        let velocity = self.velocity.load();
+        nbt.put(
+            "Motion",
+            NbtTag::List(vec![
+                velocity.x.into(),
+                velocity.y.into(),
+                velocity.z.into(),
+            ]),
+        );
+        nbt.put(
+            "Rotation",
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
+        );
+
+        // todo more...
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        let position = nbt.get_list("Pos").unwrap();
+        let x = position[0].extract_double().unwrap_or(0.0);
+        let y = position[1].extract_double().unwrap_or(0.0);
+        let z = position[2].extract_double().unwrap_or(0.0);
+        self.pos.store(Vector3::new(x, y, z));
+        let velocity = nbt.get_list("Motion").unwrap();
+        let x = velocity[0].extract_double().unwrap_or(0.0);
+        let y = velocity[1].extract_double().unwrap_or(0.0);
+        let z = velocity[2].extract_double().unwrap_or(0.0);
+        self.velocity.store(Vector3::new(x, y, z));
+        let rotation = nbt.get_list("Rotation").unwrap();
+        let yaw = rotation[0].extract_float().unwrap_or(0.0);
+        let pitch = rotation[1].extract_float().unwrap_or(0.0);
+        self.yaw.store(yaw);
+        self.pitch.store(pitch);
+
+        // todo more...
+    }
+}
+
+#[async_trait]
+pub trait NBTStorage: Send + Sync {
+    async fn write_nbt(&self, nbt: &mut NbtCompound);
+
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Represents various entity flags that are sent in entity metadata.
 ///
 /// These flags are used by the client to modify the rendering of entities based on their current state.

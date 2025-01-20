@@ -1,7 +1,8 @@
+use pumpkin_data::packet::clientbound::CONFIG_FINISH_CONFIGURATION;
 use pumpkin_macros::client_packet;
 
 #[derive(serde::Serialize)]
-#[client_packet("config:finish_configuration")]
+#[client_packet(CONFIG_FINISH_CONFIGURATION)]
 pub struct CFinishConfig {}
 
 impl Default for CFinishConfig {

@@ -1,11 +1,11 @@
 use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_core::{
-    math::{get_section_cord, position::WorldPosition, vector3::Vector3},
+use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
+use pumpkin_util::{
+    math::{get_section_cord, position::BlockPos, vector3::Vector3},
     GameMode,
 };
-use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;
@@ -79,18 +79,13 @@ pub async fn update_position(player: &Arc<Player>) {
 
         // Make sure the watched section and the chunk watcher updates are async atomic. We want to
         // ensure what we unload when the player disconnects is correct
-        entity
-            .world
-            .level
-            .mark_chunks_as_newly_watched(&loading_chunks);
-        let chunks_to_clean = entity
-            .world
-            .level
-            .mark_chunks_as_not_watched(&unloading_chunks);
+        let level = &entity.world.level;
+        level.mark_chunks_as_newly_watched(&loading_chunks);
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks);
         player.watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {
-            entity.world.level.clean_chunks(&chunks_to_clean);
+            level.clean_chunks(&chunks_to_clean).await;
 
             // This can take a little if we are sending a bunch of packets, queue it up :p
             let client = player.client.clone();
@@ -116,7 +111,7 @@ pub async fn update_position(player: &Arc<Player>) {
 }
 
 #[must_use]
-pub const fn chunk_section_from_pos(block_pos: &WorldPosition) -> Vector3<i32> {
+pub const fn chunk_section_from_pos(block_pos: &BlockPos) -> Vector3<i32> {
     let block_pos = block_pos.0;
     Vector3::new(
         get_section_cord(block_pos.x),

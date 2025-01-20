@@ -16,8 +16,8 @@ use crate::server::Server;
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
 use async_trait::async_trait;
-use pumpkin_core::text::color::{Color, NamedColor};
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];

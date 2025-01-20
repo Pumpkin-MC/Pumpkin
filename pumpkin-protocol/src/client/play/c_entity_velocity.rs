@@ -1,10 +1,11 @@
+use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_MOTION;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:set_entity_motion")]
+#[client_packet(PLAY_SET_ENTITY_MOTION)]
 pub struct CEntityVelocity<'a> {
     entity_id: &'a VarInt,
     velocity_x: i16,

@@ -1,4 +1,5 @@
 use bytes::{Buf, Bytes};
+use pumpkin_data::packet::serverbound::PLAY_CHAT;
 use pumpkin_macros::server_packet;
 
 use crate::{
@@ -7,7 +8,7 @@ use crate::{
 };
 
 // derive(Deserialize)]
-#[server_packet("play:chat")]
+#[server_packet(PLAY_CHAT)]
 pub struct SChatMessage {
     pub message: String,
     pub timestamp: i64,

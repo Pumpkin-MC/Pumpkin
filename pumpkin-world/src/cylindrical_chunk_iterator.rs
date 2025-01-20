@@ -1,6 +1,6 @@
 use std::num::NonZeroU8;
 
-use pumpkin_core::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vector2;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cylindrical {
@@ -61,7 +61,7 @@ impl Cylindrical {
         let min_leg = rel_x.min(rel_z) as i64;
 
         let hyp_sqr = max_leg * max_leg + min_leg * min_leg;
-        hyp_sqr < (self.view_distance.get() as i64 * self.view_distance.get() as i64)
+        hyp_sqr < (self.view_distance.saturating_mul(self.view_distance).get() as i64)
     }
 
     /// Returns an iterator of all chunks within this cylinder
@@ -87,7 +87,7 @@ mod test {
     use std::num::NonZeroU8;
 
     use super::Cylindrical;
-    use pumpkin_core::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vector2;
 
     #[test]
     fn test_bounds() {

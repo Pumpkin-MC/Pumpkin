@@ -1,8 +1,9 @@
-use pumpkin_core::math::vector3::Vector3;
+use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_POS_ROT;
 use pumpkin_macros::server_packet;
+use pumpkin_util::math::vector3::Vector3;
 
 #[derive(serde::Deserialize)]
-#[server_packet("play:move_player_pos_rot")]
+#[server_packet(PLAY_MOVE_PLAYER_POS_ROT)]
 pub struct SPlayerPositionRotation {
     pub position: Vector3<f64>,
     pub yaw: f32,

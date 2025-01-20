@@ -5,16 +5,14 @@ edition.workspace = true
 
 [dependencies]
 pumpkin-protocol = { path = "../pumpkin-protocol" }
+pumpkin-data = { path = "../pumpkin-data" }
 
 pumpkin-world = { path = "../pumpkin-world" }
 pumpkin-registry = {path = "../pumpkin-registry"}
-pumpkin-macros = { path = "../pumpkin-macros" }
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 
 log.workspace = true
 rayon.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 
-num-traits.workspace = true
-num-derive.workspace = true

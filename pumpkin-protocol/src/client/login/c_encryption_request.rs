@@ -1,10 +1,11 @@
+use pumpkin_data::packet::clientbound::LOGIN_HELLO;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("login:hello")]
+#[client_packet(LOGIN_HELLO)]
 pub struct CEncryptionRequest<'a> {
     server_id: &'a str, // 20
     public_key_length: VarInt,

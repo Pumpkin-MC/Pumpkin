@@ -1,9 +1,10 @@
 use crate::{Link, VarInt};
+use pumpkin_data::packet::clientbound::CONFIG_SERVER_LINKS;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet("config:server_links")]
+#[client_packet(CONFIG_SERVER_LINKS)]
 pub struct CConfigServerLinks<'a> {
     links_count: &'a VarInt,
     links: &'a [Link<'a>],
