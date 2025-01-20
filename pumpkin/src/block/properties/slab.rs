@@ -24,7 +24,7 @@ pub struct SlabBehavior {
 }
 
 impl SlabBehavior {
-    pub fn get_or_init(properties: &Vec<Property>) -> Arc<Self> {
+    pub fn get_or_init(properties: &[Property]) -> Arc<Self> {
         SLAB_BEHAVIOR
             .get_or_init(|| Arc::new(Self::new(properties)))
             .clone()
@@ -34,7 +34,7 @@ impl SlabBehavior {
         SLAB_BEHAVIOR.get().expect("Slab Uninitialized").clone()
     }
 
-    pub fn new(properties: &Vec<Property>) -> Self {
+    pub fn new(properties: &[Property]) -> Self {
         let total_combinations: usize = properties.iter().map(|p| p.values.len()).product();
 
         let mut forward_map = HashMap::with_capacity(total_combinations);
@@ -74,7 +74,6 @@ impl SlabBehavior {
     }
 
     pub fn evalute_property_type(
-        &self,
         block: &Block,
         clicked_block: &Block,
         _world_pos: &BlockPos,
@@ -87,7 +86,6 @@ impl SlabBehavior {
     }
 
     pub fn evalute_property_waterlogged(
-        &self,
         _block: &Block,
         clicked_block: &Block,
         _world_pos: &BlockPos,
@@ -96,7 +94,7 @@ impl SlabBehavior {
         if clicked_block.name == "water" {
             return format!("{}{}", "waterlogged", "true");
         }
-        return format!("{}{}", "waterlogged", "false");
+        format!("{}{}", "waterlogged", "false")
     }
 }
 
@@ -109,20 +107,21 @@ impl BlockBehavior for SlabBehavior {
         face: &BlockFace,
         world_pos: &BlockPos,
     ) -> u16 {
-        let clicked_block = world.get_block(&*world_pos).await.unwrap();
+        let clicked_block = world.get_block(world_pos).await.unwrap();
         let mut hmap_key: Vec<String> = Vec::with_capacity(block.properties.len());
-        let slab_behaviour = SlabBehavior::get();
+        let slab_behaviour = Self::get();
 
-        for property in block.properties.iter() {
-            let state =
-                match get_property_key(&property.name.as_str()).expect("Property not found") {
-                    BlockProperty::SlabType(SlabPosition::Top) => {
-                        slab_behaviour.evalute_property_type(block, clicked_block, world_pos, face)
-                    }
-                    BlockProperty::Waterlogged(false) => slab_behaviour
-                        .evalute_property_waterlogged(block, clicked_block, world_pos, face),
-                    _ => panic!("Property not found"),
-                };
+        for property in &block.properties {
+            let state = match get_property_key(property.name.as_str()).expect("Property not found")
+            {
+                BlockProperty::SlabType(SlabPosition::Top) => {
+                    Self::evalute_property_type(block, clicked_block, world_pos, face)
+                }
+                BlockProperty::Waterlogged(false) => {
+                    Self::evalute_property_waterlogged(block, clicked_block, world_pos, face)
+                }
+                _ => panic!("Property not found"),
+            };
             hmap_key.push(state.to_string());
         }
 
@@ -137,17 +136,15 @@ impl BlockBehavior for SlabBehavior {
         face: &BlockFace,
         world_pos: &BlockPos,
     ) -> bool {
-        let clicked_block = world.get_block(&*world_pos).await.unwrap();
+        let clicked_block = world.get_block(world_pos).await.unwrap();
         if block.id != clicked_block.id || *face != BlockFace::Top {
             return false;
         }
 
-        let clicked_block_state_id = world.get_block_state_id(&*world_pos).await.unwrap();
+        let clicked_block_state_id = world.get_block_state_id(world_pos).await.unwrap();
 
-        if let Some(properties) = SlabBehavior::get()
-            .property_mappings
-            .get(&(&clicked_block_state_id - clicked_block.states[0].id))
-        {
+        let key = clicked_block_state_id - clicked_block.states[0].id;
+        if let Some(properties) = Self::get().property_mappings.get(&key) {
             log::warn!("Properties: {:?}", properties);
             if properties.contains(&"typebottom".to_string()) {
                 return true;

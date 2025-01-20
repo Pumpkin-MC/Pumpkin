@@ -52,6 +52,7 @@ pub enum Direction {
     West,
 }
 
+#[must_use]
 pub fn get_property_key(property_name: &str) -> Option<BlockProperty> {
     match property_name {
         "waterlogged" => Some(BlockProperty::Waterlogged(false)),
@@ -68,7 +69,7 @@ pub struct BlockPropertiesManager {
 
 impl BlockPropertiesManager {
     pub fn build_properties_registry(&mut self) {
-        for block in BLOCKS.blocks.iter() {
+        for block in &BLOCKS.blocks {
             let behaviour: Arc<dyn BlockBehavior> = match block.name.as_str() {
                 name if name.ends_with("_slab") => SlabBehavior::get_or_init(&block.properties),
                 _ => continue,

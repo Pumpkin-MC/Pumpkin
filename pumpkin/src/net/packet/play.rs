@@ -1097,37 +1097,36 @@ impl Player {
         let entity = &self.living_entity.entity;
         let world = &entity.world;
 
-        let clicked_world_pos = BlockPos(location.0);
-        let clicked_block_state = world.get_block_state(&clicked_world_pos).await?;
+        let clicked_block_pos = BlockPos(location.0);
+        let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;
 
-        let world_pos = if clicked_block_state.replaceable {
-            clicked_world_pos
-        } else if server
-            .block_properties_manager
-            .is_updateable(&world, &block, face, &clicked_world_pos)
-            .await
+        let final_block_pos = if clicked_block_state.replaceable
+            || server
+                .block_properties_manager
+                .is_updateable(world, &block, face, &clicked_block_pos)
+                .await
         {
-            clicked_world_pos
+            clicked_block_pos
         } else {
-            let world_pos = BlockPos(location.0 + face.to_offset());
-            let previous_block_state = world.get_block_state(&world_pos).await?;
+            let new_block_pos = BlockPos(location.0 + face.to_offset());
+            let previous_block_state = world.get_block_state(&new_block_pos).await?;
 
             if !previous_block_state.replaceable {
                 return Ok(true);
             }
 
-            world_pos
+            new_block_pos
         };
 
         //check max world build height
-        if world_pos.0.y > 319 {
+        if final_block_pos.0.y > 319 {
             self.client
                 .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
                 .await;
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
-        let block_bounding_box = BoundingBox::from_block(&world_pos);
+        let block_bounding_box = BoundingBox::from_block(&final_block_pos);
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();
@@ -1138,12 +1137,12 @@ impl Player {
         if !intersects {
             let mapped_block_id = server
                 .block_properties_manager
-                .get_state_id(&world, &block, face, &world_pos)
+                .get_state_id(world, &block, face, &final_block_pos)
                 .await;
-            let _replaced_id = world.set_block_state(&world_pos, mapped_block_id).await;
+            let _replaced_id = world.set_block_state(&location, mapped_block_id).await;
             server
                 .block_manager
-                .on_placed(&block, self, world_pos, server)
+                .on_placed(&block, self, final_block_pos, server)
                 .await;
         }
         self.client
