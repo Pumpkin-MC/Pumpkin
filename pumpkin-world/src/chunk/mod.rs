@@ -1,9 +1,10 @@
 use fastnbt::LongArray;
 use pumpkin_core::math::vector2::Vector2;
+use pumpkin_nbt::deserializer::from_bytes_unnamed;
 use serde::{Deserialize, Serialize};
-use std::cmp::max;
 use std::collections::HashMap;
 use std::ops::Index;
+use std::{cmp::max, io::Cursor};
 use thiserror::Error;
 
 use crate::{
@@ -233,14 +234,26 @@ impl Index<ChunkRelativeBlockCoordinates> for ChunkBlocks {
 
 impl ChunkData {
     pub fn from_bytes(chunk_data: &[u8], at: Vector2<i32>) -> Result<Self, ChunkParsingError> {
-        if fastnbt::from_bytes::<ChunkStatus>(chunk_data)
+        // if fastnbt::from_bytes::<ChunkStatus>(chunk_data)
+        //     .map_err(|_| ChunkParsingError::FailedReadStatus)?
+        //     != ChunkStatus::Full
+        // {
+        //     return Err(ChunkParsingError::ChunkNotGenerated);
+        // }
+
+        // let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
+        //     .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+
+        let mut a = Cursor::new(chunk_data);
+
+        if from_bytes_unnamed::<ChunkStatus>(&mut a)
             .map_err(|_| ChunkParsingError::FailedReadStatus)?
             != ChunkStatus::Full
         {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
+        let chunk_data = from_bytes_unnamed::<ChunkNbt>(&mut a)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         // this needs to be boxed, otherwise it will cause a stack-overflow

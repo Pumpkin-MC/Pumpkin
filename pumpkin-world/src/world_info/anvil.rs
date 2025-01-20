@@ -1,10 +1,11 @@
 use std::{
     fs::OpenOptions,
-    io::{Read, Write},
+    io::{Cursor, Read, Write},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use pumpkin_nbt::deserializer::from_bytes_unnamed;
 use serde::{Deserialize, Serialize};
 
 use crate::level::LevelFolder;
@@ -29,7 +30,12 @@ impl WorldInfoReader for AnvilLevelInfo {
         let mut decompressed_data = Vec::new();
         decoder.read_to_end(&mut decompressed_data)?;
 
-        let info = fastnbt::from_bytes::<LevelDat>(&decompressed_data)
+        // let info = fastnbt::from_bytes::<LevelDat>(&decompressed_data)
+        //     .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
+
+        let mut a = Cursor::new(decompressed_data);
+
+        let info = from_bytes_unnamed::<LevelDat>(&mut a)
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
 
         // todo check version
