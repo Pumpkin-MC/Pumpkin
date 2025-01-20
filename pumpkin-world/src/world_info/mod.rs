@@ -1,5 +1,5 @@
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_core::Difficulty;
+use pumpkin_util::Difficulty;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

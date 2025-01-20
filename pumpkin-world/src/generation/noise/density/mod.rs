@@ -12,7 +12,7 @@ use noise::{InternalNoise, NoiseFunction};
 
 use crate::generation::{blender::Blender, chunk_noise::ChunkNoisePos};
 
-use super::perlin::DoublePerlinNoiseParameters;
+use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 
 pub mod basic;
 mod blend;
@@ -74,12 +74,12 @@ pub trait NoisePosImpl {
 }
 
 pub mod built_in_density_function {
+    use pumpkin_data::chunk::*;
     use std::sync::{Arc, LazyLock};
 
-    use crate::generation::noise::built_in_noise_params::{self};
     use crate::generation::positions::{MAX_COLUMN_HEIGHT, MIN_HEIGHT};
 
-    use pumpkin_core::math::floor_div;
+    use pumpkin_util::math::floor_div;
 
     use super::{apply_blending, noise_in_range, vertical_range_choice};
 
@@ -124,11 +124,7 @@ pub mod built_in_density_function {
     pub static SHIFT_X: LazyLock<SharedComponentReference> = LazyLock::new(|| {
         WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
             WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
-                ShiftAFunction::new(Arc::new(InternalNoise::new(
-                    &built_in_noise_params::OFFSET,
-                    None,
-                )))
-                .into(),
+                ShiftAFunction::new(Arc::new(InternalNoise::new(&OFFSET, None))).into(),
                 WrapperType::Cache2D,
             )
             .into(),
@@ -139,11 +135,7 @@ pub mod built_in_density_function {
     pub static SHIFT_Z: LazyLock<SharedComponentReference> = LazyLock::new(|| {
         WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
             WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
-                ShiftBFunction::new(Arc::new(InternalNoise::new(
-                    &built_in_noise_params::OFFSET,
-                    None,
-                )))
-                .into(),
+                ShiftBFunction::new(Arc::new(InternalNoise::new(&OFFSET, None))).into(),
                 WrapperType::Cache2D,
             )
             .into(),
@@ -182,10 +174,7 @@ pub mod built_in_density_function {
                 SHIFT_Z.clone(),
                 0.25f64,
                 0f64,
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::CONTINENTALNESS,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&CONTINENTALNESS, None)),
             )
             .into(),
             WrapperType::FlatCache,
@@ -205,7 +194,7 @@ pub mod built_in_density_function {
                 SHIFT_Z.clone(),
                 0.25f64,
                 0f64,
-                Arc::new(InternalNoise::new(&built_in_noise_params::EROSION, None)),
+                Arc::new(InternalNoise::new(&EROSION, None)),
             )
             .into(),
             WrapperType::FlatCache,
@@ -225,7 +214,7 @@ pub mod built_in_density_function {
                 SHIFT_Z.clone(),
                 0.25f64,
                 0f64,
-                Arc::new(InternalNoise::new(&built_in_noise_params::RIDGE, None)),
+                Arc::new(InternalNoise::new(&RIDGE, None)),
             )
             .into(),
             WrapperType::FlatCache,
@@ -242,12 +231,7 @@ pub mod built_in_density_function {
             .mul_const(-3f64)
     });
     static JAGGED_NOISE: LazyLock<SharedComponentReference> = LazyLock::new(|| {
-        NoiseFunction::new(
-            Arc::new(InternalNoise::new(&built_in_noise_params::JAGGED, None)),
-            1500f64,
-            0f64,
-        )
-        .into()
+        NoiseFunction::new(Arc::new(InternalNoise::new(&JAGGED, None)), 1500f64, 0f64).into()
     });
     pub static OFFSET_OVERWORLD: LazyLock<SharedComponentReference> = LazyLock::new(|| {
         apply_blending(
@@ -329,10 +313,7 @@ pub mod built_in_density_function {
                     SHIFT_Z.clone(),
                     0.25f64,
                     0f64,
-                    Arc::new(InternalNoise::new(
-                        &built_in_noise_params::CONTINENTALNESS_LARGE,
-                        None,
-                    )),
+                    Arc::new(InternalNoise::new(&CONTINENTALNESS_LARGE, None)),
                 )
                 .into(),
                 WrapperType::FlatCache,
@@ -353,10 +334,7 @@ pub mod built_in_density_function {
                     SHIFT_Z.clone(),
                     0.25f64,
                     0f64,
-                    Arc::new(InternalNoise::new(
-                        &built_in_noise_params::EROSION_LARGE,
-                        None,
-                    )),
+                    Arc::new(InternalNoise::new(&EROSION_LARGE, None)),
                 )
                 .into(),
                 WrapperType::FlatCache,
@@ -511,21 +489,13 @@ pub mod built_in_density_function {
     pub static CAVES_SPAGHETTI_ROUGHNESS_FUNCTION_OVERWORLD: LazyLock<SharedComponentReference> =
         LazyLock::new(|| {
             let function = NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::SPAGHETTI_ROUGHNESS,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&SPAGHETTI_ROUGHNESS, None)),
                 1f64,
                 1f64,
             );
 
-            let function2 = noise_in_range(
-                &built_in_noise_params::SPAGHETTI_ROUGHNESS_MODULATOR,
-                1f64,
-                1f64,
-                0f64,
-                -0.1f64,
-            );
+            let function2 =
+                noise_in_range(&SPAGHETTI_ROUGHNESS_MODULATOR, 1f64, 1f64, 0f64, -0.1f64);
 
             WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
                 function2.mul(function.abs().add_const(-0.4f64)),
@@ -536,13 +506,7 @@ pub mod built_in_density_function {
     pub static CAVES_SPAGHETTI_2D_THICKNESS_MODULAR_OVERWORLD: LazyLock<SharedComponentReference> =
         LazyLock::new(|| {
             WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
-                noise_in_range(
-                    &built_in_noise_params::SPAGHETTI_2D_THICKNESS,
-                    2f64,
-                    1f64,
-                    -0.6f64,
-                    -1.3f64,
-                ),
+                noise_in_range(&SPAGHETTI_2D_THICKNESS, 2f64, 1f64, -0.6f64, -1.3f64),
                 WrapperType::OnceCache,
             )
             .into()
@@ -550,25 +514,19 @@ pub mod built_in_density_function {
     pub static CAVES_SPAGHETTI_2D_OVERWORLD: LazyLock<SharedComponentReference> =
         LazyLock::new(|| {
             let function1 = NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::SPAGHETTI_2D_MODULATOR,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&SPAGHETTI_2D_MODULATOR, None)),
                 2f64,
                 1f64,
             );
 
             let function2 = WierdScaledFunction::<NoEnvironment, SharedComponentReference>::new(
                 function1.into(),
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::SPAGHETTI_2D,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&SPAGHETTI_2D, None)),
                 RarityMapper::Caves,
             );
 
             let function3 = noise_in_range(
-                &built_in_noise_params::SPAGHETTI_2D_ELEVATION,
+                &SPAGHETTI_2D_ELEVATION,
                 1f64,
                 0f64,
                 floor_div(-64, 8) as f64,
@@ -592,10 +550,7 @@ pub mod built_in_density_function {
             let function_ref: SharedComponentReference =
                 WrapperFunction::<NoEnvironment, SharedComponentReference>::new(
                     NoiseFunction::new(
-                        Arc::new(InternalNoise::new(
-                            &built_in_noise_params::SPAGHETTI_3D_RARITY,
-                            None,
-                        )),
+                        Arc::new(InternalNoise::new(&SPAGHETTI_3D_RARITY, None)),
                         2f64,
                         1f64,
                     )
@@ -604,29 +559,18 @@ pub mod built_in_density_function {
                 )
                 .into();
 
-            let function2 = noise_in_range(
-                &built_in_noise_params::SPAGHETTI_3D_THICKNESS,
-                1f64,
-                1f64,
-                -0.065f64,
-                -0.088f64,
-            );
+            let function2 =
+                noise_in_range(&SPAGHETTI_3D_THICKNESS, 1f64, 1f64, -0.065f64, -0.088f64);
 
             let function3 = WierdScaledFunction::<NoEnvironment, SharedComponentReference>::new(
                 function_ref.clone(),
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::SPAGHETTI_3D_1,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&SPAGHETTI_3D_1, None)),
                 RarityMapper::Tunnels,
             );
 
             let function4 = WierdScaledFunction::<NoEnvironment, SharedComponentReference>::new(
                 function_ref,
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::SPAGHETTI_3D_2,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&SPAGHETTI_3D_2, None)),
                 RarityMapper::Tunnels,
             );
             let function5 = function3
@@ -637,10 +581,7 @@ pub mod built_in_density_function {
             let function6 = CAVES_SPAGHETTI_ROUGHNESS_FUNCTION_OVERWORLD.clone();
 
             let function7 = NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::CAVE_ENTRANCE,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&CAVE_ENTRANCE, None)),
                 0.75f64,
                 0.5f64,
             );
@@ -658,12 +599,7 @@ pub mod built_in_density_function {
     pub static CAVES_NOODLE_OVERWORLD: LazyLock<SharedComponentReference> = LazyLock::new(|| {
         let function2 = vertical_range_choice(
             Y.clone(),
-            NoiseFunction::new(
-                Arc::new(InternalNoise::new(&built_in_noise_params::NOODLE, None)),
-                1f64,
-                1f64,
-            )
-            .into(),
+            NoiseFunction::new(Arc::new(InternalNoise::new(&NOODLE, None)), 1f64, 1f64).into(),
             -60,
             320,
             -1,
@@ -671,13 +607,7 @@ pub mod built_in_density_function {
 
         let function3 = vertical_range_choice(
             Y.clone(),
-            noise_in_range(
-                &built_in_noise_params::NOODLE_THICKNESS,
-                1f64,
-                1f64,
-                -0.05f64,
-                -0.1f64,
-            ),
+            noise_in_range(&NOODLE_THICKNESS, 1f64, 1f64, -0.05f64, -0.1f64),
             -60,
             320,
             0,
@@ -686,10 +616,7 @@ pub mod built_in_density_function {
         let function4 = vertical_range_choice(
             Y.clone(),
             NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::NOODLE_RIDGE_A,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&NOODLE_RIDGE_A, None)),
                 2.6666666666666665f64,
                 2.6666666666666665f64,
             )
@@ -702,10 +629,7 @@ pub mod built_in_density_function {
         let function5 = vertical_range_choice(
             Y.clone(),
             NoiseFunction::new(
-                Arc::new(InternalNoise::new(
-                    &built_in_noise_params::NOODLE_RIDGE_B,
-                    None,
-                )),
+                Arc::new(InternalNoise::new(&NOODLE_RIDGE_B, None)),
                 2.6666666666666665f64,
                 2.6666666666666665f64,
             )
@@ -732,27 +656,12 @@ pub mod built_in_density_function {
         .into()
     });
     pub static CAVES_PILLARS_OVERWORLD: LazyLock<SharedComponentReference> = LazyLock::new(|| {
-        let function = NoiseFunction::new(
-            Arc::new(InternalNoise::new(&built_in_noise_params::PILLAR, None)),
-            25f64,
-            0.3f64,
-        );
+        let function =
+            NoiseFunction::new(Arc::new(InternalNoise::new(&PILLAR, None)), 25f64, 0.3f64);
 
-        let function2 = noise_in_range(
-            &built_in_noise_params::PILLAR_RARENESS,
-            1f64,
-            1f64,
-            0f64,
-            -2f64,
-        );
+        let function2 = noise_in_range(&PILLAR_RARENESS, 1f64, 1f64, 0f64, -2f64);
 
-        let function3 = noise_in_range(
-            &built_in_noise_params::PILLAR_THICKNESS,
-            1f64,
-            1f64,
-            0f64,
-            1.1f64,
-        );
+        let function3 = noise_in_range(&PILLAR_THICKNESS, 1f64, 1f64, 0f64, 1.1f64);
 
         let function4 = function.mul_const(2f64).add(function2);
 
@@ -875,14 +784,13 @@ pub fn lerp_density_static_start(
 mod test {
     use std::sync::Arc;
 
-    use pumpkin_core::random::{
-        legacy_rand::LegacyRand, RandomDeriver, RandomDeriverImpl, RandomImpl,
-    };
-
     use crate::generation::noise::{
-        built_in_noise_params,
         density::{built_in_density_function::*, NoisePos, UnblendedNoisePos},
         perlin::DoublePerlinNoiseSampler,
+    };
+    use pumpkin_data::chunk::*;
+    use pumpkin_util::random::{
+        legacy_rand::LegacyRand, RandomDeriver, RandomDeriverImpl, RandomImpl,
     };
 
     use super::{
@@ -1357,21 +1265,11 @@ mod test {
     #[test]
     fn test_owned_converter() {
         let test_func = NoiseFunction::new(
-            Arc::new(InternalNoise::new(
-                &built_in_noise_params::NETHER_WART,
-                None,
-            )),
+            Arc::new(InternalNoise::new(&NETHER_WART, None)),
             10f64,
             1.2f64,
         )
-        .add(
-            NoiseFunction::new(
-                Arc::new(InternalNoise::new(&built_in_noise_params::NOODLE, None)),
-                0.1f64,
-                -1f64,
-            )
-            .into(),
-        );
+        .add(NoiseFunction::new(Arc::new(InternalNoise::new(&NOODLE, None)), 0.1f64, -1f64).into());
 
         let mut rand = LegacyRand::from_seed(0);
         let splitter = rand.next_splitter();

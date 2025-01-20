@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use pumpkin_config::{op::Op, BASIC_CONFIG};
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::TextComponent;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["op"];

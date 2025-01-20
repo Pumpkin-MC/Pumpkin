@@ -52,11 +52,13 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Bossbar
   - [x] Chunk Loading
   - [x] Chunk Generation
-  - [ ] Chunk Saving
+  - [x] Chunk Saving
   - [x] World Time
   - [x] Scoreboard
   - [x] World Borders
   - [x] World Saving
+  - [ ] Redstone
+  - [ ] Liquid Physics
 - Player
   - [x] Player Skins
   - [x] Player Client brand
@@ -70,7 +72,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Players
   - [x] Mobs
   - [x] Animals
-  - [ ] Entity AI
+  - [x] Entity AI
   - [ ] Boss
 - Server
   - [ ] Plugins

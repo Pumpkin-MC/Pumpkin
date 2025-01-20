@@ -1,9 +1,10 @@
 use bytes::{BufMut, BytesMut};
+use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, codec::identifier::Identifier, ClientPacket};
 
-#[client_packet("config:registry_data")]
+#[client_packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
     registry_id: &'a Identifier,
     entries: &'a [RegistryEntry],

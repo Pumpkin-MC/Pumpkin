@@ -28,7 +28,7 @@ pub fn get_entity_by_id<'a>(entity_id: u16) -> Option<&'a Entity> {
 pub struct Entity {
     pub id: u16,
     pub max_health: Option<f32>,
-    pub attackable: bool,
+    pub attackable: Option<bool>,
     pub summonable: bool,
     pub fire_immune: bool,
     pub dimension: [f32; 2],

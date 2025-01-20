@@ -1,10 +1,10 @@
 use crate::block::block_manager::BlockActionResult;
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::Furnace;
-use pumpkin_inventory::WindowType;
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 
@@ -19,7 +19,7 @@ impl PumpkinBlock for FurnaceBlock {
         &self,
         block: &Block,
         player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         server: &Server,
     ) {
         self.open_furnace_screen(block, player, _location, server)
@@ -30,7 +30,7 @@ impl PumpkinBlock for FurnaceBlock {
         &self,
         block: &Block,
         player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _item: &Item,
         server: &Server,
     ) -> BlockActionResult {
@@ -43,7 +43,7 @@ impl PumpkinBlock for FurnaceBlock {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
@@ -55,7 +55,7 @@ impl FurnaceBlock {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         super::standard_open_container::<Furnace>(

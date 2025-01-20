@@ -3,9 +3,10 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_inventory::{CraftingTable, OpenContainer, WindowType};
+use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::{CraftingTable, OpenContainer};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{block::block_registry::Block, item::item_registry::Item};
 
 #[pumpkin_block("minecraft:crafting_table")]
@@ -17,7 +18,7 @@ impl PumpkinBlock for CraftingTableBlock {
         &self,
         block: &Block,
         player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         server: &Server,
     ) {
         self.open_crafting_screen(block, player, _location, server)
@@ -28,7 +29,7 @@ impl PumpkinBlock for CraftingTableBlock {
         &self,
         block: &Block,
         player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _item: &Item,
         server: &Server,
     ) -> BlockActionResult {
@@ -41,7 +42,7 @@ impl PumpkinBlock for CraftingTableBlock {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
@@ -51,7 +52,7 @@ impl PumpkinBlock for CraftingTableBlock {
         &self,
         _block: &Block,
         player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
         container: &mut OpenContainer,
     ) {
@@ -75,7 +76,7 @@ impl CraftingTableBlock {
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
         super::standard_open_container_unique::<CraftingTable>(
@@ -83,7 +84,7 @@ impl CraftingTableBlock {
             player,
             location,
             server,
-            WindowType::CraftingTable,
+            WindowType::Crafting,
         )
         .await;
     }

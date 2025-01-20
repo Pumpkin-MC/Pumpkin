@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_core::{
+use pumpkin_util::{
     math::vector2::Vector2,
     text::{
         color::{Color, NamedColor},

@@ -270,6 +270,18 @@ impl From<&[u8]> for NbtTag {
     }
 }
 
+impl From<f32> for NbtTag {
+    fn from(value: f32) -> Self {
+        NbtTag::Float(value)
+    }
+}
+
+impl From<f64> for NbtTag {
+    fn from(value: f64) -> Self {
+        NbtTag::Double(value)
+    }
+}
+
 impl From<bool> for NbtTag {
     fn from(value: bool) -> Self {
         NbtTag::Byte(value as i8)

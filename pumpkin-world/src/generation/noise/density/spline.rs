@@ -742,7 +742,7 @@ impl SplineBuilder {
 #[cfg(test)]
 mod test {
 
-    use pumpkin_core::random::{legacy_rand::LegacyRand, RandomDeriver, RandomImpl};
+    use pumpkin_util::random::{legacy_rand::LegacyRand, RandomDeriver, RandomImpl};
 
     use crate::generation::noise::density::{
         built_in_density_function::CONTINENTS_OVERWORLD,

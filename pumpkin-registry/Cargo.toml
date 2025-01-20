@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 pumpkin-protocol = { path = "../pumpkin-protocol" }
 pumpkin-nbt = { path = "../pumpkin-nbt" }
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 
 indexmap = { version = "2.7.0", features = ["serde"] }
 

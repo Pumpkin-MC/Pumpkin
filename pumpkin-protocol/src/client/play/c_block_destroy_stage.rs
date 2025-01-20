@@ -1,4 +1,5 @@
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_data::packet::clientbound::PLAY_BLOCK_DESTRUCTION;
+use pumpkin_util::math::position::BlockPos;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
@@ -6,15 +7,15 @@ use serde::Serialize;
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:block_destruction")]
+#[client_packet(PLAY_BLOCK_DESTRUCTION)]
 pub struct CSetBlockDestroyStage {
     entity_id: VarInt,
-    location: WorldPosition,
+    location: BlockPos,
     destroy_stage: u8,
 }
 
 impl CSetBlockDestroyStage {
-    pub fn new(entity_id: VarInt, location: WorldPosition, destroy_stage: u8) -> Self {
+    pub fn new(entity_id: VarInt, location: BlockPos, destroy_stage: u8) -> Self {
         Self {
             entity_id,
             location,

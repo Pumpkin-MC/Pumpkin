@@ -3,9 +3,9 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::item::item_registry::Item;
 
@@ -18,7 +18,7 @@ impl PumpkinBlock for JukeboxBlock {
         &self,
         _block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         _server: &Server,
     ) {
         // For now just stop the music at this position
@@ -31,7 +31,7 @@ impl PumpkinBlock for JukeboxBlock {
         &self,
         _block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         item: &Item,
         _server: &Server,
     ) -> BlockActionResult {
@@ -61,7 +61,7 @@ impl PumpkinBlock for JukeboxBlock {
         &self,
         _block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         _server: &Server,
     ) {
         // For now just stop the music at this position

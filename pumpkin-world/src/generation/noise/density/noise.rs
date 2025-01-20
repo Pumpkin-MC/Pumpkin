@@ -1,11 +1,12 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use pumpkin_core::random::{xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl};
+use pumpkin_data::chunk::*;
+use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl};
 
 use crate::{
     generation::noise::{
         clamped_lerp,
-        perlin::{DoublePerlinNoiseParameters, DoublePerlinNoiseSampler, OctavePerlinNoiseSampler},
+        perlin::{DoublePerlinNoiseSampler, OctavePerlinNoiseSampler},
     },
     match_ref_implementations,
 };

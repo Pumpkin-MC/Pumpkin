@@ -44,7 +44,6 @@ Temporary Items
 
 ## Java/Gradle Stuff
 .gradle
-**/build/
 !src/**/build/
 .kotlin
 

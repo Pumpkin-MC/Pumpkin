@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
     client::play::{CDisplayObjective, CUpdateObjectives, CUpdateScore, RenderType},
     codec::var_int::VarInt,
     NumberFormat,
 };
+use pumpkin_util::text::TextComponent;
 
 use super::World;
 
@@ -23,7 +24,7 @@ impl Scoreboard {
         }
     }
 
-    pub async fn add_objective<'a>(&mut self, world: &World, objective: ScoreboardObjective<'a>) {
+    pub async fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'_>) {
         if self.objectives.contains_key(objective.name) {
             // Maybe make this an error ?
             log::warn!(
@@ -43,13 +44,13 @@ impl Scoreboard {
             .await;
         world
             .broadcast_packet_all(&CDisplayObjective::new(
-                pumpkin_protocol::client::play::DisplaySlot::Sidebar,
+                ScoreboardDisplaySlot::Sidebar,
                 objective.name,
             ))
             .await;
     }
 
-    pub async fn update_score<'a>(&self, world: &World, score: ScoreboardScore<'a>) {
+    pub async fn update_score(&self, world: &World, score: ScoreboardScore<'_>) {
         if self.objectives.contains_key(score.objective_name) {
             log::warn!(
                 "Tried to place a score into a Objective which does not exist, {}",

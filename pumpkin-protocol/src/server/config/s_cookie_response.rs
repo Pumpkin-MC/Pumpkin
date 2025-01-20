@@ -1,4 +1,5 @@
 use bytes::Buf;
+use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::server_packet;
 
 use crate::{
@@ -7,7 +8,7 @@ use crate::{
     ServerPacket, VarInt,
 };
 
-#[server_packet("config:cookie_response")]
+#[server_packet(CONFIG_COOKIE_RESPONSE)]
 /// Response to a Cookie Request (configuration) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 kiB in size.
 pub struct SConfigCookieResponse {

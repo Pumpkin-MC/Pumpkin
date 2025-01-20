@@ -1,10 +1,11 @@
 use bytes::BufMut;
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_COMMAND_SUGGESTIONS;
 use pumpkin_macros::client_packet;
+use pumpkin_util::text::TextComponent;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, VarInt};
 
-#[client_packet("play:command_suggestions")]
+#[client_packet(PLAY_COMMAND_SUGGESTIONS)]
 pub struct CCommandSuggestions {
     id: VarInt,
     start: VarInt,

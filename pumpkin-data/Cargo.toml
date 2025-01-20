@@ -1,0 +1,17 @@
+[package]
+name = "pumpkin-data"
+version.workspace = true
+edition.workspace = true
+build = "build/build.rs"
+
+[dependencies]
+serde.workspace = true
+
+[build-dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+heck = "0.5.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "2.0"

@@ -12,22 +12,21 @@ query = []
 
 [dependencies]
 pumpkin-nbt = { path = "../pumpkin-nbt" }
+pumpkin-data = { path = "../pumpkin-data" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-world = { path = "../pumpkin-world" }
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 
 uuid.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
 tokio.workspace = true
-num-traits.workspace = true
-num-derive.workspace = true
 bytes.workspace = true
 
 # encryption
 aes = "0.8.4"
 cfb8 = "0.8.1"
 
-# decryption
+# compression
 libdeflater = "1.23.0"

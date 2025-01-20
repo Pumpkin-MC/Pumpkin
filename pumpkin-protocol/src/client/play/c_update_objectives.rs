@@ -1,10 +1,11 @@
 use bytes::BufMut;
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
 use pumpkin_macros::client_packet;
+use pumpkin_util::text::TextComponent;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, NumberFormat, VarInt};
 
-#[client_packet("play:set_objective")]
+#[client_packet(PLAY_SET_OBJECTIVE)]
 pub struct CUpdateObjectives<'a> {
     objective_name: &'a str,
     mode: u8,

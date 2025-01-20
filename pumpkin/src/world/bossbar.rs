@@ -1,6 +1,6 @@
 use crate::entity::player::Player;
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::{BosseventAction, CBossEvent};
+use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq)]

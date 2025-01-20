@@ -2,14 +2,13 @@
 resolver = "2"
 members = [
     "pumpkin-config",
-    "pumpkin-core",
-    "pumpkin-entity",
+    "pumpkin-util",
     "pumpkin-inventory",
     "pumpkin-macros/",
     "pumpkin-protocol/",
     "pumpkin-registry/",
     "pumpkin-world",
-    "pumpkin/",
+    "pumpkin/", "pumpkin-data",
 ]
 
 [workspace.package]
@@ -34,8 +33,6 @@ debug = true
 [workspace.dependencies]
 log = "0.4"
 tokio = { version = "1.42", features = [
-    "fs",
-    "io-util",
     "macros",
     "net",
     "rt-multi-thread",
@@ -45,8 +42,6 @@ tokio = { version = "1.42", features = [
 ] }
 
 thiserror = "2"
-num-traits = "0.2"
-num-derive = "0.4"
 
 bytes = "1.9"
 
