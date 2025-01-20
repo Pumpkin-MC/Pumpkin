@@ -61,6 +61,7 @@ pub enum BlockPlacingError {
     InvalidBlockFace,
     BlockOutOfWorld,
     InventoryInvalid,
+    InvalidGamemode,
 }
 
 impl std::fmt::Display for BlockPlacingError {
@@ -72,23 +73,24 @@ impl std::fmt::Display for BlockPlacingError {
 impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
-            Self::BlockOutOfReach | Self::BlockOutOfWorld => false,
+            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
             Self::InvalidBlockFace | Self::InventoryInvalid => true,
         }
     }
 
     fn severity(&self) -> log::Level {
         match self {
-            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidBlockFace => {
-                log::Level::Warn
-            }
+            Self::BlockOutOfReach
+            | Self::BlockOutOfWorld
+            | Self::InvalidBlockFace
+            | Self::InvalidGamemode => log::Level::Warn,
             Self::InventoryInvalid => log::Level::Error,
         }
     }
 
     fn client_kick_reason(&self) -> Option<String> {
         match self {
-            Self::BlockOutOfReach | Self::BlockOutOfWorld => None,
+            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
             Self::InventoryInvalid => Some("Held item invalid".into()),
         }
@@ -1125,6 +1127,16 @@ impl Player {
                 .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
                 .await;
             return Err(BlockPlacingError::BlockOutOfWorld.into());
+        }
+
+        match self.gamemode.load() {
+            GameMode::Spectator | GameMode::Adventure => {
+                self.client
+                    .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                    .await;
+                return Err(BlockPlacingError::InvalidGamemode.into());
+            }
+            _ => {}
         }
 
         let clicked_world_pos = BlockPos(location.0);
