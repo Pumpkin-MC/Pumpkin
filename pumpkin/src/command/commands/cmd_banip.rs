@@ -1,8 +1,8 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
-        args::{arg_ip::IpConsumer, arg_message::MsgArgConsumer, Arg, ConsumedArgs},
+        args::{arg_message::MsgArgConsumer, arg_simple::SimpleArgConsumer, Arg, ConsumedArgs},
         tree::CommandTree,
         tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
@@ -22,6 +22,23 @@ const DESCRIPTION: &str = "bans a player-ip";
 const ARG_TARGET: &str = "ip";
 const ARG_REASON: &str = "reason";
 
+async fn parse_ip(target: &str, server: &Server) -> Result<IpAddr, CommandError> {
+    Ok(match IpAddr::from_str(target) {
+        Ok(ip) => ip,
+        Err(_) => server
+            .get_player_by_name(target)
+            .await
+            .ok_or(CommandError::GeneralCommandIssue(
+                "Invalid IP address or unknown player".to_string(),
+            ))?
+            .client
+            .address
+            .lock()
+            .await
+            .ip(),
+    })
+}
+
 struct BanIpNoReasonExecutor;
 
 #[async_trait]
@@ -32,11 +49,13 @@ impl CommandExecutor for BanIpNoReasonExecutor {
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Ip(ip)) = args.get(&ARG_TARGET) else {
+        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        ban_ip(sender, server, *ip, "Banned by an operator.").await
+        let ip = parse_ip(target, server).await?;
+
+        ban_ip(sender, server, ip, "Banned by an operator.").await
     }
 }
 
@@ -50,15 +69,17 @@ impl CommandExecutor for BanIpReasonExecutor {
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Ip(ip)) = args.get(&ARG_TARGET) else {
+        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
+
+        let ip = parse_ip(target, server).await?;
 
         let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_ip(sender, server, *ip, reason).await
+        ban_ip(sender, server, ip, reason).await
     }
 }
 
@@ -76,14 +97,9 @@ async fn ban_ip(
         ));
     }
 
-    let source = match sender {
-        CommandSender::Player(player) => &player.gameprofile.name,
-        _ => "Server",
-    };
-
     banned_ips.banned_ips.push(BannedIpEntry::new(
         target_ip,
-        source.to_string(),
+        sender.to_string(),
         None,
         reason.to_string(),
     ));
@@ -122,7 +138,7 @@ async fn ban_ip(
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).with_child(
-        argument(ARG_TARGET, IpConsumer)
+        argument(ARG_TARGET, SimpleArgConsumer)
             .execute(BanIpNoReasonExecutor)
             .with_child(argument(ARG_REASON, MsgArgConsumer).execute(BanIpReasonExecutor)),
     )

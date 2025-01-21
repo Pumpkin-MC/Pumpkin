@@ -77,14 +77,9 @@ async fn ban_player(
         ));
     }
 
-    let source = match sender {
-        CommandSender::Player(player) => &player.gameprofile.name,
-        _ => "Server",
-    };
-
     banned_players.banned_players.push(BannedPlayerEntry::new(
         profile,
-        source.to_string(),
+        sender.to_string(),
         None,
         reason.to_string(),
     ));
