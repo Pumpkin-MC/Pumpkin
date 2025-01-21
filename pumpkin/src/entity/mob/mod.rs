@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_protocol::{client::play::CSpawnEntity, codec::var_int::VarInt};
 use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -59,5 +60,25 @@ pub async fn from_type(
 impl MobEntity {
     pub async fn goal<T: Goal + 'static>(&self, goal: T) {
         self.goals.lock().await.push((Arc::new(goal), false));
+    }
+
+    pub fn create_spawn_entity_packet(&self, uuid: Uuid) -> CSpawnEntity {
+        let e = &self.living_entity.entity;
+        let y = e.pos.load();
+        CSpawnEntity::new(
+            VarInt(e.entity_id),
+            uuid,
+            VarInt((e.entity_type) as i32),
+            y.x,
+            y.y,
+            y.z,
+            e.pitch.load(),
+            e.yaw.load(),
+            e.yaw.load(), // todo: head_yaw and yaw are swapped, find out why
+            0.into(),
+            0.0,
+            0.0,
+            0.0,
+        )
     }
 }
