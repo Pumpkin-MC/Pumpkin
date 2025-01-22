@@ -1,10 +1,11 @@
+use pumpkin_data::packet::clientbound::PLAY_HURT_ANIMATION;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:hurt_animation")]
+#[client_packet(PLAY_HURT_ANIMATION)]
 pub struct CHurtAnimation<'a> {
     entity_id: &'a VarInt,
     yaw: f32,

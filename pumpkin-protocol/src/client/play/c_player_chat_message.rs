@@ -1,12 +1,13 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
+use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
-use crate::{BitSet, VarInt};
+use crate::{codec::bit_set::BitSet, VarInt};
 
 #[derive(Serialize)]
-#[client_packet("play:player_chat")]
+#[client_packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage<'a> {
     #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
@@ -17,11 +18,11 @@ pub struct CPlayerChatMessage<'a> {
     salt: i64,
     previous_messages_count: VarInt,
     previous_messages: &'a [PreviousMessage<'a>], // max 20
-    unsigned_content: Option<TextComponent<'a>>,
-    filter_type: FilterType<'a>,
+    unsigned_content: Option<TextComponent>,
+    filter_type: FilterType,
     chat_type: VarInt,
-    sender_name: TextComponent<'a>,
-    target_name: Option<TextComponent<'a>>,
+    sender_name: TextComponent,
+    target_name: Option<TextComponent>,
 }
 
 impl<'a> CPlayerChatMessage<'a> {
@@ -34,11 +35,11 @@ impl<'a> CPlayerChatMessage<'a> {
         timestamp: i64,
         salt: i64,
         previous_messages: &'a [PreviousMessage<'a>],
-        unsigned_content: Option<TextComponent<'a>>,
-        filter_type: FilterType<'a>,
+        unsigned_content: Option<TextComponent>,
+        filter_type: FilterType,
         chat_type: VarInt,
-        sender_name: TextComponent<'a>,
-        target_name: Option<TextComponent<'a>>,
+        sender_name: TextComponent,
+        target_name: Option<TextComponent>,
     ) -> Self {
         Self {
             sender,
@@ -66,11 +67,11 @@ pub struct PreviousMessage<'a> {
 
 #[derive(Serialize)]
 #[repr(i32)]
-pub enum FilterType<'a> {
+pub enum FilterType {
     /// Message is not filtered at all
     PassThrough = 0,
     /// Message is fully filtered
     FullyFiltered = 1,
     /// Only some characters in the message are filtered
-    PartiallyFiltered(BitSet<'a>) = 2,
+    PartiallyFiltered(BitSet) = 2,
 }

@@ -2,23 +2,27 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use arg_bounded_num::{NotInBounds, Number};
 use async_trait::async_trait;
-use pumpkin_core::{
-    math::{position::WorldPosition, vector2::Vector2, vector3::Vector3},
-    GameMode,
-};
 use pumpkin_protocol::client::play::{
     CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
 };
-
-use crate::{entity::player::Player, server::Server};
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::{
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+    GameMode,
+};
 
 use super::{
     dispatcher::CommandError,
     tree::{CommandTree, RawArgs},
     CommandSender,
 };
+use crate::world::bossbar::{BossbarColor, BossbarDivisions};
+use crate::{entity::player::Player, server::Server};
 
 pub(crate) mod arg_block;
+pub(crate) mod arg_bool;
+pub(crate) mod arg_bossbar_color;
+pub(crate) mod arg_bossbar_style;
 pub(crate) mod arg_bounded_num;
 pub(crate) mod arg_command;
 pub(crate) mod arg_entities;
@@ -29,30 +33,32 @@ pub(crate) mod arg_message;
 pub(crate) mod arg_players;
 pub(crate) mod arg_position_2d;
 pub(crate) mod arg_position_3d;
-pub(crate) mod arg_postition_block;
+pub(crate) mod arg_position_block;
+pub(crate) mod arg_resource_location;
 pub(crate) mod arg_rotation;
 pub(crate) mod arg_simple;
+pub(crate) mod arg_textcomponent;
 mod coordinate;
 
 /// see [`crate::commands::tree_builder::argument`]
 #[async_trait]
 pub(crate) trait ArgumentConsumer: Sync + GetClientSideArgParser {
     async fn consume<'a>(
-        &self,
+        &'a self,
         sender: &CommandSender<'a>,
         server: &'a Server,
         args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>>;
+    ) -> Option<Arg>;
 
     /// Used for tab completion (but only if argument suggestion type is "minecraft:ask_server"!).
     ///
-    /// NOTE: This is called after this consumer's [`ArgumentConsumer::consume`] method returnd None, so if args is used here, make sure [`ArgumentConsumer::consume`] never returns None after mutating args.
+    /// NOTE: This is called after this consumer's [`ArgumentConsumer::consume`] method returned None, so if args is used here, make sure [`ArgumentConsumer::consume`] never returns None after mutating args.
     async fn suggest<'a>(
-        &self,
+        &'a self,
         sender: &CommandSender<'a>,
         server: &'a Server,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError>;
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError>;
 }
 
 pub(crate) trait GetClientSideArgParser {
@@ -63,10 +69,7 @@ pub(crate) trait GetClientSideArgParser {
 }
 
 pub(crate) trait DefaultNameArgConsumer: ArgumentConsumer {
-    fn default_name(&self) -> &'static str;
-
-    /// needed because trait upcasting is not stable
-    fn get_argument_consumer(&self) -> &dyn ArgumentConsumer;
+    fn default_name(&self) -> String;
 }
 
 #[derive(Clone)]
@@ -74,18 +77,23 @@ pub(crate) enum Arg<'a> {
     Entities(Vec<Arc<Player>>),
     Entity(Arc<Player>),
     Players(Vec<Arc<Player>>),
-    BlockPos(WorldPosition),
+    BlockPos(BlockPos),
     Pos3D(Vector3<f64>),
     Pos2D(Vector2<f64>),
     Rotation(f32, f32),
     GameMode(GameMode),
-    CommandTree(&'a CommandTree<'a>),
-    Item(String),
-    Block(String),
+    CommandTree(CommandTree),
+    Item(&'a str),
+    ResourceLocation(&'a str),
+    Block(&'a str),
+    BossbarColor(BossbarColor),
+    BossbarStyle(BossbarDivisions),
     Msg(String),
+    TextComponent(TextComponent),
     Num(Result<Number, NotInBounds>),
+    Bool(bool),
     #[allow(unused)]
-    Simple(String),
+    Simple(&'a str),
 }
 
 /// see [`crate::commands::tree_builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree_builder::NonLeafNodeBuilder::execute`]
@@ -104,7 +112,7 @@ impl<K: Eq + Hash, V: Clone> GetCloned<K, V> for HashMap<K, V> {
 pub(crate) trait FindArg<'a> {
     type Data;
 
-    fn find_arg(args: &'a ConsumedArgs, name: &'a str) -> Result<Self::Data, CommandError>;
+    fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError>;
 }
 
 pub(crate) trait FindArgDefaultName<'a, T> {
@@ -113,7 +121,7 @@ pub(crate) trait FindArgDefaultName<'a, T> {
 
 impl<'a, T, C: FindArg<'a, Data = T> + DefaultNameArgConsumer> FindArgDefaultName<'a, T> for C {
     fn find_arg_default_name(&self, args: &'a ConsumedArgs) -> Result<T, CommandError> {
-        C::find_arg(args, self.default_name())
+        C::find_arg(args, &self.default_name())
     }
 }
 

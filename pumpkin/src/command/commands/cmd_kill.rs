@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_core::text::color::NamedColor;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
@@ -37,7 +37,7 @@ impl CommandExecutor for KillExecutor {
         let msg = if target_count == 1 {
             TextComponent::text("Entity has been killed.")
         } else {
-            TextComponent::text_string(format!("{target_count} entities have been killed."))
+            TextComponent::text(format!("{target_count} entities have been killed."))
         };
 
         sender.send_message(msg.color_named(NamedColor::Blue)).await;
@@ -65,8 +65,8 @@ impl CommandExecutor for KillSelfExecutor {
 }
 
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
-pub fn init_command_tree<'a>() -> CommandTree<'a> {
+pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_TARGET, &EntitiesArgumentConsumer).execute(&KillExecutor))
-        .with_child(require(&|sender| sender.is_player()).execute(&KillSelfExecutor))
+        .with_child(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(KillExecutor))
+        .with_child(require(|sender| sender.is_player()).execute(KillSelfExecutor))
 }

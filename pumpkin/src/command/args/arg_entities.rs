@@ -34,7 +34,7 @@ impl GetClientSideArgParser for EntitiesArgumentConsumer {
 #[async_trait]
 impl ArgumentConsumer for EntitiesArgumentConsumer {
     async fn consume<'a>(
-        &self,
+        &'a self,
         src: &CommandSender<'a>,
         server: &'a Server,
         args: &mut RawArgs<'a>,
@@ -47,29 +47,25 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
     }
 
     async fn suggest<'a>(
-        &self,
+        &'a self,
         _sender: &CommandSender<'a>,
         _server: &'a Server,
         _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError> {
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
         Ok(None)
     }
 }
 
 impl DefaultNameArgConsumer for EntitiesArgumentConsumer {
-    fn default_name(&self) -> &'static str {
-        "targets"
-    }
-
-    fn get_argument_consumer(&self) -> &dyn ArgumentConsumer {
-        &EntitiesArgumentConsumer
+    fn default_name(&self) -> String {
+        "targets".to_string()
     }
 }
 
 impl<'a> FindArg<'a> for EntitiesArgumentConsumer {
     type Data = &'a [Arc<Player>];
 
-    fn find_arg(args: &'a super::ConsumedArgs, name: &'a str) -> Result<Self::Data, CommandError> {
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Entities(data)) => Ok(data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),

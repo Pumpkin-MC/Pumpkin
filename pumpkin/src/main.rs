@@ -2,6 +2,22 @@
 #![deny(clippy::pedantic)]
 // #![warn(clippy::restriction)]
 #![deny(clippy::cargo)]
+// to keep consistency
+#![deny(clippy::if_then_some_else_none)]
+#![deny(clippy::empty_enum_variants_with_brackets)]
+#![deny(clippy::empty_structs_with_brackets)]
+#![deny(clippy::separated_literal_suffix)]
+#![deny(clippy::semicolon_outside_block)]
+#![deny(clippy::non_zero_suggestions)]
+#![deny(clippy::string_lit_chars_any)]
+#![deny(clippy::use_self)]
+#![deny(clippy::useless_let_if_seq)]
+#![deny(clippy::branches_sharing_code)]
+#![deny(clippy::equatable_if_let)]
+#![deny(clippy::option_if_let_else)]
+// use log crate
+#![deny(clippy::print_stdout)]
+#![deny(clippy::print_stderr)]
 // REMOVE SOME WHEN RELEASE
 #![expect(clippy::cargo_common_metadata)]
 #![expect(clippy::multiple_crate_versions)]
@@ -19,7 +35,7 @@ compile_error!("Compiling for WASI targets is not supported!");
 
 use log::LevelFilter;
 
-use client::Client;
+use net::{lan_broadcast, query, rcon::RCONServer, Client};
 use server::{ticker::Ticker, Server};
 use std::io::{self};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -32,19 +48,17 @@ use std::sync::Arc;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
-use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
-use rcon::RCONServer;
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
-pub mod client;
+pub mod block;
 pub mod command;
+pub mod data;
 pub mod entity;
 pub mod error;
-pub mod proxy;
-pub mod query;
-pub mod rcon;
+pub mod net;
 pub mod server;
 pub mod world;
 
@@ -71,76 +85,30 @@ fn init_logger() {
             logger = logger.without_timestamps();
         }
 
-        if ADVANCED_CONFIG.logging.env {
-            logger = logger.env();
-        }
-
-        logger = logger.with_level(convert_logger_filter(ADVANCED_CONFIG.logging.level));
+        // default
+        logger = logger.with_level(LevelFilter::Info);
 
         logger = logger.with_colors(ADVANCED_CONFIG.logging.color);
         logger = logger.with_threads(ADVANCED_CONFIG.logging.threads);
+
+        logger = logger.env();
+
         logger.init().unwrap();
     }
 }
 
-const fn convert_logger_filter(level: pumpkin_config::logging::LevelFilter) -> LevelFilter {
-    match level {
-        pumpkin_config::logging::LevelFilter::Off => LevelFilter::Off,
-        pumpkin_config::logging::LevelFilter::Error => LevelFilter::Error,
-        pumpkin_config::logging::LevelFilter::Warn => LevelFilter::Warn,
-        pumpkin_config::logging::LevelFilter::Info => LevelFilter::Info,
-        pumpkin_config::logging::LevelFilter::Debug => LevelFilter::Debug,
-        pumpkin_config::logging::LevelFilter::Trace => LevelFilter::Trace,
-    }
-}
-
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-fn log_system_info() {
-    let os_type = sys_info::os_type().unwrap();
-    let os_release = sys_info::os_release().unwrap();
-    let arch = std::env::consts::ARCH;
-
-    if cfg!(target_os = "linux") {
-        if let Some(linux_release) = sys_info::linux_os_release().unwrap().pretty_name {
-            log::info!(
-                "Running on {} ({}) {} ({})",
-                os_type,
-                linux_release,
-                os_release,
-                arch
-            );
-            return;
-        }
-    }
-    log::info!("Running on {} {} ({})", os_type, os_release, arch);
-}
-
 const GIT_VERSION: &str = env!("GIT_VERSION");
 
+// WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
+// like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
+// runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
-async fn main() -> io::Result<()> {
+#[expect(clippy::too_many_lines)]
+async fn main() {
+    let time = Instant::now();
     init_logger();
-    log_system_info();
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",);
-    log::warn!("Pumpkin is currently under heavy development!");
-    log::info!("Report Issues on https://github.com/Snowiiii/Pumpkin/issues");
-    log::info!("Join our Discord for community support https://discord.com/invite/wT8XjrjKkf");
-    //log::info!("CPU {} Cores {}MHz", sys_info::cpu_num().unwrap(), sys_info::cpu_speed().unwrap());
 
-    // let rt = tokio::runtime::Builder::new_multi_thread()
-    //     .enable_all()
-    //     .build()
-    //     .unwrap();
-
-    tokio::spawn(async {
-        setup_sighandler()
-            .await
-            .expect("Unable to setup signal handlers");
-    });
-
-    // ensure rayon is built outside of tokio scope
-    rayon::ThreadPoolBuilder::new().build_global().unwrap();
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         default_panic(info);
@@ -148,7 +116,29 @@ async fn main() -> io::Result<()> {
         std::process::exit(1);
     }));
 
-    let time = Instant::now();
+    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",);
+
+    log::debug!(
+        "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
+        std::env::consts::FAMILY,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        if cfg!(debug_assertions) {
+            "Debug"
+        } else {
+            "Release"
+        }
+    );
+
+    log::warn!("Pumpkin is currently under heavy development!");
+    log::info!("Report Issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
+    log::info!("Join our Discord for community support https://discord.com/invite/wT8XjrjKkf");
+
+    tokio::spawn(async {
+        setup_sighandler()
+            .await
+            .expect("Unable to setup signal handlers");
+    });
 
     // Setup the TCP server socket.
     let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.server_address)
@@ -160,7 +150,7 @@ async fn main() -> io::Result<()> {
         .expect("Unable to get the address of server!");
 
     let use_console = ADVANCED_CONFIG.commands.use_console;
-    let rcon = ADVANCED_CONFIG.rcon.clone();
+    let rcon = ADVANCED_CONFIG.networking.rcon.clone();
 
     let server = Arc::new(Server::new());
     let mut ticker = Ticker::new(BASIC_CONFIG.tps);
@@ -178,22 +168,27 @@ async fn main() -> io::Result<()> {
         });
     }
 
-    if ADVANCED_CONFIG.query.enabled {
+    if ADVANCED_CONFIG.networking.query.enabled {
         log::info!("Query protocol enabled. Starting...");
         tokio::spawn(query::start_query_handler(server.clone(), addr));
+    }
+
+    if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
+        log::info!("LAN broadcast enabled. Starting...");
+        tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
     }
 
     {
         let server = server.clone();
         tokio::spawn(async move {
             ticker.run(&server).await;
-        });
-    }
+        })
+    };
 
     let mut master_client_id: u16 = 0;
     loop {
         // Asynchronously wait for an inbound socket.
-        let (connection, address) = listener.accept().await?;
+        let (connection, address) = listener.accept().await.unwrap();
 
         if let Err(e) = connection.set_nodelay(true) {
             log::warn!("failed to set TCP_NODELAY {e}");
@@ -228,7 +223,7 @@ async fn main() -> io::Result<()> {
             {
                 let (player, world) = server.add_player(client).await;
                 world
-                    .spawn_player(&BASIC_CONFIG, player.clone(), &server.command_dispatcher)
+                    .spawn_player(&BASIC_CONFIG, player.clone(), &server)
                     .await;
 
                 // poll Player
@@ -301,10 +296,13 @@ fn setup_console(server: Arc<Server>) {
                 .expect("Failed to read console line");
 
             if !out.is_empty() {
-                let dispatcher = server.command_dispatcher.clone();
-                dispatcher
-                    .handle_command(&mut command::CommandSender::Console, &server, &out)
-                    .await;
+                let server_clone = server.clone();
+                tokio::spawn(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(&mut command::CommandSender::Console, &server_clone, &out)
+                        .await;
+                });
             }
         }
     });

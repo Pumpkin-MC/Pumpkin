@@ -1,4 +1,5 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_OPEN_SCREEN;
+use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
@@ -6,15 +7,15 @@ use serde::Serialize;
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:open_screen")]
+#[client_packet(PLAY_OPEN_SCREEN)]
 pub struct COpenScreen<'a> {
     window_id: VarInt,
     window_type: VarInt,
-    window_title: TextComponent<'a>,
+    window_title: &'a TextComponent,
 }
 
 impl<'a> COpenScreen<'a> {
-    pub fn new(window_id: VarInt, window_type: VarInt, window_title: TextComponent<'a>) -> Self {
+    pub fn new(window_id: VarInt, window_type: VarInt, window_title: &'a TextComponent) -> Self {
         Self {
             window_id,
             window_type,

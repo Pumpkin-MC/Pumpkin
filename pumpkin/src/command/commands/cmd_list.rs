@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use itertools::Itertools;
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{
@@ -29,16 +28,13 @@ impl CommandExecutor for ListExecutor {
         let players: Vec<Arc<Player>> = server.get_all_players().await;
 
         let message = if players.is_empty() {
-            "There are no players online."
+            "There are no players online.".to_owned()
         } else {
-            &format!(
+            format!(
                 "There are {} of a max of {} players online: {}",
                 players.len(),
                 BASIC_CONFIG.max_players,
-                players
-                    .iter()
-                    .map(|player| &player.gameprofile.name)
-                    .join(", ")
+                get_player_names(players)
             )
         };
 
@@ -48,6 +44,17 @@ impl CommandExecutor for ListExecutor {
     }
 }
 
-pub fn init_command_tree<'a>() -> CommandTree<'a> {
-    CommandTree::new(NAMES, DESCRIPTION).execute(&ListExecutor)
+fn get_player_names(players: Vec<Arc<Player>>) -> String {
+    let mut names = String::new();
+    for player in players {
+        if !names.is_empty() {
+            names.push_str(", ");
+        }
+        names.push_str(&player.gameprofile.name);
+    }
+    names
+}
+
+pub fn init_command_tree() -> CommandTree {
+    CommandTree::new(NAMES, DESCRIPTION).execute(ListExecutor)
 }

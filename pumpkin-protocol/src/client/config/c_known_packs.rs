@@ -1,8 +1,10 @@
+use bytes::BufMut;
+use pumpkin_data::packet::clientbound::CONFIG_SELECT_KNOWN_PACKS;
 use pumpkin_macros::client_packet;
 
-use crate::{bytebuf::ByteBuffer, ClientPacket, KnownPack};
+use crate::{bytebuf::ByteBufMut, ClientPacket, KnownPack};
 
-#[client_packet("config:select_known_packs")]
+#[client_packet(CONFIG_SELECT_KNOWN_PACKS)]
 pub struct CKnownPacks<'a> {
     known_packs: &'a [KnownPack<'a>],
 }
@@ -13,8 +15,8 @@ impl<'a> CKnownPacks<'a> {
     }
 }
 
-impl<'a> ClientPacket for CKnownPacks<'a> {
-    fn write(&self, bytebuf: &mut ByteBuffer) {
+impl ClientPacket for CKnownPacks<'_> {
+    fn write(&self, bytebuf: &mut impl BufMut) {
         bytebuf.put_list::<KnownPack>(self.known_packs, |p, v| {
             p.put_string(v.namespace);
             p.put_string(v.id);

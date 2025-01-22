@@ -1,10 +1,11 @@
+use pumpkin_data::packet::clientbound::PLAY_REMOVE_ENTITIES;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:remove_entities")]
+#[client_packet(PLAY_REMOVE_ENTITIES)]
 pub struct CRemoveEntities<'a> {
     count: VarInt,
     entity_ids: &'a [VarInt],

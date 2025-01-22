@@ -1,8 +1,9 @@
+use pumpkin_data::packet::clientbound::LOGIN_LOGIN_DISCONNECT;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet("login:login_disconnect")]
+#[client_packet(LOGIN_LOGIN_DISCONNECT)]
 pub struct CLoginDisconnect<'a> {
     json_reason: &'a str,
 }

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_core::text::color::NamedColor;
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_players::PlayersArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
@@ -40,7 +40,7 @@ impl CommandExecutor for KickExecutor {
         let msg = if target_count == 1 {
             TextComponent::text("Player has been kicked.")
         } else {
-            TextComponent::text_string(format!("{target_count} players have been kicked."))
+            TextComponent::text(format!("{target_count} players have been kicked."))
         };
 
         sender.send_message(msg.color_named(NamedColor::Blue)).await;
@@ -49,7 +49,8 @@ impl CommandExecutor for KickExecutor {
     }
 }
 
-pub fn init_command_tree<'a>() -> CommandTree<'a> {
+// TODO: Permission
+pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_TARGET, &PlayersArgumentConsumer).execute(&KickExecutor))
+        .with_child(argument(ARG_TARGET, PlayersArgumentConsumer).execute(KickExecutor))
 }

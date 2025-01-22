@@ -1,10 +1,11 @@
+use pumpkin_data::packet::clientbound::PLAY_ANIMATE;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:animate")]
+#[client_packet(PLAY_ANIMATE)]
 pub struct CEntityAnimation {
     entity_id: VarInt,
     /// See `Animation`
@@ -20,10 +21,11 @@ impl CEntityAnimation {
     }
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum Animation {
     SwingMainArm,
-    LeaveBed,
+    LeaveBed = 2,
     SwingOffhand,
     CriticalEffect,
     MagicCriticaleffect,

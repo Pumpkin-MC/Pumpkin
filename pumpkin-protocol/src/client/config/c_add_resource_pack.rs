@@ -1,16 +1,18 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
+use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
+
 #[derive(Serialize)]
-#[client_packet("config:resource_pack_push")]
+#[client_packet(CONFIG_RESOURCE_PACK_PUSH)]
 pub struct CConfigAddResourcePack<'a> {
     uuid: uuid::Uuid,
     url: &'a str,
     hash: &'a str, // max 40
     forced: bool,
-    prompt_message: Option<TextComponent<'a>>,
+    prompt_message: Option<TextComponent>,
 }
 
 impl<'a> CConfigAddResourcePack<'a> {
@@ -19,7 +21,7 @@ impl<'a> CConfigAddResourcePack<'a> {
         url: &'a str,
         hash: &'a str,
         forced: bool,
-        prompt_message: Option<TextComponent<'a>>,
+        prompt_message: Option<TextComponent>,
     ) -> Self {
         Self {
             uuid,
