@@ -9,9 +9,9 @@ pub(crate) fn block_entity_impl(item: TokenStream) -> TokenStream {
         pumpkin_world::block::block_registry::BLOCKS
             .block_entity_types
             .iter()
-            .find(|block_type| block_type.ident == #block_entity_name)
-            .unwrap()
-            .id
+            .position(|block_type| *block_type == #block_entity_name)
+            .unwrap() as u32
+
     }
     .into()
 }

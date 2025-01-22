@@ -1,19 +1,20 @@
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_data::packet::clientbound::PLAY_BLOCK_ENTITY_DATA;
 use pumpkin_macros::client_packet;
+use pumpkin_util::math::position::BlockPos;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet("play:block_entity_data")]
+#[client_packet(PLAY_BLOCK_ENTITY_DATA)]
 pub struct CBlockEntityData {
-    location: WorldPosition,
+    location: BlockPos,
     r#type: VarInt,
     nbt_data: Vec<u8>,
 }
 
 impl CBlockEntityData {
-    pub fn new(location: WorldPosition, r#type: VarInt, nbt_data: Vec<u8>) -> Self {
+    pub fn new(location: BlockPos, r#type: VarInt, nbt_data: Vec<u8>) -> Self {
         Self {
             location,
             r#type,

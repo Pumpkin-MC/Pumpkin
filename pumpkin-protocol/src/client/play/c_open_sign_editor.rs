@@ -1,16 +1,17 @@
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_data::packet::clientbound::PLAY_OPEN_SIGN_EDITOR;
 use pumpkin_macros::client_packet;
+use pumpkin_util::math::position::BlockPos;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet("play:open_sign_editor")]
+#[client_packet(PLAY_OPEN_SIGN_EDITOR)]
 pub struct COpenSignEditor {
-    location: WorldPosition,
+    location: BlockPos,
     is_front_text: bool,
 }
 
 impl COpenSignEditor {
-    pub fn new(location: WorldPosition, is_front_text: bool) -> Self {
+    pub fn new(location: BlockPos, is_front_text: bool) -> Self {
         Self {
             location,
             is_front_text,

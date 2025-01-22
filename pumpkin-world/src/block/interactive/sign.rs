@@ -1,4 +1,4 @@
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
 
 // NBT data structure
@@ -36,7 +36,7 @@ impl Text {
 }
 
 impl Sign {
-    pub fn new(location: WorldPosition, is_front: bool, messages: [String; 4]) -> Self {
+    pub fn new(location: BlockPos, is_front: bool, messages: [String; 4]) -> Self {
         let formatted_messages = [
             format!("\"{}\"", messages[0]),
             format!("\"{}\"", messages[1]),
