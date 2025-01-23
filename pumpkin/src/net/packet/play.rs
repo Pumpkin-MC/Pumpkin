@@ -1191,10 +1191,8 @@ impl Player {
         };
 
         // To this point we must have the new block state
-        let block_bounding_box = match get_block_collision_shapes(block.default_state_id) {
-            Some(bounding_box) => bounding_box,
-            None => vec![],
-        };
+        let block_bounding_box =
+            get_block_collision_shapes(block.default_state_id).unwrap_or_default();
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();

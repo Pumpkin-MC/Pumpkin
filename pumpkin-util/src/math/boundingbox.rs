@@ -59,7 +59,7 @@ impl BoundingBox {
             && self.max_z > other.min_z
     }
 
-    pub fn intersects_block(&self, position: &BlockPos, bounding_box: &Vec<f32>) -> bool {
+    pub fn intersects_block(&self, position: &BlockPos, bounding_box: &[f32]) -> bool {
         for i in 0..bounding_box.len() / 6 {
             let other = BoundingBox {
                 min_x: position.0.x as f64 + bounding_box[i * 6] as f64,
