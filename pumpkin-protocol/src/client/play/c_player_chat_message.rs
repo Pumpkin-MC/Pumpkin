@@ -20,6 +20,7 @@ pub struct CPlayerChatMessage<'a> {
     previous_messages: &'a [PreviousMessage<'a>], // max 20
     unsigned_content: Option<TextComponent>,
     filter_type: FilterType,
+    /// This should not be zero, (index + 1)
     chat_type: VarInt,
     sender_name: TextComponent,
     target_name: Option<TextComponent>,

@@ -561,7 +561,7 @@ impl Player {
                 &[],
                 Some(TextComponent::text(message.clone())),
                 FilterType::PassThrough,
-                CHAT.into(),
+                (CHAT + 1).into(),
                 TextComponent::text(gameprofile.name.clone()),
                 None,
             ))
