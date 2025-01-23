@@ -36,14 +36,14 @@ use pumpkin_protocol::{
         SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSwingArm, SUseItemOn, Status,
     },
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
     GameMode,
 };
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::block_registry::{get_block_collision_shapes, Block};
 use pumpkin_world::item::item_registry::get_item_by_id;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
@@ -1190,11 +1190,15 @@ impl Player {
             world_pos
         };
 
-        let block_bounding_box = BoundingBox::from_block(&world_pos);
+        // To this point we must have the new block state
+        let block_bounding_box = match get_block_collision_shapes(block.default_state_id) {
+            Some(bounding_box) => bounding_box,
+            None => vec![],
+        };
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();
-            if bounding_box.intersects(&block_bounding_box) {
+            if bounding_box.intersects_block(&world_pos, &block_bounding_box) {
                 intersects = true;
             }
         }
