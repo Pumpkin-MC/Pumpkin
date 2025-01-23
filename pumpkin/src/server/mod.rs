@@ -12,6 +12,7 @@ use pumpkin_util::math::boundingbox::{BoundingBox, BoundingBoxSize};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::dimension::Dimension;
@@ -332,6 +333,20 @@ impl Server {
     {
         for world in &self.worlds {
             world.broadcast_packet_all(packet).await;
+        }
+    }
+
+    pub async fn broadcast_message(
+        &self,
+        message: &TextComponent,
+        sender_name: &TextComponent,
+        chat_type: u32,
+        target_name: Option<&TextComponent>,
+    ) {
+        for world in &self.worlds {
+            world
+                .broadcast_message(message, sender_name, chat_type, target_name)
+                .await;
         }
     }
 

@@ -16,7 +16,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_protocol::client::play::{CBlockUpdate, CRespawn, CWorldEvent};
+use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{
     client::play::CLevelEvent,
     codec::{identifier::Identifier, var_int::VarInt},
@@ -139,6 +139,22 @@ impl World {
         for player in current_players.values() {
             player.client.send_packet(packet).await;
         }
+    }
+
+    pub async fn broadcast_message(
+        &self,
+        message: &TextComponent,
+        sender_name: &TextComponent,
+        chat_type: u32,
+        target_name: Option<&TextComponent>,
+    ) {
+        self.broadcast_packet_all(&CDisguisedChatMessage::new(
+            message,
+            (chat_type + 1).into(),
+            sender_name,
+            target_name,
+        ))
+        .await;
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
