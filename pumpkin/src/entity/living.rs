@@ -1,10 +1,12 @@
 use std::sync::atomic::AtomicI32;
 
+use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_core::math::vector3::Vector3;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
+use pumpkin_util::math::vector3::Vector3;
 
-use super::Entity;
+use super::{Entity, EntityId, NBTStorage};
 
 /// Represents a living entity within the game world.
 ///
@@ -23,7 +25,6 @@ pub struct LivingEntity {
     /// The distance the entity has been falling
     pub fall_distance: AtomicCell<f64>,
 }
-
 impl LivingEntity {
     pub const fn new(entity: Entity) -> Self {
         Self {
@@ -47,9 +48,9 @@ impl LivingEntity {
         }
     }
 
-    pub fn set_pos(&self, x: f64, y: f64, z: f64) {
+    pub fn set_pos(&self, position: Vector3<f64>) {
         self.last_pos.store(self.entity.pos.load());
-        self.entity.set_pos(x, y, z);
+        self.entity.set_pos(position);
     }
 
     pub async fn set_health(&self, health: f32) {
@@ -64,13 +65,17 @@ impl LivingEntity {
             .await;
     }
 
-    pub async fn damage(&self, amount: f32) {
+    pub const fn entity_id(&self) -> EntityId {
+        self.entity.entity_id
+    }
+
+    // TODO add damage_type enum
+    pub async fn damage(&self, amount: f32, damage_type: u8) {
         self.entity
             .world
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
-                // TODO add damage_type id
-                0.into(),
+                damage_type.into(),
                 None,
                 None,
                 None,
@@ -130,7 +135,7 @@ impl LivingEntity {
                 return;
             }
 
-            self.damage(damage).await;
+            self.damage(damage, 10).await; // Fall
         } else if y_diff < 0.0 {
             self.fall_distance.store(0.0);
         } else {
@@ -155,5 +160,19 @@ impl LivingEntity {
             .world
             .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 3))
             .await;
+    }
+}
+#[async_trait]
+impl NBTStorage for LivingEntity {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.entity.write_nbt(nbt).await;
+        nbt.put("Health", NbtTag::Float(self.health.load()));
+        // todo more...
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.entity.read_nbt(nbt).await;
+        self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+        // todo more...
     }
 }

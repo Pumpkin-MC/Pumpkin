@@ -1,17 +1,18 @@
-use pumpkin_core::text::TextComponent;
+use pumpkin_data::packet::clientbound::PLAY_SYSTEM_CHAT;
+use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet("play:system_chat")]
+#[client_packet(PLAY_SYSTEM_CHAT)]
 pub struct CSystemChatMessage<'a> {
-    content: &'a TextComponent<'a>,
+    content: &'a TextComponent,
     overlay: bool,
 }
 
 impl<'a> CSystemChatMessage<'a> {
-    pub fn new(content: &'a TextComponent<'a>, overlay: bool) -> Self {
+    pub fn new(content: &'a TextComponent, overlay: bool) -> Self {
         Self { content, overlay }
     }
 }

@@ -1,20 +1,20 @@
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CommandSuggestion;
+use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::text::TextComponent;
 
 use super::args::ConsumedArgs;
 
 use crate::command::dispatcher::CommandError::{
-    GeneralCommandIssue, InvalidConsumption, InvalidRequirement, OtherPumpkin,
+    GeneralCommandIssue, InvalidConsumption, InvalidRequirement, OtherPumpkin, PermissionDenied,
 };
 use crate::command::tree::{Command, CommandTree, NodeType, RawArgs};
 use crate::command::CommandSender;
 use crate::error::PumpkinError;
 use crate::server::Server;
-use pumpkin_core::text::color::{Color, NamedColor};
+use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) enum CommandError {
     /// This error means that there was an error while parsing a previously consumed argument.
     /// That only happens when consumption is wrongly implemented, as it should ensure parsing may
@@ -23,6 +23,8 @@ pub(crate) enum CommandError {
 
     /// Return this if a condition that a [`Node::Require`] should ensure is met is not met.
     InvalidRequirement,
+
+    PermissionDenied,
 
     OtherPumpkin(Box<dyn PumpkinError>),
 
@@ -33,12 +35,16 @@ impl CommandError {
     pub fn into_string_or_pumpkin_error(self, cmd: &str) -> Result<String, Box<dyn PumpkinError>> {
         match self {
             InvalidConsumption(s) => {
-                println!("Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed");
+                log::error!("Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed");
                 Ok("Internal Error (See logs for details)".into())
             }
             InvalidRequirement => {
-                println!("Error while parsing command \"{cmd}\": a requirement that was expected was not met.");
+                log::error!("Error while parsing command \"{cmd}\": a requirement that was expected was not met.");
                 Ok("Internal Error (See logs for details)".into())
+            }
+            PermissionDenied => {
+                log::warn!("Permission denied for command \"{cmd}\"");
+                Ok("I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.".into())
             }
             GeneralCommandIssue(s) => Ok(s),
             OtherPumpkin(e) => Err(e),
@@ -47,13 +53,14 @@ impl CommandError {
 }
 
 #[derive(Default)]
-pub struct CommandDispatcher<'a> {
-    pub(crate) commands: HashMap<&'a str, Command<'a>>,
+pub struct CommandDispatcher {
+    pub(crate) commands: HashMap<String, Command>,
+    pub(crate) permissions: HashMap<String, PermissionLvl>,
 }
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
-impl<'a> CommandDispatcher<'a> {
-    pub async fn handle_command(
+impl CommandDispatcher {
+    pub async fn handle_command<'a>(
         &'a self,
         sender: &mut CommandSender<'a>,
         server: &'a Server,
@@ -64,14 +71,14 @@ impl<'a> CommandDispatcher<'a> {
                 Ok(err) => {
                     sender
                         .send_message(
-                            TextComponent::text_string(err)
-                                .color_named(pumpkin_core::text::color::NamedColor::Red),
+                            TextComponent::text(err)
+                                .color_named(pumpkin_util::text::color::NamedColor::Red),
                         )
                         .await;
                 }
                 Err(pumpkin_error) => {
                     pumpkin_error.log();
-                    sender.send_message(TextComponent::text("Unknown internal error occured while running command. Please see server log").color(Color::Named(NamedColor::Red))).await;
+                    sender.send_message(TextComponent::text("Unknown internal error occurred while running command. Please see server log").color(Color::Named(NamedColor::Red))).await;
                 }
             }
         }
@@ -82,17 +89,17 @@ impl<'a> CommandDispatcher<'a> {
     /// # todo
     /// - make this less ugly
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
-    pub(crate) async fn find_suggestions(
+    pub(crate) async fn find_suggestions<'a>(
         &'a self,
         src: &mut CommandSender<'a>,
         server: &'a Server,
         cmd: &'a str,
-    ) -> Vec<CommandSuggestion<'a>> {
+    ) -> Vec<CommandSuggestion> {
         let mut parts = cmd.split_whitespace();
         let Some(key) = parts.next() else {
             return Vec::new();
         };
-        let raw_args: Vec<&str> = parts.rev().collect();
+        let mut raw_args: Vec<&str> = parts.rev().collect();
 
         let Ok(tree) = self.get_tree(key) else {
             return Vec::new();
@@ -103,15 +110,8 @@ impl<'a> CommandDispatcher<'a> {
         // try paths and collect the nodes that fail
         // todo: make this more fine-grained
         for path in tree.iter_paths() {
-            match Self::try_find_suggestions_on_path(
-                src,
-                server,
-                &path,
-                tree,
-                raw_args.clone(),
-                cmd,
-            )
-            .await
+            match Self::try_find_suggestions_on_path(src, server, &path, tree, &mut raw_args, cmd)
+                .await
             {
                 Err(InvalidConsumption(s)) => {
                     log::error!("Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed");
@@ -119,6 +119,10 @@ impl<'a> CommandDispatcher<'a> {
                 }
                 Err(InvalidRequirement) => {
                     log::error!("Error while parsing command \"{cmd}\": a requirement that was expected was not met.");
+                    return Vec::new();
+                }
+                Err(PermissionDenied) => {
+                    log::warn!("Permission denied for command \"{cmd}\"");
                     return Vec::new();
                 }
                 Err(GeneralCommandIssue(issue)) => {
@@ -137,12 +141,12 @@ impl<'a> CommandDispatcher<'a> {
         }
 
         let mut suggestions = Vec::from_iter(suggestions);
-        suggestions.sort_by(|a, b| a.suggestion.cmp(b.suggestion));
+        suggestions.sort_by(|a, b| a.suggestion.cmp(&b.suggestion));
         suggestions
     }
 
     /// Execute a command using its corresponding [`CommandTree`].
-    pub(crate) async fn dispatch(
+    pub(crate) async fn dispatch<'a>(
         &'a self,
         src: &mut CommandSender<'a>,
         server: &'a Server,
@@ -155,11 +159,25 @@ impl<'a> CommandDispatcher<'a> {
             .ok_or(GeneralCommandIssue("Empty Command".to_string()))?;
         let raw_args: Vec<&str> = parts.rev().collect();
 
+        if !self.commands.contains_key(key) {
+            return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
+        }
+
+        let Some(permission) = self.permissions.get(key) else {
+            return Err(GeneralCommandIssue(
+                "Permission for Command not found".to_string(),
+            ));
+        };
+
+        if !src.has_permission_lvl(*permission) {
+            return Err(PermissionDenied);
+        }
+
         let tree = self.get_tree(key)?;
 
         // try paths until fitting path is found
         for path in tree.iter_paths() {
-            if Self::try_is_fitting_path(src, server, &path, tree, raw_args.clone()).await? {
+            if Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone()).await? {
                 return Ok(());
             }
         }
@@ -168,7 +186,7 @@ impl<'a> CommandDispatcher<'a> {
         )))
     }
 
-    pub(crate) fn get_tree(&'a self, key: &str) -> Result<&'a CommandTree<'a>, CommandError> {
+    pub(crate) fn get_tree(&self, key: &str) -> Result<&CommandTree, CommandError> {
         let command = self
             .commands
             .get(key)
@@ -177,7 +195,7 @@ impl<'a> CommandDispatcher<'a> {
         match command {
             Command::Tree(tree) => Ok(tree),
             Command::Alias(target) => {
-                let Some(Command::Tree(tree)) = &self.commands.get(target) else {
+                let Some(Command::Tree(tree)) = self.commands.get(target) else {
                     log::error!("Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree");
                     return Err(GeneralCommandIssue(
                         "Internal Error (See logs for details)".into(),
@@ -188,17 +206,21 @@ impl<'a> CommandDispatcher<'a> {
         }
     }
 
-    async fn try_is_fitting_path(
+    pub(crate) fn get_permission_lvl(&self, key: &str) -> Option<PermissionLvl> {
+        self.permissions.get(key).copied()
+    }
+
+    async fn try_is_fitting_path<'a>(
         src: &mut CommandSender<'a>,
         server: &'a Server,
         path: &[usize],
-        tree: &CommandTree<'a>,
-        mut raw_args: RawArgs<'a>,
+        tree: &'a CommandTree,
+        raw_args: &mut RawArgs<'a>,
     ) -> Result<bool, CommandError> {
         let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
-            match node.node_type {
+            match &node.node_type {
                 NodeType::ExecuteLeaf { executor } => {
                     return if raw_args.is_empty() {
                         executor.execute(src, server, &parsed_args).await?;
@@ -213,7 +235,7 @@ impl<'a> CommandDispatcher<'a> {
                     }
                 }
                 NodeType::Argument { consumer, name, .. } => {
-                    match consumer.consume(src, server, &mut raw_args).await {
+                    match consumer.consume(src, server, raw_args).await {
                         Some(consumed) => {
                             parsed_args.insert(name, consumed);
                         }
@@ -231,18 +253,18 @@ impl<'a> CommandDispatcher<'a> {
         Ok(false)
     }
 
-    async fn try_find_suggestions_on_path(
+    async fn try_find_suggestions_on_path<'a>(
         src: &mut CommandSender<'a>,
         server: &'a Server,
         path: &[usize],
-        tree: &CommandTree<'a>,
-        mut raw_args: RawArgs<'a>,
+        tree: &'a CommandTree,
+        raw_args: &mut RawArgs<'a>,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError> {
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
         let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
-            match node.node_type {
+            match &node.node_type {
                 NodeType::ExecuteLeaf { .. } => {
                     return Ok(None);
                 }
@@ -252,7 +274,7 @@ impl<'a> CommandDispatcher<'a> {
                     }
                 }
                 NodeType::Argument { consumer, name } => {
-                    match consumer.consume(src, server, &mut raw_args).await {
+                    match consumer.consume(src, server, raw_args).await {
                         Some(consumed) => {
                             parsed_args.insert(name, consumed);
                         }
@@ -278,15 +300,32 @@ impl<'a> CommandDispatcher<'a> {
     }
 
     /// Register a command with the dispatcher.
-    pub(crate) fn register(&mut self, tree: CommandTree<'a>) {
+    pub(crate) fn register(&mut self, tree: CommandTree, permission: PermissionLvl) {
         let mut names = tree.names.iter();
 
         let primary_name = names.next().expect("at least one name must be provided");
 
-        for &name in names {
-            self.commands.insert(name, Command::Alias(primary_name));
+        for name in names {
+            self.commands
+                .insert(name.to_string(), Command::Alias(primary_name.to_string()));
+            self.permissions.insert(name.to_string(), permission);
         }
 
-        self.commands.insert(primary_name, Command::Tree(tree));
+        self.permissions
+            .insert(primary_name.to_string(), permission);
+        self.commands
+            .insert(primary_name.to_string(), Command::Tree(tree));
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::command::{default_dispatcher, tree::CommandTree};
+    use pumpkin_util::permission::PermissionLvl;
+    #[test]
+    fn test_dynamic_command() {
+        let mut dispatcher = default_dispatcher();
+        let tree = CommandTree::new(["test"], "test_desc");
+        dispatcher.register(tree, PermissionLvl::Zero);
     }
 }

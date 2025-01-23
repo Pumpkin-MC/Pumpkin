@@ -1,10 +1,10 @@
+use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_POS;
 use pumpkin_macros::server_packet;
+use pumpkin_util::math::vector3::Vector3;
 
 #[derive(serde::Deserialize)]
-#[server_packet("play:move_player_pos")]
+#[server_packet(PLAY_MOVE_PLAYER_POS)]
 pub struct SPlayerPosition {
-    pub x: f64,
-    pub feet_y: f64,
-    pub z: f64,
+    pub position: Vector3<f64>,
     pub ground: bool,
 }

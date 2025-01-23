@@ -1,37 +1,41 @@
+use chunk::ChunkConfig;
 use log::warn;
 use logging::LoggingConfig;
-use pumpkin_core::{Difficulty, GameMode};
-use query::QueryConfig;
+use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use std::{
-    fs,
+    env, fs,
     net::{Ipv4Addr, SocketAddr},
+    num::NonZeroU8,
     path::Path,
     sync::LazyLock,
 };
 
-pub mod auth;
 pub mod logging;
-pub mod proxy;
-pub mod query;
+pub mod networking;
+
 pub mod resource_pack;
 
-pub use auth::AuthenticationConfig;
 pub use commands::CommandsConfig;
-pub use compression::CompressionConfig;
-pub use lan_broadcast::LANBroadcastConfig;
+pub use networking::auth::AuthenticationConfig;
+pub use networking::compression::CompressionConfig;
+pub use networking::lan_broadcast::LANBroadcastConfig;
+pub use networking::rcon::RCONConfig;
 pub use pvp::PVPConfig;
-pub use rcon::RCONConfig;
+pub use server_links::ServerLinksConfig;
 
 mod commands;
-pub mod compression;
-mod lan_broadcast;
-mod pvp;
-mod rcon;
 
-use proxy::ProxyConfig;
+pub mod chunk;
+pub mod op;
+mod pvp;
+mod server_links;
+
+use networking::NetworkingConfig;
 use resource_pack::ResourcePackConfig;
+
+const CONFIG_ROOT_FOLDER: &str = "config/";
 
 pub static ADVANCED_CONFIG: LazyLock<AdvancedConfiguration> =
     LazyLock::new(AdvancedConfiguration::load);
@@ -46,16 +50,13 @@ pub static BASIC_CONFIG: LazyLock<BasicConfiguration> = LazyLock::new(BasicConfi
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct AdvancedConfiguration {
-    pub proxy: ProxyConfig,
-    pub authentication: AuthenticationConfig,
-    pub packet_compression: CompressionConfig,
-    pub resource_pack: ResourcePackConfig,
-    pub commands: CommandsConfig,
-    pub rcon: RCONConfig,
-    pub pvp: PVPConfig,
     pub logging: LoggingConfig,
-    pub query: QueryConfig,
-    pub lan_broadcast: LANBroadcastConfig,
+    pub resource_pack: ResourcePackConfig,
+    pub chunk: ChunkConfig,
+    pub networking: NetworkingConfig,
+    pub commands: CommandsConfig,
+    pub pvp: PVPConfig,
+    pub server_links: ServerLinksConfig,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -68,11 +69,13 @@ pub struct BasicConfiguration {
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
     /// The maximum view distance for players.
-    pub view_distance: u8,
+    pub view_distance: NonZeroU8,
     /// The maximum simulated view distance.
-    pub simulation_distance: u8,
+    pub simulation_distance: NonZeroU8,
     /// The default game difficulty.
     pub default_difficulty: Difficulty,
+    /// The op level assign by the /op command
+    pub op_permission_level: PermissionLvl,
     /// Whether the Nether dimension is enabled.
     pub allow_nether: bool,
     /// Whether the server is in hardcore mode.
@@ -100,9 +103,10 @@ impl Default for BasicConfiguration {
             server_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
             seed: "".to_string(),
             max_players: 100000,
-            view_distance: 10,
-            simulation_distance: 10,
+            view_distance: NonZeroU8::new(10).unwrap(),
+            simulation_distance: NonZeroU8::new(10).unwrap(),
             default_difficulty: Difficulty::Normal,
+            op_permission_level: PermissionLvl::Four,
             allow_nether: true,
             hardcore: false,
             online_mode: true,
@@ -122,26 +126,32 @@ trait LoadConfiguration {
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
-        let path = Self::get_path();
+        let exe_dir = env::current_dir().unwrap();
+        let config_dir = exe_dir.join(CONFIG_ROOT_FOLDER);
+        if !config_dir.exists() {
+            log::debug!("creating new config root folder");
+            fs::create_dir(&config_dir).expect("Failed to create Config root folder");
+        }
+        let path = config_dir.join(Self::get_path());
 
         let config = if path.exists() {
-            let file_content = fs::read_to_string(path)
-                .unwrap_or_else(|_| panic!("Couldn't read configuration file at {:?}", path));
+            let file_content = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Couldn't read configuration file at {:?}", &path));
 
             toml::from_str(&file_content).unwrap_or_else(|err| {
                 panic!(
-                    "Couldn't parse config at {:?}. Reason: {}. This is is proberbly caused by an Config update, Just delete the old Config and start Pumpkin again",
-                    path,
+                    "Couldn't parse config at {:?}. Reason: {}. This is is probably caused by an Config update, Just delete the old Config and start Pumpkin again",
+                    &path,
                     err.message()
                 )
             })
         } else {
             let content = Self::default();
 
-            if let Err(err) = fs::write(path, toml::to_string(&content).unwrap()) {
+            if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 warn!(
-                    "Couldn't write default config to {:?}. Reason: {}. This is is proberbly caused by an Config update, Just delete the old Config and start Pumpkin again",
-                    path, err
+                    "Couldn't write default config to {:?}. Reason: {}. This is is probably caused by an Config update, Just delete the old Config and start Pumpkin again",
+                    &path, err
                 );
             }
 
@@ -173,9 +183,14 @@ impl LoadConfiguration for BasicConfiguration {
     }
 
     fn validate(&self) {
-        assert!(self.view_distance >= 2, "View distance must be at least 2");
         assert!(
-            self.view_distance <= 32,
+            self.view_distance
+                .ge(unsafe { &NonZeroU8::new_unchecked(2) }),
+            "View distance must be at least 2"
+        );
+        assert!(
+            self.view_distance
+                .le(unsafe { &NonZeroU8::new_unchecked(32) }),
             "View distance must be less than 32"
         );
         if self.online_mode {

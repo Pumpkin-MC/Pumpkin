@@ -13,7 +13,7 @@ pub struct PlayerInventory {
     armor: [Option<ItemStack>; 4],
     offhand: Option<ItemStack>,
     // current selected slot in hotbar
-    selected: usize,
+    pub selected: u32,
     pub state_id: u32,
     // Notchian server wraps this value at 100, we can just keep it as a u8 that automatically wraps
     pub total_opened_containers: i32,
@@ -42,9 +42,6 @@ impl PlayerInventory {
         }
     }
     /// Set the contents of an item in a slot
-    ///
-    /// ## Slot
-    /// The slot according to https://wiki.vg/Inventory#Player_Inventory
     ///
     /// ## Item
     /// The optional item to place in the slot
@@ -104,19 +101,52 @@ impl PlayerInventory {
             _ => Err(InventoryError::InvalidSlot),
         }
     }
-    pub fn set_selected(&mut self, slot: usize) {
+    pub fn set_selected(&mut self, slot: u32) {
         assert!((0..9).contains(&slot));
         self.selected = slot;
     }
 
+    pub fn get_selected(&self) -> u32 {
+        self.selected + 36
+    }
+
     pub fn held_item(&self) -> Option<&ItemStack> {
         debug_assert!((0..9).contains(&self.selected));
-        self.items[self.selected + 36 - 9].as_ref()
+        self.items[self.selected as usize + 36 - 9].as_ref()
     }
 
     pub fn held_item_mut(&mut self) -> &mut Option<ItemStack> {
         debug_assert!((0..9).contains(&self.selected));
-        &mut self.items[self.selected + 36 - 9]
+        &mut self.items[self.selected as usize + 36 - 9]
+    }
+
+    pub fn get_slot_with_item(&self, item_id: u16) -> Option<usize> {
+        for slot in 9..=44 {
+            match &self.items[slot - 9] {
+                Some(item) if item.item_id == item_id => return Some(slot),
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
+    pub fn get_pick_item_hotbar_slot(&self) -> u32 {
+        if self.items[self.selected as usize + 36 - 9].is_none() {
+            return self.selected;
+        }
+
+        for slot in 0..9 {
+            if self.items[slot + 36 - 9].is_none() {
+                return slot as u32;
+            }
+        }
+
+        self.selected
+    }
+
+    pub fn get_empty_slot(&self) -> Option<usize> {
+        (9..=44).find(|&slot| self.items[slot - 9].is_none())
     }
 
     pub fn slots(&self) -> Vec<Option<&ItemStack>> {

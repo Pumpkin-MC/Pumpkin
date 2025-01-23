@@ -31,53 +31,44 @@ impl GetClientSideArgParser for BlockArgumentConsumer {
 #[async_trait]
 impl ArgumentConsumer for BlockArgumentConsumer {
     async fn consume<'a>(
-        &self,
+        &'a self,
         _sender: &CommandSender<'a>,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
         let s = args.pop()?;
-
-        let name = if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("minecraft:{s}")
-        };
-
-        Some(Arg::Block(name))
+        Some(Arg::Block(s))
     }
 
     async fn suggest<'a>(
-        &self,
+        &'a self,
         _sender: &CommandSender<'a>,
         _server: &'a Server,
         _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError> {
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
         Ok(None)
     }
 }
 
 impl DefaultNameArgConsumer for BlockArgumentConsumer {
-    fn default_name(&self) -> &'static str {
-        "block"
-    }
-
-    fn get_argument_consumer(&self) -> &dyn ArgumentConsumer {
-        self
+    fn default_name(&self) -> String {
+        "block".to_string()
     }
 }
 
 impl<'a> FindArg<'a> for BlockArgumentConsumer {
     type Data = &'a Block;
 
-    fn find_arg(args: &'a super::ConsumedArgs, name: &'a str) -> Result<Self::Data, CommandError> {
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Block(name)) => match block_registry::get_block(name) {
-                Some(block) => Ok(block),
-                None => Err(CommandError::GeneralCommandIssue(format!(
-                    "Block {name} does not exist."
-                ))),
-            },
+            Some(Arg::Block(name)) => block_registry::get_block(name).map_or_else(
+                || {
+                    Err(CommandError::GeneralCommandIssue(format!(
+                        "Block {name} does not exist."
+                    )))
+                },
+                Result::Ok,
+            ),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

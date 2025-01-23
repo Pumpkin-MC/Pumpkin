@@ -29,54 +29,44 @@ impl GetClientSideArgParser for ItemArgumentConsumer {
 #[async_trait]
 impl ArgumentConsumer for ItemArgumentConsumer {
     async fn consume<'a>(
-        &self,
+        &'a self,
         _sender: &CommandSender<'a>,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
-
-        let name = if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("minecraft:{s}")
-        };
-
         // todo: get an actual item
-        Some(Arg::Item(name))
+        Some(Arg::Item(args.pop()?))
     }
 
     async fn suggest<'a>(
-        &self,
+        &'a self,
         _sender: &CommandSender<'a>,
         _server: &'a Server,
         _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError> {
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
         Ok(None)
     }
 }
 
 impl DefaultNameArgConsumer for ItemArgumentConsumer {
-    fn default_name(&self) -> &'static str {
-        "item"
-    }
-
-    fn get_argument_consumer(&self) -> &dyn ArgumentConsumer {
-        self
+    fn default_name(&self) -> String {
+        "item".to_string()
     }
 }
 
 impl<'a> FindArg<'a> for ItemArgumentConsumer {
     type Data = (&'a str, &'a Item);
 
-    fn find_arg(args: &'a super::ConsumedArgs, name: &'a str) -> Result<Self::Data, CommandError> {
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Item(name)) => match item_registry::get_item(name) {
-                Some(item) => Ok((name, item)),
-                None => Err(CommandError::GeneralCommandIssue(format!(
-                    "Item {name} does not exist."
-                ))),
-            },
+            Some(Arg::Item(name)) => item_registry::get_item(name).map_or_else(
+                || {
+                    Err(CommandError::GeneralCommandIssue(format!(
+                        "Item {name} does not exist."
+                    )))
+                },
+                |item| Ok((*name, item)),
+            ),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

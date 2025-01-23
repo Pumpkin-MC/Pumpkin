@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_core::text::color::NamedColor;
-use pumpkin_core::text::TextComponent;
 use pumpkin_inventory::Container;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
@@ -19,7 +19,7 @@ const DESCRIPTION: &str = "Clear yours or targets inventory.";
 const ARG_TARGET: &str = "target";
 
 async fn clear_player(target: &Player) -> usize {
-    let mut inventory = target.inventory.lock().await;
+    let mut inventory = target.inventory().lock().await;
 
     let slots = inventory.all_slots();
     let items_count = slots
@@ -36,20 +36,20 @@ async fn clear_player(target: &Player) -> usize {
 
 fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
-        [target] if item_count == 0 => TextComponent::text_string(format!(
+        [target] if item_count == 0 => TextComponent::text(format!(
             "No items were found on player {}",
             target.gameprofile.name
         ))
         .color_named(NamedColor::Red),
-        [target] => TextComponent::text_string(format!(
+        [target] => TextComponent::text(format!(
             "Removed {} item(s) on player {}",
             item_count, target.gameprofile.name
         )),
         targets if item_count == 0 => {
-            TextComponent::text_string(format!("No items were found on {} players", targets.len()))
+            TextComponent::text(format!("No items were found on {} players", targets.len()))
                 .color_named(NamedColor::Red)
         }
-        targets => TextComponent::text_string(format!(
+        targets => TextComponent::text(format!(
             "Removed {item_count} item(s) from {} players",
             targets.len()
         )),
@@ -107,8 +107,8 @@ impl CommandExecutor for ClearSelfExecutor {
 }
 
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
-pub fn init_command_tree<'a>() -> CommandTree<'a> {
+pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_TARGET, &EntitiesArgumentConsumer).execute(&ClearExecutor))
-        .with_child(require(&|sender| sender.is_player()).execute(&ClearSelfExecutor))
+        .with_child(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(ClearExecutor))
+        .with_child(require(|sender| sender.is_player()).execute(ClearSelfExecutor))
 }

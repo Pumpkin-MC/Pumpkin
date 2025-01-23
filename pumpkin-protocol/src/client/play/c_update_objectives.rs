@@ -1,24 +1,26 @@
-use pumpkin_core::text::TextComponent;
+use bytes::BufMut;
+use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
 use pumpkin_macros::client_packet;
+use pumpkin_util::text::TextComponent;
 
-use crate::{ClientPacket, NumberFormat, VarInt};
+use crate::{bytebuf::ByteBufMut, ClientPacket, NumberFormat, VarInt};
 
-#[client_packet("play:set_objective")]
+#[client_packet(PLAY_SET_OBJECTIVE)]
 pub struct CUpdateObjectives<'a> {
     objective_name: &'a str,
     mode: u8,
-    display_name: TextComponent<'a>,
+    display_name: TextComponent,
     render_type: VarInt,
-    number_format: Option<NumberFormat<'a>>,
+    number_format: Option<NumberFormat>,
 }
 
 impl<'a> CUpdateObjectives<'a> {
     pub fn new(
         objective_name: &'a str,
         mode: Mode,
-        display_name: TextComponent<'a>,
+        display_name: TextComponent,
         render_type: RenderType,
-        number_format: Option<NumberFormat<'a>>,
+        number_format: Option<NumberFormat>,
     ) -> Self {
         Self {
             objective_name,
@@ -30,8 +32,8 @@ impl<'a> CUpdateObjectives<'a> {
     }
 }
 
-impl<'a> ClientPacket for CUpdateObjectives<'a> {
-    fn write(&self, bytebuf: &mut crate::bytebuf::ByteBuffer) {
+impl ClientPacket for CUpdateObjectives<'_> {
+    fn write(&self, bytebuf: &mut impl BufMut) {
         bytebuf.put_string(self.objective_name);
         bytebuf.put_u8(self.mode);
         if self.mode == 0 || self.mode == 2 {
@@ -45,7 +47,7 @@ impl<'a> ClientPacket for CUpdateObjectives<'a> {
                     NumberFormat::Styled(style) => {
                         p.put_var_int(&VarInt(1));
                         // TODO
-                        p.put_slice(&fastnbt::to_bytes(style).unwrap());
+                        p.put_slice(&pumpkin_nbt::serializer::to_bytes_unnamed(style).unwrap());
                     }
                     NumberFormat::Fixed(text_component) => {
                         p.put_var_int(&VarInt(2));

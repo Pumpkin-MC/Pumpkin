@@ -1,16 +1,25 @@
 use connection_cache::{CachedBranding, CachedStatus};
+use crossbeam::atomic::AtomicCell;
+use hmac::digest::consts::U6;
 use key_store::KeyStore;
-use pumpkin_config::BASIC_CONFIG;
-use pumpkin_core::GameMode;
-use pumpkin_entity::EntityId;
+use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_data::entity::EntityType;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{client::config::CPluginMessage, ClientPacket};
-use pumpkin_registry::Registry;
+use pumpkin_registry::{DimensionType, Registry};
+use pumpkin_util::math::boundingbox::{BoundingBox, BoundingBoxSize};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::GameMode;
+use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::dimension::Dimension;
+use pumpkin_world::entity::entity_registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
 use std::{
     sync::{
         atomic::{AtomicI32, Ordering},
@@ -19,12 +28,20 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
+use uuid::Uuid;
 
-use crate::client::EncryptionError;
+use crate::block::block_manager::BlockManager;
+use crate::block::default_block_manager;
+use crate::entity::ai::path::Navigator;
+use crate::entity::living::LivingEntity;
+use crate::entity::mob::MobEntity;
+use crate::entity::{Entity, EntityId};
+use crate::net::EncryptionError;
+use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
-    client::Client,
     command::{default_dispatcher, dispatcher::CommandDispatcher},
     entity::player::Player,
+    net::Client,
     world::World,
 };
 
@@ -32,7 +49,7 @@ mod connection_cache;
 mod key_store;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.3";
+pub const CURRENT_MC_VERSION: &str = "1.21.4";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -43,61 +60,89 @@ pub struct Server {
     /// Saves server branding information.
     server_branding: CachedBranding,
     /// Saves and Dispatches commands to appropriate handlers.
-    pub command_dispatcher: Arc<CommandDispatcher<'static>>,
+    pub command_dispatcher: RwLock<CommandDispatcher>,
+    /// Saves and calls blocks blocks
+    pub block_manager: Arc<BlockManager>,
     /// Manages multiple worlds within the server.
     pub worlds: Vec<Arc<World>>,
+    // All the dimensions that exists on the server,
+    pub dimensions: Vec<DimensionType>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
     /// Tracks open containers used for item interactions.
+    // TODO: should have per player open_containers
     pub open_containers: RwLock<HashMap<u64, OpenContainer>>,
     pub drag_handler: DragHandler,
     /// Assigns unique IDs to entities.
     entity_id: AtomicI32,
+    /// Assigns unique IDs to containers.
+    container_id: AtomicU32,
     /// Manages authentication with a authentication server, if enabled.
     pub auth_client: Option<reqwest::Client>,
+    /// The server's custom bossbars
+    pub bossbars: Mutex<CustomBossbars>,
 }
 
 impl Server {
     #[allow(clippy::new_without_default)]
     #[must_use]
     pub fn new() -> Self {
-        // TODO: only create when needed
-
-        let auth_client = if BASIC_CONFIG.online_mode {
-            Some(
-                reqwest::Client::builder()
-                    .timeout(Duration::from_millis(5000))
-                    .build()
-                    .expect("Failed to to make reqwest client"),
-            )
-        } else {
-            None
-        };
+        let auth_client = BASIC_CONFIG.online_mode.then(|| {
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_millis(
+                    ADVANCED_CONFIG.networking.authentication.connect_timeout as u64,
+                ))
+                .read_timeout(Duration::from_millis(
+                    ADVANCED_CONFIG.networking.authentication.read_timeout as u64,
+                ))
+                .build()
+                .expect("Failed to to make reqwest client")
+        });
 
         // First register default command, after that plugins can put in their own
-        let command_dispatcher = default_dispatcher();
+        let command_dispatcher = RwLock::new(default_dispatcher());
 
-        let world = World::load(Dimension::OverWorld.into_level(
-            // TODO: load form config
-            "./world".parse().unwrap(),
-        ));
+        let world = World::load(
+            Dimension::OverWorld.into_level(
+                // TODO: load form config
+                "./world".parse().unwrap(),
+            ),
+            DimensionType::Overworld,
+        );
+
+        // Spawn chunks are never unloaded
+        for x in -1..=1 {
+            for z in -1..=1 {
+                world.level.mark_chunk_as_newly_watched(Vector2::new(x, z));
+            }
+        }
+
         Self {
             cached_registry: Registry::get_synced(),
             open_containers: RwLock::new(HashMap::new()),
             drag_handler: DragHandler::new(),
             // 0 is invalid
             entity_id: 2.into(),
+            container_id: 0.into(),
             worlds: vec![Arc::new(world)],
+            dimensions: vec![
+                DimensionType::Overworld,
+                DimensionType::OverworldCaves,
+                DimensionType::TheNether,
+                DimensionType::TheEnd,
+            ],
             command_dispatcher,
+            block_manager: default_block_manager(),
             auth_client,
             key_store: KeyStore::new(),
             server_listing: Mutex::new(CachedStatus::new()),
             server_branding: CachedBranding::new(),
+            bossbars: Mutex::new(CustomBossbars::new()),
         }
     }
 
     /// Adds a new player to the server.
-
+    ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
     ///
     /// 1. Generates a new entity ID for the player.
@@ -110,7 +155,7 @@ impl Server {
     /// # Arguments
     ///
     /// * `client`: An `Arc<Client>` representing the connected client.
-
+    ///
     /// # Returns
     ///
     /// A tuple containing:
@@ -151,6 +196,73 @@ impl Server {
         self.server_listing.lock().await.remove_player();
     }
 
+    pub async fn save(&self) {
+        for world in &self.worlds {
+            world.save().await;
+        }
+    }
+
+    pub async fn add_mob_entity(
+        &self,
+        entity_type: EntityType,
+        position: Vector3<f64>,
+        world: &Arc<World>,
+    ) -> (Arc<MobEntity>, Uuid) {
+        let (living_entity, uuid) = self.add_living_entity(position, entity_type, world);
+
+        let mob = Arc::new(MobEntity {
+            living_entity,
+            goals: Mutex::new(vec![]),
+            navigator: Mutex::new(Navigator::default()),
+        });
+        world.add_mob_entity(uuid, mob.clone()).await;
+        (mob, uuid)
+    }
+    /// Adds a new living entity to the server. This does not Spawn the entity
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    ///
+    /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
+    /// - `Arc<World>`: A reference to the world that the living entity was added to.
+    /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
+    fn add_living_entity(
+        &self,
+        position: Vector3<f64>,
+        entity_type: EntityType,
+        world: &Arc<World>,
+    ) -> (Arc<LivingEntity>, Uuid) {
+        let entity_id = self.new_entity_id();
+
+        // TODO: this should be resolved to a integer using a macro when calling this function
+        let bounding_box_size = get_entity_by_id(entity_type as u16).map_or(
+            BoundingBoxSize {
+                width: 0.6,
+                height: 1.8,
+            },
+            |entity| BoundingBoxSize {
+                width: f64::from(entity.dimension[0]),
+                height: f64::from(entity.dimension[1]),
+            },
+        );
+
+        // TODO: standing eye height should be per mob
+        let new_uuid = uuid::Uuid::new_v4();
+        let mob = Arc::new(LivingEntity::new(Entity::new(
+            entity_id,
+            new_uuid,
+            world.clone(),
+            position,
+            entity_type,
+            1.62,
+            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            AtomicCell::new(bounding_box_size),
+        )));
+
+        (mob, new_uuid)
+    }
+
     pub async fn try_get_container(
         &self,
         player_id: EntityId,
@@ -161,6 +273,51 @@ impl Server {
             .get(&container_id)?
             .try_open(player_id)
             .cloned()
+    }
+
+    /// Returns the first id with a matching location and block type. If this is used with unique
+    /// blocks, the output will return a random result.
+    pub async fn get_container_id(&self, location: BlockPos, block: Block) -> Option<u32> {
+        let open_containers = self.open_containers.read().await;
+        // TODO: do better than brute force
+        for (id, container) in open_containers.iter() {
+            if container.is_location(location) {
+                if let Some(container_block) = container.get_block() {
+                    if container_block.id == block.id {
+                        log::debug!("Found container id: {}", id);
+                        return Some(*id as u32);
+                    }
+                }
+            }
+        }
+
+        drop(open_containers);
+
+        None
+    }
+
+    pub async fn get_all_container_ids(
+        &self,
+        location: BlockPos,
+        block: Block,
+    ) -> Option<Vec<u32>> {
+        let open_containers = self.open_containers.read().await;
+        let mut matching_container_ids: Vec<u32> = vec![];
+        // TODO: do better than brute force
+        for (id, container) in open_containers.iter() {
+            if container.is_location(location) {
+                if let Some(container_block) = container.get_block() {
+                    if container_block.id == block.id {
+                        log::debug!("Found matching container id: {}", id);
+                        matching_container_ids.push(*id as u32);
+                    }
+                }
+            }
+        }
+
+        drop(open_containers);
+
+        Some(matching_container_ids)
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -274,6 +431,11 @@ impl Server {
         self.entity_id.fetch_add(1, Ordering::SeqCst)
     }
 
+    /// Generates a new container id
+    pub fn new_container_id(&self) -> u32 {
+        self.container_id.fetch_add(1, Ordering::SeqCst)
+    }
+
     pub fn get_branding(&self) -> CPluginMessage<'_> {
         self.server_branding.get_branding()
     }
@@ -286,7 +448,7 @@ impl Server {
         &'a self,
         verification_token: &'a [u8; 4],
         should_authenticate: bool,
-    ) -> CEncryptionRequest<'_> {
+    ) -> CEncryptionRequest<'a> {
         self.key_store
             .encryption_request("", verification_token, should_authenticate)
     }

@@ -1,19 +1,18 @@
-use num_derive::FromPrimitive;
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
 use pumpkin_macros::server_packet;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::VarInt;
 
 #[derive(serde::Deserialize)]
-#[server_packet("play:player_action")]
+#[server_packet(PLAY_PLAYER_ACTION)]
 pub struct SPlayerAction {
     pub status: VarInt,
-    pub location: WorldPosition,
+    pub location: BlockPos,
     pub face: u8,
     pub sequence: VarInt,
 }
 
-#[derive(FromPrimitive)]
 pub enum Status {
     /// Sent when the player starts digging a block. If the block was instamined or the player is in creative mode, the client will not send Status = Finished digging, and will assume the server completed the destruction. To detect this, it is necessary to calculate the block destruction speed server-side.
     StartedDigging = 0,
@@ -30,4 +29,23 @@ pub enum Status {
     ShootArrowOrFinishEating,
     /// Used to swap or assign an item to the second hand. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.  
     SwapItem,
+}
+
+pub struct InvalidStatus;
+
+impl TryFrom<i32> for Status {
+    type Error = InvalidStatus;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::StartedDigging),
+            1 => Ok(Self::CancelledDigging),
+            2 => Ok(Self::FinishedDigging),
+            3 => Ok(Self::DropItemStack),
+            4 => Ok(Self::DropItem),
+            5 => Ok(Self::ShootArrowOrFinishEating),
+            6 => Ok(Self::SwapItem),
+            _ => Err(InvalidStatus),
+        }
+    }
 }

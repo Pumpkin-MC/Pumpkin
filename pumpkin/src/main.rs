@@ -2,6 +2,22 @@
 #![deny(clippy::pedantic)]
 // #![warn(clippy::restriction)]
 #![deny(clippy::cargo)]
+// to keep consistency
+#![deny(clippy::if_then_some_else_none)]
+#![deny(clippy::empty_enum_variants_with_brackets)]
+#![deny(clippy::empty_structs_with_brackets)]
+#![deny(clippy::separated_literal_suffix)]
+#![deny(clippy::semicolon_outside_block)]
+#![deny(clippy::non_zero_suggestions)]
+#![deny(clippy::string_lit_chars_any)]
+#![deny(clippy::use_self)]
+#![deny(clippy::useless_let_if_seq)]
+#![deny(clippy::branches_sharing_code)]
+#![deny(clippy::equatable_if_let)]
+#![deny(clippy::option_if_let_else)]
+// use log crate
+#![deny(clippy::print_stdout)]
+#![deny(clippy::print_stderr)]
 // REMOVE SOME WHEN RELEASE
 #![expect(clippy::cargo_common_metadata)]
 #![expect(clippy::multiple_crate_versions)]
@@ -19,7 +35,7 @@ compile_error!("Compiling for WASI targets is not supported!");
 
 use log::LevelFilter;
 
-use client::Client;
+use net::{lan_broadcast, query, rcon::RCONServer, Client};
 use server::{ticker::Ticker, Server};
 use std::io::{self};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -32,21 +48,17 @@ use std::sync::Arc;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
-use pumpkin_core::text::{color::NamedColor, TextComponent};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
-use rcon::RCONServer;
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::time::Instant;
-use sysinfo::{CpuRefreshKind, System};
 // Setup some tokens to allow us to identify which event is for which socket.
 
-pub mod client;
+pub mod block;
 pub mod command;
+pub mod data;
 pub mod entity;
 pub mod error;
-pub mod lan_broadcast;
-pub mod proxy;
-pub mod query;
-pub mod rcon;
+pub mod net;
 pub mod server;
 pub mod world;
 
@@ -73,123 +85,30 @@ fn init_logger() {
             logger = logger.without_timestamps();
         }
 
-        if ADVANCED_CONFIG.logging.env {
-            logger = logger.env();
-        }
-
-        logger = logger.with_level(convert_logger_filter(ADVANCED_CONFIG.logging.level));
+        // default
+        logger = logger.with_level(LevelFilter::Info);
 
         logger = logger.with_colors(ADVANCED_CONFIG.logging.color);
         logger = logger.with_threads(ADVANCED_CONFIG.logging.threads);
-        logger.init().unwrap();
-    }
-}
 
-const fn convert_logger_filter(level: pumpkin_config::logging::LevelFilter) -> LevelFilter {
-    match level {
-        pumpkin_config::logging::LevelFilter::Off => LevelFilter::Off,
-        pumpkin_config::logging::LevelFilter::Error => LevelFilter::Error,
-        pumpkin_config::logging::LevelFilter::Warn => LevelFilter::Warn,
-        pumpkin_config::logging::LevelFilter::Info => LevelFilter::Info,
-        pumpkin_config::logging::LevelFilter::Debug => LevelFilter::Debug,
-        pumpkin_config::logging::LevelFilter::Trace => LevelFilter::Trace,
+        logger = logger.env();
+
+        logger.init().unwrap();
     }
 }
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_VERSION: &str = env!("GIT_VERSION");
 
-fn bytes_to_human_readable(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-
-    if bytes >= GB {
-        let whole_gb = bytes / GB;
-        let remainder = (bytes % GB) / (GB / 100);
-        format!("{whole_gb}.{remainder:02} GB")
-    } else if bytes >= MB {
-        let whole_mb = bytes / MB;
-        let remainder = (bytes % MB) / (MB / 100);
-        format!("{whole_mb}.{remainder:02} MB")
-    } else if bytes >= KB {
-        let whole_kb = bytes / KB;
-        let remainder = (bytes % KB) / (KB / 100);
-        format!("{whole_kb}.{remainder:02} KB")
-    } else {
-        format!("{bytes} bytes")
-    }
-}
-
-fn log_system_info() {
-    if sysinfo::IS_SUPPORTED_SYSTEM {
-        log::info!(
-            "Running on {} ({}) {}",
-            System::long_os_version().unwrap_or(String::from("unknown")),
-            System::kernel_version().unwrap_or(String::from("unknown")),
-            System::cpu_arch().unwrap_or(String::from("unknown"))
-        );
-
-        let mut sys = System::new();
-        sys.refresh_cpu_list(CpuRefreshKind::new().with_frequency());
-
-        let cpus = sys.cpus();
-        if let Some(cpu) = cpus.first() {
-            log::info!(
-                "CPU Information: Brand: \"{}\", Frequency: {} GHz, Physical Cores: {}, Logical Processors: {}",
-                cpu.brand(),
-                cpu.frequency() / 1000,
-                sys.physical_core_count().unwrap_or(0),
-                cpus.len()
-            );
-        } else {
-            log::info!("CPU Information: Could not retrieve CPU details.");
-        }
-
-        sys.refresh_memory();
-        let total_memory = sys.total_memory();
-
-        log::info!(
-            "Memory Information: RAM: {}, SWAP: {}",
-            bytes_to_human_readable(total_memory),
-            bytes_to_human_readable(sys.total_swap())
-        );
-
-        let used_memory = sys.used_memory();
-
-        if total_memory > 0 && used_memory > 0 {
-            let memory_usage_percentage = (used_memory * 100) / total_memory;
-
-            if memory_usage_percentage > 90 {
-                log::warn!(
-                    "High memory usage detected on startup: {}% of total RAM is used!",
-                    memory_usage_percentage
-                );
-            }
-        }
-    } else {
-        log::info!("Running on Unknown System");
-    }
-}
-
+// WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
+// like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
+// runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 #[expect(clippy::too_many_lines)]
-async fn main() -> io::Result<()> {
+async fn main() {
+    let time = Instant::now();
     init_logger();
 
-    // let rt = tokio::runtime::Builder::new_multi_thread()
-    //     .enable_all()
-    //     .build()
-    //     .unwrap();
-
-    tokio::spawn(async {
-        setup_sighandler()
-            .await
-            .expect("Unable to setup signal handlers");
-    });
-
-    // ensure rayon is built outside of tokio scope
-    rayon::ThreadPoolBuilder::new().build_global().unwrap();
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         default_panic(info);
@@ -199,7 +118,6 @@ async fn main() -> io::Result<()> {
 
     log::info!("Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",);
 
-    log_system_info();
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
         std::env::consts::FAMILY,
@@ -213,10 +131,14 @@ async fn main() -> io::Result<()> {
     );
 
     log::warn!("Pumpkin is currently under heavy development!");
-    log::info!("Report Issues on https://github.com/Snowiiii/Pumpkin/issues");
+    log::info!("Report Issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
     log::info!("Join our Discord for community support https://discord.com/invite/wT8XjrjKkf");
 
-    let time = Instant::now();
+    tokio::spawn(async {
+        setup_sighandler()
+            .await
+            .expect("Unable to setup signal handlers");
+    });
 
     // Setup the TCP server socket.
     let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.server_address)
@@ -228,7 +150,7 @@ async fn main() -> io::Result<()> {
         .expect("Unable to get the address of server!");
 
     let use_console = ADVANCED_CONFIG.commands.use_console;
-    let rcon = ADVANCED_CONFIG.rcon.clone();
+    let rcon = ADVANCED_CONFIG.networking.rcon.clone();
 
     let server = Arc::new(Server::new());
     let mut ticker = Ticker::new(BASIC_CONFIG.tps);
@@ -246,12 +168,12 @@ async fn main() -> io::Result<()> {
         });
     }
 
-    if ADVANCED_CONFIG.query.enabled {
+    if ADVANCED_CONFIG.networking.query.enabled {
         log::info!("Query protocol enabled. Starting...");
         tokio::spawn(query::start_query_handler(server.clone(), addr));
     }
 
-    if ADVANCED_CONFIG.lan_broadcast.enabled {
+    if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
         log::info!("LAN broadcast enabled. Starting...");
         tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
     }
@@ -260,13 +182,13 @@ async fn main() -> io::Result<()> {
         let server = server.clone();
         tokio::spawn(async move {
             ticker.run(&server).await;
-        });
-    }
+        })
+    };
 
     let mut master_client_id: u16 = 0;
     loop {
         // Asynchronously wait for an inbound socket.
-        let (connection, address) = listener.accept().await?;
+        let (connection, address) = listener.accept().await.unwrap();
 
         if let Err(e) = connection.set_nodelay(true) {
             log::warn!("failed to set TCP_NODELAY {e}");
@@ -301,7 +223,7 @@ async fn main() -> io::Result<()> {
             {
                 let (player, world) = server.add_player(client).await;
                 world
-                    .spawn_player(&BASIC_CONFIG, player.clone(), &server.command_dispatcher)
+                    .spawn_player(&BASIC_CONFIG, player.clone(), &server)
                     .await;
 
                 // poll Player
@@ -374,10 +296,13 @@ fn setup_console(server: Arc<Server>) {
                 .expect("Failed to read console line");
 
             if !out.is_empty() {
-                let dispatcher = server.command_dispatcher.clone();
-                dispatcher
-                    .handle_command(&mut command::CommandSender::Console, &server, &out)
-                    .await;
+                let server_clone = server.clone();
+                tokio::spawn(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(&mut command::CommandSender::Console, &server_clone, &out)
+                        .await;
+                });
             }
         }
     });
