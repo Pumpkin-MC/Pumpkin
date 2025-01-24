@@ -17,7 +17,11 @@ pub mod style;
 /// Represents a Text component
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub struct TextComponent {
+pub struct TextComponent(pub TextComponentBase);
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct TextComponentBase {
     /// The actual text
     #[serde(flatten)]
     pub content: TextContent,
@@ -27,53 +31,10 @@ pub struct TextComponent {
     pub style: Style,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Extra text components
-    pub extra: Vec<TextComponent>,
+    pub extra: Vec<TextComponentBase>,
 }
 
-impl TextComponent {
-    pub fn text<P>(plain: P) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
-        Self {
-            content: TextContent::Text { text: plain.into() },
-            style: Style::default(),
-            extra: vec![],
-        }
-    }
-
-    pub fn translate<K, W>(key: K, with: W) -> Self
-    where
-        K: Into<Cow<'static, str>>,
-        W: Into<Vec<Cow<'static, str>>>,
-    {
-        Self {
-            content: TextContent::Translate {
-                translate: key.into(),
-                with: with.into(),
-            },
-            style: Style::default(),
-            extra: vec![],
-        }
-    }
-
-    pub fn add_child(mut self, child: TextComponent) -> Self {
-        self.extra.push(child);
-        self
-    }
-
-    pub fn get_text(self) -> String {
-        match self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with: _ } => translate.into_owned(),
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-        }
-    }
-
+impl TextComponentBase {
     pub fn to_pretty_console(self) -> String {
         let mut text = match self.content {
             TextContent::Text { text } => text.into_owned(),
@@ -119,6 +80,66 @@ impl TextComponent {
     }
 }
 
+impl TextComponent {
+    pub fn text<P>(plain: P) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
+        Self(TextComponentBase {
+            content: TextContent::Text { text: plain.into() },
+            style: Style::default(),
+            extra: vec![],
+        })
+    }
+
+    pub fn translate<K>(key: K, with: Vec<TextComponent>) -> Self
+    where
+        K: Into<Cow<'static, str>>,
+    {
+        Self(TextComponentBase {
+            content: TextContent::Translate {
+                translate: key.into(),
+                with: with.into_iter().map(|x| x.0).collect(),
+            },
+            style: Style::default(),
+            extra: vec![],
+        })
+    }
+
+    pub fn add_child(mut self, child: TextComponent) -> Self {
+        self.0.extra.push(child.0);
+        self
+    }
+
+    pub fn add_text<P>(mut self, text: P) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
+        self.0.extra.push(TextComponentBase {
+            content: TextContent::Text { text: text.into() },
+            style: Style::default(),
+            extra: vec![],
+        });
+        self
+    }
+
+    pub fn get_text(self) -> String {
+        match self.0.content {
+            TextContent::Text { text } => text.into_owned(),
+            TextContent::Translate { translate, with: _ } => translate.into_owned(),
+            TextContent::EntityNames {
+                selector,
+                separator: _,
+            } => selector.into_owned(),
+            TextContent::Keybind { keybind } => keybind.into_owned(),
+        }
+    }
+
+    pub fn to_pretty_console(self) -> String {
+        self.0.to_pretty_console()
+    }
+}
+
 impl serde::Serialize for TextComponent {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -128,118 +149,94 @@ impl serde::Serialize for TextComponent {
     }
 }
 
+impl pumpkin_nbt::serializer::SerializeChild for TextComponent {
+    fn serialize_child<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
 impl TextComponent {
+    pub fn encode(&self) -> bytes::BytesMut {
+        pumpkin_nbt::serializer::to_bytes_text_component(self).unwrap()
+    }
+
     pub fn color(mut self, color: Color) -> Self {
-        self.style.color = Some(color);
+        self.0.style.color = Some(color);
         self
     }
 
     pub fn color_named(mut self, color: color::NamedColor) -> Self {
-        self.style.color = Some(Color::Named(color));
+        self.0.style.color = Some(Color::Named(color));
         self
     }
 
     pub fn color_rgb(mut self, color: color::RGBColor) -> Self {
-        self.style.color = Some(Color::Rgb(color));
+        self.0.style.color = Some(Color::Rgb(color));
         self
     }
 
     /// Makes the text bold
     pub fn bold(mut self) -> Self {
-        self.style.bold = Some(true);
+        self.0.style.bold = Some(true);
         self
     }
 
     /// Makes the text italic
     pub fn italic(mut self) -> Self {
-        self.style.italic = Some(true);
+        self.0.style.italic = Some(true);
         self
     }
 
     /// Makes the text underlined
     pub fn underlined(mut self) -> Self {
-        self.style.underlined = Some(true);
+        self.0.style.underlined = Some(true);
         self
     }
 
     /// Makes the text strikethrough
     pub fn strikethrough(mut self) -> Self {
-        self.style.strikethrough = Some(true);
+        self.0.style.strikethrough = Some(true);
         self
     }
 
     /// Makes the text obfuscated
     pub fn obfuscated(mut self) -> Self {
-        self.style.obfuscated = Some(true);
+        self.0.style.obfuscated = Some(true);
         self
     }
 
     /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages
     pub fn insertion(mut self, text: String) -> Self {
-        self.style.insertion = Some(text);
+        self.0.style.insertion = Some(text);
         self
     }
 
     /// Allows for events to occur when the player clicks on text. Only work in chat.
     pub fn click_event(mut self, event: ClickEvent) -> Self {
-        self.style.click_event = Some(event);
+        self.0.style.click_event = Some(event);
         self
     }
 
     /// Allows for a tooltip to be displayed when the player hovers their mouse over text.
     pub fn hover_event(mut self, event: HoverEvent) -> Self {
-        self.style.hover_event = Some(event);
+        self.0.style.hover_event = Some(event);
         self
     }
 
     /// Allows you to change the font of the text.
     /// Default fonts: `minecraft:default`, `minecraft:uniform`, `minecraft:alt`, `minecraft:illageralt`
     pub fn font(mut self, identifier: String) -> Self {
-        self.style.font = Some(identifier);
+        self.0.style.font = Some(identifier);
         self
     }
 
     /// Overrides the shadow properties of text.
     pub fn shadow_color(mut self, color: ARGBColor) -> Self {
-        self.style.shadow_color = Some(color);
+        self.0.style.shadow_color = Some(color);
         self
-    }
-
-    pub fn encode(&self) -> bytes::BytesMut {
-        // TODO: Somehow fix this ugly mess
-        #[derive(serde::Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct TempStruct<'a> {
-            #[serde(flatten)]
-            text: &'a TextContent,
-            #[serde(flatten)]
-            style: &'a Style,
-            #[serde(default, skip_serializing_if = "Vec::is_empty")]
-            #[serde(rename = "extra")]
-            extra: Vec<TempStruct<'a>>,
-        }
-        fn convert_extra(extra: &[TextComponent]) -> Vec<TempStruct<'_>> {
-            extra
-                .iter()
-                .map(|x| TempStruct {
-                    text: &x.content,
-                    style: &x.style,
-                    extra: convert_extra(&x.extra),
-                })
-                .collect()
-        }
-
-        let temp_extra = convert_extra(&self.extra);
-        let astruct = TempStruct {
-            text: &self.content,
-            style: &self.style,
-            extra: temp_extra,
-        };
-        // dbg!(&serde_json::to_string(&astruct));
-        // dbg!(pumpkin_nbt::serializer::to_bytes_unnamed(&astruct).unwrap().to_vec());
-
-        // TODO
-        pumpkin_nbt::serializer::to_bytes_unnamed(&astruct).unwrap()
     }
 }
 
@@ -252,8 +249,7 @@ pub enum TextContent {
     Translate {
         translate: Cow<'static, str>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        // TODO: ReIntroduce TextComponent, changed due to circular encoding
-        with: Vec<Cow<'static, str>>,
+        with: Vec<TextComponentBase>,
     },
     /// Displays the name of one or more entities found by a selector.
     EntityNames {

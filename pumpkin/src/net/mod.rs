@@ -571,7 +571,7 @@ impl Client {
             ConnectionState::Login => {
                 // TextComponent implements Serialze and writes in bytes instead of String, thats the reasib we only use content
                 self.try_send_packet(&CLoginDisconnect::new(
-                    &serde_json::to_string(&reason.content).unwrap_or_else(|_| String::new()),
+                    &serde_json::to_string(&reason.0.content).unwrap_or_else(|_| String::new()),
                 ))
                 .await
             }

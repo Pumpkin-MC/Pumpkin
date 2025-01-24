@@ -11,6 +11,12 @@ use crate::{
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub trait SerializeChild {
+    fn serialize_child<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: ser::Serializer;
+}
+
 pub struct Serializer {
     output: BytesMut,
     state: State,
@@ -54,6 +60,19 @@ impl Serializer {
         };
         Ok(())
     }
+}
+
+/// Serializes struct using Serde Serializer to unnamed (network) NBT (Exclusive to TextComponent)
+pub fn to_bytes_text_component<T>(value: &T) -> Result<BytesMut>
+where
+    T: SerializeChild,
+{
+    let mut serializer = Serializer {
+        output: BytesMut::new(),
+        state: State::Root(None),
+    };
+    value.serialize_child(&mut serializer)?;
+    Ok(serializer.output)
 }
 
 /// Serializes struct using Serde Serializer to unnamed (network) NBT

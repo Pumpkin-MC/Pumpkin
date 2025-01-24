@@ -72,8 +72,9 @@ fn parse_text_component(input: &str) -> Option<TextComponent> {
         let mut text_component_array = text_component_array?;
         let mut constructed_text_component = text_component_array[0].clone();
         text_component_array.remove(0);
-        constructed_text_component.extra = text_component_array;
-
+        for child in &text_component_array {
+            constructed_text_component = constructed_text_component.add_child(child.clone());
+        }
         Some(constructed_text_component)
     } else {
         serde_json::from_str(input).unwrap_or(None)
