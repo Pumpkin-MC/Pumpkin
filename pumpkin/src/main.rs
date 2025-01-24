@@ -229,7 +229,7 @@ async fn main() {
         let connection_reader = Arc::new(Mutex::new(connection_reader));
         let connection_writer = Arc::new(Mutex::new(connection_writer));
 
-        let client = Arc::new(Client::new(tx, addr, id));
+        let client = Arc::new(Client::new(tx, client_addr, id));
 
         let client_clone = client.clone();
         tokio::spawn(async move {

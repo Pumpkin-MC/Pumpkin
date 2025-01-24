@@ -1,5 +1,6 @@
 use std::{net::IpAddr, path::Path, sync::LazyLock};
 
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 
 use super::{banlist_serializer::BannedIpEntry, LoadJSONConfiguration, SaveJSONConfiguration};
@@ -15,11 +16,20 @@ pub struct BannedIpList {
 
 impl BannedIpList {
     #[must_use]
-    pub fn get_entry(&mut self, ip: &IpAddr) -> Option<(usize, &BannedIpEntry)> {
+    pub fn get_entry(&mut self, ip: &IpAddr) -> Option<&BannedIpEntry> {
+        self.remove_invalid_entries();
+        self.banned_ips.iter().find(|entry| entry.ip == *ip)
+    }
+
+    fn remove_invalid_entries(&mut self) {
+        let original_len = self.banned_ips.len();
+
         self.banned_ips
-            .iter()
-            .enumerate()
-            .find(|(_, entry)| &entry.ip == ip)
+            .retain(|entry| entry.expires.is_none_or(|expires| expires >= Local::now()));
+
+        if original_len != self.banned_ips.len() {
+            self.save();
+        }
     }
 }
 

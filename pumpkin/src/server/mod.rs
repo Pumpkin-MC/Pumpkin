@@ -375,7 +375,7 @@ impl Server {
     pub async fn get_players_by_ip(&self, ip: IpAddr) -> Vec<Arc<Player>> {
         let mut players = Vec::<Arc<Player>>::new();
 
-        for world in &self.worlds {
+        for world in self.worlds.read().await.iter() {
             for (_, player) in world.current_players.lock().await.iter() {
                 if player.client.address.lock().await.ip() == ip {
                     players.push(player.clone());

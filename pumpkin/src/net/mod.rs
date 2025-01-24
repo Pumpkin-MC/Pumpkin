@@ -9,15 +9,11 @@ use std::{
 };
 
 use crate::{
-    data::{
-        banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
-        SaveJSONConfiguration,
-    },
+    data::{banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST},
     entity::player::{ChatMode, Hand},
     server::Server,
 };
 
-use chrono::{DateTime, FixedOffset, Local};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
@@ -527,7 +523,7 @@ impl Client {
             ConnectionState::Login => {
                 // TextComponent implements Serialze and writes in bytes instead of String, thats the reasib we only use content
                 self.try_send_packet(&CLoginDisconnect::new(
-                    &serde_json::to_string(&reason.0.content).unwrap_or_else(|_| String::new()),
+                    &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
                 .await
             }
@@ -547,31 +543,49 @@ impl Client {
     }
 
     /// Checks if the client can join the server.
-    pub async fn can_not_join(&self) -> Option<String> {
+    pub async fn can_not_join(&self) -> Option<TextComponent> {
         let profile: tokio::sync::MutexGuard<'_, Option<GameProfile>> =
             self.gameprofile.lock().await;
 
         let Some(profile) = profile.as_ref() else {
-            return Some("GameProfile missing".to_string());
+            return Some(TextComponent::text("Missing GameProfile"));
         };
 
         let mut banned_players = BANNED_PLAYER_LIST.write().await;
-        if let Some((idx, entry)) = banned_players.get_entry(profile) {
-            return ban_reason(&entry.reason, entry.expires).or_else(|| {
-                banned_players.banned_players.remove(idx);
-                banned_players.save();
-                None
+        if let Some(entry) = banned_players.get_entry(profile) {
+            let text = TextComponent::translate(
+                "multiplayer.disconnect.banned.reason",
+                vec![TextComponent::text(entry.reason.clone())],
+            );
+            return Some(match entry.expires {
+                Some(expires) => text.add_child(TextComponent::translate(
+                    "multiplayer.disconnect.banned.expiration",
+                    [TextComponent::text(
+                        expires.format("%F at %T %Z").to_string(),
+                    )]
+                    .into(),
+                )),
+                None => text,
             });
         }
         drop(banned_players);
 
         let mut banned_ips = BANNED_IP_LIST.write().await;
         let address = self.address.lock().await;
-        if let Some((idx, entry)) = banned_ips.get_entry(&address.ip()) {
-            return ban_reason(&entry.reason, entry.expires).or_else(|| {
-                banned_ips.banned_ips.remove(idx);
-                banned_ips.save();
-                None
+        if let Some(entry) = banned_ips.get_entry(&address.ip()) {
+            let text = TextComponent::translate(
+                "multiplayer.disconnect.banned_ip.reason",
+                vec![TextComponent::text(entry.reason.clone())],
+            );
+            return Some(match entry.expires {
+                Some(expires) => text.add_child(TextComponent::translate(
+                    "multiplayer.disconnect.banned_ip.expiration",
+                    [TextComponent::text(
+                        expires.format("%F at %T %Z").to_string(),
+                    )]
+                    .into(),
+                )),
+                None => text,
             });
         }
 
@@ -591,25 +605,6 @@ impl Client {
         self.closed
             .store(true, std::sync::atomic::Ordering::Relaxed);
         log::debug!("Closed connection for {}", self.id);
-    }
-}
-
-/// Returns none if ban has expired and should be removed
-pub(crate) fn ban_reason(reason: &str, expires: Option<DateTime<FixedOffset>>) -> Option<String> {
-    match expires {
-        Some(datetime) => {
-            if Local::now().fixed_offset() > datetime {
-                return None;
-            }
-            Some(format!("You are banned from this server.\nReason: {reason}\nYour ban will be removed on {} at {} {}",
-                datetime.format("%Y-%m-%d"),
-                datetime.format("%H:%M:%S"),
-                datetime.offset()
-            ))
-        }
-        None => Some(format!(
-            "You are banned from this server.\nReason: {reason}",
-        )),
     }
 }
 

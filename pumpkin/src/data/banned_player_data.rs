@@ -1,5 +1,6 @@
 use std::{path::Path, sync::LazyLock};
 
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 
 use crate::net::GameProfile;
@@ -17,11 +18,22 @@ pub struct BannedPlayerList {
 
 impl BannedPlayerList {
     #[must_use]
-    pub fn get_entry(&self, profile: &GameProfile) -> Option<(usize, &BannedPlayerEntry)> {
+    pub fn get_entry(&mut self, profile: &GameProfile) -> Option<&BannedPlayerEntry> {
+        self.remove_invalid_entries();
         self.banned_players
             .iter()
-            .enumerate()
-            .find(|(_, entry)| entry.name == profile.name && entry.uuid == profile.id)
+            .find(|entry| entry.name == profile.name && entry.uuid == profile.id)
+    }
+
+    fn remove_invalid_entries(&mut self) {
+        let original_len = self.banned_players.len();
+
+        self.banned_players
+            .retain(|entry| entry.expires.is_none_or(|expires| expires >= Local::now()));
+
+        if original_len != self.banned_players.len() {
+            self.save();
+        }
     }
 }
 
