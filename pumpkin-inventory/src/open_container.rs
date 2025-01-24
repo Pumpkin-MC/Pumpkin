@@ -70,7 +70,7 @@ impl OpenContainer {
     }
 
     pub fn clear_all_players(&mut self) {
-        self.players = vec![];
+        self.players.clear();
     }
 
     pub fn all_player_ids(&self) -> Vec<i32> {

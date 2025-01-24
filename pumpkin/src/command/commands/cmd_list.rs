@@ -27,18 +27,17 @@ impl CommandExecutor for ListExecutor {
     ) -> Result<(), CommandError> {
         let players: Vec<Arc<Player>> = server.get_all_players().await;
 
-        let message = if players.is_empty() {
-            "There are no players online.".to_owned()
-        } else {
-            format!(
-                "There are {} of a max of {} players online: {}",
-                players.len(),
-                BASIC_CONFIG.max_players,
-                get_player_names(players)
-            )
-        };
-
-        sender.send_message(TextComponent::text(message)).await;
+        sender
+            .send_message(TextComponent::translate(
+                "commands.list.players",
+                [
+                    TextComponent::text(players.len().to_string()),
+                    TextComponent::text(BASIC_CONFIG.max_players.to_string()),
+                    TextComponent::text(get_player_names(players)),
+                ]
+                .into(),
+            ))
+            .await;
 
         Ok(())
     }

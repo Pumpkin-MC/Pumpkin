@@ -7,6 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
@@ -14,6 +15,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::player::PlayerInventory;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     bytebuf::packet_id::Packet,
     client::play::{
@@ -61,7 +63,7 @@ use pumpkin_world::{
 };
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use super::{Entity, EntityId};
+use super::{Entity, EntityId, NBTStorage};
 use crate::{
     command::{client_cmd_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
@@ -81,11 +83,13 @@ use super::living::LivingEntity;
 /// A `Player` is a special type of entity that represents a human player connected to the server.
 pub struct Player {
     /// The underlying living entity object that represents the player.
-    pub living_entity: LivingEntity<PlayerInventory>,
+    pub living_entity: LivingEntity,
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
     pub client: Arc<Client>,
+    /// Players Inventory
+    pub inventory: Mutex<PlayerInventory>,
     /// The player's configuration settings. Changes when the Player changes their settings.
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
@@ -162,19 +166,16 @@ impl Player {
         };
 
         Self {
-            living_entity: LivingEntity::new_with_container(
-                Entity::new(
-                    entity_id,
-                    player_uuid,
-                    world,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    EntityType::Player,
-                    1.62,
-                    AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
-                    AtomicCell::new(bounding_box_size),
-                ),
-                PlayerInventory::new(),
-            ),
+            living_entity: LivingEntity::new(Entity::new(
+                entity_id,
+                player_uuid,
+                world,
+                Vector3::new(0.0, 0.0, 0.0),
+                EntityType::Player,
+                1.62,
+                AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+                AtomicCell::new(bounding_box_size),
+            )),
             config: Mutex::new(config),
             gameprofile,
             client,
@@ -214,23 +215,21 @@ impl Player {
                     AtomicCell::new(ADVANCED_CONFIG.commands.default_op_level),
                     |op| AtomicCell::new(op.level),
                 ),
+            inventory: Mutex::new(PlayerInventory::new()),
         }
     }
 
     pub fn inventory(&self) -> &Mutex<PlayerInventory> {
-        self.living_entity
-            .inventory
-            .as_ref()
-            .expect("Player always has inventory")
+        &self.inventory
     }
 
     /// Removes the Player out of the current World
     #[allow(unused_variables)]
-    pub async fn remove(&self) {
+    pub async fn remove(self: Arc<Self>) {
         let world = self.world();
         self.cancel_tasks.notify_waiters();
 
-        world.remove_player(self).await;
+        world.remove_player(self.clone()).await;
 
         let cylindrical = self.watched_section.load();
 
@@ -420,7 +419,8 @@ impl Player {
                 .wait_for_keep_alive
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                self.kick(TextComponent::text("Timeout")).await;
+                self.kick(TextComponent::translate("disconnect.timeout", [].into()))
+                    .await;
                 return;
             }
             self.wait_for_keep_alive
@@ -486,7 +486,7 @@ impl Player {
             .send_packet(&CPlayerAbilities::new(
                 b,
                 abilities.fly_speed,
-                abilities.walk_speed_fov,
+                abilities.walk_speed,
             ))
             .await;
     }
@@ -698,9 +698,30 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
+        self.send_system_message_raw(text, false).await;
+    }
+
+    pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         self.client
-            .send_packet(&CSystemChatMessage::new(text, false))
+            .send_packet(&CSystemChatMessage::new(text, overlay))
             .await;
+    }
+}
+#[async_trait]
+impl NBTStorage for Player {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.living_entity.write_nbt(nbt).await;
+        nbt.put_int(
+            "SelectedItemSlot",
+            self.inventory.lock().await.selected as i32,
+        );
+        self.abilities.lock().await.write_nbt(nbt).await;
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+        self.living_entity.read_nbt(nbt).await;
+        self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
+        self.abilities.lock().await.read_nbt(nbt).await;
     }
 }
 
@@ -795,7 +816,8 @@ impl Player {
                     .await;
             }
             SPlayerAction::PACKET_ID => {
-                self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
+                self.clone()
+                    .handle_player_action(SPlayerAction::read(bytebuf)?, server)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {
@@ -860,10 +882,39 @@ pub struct Abilities {
     pub allow_flying: bool,
     /// Indicates whether the player is in creative mode.
     pub creative: bool,
+    /// Indicates whether the player is allowed to modify the world.
+    pub allow_modify_world: bool,
     /// The player's flying speed.
     pub fly_speed: f32,
     /// The field of view adjustment when the player is walking or sprinting.
-    pub walk_speed_fov: f32,
+    pub walk_speed: f32,
+}
+
+#[async_trait]
+impl NBTStorage for Abilities {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        let mut component = NbtCompound::new();
+        component.put_bool("invulnerable", self.invulnerable);
+        component.put_bool("flying", self.flying);
+        component.put_bool("mayfly", self.allow_flying);
+        component.put_bool("instabuild", self.creative);
+        component.put_bool("mayBuild", self.allow_modify_world);
+        component.put_float("flySpeed", self.fly_speed);
+        component.put_float("walkSpeed", self.walk_speed);
+        nbt.put_component("abilities", component);
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        if let Some(component) = nbt.get_compound("abilities") {
+            self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
+            self.flying = component.get_bool("flying").unwrap_or(false);
+            self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
+            self.creative = component.get_bool("instabuild").unwrap_or(false);
+            self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
+            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.0);
+            self.walk_speed = component.get_float("walk_speed").unwrap_or(0.0);
+        }
+    }
 }
 
 impl Default for Abilities {
@@ -873,8 +924,9 @@ impl Default for Abilities {
             flying: false,
             allow_flying: false,
             creative: false,
+            allow_modify_world: true,
             fly_speed: 0.05,
-            walk_speed_fov: 0.1,
+            walk_speed: 0.1,
         }
     }
 }

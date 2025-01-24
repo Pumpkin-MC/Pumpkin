@@ -59,6 +59,23 @@ impl BoundingBox {
             && self.max_z > other.min_z
     }
 
+    pub fn intersects_block(&self, position: &BlockPos, bounding_box: &[f32]) -> bool {
+        for i in 0..bounding_box.len() / 6 {
+            let other = BoundingBox {
+                min_x: position.0.x as f64 + bounding_box[i * 6] as f64,
+                min_y: position.0.y as f64 + bounding_box[i * 6 + 1] as f64,
+                min_z: position.0.z as f64 + bounding_box[i * 6 + 2] as f64,
+                max_x: position.0.x as f64 + bounding_box[i * 6 + 3] as f64,
+                max_y: position.0.y as f64 + bounding_box[i * 6 + 4] as f64,
+                max_z: position.0.z as f64 + bounding_box[i * 6 + 5] as f64,
+            };
+            if self.intersects(&other) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn squared_magnitude(&self, pos: Vector3<f64>) -> f64 {
         let d = f64::max(f64::max(self.min_x - pos.x, pos.x - self.max_x), 0.0);
         let e = f64::max(f64::max(self.min_y - pos.y, pos.y - self.max_y), 0.0);

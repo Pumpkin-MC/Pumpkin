@@ -144,10 +144,10 @@ impl CommandExecutor for SetblockExecutor {
         };
 
         sender
-            .send_message(TextComponent::text(format!(
-                "Placed {} blocks of {} from {from} to {to}",
-                placed_blocks, block.name
-            )))
+            .send_message(TextComponent::translate(
+                "commands.fill.success",
+                [TextComponent::text(placed_blocks.to_string())].into(),
+            ))
             .await;
 
         Ok(())

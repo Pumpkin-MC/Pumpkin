@@ -8,6 +8,7 @@ use crate::ident;
 
 #[derive(Deserialize)]
 pub struct DoublePerlinNoiseParameters {
+    #[serde(rename = "firstOctave")]
     first_octave: i32,
     amplitudes: Vec<f64>,
 }

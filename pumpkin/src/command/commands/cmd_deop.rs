@@ -13,7 +13,7 @@ use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["deop"];
 const DESCRIPTION: &str = "Revokes operator status from a player.";
-const ARG_TARGET: &str = "player";
+const ARG_TARGETS: &str = "targets";
 
 struct DeopExecutor;
 
@@ -27,42 +27,39 @@ impl CommandExecutor for DeopExecutor {
     ) -> Result<(), CommandError> {
         let mut config = OPERATOR_CONFIG.write().await;
 
-        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+            return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
         };
 
-        // from the command tree, the command can only be executed with one player
-        let player = &targets[0];
+        for player in targets {
+            if let Some(op_index) = config
+                .ops
+                .iter()
+                .position(|o| o.uuid == player.gameprofile.id)
+            {
+                config.ops.remove(op_index);
+            }
+            config.save();
 
-        if let Some(op_index) = config
-            .ops
-            .iter()
-            .position(|o| o.uuid == player.gameprofile.id)
-        {
-            config.ops.remove(op_index);
+            player
+                .set_permission_lvl(
+                    pumpkin_util::PermissionLvl::Zero,
+                    &server.command_dispatcher,
+                )
+                .await;
+
+            let player_name = &player.gameprofile.name;
+            let msg = TextComponent::translate(
+                "commands.deop.success",
+                [TextComponent::text(player_name.clone())].into(),
+            );
+            sender.send_message(msg).await;
         }
-        config.save();
-
-        player
-            .set_permission_lvl(
-                pumpkin_util::PermissionLvl::Zero,
-                &server.command_dispatcher,
-            )
-            .await;
-
-        let player_name = &player.gameprofile.name;
-        let message = format!("Revoked {player_name}'s server operator status.");
-        let msg = TextComponent::text(message);
-        sender.send_message(msg).await;
-        player
-            .send_system_message(&TextComponent::text("You are no longer a server operator."))
-            .await;
-
         Ok(())
     }
 }
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_TARGET, PlayersArgumentConsumer).execute(DeopExecutor))
+        .with_child(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(DeopExecutor))
 }

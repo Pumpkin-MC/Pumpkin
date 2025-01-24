@@ -204,7 +204,7 @@ impl Player {
     pub async fn handle_decrease_item(
         &self,
         _server: &Server,
-        slot_index: usize,
+        slot_index: i16,
         item_stack: Option<&ItemStack>,
         state_id: &mut u32,
     ) -> Result<(), InventoryError> {
@@ -521,7 +521,7 @@ impl Player {
             let packet = CSetContainerSlot::new(
                 total_opened_containers as i8,
                 (inventory.state_id) as i32,
-                slot_index,
+                slot_index as i16,
                 &slot,
             );
             player.client.send_packet(&packet).await;

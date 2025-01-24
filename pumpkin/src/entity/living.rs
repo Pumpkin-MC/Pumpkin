@@ -1,20 +1,17 @@
 use std::sync::atomic::AtomicI32;
 
+use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_inventory::{Container, EmptyContainer};
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
 use pumpkin_util::math::vector3::Vector3;
-use tokio::sync::Mutex;
 
-use super::{Entity, EntityId};
+use super::{Entity, EntityId, NBTStorage};
 
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
-pub struct LivingEntity<C = EmptyContainer>
-where
-    C: Container,
-{
+pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
     /// Previously last known position of the entity
@@ -27,8 +24,6 @@ where
     pub health: AtomicCell<f32>,
     /// The distance the entity has been falling
     pub fall_distance: AtomicCell<f64>,
-    /// Inventory if it exists on the entity
-    pub inventory: Option<Mutex<C>>,
 }
 impl LivingEntity {
     pub const fn new(entity: Entity) -> Self {
@@ -39,21 +34,6 @@ impl LivingEntity {
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
             fall_distance: AtomicCell::new(0.0),
-            // This automatically gets inferred as Option::<EmptyContainer>::None
-            inventory: None,
-        }
-    }
-}
-impl<C: Container> LivingEntity<C> {
-    pub fn new_with_container(entity: Entity, inventory: C) -> Self {
-        Self {
-            entity,
-            last_pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
-            time_until_regen: AtomicI32::new(0),
-            last_damage_taken: AtomicCell::new(0.0),
-            health: AtomicCell::new(20.0),
-            fall_distance: AtomicCell::new(0.0),
-            inventory: Some(Mutex::new(inventory)),
         }
     }
 
@@ -180,5 +160,19 @@ impl<C: Container> LivingEntity<C> {
             .world
             .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 3))
             .await;
+    }
+}
+#[async_trait]
+impl NBTStorage for LivingEntity {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.entity.write_nbt(nbt).await;
+        nbt.put("Health", NbtTag::Float(self.health.load()));
+        // todo more...
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.entity.read_nbt(nbt).await;
+        self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+        // todo more...
     }
 }

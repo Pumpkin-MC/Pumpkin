@@ -28,5 +28,5 @@ bytes.workspace = true
 aes = "0.8.4"
 cfb8 = "0.8.1"
 
-# decryption
+# compression
 libdeflater = "1.23.0"

@@ -14,6 +14,7 @@ use pumpkin_protocol::{
     },
     ConnectionState,
 };
+use pumpkin_util::text::TextComponent;
 
 impl Client {
     pub async fn handle_client_information_config(
@@ -22,8 +23,10 @@ impl Client {
     ) {
         log::debug!("Handling client settings");
         if client_information.view_distance <= 0 {
-            self.kick("Cannot have zero or negative view distance!")
-                .await;
+            self.kick(&TextComponent::text(
+                "Cannot have zero or negative view distance!",
+            ))
+            .await;
             return;
         }
 
@@ -44,7 +47,8 @@ impl Client {
                 server_listing: client_information.server_listing,
             });
         } else {
-            self.kick("Invalid hand or chat type").await;
+            self.kick(&TextComponent::text("Invalid hand or chat type"))
+                .await;
         }
     }
 
@@ -58,7 +62,7 @@ impl Client {
             log::debug!("got a client brand");
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
-                Err(e) => self.kick(&e.to_string()).await,
+                Err(e) => self.kick(&TextComponent::text(e.to_string())).await,
             }
         }
     }

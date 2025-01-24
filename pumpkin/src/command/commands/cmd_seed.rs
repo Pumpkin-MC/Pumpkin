@@ -23,7 +23,8 @@ impl CommandExecutor for PumpkinExecutor {
     ) -> Result<(), CommandError> {
         let seed = match sender {
             CommandSender::Player(player) => player.living_entity.entity.world.level.seed.0,
-            _ => match server.worlds.first() {
+            // TODO: Maybe ask player for world, or get the current world
+            _ => match server.worlds.read().await.first() {
                 Some(world) => world.level.seed.0,
                 None => {
                     return Err(CommandError::GeneralCommandIssue(
