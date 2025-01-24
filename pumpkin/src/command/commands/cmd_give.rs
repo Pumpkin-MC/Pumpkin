@@ -62,7 +62,8 @@ impl CommandExecutor for GiveExecutor {
                     TextComponent::text(item_count.to_string()),
                     TextComponent::text(item_name.to_string()),
                     TextComponent::text(targets[0].gameprofile.name.to_string()),
-                ].into(),
+                ]
+                .into(),
             )
         } else {
             TextComponent::translate(
@@ -71,7 +72,8 @@ impl CommandExecutor for GiveExecutor {
                     TextComponent::text(item_count.to_string()),
                     TextComponent::text(item_name.to_string()),
                     TextComponent::text(targets.len().to_string()),
-                ].into(),
+                ]
+                .into(),
             )
         };
         sender.send_message(msg).await;

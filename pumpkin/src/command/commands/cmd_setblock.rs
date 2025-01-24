@@ -72,7 +72,8 @@ impl CommandExecutor for SetblockExecutor {
                         TextComponent::text(pos.0.x.to_string()),
                         TextComponent::text(pos.0.y.to_string()),
                         TextComponent::text(pos.0.z.to_string()),
-                    ].into(),
+                    ]
+                    .into(),
                 )
             } else {
                 TextComponent::translate("commands.setblock.failed", [].into())

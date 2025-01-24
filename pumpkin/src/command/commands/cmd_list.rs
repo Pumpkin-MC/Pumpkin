@@ -34,7 +34,8 @@ impl CommandExecutor for ListExecutor {
                     TextComponent::text(players.len().to_string()),
                     TextComponent::text(BASIC_CONFIG.max_players.to_string()),
                     TextComponent::text(get_player_names(players)),
-                ].into(),
+                ]
+                .into(),
             ))
             .await;
 
