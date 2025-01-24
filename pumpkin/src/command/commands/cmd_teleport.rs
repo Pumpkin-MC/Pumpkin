@@ -195,7 +195,10 @@ impl CommandExecutor for TpSelfToEntityExecutor {
             }
             _ => {
                 sender
-                    .send_message(TextComponent::translate("permissions.requires.player", []))
+                    .send_message(TextComponent::translate(
+                        "permissions.requires.player",
+                        [].into(),
+                    ))
                     .await;
             }
         };
@@ -223,7 +226,10 @@ impl CommandExecutor for TpSelfToPosExecutor {
             }
             _ => {
                 sender
-                    .send_message(TextComponent::translate("permissions.requires.player", []))
+                    .send_message(TextComponent::translate(
+                        "permissions.requires.player",
+                        [].into(),
+                    ))
                     .await;
             }
         };

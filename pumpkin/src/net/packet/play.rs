@@ -139,7 +139,7 @@ impl Player {
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
-                [],
+                [].into(),
             ))
             .await;
             return;
@@ -207,7 +207,7 @@ impl Player {
         {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
-                [],
+                [].into(),
             ))
             .await;
             return;
@@ -287,7 +287,7 @@ impl Player {
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
-                [],
+                [].into(),
             ))
             .await;
             return;
@@ -539,7 +539,7 @@ impl Player {
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.illegal_characters",
-                [],
+                [].into(),
             ))
             .await;
             return;
@@ -719,7 +719,7 @@ impl Player {
                     );
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.invalid_entity_attacked",
-                        [],
+                        [].into(),
                     ))
                     .await;
                     return;
@@ -1152,7 +1152,7 @@ impl Player {
             self.send_system_message_raw(
                 &TextComponent::translate(
                     "build.tooHigh",
-                    vec![(WORLD_MAX_Y - 1).to_string().into()],
+                    vec![TextComponent::text((WORLD_MAX_Y - 1).to_string())],
                 )
                 .color_named(NamedColor::Red),
                 true,

@@ -146,7 +146,7 @@ impl CommandExecutor for SetblockExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.fill.success",
-                [placed_blocks.to_string().into()],
+                [TextComponent::text(placed_blocks.to_string())].into(),
             ))
             .await;
 

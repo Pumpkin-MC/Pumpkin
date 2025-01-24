@@ -40,12 +40,12 @@ impl CommandExecutor for GamemodeTargetSelf {
         if let Player(target) = sender {
             if target.gamemode.load() != gamemode {
                 target.set_gamemode(gamemode).await;
-                let gamemode_string = format!("{gamemode:?}");
-                // TODO: translate gamemode
+                let gamemode_string = format!("{gamemode:?}").to_lowercase();
+                let gamemode_string = format!("gameMode.{gamemode_string}");
                 target
                     .send_system_message(&TextComponent::translate(
                         "commands.gamemode.success.self",
-                        [gamemode_string.into()],
+                        [TextComponent::translate(gamemode_string, [].into())].into(),
                     ))
                     .await;
             }
@@ -78,12 +78,12 @@ impl CommandExecutor for GamemodeTargetPlayer {
         for target in targets {
             if target.gamemode.load() != gamemode {
                 target.set_gamemode(gamemode).await;
-                let gamemode_string = format!("{gamemode:?}");
-                // TODO: translate gamemode
+                let gamemode_string = format!("{gamemode:?}").to_lowercase();
+                let gamemode_string = format!("gameMode.{gamemode_string}");
                 target
                     .send_system_message(&TextComponent::translate(
                         "gameMode.changed",
-                        [gamemode_string.clone().into()],
+                        [TextComponent::translate(gamemode_string.clone(), [].into())].into(),
                     ))
                     .await;
                 if target_count == 1 {
@@ -91,9 +91,10 @@ impl CommandExecutor for GamemodeTargetPlayer {
                         .send_message(TextComponent::translate(
                             "commands.gamemode.success.other",
                             [
-                                target.gameprofile.name.clone().into(),
-                                gamemode_string.into(),
-                            ],
+                                TextComponent::text(target.gameprofile.name.clone()),
+                                TextComponent::translate(gamemode_string, [].into()),
+                            ]
+                            .into(),
                         ))
                         .await;
                 }

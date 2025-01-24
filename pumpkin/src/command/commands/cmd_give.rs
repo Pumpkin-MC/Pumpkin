@@ -59,19 +59,19 @@ impl CommandExecutor for GiveExecutor {
             TextComponent::translate(
                 "commands.give.success.single",
                 [
-                    item_count.to_string().into(),
-                    item_name.to_string().into(),
-                    targets[0].gameprofile.name.to_string().into(),
-                ],
+                    TextComponent::text(item_count.to_string()),
+                    TextComponent::text(item_name.to_string()),
+                    TextComponent::text(targets[0].gameprofile.name.to_string()),
+                ].into(),
             )
         } else {
             TextComponent::translate(
                 "commands.give.success.single",
                 [
-                    item_count.to_string().into(),
-                    item_name.to_string().into(),
-                    targets.len().to_string().into(),
-                ],
+                    TextComponent::text(item_count.to_string()),
+                    TextComponent::text(item_name.to_string()),
+                    TextComponent::text(targets.len().to_string()),
+                ].into(),
             )
         };
         sender.send_message(msg).await;

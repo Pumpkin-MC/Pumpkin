@@ -49,8 +49,10 @@ impl CommandExecutor for DeopExecutor {
                 .await;
 
             let player_name = &player.gameprofile.name;
-            let msg =
-                TextComponent::translate("commands.deop.success", [player_name.clone().into()]);
+            let msg = TextComponent::translate(
+                "commands.deop.success",
+                [TextComponent::text(player_name.clone())].into(),
+            );
             sender.send_message(msg).await;
         }
         Ok(())

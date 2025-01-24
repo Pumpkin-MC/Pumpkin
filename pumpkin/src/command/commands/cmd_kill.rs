@@ -36,11 +36,11 @@ impl CommandExecutor for KillExecutor {
         }
 
         let msg = if target_count == 1 {
-            TextComponent::translate("commands.kill.success.single", [name.into()])
+            TextComponent::translate("commands.kill.success.single", [TextComponent::text(name)].into())
         } else {
             TextComponent::translate(
                 "commands.kill.success.multiple",
-                [target_count.to_string().into()],
+                [TextComponent::text(target_count.to_string())].into(),
             )
         };
 

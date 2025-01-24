@@ -39,7 +39,7 @@ impl CommandExecutor for OpExecutor {
 
             if player.permission_lvl.load() == new_level {
                 sender
-                    .send_message(TextComponent::translate("commands.op.failed", []))
+                    .send_message(TextComponent::translate("commands.op.failed", [].into()))
                     .await;
                 continue;
             }
@@ -70,7 +70,7 @@ impl CommandExecutor for OpExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.op.success",
-                    [player_name.clone().into()],
+                    [TextComponent::text(player_name.clone())].into(),
                 ))
                 .await;
         }

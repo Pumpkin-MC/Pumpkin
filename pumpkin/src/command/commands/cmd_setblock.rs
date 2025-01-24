@@ -69,13 +69,13 @@ impl CommandExecutor for SetblockExecutor {
                 TextComponent::translate(
                     "commands.setblock.success",
                     [
-                        pos.0.x.to_string().into(),
-                        pos.0.y.to_string().into(),
-                        pos.0.z.to_string().into(),
-                    ],
+                        TextComponent::text(pos.0.x.to_string()),
+                        TextComponent::text(pos.0.y.to_string()),
+                        TextComponent::text(pos.0.z.to_string()),
+                    ].into(),
                 )
             } else {
-                TextComponent::translate("commands.setblock.failed", [])
+                TextComponent::translate("commands.setblock.failed", [].into())
             })
             .await;
 

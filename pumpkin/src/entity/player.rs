@@ -419,7 +419,7 @@ impl Player {
                 .wait_for_keep_alive
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                self.kick(TextComponent::translate("disconnect.timeout", []))
+                self.kick(TextComponent::translate("disconnect.timeout", [].into()))
                     .await;
                 return;
             }

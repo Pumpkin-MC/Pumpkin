@@ -763,7 +763,7 @@ impl World {
         // TODO: Config
         let msg_comp = TextComponent::translate(
             "multiplayer.player.joined",
-            [player.gameprofile.name.clone().into()],
+            [TextComponent::text(player.gameprofile.name.clone())].into(),
         )
         .color_named(NamedColor::Yellow);
         for player in current_players.values() {
@@ -808,7 +808,7 @@ impl World {
         // TODO: Config
         let disconn_msg = TextComponent::translate(
             "multiplayer.player.left",
-            [player.gameprofile.name.clone().into()],
+            [TextComponent::text(player.gameprofile.name.clone())].into(),
         )
         .color_named(NamedColor::Yellow);
         for player in self.current_players.lock().await.values() {

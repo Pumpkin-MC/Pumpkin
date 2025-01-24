@@ -31,10 +31,10 @@ impl CommandExecutor for ListExecutor {
             .send_message(TextComponent::translate(
                 "commands.list.players",
                 [
-                    players.len().to_string().into(),
-                    BASIC_CONFIG.max_players.to_string().into(),
-                    get_player_names(players).into(),
-                ],
+                    TextComponent::text(players.len().to_string()),
+                    TextComponent::text(BASIC_CONFIG.max_players.to_string()),
+                    TextComponent::text(get_player_names(players)),
+                ].into(),
             ))
             .await;
 
