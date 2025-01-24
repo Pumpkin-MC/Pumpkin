@@ -29,25 +29,33 @@ impl CommandExecutor for PardonExecutor {
         let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
+        let target = (*target).to_string();
 
         let mut lock = BANNED_PLAYER_LIST.write().await;
 
         if let Some(idx) = lock
             .banned_players
             .iter()
-            .position(|entry| entry.name == *target)
+            .position(|entry| entry.name == target)
         {
             lock.banned_players.remove(idx);
         } else {
-            return Err(CommandError::GeneralCommandIssue(
-                "Nothing changed. The player isn't banned.".to_string(),
-            ));
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.pardon.failed",
+                    [].into(),
+                ))
+                .await;
+            return Ok(());
         }
 
         lock.save();
 
         sender
-            .send_message(TextComponent::text(format!("Unbanned {target}")))
+            .send_message(TextComponent::translate(
+                "commands.pardon.success",
+                [TextComponent::text(target)].into(),
+            ))
             .await;
         Ok(())
     }

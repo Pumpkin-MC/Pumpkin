@@ -33,9 +33,13 @@ impl CommandExecutor for PardonIpExecutor {
         };
 
         let Ok(ip) = IpAddr::from_str(target) else {
-            return Err(CommandError::GeneralCommandIssue(
-                "Invalid IP address".to_string(),
-            ));
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.pardonip.invalid",
+                    [].into(),
+                ))
+                .await;
+            return Ok(());
         };
 
         let mut lock = BANNED_IP_LIST.write().await;
@@ -43,15 +47,22 @@ impl CommandExecutor for PardonIpExecutor {
         if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip) {
             lock.banned_ips.remove(idx);
         } else {
-            return Err(CommandError::GeneralCommandIssue(
-                "Nothing changed. That IP isn't banned.".to_string(),
-            ));
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.pardonip.failed",
+                    [].into(),
+                ))
+                .await;
+            return Ok(());
         }
 
         lock.save();
 
         sender
-            .send_message(TextComponent::text(format!("Unbanned IP {target}")))
+            .send_message(TextComponent::translate(
+                "commands.pardonip.success",
+                [TextComponent::text(ip.to_string())].into(),
+            ))
             .await;
         Ok(())
     }

@@ -37,7 +37,8 @@ impl CommandExecutor for BanNoReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        ban_player(sender, &targets[0], "Banned by an operator.").await
+        ban_player(sender, &targets[0], "Banned by an operator.".to_string()).await;
+        Ok(())
     }
 }
 
@@ -59,47 +60,50 @@ impl CommandExecutor for BanReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_player(sender, &targets[0], reason).await
+        ban_player(sender, &targets[0], reason.to_string()).await;
+        Ok(())
     }
 }
 
-async fn ban_player(
-    sender: &CommandSender<'_>,
-    player: &Player,
-    reason: &str,
-) -> Result<(), CommandError> {
+async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: String) {
     let mut banned_players = BANNED_PLAYER_LIST.write().await;
     let profile = &player.gameprofile;
 
     if banned_players.get_entry(&player.gameprofile).is_some() {
-        return Err(CommandError::GeneralCommandIssue(
-            "Nothing changed. The player is already banned".to_string(),
-        ));
+        sender
+            .send_message(TextComponent::translate("commands.ban.failed", [].into()))
+            .await;
+        return;
     }
 
     banned_players.banned_players.push(BannedPlayerEntry::new(
         profile,
         sender.to_string(),
         None,
-        reason.to_string(),
+        reason.clone(),
     ));
 
     banned_players.save();
     drop(banned_players);
 
     // Send messages
-    let player_name = &player.gameprofile.name;
     sender
-        .send_message(TextComponent::text(format!(
-            "Banned {player_name}: {reason}"
-        )))
+        .send_message(TextComponent::translate(
+            "commands.ban.success",
+            [
+                TextComponent::text(player.gameprofile.name.clone()),
+                TextComponent::text(reason),
+            ]
+            .into(),
+        ))
         .await;
 
     player
-        .kick(TextComponent::text("You are banned from this server"))
+        .kick(TextComponent::translate(
+            "multiplayer.disconnect.banned",
+            [].into(),
+        ))
         .await;
-
-    Ok(())
 }
 
 pub fn init_command_tree() -> CommandTree {

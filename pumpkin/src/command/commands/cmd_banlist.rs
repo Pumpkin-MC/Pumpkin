@@ -33,37 +33,35 @@ impl CommandExecutor for BanListExecutor {
         match *list_type {
             "ips" => {
                 let lock = &BANNED_IP_LIST.read().await;
-                sender
-                    .send_message(TextComponent::text(format!(
-                        "There are {} ban(s):",
-                        lock.banned_ips.len()
-                    )))
-                    .await;
-                for ip in &lock.banned_ips {
-                    sender
-                        .send_message(TextComponent::text(format!(
-                            "{} was banned by {}: {}",
-                            ip.ip, ip.source, ip.reason
-                        )))
-                        .await;
-                }
+                let entires = lock
+                    .banned_ips
+                    .iter()
+                    .map(|entry| {
+                        (
+                            entry.ip.to_string(),
+                            entry.source.clone(),
+                            entry.reason.clone(),
+                        )
+                    })
+                    .collect();
+
+                handle_banlist(entires, sender).await;
             }
             "players" => {
                 let lock = &BANNED_PLAYER_LIST.read().await;
-                sender
-                    .send_message(TextComponent::text(format!(
-                        "There are {} ban(s):",
-                        lock.banned_players.len()
-                    )))
-                    .await;
-                for player in &lock.banned_players {
-                    sender
-                        .send_message(TextComponent::text(format!(
-                            "{} was banned by {}: {}",
-                            player.name, player.source, player.reason
-                        )))
-                        .await;
-                }
+                let entires = lock
+                    .banned_players
+                    .iter()
+                    .map(|entry| {
+                        (
+                            entry.name.clone(),
+                            entry.source.clone(),
+                            entry.reason.clone(),
+                        )
+                    })
+                    .collect();
+
+                handle_banlist(entires, sender).await;
             }
             _ => {
                 return Err(CommandError::GeneralCommandIssue(
@@ -87,31 +85,55 @@ impl CommandExecutor for BanListAllExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let mut entries = Vec::new();
-        for player in &BANNED_PLAYER_LIST.read().await.banned_players {
-            entries.push(format!(
-                "{} was banned by {}: {}",
-                player.name, player.source, player.reason
+        for entry in &BANNED_PLAYER_LIST.read().await.banned_players {
+            entries.push((
+                entry.name.clone(),
+                entry.source.clone(),
+                entry.reason.clone(),
             ));
         }
 
-        for ip in &BANNED_IP_LIST.read().await.banned_ips {
-            entries.push(format!(
-                "{} was banned by {}: {}",
-                ip.ip, ip.source, ip.reason
+        for entry in &BANNED_IP_LIST.read().await.banned_ips {
+            entries.push((
+                entry.ip.to_string(),
+                entry.source.clone(),
+                entry.reason.clone(),
             ));
         }
 
-        sender
-            .send_message(TextComponent::text(format!(
-                "There are {} ban(s):",
-                entries.len()
-            )))
-            .await;
-        for entry in entries {
-            sender.send_message(TextComponent::text(entry)).await;
-        }
-
+        handle_banlist(entries, sender).await;
         Ok(())
+    }
+}
+
+/// `Vec<(name, source, reason)>`
+async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender<'_>) {
+    if list.is_empty() {
+        sender
+            .send_message(TextComponent::translate("commands.banlist.none", [].into()))
+            .await;
+        return;
+    }
+
+    sender
+        .send_message(TextComponent::translate(
+            "commands.banlist.list",
+            [TextComponent::text(list.len().to_string())].into(),
+        ))
+        .await;
+
+    for (name, source, reason) in list {
+        sender
+            .send_message(TextComponent::translate(
+                "commands.banlist.entry",
+                [
+                    TextComponent::text(name),
+                    TextComponent::text(source),
+                    TextComponent::text(reason),
+                ]
+                .into(),
+            ))
+            .await;
     }
 }
 

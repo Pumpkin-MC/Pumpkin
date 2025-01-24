@@ -22,15 +22,12 @@ const DESCRIPTION: &str = "bans a player-ip";
 const ARG_TARGET: &str = "ip";
 const ARG_REASON: &str = "reason";
 
-async fn parse_ip(target: &str, server: &Server) -> Result<IpAddr, CommandError> {
-    Ok(match IpAddr::from_str(target) {
+async fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
+    Some(match IpAddr::from_str(target) {
         Ok(ip) => ip,
         Err(_) => server
             .get_player_by_name(target)
-            .await
-            .ok_or(CommandError::GeneralCommandIssue(
-                "Invalid IP address or unknown player".to_string(),
-            ))?
+            .await?
             .client
             .address
             .lock()
@@ -53,9 +50,8 @@ impl CommandExecutor for BanIpNoReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        let ip = parse_ip(target, server).await?;
-
-        ban_ip(sender, server, ip, "Banned by an operator.").await
+        ban_ip(sender, server, target, "Banned by an operator.".to_string()).await;
+        Ok(())
     }
 }
 
@@ -73,35 +69,40 @@ impl CommandExecutor for BanIpReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        let ip = parse_ip(target, server).await?;
-
         let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_ip(sender, server, ip, reason).await
+        ban_ip(sender, server, target, reason.to_string()).await;
+        Ok(())
     }
 }
 
-async fn ban_ip(
-    sender: &CommandSender<'_>,
-    server: &Server,
-    target_ip: IpAddr,
-    reason: &str,
-) -> Result<(), CommandError> {
+async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reason: String) {
+    let Some(target_ip) = parse_ip(target, server).await else {
+        sender
+            .send_message(TextComponent::translate(
+                "commands.banip.invalid",
+                [].into(),
+            ))
+            .await;
+        return;
+    };
+
     let mut banned_ips = BANNED_IP_LIST.write().await;
 
     if banned_ips.get_entry(&target_ip).is_some() {
-        return Err(CommandError::GeneralCommandIssue(
-            "Nothing changed. That IP is already banned".to_string(),
-        ));
+        sender
+            .send_message(TextComponent::translate("commands.banip.failed", [].into()))
+            .await;
+        return;
     }
 
     banned_ips.banned_ips.push(BannedIpEntry::new(
         target_ip,
         sender.to_string(),
         None,
-        reason.to_string(),
+        reason.clone(),
     ));
 
     banned_ips.save();
@@ -116,24 +117,35 @@ async fn ban_ip(
         .join(" ");
 
     sender
-        .send_message(TextComponent::text(format!("Banned IP: {reason}")))
+        .send_message(TextComponent::translate(
+            "commands.banip.success",
+            [
+                TextComponent::text(target_ip.to_string()),
+                TextComponent::text(reason),
+            ]
+            .into(),
+        ))
         .await;
 
     sender
-        .send_message(TextComponent::text(format!(
-            "This ban affects {} player(s): {}",
-            affected.len(),
-            names
-        )))
+        .send_message(TextComponent::translate(
+            "commands.banip.info",
+            [
+                TextComponent::text(affected.len().to_string()),
+                TextComponent::text(names),
+            ]
+            .into(),
+        ))
         .await;
 
     for target in affected {
         target
-            .kick(TextComponent::text("You are IP banned from this server"))
+            .kick(TextComponent::translate(
+                "multiplayer.disconnect.ip_banned",
+                [].into(),
+            ))
             .await;
     }
-
-    Ok(())
 }
 
 pub fn init_command_tree() -> CommandTree {
