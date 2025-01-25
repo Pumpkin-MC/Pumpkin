@@ -6,7 +6,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 pub use block_state::BlockState;
 
-#[derive(FromPrimitive, PartialEq)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy)]
 pub enum BlockFace {
     Bottom = 0,
     Top,
