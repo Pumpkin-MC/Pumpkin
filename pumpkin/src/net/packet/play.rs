@@ -969,7 +969,8 @@ impl Player {
         world
             .broadcast_packet_all(&CBlockEntityData::new(
                 sign_data.location,
-                VarInt(7),
+                VarInt(block_entity!("sign") as i32),
+                // pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign).unwrap().to_vec(),
                 fastnbt::to_bytes_with_opts(&updated_sign, fastnbt::SerOpts::network_nbt())
                     .unwrap(),
             ))
