@@ -43,9 +43,9 @@ use pumpkin_util::{
     text::TextComponent,
     GameMode,
 };
+use pumpkin_world::block::block_registry::get_block_collision_shapes;
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::entity::FacingDirection;
-use pumpkin_world::block::block_registry::get_block_collision_shapes;
 use pumpkin_world::item::item_registry::get_item_by_id;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
