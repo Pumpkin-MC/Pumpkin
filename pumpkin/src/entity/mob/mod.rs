@@ -64,21 +64,22 @@ impl MobEntity {
 
     pub fn create_spawn_entity_packet(&self, uuid: Uuid) -> CSpawnEntity {
         let e = &self.living_entity.entity;
-        let y = e.pos.load();
+        let entity_loc = e.pos.load();
+        let entity_vel = e.velocity.load();
         CSpawnEntity::new(
             VarInt(e.entity_id),
             uuid,
             VarInt((e.entity_type) as i32),
-            y.x,
-            y.y,
-            y.z,
+            entity_loc.x,
+            entity_loc.y,
+            entity_loc.z,
             e.pitch.load(),
             e.yaw.load(),
             e.yaw.load(), // todo: head_yaw and yaw are swapped, find out why
             0.into(),
-            0.0,
-            0.0,
-            0.0,
+            entity_vel.x as f32,
+            entity_vel.y as f32,
+            entity_vel.z as f32,
         )
     }
 }
