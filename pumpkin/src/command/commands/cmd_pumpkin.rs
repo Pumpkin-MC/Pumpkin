@@ -33,7 +33,9 @@ impl CommandExecutor for PumpkinExecutor {
         sender
             .send_message(
                 TextComponent::text(format!("Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})"))
-                    .hover_event(HoverEvent::ShowText(Cow::from("Click to Copy Version")))
+                    .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
+                        "Click to Copy Version",
+                    ))))
                     .click_event(ClickEvent::CopyToClipboard(Cow::from(format!(
                         "Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})"
                     ))))
@@ -43,9 +45,9 @@ impl CommandExecutor for PumpkinExecutor {
                             .click_event(ClickEvent::CopyToClipboard(Cow::from(
                                 CARGO_PKG_DESCRIPTION,
                             )))
-                            .hover_event(HoverEvent::ShowText(Cow::from(
+                            .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                                 "Click to Copy Description",
-                            )))
+                            ))))
                             .color_named(NamedColor::White),
                     )
                     .add_child(
@@ -55,9 +57,9 @@ impl CommandExecutor for PumpkinExecutor {
                         .click_event(ClickEvent::CopyToClipboard(Cow::from(format!(
                             "(Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})"
                         ))))
-                        .hover_event(HoverEvent::ShowText(Cow::from(
+                        .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                             "Click to Copy Minecraft Version",
-                        )))
+                        ))))
                         .color_named(NamedColor::Gold),
                     )
                     .add_child(TextComponent::text(" "))
@@ -67,9 +69,9 @@ impl CommandExecutor for PumpkinExecutor {
                             .click_event(ClickEvent::OpenUrl(Cow::from(
                                 "https://github.com/Pumpkin-MC/Pumpkin",
                             )))
-                            .hover_event(HoverEvent::ShowText(Cow::from(
+                            .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                                 "Click to open repository.",
-                            )))
+                            ))))
                             .color_named(NamedColor::Blue)
                             .bold()
                             .underlined(),
@@ -79,7 +81,9 @@ impl CommandExecutor for PumpkinExecutor {
                     .add_child(
                         TextComponent::text("Website")
                             .click_event(ClickEvent::OpenUrl(Cow::from("https://pumpkinmc.org/")))
-                            .hover_event(HoverEvent::ShowText(Cow::from("Click to open website.")))
+                            .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
+                                "Click to open website.",
+                            ))))
                             .color_named(NamedColor::Blue)
                             .bold()
                             .underlined(),

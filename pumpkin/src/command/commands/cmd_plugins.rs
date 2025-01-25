@@ -47,11 +47,11 @@ impl CommandExecutor for ListExecutor {
             let component = if *loaded {
                 TextComponent::text(fmt)
                     .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::ShowText(hover_text.into()))
+                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
             } else {
                 TextComponent::text(fmt)
                     .color_named(NamedColor::Red)
-                    .hover_event(HoverEvent::ShowText(hover_text.into()))
+                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
             };
             message = message.add_child(component);
         }
