@@ -29,15 +29,22 @@ impl CommandExecutor for KillExecutor {
         };
 
         let target_count = targets.len();
-
+        let mut name = String::new();
         for target in targets {
             target.living_entity.kill().await;
+            name.clone_from(&target.gameprofile.name);
         }
 
         let msg = if target_count == 1 {
-            TextComponent::text("Entity has been killed.")
+            TextComponent::translate(
+                "commands.kill.success.single",
+                [TextComponent::text(name)].into(),
+            )
         } else {
-            TextComponent::text(format!("{target_count} entities have been killed."))
+            TextComponent::translate(
+                "commands.kill.success.multiple",
+                [TextComponent::text(target_count.to_string())].into(),
+            )
         };
 
         sender.send_message(msg.color_named(NamedColor::Blue)).await;
@@ -67,6 +74,6 @@ impl CommandExecutor for KillSelfExecutor {
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(KillExecutor))
-        .with_child(require(|sender| sender.is_player()).execute(KillSelfExecutor))
+        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(KillExecutor))
+        .then(require(|sender| sender.is_player()).execute(KillSelfExecutor))
 }

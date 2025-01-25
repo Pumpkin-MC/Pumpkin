@@ -7,20 +7,18 @@ use crate::command::CommandSender;
 use crate::server::Server;
 use crate::world::bossbar::BossbarDivisions;
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
-pub(crate) struct BossbarStyleArgumentConsumer;
+pub struct BossbarStyleArgumentConsumer;
 
 impl GetClientSideArgParser for BossbarStyleArgumentConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
+    fn get_client_side_parser(&self) -> ArgumentType {
         // Not sure if this is right...
-        ProtoCmdArgParser::ResourceLocation
+        ArgumentType::ResourceLocation
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
-        Some(ProtoCmdArgSuggestionType::AskServer)
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        Some(SuggestionProviders::AskServer)
     }
 }
 

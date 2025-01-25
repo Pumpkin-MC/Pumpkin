@@ -144,10 +144,10 @@ impl CommandExecutor for SetblockExecutor {
         };
 
         sender
-            .send_message(TextComponent::text(format!(
-                "Placed {} blocks of {} from {from} to {to}",
-                placed_blocks, block.name
-            )))
+            .send_message(TextComponent::translate(
+                "commands.fill.success",
+                [TextComponent::text(placed_blocks.to_string())].into(),
+            ))
             .await;
 
         Ok(())
@@ -155,15 +155,15 @@ impl CommandExecutor for SetblockExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
-        argument(ARG_FROM, BlockPosArgumentConsumer).with_child(
-            argument(ARG_TO, BlockPosArgumentConsumer).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
+        argument(ARG_FROM, BlockPosArgumentConsumer).then(
+            argument(ARG_TO, BlockPosArgumentConsumer).then(
                 argument(ARG_BLOCK, BlockArgumentConsumer)
-                    .with_child(literal("destroy").execute(SetblockExecutor(Mode::Destroy)))
-                    .with_child(literal("hollow").execute(SetblockExecutor(Mode::Hollow)))
-                    .with_child(literal("keep").execute(SetblockExecutor(Mode::Keep)))
-                    .with_child(literal("outline").execute(SetblockExecutor(Mode::Outline)))
-                    .with_child(literal("replace").execute(SetblockExecutor(Mode::Replace)))
+                    .then(literal("destroy").execute(SetblockExecutor(Mode::Destroy)))
+                    .then(literal("hollow").execute(SetblockExecutor(Mode::Hollow)))
+                    .then(literal("keep").execute(SetblockExecutor(Mode::Keep)))
+                    .then(literal("outline").execute(SetblockExecutor(Mode::Outline)))
+                    .then(literal("replace").execute(SetblockExecutor(Mode::Replace)))
                     .execute(SetblockExecutor(Mode::Replace)),
             ),
         ),

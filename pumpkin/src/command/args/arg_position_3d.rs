@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::command::dispatcher::CommandError;
@@ -14,14 +12,14 @@ use super::coordinate::MaybeRelativeCoordinate;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
 /// x, y and z coordinates
-pub(crate) struct Position3DArgumentConsumer;
+pub struct Position3DArgumentConsumer;
 
 impl GetClientSideArgParser for Position3DArgumentConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Vec3
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Vec3
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
         None
     }
 }

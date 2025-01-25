@@ -13,6 +13,7 @@ use crate::{
 };
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
 use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem, CSpawnEntity};
@@ -35,7 +36,8 @@ use pumpkin_protocol::{
         SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSwingArm, SUseItemOn, Status,
     },
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
@@ -43,6 +45,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::entity::FacingDirection;
+use pumpkin_world::block::block_registry::get_block_collision_shapes;
 use pumpkin_world::item::item_registry::get_item_by_id;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
@@ -51,6 +54,7 @@ use pumpkin_world::{
     item::item_registry::get_spawn_egg,
 };
 
+use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -59,6 +63,8 @@ pub enum BlockPlacingError {
     InvalidBlockFace,
     BlockOutOfWorld,
     InventoryInvalid,
+    InvalidGamemode,
+    NoBaseBlock,
 }
 
 impl std::fmt::Display for BlockPlacingError {
@@ -70,25 +76,25 @@ impl std::fmt::Display for BlockPlacingError {
 impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
-            Self::BlockOutOfReach | Self::BlockOutOfWorld => false,
-            Self::InvalidBlockFace | Self::InventoryInvalid => true,
+            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
+            Self::InvalidBlockFace | Self::InventoryInvalid | Self::NoBaseBlock => true,
         }
     }
 
     fn severity(&self) -> log::Level {
         match self {
-            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidBlockFace => {
-                log::Level::Warn
-            }
+            Self::BlockOutOfWorld | Self::InvalidGamemode | Self::NoBaseBlock => log::Level::Trace,
+            Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
             Self::InventoryInvalid => log::Level::Error,
         }
     }
 
     fn client_kick_reason(&self) -> Option<String> {
         match self {
-            Self::BlockOutOfReach | Self::BlockOutOfWorld => None,
+            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
             Self::InventoryInvalid => Some("Held item invalid".into()),
+            Self::NoBaseBlock => Some("No base block".into()),
         }
     }
 }
@@ -134,7 +140,11 @@ impl Player {
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::text("Invalid movement")).await;
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.invalid_player_movement",
+                [].into(),
+            ))
+            .await;
             return;
         }
         let position = Vector3::new(
@@ -192,15 +202,20 @@ impl Player {
         }
         // y = feet Y
         let position = packet.position;
-        if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::text("Invalid movement")).await;
+        if position.x.is_nan()
+            || position.y.is_nan()
+            || position.z.is_nan()
+            || packet.yaw.is_infinite()
+            || packet.pitch.is_infinite()
+        {
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.invalid_player_movement",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
-        if packet.yaw.is_infinite() || packet.pitch.is_infinite() {
-            self.kick(TextComponent::text("Invalid rotation")).await;
-            return;
-        }
         let position = Vector3::new(
             Self::clamp_horizontal(position.x),
             Self::clamp_vertical(position.y),
@@ -273,7 +288,11 @@ impl Player {
             return;
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
-            self.kick(TextComponent::text("Invalid rotation")).await;
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.invalid_player_movement",
+                [].into(),
+            ))
+            .await;
             return;
         }
         let entity = &self.living_entity.entity;
@@ -521,8 +540,11 @@ impl Player {
         }
 
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
-            self.kick(TextComponent::text("Illegal characters in chat"))
-                .await;
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.illegal_characters",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
@@ -542,7 +564,7 @@ impl Player {
                 &[],
                 Some(TextComponent::text(message.clone())),
                 FilterType::PassThrough,
-                1.into(),
+                (CHAT + 1).into(),
                 TextComponent::text(gameprofile.name.clone()),
                 None,
             ))
@@ -698,8 +720,11 @@ impl Player {
                         self.entity_id(),
                         entity_id.0
                     );
-                    self.kick(TextComponent::text("Interacted with invalid entity id"))
-                        .await;
+                    self.kick(TextComponent::translate(
+                        "multiplayer.disconnect.invalid_entity_attacked",
+                        [].into(),
+                    ))
+                    .await;
                     return;
                 };
 
@@ -715,11 +740,14 @@ impl Player {
         }
     }
 
-    pub async fn handle_player_action(&self, player_action: SPlayerAction, server: &Server) {
+    pub async fn handle_player_action(
+        self: Arc<Self>,
+        player_action: SPlayerAction,
+        server: &Server,
+    ) {
         if !self.has_client_loaded() {
             return;
         }
-
         match Status::try_from(player_action.status.0) {
             Ok(status) => match status {
                 Status::StartedDigging => {
@@ -740,12 +768,12 @@ impl Player {
                         let world = &entity.world;
                         let block = world.get_block(&location).await;
 
-                        world.break_block(&location, Some(self)).await;
+                        world.break_block(&location, Some(self.clone())).await;
 
                         if let Ok(block) = block {
                             server
                                 .block_manager
-                                .on_broken(block, self, location, server)
+                                .on_broken(block, &self, location, server)
                                 .await;
                         }
                     }
@@ -778,12 +806,12 @@ impl Player {
                     let world = &entity.world;
                     let block = world.get_block(&location).await;
 
-                    world.break_block(&location, Some(self)).await;
+                    world.break_block(&location, Some(self.clone())).await;
 
                     if let Ok(block) = block {
                         server
                             .block_manager
-                            .on_broken(block, self, location, server)
+                            .on_broken(block, &self, location, server)
                             .await;
                     }
                 }
@@ -852,77 +880,95 @@ impl Player {
             return Err(BlockPlacingError::BlockOutOfReach.into());
         }
 
-        if let Ok(face) = BlockFace::try_from(use_item_on.face.0) {
-            let mut inventory = self.inventory().lock().await;
-            let entity = &self.living_entity.entity;
-            let world = &entity.world;
-            let slot_id = inventory.get_selected();
-            let mut state_id = inventory.state_id;
-            let item_slot = *inventory.held_item_mut();
-            drop(inventory);
+        let Ok(face) = BlockFace::try_from(use_item_on.face.0) else {
+            return Err(BlockPlacingError::InvalidBlockFace.into());
+        };
 
-            if let Some(item_stack) = item_slot {
-                // check if block is interactive
-                if let Some(item) = get_item_by_id(item_stack.item_id) {
-                    if let Ok(block) = world.get_block(&location).await {
-                        let result = server
-                            .block_manager
-                            .on_use_with_item(block, self, location, item, server)
-                            .await;
-                        match result {
-                            BlockActionResult::Continue => {}
-                            BlockActionResult::Consume => {
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
+        let mut inventory = self.inventory().lock().await;
+        let entity = &self.living_entity.entity;
+        let world = &entity.world;
+        let slot_id = inventory.get_selected();
+        let mut state_id = inventory.state_id;
+        let item_slot = *inventory.held_item_mut();
+        drop(inventory);
 
-                // check if item is a block, Because Not every item can be placed :D
-                if let Some(block) = get_block_by_item(item_stack.item_id) {
-                    should_try_decrement = self
-                        .run_is_block_place(block.clone(), server, use_item_on, location, &face)
-                        .await?;
-                }
-                // check if item is a spawn egg
-                if let Some(item_t) = get_spawn_egg(item_stack.item_id) {
-                    should_try_decrement = self
-                        .run_is_spawn_egg(item_t, server, location, &face)
-                        .await?;
-                };
+        let Ok(block) = world.get_block(&location).await else {
+            return Err(BlockPlacingError::NoBaseBlock.into());
+        };
 
-                if should_try_decrement {
-                    // TODO: Config
-                    // Decrease Block count
-                    if self.gamemode.load() != GameMode::Creative {
-                        let mut inventory = self.inventory().lock().await;
-                        let item_slot = inventory.held_item_mut();
-                        // This should never be possible
-                        let Some(item_stack) = item_slot else {
-                            return Err(BlockPlacingError::InventoryInvalid.into());
-                        };
-                        item_stack.item_count -= 1;
-                        if item_stack.item_count == 0 {
-                            *item_slot = None;
-                        }
+        let Some(stack) = item_slot else {
+            if !self
+                .living_entity
+                .entity
+                .sneaking
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                // Using block with empty hand
+                server
+                    .block_manager
+                    .on_use(block, self, location, server)
+                    .await;
+            }
+            return Ok(());
+        };
+        let Some(item) = get_item_by_id(stack.item_id) else {
+            // If there is an item stack, there should be an item
+            return Err(BlockPlacingError::InventoryInvalid.into());
+        };
 
-                        // TODO: this should be by use item on not currently selected as they might be different
-                        let _ = self
-                            .handle_decrease_item(
-                                server,
-                                slot_id as i16,
-                                item_slot.as_ref(),
-                                &mut state_id,
-                            )
-                            .await;
-                    }
+        if !self
+            .living_entity
+            .entity
+            .sneaking
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let action_result = server
+                .block_manager
+                .on_use_with_item(block, self, location, item, server)
+                .await;
+            match action_result {
+                BlockActionResult::Continue => {}
+                BlockActionResult::Consume => {
+                    return Ok(());
                 }
             }
-
-            Ok(())
-        } else {
-            Err(BlockPlacingError::InvalidBlockFace.into())
         }
+        // check if item is a block, Because Not every item can be placed :D
+        if let Some(block) = get_block_by_item(stack.item_id) {
+            should_try_decrement = self
+                .run_is_block_place(block.clone(), server, use_item_on, location, &face)
+                .await?;
+        }
+        // check if item is a spawn egg
+        if let Some(item_t) = get_spawn_egg(stack.item_id) {
+            should_try_decrement = self
+                .run_is_spawn_egg(item_t, server, location, &face)
+                .await?;
+        };
+
+        if should_try_decrement {
+            // TODO: Config
+            // Decrease Block count
+            if self.gamemode.load() != GameMode::Creative {
+                let mut inventory = self.inventory().lock().await;
+                let item_slot = inventory.held_item_mut();
+                // This should never be possible
+                let Some(item_stack) = item_slot else {
+                    return Err(BlockPlacingError::InventoryInvalid.into());
+                };
+                item_stack.item_count -= 1;
+                if item_stack.item_count == 0 {
+                    *item_slot = None;
+                }
+
+                // TODO: this should be by use item on not currently selected as they might be different
+                let _ = self
+                    .handle_decrease_item(server, slot_id as i16, item_slot.as_ref(), &mut state_id)
+                    .await;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn handle_use_item(&self, _use_item: &SUseItem) {
@@ -1112,8 +1158,43 @@ impl Player {
         let world = &entity.world;
 
         let clicked_block_pos = BlockPos(location.0);
-
         let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;
+
+        // check block under the world
+        if location.0.y + face.to_offset().y < WORLD_LOWEST_Y.into() {
+            self.client
+                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld.into());
+        }
+
+        //check max world build height
+        if location.0.y + face.to_offset().y >= WORLD_MAX_Y.into() {
+            self.send_system_message_raw(
+                &TextComponent::translate(
+                    "build.tooHigh",
+                    vec![TextComponent::text((WORLD_MAX_Y - 1).to_string())],
+                )
+                .color_named(NamedColor::Red),
+                true,
+            )
+            .await;
+            self.client
+                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld.into());
+        }
+
+        match self.gamemode.load() {
+            GameMode::Spectator | GameMode::Adventure => {
+                self.client
+                    .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                    .await;
+                return Err(BlockPlacingError::InvalidGamemode.into());
+            }
+            _ => {}
+        }
+
         let clicked_block_updated_able = server
             .block_properties_manager
             .is_updateable(world, &block, face, &clicked_block_pos)
@@ -1122,29 +1203,23 @@ impl Player {
         let final_block_pos = if clicked_block_state.replaceable || clicked_block_updated_able {
             clicked_block_pos
         } else {
-            let world_pos = BlockPos(location.0 + face.to_offset());
-            let previous_block_state = world.get_block_state(&world_pos).await?;
+            let block_pos = BlockPos(location.0 + face.to_offset());
+            let previous_block_state = world.get_block_state(&block_pos).await?;
 
             if !previous_block_state.replaceable {
                 return Ok(true);
             }
 
-            world_pos
+            block_pos
         };
 
-        //check max world build height
-        if final_block_pos.0.y > 319 {
-            self.client
-                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
-                .await;
-            return Err(BlockPlacingError::BlockOutOfWorld.into());
-        }
-
-        let block_bounding_box = BoundingBox::from_block(&final_block_pos);
+        // To this point we must have the new block state
+        let block_bounding_box =
+            get_block_collision_shapes(block.default_state_id).unwrap_or_default();
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();
-            if bounding_box.intersects(&block_bounding_box) {
+            if bounding_box.intersects_block(&final_block_pos, &block_bounding_box) {
                 intersects = true;
             }
         }

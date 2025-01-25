@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::CSystemChatMessage;
+use pumpkin_data::world::SAY_COMMAND;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
@@ -31,10 +31,12 @@ impl CommandExecutor for SayExecutor {
         };
 
         server
-            .broadcast_packet_all(&CSystemChatMessage::new(
-                &TextComponent::text(format!("[{sender}] {msg}")),
-                false,
-            ))
+            .broadcast_message(
+                &TextComponent::text(msg.clone()),
+                &TextComponent::text(format!("{sender}")),
+                SAY_COMMAND,
+                None,
+            )
             .await;
         Ok(())
     }
@@ -42,5 +44,5 @@ impl CommandExecutor for SayExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_MESSAGE, MsgArgConsumer).execute(SayExecutor))
+        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(SayExecutor))
 }

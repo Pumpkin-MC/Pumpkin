@@ -43,8 +43,8 @@ pub enum ProtoNodeType<'a> {
     Argument {
         name: &'a str,
         is_executable: bool,
-        parser: ProtoCmdArgParser<'a>,
-        override_suggestion_type: Option<ProtoCmdArgSuggestionType>,
+        parser: ArgumentType<'a>,
+        override_suggestion_type: Option<SuggestionProviders>,
     },
 }
 
@@ -126,7 +126,8 @@ impl ProtoNode<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub enum ProtoCmdArgParser<'a> {
+#[repr(u32)]
+pub enum ArgumentType<'a> {
     Bool,
     Float { min: Option<f32>, max: Option<f32> },
     Double { min: Option<f64>, max: Option<f64> },
@@ -183,21 +184,21 @@ pub enum ProtoCmdArgParser<'a> {
     Uuid,
 }
 
-impl ProtoCmdArgParser<'_> {
+impl ArgumentType<'_> {
     pub const ENTITY_FLAG_ONLY_SINGLE: u8 = 1;
     pub const ENTITY_FLAG_PLAYERS_ONLY: u8 = 2;
 
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     pub fn write_to_buffer(&self, bytebuf: &mut impl BufMut) {
+        let id = unsafe { *(self as *const Self as *const i32) };
+        bytebuf.put_var_int(&(id).into());
         match self {
-            Self::Bool => bytebuf.put_var_int(&0.into()),
-            Self::Float { min, max } => Self::write_number_arg(&1.into(), *min, *max, bytebuf),
-            Self::Double { min, max } => Self::write_number_arg(&2.into(), *min, *max, bytebuf),
-            Self::Integer { min, max } => Self::write_number_arg(&3.into(), *min, *max, bytebuf),
-            Self::Long { min, max } => Self::write_number_arg(&4.into(), *min, *max, bytebuf),
+            Self::Float { min, max } => Self::write_number_arg(*min, *max, bytebuf),
+            Self::Double { min, max } => Self::write_number_arg(*min, *max, bytebuf),
+            Self::Integer { min, max } => Self::write_number_arg(*min, *max, bytebuf),
+            Self::Long { min, max } => Self::write_number_arg(*min, *max, bytebuf),
             Self::String(behavior) => {
-                bytebuf.put_var_int(&5.into());
                 let i = match behavior {
                     StringProtoArgBehavior::SingleWord => 0,
                     StringProtoArgBehavior::QuotablePhrase => 1,
@@ -205,70 +206,22 @@ impl ProtoCmdArgParser<'_> {
                 };
                 bytebuf.put_var_int(&i.into());
             }
-            Self::Entity { flags } => Self::write_with_flags(&6.into(), *flags, bytebuf),
-            Self::GameProfile => bytebuf.put_var_int(&7.into()),
-            Self::BlockPos => bytebuf.put_var_int(&8.into()),
-            Self::ColumnPos => bytebuf.put_var_int(&9.into()),
-            Self::Vec3 => bytebuf.put_var_int(&10.into()),
-            Self::Vec2 => bytebuf.put_var_int(&11.into()),
-            Self::BlockState => bytebuf.put_var_int(&12.into()),
-            Self::BlockPredicate => bytebuf.put_var_int(&13.into()),
-            Self::ItemStack => bytebuf.put_var_int(&14.into()),
-            Self::ItemPredicate => bytebuf.put_var_int(&15.into()),
-            Self::Color => bytebuf.put_var_int(&16.into()),
-            Self::Component => bytebuf.put_var_int(&17.into()),
-            Self::Style => bytebuf.put_var_int(&18.into()),
-            Self::Message => bytebuf.put_var_int(&19.into()),
-            Self::Nbt => bytebuf.put_var_int(&20.into()),
-            Self::NbtTag => bytebuf.put_var_int(&21.into()),
-            Self::NbtPath => bytebuf.put_var_int(&22.into()),
-            Self::Objective => bytebuf.put_var_int(&23.into()),
-            Self::ObjectiveCriteria => bytebuf.put_var_int(&24.into()),
-            Self::Operation => bytebuf.put_var_int(&25.into()),
-            Self::Particle => bytebuf.put_var_int(&26.into()),
-            Self::Angle => bytebuf.put_var_int(&27.into()),
-            Self::Rotation => bytebuf.put_var_int(&28.into()),
-            Self::ScoreboardSlot => bytebuf.put_var_int(&29.into()),
-            Self::ScoreHolder { flags } => Self::write_with_flags(&30.into(), *flags, bytebuf),
-            Self::Swizzle => bytebuf.put_var_int(&31.into()),
-            Self::Team => bytebuf.put_var_int(&32.into()),
-            Self::ItemSlot => bytebuf.put_var_int(&33.into()),
-            Self::ItemSlots => bytebuf.put_var_int(&34.into()),
-            Self::ResourceLocation => bytebuf.put_var_int(&35.into()),
-            Self::Function => bytebuf.put_var_int(&36.into()),
-            Self::EntityAnchor => bytebuf.put_var_int(&37.into()),
-            Self::IntRange => bytebuf.put_var_int(&38.into()),
-            Self::FloatRange => bytebuf.put_var_int(&39.into()),
-            Self::Dimension => bytebuf.put_var_int(&40.into()),
-            Self::Gamemode => bytebuf.put_var_int(&41.into()),
+            Self::Entity { flags } => Self::write_with_flags(*flags, bytebuf),
+            Self::ScoreHolder { flags } => Self::write_with_flags(*flags, bytebuf),
             Self::Time { min } => {
-                bytebuf.put_var_int(&42.into());
                 bytebuf.put_i32(*min);
             }
-            Self::ResourceOrTag { identifier } => {
-                Self::write_with_identifier(&43.into(), identifier, bytebuf)
-            }
+            Self::ResourceOrTag { identifier } => Self::write_with_identifier(identifier, bytebuf),
             Self::ResourceOrTagKey { identifier } => {
-                Self::write_with_identifier(&44.into(), identifier, bytebuf)
+                Self::write_with_identifier(identifier, bytebuf)
             }
-            Self::Resource { identifier } => {
-                Self::write_with_identifier(&45.into(), identifier, bytebuf)
-            }
-            Self::ResourceKey { identifier } => {
-                Self::write_with_identifier(&46.into(), identifier, bytebuf)
-            }
-            Self::TemplateMirror => bytebuf.put_var_int(&47.into()),
-            Self::TemplateRotation => bytebuf.put_var_int(&48.into()),
-            Self::Heightmap => bytebuf.put_var_int(&49.into()),
-            Self::LootTable => bytebuf.put_var_int(&50.into()),
-            Self::LootPredicate => bytebuf.put_var_int(&51.into()),
-            Self::LootModifier => bytebuf.put_var_int(&52.into()),
-            Self::Uuid => bytebuf.put_var_int(&53.into()),
+            Self::Resource { identifier } => Self::write_with_identifier(identifier, bytebuf),
+            Self::ResourceKey { identifier } => Self::write_with_identifier(identifier, bytebuf),
+            _ => {}
         }
     }
 
     fn write_number_arg<T: NumberCmdArg>(
-        id: &VarInt,
         min: Option<T>,
         max: Option<T>,
         bytebuf: &mut impl BufMut,
@@ -281,8 +234,6 @@ impl ProtoCmdArgParser<'_> {
             flags |= 2
         }
 
-        bytebuf.put_var_int(id);
-
         bytebuf.put_u8(flags);
         if let Some(min) = min {
             min.write(bytebuf);
@@ -292,15 +243,11 @@ impl ProtoCmdArgParser<'_> {
         }
     }
 
-    fn write_with_flags(id: &VarInt, flags: u8, bytebuf: &mut impl BufMut) {
-        bytebuf.put_var_int(id);
-
+    fn write_with_flags(flags: u8, bytebuf: &mut impl BufMut) {
         bytebuf.put_u8(flags);
     }
 
-    fn write_with_identifier(id: &VarInt, extra_identifier: &str, bytebuf: &mut impl BufMut) {
-        bytebuf.put_var_int(id);
-
+    fn write_with_identifier(extra_identifier: &str, bytebuf: &mut impl BufMut) {
         bytebuf.put_string(extra_identifier);
     }
 }
@@ -342,14 +289,14 @@ impl NumberCmdArg for i64 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ProtoCmdArgSuggestionType {
+pub enum SuggestionProviders {
     AskServer,
     AllRecipes,
     AvailableSounds,
     SummonableEntities,
 }
 
-impl ProtoCmdArgSuggestionType {
+impl SuggestionProviders {
     fn identifier(&self) -> &'static str {
         match self {
             Self::AskServer => "minecraft:ask_server",

@@ -216,7 +216,7 @@ impl CommandExecutor for BaseHelpExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_COMMAND, CommandTreeArgumentConsumer).execute(CommandHelpExecutor))
-        .with_child(argument_default_name(page_number_consumer()).execute(BaseHelpExecutor))
+        .then(argument(ARG_COMMAND, CommandTreeArgumentConsumer).execute(CommandHelpExecutor))
+        .then(argument_default_name(page_number_consumer()).execute(BaseHelpExecutor))
         .execute(BaseHelpExecutor)
 }

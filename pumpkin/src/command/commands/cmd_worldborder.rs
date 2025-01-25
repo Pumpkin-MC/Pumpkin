@@ -25,6 +25,8 @@ const NAMES: [&str; 1] = ["worldborder"];
 
 const DESCRIPTION: &str = "Worldborder command.";
 
+const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
+
 fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
     BoundedNumArgumentConsumer::new().min(0.0).name("distance")
 }
@@ -57,17 +59,19 @@ impl CommandExecutor for WorldborderGetExecutor {
         server: &Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let border = world.worldborder.lock().await;
 
         let diameter = border.new_diameter.round() as i32;
         sender
-            .send_message(TextComponent::text(format!(
-                "The world border is currently {diameter} block(s) wide"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.get",
+                [TextComponent::text(diameter.to_string())].into(),
+            ))
             .await;
         Ok(())
     }
@@ -83,10 +87,11 @@ impl CommandExecutor for WorldborderSetExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -105,17 +110,19 @@ impl CommandExecutor for WorldborderSetExecutor {
         if (distance - border.new_diameter).abs() < f64::EPSILON {
             sender
                 .send_message(
-                    TextComponent::text("Nothing changed. The world border is already that size")
+                    TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [].into())
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
             return Ok(());
         }
 
+        let dist = format!("{distance:.1}");
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the world border to {distance:.1} block(s) wide"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.set.immediate",
+                [TextComponent::text(dist)].into(),
+            ))
             .await;
         border.set_diameter(world, distance, None).await;
         Ok(())
@@ -132,10 +139,11 @@ impl CommandExecutor for WorldborderSetTimeExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -167,22 +175,36 @@ impl CommandExecutor for WorldborderSetTimeExecutor {
             std::cmp::Ordering::Equal => {
                 sender
                     .send_message(
-                        TextComponent::text(
-                            "Nothing changed. The world border is already that size",
-                        )
-                        .color(Color::Named(NamedColor::Red)),
+                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [].into())
+                            .color(Color::Named(NamedColor::Red)),
                     )
                     .await;
                 return Ok(());
             }
             std::cmp::Ordering::Less => {
-                sender.send_message(TextComponent::text(format!("Shrinking the world border to {distance:.2} blocks wide over {time} second(s)"))).await;
+                let dist = format!("{distance:.1}");
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.worldborder.set.shrink",
+                        [
+                            TextComponent::text(dist),
+                            TextComponent::text(time.to_string()),
+                        ]
+                        .into(),
+                    ))
+                    .await;
             }
             std::cmp::Ordering::Greater => {
+                let dist = format!("{distance:.1}");
                 sender
-                    .send_message(TextComponent::text(format!(
-                        "Growing the world border to {distance:.2} blocks wide over {time} seconds"
-                    )))
+                    .send_message(TextComponent::translate(
+                        "commands.worldborder.set.grow",
+                        [
+                            TextComponent::text(dist),
+                            TextComponent::text(time.to_string()),
+                        ]
+                        .into(),
+                    ))
                     .await;
             }
         }
@@ -204,10 +226,11 @@ impl CommandExecutor for WorldborderAddExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -226,7 +249,7 @@ impl CommandExecutor for WorldborderAddExecutor {
         if distance == 0.0 {
             sender
                 .send_message(
-                    TextComponent::text("Nothing changed. The world border is already that size")
+                    TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [].into())
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -235,10 +258,12 @@ impl CommandExecutor for WorldborderAddExecutor {
 
         let distance = border.new_diameter + distance;
 
+        let dist = format!("{distance:.1}");
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the world border to {distance:.1} block(s) wide"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.set.immediate",
+                [TextComponent::text(dist)].into(),
+            ))
             .await;
         border.set_diameter(world, distance, None).await;
         Ok(())
@@ -255,10 +280,11 @@ impl CommandExecutor for WorldborderAddTimeExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -292,22 +318,36 @@ impl CommandExecutor for WorldborderAddTimeExecutor {
             std::cmp::Ordering::Equal => {
                 sender
                     .send_message(
-                        TextComponent::text(
-                            "Nothing changed. The world border is already that size",
-                        )
-                        .color(Color::Named(NamedColor::Red)),
+                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [].into())
+                            .color(Color::Named(NamedColor::Red)),
                     )
                     .await;
                 return Ok(());
             }
             std::cmp::Ordering::Less => {
-                sender.send_message(TextComponent::text(format!("Shrinking the world border to {distance:.2} blocks wide over {time} second(s)"))).await;
+                let dist = format!("{distance:.1}");
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.worldborder.set.shrink",
+                        [
+                            TextComponent::text(dist),
+                            TextComponent::text(time.to_string()),
+                        ]
+                        .into(),
+                    ))
+                    .await;
             }
             std::cmp::Ordering::Greater => {
+                let dist = format!("{distance:.1}");
                 sender
-                    .send_message(TextComponent::text(format!(
-                        "Growing the world border to {distance:.2} blocks wide over {time} seconds"
-                    )))
+                    .send_message(TextComponent::translate(
+                        "commands.worldborder.set.grow",
+                        [
+                            TextComponent::text(dist),
+                            TextComponent::text(time.to_string()),
+                        ]
+                        .into(),
+                    ))
                     .await;
             }
         }
@@ -329,18 +369,24 @@ impl CommandExecutor for WorldborderCenterExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Vector2 { x, z } = Position2DArgumentConsumer.find_arg_default_name(args)?;
 
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the center of world border to {x:.2}, {z:.2}"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.center.success",
+                [
+                    TextComponent::text(format!("{x:.2}")),
+                    TextComponent::text(format!("{z:.2}")),
+                ]
+                .into(),
+            ))
             .await;
         border.set_center(world, x, z).await;
         Ok(())
@@ -357,10 +403,11 @@ impl CommandExecutor for WorldborderDamageAmountExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(damage_per_block) = damage_per_block_consumer().find_arg_default_name(args)? else {
@@ -379,8 +426,9 @@ impl CommandExecutor for WorldborderDamageAmountExecutor {
         if (damage_per_block - border.damage_per_block).abs() < f32::EPSILON {
             sender
                 .send_message(
-                    TextComponent::text(
-                        "Nothing changed. The world border damage is already that amount",
+                    TextComponent::translate(
+                        "commands.worldborder.damage.amount.failed",
+                        [].into(),
                     )
                     .color(Color::Named(NamedColor::Red)),
                 )
@@ -388,10 +436,12 @@ impl CommandExecutor for WorldborderDamageAmountExecutor {
             return Ok(());
         }
 
+        let damage = format!("{damage_per_block:.2}");
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the world border damage to {damage_per_block:.2} per block each second"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.damage.amount.success",
+                [TextComponent::text(damage)].into(),
+            ))
             .await;
         border.damage_per_block = damage_per_block;
         Ok(())
@@ -408,10 +458,11 @@ impl CommandExecutor for WorldborderDamageBufferExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(buffer) = damage_buffer_consumer().find_arg_default_name(args)? else {
@@ -430,8 +481,9 @@ impl CommandExecutor for WorldborderDamageBufferExecutor {
         if (buffer - border.buffer).abs() < f32::EPSILON {
             sender
                 .send_message(
-                    TextComponent::text(
-                        "Nothing changed. The world border damage buffer is already that distance",
+                    TextComponent::translate(
+                        "commands.worldborder.damage.buffer.failed",
+                        [].into(),
                     )
                     .color(Color::Named(NamedColor::Red)),
                 )
@@ -439,10 +491,12 @@ impl CommandExecutor for WorldborderDamageBufferExecutor {
             return Ok(());
         }
 
+        let buf = format!("{buffer:.2}");
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the world border damage buffer to {buffer:.2} block(s)"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.damage.buffer.success",
+                [TextComponent::text(buf)].into(),
+            ))
             .await;
         border.buffer = buffer;
         Ok(())
@@ -459,10 +513,11 @@ impl CommandExecutor for WorldborderWarningDistanceExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(distance) = warning_distance_consumer().find_arg_default_name(args)? else {
@@ -481,8 +536,9 @@ impl CommandExecutor for WorldborderWarningDistanceExecutor {
         if distance == border.warning_blocks {
             sender
                 .send_message(
-                    TextComponent::text(
-                        "Nothing changed. The world border warning is already that distance",
+                    TextComponent::translate(
+                        "commands.worldborder.warning.distance.failed",
+                        [].into(),
                     )
                     .color(Color::Named(NamedColor::Red)),
                 )
@@ -491,9 +547,10 @@ impl CommandExecutor for WorldborderWarningDistanceExecutor {
         }
 
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the world border warning distance to {distance} block(s)"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.warning.distance.success",
+                [TextComponent::text(distance.to_string())].into(),
+            ))
             .await;
         border.set_warning_distance(world, distance).await;
         Ok(())
@@ -510,10 +567,11 @@ impl CommandExecutor for WorldborderWarningTimeExecutor {
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
-            .expect("There should always be atleast one world");
+            .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
         let Ok(time) = time_consumer().find_arg_default_name(args)? else {
@@ -532,19 +590,18 @@ impl CommandExecutor for WorldborderWarningTimeExecutor {
         if time == border.warning_time {
             sender
                 .send_message(
-                    TextComponent::text(
-                        "Nothing changed. The world border warning is already that amount of time",
-                    )
-                    .color(Color::Named(NamedColor::Red)),
+                    TextComponent::translate("commands.worldborder.warning.time.failed", [].into())
+                        .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
             return Ok(());
         }
 
         sender
-            .send_message(TextComponent::text(format!(
-                "Set the world border warning time to {time} second(s)"
-            )))
+            .send_message(TextComponent::translate(
+                "commands.worldborder.warning.time.success",
+                [TextComponent::text(time.to_string())].into(),
+            ))
             .await;
         border.set_warning_delay(world, time).await;
         Ok(())
@@ -553,52 +610,52 @@ impl CommandExecutor for WorldborderWarningTimeExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(
-            literal("add").with_child(
+        .then(
+            literal("add").then(
                 argument_default_name(distance_consumer())
                     .execute(WorldborderAddExecutor)
-                    .with_child(
+                    .then(
                         argument_default_name(time_consumer()).execute(WorldborderAddTimeExecutor),
                     ),
             ),
         )
-        .with_child(literal("center").with_child(
+        .then(literal("center").then(
             argument_default_name(Position2DArgumentConsumer).execute(WorldborderCenterExecutor),
         ))
-        .with_child(
+        .then(
             literal("damage")
-                .with_child(
-                    literal("amount").with_child(
+                .then(
+                    literal("amount").then(
                         argument_default_name(damage_per_block_consumer())
                             .execute(WorldborderDamageAmountExecutor),
                     ),
                 )
-                .with_child(
-                    literal("buffer").with_child(
+                .then(
+                    literal("buffer").then(
                         argument_default_name(damage_buffer_consumer())
                             .execute(WorldborderDamageBufferExecutor),
                     ),
                 ),
         )
-        .with_child(literal("get").execute(WorldborderGetExecutor))
-        .with_child(
-            literal("set").with_child(
+        .then(literal("get").execute(WorldborderGetExecutor))
+        .then(
+            literal("set").then(
                 argument_default_name(distance_consumer())
                     .execute(WorldborderSetExecutor)
-                    .with_child(
+                    .then(
                         argument_default_name(time_consumer()).execute(WorldborderSetTimeExecutor),
                     ),
             ),
         )
-        .with_child(
+        .then(
             literal("warning")
-                .with_child(
-                    literal("distance").with_child(
+                .then(
+                    literal("distance").then(
                         argument_default_name(warning_distance_consumer())
                             .execute(WorldborderWarningDistanceExecutor),
                     ),
                 )
-                .with_child(literal("time").with_child(
+                .then(literal("time").then(
                     argument_default_name(time_consumer()).execute(WorldborderWarningTimeExecutor),
                 )),
         )

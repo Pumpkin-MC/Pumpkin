@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType, StringProtoArgBehavior,
+    ArgumentType, CommandSuggestion, StringProtoArgBehavior, SuggestionProviders,
 };
 
 use crate::{command::dispatcher::CommandError, server::Server};
@@ -15,14 +15,14 @@ use super::{
 
 /// Should never be a permanent solution
 #[allow(unused)]
-pub(crate) struct SimpleArgConsumer;
+pub struct SimpleArgConsumer;
 
 impl GetClientSideArgParser for SimpleArgConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::String(StringProtoArgBehavior::SingleWord)
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::String(StringProtoArgBehavior::SingleWord)
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
         None
     }
 }

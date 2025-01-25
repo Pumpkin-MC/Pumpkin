@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_world::item::item_registry::{self, Item};
 
 use crate::{command::dispatcher::CommandError, server::Server};
@@ -14,14 +12,14 @@ use super::{
     Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };
 
-pub(crate) struct ItemArgumentConsumer;
+pub struct ItemArgumentConsumer;
 
 impl GetClientSideArgParser for ItemArgumentConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Resource { identifier: "item" }
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Resource { identifier: "item" }
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
         None
     }
 }

@@ -1,9 +1,7 @@
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::GameMode;
 
 use crate::{
@@ -13,14 +11,14 @@ use crate::{
 
 use super::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
-pub(crate) struct GamemodeArgumentConsumer;
+pub struct GamemodeArgumentConsumer;
 
 impl GetClientSideArgParser for GamemodeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Gamemode
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Gamemode
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
         None
     }
 }

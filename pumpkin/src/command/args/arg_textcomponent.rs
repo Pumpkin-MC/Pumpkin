@@ -4,19 +4,17 @@ use crate::command::tree::RawArgs;
 use crate::command::CommandSender;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
-use pumpkin_util::text::TextComponent;
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::text::{TextComponent, TextContent};
 
 pub(crate) struct TextComponentArgConsumer;
 
 impl GetClientSideArgParser for TextComponentArgConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Component
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Component
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
         None
     }
 }
@@ -34,6 +32,7 @@ impl ArgumentConsumer for TextComponentArgConsumer {
         let text_component = parse_text_component(s);
 
         let Some(text_component) = text_component else {
+            dbg!(text_component);
             if s.starts_with('"') && s.ends_with('"') {
                 let s = s.replace('"', "");
                 return Some(Arg::TextComponent(TextComponent::text(s)));
@@ -66,15 +65,9 @@ impl FindArg<'_> for TextComponentArgConsumer {
 }
 
 fn parse_text_component(input: &str) -> Option<TextComponent> {
-    if input.starts_with('[') && input.ends_with(']') {
-        let text_component_array: Option<Vec<TextComponent>> =
-            serde_json::from_str(input).unwrap_or(None);
-        let mut text_component_array = text_component_array?;
-        let mut constructed_text_component = text_component_array[0].clone();
-        text_component_array.remove(0);
-        constructed_text_component.extra = text_component_array;
-
-        Some(constructed_text_component)
+    if input.starts_with('{') && input.ends_with('}') {
+        let text_component: Option<TextContent> = serde_json::from_str(input).unwrap_or(None);
+        Some(TextComponent::from_content(text_component?))
     } else {
         serde_json::from_str(input).unwrap_or(None)
     }

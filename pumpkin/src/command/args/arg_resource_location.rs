@@ -6,21 +6,19 @@ use crate::command::tree::RawArgs;
 use crate::command::CommandSender;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 pub(crate) struct ResourceLocationArgumentConsumer {
     autocomplete: bool,
 }
 
 impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::ResourceLocation
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::ResourceLocation
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
-        Some(ProtoCmdArgSuggestionType::AskServer)
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        Some(SuggestionProviders::AskServer)
     }
 }
 

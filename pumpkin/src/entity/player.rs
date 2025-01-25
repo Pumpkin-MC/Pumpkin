@@ -19,9 +19,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     bytebuf::packet_id::Packet,
     client::play::{
-        CCombatDeath, CEntityStatus, CGameEvent, CHurtAnimation, CKeepAlive, CPlayDisconnect,
-        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CSetHealth, CSystemChatMessage,
-        GameEvent, PlayerAction,
+        CActionBar, CCombatDeath, CEntityStatus, CGameEvent, CHurtAnimation, CKeepAlive,
+        CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CSetHealth,
+        CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -225,11 +225,11 @@ impl Player {
 
     /// Removes the Player out of the current World
     #[allow(unused_variables)]
-    pub async fn remove(&self) {
+    pub async fn remove(self: Arc<Self>) {
         let world = self.world();
         self.cancel_tasks.notify_waiters();
 
-        world.remove_player(self).await;
+        world.remove_player(self.clone()).await;
 
         let cylindrical = self.watched_section.load();
 
@@ -370,6 +370,14 @@ impl Player {
         if config.swing {}
     }
 
+    pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
+        match mode {
+            TitleMode::Title => self.client.send_packet(&CTitleText::new(text)).await,
+            TitleMode::SubTitle => self.client.send_packet(&CSubtitle::new(text)).await,
+            TitleMode::ActionBar => self.client.send_packet(&CActionBar::new(text)).await,
+        }
+    }
+
     pub async fn play_sound(
         &self,
         sound_id: u16,
@@ -419,7 +427,8 @@ impl Player {
                 .wait_for_keep_alive
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                self.kick(TextComponent::text("Timeout")).await;
+                self.kick(TextComponent::translate("disconnect.timeout", [].into()))
+                    .await;
                 return;
             }
             self.wait_for_keep_alive
@@ -697,8 +706,12 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
+        self.send_system_message_raw(text, false).await;
+    }
+
+    pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         self.client
-            .send_packet(&CSystemChatMessage::new(text, false))
+            .send_packet(&CSystemChatMessage::new(text, overlay))
             .await;
     }
 }
@@ -811,7 +824,8 @@ impl Player {
                     .await;
             }
             SPlayerAction::PACKET_ID => {
-                self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
+                self.clone()
+                    .handle_player_action(SPlayerAction::read(bytebuf)?, server)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {
@@ -862,6 +876,13 @@ impl Player {
         };
         Ok(())
     }
+}
+
+#[derive(Debug)]
+pub enum TitleMode {
+    Title,
+    SubTitle,
+    ActionBar,
 }
 
 /// Represents a player's abilities and special powers.

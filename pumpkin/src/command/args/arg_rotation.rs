@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
@@ -12,14 +10,14 @@ use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
 /// yaw and pitch
-pub(crate) struct RotationArgumentConsumer;
+pub struct RotationArgumentConsumer;
 
 impl GetClientSideArgParser for RotationArgumentConsumer {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Rotation
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Rotation
     }
 
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType> {
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
         None
     }
 }
