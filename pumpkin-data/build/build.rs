@@ -10,6 +10,7 @@ mod chunk_status;
 mod entity_pose;
 mod entity_type;
 mod game_event;
+mod message_type;
 mod noise_parmeter;
 mod packet;
 mod particle;
@@ -33,6 +34,7 @@ pub fn main() {
     write_generated_file(entity_type::build(), "entity_type.rs");
     write_generated_file(noise_parmeter::build(), "noise_parmeter.rs");
     write_generated_file(biome::build(), "biome.rs");
+    write_generated_file(message_type::build(), "message_type.rs");
 }
 
 pub fn array_to_tokenstream(array: Vec<String>) -> TokenStream {

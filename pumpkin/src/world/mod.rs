@@ -7,7 +7,16 @@ use crate::{
     command::client_cmd_suggestions,
     entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity, EntityId},
     error::PumpkinError,
+    plugin::{
+        block::r#break::BlockBreakEventImpl,
+        player::{
+            join::PlayerJoinEventImpl, leave::PlayerLeaveEventImpl, PlayerJoinEvent,
+            PlayerLeaveEvent,
+        },
+        CancellableEvent,
+    },
     server::Server,
+    PLUGIN_MANAGER,
 };
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
@@ -16,7 +25,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_protocol::client::play::{CBlockUpdate, CRespawn, CWorldEvent};
+use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{
     client::play::CLevelEvent,
     codec::{identifier::Identifier, var_int::VarInt},
@@ -139,6 +148,22 @@ impl World {
         for player in current_players.values() {
             player.client.send_packet(packet).await;
         }
+    }
+
+    pub async fn broadcast_message(
+        &self,
+        message: &TextComponent,
+        sender_name: &TextComponent,
+        chat_type: u32,
+        target_name: Option<&TextComponent>,
+    ) {
+        self.broadcast_packet_all(&CDisguisedChatMessage::new(
+            message,
+            (chat_type + 1).into(),
+            sender_name,
+            target_name,
+        ))
+        .await;
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
@@ -742,17 +767,35 @@ impl World {
     /// * `uuid`: The unique UUID of the player to add.
     /// * `player`: An `Arc<Player>` reference to the player object.
     pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) {
-        let mut current_players = self.current_players.lock().await;
-        current_players.insert(uuid, player.clone());
+        {
+            let mut current_players = self.current_players.lock().await;
+            current_players.insert(uuid, player.clone())
+        };
 
-        // Handle join message
-        // TODO: Config
-        let msg_txt = format!("{} joined the game.", player.gameprofile.name.as_str());
-        let msg_comp = TextComponent::text(msg_txt).color_named(NamedColor::Yellow);
-        for player in current_players.values() {
-            player.send_system_message(&msg_comp).await;
-        }
-        log::info!("{}", msg_comp.to_pretty_console());
+        let current_players = self.current_players.clone();
+        tokio::spawn(async move {
+            let msg_comp = TextComponent::translate(
+                "multiplayer.player.joined",
+                [TextComponent::text(player.gameprofile.name.clone())].into(),
+            )
+            .color_named(NamedColor::Yellow);
+            let event = PlayerJoinEventImpl::new(player.clone(), msg_comp);
+
+            let event = PLUGIN_MANAGER
+                .lock()
+                .await
+                .fire::<PlayerJoinEventImpl>(event)
+                .await;
+
+            if !event.is_cancelled() {
+                let current_players = current_players.clone();
+                let players = current_players.lock().await;
+                for player in players.values() {
+                    player.send_system_message(event.get_join_message()).await;
+                }
+                log::info!("{}", event.get_join_message().clone().to_pretty_console());
+            }
+        });
     }
 
     /// Removes a player from the world and broadcasts a disconnect message if enabled.
@@ -773,7 +816,7 @@ impl World {
     ///
     /// - This function assumes `broadcast_packet_expect` and `remove_entity` are defined elsewhere.
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
-    pub async fn remove_player(&self, player: &Player) {
+    pub async fn remove_player(&self, player: Arc<Player>) {
         self.current_players
             .lock()
             .await
@@ -787,14 +830,26 @@ impl World {
         .await;
         self.remove_entity(&player.living_entity.entity).await;
 
-        // Send disconnect message / quit message to players in the same world
-        // TODO: Config
-        let disconn_msg_txt = format!("{} left the game.", player.gameprofile.name.as_str());
-        let disconn_msg_cmp = TextComponent::text(disconn_msg_txt).color_named(NamedColor::Yellow);
-        for player in self.current_players.lock().await.values() {
-            player.send_system_message(&disconn_msg_cmp).await;
+        let msg_comp = TextComponent::translate(
+            "multiplayer.player.left",
+            [TextComponent::text(player.gameprofile.name.clone())].into(),
+        )
+        .color_named(NamedColor::Yellow);
+        let event = PlayerLeaveEventImpl::new(player.clone(), msg_comp);
+
+        let event = PLUGIN_MANAGER
+            .lock()
+            .await
+            .fire::<PlayerLeaveEventImpl>(event)
+            .await;
+
+        if !event.is_cancelled() {
+            let players = self.current_players.lock().await;
+            for player in players.values() {
+                player.send_system_message(event.get_leave_message()).await;
+            }
+            log::info!("{}", event.get_leave_message().clone().to_pretty_console());
         }
-        log::info!("{}", disconn_msg_cmp.to_pretty_console());
     }
 
     /// Adds a living entity to the world.
@@ -888,22 +943,33 @@ impl World {
         chunk
     }
 
-    pub async fn break_block(&self, position: &BlockPos, cause: Option<&Player>) {
-        let broken_block_state_id = self.set_block_state(position, 0).await;
+    pub async fn break_block(&self, position: &BlockPos, cause: Option<Arc<Player>>) {
+        let block = self.get_block(position).await.unwrap();
+        let event = BlockBreakEventImpl::new(cause.clone(), block.clone(), 0, false);
 
-        let particles_packet = CWorldEvent::new(
-            WorldEvent::BlockBroken as i32,
-            position,
-            broken_block_state_id.into(),
-            false,
-        );
+        let event = PLUGIN_MANAGER
+            .lock()
+            .await
+            .fire::<BlockBreakEventImpl>(event)
+            .await;
 
-        match cause {
-            Some(player) => {
-                self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
-                    .await;
+        if !event.is_cancelled() {
+            let broken_block_state_id = self.set_block_state(position, 0).await;
+
+            let particles_packet = CWorldEvent::new(
+                WorldEvent::BlockBroken as i32,
+                position,
+                broken_block_state_id.into(),
+                false,
+            );
+
+            match cause {
+                Some(player) => {
+                    self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
+                        .await;
+                }
+                None => self.broadcast_packet_all(&particles_packet).await,
             }
-            None => self.broadcast_packet_all(&particles_packet).await,
         }
     }
 

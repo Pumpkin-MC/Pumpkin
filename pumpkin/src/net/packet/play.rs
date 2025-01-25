@@ -13,9 +13,10 @@ use crate::{
 };
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
-use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem, CSystemChatMessage};
+use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SCookieResponse as SPCookieResponse;
@@ -35,14 +36,14 @@ use pumpkin_protocol::{
         SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSwingArm, SUseItemOn, Status,
     },
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
     GameMode,
 };
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::block_registry::{get_block_collision_shapes, Block};
 use pumpkin_world::item::item_registry::get_item_by_id;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
@@ -79,11 +80,8 @@ impl PumpkinError for BlockPlacingError {
 
     fn severity(&self) -> log::Level {
         match self {
-            Self::BlockOutOfReach
-            | Self::BlockOutOfWorld
-            | Self::InvalidBlockFace
-            | Self::InvalidGamemode
-            | Self::NoBaseBlock => log::Level::Warn,
+            Self::BlockOutOfWorld | Self::InvalidGamemode | Self::NoBaseBlock => log::Level::Trace,
+            Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
             Self::InventoryInvalid => log::Level::Error,
         }
     }
@@ -139,7 +137,11 @@ impl Player {
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::text("Invalid movement")).await;
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.invalid_player_movement",
+                [].into(),
+            ))
+            .await;
             return;
         }
         let position = Vector3::new(
@@ -197,15 +199,20 @@ impl Player {
         }
         // y = feet Y
         let position = packet.position;
-        if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::text("Invalid movement")).await;
+        if position.x.is_nan()
+            || position.y.is_nan()
+            || position.z.is_nan()
+            || packet.yaw.is_infinite()
+            || packet.pitch.is_infinite()
+        {
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.invalid_player_movement",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
-        if packet.yaw.is_infinite() || packet.pitch.is_infinite() {
-            self.kick(TextComponent::text("Invalid rotation")).await;
-            return;
-        }
         let position = Vector3::new(
             Self::clamp_horizontal(position.x),
             Self::clamp_vertical(position.y),
@@ -278,7 +285,11 @@ impl Player {
             return;
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
-            self.kick(TextComponent::text("Invalid rotation")).await;
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.invalid_player_movement",
+                [].into(),
+            ))
+            .await;
             return;
         }
         let entity = &self.living_entity.entity;
@@ -526,8 +537,11 @@ impl Player {
         }
 
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
-            self.kick(TextComponent::text("Illegal characters in chat"))
-                .await;
+            self.kick(TextComponent::translate(
+                "multiplayer.disconnect.illegal_characters",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
@@ -547,7 +561,7 @@ impl Player {
                 &[],
                 Some(TextComponent::text(message.clone())),
                 FilterType::PassThrough,
-                1.into(),
+                (CHAT + 1).into(),
                 TextComponent::text(gameprofile.name.clone()),
                 None,
             ))
@@ -703,8 +717,11 @@ impl Player {
                         self.entity_id(),
                         entity_id.0
                     );
-                    self.kick(TextComponent::text("Interacted with invalid entity id"))
-                        .await;
+                    self.kick(TextComponent::translate(
+                        "multiplayer.disconnect.invalid_entity_attacked",
+                        [].into(),
+                    ))
+                    .await;
                     return;
                 };
 
@@ -720,11 +737,14 @@ impl Player {
         }
     }
 
-    pub async fn handle_player_action(&self, player_action: SPlayerAction, server: &Server) {
+    pub async fn handle_player_action(
+        self: Arc<Self>,
+        player_action: SPlayerAction,
+        server: &Server,
+    ) {
         if !self.has_client_loaded() {
             return;
         }
-
         match Status::try_from(player_action.status.0) {
             Ok(status) => match status {
                 Status::StartedDigging => {
@@ -745,12 +765,12 @@ impl Player {
                         let world = &entity.world;
                         let block = world.get_block(&location).await;
 
-                        world.break_block(&location, Some(self)).await;
+                        world.break_block(&location, Some(self.clone())).await;
 
                         if let Ok(block) = block {
                             server
                                 .block_manager
-                                .on_broken(block, self, location, server)
+                                .on_broken(block, &self, location, server)
                                 .await;
                         }
                     }
@@ -783,12 +803,12 @@ impl Player {
                     let world = &entity.world;
                     let block = world.get_block(&location).await;
 
-                    world.break_block(&location, Some(self)).await;
+                    world.break_block(&location, Some(self.clone())).await;
 
                     if let Ok(block) = block {
                         server
                             .block_manager
-                            .on_broken(block, self, location, server)
+                            .on_broken(block, &self, location, server)
                             .await;
                     }
                 }
@@ -1122,16 +1142,15 @@ impl Player {
 
         //check max world build height
         if location.0.y + face.to_offset().y >= WORLD_MAX_Y.into() {
-            self.client
-                .send_packet(&CSystemChatMessage::new(
-                    &TextComponent::translate(
-                        "build.tooHigh",
-                        vec![(WORLD_MAX_Y - 1).to_string().into()],
-                    )
-                    .color_named(NamedColor::Red),
-                    true,
-                ))
-                .await;
+            self.send_system_message_raw(
+                &TextComponent::translate(
+                    "build.tooHigh",
+                    vec![TextComponent::text((WORLD_MAX_Y - 1).to_string())],
+                )
+                .color_named(NamedColor::Red),
+                true,
+            )
+            .await;
             self.client
                 .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
                 .await;
@@ -1164,11 +1183,13 @@ impl Player {
             world_pos
         };
 
-        let block_bounding_box = BoundingBox::from_block(&world_pos);
+        // To this point we must have the new block state
+        let block_bounding_box =
+            get_block_collision_shapes(block.default_state_id).unwrap_or_default();
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
             let bounding_box = player.1.living_entity.entity.bounding_box.load();
-            if bounding_box.intersects(&block_bounding_box) {
+            if bounding_box.intersects_block(&world_pos, &block_bounding_box) {
                 intersects = true;
             }
         }

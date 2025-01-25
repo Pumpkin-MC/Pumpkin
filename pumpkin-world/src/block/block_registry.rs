@@ -90,6 +90,23 @@ pub fn get_block_by_item<'a>(item_id: u16) -> Option<&'a Block> {
     let block_id = BLOCK_ID_BY_ITEM_ID.get(&item_id)?;
     BLOCKS_BY_ID.get(block_id)
 }
+
+pub fn get_block_collision_shapes(block_id: u16) -> Option<Vec<f32>> {
+    let block = BLOCKS_BY_ID.get(&BLOCK_ID_BY_STATE_ID[&block_id])?;
+    let state = &block.states[STATE_INDEX_BY_STATE_ID[&block_id] as usize];
+    let mut shapes: Vec<f32> = vec![];
+    for i in 0..state.collision_shapes.len() {
+        let shape = &BLOCKS.shapes[state.collision_shapes[i] as usize];
+        shapes.push(shape.min[0]);
+        shapes.push(shape.min[1]);
+        shapes.push(shape.min[2]);
+        shapes.push(shape.max[0]);
+        shapes.push(shape.max[1]);
+        shapes.push(shape.max[2]);
+    }
+    Some(shapes)
+}
+
 #[expect(dead_code)]
 #[derive(Deserialize, Clone, Debug)]
 pub struct TopLevel {
@@ -126,7 +143,6 @@ pub struct State {
     pub collision_shapes: Vec<u16>,
     pub block_entity_type: Option<u32>,
 }
-#[expect(dead_code)]
 #[derive(Deserialize, Clone, Debug)]
 struct Shape {
     min: [f32; 3],
