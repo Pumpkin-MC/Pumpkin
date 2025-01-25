@@ -12,6 +12,7 @@ pub mod error;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod server_manager;
 pub mod world;
 
 const GIT_VERSION: &str = env!("GIT_VERSION");
