@@ -31,7 +31,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl Sound {
-            pub const fn from_name(name: &str) -> Option<Self> {
+            pub fn from_name(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
                     _ => None

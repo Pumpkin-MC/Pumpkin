@@ -7,19 +7,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::ident;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct RawChatType {
     id: u32,
     components: ChatType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ChatType {
     chat: Decoration,
     narration: Decoration,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Decoration {
     translation_key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -2,11 +2,10 @@ use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::ident;
-
-#[derive(Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct DoublePerlinNoiseParameters {
     #[serde(rename = "firstOctave")]
     first_octave: i32,

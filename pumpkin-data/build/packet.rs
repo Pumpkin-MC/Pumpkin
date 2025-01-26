@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::ident;
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Packets {
     serverbound: HashMap<String, Vec<String>>,
     clientbound: HashMap<String, Vec<String>>,

@@ -21,6 +21,7 @@ pub(crate) fn build() -> TokenStream {
         }]);
     }
     quote! {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u16)]
         pub enum WorldEvent {
             #variants

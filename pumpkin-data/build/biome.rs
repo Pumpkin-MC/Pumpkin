@@ -11,7 +11,7 @@ pub(crate) fn build() -> TokenStream {
     let variants = array_to_tokenstream(biomes);
 
     quote! {
-        #[derive(Clone, Copy)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u8)]
         pub enum Biome {
             #variants
