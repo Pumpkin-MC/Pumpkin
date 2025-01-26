@@ -1,5 +1,5 @@
 use bytes::{Buf, Bytes};
-use pumpkin_data::packet::serverbound::PLAY_CHAT;
+use pumpkin_data::packets::serverbound::PLAY_CHAT;
 use pumpkin_macros::server_packet;
 
 use crate::{

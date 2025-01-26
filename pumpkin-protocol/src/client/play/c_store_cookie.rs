@@ -1,5 +1,5 @@
 use crate::{codec::identifier::Identifier, VarInt};
-use pumpkin_data::packet::clientbound::PLAY_STORE_COOKIE;
+use pumpkin_data::packets::clientbound::PLAY_STORE_COOKIE;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

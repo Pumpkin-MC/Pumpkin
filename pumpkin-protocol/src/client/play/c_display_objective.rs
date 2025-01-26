@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    packet::clientbound::PLAY_SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
+    packets::clientbound::PLAY_SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
 };
 use pumpkin_macros::client_packet;
 use serde::Serialize;

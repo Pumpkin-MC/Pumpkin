@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_KEEP_ALIVE;
+use pumpkin_data::packets::serverbound::PLAY_KEEP_ALIVE;
 use pumpkin_macros::server_packet;
 use serde::Deserialize;
 

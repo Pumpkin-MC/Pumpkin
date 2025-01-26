@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_FINISH_CONFIGURATION;
+use pumpkin_data::packets::serverbound::CONFIG_FINISH_CONFIGURATION;
 use pumpkin_macros::server_packet;
 
 #[derive(serde::Deserialize)]

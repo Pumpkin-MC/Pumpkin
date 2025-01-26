@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_CLIENT_TICK_END;
+use pumpkin_data::packets::serverbound::PLAY_CLIENT_TICK_END;
 use pumpkin_macros::server_packet;
 
 #[derive(serde::Deserialize)]

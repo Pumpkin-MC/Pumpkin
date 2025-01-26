@@ -1,5 +1,5 @@
 use crate::{Link, VarInt};
-use pumpkin_data::packet::clientbound::PLAY_SERVER_LINKS;
+use pumpkin_data::packets::clientbound::PLAY_SERVER_LINKS;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

@@ -41,7 +41,7 @@ pub(crate) fn build() -> TokenStream {
         .collect::<TokenStream>();
 
     quote! {
-        #[derive(Clone, Copy)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u8)]
         pub enum EntityType {
             #variants

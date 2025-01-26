@@ -1,7 +1,7 @@
 use crate::{bytebuf::ByteBufMut, codec::bit_set::BitSet, ClientPacket, VarInt};
 
 use bytes::{BufMut, BytesMut};
-use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
+use pumpkin_data::packets::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::client_packet;
 use pumpkin_world::{
     chunk::{ChunkData, SUBCHUNKS_COUNT},

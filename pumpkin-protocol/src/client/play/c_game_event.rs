@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_GAME_EVENT;
+use pumpkin_data::packets::clientbound::PLAY_GAME_EVENT;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

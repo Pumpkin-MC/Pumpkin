@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use pumpkin_data::packet::clientbound::CONFIG_SELECT_KNOWN_PACKS;
+use pumpkin_data::packets::clientbound::CONFIG_SELECT_KNOWN_PACKS;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, KnownPack};

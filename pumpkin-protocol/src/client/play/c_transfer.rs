@@ -1,5 +1,5 @@
 use crate::VarInt;
-use pumpkin_data::packet::clientbound::PLAY_TRANSFER;
+use pumpkin_data::packets::clientbound::PLAY_TRANSFER;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
+use pumpkin_data::packets::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, VarInt};

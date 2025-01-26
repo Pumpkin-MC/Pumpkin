@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
+use pumpkin_data::packets::clientbound::PLAY_PLAYER_INFO_UPDATE;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, ClientPacket, Property};

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_HEALTH;
+use pumpkin_data::packets::clientbound::PLAY_SET_HEALTH;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

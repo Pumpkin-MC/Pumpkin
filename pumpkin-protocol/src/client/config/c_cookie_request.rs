@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::CONFIG_COOKIE_REQUEST;
+use pumpkin_data::packets::clientbound::CONFIG_COOKIE_REQUEST;
 use pumpkin_macros::client_packet;
 
 use crate::codec::identifier::Identifier;

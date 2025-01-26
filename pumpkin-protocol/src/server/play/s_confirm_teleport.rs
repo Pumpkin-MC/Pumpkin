@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_ACCEPT_TELEPORTATION;
+use pumpkin_data::packets::serverbound::PLAY_ACCEPT_TELEPORTATION;
 use pumpkin_macros::server_packet;
 
 use crate::VarInt;

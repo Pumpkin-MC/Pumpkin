@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::LOGIN_COOKIE_REQUEST;
+use pumpkin_data::packets::clientbound::LOGIN_COOKIE_REQUEST;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

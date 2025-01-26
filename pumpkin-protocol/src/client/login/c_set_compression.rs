@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::LOGIN_LOGIN_COMPRESSION;
+use pumpkin_data::packets::clientbound::LOGIN_LOGIN_COMPRESSION;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_ABILITIES;
+use pumpkin_data::packets::clientbound::PLAY_PLAYER_ABILITIES;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

@@ -2,7 +2,7 @@ use crate::bytebuf::ByteBufMut;
 use crate::client::play::bossevent_action::BosseventAction;
 use crate::{ClientPacket, VarInt};
 use bytes::BufMut;
-use pumpkin_data::packet::clientbound::PLAY_BOSS_EVENT;
+use pumpkin_data::packets::clientbound::PLAY_BOSS_EVENT;
 use pumpkin_macros::client_packet;
 
 #[client_packet(PLAY_BOSS_EVENT)]

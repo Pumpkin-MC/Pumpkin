@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_SCORE;
+use pumpkin_data::packets::clientbound::PLAY_SET_SCORE;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;

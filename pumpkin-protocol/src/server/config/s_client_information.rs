@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_CLIENT_INFORMATION;
+use pumpkin_data::packets::serverbound::CONFIG_CLIENT_INFORMATION;
 use pumpkin_macros::server_packet;
 
 use crate::VarInt;

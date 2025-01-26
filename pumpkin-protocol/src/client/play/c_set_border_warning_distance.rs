@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_BORDER_WARNING_DISTANCE;
+use pumpkin_data::packets::clientbound::PLAY_SET_BORDER_WARNING_DISTANCE;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
