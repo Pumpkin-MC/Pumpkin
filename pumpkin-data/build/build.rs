@@ -11,8 +11,8 @@ mod entity_pose;
 mod entity_type;
 mod game_event;
 mod message_type;
-mod noise_parmeter;
-mod packet;
+mod noise_parameters;
+mod packets;
 mod particle;
 mod scoreboard_slot;
 mod screen;
@@ -21,7 +21,7 @@ mod sound_category;
 mod world_event;
 
 pub fn main() {
-    write_generated_file(packet::build(), "packet.rs");
+    write_generated_file(packets::build(), "packets.rs");
     write_generated_file(screen::build(), "screen.rs");
     write_generated_file(particle::build(), "particle.rs");
     write_generated_file(sound::build(), "sound.rs");
@@ -32,7 +32,7 @@ pub fn main() {
     write_generated_file(scoreboard_slot::build(), "scoreboard_slot.rs");
     write_generated_file(world_event::build(), "world_event.rs");
     write_generated_file(entity_type::build(), "entity_type.rs");
-    write_generated_file(noise_parmeter::build(), "noise_parmeter.rs");
+    write_generated_file(noise_parameters::build(), "noise_parameters.rs");
     write_generated_file(biome::build(), "biome.rs");
     write_generated_file(message_type::build(), "message_type.rs");
 }
