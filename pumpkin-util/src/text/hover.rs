@@ -45,10 +45,7 @@ impl HoverEvent {
     {
         Self::ShowEntity {
             id: id.into(),
-            kind: match kind {
-                Some(kind) => Some(kind.into()),
-                None => None,
-            },
+            kind: kind.map(|kind| kind.into()),
             name: match name {
                 Some(name) => Some(vec![name.0]),
                 None => None,

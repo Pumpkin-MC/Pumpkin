@@ -91,9 +91,11 @@ pub(crate) fn build() -> TokenStream {
                     #type_to_str
                 }
             }
+        }
 
-            pub fn to_string(&self) -> String {
-                self.to_str().to_string()
+        impl std::fmt::Display for EntityType {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self.to_str())
             }
         }
     }
