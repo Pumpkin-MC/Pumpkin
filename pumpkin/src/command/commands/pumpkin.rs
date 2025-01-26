@@ -32,7 +32,7 @@ impl CommandExecutor for PumpkinExecutor {
     ) -> Result<(), CommandError> {
         sender
             .send_message(
-                TextComponent::text(format!("Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})"))
+                TextComponent::text(format!("Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})\n"))
                     .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                         "Click to Copy Version",
                     ))))
@@ -41,18 +41,22 @@ impl CommandExecutor for PumpkinExecutor {
                     ))))
                     .color_named(NamedColor::Green)
                     .add_child(
-                        TextComponent::text(format!(", {CARGO_PKG_DESCRIPTION}"))
-                            .click_event(ClickEvent::CopyToClipboard(Cow::from(
-                                CARGO_PKG_DESCRIPTION,
-                            )))
-                            .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
-                                "Click to Copy Description",
-                            ))))
-                            .color_named(NamedColor::White),
+                        TextComponent::text(format!(
+                            "{}\n{}\n",
+                            &CARGO_PKG_DESCRIPTION[0..35],
+                            &CARGO_PKG_DESCRIPTION[37..]
+                        ))
+                        .click_event(ClickEvent::CopyToClipboard(Cow::from(
+                            CARGO_PKG_DESCRIPTION,
+                        )))
+                        .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
+                            "Click to Copy Description",
+                        ))))
+                        .color_named(NamedColor::White),
                     )
                     .add_child(
                         TextComponent::text(format!(
-                            " (Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})"
+                            "(Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})\n"
                         ))
                         .click_event(ClickEvent::CopyToClipboard(Cow::from(format!(
                             "(Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})"
@@ -62,10 +66,9 @@ impl CommandExecutor for PumpkinExecutor {
                         ))))
                         .color_named(NamedColor::Gold),
                     )
-                    .add_child(TextComponent::text(" "))
                     // https://pumpkinmc.org/
                     .add_child(
-                        TextComponent::text("Github Repository")
+                        TextComponent::text("[Github Repository]")
                             .click_event(ClickEvent::OpenUrl(Cow::from(
                                 "https://github.com/Pumpkin-MC/Pumpkin",
                             )))
@@ -77,9 +80,9 @@ impl CommandExecutor for PumpkinExecutor {
                             .underlined(),
                     )
                     // Added docs. and a space for spacing
-                    .add_child(TextComponent::text(" "))
+                    .add_child(TextComponent::text("  "))
                     .add_child(
-                        TextComponent::text("Website")
+                        TextComponent::text("[Website]")
                             .click_event(ClickEvent::OpenUrl(Cow::from("https://pumpkinmc.org/")))
                             .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                                 "Click to open website.",
