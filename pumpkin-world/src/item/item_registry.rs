@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use pumpkin_util::text::TextComponent;
 use serde::Deserialize;
 
 const ITEMS_JSON: &str = include_str!("../../../assets/items.json");
@@ -42,8 +43,16 @@ pub struct Item {
     pub components: ItemComponents,
 }
 
+impl Item {
+    pub fn translated_name(&self) -> TextComponent {
+        serde_json::from_str(&self.components.item_name).expect("Could not parse item name.")
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemComponents {
+    #[serde(rename = "minecraft:item_name")]
+    pub item_name: String,
     #[serde(rename = "minecraft:max_stack_size")]
     pub max_stack_size: u8,
     #[serde(rename = "minecraft:jukebox_playable")]
