@@ -486,73 +486,70 @@ fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(literal("add").with_child(
-            argument_default_name(non_autocomplete_consumer()).with_child(
-                argument(ARG_NAME, TextComponentArgConsumer).execute(BossbarAddExecuter),
-            ),
-        ))
-        .with_child(
-            literal("get").with_child(
+        .then(
+            literal("add")
+                .then(argument_default_name(non_autocomplete_consumer()).then(
+                    argument(ARG_NAME, TextComponentArgConsumer).execute(BossbarAddExecuter),
+                )),
+        )
+        .then(
+            literal("get").then(
                 argument_default_name(autocomplete_consumer())
-                    .with_child(literal("max").execute(BossbarGetExecuter(CommandValueGet::Max)))
-                    .with_child(
-                        literal("players").execute(BossbarGetExecuter(CommandValueGet::Players)),
-                    )
-                    .with_child(
-                        literal("value").execute(BossbarGetExecuter(CommandValueGet::Value)),
-                    )
-                    .with_child(
-                        literal("visible").execute(BossbarGetExecuter(CommandValueGet::Visible)),
-                    ),
+                    .then(literal("max").execute(BossbarGetExecuter(CommandValueGet::Max)))
+                    .then(literal("players").execute(BossbarGetExecuter(CommandValueGet::Players)))
+                    .then(literal("value").execute(BossbarGetExecuter(CommandValueGet::Value)))
+                    .then(literal("visible").execute(BossbarGetExecuter(CommandValueGet::Visible))),
             ),
         )
-        .with_child(literal("list").execute(BossbarListExecuter))
-        .with_child(literal("remove").with_child(
-            argument_default_name(autocomplete_consumer()).execute(BossbarRemoveExecuter),
-        ))
-        .with_child(
-            literal("set").with_child(
+        .then(literal("list").execute(BossbarListExecuter))
+        .then(
+            literal("remove").then(
+                argument_default_name(autocomplete_consumer()).execute(BossbarRemoveExecuter),
+            ),
+        )
+        .then(
+            literal("set").then(
                 argument_default_name(autocomplete_consumer())
-                    .with_child(
-                        literal("color").with_child(
+                    .then(
+                        literal("color").then(
                             argument_default_name(BossbarColorArgumentConsumer)
                                 .execute(BossbarSetExecuter(CommandValueSet::Color)),
                         ),
                     )
-                    .with_child(
-                        literal("max").with_child(
+                    .then(
+                        literal("max").then(
                             argument_default_name(max_value_consumer())
                                 .execute(BossbarSetExecuter(CommandValueSet::Max)),
                         ),
                     )
-                    .with_child(
-                        literal("name").with_child(
+                    .then(
+                        literal("name").then(
                             argument(ARG_NAME, TextComponentArgConsumer)
                                 .execute(BossbarSetExecuter(CommandValueSet::Name)),
                         ),
                     )
-                    .with_child(
+                    .then(
                         literal("players")
-                            .with_child(
+                            .then(
                                 argument_default_name(PlayersArgumentConsumer)
                                     .execute(BossbarSetExecuter(CommandValueSet::Players(true))),
                             )
                             .execute(BossbarSetExecuter(CommandValueSet::Players(false))),
                     )
-                    .with_child(
-                        literal("style").with_child(
+                    .then(
+                        literal("style").then(
                             argument_default_name(BossbarStyleArgumentConsumer)
                                 .execute(BossbarSetExecuter(CommandValueSet::Style)),
                         ),
                     )
-                    .with_child(
-                        literal("value").with_child(
+                    .then(
+                        literal("value").then(
                             argument_default_name(value_consumer())
                                 .execute(BossbarSetExecuter(CommandValueSet::Value)),
                         ),
                     )
-                    .with_child(
-                        literal("visible").with_child(
+                    .then(
+                        literal("visible").then(
                             argument(ARG_VISIBLE, BoolArgConsumer)
                                 .execute(BossbarSetExecuter(CommandValueSet::Visible)),
                         ),

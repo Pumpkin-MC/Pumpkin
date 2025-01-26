@@ -55,30 +55,39 @@ impl CommandExecutor for GiveExecutor {
             target.give_items(item, item_count as u32).await;
         }
 
-        sender
-            .send_message(TextComponent::text(match targets {
-                [target] => format!(
-                    "Gave {item_count} {} to {}",
-                    item_name, target.gameprofile.name
-                ),
-                _ => format!(
-                    "Gave {item_count} {} to {} players",
-                    item_name,
-                    targets.len()
-                ),
-            }))
-            .await;
+        let msg = if targets.len() == 1 {
+            TextComponent::translate(
+                "commands.give.success.single",
+                [
+                    TextComponent::text(item_count.to_string()),
+                    TextComponent::text(item_name.to_string()),
+                    TextComponent::text(targets[0].gameprofile.name.to_string()),
+                ]
+                .into(),
+            )
+        } else {
+            TextComponent::translate(
+                "commands.give.success.single",
+                [
+                    TextComponent::text(item_count.to_string()),
+                    TextComponent::text(item_name.to_string()),
+                    TextComponent::text(targets.len().to_string()),
+                ]
+                .into(),
+            )
+        };
+        sender.send_message(msg).await;
 
         Ok(())
     }
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
-        argument_default_name(PlayersArgumentConsumer).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
+        argument_default_name(PlayersArgumentConsumer).then(
             argument(ARG_ITEM, ItemArgumentConsumer)
                 .execute(GiveExecutor)
-                .with_child(argument_default_name(item_count_consumer()).execute(GiveExecutor)),
+                .then(argument_default_name(item_count_consumer()).execute(GiveExecutor)),
         ),
     )
 }

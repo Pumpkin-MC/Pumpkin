@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::arg_block::BlockArgumentConsumer;
@@ -14,7 +13,7 @@ const NAMES: [&str; 1] = ["setblock"];
 const DESCRIPTION: &str = "Place a block.";
 
 const ARG_BLOCK: &str = "block";
-const ARG_BLOCK_POS: &str = "position";
+const ARG_BLOCK_POS: &str = "pos";
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -67,9 +66,17 @@ impl CommandExecutor for SetblockExecutor {
 
         sender
             .send_message(if success {
-                TextComponent::text(format!("Placed block {} at {pos}", block.name,))
+                TextComponent::translate(
+                    "commands.setblock.success",
+                    [
+                        TextComponent::text(pos.0.x.to_string()),
+                        TextComponent::text(pos.0.y.to_string()),
+                        TextComponent::text(pos.0.z.to_string()),
+                    ]
+                    .into(),
+                )
             } else {
-                TextComponent::text(format!("Kept block at {pos}")).color_named(NamedColor::Red)
+                TextComponent::translate("commands.setblock.failed", [].into())
             })
             .await;
 
@@ -78,12 +85,12 @@ impl CommandExecutor for SetblockExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
-        argument(ARG_BLOCK_POS, BlockPosArgumentConsumer).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
+        argument(ARG_BLOCK_POS, BlockPosArgumentConsumer).then(
             argument(ARG_BLOCK, BlockArgumentConsumer)
-                .with_child(literal("replace").execute(SetblockExecutor(Mode::Replace)))
-                .with_child(literal("destroy").execute(SetblockExecutor(Mode::Destroy)))
-                .with_child(literal("keep").execute(SetblockExecutor(Mode::Keep)))
+                .then(literal("replace").execute(SetblockExecutor(Mode::Replace)))
+                .then(literal("destroy").execute(SetblockExecutor(Mode::Destroy)))
+                .then(literal("keep").execute(SetblockExecutor(Mode::Keep)))
                 .execute(SetblockExecutor(Mode::Replace)),
         ),
     )

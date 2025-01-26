@@ -38,18 +38,15 @@ impl CommandExecutor for GamemodeTargetSelf {
         };
 
         if let Player(target) = sender {
-            if target.gamemode.load() == gamemode {
-                target
-                    .send_system_message(&TextComponent::text(format!(
-                        "You already in {gamemode:?} gamemode"
-                    )))
-                    .await;
-            } else {
+            if target.gamemode.load() != gamemode {
                 target.set_gamemode(gamemode).await;
+                let gamemode_string = format!("{gamemode:?}").to_lowercase();
+                let gamemode_string = format!("gameMode.{gamemode_string}");
                 target
-                    .send_system_message(&TextComponent::text(format!(
-                        "Game mode was set to {gamemode:?}"
-                    )))
+                    .send_system_message(&TextComponent::translate(
+                        "commands.gamemode.success.self",
+                        [TextComponent::translate(gamemode_string, [].into())].into(),
+                    ))
                     .await;
             }
             Ok(())
@@ -79,23 +76,26 @@ impl CommandExecutor for GamemodeTargetPlayer {
         let target_count = targets.len();
 
         for target in targets {
-            if target.gamemode.load() == gamemode {
-                if target_count == 1 {
-                    sender
-                        .send_message(TextComponent::text(format!(
-                            "{} is already in {:?} gamemode",
-                            target.gameprofile.name, gamemode
-                        )))
-                        .await;
-                }
-            } else {
+            if target.gamemode.load() != gamemode {
                 target.set_gamemode(gamemode).await;
+                let gamemode_string = format!("{gamemode:?}").to_lowercase();
+                let gamemode_string = format!("gameMode.{gamemode_string}");
+                target
+                    .send_system_message(&TextComponent::translate(
+                        "gameMode.changed",
+                        [TextComponent::translate(gamemode_string.clone(), [].into())].into(),
+                    ))
+                    .await;
                 if target_count == 1 {
                     sender
-                        .send_message(TextComponent::text(format!(
-                            "{}'s Game mode was set to {:?}",
-                            target.gameprofile.name, gamemode
-                        )))
+                        .send_message(TextComponent::translate(
+                            "commands.gamemode.success.other",
+                            [
+                                TextComponent::text(target.gameprofile.name.clone()),
+                                TextComponent::translate(gamemode_string, [].into()),
+                            ]
+                            .into(),
+                        ))
                         .await;
                 }
             }
@@ -107,11 +107,9 @@ impl CommandExecutor for GamemodeTargetPlayer {
 
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_GAMEMODE, GamemodeArgumentConsumer)
-            .with_child(require(|sender| sender.is_player()).execute(GamemodeTargetSelf))
-            .with_child(
-                argument(ARG_TARGET, PlayersArgumentConsumer).execute(GamemodeTargetPlayer),
-            ),
+            .then(require(|sender| sender.is_player()).execute(GamemodeTargetSelf))
+            .then(argument(ARG_TARGET, PlayersArgumentConsumer).execute(GamemodeTargetPlayer)),
     )
 }

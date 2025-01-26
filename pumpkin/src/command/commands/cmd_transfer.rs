@@ -119,13 +119,13 @@ impl CommandExecutor for TransferTargetPlayer {
 
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_HOSTNAME, SimpleArgConsumer)
-            .with_child(require(|sender| sender.is_player()).execute(TransferTargetSelf))
-            .with_child(
+            .then(require(|sender| sender.is_player()).execute(TransferTargetSelf))
+            .then(
                 argument_default_name(port_consumer())
-                    .with_child(require(|sender| sender.is_player()).execute(TransferTargetSelf))
-                    .with_child(
+                    .then(require(|sender| sender.is_player()).execute(TransferTargetSelf))
+                    .then(
                         argument(ARG_PLAYERS, PlayersArgumentConsumer)
                             .execute(TransferTargetPlayer),
                     ),

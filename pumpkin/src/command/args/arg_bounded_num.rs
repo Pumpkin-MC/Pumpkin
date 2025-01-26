@@ -2,7 +2,7 @@ use core::f64;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{CommandSuggestion, ProtoCmdArgParser};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion};
 
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
@@ -80,10 +80,10 @@ impl<T: ToFromNumber> FindArg<'_> for BoundedNumArgumentConsumer<T> {
     }
 }
 
-pub(crate) type NotInBounds = ();
+pub type NotInBounds = ();
 
 #[derive(Clone, Copy)]
-pub(crate) enum Number {
+pub enum Number {
     F64(f64),
     F32(f32),
     I32(i32),
@@ -136,8 +136,8 @@ impl ToFromNumber for f64 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<f64> {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Double {
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Double {
             min: self.min_inclusive,
             max: self.max_inclusive,
         }
@@ -145,7 +145,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<f64> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::ProtoCmdArgSuggestionType> {
+    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
         None
     }
 }
@@ -164,8 +164,8 @@ impl ToFromNumber for f32 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<f32> {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Float {
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Float {
             min: self.min_inclusive,
             max: self.max_inclusive,
         }
@@ -173,7 +173,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<f32> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::ProtoCmdArgSuggestionType> {
+    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
         None
     }
 }
@@ -192,8 +192,8 @@ impl ToFromNumber for i32 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<i32> {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Integer {
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Integer {
             min: self.min_inclusive,
             max: self.max_inclusive,
         }
@@ -201,7 +201,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<i32> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::ProtoCmdArgSuggestionType> {
+    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
         None
     }
 }
@@ -220,8 +220,8 @@ impl ToFromNumber for i64 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<i64> {
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser {
-        ProtoCmdArgParser::Long {
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::Long {
             min: self.min_inclusive,
             max: self.max_inclusive,
         }
@@ -229,7 +229,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<i64> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::ProtoCmdArgSuggestionType> {
+    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
         None
     }
 }

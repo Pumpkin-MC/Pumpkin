@@ -53,8 +53,9 @@ impl CommandExecutor for TimeQueryExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let mode = self.0;
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
             .expect("There should always be at least one world");
         let level_time = world.level_time.lock().await;
@@ -62,19 +63,28 @@ impl CommandExecutor for TimeQueryExecutor {
         let msg = match mode {
             QueryMode::DayTime => {
                 let curr_time = level_time.query_daytime();
-                format!("Daytime is: {curr_time}")
+                TextComponent::translate(
+                    "commands.time.query",
+                    [TextComponent::text(curr_time.to_string())].into(),
+                )
             }
             QueryMode::GameTime => {
                 let curr_time = level_time.query_gametime();
-                format!("Gametime is: {curr_time}")
+                TextComponent::translate(
+                    "commands.time.query",
+                    [TextComponent::text(curr_time.to_string())].into(),
+                )
             }
             QueryMode::Day => {
                 let curr_time = level_time.query_day();
-                format!("Day is: {curr_time}")
+                TextComponent::translate(
+                    "commands.time.query",
+                    [TextComponent::text(curr_time.to_string())].into(),
+                )
             }
         };
 
-        sender.send_message(TextComponent::text(msg)).await;
+        sender.send_message(msg).await;
         Ok(())
     }
 }
@@ -112,8 +122,9 @@ impl CommandExecutor for TimeChangeExecutor {
             }
         };
         let mode = self.0;
-        let world = server
-            .worlds
+        // TODO: Maybe ask player for world, or get the current world
+        let worlds = server.worlds.read().await;
+        let world = worlds
             .first()
             .expect("There should always be at least one world");
         let mut level_time = world.level_time.lock().await;
@@ -124,51 +135,54 @@ impl CommandExecutor for TimeChangeExecutor {
                 level_time.add_time(time_count.into());
                 level_time.send_time(world).await;
                 let curr_time = level_time.query_daytime();
-                format!("Added {time_count} time for result: {curr_time}")
+                TextComponent::translate(
+                    "commands.time.add",
+                    [TextComponent::text(curr_time.to_string())].into(),
+                )
             }
             Mode::Set(_) => {
                 // set
                 level_time.set_time(time_count.into());
                 level_time.send_time(world).await;
-                format!("Changed time to: {time_count}")
+                TextComponent::translate(
+                    "commands.time.set",
+                    [TextComponent::text(time_count.to_string())].into(),
+                )
             }
         };
 
-        sender.send_message(TextComponent::text(msg)).await;
+        sender.send_message(msg).await;
         Ok(())
     }
 }
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(
-            literal("add").with_child(
-                argument_default_name(arg_number()).execute(TimeChangeExecutor(Mode::Add)),
-            ),
+        .then(
+            literal("add")
+                .then(argument_default_name(arg_number()).execute(TimeChangeExecutor(Mode::Add))),
         )
-        .with_child(
+        .then(
             literal("query")
-                .with_child(literal("daytime").execute(TimeQueryExecutor(QueryMode::DayTime)))
-                .with_child(literal("gametime").execute(TimeQueryExecutor(QueryMode::GameTime)))
-                .with_child(literal("day").execute(TimeQueryExecutor(QueryMode::Day))),
+                .then(literal("daytime").execute(TimeQueryExecutor(QueryMode::DayTime)))
+                .then(literal("gametime").execute(TimeQueryExecutor(QueryMode::GameTime)))
+                .then(literal("day").execute(TimeQueryExecutor(QueryMode::Day))),
         )
-        .with_child(
+        .then(
             literal("set")
-                .with_child(
-                    literal("day").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Day)))),
-                )
-                .with_child(
+                .then(literal("day").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Day)))))
+                .then(
                     literal("noon").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Noon)))),
                 )
-                .with_child(
+                .then(
                     literal("night")
                         .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Night)))),
                 )
-                .with_child(
+                .then(
                     literal("midnight")
                         .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Midnight)))),
                 )
-                .with_child(
+                .then(
                     argument_default_name(arg_number())
                         .execute(TimeChangeExecutor(Mode::Set(None))),
                 ),
