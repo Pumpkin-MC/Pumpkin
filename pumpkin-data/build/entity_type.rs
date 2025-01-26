@@ -52,8 +52,20 @@ pub(crate) fn build() -> TokenStream {
         })
         .collect::<TokenStream>();
 
+    let type_to_str = json
+        .iter()
+        .map(|sound| {
+            let name = ident(sound.0.to_pascal_case());
+            let identifier = format!("minecraft:{}", sound.0);
+
+            quote! {
+                Self::#name => #identifier,
+            }
+        })
+        .collect::<TokenStream>();
+
     quote! {
-        #[derive(Clone, Copy, Debug)]
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         #[repr(u8)]
         pub enum EntityType {
             #variants
@@ -72,6 +84,16 @@ pub(crate) fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
+            }
+
+            pub const fn to_str(&self) -> &'static str {
+                match self {
+                    #type_to_str
+                }
+            }
+
+            pub fn to_string(&self) -> String {
+                self.to_str().to_string()
             }
         }
     }
