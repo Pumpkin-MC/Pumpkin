@@ -22,7 +22,9 @@ struct Text {
     has_glowing_text: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     color: Option<String>,
-    messages: [String; 4],
+    messages: Vec<String>,
+    // TODO: uncomment when pumpkin-nbt supports arrays
+    // messages: [String; 4],
 }
 
 impl Text {
@@ -30,7 +32,9 @@ impl Text {
         Self {
             has_glowing_text: None,
             color: None,
-            messages,
+            messages: messages.to_vec(),
+            // TODO: uncomment when pumpkin-nbt supports arrays
+            // messages,
         }
     }
 }

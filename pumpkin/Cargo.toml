@@ -67,9 +67,6 @@ png = "0.17.15"
 simple_logger = { version = "5.0.0", features = ["threads"] }
 time = "0.3.37"
 
-# nbt
-fastnbt = { git = "https://github.com/owengage/fastnbt.git" }
-
 # commands
 async-trait = "0.1.83"
 [build-dependencies]
