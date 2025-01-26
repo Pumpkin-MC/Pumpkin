@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_BLOCK_EVENT;
+use pumpkin_data::packets::clientbound::PLAY_BLOCK_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
 use pumpkin_macros::client_packet;

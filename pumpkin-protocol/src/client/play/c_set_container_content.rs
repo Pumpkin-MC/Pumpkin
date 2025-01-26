@@ -1,7 +1,7 @@
 use crate::codec::slot::Slot;
 use crate::VarInt;
 
-use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_CONTENT;
+use pumpkin_data::packets::clientbound::PLAY_CONTAINER_SET_CONTENT;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

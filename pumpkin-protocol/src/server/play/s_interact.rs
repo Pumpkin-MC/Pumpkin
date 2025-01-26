@@ -1,5 +1,5 @@
 use bytes::Buf;
-use pumpkin_data::packet::serverbound::PLAY_INTERACT;
+use pumpkin_data::packets::serverbound::PLAY_INTERACT;
 use pumpkin_macros::server_packet;
 use pumpkin_util::math::vector3::Vector3;
 

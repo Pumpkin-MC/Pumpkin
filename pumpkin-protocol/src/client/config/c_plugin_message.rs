@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::CONFIG_CUSTOM_PAYLOAD;
+use pumpkin_data::packets::clientbound::CONFIG_CUSTOM_PAYLOAD;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

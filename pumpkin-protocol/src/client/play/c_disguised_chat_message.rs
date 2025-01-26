@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_DISGUISED_CHAT;
+use pumpkin_data::packets::clientbound::PLAY_DISGUISED_CHAT;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::client_packet;

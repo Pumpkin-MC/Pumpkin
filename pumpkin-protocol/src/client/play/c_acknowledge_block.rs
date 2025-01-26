@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_BLOCK_CHANGED_ACK;
+use pumpkin_data::packets::clientbound::PLAY_BLOCK_CHANGED_ACK;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

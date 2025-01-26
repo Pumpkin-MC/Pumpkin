@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_ROT;
+use pumpkin_data::packets::serverbound::PLAY_MOVE_PLAYER_ROT;
 use pumpkin_macros::server_packet;
 
 #[derive(serde::Deserialize)]

@@ -1,5 +1,5 @@
 use bytes::{BufMut, BytesMut};
-use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
+use pumpkin_data::packets::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::client_packet;
 
 use crate::{bytebuf::ByteBufMut, codec::identifier::Identifier, ClientPacket};

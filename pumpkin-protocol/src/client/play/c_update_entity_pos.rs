@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_POS;
+use pumpkin_data::packets::clientbound::PLAY_MOVE_ENTITY_POS;
 use pumpkin_macros::client_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;

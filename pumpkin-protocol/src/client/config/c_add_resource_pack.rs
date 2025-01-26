@@ -3,7 +3,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
-use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
+use pumpkin_data::packets::clientbound::CONFIG_RESOURCE_PACK_PUSH;
 
 #[derive(Serialize)]
 #[client_packet(CONFIG_RESOURCE_PACK_PUSH)]

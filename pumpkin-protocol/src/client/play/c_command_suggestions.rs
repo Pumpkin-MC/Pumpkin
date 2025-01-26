@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use pumpkin_data::packet::clientbound::PLAY_COMMAND_SUGGESTIONS;
+use pumpkin_data::packets::clientbound::PLAY_COMMAND_SUGGESTIONS;
 use pumpkin_macros::client_packet;
 use pumpkin_util::text::TextComponent;
 

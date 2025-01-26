@@ -1,6 +1,6 @@
 use crate::codec::slot::Slot;
 use crate::VarInt;
-use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
+use pumpkin_data::packets::serverbound::PLAY_CONTAINER_CLICK;
 use pumpkin_macros::server_packet;
 use serde::de::SeqAccess;
 use serde::{de, Deserialize};

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_CLEAR_TITLES;
+use pumpkin_data::packets::clientbound::PLAY_CLEAR_TITLES;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

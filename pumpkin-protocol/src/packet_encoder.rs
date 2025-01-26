@@ -221,7 +221,7 @@ mod tests {
     use cfb8::cipher::AsyncStreamCipher;
     use cfb8::Decryptor as Cfb8Decryptor;
     use libdeflater::{DecompressionError, Decompressor};
-    use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
+    use pumpkin_data::packets::clientbound::STATUS_STATUS_RESPONSE;
     use pumpkin_macros::client_packet;
     use serde::Serialize;
 

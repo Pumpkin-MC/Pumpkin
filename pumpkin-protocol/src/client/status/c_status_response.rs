@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
+use pumpkin_data::packets::clientbound::STATUS_STATUS_RESPONSE;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 

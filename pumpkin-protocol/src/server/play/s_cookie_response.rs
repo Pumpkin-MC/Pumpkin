@@ -4,7 +4,7 @@ use crate::{
     ServerPacket, VarInt,
 };
 use bytes::Buf;
-use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
+use pumpkin_data::packets::serverbound::PLAY_COOKIE_RESPONSE;
 use pumpkin_macros::server_packet;
 
 #[server_packet(PLAY_COOKIE_RESPONSE)]

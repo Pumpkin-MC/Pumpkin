@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SWING;
+use pumpkin_data::packets::serverbound::PLAY_SWING;
 use pumpkin_macros::server_packet;
 
 use crate::VarInt;

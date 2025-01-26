@@ -1,6 +1,6 @@
 use pumpkin_macros::client_packet;
 
-use pumpkin_data::packet::clientbound::CONFIG_DISCONNECT;
+use pumpkin_data::packets::clientbound::CONFIG_DISCONNECT;
 
 #[derive(serde::Serialize)]
 #[client_packet(CONFIG_DISCONNECT)]

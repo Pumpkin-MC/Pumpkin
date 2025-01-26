@@ -1,5 +1,5 @@
 use bytes::Buf;
-use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
+use pumpkin_data::packets::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::server_packet;
 
 use crate::{

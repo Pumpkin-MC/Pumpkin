@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_COMBAT_KILL;
+use pumpkin_data::packets::clientbound::PLAY_PLAYER_COMBAT_KILL;
 use pumpkin_macros::client_packet;
 use pumpkin_util::text::TextComponent;
 use serde::Serialize;

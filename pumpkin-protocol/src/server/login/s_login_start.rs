@@ -1,5 +1,5 @@
 use bytes::Buf;
-use pumpkin_data::packet::serverbound::LOGIN_HELLO;
+use pumpkin_data::packets::serverbound::LOGIN_HELLO;
 use pumpkin_macros::server_packet;
 
 use crate::{

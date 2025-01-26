@@ -3,7 +3,7 @@ use crate::{
     ServerPacket, VarInt,
 };
 use bytes::{Buf, Bytes};
-use pumpkin_data::packet::serverbound::LOGIN_CUSTOM_QUERY_ANSWER;
+use pumpkin_data::packets::serverbound::LOGIN_CUSTOM_QUERY_ANSWER;
 use pumpkin_macros::server_packet;
 
 const MAX_PAYLOAD_SIZE: usize = 1048576;

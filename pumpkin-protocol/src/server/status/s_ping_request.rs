@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::STATUS_PING_REQUEST;
+use pumpkin_data::packets::serverbound::STATUS_PING_REQUEST;
 use pumpkin_macros::server_packet;
 
 #[derive(serde::Deserialize)]

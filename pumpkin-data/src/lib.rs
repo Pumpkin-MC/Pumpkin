@@ -1,5 +1,5 @@
-pub mod packet {
-    include!(concat!(env!("OUT_DIR"), "/packet.rs"));
+pub mod packets {
+    include!(concat!(env!("OUT_DIR"), "/packets.rs"));
 }
 
 pub mod screen {
@@ -17,7 +17,7 @@ pub mod sound {
 
 pub mod chunk {
     include!(concat!(env!("OUT_DIR"), "/biome.rs"));
-    include!(concat!(env!("OUT_DIR"), "/noise_parmeter.rs"));
+    include!(concat!(env!("OUT_DIR"), "/noise_parameters.rs"));
     include!(concat!(env!("OUT_DIR"), "/chunk_status.rs"));
 }
 
