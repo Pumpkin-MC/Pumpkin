@@ -39,14 +39,16 @@ impl HoverEvent {
     pub fn show_text(text: TextComponent) -> Self {
         Self::ShowText(vec![text.0])
     }
-    pub fn show_entity(
-        id: Cow<'static, str>,
-        kind: Option<Cow<'static, str>>,
-        name: Option<TextComponent>,
-    ) -> Self {
+    pub fn show_entity<P>(id: P, kind: Option<P>, name: Option<TextComponent>) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
         Self::ShowEntity {
-            id,
-            kind,
+            id: id.into(),
+            kind: match kind {
+                Some(kind) => Some(kind.into()),
+                None => None,
+            },
             name: match name {
                 Some(name) => Some(vec![name.0]),
                 None => None,
