@@ -21,19 +21,17 @@ use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SCookieResponse as SPCookieResponse;
 use pumpkin_protocol::{
-    client::play::CCommandSuggestions,
-    server::play::{SCloseContainer, SCommandSuggestion, SKeepAlive, SSetPlayerGround, SUseItem},
-};
-use pumpkin_protocol::{
     client::play::{
-        Animation, CAcknowledgeBlockChange, CEntityAnimation, CHeadRot, CPingResponse,
-        CPlayerChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, FilterType,
+        Animation, CAcknowledgeBlockChange, CCommandSuggestions, CEntityAnimation, CHeadRot,
+        CPingResponse, CPlayerChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
+        FilterType,
     },
     server::play::{
         Action, ActionType, SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay,
-        SConfirmTeleport, SInteract, SPickItemFromBlock, SPickItemFromEntity, SPlayPingRequest,
-        SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerPosition, SPlayerPositionRotation,
-        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSwingArm, SUseItemOn, Status,
+        SCloseContainer, SCommandSuggestion, SConfirmTeleport, SInteract, SKeepAlive,
+        SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
+        SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem,
+        SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
     },
 };
 use pumpkin_util::math::position::BlockPos;
@@ -442,9 +440,9 @@ impl Player {
             .await;
     }
 
-    pub fn handle_pick_item_from_entity(&self, _pick_item: SPickItemFromEntity) {
-        // TODO: Implement and merge any redundant code with pick_item_from_block
-    }
+    // pub fn handle_pick_item_from_entity(&self, _pick_item: SPickItemFromEntity) {
+    //     // TODO: Implement and merge any redundant code with pick_item_from_block
+    // }
 
     pub async fn handle_player_command(&self, command: SPlayerCommand) {
         if command.entity_id != self.entity_id().into() {
@@ -653,11 +651,17 @@ impl Player {
     pub async fn handle_client_status(self: &Arc<Self>, client_status: SClientCommand) {
         match client_status.action_id.0 {
             0 => {
+                // Perform Respawn
                 if self.living_entity.health.load() > 0.0 {
                     return;
                 }
-                self.world().respawn_player(self, false).await;
-                // TODO: hardcore set spectator
+                self.world().respawn_player(&self.clone(), false).await;
+
+                // Restore abilities based on gamemode after respawn
+                let mut abilities = self.abilities.lock().await;
+                abilities.set_for_gamemode(self.gamemode.load());
+                drop(abilities);
+                self.send_abilities_update().await;
             }
             1 => {
                 // request stats

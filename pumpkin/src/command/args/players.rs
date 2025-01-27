@@ -72,7 +72,7 @@ impl ArgumentConsumer for PlayersArgumentConsumer {
 
 impl DefaultNameArgConsumer for PlayersArgumentConsumer {
     fn default_name(&self) -> &'static str {
-        "player"
+        "target"
     }
 }
 

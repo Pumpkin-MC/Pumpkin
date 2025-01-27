@@ -657,26 +657,8 @@ impl Player {
         {
             // use another scope so we instantly unlock abilities
             let mut abilities = self.abilities.lock().await;
-            match gamemode {
-                GameMode::Undefined | GameMode::Survival | GameMode::Adventure => {
-                    abilities.flying = false;
-                    abilities.allow_flying = false;
-                    abilities.creative = false;
-                    abilities.invulnerable = false;
-                }
-                GameMode::Creative => {
-                    abilities.allow_flying = true;
-                    abilities.creative = true;
-                    abilities.invulnerable = true;
-                }
-                GameMode::Spectator => {
-                    abilities.flying = true;
-                    abilities.allow_flying = true;
-                    abilities.creative = false;
-                    abilities.invulnerable = true;
-                }
-            }
-        }
+            abilities.set_for_gamemode(gamemode);
+        };
         self.send_abilities_update().await;
         self.living_entity
             .entity
@@ -970,6 +952,31 @@ impl Default for Abilities {
             allow_modify_world: true,
             fly_speed: 0.05,
             walk_speed: 0.1,
+        }
+    }
+}
+
+impl Abilities {
+    pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
+        match gamemode {
+            GameMode::Creative => {
+                self.flying = false; // Start not flying
+                self.allow_flying = true;
+                self.creative = true;
+                self.invulnerable = true;
+            }
+            GameMode::Spectator => {
+                self.flying = true;
+                self.allow_flying = true;
+                self.creative = false;
+                self.invulnerable = true;
+            }
+            GameMode::Survival | GameMode::Adventure | GameMode::Undefined => {
+                self.flying = false;
+                self.allow_flying = false;
+                self.creative = false;
+                self.invulnerable = false;
+            }
         }
     }
 }

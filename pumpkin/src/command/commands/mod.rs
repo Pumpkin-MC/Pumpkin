@@ -1,3 +1,6 @@
+pub mod ban;
+pub mod banip;
+pub mod banlist;
 pub mod bossbar;
 pub mod clear;
 pub mod deop;
@@ -11,6 +14,8 @@ pub mod list;
 pub mod me;
 pub mod msg;
 pub mod op;
+pub mod pardon;
+pub mod pardonip;
 pub mod playsound;
 pub mod plugin;
 pub mod plugins;

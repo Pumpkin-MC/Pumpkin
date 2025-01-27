@@ -21,8 +21,8 @@ const ARG_ITEM: &str = "item";
 fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("count")
-        .min(0)
-        .max(6400)
+        .min(1)
+        .max(i32::MAX)
 }
 
 struct GiveExecutor;

@@ -19,6 +19,7 @@ use pumpkin_world::dimension::Dimension;
 use pumpkin_world::entity::entity_registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
 use std::{
     sync::{
@@ -369,6 +370,20 @@ impl Server {
             }
         }
         None
+    }
+
+    pub async fn get_players_by_ip(&self, ip: IpAddr) -> Vec<Arc<Player>> {
+        let mut players = Vec::<Arc<Player>>::new();
+
+        for world in self.worlds.read().await.iter() {
+            for (_, player) in world.current_players.lock().await.iter() {
+                if player.client.address.lock().await.ip() == ip {
+                    players.push(player.clone());
+                }
+            }
+        }
+
+        players
     }
 
     /// Returns all players from all worlds.
