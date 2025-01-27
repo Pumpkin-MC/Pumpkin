@@ -9,7 +9,7 @@ use crate::command::CommandSender;
 impl CommandTree {
     /// Add a child [Node] to the root of this [`CommandTree`].
     #[must_use]
-    pub fn with_child(mut self, child: impl NodeBuilder) -> Self {
+    pub fn then(mut self, child: impl NodeBuilder) -> Self {
         let node = child.build(&mut self);
         self.children.push(self.nodes.len());
         self.nodes.push(node);
@@ -104,7 +104,7 @@ impl NodeBuilder for NonLeafNodeBuilder {
 impl NonLeafNodeBuilder {
     /// Add a child [Node] to this one.
     #[must_use]
-    pub fn with_child(mut self, child: Self) -> Self {
+    pub fn then(mut self, child: Self) -> Self {
         self.child_nodes.push(child);
         self
     }
@@ -168,7 +168,7 @@ pub fn argument_default_name(
 ) -> NonLeafNodeBuilder {
     NonLeafNodeBuilder {
         node_type: NodeType::Argument {
-            name: consumer.default_name(),
+            name: consumer.default_name().to_string(),
             consumer: Arc::new(consumer),
         },
         child_nodes: Vec::new(),

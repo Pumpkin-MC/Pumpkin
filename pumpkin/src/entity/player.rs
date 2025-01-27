@@ -19,9 +19,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     bytebuf::packet_id::Packet,
     client::play::{
-        CCombatDeath, CEntityStatus, CGameEvent, CHurtAnimation, CKeepAlive, CPlayDisconnect,
-        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CSetHealth, CSystemChatMessage,
-        GameEvent, PlayerAction,
+        CActionBar, CCombatDeath, CEntityStatus, CGameEvent, CHurtAnimation, CKeepAlive,
+        CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CSetHealth,
+        CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -370,6 +370,14 @@ impl Player {
         if config.swing {}
     }
 
+    pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
+        match mode {
+            TitleMode::Title => self.client.send_packet(&CTitleText::new(text)).await,
+            TitleMode::SubTitle => self.client.send_packet(&CSubtitle::new(text)).await,
+            TitleMode::ActionBar => self.client.send_packet(&CActionBar::new(text)).await,
+        }
+    }
+
     pub async fn play_sound(
         &self,
         sound_id: u16,
@@ -524,6 +532,17 @@ impl Player {
             .await;
     }
 
+    /// Sends the mobs to just the player.
+    // TODO: This should be optimized for larger servers based on current player chunk
+    pub async fn send_mobs(&self, world: &World) {
+        let mobs = world.current_living_mobs.lock().await.clone();
+        for (uuid, mob) in mobs {
+            self.client
+                .send_packet(&mob.living_entity.entity.create_spawn_packet(uuid))
+                .await;
+        }
+    }
+
     /// Yaw and Pitch in degrees
     /// Rarly used, For example when waking up player from bed or first time spawn. Otherwise entity teleport is used
     /// Player should respond with the `SConfirmTeleport` packet
@@ -638,26 +657,8 @@ impl Player {
         {
             // use another scope so we instantly unlock abilities
             let mut abilities = self.abilities.lock().await;
-            match gamemode {
-                GameMode::Undefined | GameMode::Survival | GameMode::Adventure => {
-                    abilities.flying = false;
-                    abilities.allow_flying = false;
-                    abilities.creative = false;
-                    abilities.invulnerable = false;
-                }
-                GameMode::Creative => {
-                    abilities.allow_flying = true;
-                    abilities.creative = true;
-                    abilities.invulnerable = true;
-                }
-                GameMode::Spectator => {
-                    abilities.flying = true;
-                    abilities.allow_flying = true;
-                    abilities.creative = false;
-                    abilities.invulnerable = true;
-                }
-            }
-        }
+            abilities.set_for_gamemode(gamemode);
+        };
         self.send_abilities_update().await;
         self.living_entity
             .entity
@@ -870,6 +871,13 @@ impl Player {
     }
 }
 
+#[derive(Debug)]
+pub enum TitleMode {
+    Title,
+    SubTitle,
+    ActionBar,
+}
+
 /// Represents a player's abilities and special powers.
 ///
 /// This struct contains information about the player's current abilities, such as flight, invulnerability, and creative mode.
@@ -927,6 +935,31 @@ impl Default for Abilities {
             allow_modify_world: true,
             fly_speed: 0.05,
             walk_speed: 0.1,
+        }
+    }
+}
+
+impl Abilities {
+    pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
+        match gamemode {
+            GameMode::Creative => {
+                self.flying = false; // Start not flying
+                self.allow_flying = true;
+                self.creative = true;
+                self.invulnerable = true;
+            }
+            GameMode::Spectator => {
+                self.flying = true;
+                self.allow_flying = true;
+                self.creative = false;
+                self.invulnerable = true;
+            }
+            GameMode::Survival | GameMode::Adventure | GameMode::Undefined => {
+                self.flying = false;
+                self.allow_flying = false;
+                self.creative = false;
+                self.invulnerable = false;
+            }
         }
     }
 }

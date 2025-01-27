@@ -111,6 +111,14 @@ impl TextComponent {
         self
     }
 
+    pub fn from_content(content: TextContent) -> Self {
+        Self(TextComponentBase {
+            content,
+            style: Style::default(),
+            extra: vec![],
+        })
+    }
+
     pub fn add_text<P>(mut self, text: P) -> Self
     where
         P: Into<Cow<'static, str>>,
@@ -126,7 +134,12 @@ impl TextComponent {
     pub fn get_text(self) -> String {
         match self.0.content {
             TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with: _ } => translate.into_owned(),
+            TextContent::Translate { translate, with } => {
+                let translate = translate.into_owned();
+                get_translation_en_us(&translate, with)
+                    .unwrap_or(translate.to_string())
+                    .clone()
+            }
             TextContent::EntityNames {
                 selector,
                 separator: _,

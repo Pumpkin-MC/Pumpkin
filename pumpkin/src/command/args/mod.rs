@@ -1,10 +1,8 @@
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 
-use arg_bounded_num::{NotInBounds, Number};
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
-};
+use bounded_num::{NotInBounds, Number};
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
@@ -19,27 +17,28 @@ use super::{
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
-pub mod arg_block;
-pub mod arg_bool;
-pub mod arg_bossbar_color;
-pub mod arg_bossbar_style;
-pub mod arg_bounded_num;
-pub mod arg_command;
-pub mod arg_entities;
-pub mod arg_entity;
-pub mod arg_gamemode;
-pub mod arg_item;
-pub mod arg_message;
-pub mod arg_players;
-pub mod arg_position_2d;
-pub mod arg_position_3d;
-pub mod arg_position_block;
-pub mod arg_resource_location;
-pub mod arg_rotation;
-pub mod arg_simple;
-pub mod arg_sound;
-pub mod arg_textcomponent;
+pub mod block;
+pub mod bool;
+pub mod bossbar_color;
+pub mod bossbar_style;
+pub mod bounded_num;
+pub mod command;
 mod coordinate;
+pub mod entities;
+pub mod entity;
+pub mod gamemode;
+pub mod item;
+pub mod message;
+pub mod players;
+pub mod position_2d;
+pub mod position_3d;
+pub mod position_block;
+pub mod resource_location;
+pub mod rotation;
+pub mod simple;
+pub mod sound;
+pub mod summonable_entities;
+pub mod textcomponent;
 
 /// see [`crate::commands::tree_builder::argument`]
 #[async_trait]
@@ -64,13 +63,13 @@ pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
 
 pub trait GetClientSideArgParser {
     /// Return the parser the client should use while typing a command in chat.
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser;
+    fn get_client_side_parser(&self) -> ArgumentType;
     /// Usually this should return None. This can be used to force suggestions to be processed on serverside.
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType>;
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders>;
 }
 
 pub trait DefaultNameArgConsumer: ArgumentConsumer {
-    fn default_name(&self) -> String;
+    fn default_name(&self) -> &str;
 }
 
 #[derive(Clone)]
@@ -122,7 +121,7 @@ pub(crate) trait FindArgDefaultName<'a, T> {
 
 impl<'a, T, C: FindArg<'a, Data = T> + DefaultNameArgConsumer> FindArgDefaultName<'a, T> for C {
     fn find_arg_default_name(&self, args: &'a ConsumedArgs) -> Result<T, CommandError> {
-        C::find_arg(args, &self.default_name())
+        C::find_arg(args, self.default_name())
     }
 }
 

@@ -1,8 +1,8 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::command::commands::cmd_seed;
-use crate::command::commands::{cmd_bossbar, cmd_transfer};
+use crate::command::commands::seed;
+use crate::command::commands::{bossbar, transfer};
 use crate::command::dispatcher::CommandDispatcher;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -113,35 +113,32 @@ impl CommandSender<'_> {
 pub fn default_dispatcher() -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
 
-    dispatcher.register(cmd_pumpkin::init_command_tree(), PermissionLvl::Zero);
-    dispatcher.register(cmd_bossbar::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_say::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_gamemode::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_stop::init_command_tree(), PermissionLvl::Four);
-    dispatcher.register(cmd_help::init_command_tree(), PermissionLvl::Zero);
-    dispatcher.register(cmd_kill::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_kick::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_plugin::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_plugins::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_worldborder::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_teleport::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_time::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_give::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_list::init_command_tree(), PermissionLvl::Zero);
-    dispatcher.register(cmd_clear::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_setblock::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_seed::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_transfer::init_command_tree(), PermissionLvl::Zero);
-    dispatcher.register(cmd_fill::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_op::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_deop::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_me::init_command_tree(), PermissionLvl::Zero);
-    dispatcher.register(cmd_playsound::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(cmd_ban::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_banip::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_banlist::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_pardon::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(cmd_pardonip::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(pumpkin::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(bossbar::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(say::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(gamemode::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(stop::init_command_tree(), PermissionLvl::Four);
+    dispatcher.register(help::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(kill::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(kick::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(plugin::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(plugins::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(worldborder::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(teleport::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(time::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(give::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(list::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(clear::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(setblock::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(seed::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(transfer::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(fill::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(op::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(deop::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(me::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(playsound::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(title::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(summon::init_command_tree(), PermissionLvl::Two);
 
     dispatcher
 }
