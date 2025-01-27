@@ -77,7 +77,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
 
     for (key, value) in &ADVANCED_CONFIG.server_links.custom {
         links.push(Link::new(
-            Label::TextComponent(TextComponent::text(key)),
+            Label::TextComponent(TextComponent::text(key).into()),
             value,
         ));
     }
@@ -157,6 +157,12 @@ impl Client {
             }
 
             *gameprofile = Some(profile);
+        }
+
+        drop(gameprofile);
+
+        if let Some(reason) = self.can_not_join().await {
+            self.kick(&reason).await;
         }
     }
 

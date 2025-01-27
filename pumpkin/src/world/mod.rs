@@ -462,6 +462,8 @@ impl World {
         //         player.send_bossbar(bossbar).await;
         //     }
         // }
+
+        player.send_mobs(self).await;
     }
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
@@ -865,13 +867,18 @@ impl World {
     }
 
     pub async fn remove_mob_entity(self: Arc<Self>, living_entity: Arc<LivingEntity>) {
-        let mut current_living_entities = self.current_living_mobs.lock().await.clone();
-        current_living_entities.remove(&living_entity.entity.entity_uuid);
+        let mut current_living_entities = self.current_living_mobs.lock().await;
+        current_living_entities
+            .remove(&living_entity.entity.entity_uuid)
+            .unwrap();
+
         // TODO: does this work with collisions?
         living_entity.entity.set_pose(EntityPose::Dying).await;
+
+        let world = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            self.remove_entity(&living_entity.entity).await;
+            world.remove_entity(&living_entity.entity).await;
         });
     }
 

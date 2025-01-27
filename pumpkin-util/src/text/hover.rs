@@ -1,33 +1,56 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, vec};
 
 use serde::{Deserialize, Serialize};
 
-use super::TextComponent;
+use super::{TextComponent, TextComponentBase};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "action", content = "contents", rename_all = "snake_case")]
 pub enum HoverEvent {
     /// Displays a tooltip with the given text.
-    ShowText(Cow<'static, str>),
+    ShowText(Vec<TextComponentBase>),
     /// Shows an item.
     ShowItem {
         /// Resource identifier of the item
         id: Cow<'static, str>,
         /// Number of the items in the stack
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         count: Option<i32>,
         /// NBT information about the item (sNBT format)
-        tag: Cow<'static, str>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tag: Option<Cow<'static, str>>,
     },
     /// Shows an entity.
     ShowEntity {
         /// The entity's UUID
-        id: uuid::Uuid,
+        /// The UUID cannot use uuid::Uuid because its serialization parses it into bytes, so its double bytes serialized
+        id: Cow<'static, str>,
         /// Resource identifier of the entity
         #[serde(rename = "type")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         kind: Option<Cow<'static, str>>,
         /// Optional custom name for the entity
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        name: Option<Box<TextComponent>>,
+        name: Option<Vec<TextComponentBase>>,
     },
+}
+
+impl HoverEvent {
+    pub fn show_text(text: TextComponent) -> Self {
+        Self::ShowText(vec![text.0])
+    }
+    pub fn show_entity(
+        id: Cow<'static, str>,
+        kind: Option<Cow<'static, str>>,
+        name: Option<TextComponent>,
+    ) -> Self {
+        Self::ShowEntity {
+            id,
+            kind,
+            name: match name {
+                Some(name) => Some(vec![name.0]),
+                None => None,
+            },
+        }
+    }
 }
