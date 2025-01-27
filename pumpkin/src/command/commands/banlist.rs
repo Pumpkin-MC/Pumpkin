@@ -1,6 +1,6 @@
 use crate::{
     command::{
-        args::{arg_simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
         tree::CommandTree,
         tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
@@ -140,5 +140,5 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .execute(BanListAllExecutor)
-        .with_child(argument(ARG_LIST_TYPE, SimpleArgConsumer).execute(BanListExecutor))
+        .then(argument(ARG_LIST_TYPE, SimpleArgConsumer).execute(BanListExecutor))
 }

@@ -2,7 +2,7 @@ use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
-        args::{arg_message::MsgArgConsumer, arg_simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        args::{message::MsgArgConsumer, simple::SimpleArgConsumer, Arg, ConsumedArgs},
         tree::CommandTree,
         tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
@@ -50,7 +50,7 @@ impl CommandExecutor for BanIpNoReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        ban_ip(sender, server, target, "Banned by an operator.".to_string()).await;
+        ban_ip(sender, server, target, None).await;
         Ok(())
     }
 }
@@ -73,12 +73,14 @@ impl CommandExecutor for BanIpReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_ip(sender, server, target, reason.to_string()).await;
+        ban_ip(sender, server, target, Some(reason.to_string())).await;
         Ok(())
     }
 }
 
-async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reason: String) {
+async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reason: Option<String>) {
+    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
+
     let Some(target_ip) = parse_ip(target, server).await else {
         sender
             .send_message(TextComponent::translate(
@@ -149,9 +151,9 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGET, SimpleArgConsumer)
             .execute(BanIpNoReasonExecutor)
-            .with_child(argument(ARG_REASON, MsgArgConsumer).execute(BanIpReasonExecutor)),
+            .then(argument(ARG_REASON, MsgArgConsumer).execute(BanIpReasonExecutor)),
     )
 }

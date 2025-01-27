@@ -1,8 +1,6 @@
 use crate::{
     command::{
-        args::{
-            arg_message::MsgArgConsumer, arg_players::PlayersArgumentConsumer, Arg, ConsumedArgs,
-        },
+        args::{message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs},
         tree::CommandTree,
         tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
@@ -37,7 +35,7 @@ impl CommandExecutor for BanNoReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        ban_player(sender, &targets[0], "Banned by an operator.".to_string()).await;
+        ban_player(sender, &targets[0], None).await;
         Ok(())
     }
 }
@@ -60,13 +58,15 @@ impl CommandExecutor for BanReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_player(sender, &targets[0], reason.to_string()).await;
+        ban_player(sender, &targets[0], Some(reason.to_string())).await;
         Ok(())
     }
 }
 
-async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: String) {
+async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: Option<String>) {
     let mut banned_players = BANNED_PLAYER_LIST.write().await;
+    
+    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
     let profile = &player.gameprofile;
 
     if banned_players.get_entry(&player.gameprofile).is_some() {
@@ -107,9 +107,9 @@ async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: String)
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).with_child(
+    CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGET, PlayersArgumentConsumer)
             .execute(BanNoReasonExecutor)
-            .with_child(argument(ARG_REASON, MsgArgConsumer).execute(BanReasonExecutor)),
+            .then(argument(ARG_REASON, MsgArgConsumer).execute(BanReasonExecutor)),
     )
 }

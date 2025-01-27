@@ -1,25 +1,27 @@
+use std::{net::IpAddr, str::FromStr};
+
 use crate::{
     command::{
-        args::{arg_simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
         tree::CommandTree,
         tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
-    data::{banned_player_data::BANNED_PLAYER_LIST, SaveJSONConfiguration},
+    data::{banned_ip_data::BANNED_IP_LIST, SaveJSONConfiguration},
 };
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use CommandError::InvalidConsumption;
 
-const NAMES: [&str; 1] = ["pardon"];
-const DESCRIPTION: &str = "unbans a player";
+const NAMES: [&str; 1] = ["pardon-ip"];
+const DESCRIPTION: &str = "unbans a ip";
 
-const ARG_TARGET: &str = "player";
+const ARG_TARGET: &str = "ip";
 
-struct PardonExecutor;
+struct PardonIpExecutor;
 
 #[async_trait]
-impl CommandExecutor for PardonExecutor {
+impl CommandExecutor for PardonIpExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -29,20 +31,25 @@ impl CommandExecutor for PardonExecutor {
         let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
-        let target = (*target).to_string();
 
-        let mut lock = BANNED_PLAYER_LIST.write().await;
+        let Ok(ip) = IpAddr::from_str(target) else {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.pardonip.invalid",
+                    [].into(),
+                ))
+                .await;
+            return Ok(());
+        };
 
-        if let Some(idx) = lock
-            .banned_players
-            .iter()
-            .position(|entry| entry.name == target)
-        {
-            lock.banned_players.remove(idx);
+        let mut lock = BANNED_IP_LIST.write().await;
+
+        if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip) {
+            lock.banned_ips.remove(idx);
         } else {
             sender
                 .send_message(TextComponent::translate(
-                    "commands.pardon.failed",
+                    "commands.pardonip.failed",
                     [].into(),
                 ))
                 .await;
@@ -53,8 +60,8 @@ impl CommandExecutor for PardonExecutor {
 
         sender
             .send_message(TextComponent::translate(
-                "commands.pardon.success",
-                [TextComponent::text(target)].into(),
+                "commands.pardonip.success",
+                [TextComponent::text(ip.to_string())].into(),
             ))
             .await;
         Ok(())
@@ -63,5 +70,5 @@ impl CommandExecutor for PardonExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .with_child(argument(ARG_TARGET, SimpleArgConsumer).execute(PardonExecutor))
+        .then(argument(ARG_TARGET, SimpleArgConsumer).execute(PardonIpExecutor))
 }

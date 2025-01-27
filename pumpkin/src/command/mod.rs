@@ -10,10 +10,9 @@ use crate::world::World;
 use args::ConsumedArgs;
 use async_trait::async_trait;
 use commands::{
-    cmd_ban, cmd_banip, cmd_banlist, cmd_clear, cmd_deop, cmd_fill, cmd_gamemode, cmd_give,
-    cmd_help, cmd_kick, cmd_kill, cmd_list, cmd_me, cmd_op, cmd_pardon, cmd_pardonip,
-    cmd_playsound, cmd_plugin, cmd_plugins, cmd_pumpkin, cmd_say, cmd_setblock, cmd_stop,
-    cmd_teleport, cmd_time, cmd_worldborder,
+    ban, banip, banlist, clear, deop, fill, gamemode, give, help, kick, kill, list, me, op, pardon,
+    pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop, summon, teleport, time,
+    title, worldborder,
 };
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
@@ -139,6 +138,11 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(playsound::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(title::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(summon::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(ban::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(banip::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(banlist::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(pardon::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(pardonip::init_command_tree(), PermissionLvl::Three);
 
     dispatcher
 }
