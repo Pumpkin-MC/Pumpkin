@@ -114,7 +114,7 @@ async fn main() {
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
     log::info!(
         "You now can connect to the server, Listening on {}",
-        pumpkin_server.addr
+        pumpkin_server.server_addr
     );
 
     pumpkin_server.start().await;

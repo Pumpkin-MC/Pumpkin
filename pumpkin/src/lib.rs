@@ -31,7 +31,7 @@ pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub listener: TcpListener,
-    pub addr: SocketAddr,
+    pub server_addr: SocketAddr,
 }
 
 impl PumpkinServer {
@@ -50,7 +50,7 @@ impl PumpkinServer {
         let pumpkin_server = Self {
             server: server.clone(),
             listener,
-            addr,
+            server_addr: addr,
         };
 
         let use_console = ADVANCED_CONFIG.commands.use_console;
@@ -100,7 +100,7 @@ impl PumpkinServer {
         let mut master_client_id: u16 = 0;
         loop {
             // Asynchronously wait for an inbound socket.
-            let (connection, address) = self.listener.accept().await.unwrap();
+            let (connection, client_addr) = self.listener.accept().await.unwrap();
 
             if let Err(e) = connection.set_nodelay(true) {
                 log::warn!("failed to set TCP_NODELAY {e}");
@@ -110,9 +110,9 @@ impl PumpkinServer {
             master_client_id = master_client_id.wrapping_add(1);
 
             let formatted_address = if BASIC_CONFIG.scrub_ips {
-                scrub_address(&format!("{address}"))
+                scrub_address(&format!("{client_addr}"))
             } else {
-                format!("{address}")
+                format!("{client_addr}")
             };
             log::info!(
                 "Accepted connection from: {} (id {})",
@@ -125,7 +125,7 @@ impl PumpkinServer {
             let connection_reader = Arc::new(Mutex::new(connection_reader));
             let connection_writer = Arc::new(Mutex::new(connection_writer));
 
-            let client = Arc::new(Client::new(tx, self.addr, id));
+            let client = Arc::new(Client::new(tx, client_addr, id));
 
             let client_clone = client.clone();
             tokio::spawn(async move {
