@@ -18,7 +18,7 @@ use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
 use pumpkin_macros::block_entity;
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem, CSpawnEntity,
+    CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -1120,34 +1120,25 @@ impl Player {
                 f64::from(world_pos.0.y),
                 f64::from(world_pos.0.z) + 0.5,
             );
+            // create rotation like Vanilla
+            let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
-            // TODO: this should not be hardcoded
+            let world = self.world();
+            // create new mob and uuid based on spawn egg id
             let (mob, uuid) = mob::from_type(
                 EntityType::from_raw(*spawn_item_id).unwrap(),
                 server,
                 pos,
-                self.world(),
+                world,
             )
             .await;
-            let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
+
+            // set the rotation
             mob.living_entity.entity.set_rotation(yaw, 0.0);
 
-            server
-                .broadcast_packet_all(&CSpawnEntity::new(
-                    VarInt(mob.living_entity.entity.entity_id),
-                    uuid,
-                    VarInt((*spawn_item_id).into()),
-                    pos.x,
-                    pos.y,
-                    pos.z,
-                    0.0,
-                    yaw,
-                    yaw,
-                    0.into(),
-                    0.0,
-                    0.0,
-                    0.0,
-                ))
+            // broadcast new mob to all players
+            world
+                .broadcast_packet_all(&mob.living_entity.entity.create_spawn_packet(uuid))
                 .await;
 
             // TODO: send/configure additional commands/data based on type of entity (horse, slime, etc)

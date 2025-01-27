@@ -532,6 +532,17 @@ impl Player {
             .await;
     }
 
+    /// Sends the mobs to just the player.
+    // TODO: This should be optimized for larger servers based on current player chunk
+    pub async fn send_mobs(&self, world: &World) {
+        let mobs = world.current_living_mobs.lock().await.clone();
+        for (uuid, mob) in mobs {
+            self.client
+                .send_packet(&mob.living_entity.entity.create_spawn_packet(uuid))
+                .await;
+        }
+    }
+
     /// Yaw and Pitch in degrees
     /// Rarly used, For example when waking up player from bed or first time spawn. Otherwise entity teleport is used
     /// Player should respond with the `SConfirmTeleport` packet

@@ -6,7 +6,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
-    client::play::{CHeadRot, CSetEntityMetadata, CTeleportEntity, CUpdateEntityRot, Metadata},
+    client::play::{
+        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot, Metadata,
+    },
     codec::var_int::VarInt,
 };
 use pumpkin_util::math::{
@@ -17,6 +19,7 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
+use uuid::Uuid;
 
 use crate::world::World;
 
@@ -204,6 +207,26 @@ impl Entity {
     /// Removes the Entity from their current World
     pub async fn remove(&self) {
         self.world.remove_entity(self).await;
+    }
+
+    pub fn create_spawn_packet(&self, uuid: Uuid) -> CSpawnEntity {
+        let entity_loc = self.pos.load();
+        let entity_vel = self.velocity.load();
+        CSpawnEntity::new(
+            VarInt(self.entity_id),
+            uuid,
+            VarInt((self.entity_type) as i32),
+            entity_loc.x,
+            entity_loc.y,
+            entity_loc.z,
+            self.pitch.load(),
+            self.yaw.load(),
+            self.head_yaw.load(), // todo: head_yaw and yaw are swapped, find out why
+            0.into(),
+            entity_vel.x as f32,
+            entity_vel.y as f32,
+            entity_vel.z as f32,
+        )
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.

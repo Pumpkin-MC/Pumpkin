@@ -168,7 +168,7 @@ pub fn argument_default_name(
 ) -> NonLeafNodeBuilder {
     NonLeafNodeBuilder {
         node_type: NodeType::Argument {
-            name: consumer.default_name(),
+            name: consumer.default_name().to_string(),
             consumer: Arc::new(consumer),
         },
         child_nodes: Vec::new(),
