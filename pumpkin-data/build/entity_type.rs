@@ -52,18 +52,6 @@ pub(crate) fn build() -> TokenStream {
         })
         .collect::<TokenStream>();
 
-    let type_to_str = json
-        .iter()
-        .map(|sound| {
-            let name = ident(sound.0.to_pascal_case());
-            let identifier = format!("minecraft:{}", sound.0);
-
-            quote! {
-                Self::#name => #identifier,
-            }
-        })
-        .collect::<TokenStream>();
-
     quote! {
         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         #[repr(u8)]
@@ -84,18 +72,6 @@ pub(crate) fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
-            }
-
-            pub const fn to_str(&self) -> &'static str {
-                match self {
-                    #type_to_str
-                }
-            }
-        }
-
-        impl std::fmt::Display for EntityType {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}", self.to_str())
             }
         }
     }

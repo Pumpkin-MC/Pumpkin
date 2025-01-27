@@ -53,7 +53,9 @@ fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> Text
                     ))
                     .hover_event(HoverEvent::show_entity(
                         target.living_entity.entity.entity_uuid.to_string(),
-                        Some(target.living_entity.entity.entity_type.to_string()),
+                        Some(
+                            format!("{:?}", target.living_entity.entity.entity_type).to_lowercase(),
+                        ),
                         Some(TextComponent::text(target.gameprofile.name.clone())),
                     )),
             ],
