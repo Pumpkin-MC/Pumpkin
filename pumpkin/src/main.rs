@@ -47,7 +47,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
-use pumpkin::server_manager::ServerManager;
+use pumpkin::PumpkinServer;
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::time::Instant;
@@ -108,16 +108,16 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let server_manager = ServerManager::new().await;
-    server_manager.init_plugins().await;
+    let pumpkin_server = PumpkinServer::new().await;
+    pumpkin_server.init_plugins().await;
 
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
     log::info!(
         "You now can connect to the server, Listening on {}",
-        server_manager.addr
+        pumpkin_server.addr
     );
 
-    server_manager.start().await;
+    pumpkin_server.start().await;
 }
 
 fn handle_interrupt() {
