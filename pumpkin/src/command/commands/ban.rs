@@ -65,7 +65,7 @@ impl CommandExecutor for BanReasonExecutor {
 
 async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: Option<String>) {
     let mut banned_players = BANNED_PLAYER_LIST.write().await;
-    
+
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
     let profile = &player.gameprofile;
 
