@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicI32, Arc};
+use std::sync::atomic::AtomicI32;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -6,9 +6,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_world::block::BlockState;
-
-use crate::world::World;
 
 use super::{Entity, EntityId, NBTStorage};
 
