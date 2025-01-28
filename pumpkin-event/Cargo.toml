@@ -1,0 +1,6 @@
+[package]
+name = "pumpkin-event"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

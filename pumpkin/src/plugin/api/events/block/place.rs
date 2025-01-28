@@ -1,10 +1,8 @@
+use pumpkin_event::event::{CancellableEvent, Event};
 use pumpkin_world::block::block_registry::Block;
 use std::sync::Arc;
 
-use crate::{
-    entity::player::Player,
-    plugin::{CancellableEvent, Event},
-};
+use crate::entity::player::Player;
 
 use super::{BlockEvent, BlockPlaceEvent};
 

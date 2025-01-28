@@ -1,9 +1,8 @@
+use pumpkin_event::event::CancellableEvent;
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
-
-use super::CancellableEvent;
 
 pub mod join;
 pub mod leave;

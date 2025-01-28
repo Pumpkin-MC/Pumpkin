@@ -8,7 +8,9 @@ members = [
     "pumpkin-protocol/",
     "pumpkin-registry/",
     "pumpkin-world",
-    "pumpkin/", "pumpkin-data",
+    "pumpkin/",
+    "pumpkin-data",
+    "pumpkin-event",
 ]
 
 [workspace.package]

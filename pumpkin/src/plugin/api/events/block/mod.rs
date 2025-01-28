@@ -1,10 +1,8 @@
+use pumpkin_event::event::CancellableEvent;
+use pumpkin_world::block::block_registry::Block;
 use std::sync::Arc;
 
-use pumpkin_world::block::block_registry::Block;
-
 use crate::entity::player::Player;
-
-use super::CancellableEvent;
 
 pub mod r#break;
 pub mod burn;

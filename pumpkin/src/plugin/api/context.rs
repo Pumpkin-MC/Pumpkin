@@ -1,5 +1,6 @@
 use std::{fs, path::Path, sync::Arc};
 
+use pumpkin_event::event::{Event, EventPriority};
 use pumpkin_util::PermissionLvl;
 use tokio::sync::RwLock;
 
@@ -9,7 +10,7 @@ use crate::{
     server::Server,
 };
 
-use super::{Event, EventPriority, PluginMetadata};
+use super::PluginMetadata;
 
 pub struct Context {
     metadata: PluginMetadata<'static>,

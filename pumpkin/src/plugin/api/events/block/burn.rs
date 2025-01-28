@@ -1,8 +1,6 @@
-use pumpkin_world::block::block_registry::Block;
-
-use crate::plugin::{CancellableEvent, Event};
-
 use super::{BlockBurnEvent, BlockEvent};
+use pumpkin_event::event::{CancellableEvent, Event};
+use pumpkin_world::block::block_registry::Block;
 
 pub struct BlockBurnEventImpl {
     igniting_block: Block,
