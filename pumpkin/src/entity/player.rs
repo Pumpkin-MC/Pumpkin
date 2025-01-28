@@ -19,9 +19,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     bytebuf::packet_id::Packet,
     client::play::{
-        CActionBar, CCombatDeath, CEntityStatus, CGameEvent, CHurtAnimation, CKeepAlive,
-        CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CSetHealth,
-        CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
+        CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
+        CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+        CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -121,7 +121,7 @@ pub struct Player {
     pub watched_section: AtomicCell<Cylindrical>,
     /// Did we send a keep alive Packet and wait for the response?
     pub wait_for_keep_alive: AtomicBool,
-    /// Whats the keep alive packet payload we send, The client should responde with the same id
+    /// Whats the keep alive packet payload we send, The client should respond with the same id
     pub keep_alive_id: AtomicI64,
     /// Last time we send a keep alive
     pub last_keep_alive_time: AtomicCell<Instant>,
@@ -657,26 +657,8 @@ impl Player {
         {
             // use another scope so we instantly unlock abilities
             let mut abilities = self.abilities.lock().await;
-            match gamemode {
-                GameMode::Undefined | GameMode::Survival | GameMode::Adventure => {
-                    abilities.flying = false;
-                    abilities.allow_flying = false;
-                    abilities.creative = false;
-                    abilities.invulnerable = false;
-                }
-                GameMode::Creative => {
-                    abilities.allow_flying = true;
-                    abilities.creative = true;
-                    abilities.invulnerable = true;
-                }
-                GameMode::Spectator => {
-                    abilities.flying = true;
-                    abilities.allow_flying = true;
-                    abilities.creative = false;
-                    abilities.invulnerable = true;
-                }
-            }
-        }
+            abilities.set_for_gamemode(gamemode);
+        };
         self.send_abilities_update().await;
         self.living_entity
             .entity
@@ -712,6 +694,23 @@ impl Player {
             .broadcast_packet_all(&CSetEntityMetadata::new(
                 self.entity_id().into(),
                 Metadata::new(18, 0.into(), config.main_hand as u8),
+            ))
+            .await;
+    }
+
+    pub async fn send_message(
+        &self,
+        message: &TextComponent,
+        chat_type: u32,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        self.client
+            .send_packet(&CDisguisedChatMessage::new(
+                message,
+                (chat_type + 1).into(),
+                sender_name,
+                target_name,
             ))
             .await;
     }
@@ -956,6 +955,31 @@ impl Default for Abilities {
             allow_modify_world: true,
             fly_speed: 0.05,
             walk_speed: 0.1,
+        }
+    }
+}
+
+impl Abilities {
+    pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
+        match gamemode {
+            GameMode::Creative => {
+                self.flying = false; // Start not flying
+                self.allow_flying = true;
+                self.creative = true;
+                self.invulnerable = true;
+            }
+            GameMode::Spectator => {
+                self.flying = true;
+                self.allow_flying = true;
+                self.creative = false;
+                self.invulnerable = true;
+            }
+            GameMode::Survival | GameMode::Adventure | GameMode::Undefined => {
+                self.flying = false;
+                self.allow_flying = false;
+                self.creative = false;
+                self.invulnerable = false;
+            }
         }
     }
 }

@@ -56,7 +56,7 @@ impl Navigator {
                 }
             }
 
-            // this is important, first this saves us many packets when we don't actually move, and secound this prevents division using zero
+            // this is important, first this saves us many packets when we don't actually move, and second this prevents division using zero
             // when normalize
             if best_move.x == 0.0 && best_move.z == 0.0 {
                 return;

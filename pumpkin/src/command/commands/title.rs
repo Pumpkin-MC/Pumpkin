@@ -22,7 +22,7 @@ const ARG_TARGETS: &str = "targets";
 
 const ARG_TITLE: &str = "title";
 
-/// bool: Wether to reset or not
+/// bool: Whether to reset or not
 struct ClearOrResetExecutor(bool);
 
 #[async_trait]

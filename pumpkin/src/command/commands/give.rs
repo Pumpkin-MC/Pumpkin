@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
@@ -19,8 +21,8 @@ const ARG_ITEM: &str = "item";
 fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("count")
-        .min(0)
-        .max(6400)
+        .min(1)
+        .max(i32::MAX)
 }
 
 struct GiveExecutor;
@@ -60,17 +62,42 @@ impl CommandExecutor for GiveExecutor {
                 "commands.give.success.single",
                 [
                     TextComponent::text(item_count.to_string()),
-                    TextComponent::text(item_name.to_string()),
-                    TextComponent::text(targets[0].gameprofile.name.to_string()),
+                    TextComponent::text("[")
+                        .add_child(item.translated_name())
+                        .add_child(TextComponent::text("]"))
+                        .hover_event(HoverEvent::ShowItem {
+                            id: item_name.to_string().into(),
+                            count: Some(item_count),
+                            tag: None,
+                        }),
+                    TextComponent::text(targets[0].gameprofile.name.to_string())
+                        .hover_event(HoverEvent::show_entity(
+                            targets[0].living_entity.entity.entity_uuid.to_string(),
+                            Some(
+                                format!("{:?}", targets[0].living_entity.entity.entity_type)
+                                    .to_lowercase(),
+                            ),
+                            Some(TextComponent::text(targets[0].gameprofile.name.clone())),
+                        ))
+                        .click_event(ClickEvent::SuggestCommand(
+                            format!("/tell {} ", targets[0].gameprofile.name.clone()).into(),
+                        )),
                 ]
                 .into(),
             )
         } else {
             TextComponent::translate(
-                "commands.give.success.single",
+                "commands.give.success.multiple",
                 [
                     TextComponent::text(item_count.to_string()),
-                    TextComponent::text(item_name.to_string()),
+                    TextComponent::text("[")
+                        .add_child(item.translated_name())
+                        .add_child(TextComponent::text("]"))
+                        .hover_event(HoverEvent::ShowItem {
+                            id: item_name.to_string().into(),
+                            count: Some(item_count),
+                            tag: None,
+                        }),
                     TextComponent::text(targets.len().to_string()),
                 ]
                 .into(),

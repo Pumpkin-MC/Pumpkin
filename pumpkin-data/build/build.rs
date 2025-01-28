@@ -11,7 +11,7 @@ mod entity_pose;
 mod entity_type;
 mod game_event;
 mod message_type;
-mod noise_parmeter;
+mod noise_parameter;
 mod packet;
 mod particle;
 mod scoreboard_slot;
@@ -32,7 +32,7 @@ pub fn main() {
     write_generated_file(scoreboard_slot::build(), "scoreboard_slot.rs");
     write_generated_file(world_event::build(), "world_event.rs");
     write_generated_file(entity_type::build(), "entity_type.rs");
-    write_generated_file(noise_parmeter::build(), "noise_parmeter.rs");
+    write_generated_file(noise_parameter::build(), "noise_parameter.rs");
     write_generated_file(biome::build(), "biome.rs");
     write_generated_file(message_type::build(), "message_type.rs");
 }
@@ -54,7 +54,7 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     let path = Path::new(&out_dir).join(out_file);
     let code = content.to_string();
 
-    fs::write(&path, code).expect("Faile to write to fs");
+    fs::write(&path, code).expect("Failed to write to fs");
 
     // Try to format the output for debugging purposes.
     // Doesn't matter if rustfmt is unavailable.

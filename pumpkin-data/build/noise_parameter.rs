@@ -21,11 +21,11 @@ pub(crate) fn build() -> TokenStream {
             .expect("Failed to parse noise_parameters.json");
     let mut variants = TokenStream::new();
 
-    for (name, paremter) in json.iter() {
+    for (name, parameter) in json.iter() {
         let raw_name = format!("minecraft:{name}");
         let name = ident(name.to_uppercase());
-        let first_octave = paremter.first_octave;
-        let amplitudes = &paremter.amplitudes;
+        let first_octave = parameter.first_octave;
+        let amplitudes = &parameter.amplitudes;
         variants.extend([quote! {
             pub const #name: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(#first_octave, &[#(#amplitudes),*], #raw_name);
         }]);

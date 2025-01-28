@@ -61,7 +61,7 @@ impl Level {
             region_folder,
         };
 
-        // if we fail to lock, lets crash ???. maybe not the best soultion when we have a large server with many worlds and one is locked.
+        // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
         let locker = AnvilLevelLocker::look(&level_folder).expect("Failed to lock level");
 
@@ -88,11 +88,9 @@ impl Level {
 
     pub async fn save(&self) {
         log::info!("Saving level...");
-        // lets first save all chunks
-        for chunk in self.loaded_chunks.iter() {
-            let chunk = chunk.read().await;
-            self.clean_chunk(&chunk.position).await;
-        }
+
+        // chunks are automatically saved when all players get removed
+
         // then lets save the world info
         self.world_info_writer
             .write_world_info(self.level_info.clone(), &self.level_folder)

@@ -240,7 +240,7 @@ impl World {
         for player in self.current_players.lock().await.values() {
             player.tick().await;
         }
-        // entites tick
+        // entities tick
         for entity in self.current_living_mobs.lock().await.values() {
             entity.tick().await;
         }

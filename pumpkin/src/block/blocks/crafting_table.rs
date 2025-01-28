@@ -65,7 +65,7 @@ impl PumpkinBlock for CraftingTableBlock {
 
         container.remove_player(entity_id);
 
-        // TODO: items should be re-added to player inventory or dropped dependending on if they are in movement.
+        // TODO: items should be re-added to player inventory or dropped depending on if they are in movement.
         // TODO: unique containers should be implemented as a separate stack internally (optimizes large player servers for example)
         // TODO: ephemeral containers (crafting tables) might need to be separate data structure than stored (ender chest)
     }

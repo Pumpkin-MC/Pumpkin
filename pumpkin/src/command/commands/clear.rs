@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_inventory::Container;
+use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
@@ -36,23 +38,40 @@ async fn clear_player(target: &Player) -> usize {
 
 fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
-        [target] if item_count == 0 => TextComponent::text(format!(
-            "No items were found on player {}",
-            target.gameprofile.name
-        ))
+        [target] if item_count == 0 => TextComponent::translate(
+            "clear.failed.single",
+            vec![TextComponent::text(target.gameprofile.name.clone())],
+        )
         .color_named(NamedColor::Red),
-        [target] => TextComponent::text(format!(
-            "Removed {} item(s) on player {}",
-            item_count, target.gameprofile.name
-        )),
-        targets if item_count == 0 => {
-            TextComponent::text(format!("No items were found on {} players", targets.len()))
-                .color_named(NamedColor::Red)
-        }
-        targets => TextComponent::text(format!(
-            "Removed {item_count} item(s) from {} players",
-            targets.len()
-        )),
+        [target] => TextComponent::translate(
+            "commands.clear.success.single",
+            vec![
+                TextComponent::text(item_count.to_string()),
+                TextComponent::text(target.gameprofile.name.clone())
+                    .click_event(ClickEvent::SuggestCommand(
+                        format!("/tell {} ", target.gameprofile.name.clone()).into(),
+                    ))
+                    .hover_event(HoverEvent::show_entity(
+                        target.living_entity.entity.entity_uuid.to_string(),
+                        Some(
+                            format!("{:?}", target.living_entity.entity.entity_type).to_lowercase(),
+                        ),
+                        Some(TextComponent::text(target.gameprofile.name.clone())),
+                    )),
+            ],
+        ),
+        targets if item_count == 0 => TextComponent::translate(
+            "clear.failed.multiple",
+            vec![TextComponent::text(targets.len().to_string())],
+        )
+        .color_named(NamedColor::Red),
+        targets => TextComponent::translate(
+            "commands.clear.success.multiple",
+            vec![
+                TextComponent::text(item_count.to_string()),
+                TextComponent::text(targets.len().to_string()),
+            ],
+        ),
     }
 }
 

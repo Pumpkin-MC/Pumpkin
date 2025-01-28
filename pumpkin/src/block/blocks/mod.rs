@@ -86,7 +86,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
         if id_to_use == -1 {
             let new_id = server.new_container_id();
-            log::debug!("Creating new unqiue container ID: {}", new_id);
+            log::debug!("Creating new unique container ID: {}", new_id);
             let open_container = OpenContainer::new_empty_container::<C>(
                 entity_id,
                 Some(location),
@@ -97,7 +97,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
             player.open_container.store(Some(new_id.into()));
         } else {
-            log::debug!("Using previous unqiue container ID: {}", id_to_use);
+            log::debug!("Using previous unique container ID: {}", id_to_use);
             if let Some(unique_container) = open_containers.get_mut(&(id_to_use as u64)) {
                 unique_container.set_location(Some(location)).await;
                 unique_container.add_player(entity_id);

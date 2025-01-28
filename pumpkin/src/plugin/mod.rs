@@ -118,9 +118,9 @@ impl PluginManager {
             fs::create_dir(PLUGIN_DIR).unwrap();
         }
 
-        let dir_entires = fs::read_dir(PLUGIN_DIR);
+        let dir_entries = fs::read_dir(PLUGIN_DIR);
 
-        for entry in dir_entires.unwrap() {
+        for entry in dir_entries.unwrap() {
             if !entry.as_ref().unwrap().path().is_file() {
                 continue;
             }

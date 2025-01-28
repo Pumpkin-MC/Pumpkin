@@ -19,6 +19,7 @@ use pumpkin_world::dimension::Dimension;
 use pumpkin_world::entity::entity_registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
 use std::{
     sync::{
@@ -31,7 +32,8 @@ use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 use crate::block::block_manager::BlockManager;
-use crate::block::default_block_manager;
+use crate::block::properties::BlockPropertiesManager;
+use crate::block::{default_block_manager, default_block_properties_manager};
 use crate::entity::ai::path::Navigator;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::MobEntity;
@@ -63,6 +65,8 @@ pub struct Server {
     pub command_dispatcher: RwLock<CommandDispatcher>,
     /// Saves and calls blocks blocks
     pub block_manager: Arc<BlockManager>,
+    /// Creates and stores block property registry and managed behaviours.
+    pub block_properties_manager: Arc<BlockPropertiesManager>,
     /// Manages multiple worlds within the server.
     pub worlds: RwLock<Vec<Arc<World>>>,
     // All the dimensions that exists on the server,
@@ -133,6 +137,7 @@ impl Server {
             ],
             command_dispatcher,
             block_manager: default_block_manager(),
+            block_properties_manager: default_block_properties_manager(),
             auth_client,
             key_store: KeyStore::new(),
             server_listing: Mutex::new(CachedStatus::new()),
@@ -369,6 +374,20 @@ impl Server {
             }
         }
         None
+    }
+
+    pub async fn get_players_by_ip(&self, ip: IpAddr) -> Vec<Arc<Player>> {
+        let mut players = Vec::<Arc<Player>>::new();
+
+        for world in self.worlds.read().await.iter() {
+            for (_, player) in world.current_players.lock().await.iter() {
+                if player.client.address.lock().await.ip() == ip {
+                    players.push(player.clone());
+                }
+            }
+        }
+
+        players
     }
 
     /// Returns all players from all worlds.

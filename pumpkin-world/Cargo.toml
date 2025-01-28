@@ -21,16 +21,18 @@ serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 
+num-derive = "0.4.2"
+
 dashmap = "6.1.0"
 
 num-traits = "0.2"
 
 # Compression   
 flate2 = "1.0"
-lz4 = "1.28.0"
+lz4 = "1.28.1"
 
 file-guard = "0.2.0"
-indexmap = "2.7.0"
+indexmap = "2.7.1"
 
 enum_dispatch = "0.3.13"
 
