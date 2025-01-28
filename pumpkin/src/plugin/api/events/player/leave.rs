@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_event::{CancellableEvent, Event};
+use pumpkin_event::{Cancellable, Event};
 use pumpkin_util::text::TextComponent;
 
 use crate::entity::player::Player;
@@ -39,7 +39,7 @@ impl PlayerEvent for PlayerLeaveEventImpl {
     }
 }
 
-impl CancellableEvent for PlayerLeaveEventImpl {
+impl Cancellable for PlayerLeaveEventImpl {
     fn is_cancelled(&self) -> bool {
         self.is_cancelled
     }

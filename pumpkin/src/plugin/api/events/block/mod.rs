@@ -1,4 +1,4 @@
-use pumpkin_event::CancellableEvent;
+use pumpkin_event::Cancellable;
 use pumpkin_world::block::block_registry::Block;
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ pub mod burn;
 pub mod can_build;
 pub mod place;
 
-pub trait BlockEvent: CancellableEvent {
+pub trait BlockEvent: Cancellable {
     fn get_block(&self) -> &Block;
 }
 

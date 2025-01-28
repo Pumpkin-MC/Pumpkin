@@ -1,4 +1,4 @@
-use pumpkin_event::{CancellableEvent, Event};
+use pumpkin_event::{Cancellable, Event};
 use pumpkin_world::block::block_registry::Block;
 use std::sync::Arc;
 
@@ -42,7 +42,7 @@ impl BlockEvent for BlockPlaceEventImpl {
     }
 }
 
-impl CancellableEvent for BlockPlaceEventImpl {
+impl Cancellable for BlockPlaceEventImpl {
     fn is_cancelled(&self) -> bool {
         self.is_cancelled
     }

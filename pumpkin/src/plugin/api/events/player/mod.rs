@@ -1,4 +1,4 @@
-use pumpkin_event::CancellableEvent;
+use pumpkin_event::Cancellable;
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
@@ -7,7 +7,7 @@ use crate::entity::player::Player;
 pub mod join;
 pub mod leave;
 
-pub trait PlayerEvent: CancellableEvent {
+pub trait PlayerEvent: Cancellable {
     fn get_player(&self) -> Arc<Player>;
 }
 

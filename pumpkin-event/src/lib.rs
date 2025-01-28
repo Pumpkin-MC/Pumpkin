@@ -1,6 +1,6 @@
 use std::any::Any;
 
-pub trait Event: Any + Send + Sync {
+pub trait Event: Send + Sync {
     fn get_name_static() -> &'static str
     where
         Self: Sized;
@@ -9,7 +9,7 @@ pub trait Event: Any + Send + Sync {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub trait CancellableEvent: Event {
+pub trait Cancellable: Send + Sync {
     fn is_cancelled(&self) -> bool;
     fn set_cancelled(&mut self, cancelled: bool);
 }

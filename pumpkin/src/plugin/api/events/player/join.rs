@@ -1,4 +1,4 @@
-use pumpkin_event::{CancellableEvent, Event};
+use pumpkin_event::{Cancellable, Event};
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
@@ -38,7 +38,7 @@ impl PlayerEvent for PlayerJoinEventImpl {
     }
 }
 
-impl CancellableEvent for PlayerJoinEventImpl {
+impl Cancellable for PlayerJoinEventImpl {
     fn is_cancelled(&self) -> bool {
         self.is_cancelled
     }
