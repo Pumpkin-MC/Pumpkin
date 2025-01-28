@@ -196,6 +196,7 @@ impl Player {
                     height_difference,
                     packet.ground,
                     self.gamemode.load() == GameMode::Creative,
+                    position,
                 )
                 .await;
         }
@@ -291,6 +292,7 @@ impl Player {
                     height_difference,
                     packet.ground,
                     self.gamemode.load() == GameMode::Creative,
+                    position
                 )
                 .await;
         }

@@ -1,11 +1,14 @@
-use std::sync::atomic::AtomicI32;
+use std::sync::{atomic::AtomicI32, Arc};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_world::block::BlockState;
+
+use crate::world::World;
 
 use super::{Entity, EntityId, NBTStorage};
 
@@ -113,31 +116,54 @@ impl LivingEntity {
         amount > 0.0
     }
 
+    // TODO: Check water and other blocks
     pub async fn update_fall_distance(
         &self,
         height_difference: f64,
         ground: bool,
         dont_damage: bool,
+        mut pos: Vector3<f64>,
     ) {
         if ground {
-            let fall_distance = self.fall_distance.swap(0.0);
-            if fall_distance <= 0.0 || dont_damage {
+            // Vanilla method to fix on_ground when falling (seriously)
+            // This is not works when i fall on block edge, and i idk how fix this
+            pos.y -= 0.2;
+
+            let state = self
+                .entity
+                .world
+                .get_block_state_id(&BlockPos(Vector3::new(
+                    pos.x as i32,
+                    pos.y as i32,
+                    pos.z as i32,
+                )))
+                .await
+                .unwrap_or(0);
+
+            if state != 0 {
+                let fall_distance = self.fall_distance.swap(0.0);
+                if fall_distance <= 0.0 || dont_damage {
+                    return;
+                }
+
+                let safe_fall_distance = 3.0;
+                let mut damage = fall_distance - safe_fall_distance;
+                damage = (damage).round();
+                if !self.check_damage(damage) {
+                    return;
+                }
+
+                self.entity
+                    .play_sound(Self::get_fall_sound(fall_distance as i32))
+                    .await;
+                // TODO: Play block fall sound
+                self.damage(damage, 10).await; // Fall
+
                 return;
             }
+        }
 
-            let safe_fall_distance = 3.0;
-            let mut damage = fall_distance - safe_fall_distance;
-            damage = (damage).round();
-            if !self.check_damage(damage) {
-                return;
-            }
-
-            self.entity
-                .play_sound(Self::get_fall_sound(fall_distance as i32))
-                .await;
-            // TODO: Play block fall sound
-            self.damage(damage, 10).await; // Fall
-        } else if height_difference < 0.0 {
+        if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance
                 .store(distance - (height_difference as f32));
