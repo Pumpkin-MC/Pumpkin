@@ -15,7 +15,6 @@ use crate::{
         },
     },
     server::Server,
-    PLUGIN_MANAGER,
 };
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
@@ -24,7 +23,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_event::Cancellable;
+use pumpkin_event::{Cancellable, EVENTS};
 use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{
     client::play::CLevelEvent,
@@ -781,7 +780,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerJoinEventImpl::new(player.clone(), msg_comp);
 
-            let event = PLUGIN_MANAGER
+            let event = EVENTS
                 .lock()
                 .await
                 .fire::<PlayerJoinEventImpl>(event)
@@ -837,7 +836,7 @@ impl World {
         .color_named(NamedColor::Yellow);
         let event = PlayerLeaveEventImpl::new(player.clone(), msg_comp);
 
-        let event = PLUGIN_MANAGER
+        let event = EVENTS
             .lock()
             .await
             .fire::<PlayerLeaveEventImpl>(event)
@@ -947,7 +946,7 @@ impl World {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEventImpl::new(cause.clone(), block.clone(), 0, false);
 
-        let event = PLUGIN_MANAGER
+        let event = EVENTS
             .lock()
             .await
             .fire::<BlockBreakEventImpl>(event)

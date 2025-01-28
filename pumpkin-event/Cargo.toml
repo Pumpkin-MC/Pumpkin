@@ -4,3 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+tokio.workspace = true
+log.workspace = true
+
+async-trait = "0.1.85"
