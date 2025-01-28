@@ -1,5 +1,1 @@
-
-
-pub struct ChunkLoadEvent {
-    
-}
+pub struct ChunkLoadEvent {}

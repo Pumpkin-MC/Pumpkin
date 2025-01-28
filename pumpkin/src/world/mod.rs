@@ -4,17 +4,7 @@ pub mod level_time;
 pub mod player_chunker;
 
 use crate::{
-    command::client_cmd_suggestions,
-    entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity, EntityId},
-    error::PumpkinError,
-    plugin::{
-        block::r#break::BlockBreakEventImpl,
-        player::{
-            join::PlayerJoinEventImpl, leave::PlayerLeaveEventImpl, PlayerJoinEvent,
-            PlayerLeaveEvent,
-        },
-    },
-    server::Server,
+    command::client_cmd_suggestions, entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity, EntityId}, error::PumpkinError, events::{block::r#break::BlockBreakEventImpl, player::{join::PlayerJoinEventImpl, leave::PlayerLeaveEventImpl, PlayerJoinEvent, PlayerLeaveEvent}}, server::Server
 };
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
@@ -780,11 +770,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerJoinEventImpl::new(player.clone(), msg_comp);
 
-            let event = EVENTS
-                .lock()
-                .await
-                .fire::<PlayerJoinEventImpl>(event)
-                .await;
+            let event = EVENTS.lock().await.fire::<PlayerJoinEventImpl>(event).await;
 
             if !event.is_cancelled() {
                 let current_players = current_players.clone();
@@ -946,11 +932,7 @@ impl World {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEventImpl::new(cause.clone(), block.clone(), 0, false);
 
-        let event = EVENTS
-            .lock()
-            .await
-            .fire::<BlockBreakEventImpl>(event)
-            .await;
+        let event = EVENTS.lock().await.fire::<BlockBreakEventImpl>(event).await;
 
         if !event.is_cancelled() {
             let broken_block_state_id = self.set_block_state(position, 0).await;

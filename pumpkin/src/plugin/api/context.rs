@@ -2,10 +2,7 @@ use std::{fs, path::Path, sync::Arc};
 
 use pumpkin_util::PermissionLvl;
 
-use crate::{
-    entity::player::Player,
-    server::Server,
-};
+use crate::server::Server;
 
 use super::PluginMetadata;
 
@@ -15,14 +12,8 @@ pub struct Context {
 }
 impl Context {
     #[must_use]
-    pub fn new(
-        metadata: PluginMetadata<'static>,
-        server: Arc<Server>,
-    ) -> Self {
-        Self {
-            metadata,
-            server,
-        }
+    pub fn new(metadata: PluginMetadata<'static>, server: Arc<Server>) -> Self {
+        Self { metadata, server }
     }
 
     #[must_use]
@@ -32,10 +23,6 @@ impl Context {
             fs::create_dir_all(&path).unwrap();
         }
         path
-    }
-
-    pub async fn get_player_by_name(&self, player_name: String) -> Option<Arc<Player>> {
-        self.server.get_player_by_name(&player_name).await
     }
 
     pub async fn register_command(

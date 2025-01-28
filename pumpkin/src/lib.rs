@@ -18,6 +18,7 @@ pub mod block;
 pub mod command;
 pub mod data;
 pub mod entity;
+pub mod events;
 pub mod error;
 pub mod net;
 pub mod plugin;
