@@ -19,6 +19,7 @@ pub mod item;
 pub mod level;
 mod lock;
 pub mod world_info;
+pub mod events;
 pub const WORLD_HEIGHT: usize = 384;
 pub const WORLD_LOWEST_Y: i16 = -64;
 pub const WORLD_MAX_Y: i16 = WORLD_HEIGHT as i16 - WORLD_LOWEST_Y.abs();

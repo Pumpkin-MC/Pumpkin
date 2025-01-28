@@ -9,6 +9,7 @@ pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-data = { path = "../pumpkin-data" }
+pumpkin-event = { path = "../pumpkin-event" }
 
 bytes.workspace = true
 
