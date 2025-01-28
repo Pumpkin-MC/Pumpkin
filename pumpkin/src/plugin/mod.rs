@@ -2,7 +2,7 @@ pub mod api;
 
 pub use api::*;
 use async_trait::async_trait;
-use pumpkin_event::event::{Event, EventPriority};
+use pumpkin_event::{Event, EventPriority};
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tokio::sync::RwLock;
 

@@ -1,4 +1,4 @@
-use pumpkin_event::event::CancellableEvent;
+use pumpkin_event::CancellableEvent;
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 

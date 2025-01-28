@@ -24,7 +24,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_event::event::CancellableEvent;
+use pumpkin_event::CancellableEvent;
 use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{
     client::play::CLevelEvent,

@@ -1,5 +1,5 @@
 use super::{BlockBurnEvent, BlockEvent};
-use pumpkin_event::event::{CancellableEvent, Event};
+use pumpkin_event::{CancellableEvent, Event};
 use pumpkin_world::block::block_registry::Block;
 
 pub struct BlockBurnEventImpl {

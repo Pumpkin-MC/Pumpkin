@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_event::event::{CancellableEvent, Event};
+use pumpkin_event::{CancellableEvent, Event};
 use pumpkin_util::text::TextComponent;
 
 use crate::entity::player::Player;

@@ -1,6 +1,6 @@
 use std::{fs, path::Path, sync::Arc};
 
-use pumpkin_event::event::{Event, EventPriority};
+use pumpkin_event::{Event, EventPriority};
 use pumpkin_util::PermissionLvl;
 use tokio::sync::RwLock;
 
