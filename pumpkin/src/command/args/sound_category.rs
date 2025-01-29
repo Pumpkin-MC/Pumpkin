@@ -37,20 +37,20 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
         // Convert string input to SoundCategory enum
         // Uses lowercase to make the command case-insensitive
         let category = match s.to_lowercase().as_str() {
-            "master" => Some(SoundCategory::Master),   // Default category, affects all sounds
-            "music" => Some(SoundCategory::Music),     // Background music
-            "record" => Some(SoundCategory::Records),  // Music discs
+            "master" => Some(SoundCategory::Master), // Default category, affects all sounds
+            "music" => Some(SoundCategory::Music),   // Background music
+            "record" => Some(SoundCategory::Records), // Music discs
             "weather" => Some(SoundCategory::Weather), // Rain, thunder
-            "block" => Some(SoundCategory::Blocks),    // Block sounds
+            "block" => Some(SoundCategory::Blocks),  // Block sounds
             "hostile" => Some(SoundCategory::Hostile), // Hostile mob sounds
             "neutral" => Some(SoundCategory::Neutral), // Neutral mob sounds
-            "player" => Some(SoundCategory::Players),  // Player sounds
+            "player" => Some(SoundCategory::Players), // Player sounds
             "ambient" => Some(SoundCategory::Ambient), // Ambient environment
-            "voice" => Some(SoundCategory::Voice),     // Voice/speech
+            "voice" => Some(SoundCategory::Voice),   // Voice/speech
             _ => None,
         };
 
-        category.map(Arg::SoundCategory)  // Simplified by removing redundant closure
+        category.map(Arg::SoundCategory) // Simplified by removing redundant closure
     }
 
     async fn suggest<'a>(

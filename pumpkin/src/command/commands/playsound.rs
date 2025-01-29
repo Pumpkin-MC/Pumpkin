@@ -70,13 +70,12 @@ impl CommandExecutor for SoundExecutor {
         let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
 
         // Get optional sound category, defaults to Master
-        let source = args.get(ARG_SOURCE).map_or(
-            SoundCategory::Master,
-            |arg| match arg {
+        let source = args
+            .get(ARG_SOURCE)
+            .map_or(SoundCategory::Master, |arg| match arg {
                 Arg::SoundCategory(category) => *category,
                 _ => SoundCategory::Master,
-            },
-        );
+            });
 
         // Get target players, defaults to sender if not specified
         let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS) {
