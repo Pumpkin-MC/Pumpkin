@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_util::text::TextComponent;
 use rand::{thread_rng, Rng};
 
 use crate::command::{
@@ -110,12 +111,59 @@ impl CommandExecutor for SoundExecutor {
         // Use same random seed for all targets to ensure sound synchronization
         let seed = thread_rng().gen::<f64>();
 
+        // Track how many players actually received the sound
+        let mut players_who_heard = 0;
+
         // Play sound for each target player
-        for target in targets {
+        for target in &targets {
             let pos = position.unwrap_or(target.living_entity.entity.pos.load());
-            target
-                .play_sound(sound as u16, source, &pos, volume, pitch, seed)
+
+            // Check if player can hear the sound based on volume and distance
+            let player_pos = target.living_entity.entity.pos.load();
+            let distance = player_pos.squared_distance_to_vec(pos);
+            let max_distance = 16.0 * volume; // 16 blocks is base distance at volume 1.0
+
+            if distance <= max_distance.into() || _min_volume > 0.0 {
+                target
+                    .play_sound(sound as u16, source, &pos, volume, pitch, seed)
+                    .await;
+                players_who_heard += 1;
+            }
+        }
+
+        // Send appropriate message based on results
+        if players_who_heard == 0 {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.playsound.failed",
+                    [].into(),
+                ))
                 .await;
+        } else {
+            let sound_name = sound.to_name();
+            if players_who_heard == 1 {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.playsound.success.single",
+                        [
+                            TextComponent::text(sound_name),
+                            TextComponent::text(targets[0].gameprofile.name.clone()),
+                        ]
+                        .into(),
+                    ))
+                    .await;
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.playsound.success.multiple",
+                        [
+                            TextComponent::text(sound_name),
+                            TextComponent::text(players_who_heard.to_string()),
+                        ]
+                        .into(),
+                    ))
+                    .await;
+            }
         }
 
         Ok(())

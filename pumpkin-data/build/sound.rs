@@ -23,6 +23,18 @@ pub(crate) fn build() -> TokenStream {
         })
         .collect::<TokenStream>();
 
+    let type_to_name = &sound
+        .iter()
+        .map(|sound| {
+            let id = &sound;
+            let name = ident(sound.to_pascal_case());
+
+            quote! {
+                Self::#name => #id,
+            }
+        })
+        .collect::<TokenStream>();
+
     quote! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u16)]
@@ -35,6 +47,12 @@ pub(crate) fn build() -> TokenStream {
                 match name {
                     #type_from_name
                     _ => None
+                }
+            }
+
+            pub fn to_name(&self) -> &'static str {
+                match self {
+                    #type_to_name
                 }
             }
         }
