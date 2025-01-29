@@ -1,4 +1,6 @@
-use crate::command::args::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
+use crate::command::args::{
+    Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
+};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::command::CommandSender;
@@ -7,7 +9,7 @@ use async_trait::async_trait;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
-/// ArgumentConsumer for Minecraft sound categories (master, music, record, etc.)
+/// `ArgumentConsumer` for Minecraft sound categories (master, music, record, etc.)
 pub struct SoundCategoryArgumentConsumer;
 
 impl GetClientSideArgParser for SoundCategoryArgumentConsumer {
@@ -48,7 +50,7 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
             _ => None,
         };
 
-        category.map(|c| Arg::SoundCategory(c))
+        category.map(Arg::SoundCategory)  // Simplified by removing redundant closure
     }
 
     async fn suggest<'a>(
@@ -58,8 +60,8 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
         _input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
         let categories = [
-            "master", "music", "record", "weather", "block",
-            "hostile", "neutral", "player", "ambient", "voice",
+            "master", "music", "record", "weather", "block", "hostile", "neutral", "player",
+            "ambient", "voice",
         ];
         let suggestions: Vec<CommandSuggestion> = categories
             .iter()

@@ -38,9 +38,9 @@ pub mod resource_location;
 pub mod rotation;
 pub mod simple;
 pub mod sound;
+pub mod sound_category;
 pub mod summonable_entities;
 pub mod textcomponent;
-pub mod sound_category;
 
 /// see [`crate::commands::tree_builder::argument`]
 #[async_trait]

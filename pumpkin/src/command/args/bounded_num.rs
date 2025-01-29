@@ -63,13 +63,10 @@ impl<'a, T: 'static + ToFromNumber> FindArg<'a> for BoundedNumArgumentConsumer<T
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Num(data)) => match data {
-                Ok(num) => {
-                    if let Some(x) = T::from_number(num) {
-                        Ok(Ok(x))
-                    } else {
-                        Err(CommandError::InvalidConsumption(Some(name.to_string())))
-                    }
-                }
+                Ok(num) => T::from_number(num).map_or_else(
+                    || Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+                    |x| Ok(Ok(x)),
+                ),
                 Err(()) => Ok(Err(())),
             },
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),

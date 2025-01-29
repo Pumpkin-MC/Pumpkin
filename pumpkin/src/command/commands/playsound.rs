@@ -4,12 +4,9 @@ use rand::{thread_rng, Rng};
 
 use crate::command::{
     args::{
-        bounded_num::BoundedNumArgumentConsumer,
-        players::PlayersArgumentConsumer,
-        position_3d::Position3DArgumentConsumer,
-        sound::SoundArgumentConsumer,
-        sound_category::SoundCategoryArgumentConsumer,
-        Arg, ConsumedArgs, FindArg,
+        bounded_num::BoundedNumArgumentConsumer, players::PlayersArgumentConsumer,
+        position_3d::Position3DArgumentConsumer, sound::SoundArgumentConsumer,
+        sound_category::SoundCategoryArgumentConsumer, Arg, ConsumedArgs, FindArg,
     },
     tree::CommandTree,
     tree_builder::argument,
@@ -17,7 +14,7 @@ use crate::command::{
 };
 
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
-/// 
+///
 /// Plays a sound at specified position for target players.
 /// - sound: The sound identifier to play
 /// - source: Sound category (master, music, record, etc.)
@@ -38,9 +35,7 @@ const ARG_MIN_VOLUME: &str = "minVolume";
 
 // Volume must be >= 0, no upper limit
 fn volume_consumer() -> BoundedNumArgumentConsumer<f32> {
-    BoundedNumArgumentConsumer::new()
-        .name(ARG_VOLUME)
-        .min(0.0)
+    BoundedNumArgumentConsumer::new().name(ARG_VOLUME).min(0.0)
 }
 
 // Pitch must be between 0.0 and 2.0
@@ -73,15 +68,15 @@ impl CommandExecutor for SoundExecutor {
     ) -> Result<(), CommandError> {
         // Get required sound argument
         let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
-        
+
         // Get optional sound category, defaults to Master
-        let source = args
-            .get(ARG_SOURCE)
-            .map(|arg| match arg {
+        let source = args.get(ARG_SOURCE).map_or(
+            SoundCategory::Master,
+            |arg| match arg {
                 Arg::SoundCategory(category) => *category,
                 _ => SoundCategory::Master,
-            })
-            .unwrap_or(SoundCategory::Master);
+            },
+        );
 
         // Get target players, defaults to sender if not specified
         let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS) {
@@ -94,43 +89,36 @@ impl CommandExecutor for SoundExecutor {
 
         // Get optional position, defaults to target's position
         let position = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
-        
+
         // Get optional volume parameter
         let volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_VOLUME) {
             Ok(Ok(v)) => v,
-            _ => 1.0,  // Default volume
+            _ => 1.0, // Default volume
         };
-        
+
         // Get optional pitch parameter
         let pitch = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_PITCH) {
-            Ok(Ok(p)) => p.max(0.5),  // Values below 0.5 are clamped
-            _ => 1.0,  // Default pitch
+            Ok(Ok(p)) => p.max(0.5), // Values below 0.5 are clamped
+            _ => 1.0,                // Default pitch
         };
-        
+
         // Get optional minimum volume (currently unused in implementation)
         let _min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME) {
             Ok(Ok(v)) => v,
-            _ => 0.0,  // Default minimum volume
+            _ => 0.0, // Default minimum volume
         };
 
         // Use same random seed for all targets to ensure sound synchronization
         let seed = thread_rng().gen::<f64>();
-        
+
         // Play sound for each target player
         for target in targets {
             let pos = position.unwrap_or(target.living_entity.entity.pos.load());
             target
-                .play_sound(
-                    sound as u16,
-                    source,
-                    &pos,
-                    volume,
-                    pitch,
-                    seed,
-                )
+                .play_sound(sound as u16, source, &pos, volume, pitch, seed)
                 .await;
         }
-        
+
         Ok(())
     }
 }
@@ -148,7 +136,13 @@ pub fn init_command_tree() -> CommandTree {
                                         argument(ARG_VOLUME, volume_consumer())
                                             .then(
                                                 argument(ARG_PITCH, pitch_consumer())
-                                                    .then(argument(ARG_MIN_VOLUME, min_volume_consumer()).execute(SoundExecutor))
+                                                    .then(
+                                                        argument(
+                                                            ARG_MIN_VOLUME,
+                                                            min_volume_consumer(),
+                                                        )
+                                                        .execute(SoundExecutor),
+                                                    )
                                                     .execute(SoundExecutor),
                                             )
                                             .execute(SoundExecutor),
