@@ -57,26 +57,23 @@ where
     }
 }
 
-impl<T: ToFromNumber> FindArg<'_> for BoundedNumArgumentConsumer<T> {
+impl<'a, T: 'static + ToFromNumber> FindArg<'a> for BoundedNumArgumentConsumer<T> {
     type Data = Result<T, NotInBounds>;
 
-    fn find_arg(args: &super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
-        let Some(Arg::Num(result)) = args.get(name) else {
-            return Err(CommandError::InvalidConsumption(Some(name.to_string())));
-        };
-
-        let data: Self::Data = match result {
-            Ok(num) => {
-                if let Some(x) = T::from_number(num) {
-                    Ok(x)
-                } else {
-                    return Err(CommandError::InvalidConsumption(Some(name.to_string())));
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+        match args.get(name) {
+            Some(Arg::Num(data)) => match data {
+                Ok(num) => {
+                    if let Some(x) = T::from_number(num) {
+                        Ok(Ok(x))
+                    } else {
+                        Err(CommandError::InvalidConsumption(Some(name.to_string())))
+                    }
                 }
-            }
-            Err(()) => Err(()),
-        };
-
-        Ok(data)
+                Err(()) => Ok(Err(())),
+            },
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+        }
     }
 }
 

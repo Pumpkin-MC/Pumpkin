@@ -2,6 +2,7 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
@@ -39,6 +40,7 @@ pub mod simple;
 pub mod sound;
 pub mod summonable_entities;
 pub mod textcomponent;
+pub mod sound_category;
 
 /// see [`crate::commands::tree_builder::argument`]
 #[async_trait]
@@ -94,6 +96,7 @@ pub enum Arg<'a> {
     Bool(bool),
     #[allow(unused)]
     Simple(&'a str),
+    SoundCategory(SoundCategory),
 }
 
 /// see [`crate::commands::tree_builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree_builder::NonLeafNodeBuilder::execute`]
