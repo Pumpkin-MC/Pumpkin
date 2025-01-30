@@ -22,8 +22,8 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/damage_type.json");
 
     let damage_types: HashMap<String, DamageTypeEntry> = 
-        serde_json::from_str(include_str!("../../assets/damage_types.json"))
-            .expect("Failed to parse damage_types.json");
+        serde_json::from_str(include_str!("../../assets/damage_type.json"))
+            .expect("Failed to parse damage_type.json");
 
     let mut constants = Vec::new();
     let mut enum_variants = Vec::new();
