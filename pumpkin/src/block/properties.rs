@@ -17,6 +17,7 @@ pub enum BlockProperty {
     Powered(bool),
     SlabType(SlabPosition),
     StairShape(StairShape),
+    Layers(u8),
     Half(BlockHalf), // Add other properties as needed
 }
 
@@ -67,9 +68,46 @@ pub fn get_property_key(property_name: &str) -> Option<BlockProperty> {
         "shape" => Some(BlockProperty::StairShape(StairShape::Straight)),
         "half" => Some(BlockProperty::Half(BlockHalf::Bottom)),
         "powered" => Some(BlockProperty::Powered(false)),
+        "layers" => Some(BlockProperty::Layers(1)),
         "face" => Some(BlockProperty::Face(BlockFace::Wall)),
         _ => None,
     }
+}
+
+#[must_use]
+pub fn evaluate_layers(
+    block: &Block,
+    clicked_block: &Block,
+    clicked_block_state: &State,
+    face: BlockDirection,
+    use_item_on: &SUseItemOn,
+    properties: &BlockProperties,
+    _other: bool,
+) -> (String, bool) {
+    let state =
+        &properties.property_mappings[&(clicked_block_state.id - clicked_block.states[0].id)];
+    for property in state {
+        // Max
+        if property == "layers8" {
+            return (property.clone(), false);
+        }
+
+        if block.id == clicked_block.id {
+            dbg!(property);
+            // bro its is so hacky :crying:
+            let mut layer: u8 = property.replace("layers", "").parse().unwrap();
+            // lets add a new layer
+            layer += 1;
+            return (format!("{}{}", "layers", layer), true);
+        }
+    }
+
+    let y_pos = use_item_on.cursor_pos.y;
+    if (y_pos > 0.5 && face != BlockDirection::Bottom) || face == BlockDirection::Top {
+        return (format!("{}{}", "layers", "1"), false);
+    }
+
+    (format!("{}{}", "layers", "1"), false)
 }
 
 #[must_use]
@@ -443,6 +481,22 @@ impl BlockPropertiesManager {
                         }
                         BlockProperty::Powered(_) => "poweredfalse".to_string(), // todo
                         BlockProperty::Face(_) => evaluate_property_block_face(*face),
+                        BlockProperty::Layers(_) => {
+                            let clicked_block = world.get_block(block_pos).await.unwrap();
+                            let clicked_block_state =
+                                world.get_block_state(block_pos).await.unwrap();
+                            let (state, can_update) = evaluate_layers(
+                                block,
+                                clicked_block,
+                                clicked_block_state,
+                                *face,
+                                use_item_on,
+                                properties,
+                                other,
+                            );
+                            updateable = can_update;
+                            state
+                        }
                     };
                     hmap_key.push(state.to_string());
                 } else {
