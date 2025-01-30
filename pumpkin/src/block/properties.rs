@@ -509,9 +509,8 @@ impl BlockPropertiesManager {
             let mapping = properties.state_mappings.get(&hmap_key);
             if let Some(mapping) = mapping {
                 return (block.states[0].id + mapping, updateable);
-            } else {
-                log::error!("Failed to get Block Properties mapping for {}", block.name);
             }
+            log::error!("Failed to get Block Properties mapping for {}", block.name);
         }
         (block.default_state_id, false)
     }
