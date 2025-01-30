@@ -58,12 +58,12 @@ impl BoundingBox {
     }
 
     pub fn intersects(&self, other: &BoundingBox) -> bool {
-        self.min.x < other.max.x
-            && self.max.x > other.min.x
-            && self.min.y < other.max.y
-            && self.max.y > other.min.y
-            && self.min.z < other.max.z
-            && self.max.z > other.min.z
+        self.min.x < other.max.x + 0.025
+            && self.max.x > other.min.x + 0.025
+            && self.min.y < other.max.y + 0.025
+            && self.max.y > other.min.y + 0.025
+            && self.min.z < other.max.z + 0.025
+            && self.max.z > other.min.z + 0.025
     }
 
     pub fn squared_magnitude(&self, pos: Vector3<f64>) -> f64 {

@@ -1248,7 +1248,7 @@ impl Player {
         // To this point we must have the new block state
         let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
         let mut intersects = false;
-        for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
+        for player in world.get_nearby_players(entity.pos.load(), 2.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {
                 let block_box = BoundingBox::from_block_raw(&final_block_pos)
