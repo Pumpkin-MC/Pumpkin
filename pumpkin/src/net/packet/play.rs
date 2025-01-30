@@ -35,6 +35,7 @@ use pumpkin_protocol::{
         SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
     },
 };
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
@@ -1245,12 +1246,17 @@ impl Player {
         };
 
         // To this point we must have the new block state
-        let block_bounding_box = get_block_collision_shapes(new_state).unwrap_or_default();
+        let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
         let mut intersects = false;
         for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
-            let bounding_box = player.1.living_entity.entity.bounding_box.load();
-            if bounding_box.intersects_block(&final_block_pos, &block_bounding_box) {
-                intersects = true;
+            let player_box = player.1.living_entity.entity.bounding_box.load();
+            for shape in &shapes {
+                let block_box = BoundingBox::from_block_raw(&final_block_pos)
+                    .offset(BoundingBox::new_array(shape.min, shape.max));
+                if player_box.intersects(&block_box) {
+                    intersects = true;
+                    break;
+                }
             }
         }
         if !intersects {
