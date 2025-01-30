@@ -11,8 +11,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
-    entity::EntityType,
-    sound::{Sound, SoundCategory},
+    damage::DamageType, entity::EntityType, sound::{Sound, SoundCategory}
 };
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_nbt::compound::NbtCompound;
@@ -343,7 +342,7 @@ impl Player {
 
         victim
             .living_entity
-            .damage(damage as f32, 34) // PlayerAttack
+            .damage(damage as f32, DamageType::PlayerAttack) // PlayerAttack
             .await;
 
         let mut knockback_strength = 1.0;

@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicI32;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
 use pumpkin_util::math::vector3::Vector3;
@@ -71,12 +71,12 @@ impl LivingEntity {
     }
 
     // TODO add damage_type enum
-    pub async fn damage(&self, amount: f32, damage_type: u8) {
+    pub async fn damage(&self, amount: f32, damage_type: DamageType) {
         self.entity
             .world
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
-                damage_type.into(),
+                damage_type.data().id.into(),
                 None,
                 None,
                 None,
@@ -136,7 +136,7 @@ impl LivingEntity {
                 .play_sound(Self::get_fall_sound(fall_distance as i32))
                 .await;
             // TODO: Play block fall sound
-            self.damage(damage, 10).await; // Fall
+            self.damage(damage, DamageType::Fall).await; // Fall
         } else if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance
