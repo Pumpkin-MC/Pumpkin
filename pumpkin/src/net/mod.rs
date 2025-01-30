@@ -490,7 +490,7 @@ impl Client {
                     .await;
             }
             SAcknowledgeFinishConfig::PACKET_ID => {
-                self.handle_config_acknowledged();
+                self.handle_config_acknowledged().await;
             }
             SKnownPacks::PACKET_ID => {
                 self.handle_known_packs(server, SKnownPacks::read(bytebuf)?)
@@ -544,9 +544,7 @@ impl Client {
 
     /// Checks if the client can join the server.
     pub async fn can_not_join(&self) -> Option<TextComponent> {
-        let profile: tokio::sync::MutexGuard<'_, Option<GameProfile>> =
-            self.gameprofile.lock().await;
-
+        let profile = self.gameprofile.lock().await;
         let Some(profile) = profile.as_ref() else {
             return Some(TextComponent::text("Missing GameProfile"));
         };
