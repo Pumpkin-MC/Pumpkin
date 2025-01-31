@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::{
     client::play::{MetaDataType, Metadata},
     codec::slot::Slot,
@@ -34,5 +35,12 @@ impl EntityBase for ItemEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
+        self.entity
+            .invulnerable
+            .load(std::sync::atomic::Ordering::Relaxed)
+            || self.entity.damage_immunities.contains(&damage_type)
     }
 }

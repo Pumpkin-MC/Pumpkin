@@ -7,7 +7,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, MetaDataType, Metadata};
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{Entity, EntityId, NBTStorage};
+use super::{Entity, EntityBase, EntityId, NBTStorage};
 
 /// Represents a living entity within the game world.
 ///

@@ -43,6 +43,7 @@ pub trait EntityBase: Send + Sync {
     async fn tick(&self);
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    fn is_invulnerable_to(&self, damage_type: DamageType) -> bool;
 }
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
@@ -352,7 +353,7 @@ impl EntityBase for Entity {
         None
     }
 
-    pub fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
+    fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
         // Check base invulnerability
         if self.invulnerable.load(std::sync::atomic::Ordering::Relaxed) {
             return true;
