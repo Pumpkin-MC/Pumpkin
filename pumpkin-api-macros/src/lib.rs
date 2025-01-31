@@ -108,7 +108,7 @@ pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             method.block = if use_global {
                 parse_quote!({
-                    GLOBAL_RUNTIME.block_on(async move {
+                    crate::GLOBAL_RUNTIME.block_on(async move {
                         #original_body
                     })
                 })

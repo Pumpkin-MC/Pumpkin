@@ -25,8 +25,8 @@ tokio.workspace = true
 bytes.workspace = true
 
 # encryption
-aes = "0.8.4"
-cfb8 = "0.8.1"
+aes = "0.8"
+cfb8 = "0.8"
 
 # compression
-libdeflater = "1.23.0"
+libdeflater = "1.23"

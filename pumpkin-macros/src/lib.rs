@@ -2,20 +2,17 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     parse::{Nothing, Parser},
-    parse_macro_input, Field, Fields, ItemStruct,
+    parse_macro_input, Block, Expr, Field, Fields, ItemStruct, Stmt,
 };
 
 extern crate proc_macro;
 
-#[proc_macro_attribute]
-pub fn event(args: TokenStream, item: TokenStream) -> TokenStream {
+#[proc_macro_derive(Event)]
+pub fn event(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
     let name = &input.ident;
-    let _ = parse_macro_input!(args as Nothing);
 
     quote! {
-        #input
-
         impl crate::plugin::Event for #name {
             fn get_name_static() -> &'static str {
                 stringify!(#name)
@@ -46,7 +43,10 @@ pub fn cancellable(args: TokenStream, input: TokenStream) -> TokenStream {
     if let Fields::Named(ref mut fields) = item_struct.fields {
         fields.named.push(
             Field::parse_named
-                .parse2(quote! { pub cancelled: bool })
+                .parse2(quote! {
+                    /// A boolean indicating cancel state of the event.
+                    pub cancelled: bool
+                })
                 .unwrap(),
         );
     }
@@ -65,6 +65,89 @@ pub fn cancellable(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
     .into()
+}
+
+#[proc_macro]
+pub fn send_cancellable(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as Block);
+
+    let mut event = None;
+    let mut after_block = None;
+    let mut cancelled_block = None;
+
+    for stmt in input.stmts {
+        if let Stmt::Expr(expr, _) = stmt {
+            if event.is_none() {
+                event = Some(expr);
+            } else if let Expr::Block(b) = expr {
+                if let Some(ref label) = b.label {
+                    if label.name.ident == "after" {
+                        after_block = Some(b);
+                    } else if label.name.ident == "cancelled" {
+                        cancelled_block = Some(b);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(event) = event {
+        if let Some(after_block) = after_block {
+            if let Some(cancelled_block) = cancelled_block {
+                quote! {
+                    let event = crate::PLUGIN_MANAGER
+                        .lock()
+                        .await
+                        .fire(#event)
+                        .await;
+
+                    if !event.cancelled {
+                        #after_block
+                    } else {
+                        #cancelled_block
+                    }
+                }
+                .into()
+            } else {
+                quote! {
+                    let event = crate::PLUGIN_MANAGER
+                        .lock()
+                        .await
+                        .fire(#event)
+                        .await;
+
+                    if !event.cancelled {
+                        #after_block
+                    }
+                }
+                .into()
+            }
+        } else if let Some(cancelled_block) = cancelled_block {
+            quote! {
+                let event = crate::PLUGIN_MANAGER
+                    .lock()
+                    .await
+                    .fire(#event)
+                    .await;
+
+                if event.cancelled {
+                    #cancelled_block
+                }
+            }
+            .into()
+        } else {
+            quote! {
+                let event = crate::PLUGIN_MANAGER
+                    .lock()
+                    .await
+                    .fire(#event)
+                    .await;
+            }
+            .into()
+        }
+    } else {
+        panic!("Event must be specified");
+    }
 }
 
 #[proc_macro_attribute]

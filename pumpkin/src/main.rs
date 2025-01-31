@@ -29,11 +29,11 @@
 #![expect(clippy::missing_errors_doc)]
 #![expect(clippy::module_name_repetitions)]
 #![expect(clippy::struct_excessive_bools)]
+// Not warn event sending macros
+#![allow(unused_labels)]
 
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
-
-use log::LevelFilter;
 
 use plugin::PluginManager;
 use std::{
@@ -47,7 +47,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
-use pumpkin::PumpkinServer;
+use pumpkin::{init_log, PumpkinServer};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::{color::NamedColor, TextComponent};
 use std::time::Instant;
@@ -75,7 +75,8 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 #[tokio::main]
 async fn main() {
     let time = Instant::now();
-    init_logger();
+
+    init_log!();
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -128,30 +129,6 @@ fn handle_interrupt() {
             .to_pretty_console()
     );
     std::process::exit(0);
-}
-
-fn init_logger() {
-    use pumpkin_config::ADVANCED_CONFIG;
-    if ADVANCED_CONFIG.logging.enabled {
-        let mut logger = simple_logger::SimpleLogger::new();
-        logger = logger.with_timestamp_format(time::macros::format_description!(
-            "[year]-[month]-[day] [hour]:[minute]:[second]"
-        ));
-
-        if !ADVANCED_CONFIG.logging.timestamp {
-            logger = logger.without_timestamps();
-        }
-
-        // default
-        logger = logger.with_level(LevelFilter::Info);
-
-        logger = logger.with_colors(ADVANCED_CONFIG.logging.color);
-        logger = logger.with_threads(ADVANCED_CONFIG.logging.threads);
-
-        logger = logger.env();
-
-        logger.init().unwrap();
-    }
 }
 
 // Non-UNIX Ctrl-C handling

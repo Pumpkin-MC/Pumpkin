@@ -1,5 +1,8 @@
 use core::f32;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    f32::consts::PI,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -166,6 +169,20 @@ impl Entity {
                 }
             }
         }
+    }
+
+    /// Returns entity rotation as vector
+    pub fn rotation(&self) -> Vector3<f32> {
+        // Convert degrees to radians if necessary
+        let yaw_rad = self.yaw.load() * (PI / 180.0);
+        let pitch_rad = self.pitch.load() * (PI / 180.0);
+
+        Vector3::new(
+            yaw_rad.cos() * pitch_rad.cos(),
+            pitch_rad.sin(),
+            yaw_rad.sin() * pitch_rad.cos(),
+        )
+        .normalize()
     }
 
     /// Changes this entity's pitch and yaw to look at target

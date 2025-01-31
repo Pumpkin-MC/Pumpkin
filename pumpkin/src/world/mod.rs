@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{atomic::Ordering, Arc},
+};
 
 pub mod level_time;
 pub mod player_chunker;
@@ -10,6 +13,7 @@ use crate::{
     plugin::{
         block::BlockBreakEvent,
         player::{PlayerJoinEvent, PlayerLeaveEvent},
+        world::{ChunkLoad, ChunkSave, ChunkSend},
     },
     server::Server,
     PLUGIN_MANAGER,
@@ -21,6 +25,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
+use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
@@ -592,11 +597,13 @@ impl World {
         let level = self.level.clone();
 
         tokio::spawn(async move {
-            while let Some(chunk_data) = receiver.recv().await {
-                let chunk_data = chunk_data.read().await;
-                let packet = CChunkData(&chunk_data);
+            'main: while let Some((chunk, first_load)) = receiver.recv().await {
+                let position = chunk.read().await.position;
+
                 #[cfg(debug_assertions)]
-                if chunk_data.position == (0, 0).into() {
+                if position == (0, 0).into() {
+                    let binding = chunk.read().await;
+                    let packet = CChunkData(&binding);
                     let mut test = bytes::BytesMut::new();
                     packet.write(&mut test);
                     let len = test.len();
@@ -608,21 +615,60 @@ impl World {
                     );
                 }
 
-                if !level.is_chunk_watched(&chunk_data.position) {
-                    log::trace!(
-                        "Received chunk {:?}, but it is no longer watched... cleaning",
-                        &chunk_data.position
-                    );
-                    level.clean_chunk(&chunk_data.position).await;
-                    continue;
-                }
+                let (world, chunk) = if level.is_chunk_watched(&position) {
+                    (player.world().clone(), chunk)
+                } else {
+                    send_cancellable! {{
+                        ChunkSave {
+                            world: player.world().clone(),
+                            chunk,
+                            cancelled: false,
+                        };
 
-                if !player
-                    .client
-                    .closed
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    player.client.send_packet(&packet).await;
+                        'after: {
+                            log::trace!(
+                                "Received chunk {:?}, but it is no longer watched... cleaning",
+                                &position
+                            );
+                            level.clean_chunk(&position).await;
+                            continue 'main;
+                        }
+                    }};
+                    (event.world, event.chunk)
+                };
+
+                let (world, chunk) = if first_load {
+                    send_cancellable! {{
+                        ChunkLoad {
+                            world,
+                            chunk,
+                            cancelled: false,
+                        };
+
+                        'cancelled: {
+                            continue 'main;
+                        }
+                    }}
+                    (event.world, event.chunk)
+                } else {
+                    (world, chunk)
+                };
+
+                if !player.client.closed.load(Ordering::Relaxed) {
+                    send_cancellable! {{
+                        ChunkSend {
+                            world,
+                            chunk,
+                            cancelled: false,
+                        };
+
+                        'after: {
+                            player
+                                .client
+                                .send_packet(&CChunkData(&*event.chunk.read().await))
+                                .await;
+                        }
+                    }};
                 }
             }
 
@@ -876,7 +922,7 @@ impl World {
         // Since we divide by 16 remnant can never exceed u8
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
-        let chunk = self.receive_chunk(chunk_coordinate).await;
+        let chunk = self.receive_chunk(chunk_coordinate).await.0;
         let replaced_block_state_id = chunk.read().await.subchunks.get_block(relative).unwrap();
         chunk
             .write()
@@ -896,7 +942,10 @@ impl World {
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Important: must be called from an async function (or changed to accept a tokio runtime
     /// handle)
-    pub fn receive_chunks(&self, chunks: Vec<Vector2<i32>>) -> Receiver<Arc<RwLock<ChunkData>>> {
+    pub fn receive_chunks(
+        &self,
+        chunks: Vec<Vector2<i32>>,
+    ) -> Receiver<(Arc<RwLock<ChunkData>>, bool)> {
         let (sender, receive) = mpsc::channel(chunks.len());
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
@@ -907,7 +956,7 @@ impl World {
         receive
     }
 
-    pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
+    pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
         let mut receiver = self.receive_chunks(vec![chunk_pos]);
         let chunk = receiver
             .recv()
@@ -958,7 +1007,7 @@ impl World {
     pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
         let (chunk, relative) = position.chunk_and_chunk_relative_position();
         let relative = ChunkRelativeBlockCoordinates::from(relative);
-        let chunk = self.receive_chunk(chunk).await;
+        let chunk = self.receive_chunk(chunk).await.0;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         let Some(id) = chunk.subchunks.get_block(relative) else {
