@@ -29,8 +29,8 @@ pub(crate) fn build() -> TokenStream {
     let mut enum_variants = Vec::new();
 
     for (name, entry) in damage_types {
-        let const_ident = crate::ident(&name.to_shouty_snake_case());
-        let enum_ident = crate::ident(&name.to_pascal_case());
+        let const_ident = crate::ident(name.to_shouty_snake_case());
+        let enum_ident = crate::ident(name.to_pascal_case());
 
         enum_variants.push(enum_ident.clone());
 
