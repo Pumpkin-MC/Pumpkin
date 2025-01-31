@@ -126,7 +126,8 @@ impl<'de, T: Buf> de::Deserializer<'de> for &mut Deserializer<'de, T> {
 
             if self.is_named {
                 // Consume struct name
-                NbtTag::deserialize(self.input)?;
+                let len = self.input.get_u16() as usize;
+                self.input.advance(len);
             }
         }
 
