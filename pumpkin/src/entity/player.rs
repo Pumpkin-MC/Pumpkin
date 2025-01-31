@@ -21,7 +21,8 @@ use pumpkin_protocol::{
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-        CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
+        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent,
+        PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -43,6 +44,7 @@ use pumpkin_protocol::{
     client::play::{CSetEntityMetadata, Metadata},
     server::play::{SClickContainer, SKeepAlive},
 };
+use pumpkin_util::math::experience;
 use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, BoundingBoxSize},
@@ -135,6 +137,12 @@ pub struct Player {
     pub client_loaded: AtomicBool,
     /// timeout (in ticks) client has to report it has finished loading.
     pub client_loaded_timeout: AtomicU32,
+    /// The player's experience level
+    pub experience_level: AtomicI32,
+    /// The player's experience progress (0.0 to 1.0)
+    pub experience_progress: AtomicCell<f32>,
+    /// The player's total experience points
+    pub total_experience: AtomicI32,
 }
 
 impl Player {
@@ -216,6 +224,9 @@ impl Player {
                     |op| AtomicCell::new(op.level),
                 ),
             inventory: Mutex::new(PlayerInventory::new()),
+            experience_level: AtomicI32::new(0),
+            experience_progress: AtomicCell::new(0.0),
+            total_experience: AtomicI32::new(0),
         }
     }
 
@@ -724,7 +735,75 @@ impl Player {
             .send_packet(&CSystemChatMessage::new(text, overlay))
             .await;
     }
+
+    /// Sets the player's experience level and updates the client
+    pub async fn set_experience(&self, level: i32, progress: f32, total_exp: i32) {
+        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_progress.store(progress.clamp(0.0, 1.0));
+        self.total_experience.store(total_exp, Ordering::Relaxed);
+
+        self.client
+            .send_packet(&CSetExperience::new(
+                progress.clamp(0.0, 1.0),
+                level.into(),
+                total_exp.into(),
+            ))
+            .await;
+    }
+
+    /// Returns the amount of experience required to reach the next level from the current level
+    pub fn get_exp_to_next_level(&self) -> i32 {
+        experience::get_exp_to_next_level(self.experience_level.load(Ordering::Relaxed))
+    }
+
+    /// Adds experience points to the player
+    pub async fn add_experience(&self, exp: i32) {
+        let current_total = self.total_experience.load(Ordering::Relaxed);
+        let new_total = current_total + exp;
+        let new_level = experience::get_level_from_total_exp(new_total);
+        let progress = experience::get_progress_from_total_exp(new_total);
+
+        self.set_experience(new_level, progress, new_total).await;
+    }
+
+    /// Sets the player's experience level directly
+    pub async fn set_level(&self, level: i32) {
+        let current_progress = self.experience_progress.load();
+        let total_exp = experience::get_total_exp_to_level(level);
+        // Add the partial progress towards next level
+        let next_level_exp = experience::get_total_exp_to_level(level + 1);
+        let exp_for_current_level = next_level_exp - total_exp;
+        #[allow(clippy::cast_precision_loss)]
+        let additional_exp = (current_progress * exp_for_current_level as f32) as i32;
+        let final_exp = total_exp + additional_exp;
+
+        self.set_experience(level, current_progress, final_exp)
+            .await;
+    }
+
+    /// Returns the total amount of experience points required to reach a specific level
+    #[must_use]
+    pub fn get_total_exp_to_level(level: i32) -> i32 {
+        match level {
+            0..=16 => level * level + 6 * level,
+            17..=31 => {
+                ((2.5 * f64::from(level * level)) - (40.5 * f64::from(level)) + 360.0) as i32
+            }
+            _ => ((4.5 * f64::from(level * level)) - (162.5 * f64::from(level)) + 2220.0) as i32,
+        }
+    }
+
+    /// Calculates level from total experience points
+    #[must_use]
+    pub fn get_level_from_total_exp(total_exp: i32) -> i32 {
+        match total_exp {
+            0..=352 => ((f64::from(total_exp) + 9.0).sqrt() - 3.0) as i32,
+            353..=1507 => (81.0 + (f64::from(total_exp) - 7839.0) / 40.0).sqrt() as i32,
+            _ => (325.0 + (f64::from(total_exp) - 54215.0) / 72.0).sqrt() as i32,
+        }
+    }
 }
+
 #[async_trait]
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -734,12 +813,21 @@ impl NBTStorage for Player {
             self.inventory.lock().await.selected as i32,
         );
         self.abilities.lock().await.write_nbt(nbt).await;
+        nbt.put_int("XpLevel", self.experience_level.load(Ordering::Relaxed));
+        nbt.put_float("XpProgress", self.experience_progress.load());
+        nbt.put_int("XpTotal", self.total_experience.load(Ordering::Relaxed));
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
         self.abilities.lock().await.read_nbt(nbt).await;
+        self.experience_level
+            .store(nbt.get_int("XpLevel").unwrap_or(0), Ordering::Relaxed);
+        self.experience_progress
+            .store(nbt.get_float("XpProgress").unwrap_or(0.0));
+        self.total_experience
+            .store(nbt.get_int("XpTotal").unwrap_or(0), Ordering::Relaxed);
     }
 }
 
