@@ -1,5 +1,6 @@
 pub mod block_registry;
 pub mod block_state;
+pub mod interactive;
 
 use num_derive::FromPrimitive;
 use pumpkin_util::math::vector3::Vector3;
