@@ -177,12 +177,11 @@ impl ExperienceExecutor {
 
     async fn handle_modify(
         &self,
-        target: &Player, // Remove sender parameter since we'll handle errors in execute
+        target: &Player,
         amount: i32,
         exp_type: ExpType,
         mode: Mode,
     ) -> Result<(), &'static str> {
-        // Change return type to indicate error reason
         match exp_type {
             ExpType::Levels => {
                 let current_level = target.experience_level.load(Ordering::Relaxed);
@@ -202,23 +201,27 @@ impl ExperienceExecutor {
                 if mode == Mode::Add {
                     target.add_experience(amount).await;
                 } else {
-                    // When setting points, check if they exceed current level's max
+                    // When setting points, keep current level but check maximum
                     let current_level = target.experience_level.load(Ordering::Relaxed);
-                    let current_level_start = experience::get_total_exp_to_level(current_level);
                     let next_level_start = experience::get_total_exp_to_level(current_level + 1);
+                    let current_level_start = experience::get_total_exp_to_level(current_level);
+                    let max_points_in_level = next_level_start - current_level_start;
 
-                    // Amount must be between current level's start and next level's start (exclusive)
-                    if amount < current_level_start || amount >= next_level_start {
+                    // Points can't exceed maximum for current level
+                    if amount > max_points_in_level {
                         return Err("commands.experience.set.points.invalid");
                     }
 
-                    // Calculate progress within current level
-                    let level_points = amount - current_level_start;
-                    let points_needed = next_level_start - current_level_start;
+                    // Calculate progress directly from points (0 to max_points_in_level)
                     #[allow(clippy::cast_precision_loss)]
-                    let progress = level_points as f32 / points_needed as f32;
+                    let progress = (amount as f32) / (max_points_in_level as f32);
+                    let progress = progress.clamp(0.0, 1.0);
 
-                    target.set_experience(current_level, progress, amount).await;
+                    // Convert local level points to global XP amount
+                    let total_exp = current_level_start + amount;
+                    target
+                        .set_experience(current_level, progress, total_exp)
+                        .await;
                 }
             }
         }
