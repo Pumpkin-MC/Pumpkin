@@ -177,12 +177,11 @@ impl ExperienceExecutor {
 
     async fn handle_modify(
         &self,
-        _sender: &mut CommandSender<'_>,
-        target: &Player,
+        target: &Player,  // Remove sender parameter since we'll handle errors in execute
         amount: i32,
         exp_type: ExpType,
         mode: Mode,
-    ) -> bool {
+    ) -> Result<(), &'static str> {  // Change return type to indicate error reason
         match exp_type {
             ExpType::Levels => {
                 let current_level = target.experience_level.load(Ordering::Relaxed);
@@ -193,7 +192,7 @@ impl ExperienceExecutor {
                 };
 
                 if new_level < 0 {
-                    return false;
+                    return Err("commands.experience.set.points.invalid");
                 }
 
                 target.set_level(new_level).await;
@@ -202,13 +201,26 @@ impl ExperienceExecutor {
                 if mode == Mode::Add {
                     target.add_experience(amount).await;
                 } else {
-                    let level = experience::get_level_from_total_exp(amount);
-                    let progress = experience::get_progress_from_total_exp(amount);
-                    target.set_experience(level, progress, amount).await;
+                    // When setting points, check if they exceed current level's max
+                    let current_level = target.experience_level.load(Ordering::Relaxed);
+                    let current_level_start = experience::get_total_exp_to_level(current_level);
+                    let next_level_start = experience::get_total_exp_to_level(current_level + 1);
+                    
+                    // Amount must be between current level's start and next level's start (exclusive)
+                    if amount < current_level_start || amount >= next_level_start {
+                        return Err("commands.experience.set.points.invalid");
+                    }
+                    
+                    // Calculate progress within current level
+                    let level_points = amount - current_level_start;
+                    let points_needed = next_level_start - current_level_start;
+                    let progress = level_points as f32 / points_needed as f32;
+                    
+                    target.set_experience(current_level, progress, amount).await;
                 }
             }
         }
-        true
+        Ok(())
     }
 }
 
@@ -254,27 +266,24 @@ impl CommandExecutor for ExperienceExecutor {
                 }
 
                 for target in targets {
-                    if !self
-                        .handle_modify(sender, target, amount, self.exp_type.unwrap(), self.mode)
-                        .await
-                    {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.experience.set.points.invalid",
-                                [].into(),
-                            ))
-                            .await;
-                        continue;
+                    match self.handle_modify(target, amount, self.exp_type.unwrap(), self.mode).await {
+                        Ok(()) => {
+                            let msg = Self::get_success_message(
+                                self.mode,
+                                self.exp_type.unwrap(),
+                                amount,
+                                targets.len(),
+                                Some(target.gameprofile.name.clone()),
+                            );
+                            sender.send_message(msg).await;
+                        }
+                        Err(error_msg) => {
+                            sender
+                                .send_message(TextComponent::translate(error_msg, [].into()))
+                                .await;
+                            continue;
+                        }
                     }
-
-                    let msg = Self::get_success_message(
-                        self.mode,
-                        self.exp_type.unwrap(),
-                        amount,
-                        targets.len(),
-                        Some(target.gameprofile.name.clone()),
-                    );
-                    sender.send_message(msg).await;
                 }
             }
         }
