@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use pumpkin_data::{
+    damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
-    damage::DamageType,
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{

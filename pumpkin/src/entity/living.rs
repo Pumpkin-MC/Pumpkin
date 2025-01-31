@@ -110,7 +110,11 @@ impl LivingEntity {
     /// Returns if the entity was damaged or not
     pub fn check_damage(&self, amount: f32) -> bool {
         // Check invulnerability
-        if self.entity.invulnerable.load(std::sync::atomic::Ordering::Relaxed) {
+        if self
+            .entity
+            .invulnerable
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             return false;
         }
 

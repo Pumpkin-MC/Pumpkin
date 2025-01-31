@@ -657,7 +657,7 @@ impl Player {
         );
 
         self.gamemode.store(gamemode);
-        
+
         // Set invulnerability based on gamemode
         self.living_entity.entity.invulnerable.store(
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),

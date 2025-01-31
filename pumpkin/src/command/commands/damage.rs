@@ -7,12 +7,8 @@ use pumpkin_util::text::{
 
 use crate::command::{
     args::{
-        bounded_num::BoundedNumArgumentConsumer,
-        damage_type::DamageTypeArgumentConsumer,
-        entity::EntityArgumentConsumer,
-        position_3d::Position3DArgumentConsumer,
-        Arg,
-        ConsumedArgs,
+        bounded_num::BoundedNumArgumentConsumer, damage_type::DamageTypeArgumentConsumer,
+        entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer, Arg, ConsumedArgs,
         FindArg,
     },
     tree::CommandTree,
@@ -35,6 +31,34 @@ fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
 
 struct DamageLocationExecutor;
 struct DamageEntityExecutor(bool);
+
+async fn send_damage_result(
+    sender: &mut CommandSender<'_>,
+    success: bool,
+    amount: f32,
+    target_name: String,
+) {
+    if !success {
+        sender
+            .send_message(
+                TextComponent::translate("commands.damage.invulnerable", [].into())
+                    .color(Color::Named(NamedColor::Red)),
+            )
+            .await;
+        return;
+    }
+
+    sender
+        .send_message(TextComponent::translate(
+            "commands.damage.success",
+            [
+                TextComponent::text(amount.to_string()),
+                TextComponent::text(target_name),
+            ]
+            .into(),
+        ))
+        .await;
+}
 
 #[async_trait]
 impl CommandExecutor for DamageLocationExecutor {
@@ -65,35 +89,12 @@ impl CommandExecutor for DamageLocationExecutor {
 
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-        if !target
-            .living_entity
-            .damage_with_context(amount, damage_type, Some(location), None, None)
-            .await 
-        {
-            sender
-                .send_message(
-                    TextComponent::translate("commands.damage.invulnerable", [].into())
-                        .color(Color::Named(NamedColor::Red)),
-                )
-                .await;
-            return Ok(());
-        }
-
-        target
+        let success = target
             .living_entity
             .damage_with_context(amount, damage_type, Some(location), None, None)
             .await;
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.damage.success",
-                [
-                    TextComponent::text(amount.to_string()),
-                    TextComponent::text(target.gameprofile.name.clone()),
-                ]
-                .into(),
-            ))
-            .await;
+        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
 
         Ok(())
     }
@@ -133,27 +134,7 @@ impl CommandExecutor for DamageEntityExecutor {
             None
         };
 
-        if !target
-            .living_entity
-            .damage_with_context(
-                amount,
-                damage_type,
-                None,
-                source.as_ref().map(|e| &e.living_entity.entity),
-                cause.as_ref().map(|e| &e.living_entity.entity),
-            )
-            .await 
-        {
-            sender
-                .send_message(
-                    TextComponent::translate("commands.damage.invulnerable", [].into())
-                        .color(Color::Named(NamedColor::Red)),
-                )
-                .await;
-            return Ok(());
-        }
-
-        target
+        let success = target
             .living_entity
             .damage_with_context(
                 amount,
@@ -164,16 +145,7 @@ impl CommandExecutor for DamageEntityExecutor {
             )
             .await;
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.damage.success",
-                [
-                    TextComponent::text(amount.to_string()),
-                    TextComponent::text(target.gameprofile.name.clone()),
-                ]
-                .into(),
-            ))
-            .await;
+        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
 
         Ok(())
     }
