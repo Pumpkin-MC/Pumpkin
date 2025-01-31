@@ -167,17 +167,25 @@ impl Player {
             height: 1.8,
         };
 
+        let entity = Entity::new(
+            entity_id,
+            player_uuid,
+            world,
+            Vector3::new(0.0, 0.0, 0.0),
+            EntityType::Player,
+            1.62,
+            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            AtomicCell::new(bounding_box_size),
+        );
+
+        // Set initial invulnerability based on gamemode
+        entity.invulnerable.store(
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         Self {
-            living_entity: LivingEntity::new(Entity::new(
-                entity_id,
-                player_uuid,
-                world,
-                Vector3::new(0.0, 0.0, 0.0),
-                EntityType::Player,
-                1.62,
-                AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
-                AtomicCell::new(bounding_box_size),
-            )),
+            living_entity: LivingEntity::new(entity),
             config: Mutex::new(config),
             gameprofile,
             client,
