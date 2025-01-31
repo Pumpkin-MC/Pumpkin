@@ -38,9 +38,6 @@ impl EntityBase for ItemEntity {
     }
 
     fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
-        self.entity
-            .invulnerable
-            .load(std::sync::atomic::Ordering::Relaxed)
-            || self.entity.damage_immunities.contains(&damage_type)
+        self.get_entity().is_invulnerable_to(damage_type)
     }
 }

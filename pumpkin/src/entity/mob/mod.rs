@@ -52,15 +52,7 @@ impl EntityBase for MobEntity {
     }
 
     fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
-        self.living_entity
-            .entity
-            .invulnerable
-            .load(std::sync::atomic::Ordering::Relaxed)
-            || self
-                .living_entity
-                .entity
-                .damage_immunities
-                .contains(&damage_type)
+        self.get_entity().is_invulnerable_to(damage_type)
     }
 }
 
