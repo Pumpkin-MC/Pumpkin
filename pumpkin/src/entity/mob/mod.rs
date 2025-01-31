@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
@@ -47,6 +48,10 @@ impl EntityBase for MobEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
+        self.get_entity().is_invulnerable_to(damage_type)
     }
 }
 

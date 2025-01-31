@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use pumpkin_data::{
+    damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
 };
@@ -44,6 +45,7 @@ pub trait EntityBase: Send + Sync {
     async fn on_player_collision(&self) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    fn is_invulnerable_to(&self, damage_type: DamageType) -> bool;
 }
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
@@ -86,6 +88,10 @@ pub struct Entity {
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
     pub bounding_box_size: AtomicCell<BoundingBoxSize>,
+    /// Whether this entity is invulnerable to all damage
+    pub invulnerable: AtomicBool,
+    /// List of damage types this entity is immune to
+    pub damage_immunities: Vec<DamageType>,
 }
 
 impl Entity {
@@ -125,6 +131,8 @@ impl Entity {
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             bounding_box_size,
+            invulnerable: AtomicBool::new(false),
+            damage_immunities: Vec::new(),
         }
     }
 
@@ -345,6 +353,20 @@ impl EntityBase for Entity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
+        // Check base invulnerability
+        if self.invulnerable.load(std::sync::atomic::Ordering::Relaxed) {
+            return true;
+        }
+
+        // Check damage type immunities
+        if self.damage_immunities.contains(&damage_type) {
+            return true;
+        }
+
+        false
     }
 }
 

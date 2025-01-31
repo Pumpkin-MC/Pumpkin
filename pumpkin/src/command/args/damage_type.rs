@@ -1,0 +1,74 @@
+use async_trait::async_trait;
+use pumpkin_data::damage::DamageType;
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+
+use crate::command::{
+    args::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser},
+    dispatcher::CommandError,
+    tree::RawArgs,
+    CommandSender,
+};
+use crate::server::Server;
+
+pub struct DamageTypeArgumentConsumer;
+
+impl GetClientSideArgParser for DamageTypeArgumentConsumer {
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::ResourceLocation
+    }
+
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        Some(SuggestionProviders::AskServer)
+    }
+}
+
+#[async_trait]
+impl ArgumentConsumer for DamageTypeArgumentConsumer {
+    async fn consume<'a>(
+        &'a self,
+        _sender: &CommandSender<'a>,
+        _server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> Option<Arg<'a>> {
+        let s = args.pop()?;
+
+        // Create a static damage type first
+        let damage_type = DamageType::from_name(s)?;
+        // Find matching static damage type from values array
+        DamageType::values()
+            .iter()
+            .find(|&&dt| std::mem::discriminant(&dt) == std::mem::discriminant(&damage_type))
+            .map(Arg::DamageType)
+    }
+
+    async fn suggest<'a>(
+        &'a self,
+        _sender: &CommandSender<'a>,
+        _server: &'a Server,
+        _input: &'a str,
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+        // Get all available damage types
+        let suggestions = DamageType::values()
+            .iter()
+            .map(|dt| CommandSuggestion::new(dt.to_name().to_string(), None))
+            .collect();
+        Ok(Some(suggestions))
+    }
+}
+
+impl DefaultNameArgConsumer for DamageTypeArgumentConsumer {
+    fn default_name(&self) -> &'static str {
+        "damageType"
+    }
+}
+
+impl<'a> FindArg<'a> for DamageTypeArgumentConsumer {
+    type Data = &'a DamageType;
+
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+        match args.get(name) {
+            Some(Arg::DamageType(data)) => Ok(data),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+        }
+    }
+}

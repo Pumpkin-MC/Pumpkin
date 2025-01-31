@@ -38,3 +38,7 @@ pub mod world {
 pub mod scoreboard {
     include!(concat!(env!("OUT_DIR"), "/scoreboard_slot.rs"));
 }
+
+pub mod damage {
+    include!(concat!(env!("OUT_DIR"), "/damage_type.rs"));
+}

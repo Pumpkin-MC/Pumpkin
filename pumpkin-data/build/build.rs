@@ -7,6 +7,7 @@ use syn::Ident;
 
 mod biome;
 mod chunk_status;
+mod damage_type;
 mod entity_pose;
 mod entity_type;
 mod game_event;
@@ -34,6 +35,7 @@ pub fn main() {
     write_generated_file(entity_type::build(), "entity_type.rs");
     write_generated_file(noise_parameter::build(), "noise_parameter.rs");
     write_generated_file(biome::build(), "biome.rs");
+    write_generated_file(damage_type::build(), "damage_type.rs");
     write_generated_file(message_type::build(), "message_type.rs");
 }
 
