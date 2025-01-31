@@ -64,13 +64,13 @@ impl ExperienceExecutor {
                     .await;
             }
             ExpType::Points => {
-                let total = target.total_experience.load(Ordering::Relaxed);
+                let points = target.experience_points.load(Ordering::Relaxed);
                 sender
                     .send_message(TextComponent::translate(
                         "commands.experience.query.points",
                         [
                             TextComponent::text(target.gameprofile.name.clone()),
-                            TextComponent::text(total.to_string()),
+                            TextComponent::text(points.to_string()),
                         ]
                         .into(),
                     ))
@@ -203,9 +203,10 @@ impl ExperienceExecutor {
                 } else {
                     // When setting points, keep current level but check maximum
                     let current_level = target.experience_level.load(Ordering::Relaxed);
-                    let next_level_start = experience::get_total_exp_to_level(current_level + 1);
-                    let current_level_start = experience::get_total_exp_to_level(current_level);
-                    let max_points_in_level = next_level_start - current_level_start;
+                    let current_progress = target.experience_progress.load();
+                    let current_total = experience::calculate_total_exp(current_level, current_progress);
+                    let next_level_total = experience::calculate_total_exp(current_level + 1, 0.0);
+                    let max_points_in_level = next_level_total - current_total;
 
                     // Points can't exceed maximum for current level
                     if amount > max_points_in_level {
@@ -218,7 +219,7 @@ impl ExperienceExecutor {
                     let progress = progress.clamp(0.0, 1.0);
 
                     // Convert local level points to global XP amount
-                    let total_exp = current_level_start + amount;
+                    let total_exp = current_total + amount;
                     target
                         .set_experience(current_level, progress, total_exp)
                         .await;

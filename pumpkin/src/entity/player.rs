@@ -44,13 +44,13 @@ use pumpkin_protocol::{
     client::play::{CSetEntityMetadata, Metadata},
     server::play::{SClickContainer, SKeepAlive},
 };
-use pumpkin_util::math::experience;
 use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, BoundingBoxSize},
         position::BlockPos,
         vector2::Vector2,
         vector3::Vector3,
+        experience
     },
     permission::PermissionLvl,
     text::TextComponent,
@@ -142,7 +142,7 @@ pub struct Player {
     /// The player's experience progress (0.0 to 1.0)
     pub experience_progress: AtomicCell<f32>,
     /// The player's total experience points
-    pub total_experience: AtomicI32,
+    pub experience_points: AtomicI32,
 }
 
 impl Player {
@@ -226,7 +226,7 @@ impl Player {
             inventory: Mutex::new(PlayerInventory::new()),
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
-            total_experience: AtomicI32::new(0),
+            experience_points: AtomicI32::new(0),
         }
     }
 
@@ -737,16 +737,16 @@ impl Player {
     }
 
     /// Sets the player's experience level and updates the client
-    pub async fn set_experience(&self, level: i32, progress: f32, total_exp: i32) {
+    pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
-        self.total_experience.store(total_exp, Ordering::Relaxed);
+        self.experience_points.store(points, Ordering::Relaxed);
 
         self.client
             .send_packet(&CSetExperience::new(
                 progress.clamp(0.0, 1.0),
                 level.into(),
-                total_exp.into(),
+                points.into(),
             ))
             .await;
     }
@@ -758,27 +758,38 @@ impl Player {
 
     /// Adds experience points to the player
     pub async fn add_experience(&self, exp: i32) {
-        let current_total = self.total_experience.load(Ordering::Relaxed);
-        let new_total = current_total + exp;
-        let new_level = experience::get_level_from_total_exp(new_total);
-        let progress = experience::get_progress_from_total_exp(new_total);
-
-        self.set_experience(new_level, progress, new_total).await;
+        let current_points = self.experience_points.load(Ordering::Relaxed);
+        let new_points = current_points + exp;
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        
+        let next_level_points = experience::get_exp_to_next_level(current_level);
+        let mut new_level = current_level;
+        let mut progress = self.experience_progress.load();
+        
+        #[allow(clippy::cast_precision_loss)]
+        let delta_progress = (exp as f32) / (next_level_points as f32);
+        progress += delta_progress;
+        
+        while progress >= 1.0 {
+            progress -= 1.0;
+            new_level += 1;
+        }
+        
+        while progress < 0.0 && new_level > 0 {
+            new_level -= 1;
+            progress += 1.0;
+        }
+        
+        progress = progress.clamp(0.0, 1.0);
+        
+        self.set_experience(new_level, progress, new_points).await;
     }
 
     /// Sets the player's experience level directly
     pub async fn set_level(&self, level: i32) {
-        let current_progress = self.experience_progress.load();
-        let total_exp = experience::get_total_exp_to_level(level);
-        // Add the partial progress towards next level
-        let next_level_exp = experience::get_total_exp_to_level(level + 1);
-        let exp_for_current_level = next_level_exp - total_exp;
-        #[allow(clippy::cast_precision_loss)]
-        let additional_exp = (current_progress * exp_for_current_level as f32) as i32;
-        let final_exp = total_exp + additional_exp;
-
-        self.set_experience(level, current_progress, final_exp)
-            .await;
+        let progress = self.experience_progress.load();
+        let points = self.experience_points.load(Ordering::Relaxed);
+        self.set_experience(level, progress, points).await;
     }
 
     /// Returns the total amount of experience points required to reach a specific level
@@ -813,21 +824,26 @@ impl NBTStorage for Player {
             self.inventory.lock().await.selected as i32,
         );
         self.abilities.lock().await.write_nbt(nbt).await;
-        nbt.put_int("XpLevel", self.experience_level.load(Ordering::Relaxed));
-        nbt.put_float("XpProgress", self.experience_progress.load());
-        nbt.put_int("XpTotal", self.total_experience.load(Ordering::Relaxed));
+        
+        // Store total XP instead of individual components
+        let total_exp = experience::calculate_total_exp(
+            self.experience_level.load(Ordering::Relaxed),
+            self.experience_progress.load()
+        );
+        nbt.put_int("XpTotal", total_exp);
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
         self.abilities.lock().await.read_nbt(nbt).await;
-        self.experience_level
-            .store(nbt.get_int("XpLevel").unwrap_or(0), Ordering::Relaxed);
-        self.experience_progress
-            .store(nbt.get_float("XpProgress").unwrap_or(0.0));
-        self.total_experience
-            .store(nbt.get_int("XpTotal").unwrap_or(0), Ordering::Relaxed);
+        
+        // Load from total XP
+        let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
+        let (level, progress) = experience::calculate_level_and_progress(total_exp);
+        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_progress.store(progress);
+        self.experience_points.store(total_exp, Ordering::Relaxed);
     }
 }
 
