@@ -1,5 +1,8 @@
+use std::sync::atomic::Ordering;
+
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::math::experience;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -27,7 +30,16 @@ enum Mode {
     Query,
 }
 
-struct ExperienceExecutor(Mode);
+#[derive(Clone, Copy, PartialEq)]
+enum ExpType {
+    Points,
+    Levels,
+}
+
+struct ExperienceExecutor {
+    mode: Mode,
+    exp_type: Option<ExpType>,
+}
 
 #[async_trait]
 impl CommandExecutor for ExperienceExecutor {
@@ -40,46 +52,48 @@ impl CommandExecutor for ExperienceExecutor {
         // Get target players
         let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-        match self.0 {
+        match self.mode {
             Mode::Query => {
-                for target in targets {
-                    let level = target
-                        .experience_level
-                        .load(std::sync::atomic::Ordering::Relaxed);
-                    let progress = target.experience_progress.load();
-                    let total = target
-                        .total_experience
-                        .load(std::sync::atomic::Ordering::Relaxed);
+                // For query mode, we can only target a single player
+                if targets.len() != 1 {
+                    // TODO: Add proper error message for multiple players in query mode
+                    return Ok(());
+                }
 
-                    // Send both levels and points queries
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.experience.query.levels",
-                            [
-                                TextComponent::text(target.gameprofile.name.clone()),
-                                TextComponent::text(level.to_string()),
-                            ]
-                            .into(),
-                        ))
-                        .await;
-
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.experience.query.points",
-                            [
-                                TextComponent::text(target.gameprofile.name.clone()),
-                                TextComponent::text(total.to_string()),
-                            ]
-                            .into(),
-                        ))
-                        .await;
+                let target = &targets[0];
+                match self.exp_type.unwrap() {
+                    ExpType::Levels => {
+                        let level = target.experience_level.load(Ordering::Relaxed);
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.experience.query.levels",
+                                [
+                                    TextComponent::text(target.gameprofile.name.clone()),
+                                    TextComponent::text(level.to_string()),
+                                ]
+                                .into(),
+                            ))
+                            .await;
+                    }
+                    ExpType::Points => {
+                        let total = target.total_experience.load(Ordering::Relaxed);
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.experience.query.points",
+                                [
+                                    TextComponent::text(target.gameprofile.name.clone()),
+                                    TextComponent::text(total.to_string()),
+                                ]
+                                .into(),
+                            ))
+                            .await;
+                    }
                 }
             }
             Mode::Add | Mode::Set => {
-                // Use proper FindArg trait function call and handle both error cases
-                let amount = match BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT) {
-                    Ok(Ok(value)) => value,
-                    Ok(Err(_)) => {
+                let amount = match BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)? {
+                    Ok(value) => value,
+                    Err(_) => {
                         sender
                             .send_message(TextComponent::translate(
                                 "commands.experience.set.points.invalid",
@@ -88,74 +102,127 @@ impl CommandExecutor for ExperienceExecutor {
                             .await;
                         return Ok(());
                     }
-                    Err(e) => return Err(e),
                 };
 
-                for target in targets {
-                    let current_level = target
-                        .experience_level
-                        .load(std::sync::atomic::Ordering::Relaxed);
-                    let new_level = if self.0 == Mode::Add {
-                        current_level + amount
-                    } else {
-                        amount
-                    };
+                if self.mode == Mode::Set && amount < 0 {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.experience.set.points.invalid",
+                            [].into(),
+                        ))
+                        .await;
+                    return Ok(());
+                }
 
-                    // Ensure level doesn't go below 0
-                    if new_level < 0 {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.experience.set.points.invalid",
-                                [].into(),
-                            ))
-                            .await;
-                        continue;
+                for target in targets.iter() {
+                    match self.exp_type.unwrap() {
+                        ExpType::Levels => {
+                            let current_level = target.experience_level.load(Ordering::Relaxed);
+                            let new_level = if self.mode == Mode::Add {
+                                current_level + amount
+                            } else {
+                                amount
+                            };
+
+                            if new_level < 0 {
+                                sender
+                                    .send_message(TextComponent::translate(
+                                        "commands.experience.set.points.invalid",
+                                        [].into(),
+                                    ))
+                                    .await;
+                                continue;
+                            }
+
+                            target.set_level(new_level).await;
+                        }
+                        ExpType::Points => {
+                            if self.mode == Mode::Add {
+                                target.add_experience(amount).await;
+                            } else {
+                                let level = experience::get_level_from_total_exp(amount);
+                                let progress = experience::get_progress_from_total_exp(amount);
+                                target.set_experience(level, progress, amount).await;
+                            }
+                        }
                     }
 
-                    target.set_experience(new_level, 0.0, new_level * 100).await;
-
-                    // Send appropriate success message based on operation and number of targets
-                    let msg = if self.0 == Mode::Add {
-                        if targets.len() > 1 {
-                            TextComponent::translate(
-                                "commands.experience.add.levels.success.multiple",
-                                [
-                                    TextComponent::text(amount.to_string()),
-                                    TextComponent::text(targets.len().to_string()),
-                                ]
-                                .into(),
-                            )
-                        } else {
-                            TextComponent::translate(
-                                "commands.experience.add.levels.success.single",
-                                [
-                                    TextComponent::text(amount.to_string()),
-                                    TextComponent::text(target.gameprofile.name.clone()),
-                                ]
-                                .into(),
-                            )
+                    // Send appropriate success message
+                    let msg = match (self.mode, self.exp_type.unwrap()) {
+                        (Mode::Add, ExpType::Points) => {
+                            if targets.len() > 1 {
+                                TextComponent::translate(
+                                    "commands.experience.add.points.success.multiple",
+                                    [
+                                        TextComponent::text(amount.to_string()),
+                                        TextComponent::text(targets.len().to_string()),
+                                    ]
+                                    .into(),
+                                )
+                            } else {
+                                TextComponent::translate(
+                                    "commands.experience.add.points.success.single",
+                                    [
+                                        TextComponent::text(amount.to_string()),
+                                        TextComponent::text(target.gameprofile.name.clone()),
+                                    ]
+                                    .into(),
+                                )
+                            }
                         }
-                    } else if targets.len() > 1 {
-                        TextComponent::translate(
-                            "commands.experience.set.levels.success.multiple",
-                            [
-                                TextComponent::text(new_level.to_string()),
-                                TextComponent::text(targets.len().to_string()),
-                            ]
-                            .into(),
-                        )
-                    } else {
-                        TextComponent::translate(
-                            "commands.experience.set.levels.success.single",
-                            [
-                                TextComponent::text(new_level.to_string()),
-                                TextComponent::text(target.gameprofile.name.clone()),
-                            ]
-                            .into(),
-                        )
+                        (Mode::Add, ExpType::Levels) => {
+                            if targets.len() > 1 {
+                                TextComponent::translate(
+                                    "commands.experience.add.levels.success.multiple",
+                                    [
+                                        TextComponent::text(amount.to_string()),
+                                        TextComponent::text(targets.len().to_string()),
+                                    ]
+                                    .into(),
+                                )
+                            } else {
+                                TextComponent::translate(
+                                    "commands.experience.add.levels.success.single",
+                                    [
+                                        TextComponent::text(amount.to_string()),
+                                        TextComponent::text(target.gameprofile.name.clone()),
+                                    ]
+                                    .into(),
+                                )
+                            }
+                        }
+                        (Mode::Set, exp_type) => {
+                            if targets.len() > 1 {
+                                TextComponent::translate(
+                                    if exp_type == ExpType::Levels {
+                                        "commands.experience.set.levels.success.multiple"
+                                    } else {
+                                        "commands.experience.set.points.success.multiple"
+                                    },
+                                    [
+                                        TextComponent::text(amount.to_string()),
+                                        TextComponent::text(targets.len().to_string()),
+                                    ]
+                                    .into(),
+                                )
+                            } else {
+                                TextComponent::translate(
+                                    if exp_type == ExpType::Levels {
+                                        "commands.experience.set.levels.success.single"
+                                    } else {
+                                        "commands.experience.set.points.success.single"
+                                    },
+                                    [
+                                        TextComponent::text(amount.to_string()),
+                                        TextComponent::text(target.gameprofile.name.clone()),
+                                    ]
+                                    .into(),
+                                )
+                            }
+                        }
+                        _ => unreachable!(),
                     };
                     sender.send_message(msg).await;
-                    break; // Only send message once for multiple targets
                 }
             }
         }
@@ -169,16 +236,50 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("add")
                 .then(argument(ARG_TARGETS, PlayersArgumentConsumer).then(
-                    argument(ARG_AMOUNT, xp_amount()).execute(ExperienceExecutor(Mode::Add)),
+                    argument(ARG_AMOUNT, xp_amount())
+                        .then(literal("levels").execute(ExperienceExecutor {
+                            mode: Mode::Add,
+                            exp_type: Some(ExpType::Levels),
+                        }))
+                        .then(literal("points").execute(ExperienceExecutor {
+                            mode: Mode::Add,
+                            exp_type: Some(ExpType::Points),
+                        }))
+                        .execute(ExperienceExecutor {
+                            mode: Mode::Add,
+                            exp_type: Some(ExpType::Points),
+                        }),
                 )),
         )
         .then(
             literal("set")
                 .then(argument(ARG_TARGETS, PlayersArgumentConsumer).then(
-                    argument(ARG_AMOUNT, xp_amount()).execute(ExperienceExecutor(Mode::Set)),
+                    argument(ARG_AMOUNT, xp_amount())
+                        .then(literal("levels").execute(ExperienceExecutor {
+                            mode: Mode::Set,
+                            exp_type: Some(ExpType::Levels),
+                        }))
+                        .then(literal("points").execute(ExperienceExecutor {
+                            mode: Mode::Set,
+                            exp_type: Some(ExpType::Points),
+                        }))
+                        .execute(ExperienceExecutor {
+                            mode: Mode::Set,
+                            exp_type: Some(ExpType::Points),
+                        }),
                 )),
         )
-        .then(literal("query").then(
-            argument(ARG_TARGETS, PlayersArgumentConsumer).execute(ExperienceExecutor(Mode::Query)),
-        ))
+        .then(
+            literal("query").then(
+                argument(ARG_TARGETS, PlayersArgumentConsumer)
+                    .then(literal("levels").execute(ExperienceExecutor {
+                        mode: Mode::Query,
+                        exp_type: Some(ExpType::Levels),
+                    }))
+                    .then(literal("points").execute(ExperienceExecutor {
+                        mode: Mode::Query,
+                        exp_type: Some(ExpType::Points),
+                    })),
+            ),
+        )
 }

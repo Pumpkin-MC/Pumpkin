@@ -55,6 +55,7 @@ use pumpkin_util::{
     text::TextComponent,
     GameMode,
 };
+use pumpkin_util::math::experience;
 use pumpkin_world::{
     cylindrical_chunk_iterator::Cylindrical,
     item::{
@@ -748,6 +749,45 @@ impl Player {
                 level.into(),
             ))
             .await;
+    }
+
+    /// Returns the amount of experience required to reach the next level from the current level
+    pub fn get_exp_to_next_level(&self) -> i32 {
+        experience::get_exp_to_next_level(self.experience_level.load(Ordering::Relaxed))
+    }
+
+    /// Adds experience points to the player
+    pub async fn add_experience(&self, exp: i32) {
+        let current_total = self.total_experience.load(Ordering::Relaxed);
+        let new_total = current_total + exp;
+        let new_level = experience::get_level_from_total_exp(new_total);
+        let progress = experience::get_progress_from_total_exp(new_total);
+        
+        self.set_experience(new_level, progress, new_total).await;
+    }
+
+    /// Sets the player's experience level directly
+    pub async fn set_level(&self, level: i32) {
+        let total_exp = experience::get_total_exp_to_level(level);
+        self.set_experience(level, 0.0, total_exp).await;
+    }
+
+    /// Returns the total amount of experience points required to reach a specific level
+    pub fn get_total_exp_to_level(level: i32) -> i32 {
+        match level {
+            0..=16 => level * level + 6 * level,
+            17..=31 => ((2.5 * f64::from(level * level)) - (40.5 * f64::from(level)) + 360.0) as i32,
+            _ => ((4.5 * f64::from(level * level)) - (162.5 * f64::from(level)) + 2220.0) as i32,
+        }
+    }
+
+    /// Calculates level from total experience points
+    pub fn get_level_from_total_exp(total_exp: i32) -> i32 {
+        match total_exp {
+            0..=352 => ((total_exp as f64 + 9.0).sqrt() - 3.0) as i32,
+            353..=1507 => (81.0 + (total_exp as f64 - 7839.0) / 40.0).sqrt() as i32,
+            _ => (325.0 + (total_exp as f64 - 54215.0) / 72.0).sqrt() as i32,
+        }
     }
 }
 
