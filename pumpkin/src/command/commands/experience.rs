@@ -177,11 +177,12 @@ impl ExperienceExecutor {
 
     async fn handle_modify(
         &self,
-        target: &Player,  // Remove sender parameter since we'll handle errors in execute
+        target: &Player, // Remove sender parameter since we'll handle errors in execute
         amount: i32,
         exp_type: ExpType,
         mode: Mode,
-    ) -> Result<(), &'static str> {  // Change return type to indicate error reason
+    ) -> Result<(), &'static str> {
+        // Change return type to indicate error reason
         match exp_type {
             ExpType::Levels => {
                 let current_level = target.experience_level.load(Ordering::Relaxed);
@@ -205,17 +206,18 @@ impl ExperienceExecutor {
                     let current_level = target.experience_level.load(Ordering::Relaxed);
                     let current_level_start = experience::get_total_exp_to_level(current_level);
                     let next_level_start = experience::get_total_exp_to_level(current_level + 1);
-                    
+
                     // Amount must be between current level's start and next level's start (exclusive)
                     if amount < current_level_start || amount >= next_level_start {
                         return Err("commands.experience.set.points.invalid");
                     }
-                    
+
                     // Calculate progress within current level
                     let level_points = amount - current_level_start;
                     let points_needed = next_level_start - current_level_start;
+                    #[allow(clippy::cast_precision_loss)]
                     let progress = level_points as f32 / points_needed as f32;
-                    
+
                     target.set_experience(current_level, progress, amount).await;
                 }
             }
@@ -266,7 +268,10 @@ impl CommandExecutor for ExperienceExecutor {
                 }
 
                 for target in targets {
-                    match self.handle_modify(target, amount, self.exp_type.unwrap(), self.mode).await {
+                    match self
+                        .handle_modify(target, amount, self.exp_type.unwrap(), self.mode)
+                        .await
+                    {
                         Ok(()) => {
                             let msg = Self::get_success_message(
                                 self.mode,
