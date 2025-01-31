@@ -45,36 +45,31 @@ impl CommandExecutor for DamageLocationExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
-        let amount = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT) {
-            Ok(Ok(v)) => v,
-            _ => {
-                sender
-                    .send_message(
-                        TextComponent::text("Invalid damage amount")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-                return Ok(());
-            }
+
+        let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT) else {
+            sender
+                .send_message(
+                    TextComponent::text("Invalid damage amount")
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
+            return Ok(());
         };
 
         let damage_type = args
             .get(ARG_DAMAGE_TYPE)
-            .map(|arg| match arg {
+            .map_or(DamageType::Generic, |arg| match arg {
                 Arg::DamageType(dt) => **dt,
                 _ => DamageType::Generic,
-            })
-            .unwrap_or(DamageType::Generic);
+            });
 
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-        // Apply damage from location with position
         target
             .living_entity
-            .damage_with_context(amount, damage_type, Some(location.clone()), None, None)
+            .damage_with_context(amount, damage_type, Some(location), None, None)
             .await;
 
-        // Send success message
         sender
             .send_message(TextComponent::translate(
                 "commands.damage.success",
@@ -99,29 +94,24 @@ impl CommandExecutor for DamageEntityExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
-        let amount = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT) {
-            Ok(Ok(v)) => v,
-            _ => {
-                sender
-                    .send_message(
-                        TextComponent::text("Invalid damage amount")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-                return Ok(());
-            }
+
+        let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT) else {
+            sender
+                .send_message(
+                    TextComponent::text("Invalid damage amount")
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
+            return Ok(());
         };
 
-        // Default to generic damage if no type specified
         let damage_type = args
             .get(ARG_DAMAGE_TYPE)
-            .map(|arg| match arg {
+            .map_or(DamageType::Generic, |arg| match arg {
                 Arg::DamageType(dt) => **dt,
                 _ => DamageType::Generic,
-            })
-            .unwrap_or(DamageType::Generic);
+            });
 
-        // Get source and cause entities if specified
         let source = EntityArgumentConsumer::find_arg(args, ARG_ENTITY).ok();
         let cause = if self.0 {
             EntityArgumentConsumer::find_arg(args, ARG_CAUSE).ok()
@@ -129,13 +119,11 @@ impl CommandExecutor for DamageEntityExecutor {
             None
         };
 
-        // Apply damage with entity context
         target
             .living_entity
             .damage_with_context(amount, damage_type, None, source, cause)
             .await;
 
-        // Send success message
         sender
             .send_message(TextComponent::translate(
                 "commands.damage.success",

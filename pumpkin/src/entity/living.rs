@@ -101,7 +101,7 @@ impl LivingEntity {
     // Modify existing damage method to use new one
     pub async fn damage(&self, amount: f32, damage_type: DamageType) {
         self.damage_with_context(amount, damage_type, None, None, None)
-            .await
+            .await;
     }
 
     /// Returns if the entity was damaged or not
