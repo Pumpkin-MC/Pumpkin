@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use dashmap::{DashMap, Entry};
 use num_traits::Zero;
+use pumpkin_config::{chunk::ChunkFormat, ADVANCED_CONFIG};
 use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::{
@@ -11,8 +12,8 @@ use tokio::{
 
 use crate::{
     chunk::{
-        anvil::AnvilChunkFormat, ChunkData, ChunkParsingError, ChunkReader, ChunkReadingError,
-        ChunkWriter,
+        anvil::AnvilChunkFormat, linear::LinearChunkFormat, ChunkData, ChunkParsingError,
+        ChunkReader, ChunkReadingError, ChunkWriter,
     },
     generation::{get_world_gen, Seed, WorldGenerator},
     lock::{anvil::AnvilLevelLocker, LevelLocker},
@@ -72,13 +73,23 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
+        let format_reader: Arc<dyn ChunkReader> = match ADVANCED_CONFIG.chunk.file_format {
+            ChunkFormat::Anvil => Arc::new(AnvilChunkFormat),
+            ChunkFormat::Linear => Arc::new(LinearChunkFormat),
+        };
+
+        let format_writer: Arc<dyn ChunkWriter> = match ADVANCED_CONFIG.chunk.file_format {
+            ChunkFormat::Anvil => Arc::new(AnvilChunkFormat),
+            ChunkFormat::Linear => Arc::new(LinearChunkFormat),
+        };
+
         Self {
             seed,
             world_gen,
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
-            chunk_reader: Arc::new(AnvilChunkFormat),
-            chunk_writer: Arc::new(AnvilChunkFormat),
+            chunk_reader: format_reader,
+            chunk_writer: format_writer,
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,

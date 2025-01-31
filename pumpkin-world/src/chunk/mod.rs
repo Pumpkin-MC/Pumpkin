@@ -1,9 +1,16 @@
 use fastnbt::LongArray;
+use log::warn;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with};
+use std::{
+    collections::HashMap,
+    iter::repeat_with,
+    path::{Path, PathBuf},
+    sync::{Arc, LazyLock},
+};
 use thiserror::Error;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     block::BlockState,
@@ -13,12 +20,15 @@ use crate::{
 };
 
 pub mod anvil;
+pub mod linear;
 
 pub const CHUNK_AREA: usize = 16 * 16;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
 pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;
 pub const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
 
+// Manejador global para múltiples archivos
+static FILE_LOCK_MANAGER: LazyLock<FileLocksManager> = LazyLock::new(FileLocksManager::default);
 pub trait ChunkReader: Sync + Send {
     fn read_chunk(
         &self,
@@ -72,6 +82,16 @@ pub enum CompressionError {
     GZipError(std::io::Error),
     #[error("Error while working with LZ4 compression: {0}")]
     LZ4Error(std::io::Error),
+    #[error("Error while working with zstd compression: {0}")]
+    ZstdError(std::io::Error),
+}
+
+type FileLocks = HashMap<PathBuf, Arc<RwLock<()>>>;
+/// Central File Lock Manager for chunk files
+/// This is used to prevent multiple threads from writing to the same file at the same time
+#[derive(Clone, Default)]
+pub struct FileLocksManager {
+    locks: Arc<Mutex<FileLocks>>,
 }
 
 pub struct ChunkData {
@@ -160,6 +180,33 @@ struct ChunkNbt {
     #[serde(rename = "sections")]
     sections: Vec<ChunkSection>,
     heightmaps: ChunkHeightmaps,
+}
+
+impl FileLocksManager {
+    pub fn get_file_lock(path: &Path) -> Arc<RwLock<()>> {
+        tokio::task::block_in_place(|| {
+            let mut file_locks = FILE_LOCK_MANAGER.locks.blocking_lock();
+
+            if let Some(file_lock) = file_locks.get(path).cloned() {
+                file_lock
+            } else {
+                file_locks
+                    .entry(path.to_path_buf())
+                    .or_insert_with(|| {
+                        warn!("Creating new FileLock for {:?}", path);
+                        Arc::new(RwLock::new(()))
+                    })
+                    .clone()
+            }
+        })
+    }
+
+    pub fn remove_file_lock(path: &Path) {
+        tokio::task::block_in_place(|| {
+            FILE_LOCK_MANAGER.locks.blocking_lock().remove(path);
+            warn!("Removed FileLock for {:?}", path);
+        })
+    }
 }
 
 /// The Heightmap for a completely empty chunk

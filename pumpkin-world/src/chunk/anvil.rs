@@ -526,8 +526,8 @@ mod tests {
     fn test_writing() {
         let generator = get_world_gen(Seed(0));
         let level_folder = LevelFolder {
-            root_folder: PathBuf::from("./tmp"),
-            region_folder: PathBuf::from("./tmp/region"),
+            root_folder: PathBuf::from("./tmp_Anvil"),
+            region_folder: PathBuf::from("./tmp_Anvil/region"),
         };
         if fs::exists(&level_folder.root_folder).unwrap() {
             fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
