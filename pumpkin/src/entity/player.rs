@@ -655,12 +655,21 @@ impl Player {
             gamemode,
             "Setting the same gamemode as already is"
         );
+
         self.gamemode.store(gamemode);
+        
+        // Set invulnerability based on gamemode
+        self.living_entity.entity.invulnerable.store(
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         {
             // use another scope so we instantly unlock abilities
             let mut abilities = self.abilities.lock().await;
             abilities.set_for_gamemode(gamemode);
         };
+
         self.send_abilities_update().await;
         self.living_entity
             .entity

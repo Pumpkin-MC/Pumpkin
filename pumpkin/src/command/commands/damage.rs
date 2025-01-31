@@ -8,7 +8,7 @@ use pumpkin_util::text::{
 use crate::command::{
     args::{
         bounded_num::BoundedNumArgumentConsumer,
-        damage_type::DamageTypeArgumentConsumer, // Add this import
+        damage_type::DamageTypeArgumentConsumer,
         entity::EntityArgumentConsumer,
         position_3d::Position3DArgumentConsumer,
         Arg,
@@ -34,7 +34,7 @@ fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
 }
 
 struct DamageLocationExecutor;
-struct DamageEntityExecutor(bool); // true if has cause
+struct DamageEntityExecutor(bool);
 
 #[async_trait]
 impl CommandExecutor for DamageLocationExecutor {
@@ -64,6 +64,20 @@ impl CommandExecutor for DamageLocationExecutor {
             });
 
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+
+        if !target
+            .living_entity
+            .damage_with_context(amount, damage_type, Some(location), None, None)
+            .await 
+        {
+            sender
+                .send_message(
+                    TextComponent::translate("commands.damage.invulnerable", [].into())
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
+            return Ok(());
+        }
 
         target
             .living_entity
@@ -118,6 +132,26 @@ impl CommandExecutor for DamageEntityExecutor {
         } else {
             None
         };
+
+        if !target
+            .living_entity
+            .damage_with_context(
+                amount,
+                damage_type,
+                None,
+                source.as_ref().map(|e| &e.living_entity.entity),
+                cause.as_ref().map(|e| &e.living_entity.entity),
+            )
+            .await 
+        {
+            sender
+                .send_message(
+                    TextComponent::translate("commands.damage.invulnerable", [].into())
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
+            return Ok(());
+        }
 
         target
             .living_entity

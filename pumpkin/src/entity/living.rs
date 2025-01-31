@@ -73,7 +73,12 @@ impl LivingEntity {
         position: Option<Vector3<f64>>,
         source: Option<&Entity>,
         cause: Option<&Entity>,
-    ) {
+    ) -> bool {
+        // Check invulnerability before applying damage
+        if self.entity.is_invulnerable_to(damage_type) {
+            return false;
+        }
+
         self.entity
             .world
             .broadcast_packet_all(&CDamageEvent::new(
@@ -92,16 +97,23 @@ impl LivingEntity {
         } else {
             self.set_health(new_health).await;
         }
+
+        true
     }
 
     // Modify existing damage method to use new one
-    pub async fn damage(&self, amount: f32, damage_type: DamageType) {
+    pub async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
         self.damage_with_context(amount, damage_type, None, None, None)
-            .await;
+            .await
     }
 
     /// Returns if the entity was damaged or not
     pub fn check_damage(&self, amount: f32) -> bool {
+        // Check invulnerability
+        if self.entity.invulnerable.load(std::sync::atomic::Ordering::Relaxed) {
+            return false;
+        }
+
         let regen = self
             .time_until_regen
             .load(std::sync::atomic::Ordering::Relaxed);
