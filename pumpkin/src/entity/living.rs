@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicI32;
+use std::sync::{atomic::AtomicI32, Arc};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -7,7 +7,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, MetaDataType, Metadata};
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{Entity, EntityId, NBTStorage};
+use super::{player::Player, Entity, EntityId, NBTStorage};
 
 /// Represents a living entity within the game world.
 ///
@@ -66,16 +66,22 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
-    // TODO add damage_type enum
-    pub async fn damage(&self, amount: f32, damage_type: DamageType) {
+    pub async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<Arc<Player>>,
+        cause: Option<Arc<Player>>,
+    ) {
         self.entity
             .world
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
                 damage_type.data().id.into(),
-                None,
-                None,
-                None,
+                source.map(|p| p.entity_id().into()),
+                cause.map(|p| p.entity_id().into()),
+                position,
             ))
             .await;
 
@@ -86,6 +92,12 @@ impl LivingEntity {
         } else {
             self.set_health(new_health).await;
         }
+    }
+
+    // Modify existing damage method to use new one
+    pub async fn damage(&self, amount: f32, damage_type: DamageType) {
+        self.damage_with_context(amount, damage_type, None, None, None)
+            .await
     }
 
     /// Returns if the entity was damaged or not

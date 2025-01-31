@@ -11,7 +11,9 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
-    damage::DamageType, entity::EntityType, sound::{Sound, SoundCategory}
+    damage::DamageType,
+    entity::EntityType,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_nbt::compound::NbtCompound;
