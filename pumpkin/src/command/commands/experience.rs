@@ -108,7 +108,70 @@ impl ExperienceExecutor {
                     )
                 }
             }
-            _ => TextComponent::text(""), // Unreachable
+            (Mode::Add, ExpType::Levels) => {
+                if targets_len > 1 {
+                    TextComponent::translate(
+                        "commands.experience.add.levels.success.multiple",
+                        [
+                            TextComponent::text(amount.to_string()),
+                            TextComponent::text(targets_len.to_string()),
+                        ]
+                        .into(),
+                    )
+                } else {
+                    TextComponent::translate(
+                        "commands.experience.add.levels.success.single",
+                        [
+                            TextComponent::text(amount.to_string()),
+                            TextComponent::text(target_name.unwrap()),
+                        ]
+                        .into(),
+                    )
+                }
+            }
+            (Mode::Set, ExpType::Points) => {
+                if targets_len > 1 {
+                    TextComponent::translate(
+                        "commands.experience.set.points.success.multiple",
+                        [
+                            TextComponent::text(amount.to_string()),
+                            TextComponent::text(targets_len.to_string()),
+                        ]
+                        .into(),
+                    )
+                } else {
+                    TextComponent::translate(
+                        "commands.experience.set.points.success.single",
+                        [
+                            TextComponent::text(amount.to_string()),
+                            TextComponent::text(target_name.unwrap()),
+                        ]
+                        .into(),
+                    )
+                }
+            }
+            (Mode::Set, ExpType::Levels) => {
+                if targets_len > 1 {
+                    TextComponent::translate(
+                        "commands.experience.set.levels.success.multiple",
+                        [
+                            TextComponent::text(amount.to_string()),
+                            TextComponent::text(targets_len.to_string()),
+                        ]
+                        .into(),
+                    )
+                } else {
+                    TextComponent::translate(
+                        "commands.experience.set.levels.success.single",
+                        [
+                            TextComponent::text(amount.to_string()),
+                            TextComponent::text(target_name.unwrap()),
+                        ]
+                        .into(),
+                    )
+                }
+            }
+            (Mode::Query, _) => unreachable!("Query mode doesn't use success messages"),
         }
     }
 
