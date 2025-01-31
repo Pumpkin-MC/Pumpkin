@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicI32, Arc};
+use std::sync::atomic::AtomicI32;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -7,7 +7,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, MetaDataType, Metadata};
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{player::Player, Entity, EntityId, NBTStorage};
+use super::{Entity, EntityId, NBTStorage};
 
 /// Represents a living entity within the game world.
 ///
@@ -71,16 +71,16 @@ impl LivingEntity {
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
-        source: Option<Arc<Player>>,
-        cause: Option<Arc<Player>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
     ) {
         self.entity
             .world
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
                 damage_type.data().id.into(),
-                source.map(|p| p.entity_id().into()),
-                cause.map(|p| p.entity_id().into()),
+                source.map(|e| e.entity_id.into()),
+                cause.map(|e| e.entity_id.into()),
                 position,
             ))
             .await;

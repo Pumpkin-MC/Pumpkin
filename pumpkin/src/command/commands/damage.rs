@@ -121,7 +121,13 @@ impl CommandExecutor for DamageEntityExecutor {
 
         target
             .living_entity
-            .damage_with_context(amount, damage_type, None, source, cause)
+            .damage_with_context(
+                amount,
+                damage_type,
+                None,
+                source.as_ref().map(|e| &e.living_entity.entity),
+                cause.as_ref().map(|e| &e.living_entity.entity),
+            )
             .await;
 
         sender
