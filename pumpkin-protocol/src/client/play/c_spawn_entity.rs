@@ -10,7 +10,7 @@ pub struct CSpawnEntity {
     entity_id: VarInt,
     #[serde(with = "uuid::serde::compact")]
     entity_uuid: uuid::Uuid,
-    typ: VarInt,
+    entity_type: VarInt,
     x: f64,
     y: f64,
     z: f64,
@@ -28,7 +28,7 @@ impl CSpawnEntity {
     pub fn new(
         entity_id: VarInt,
         entity_uuid: uuid::Uuid,
-        typ: VarInt,
+        entity_type: VarInt,
         x: f64,
         y: f64,
         z: f64,
@@ -43,7 +43,7 @@ impl CSpawnEntity {
         Self {
             entity_id,
             entity_uuid,
-            typ,
+            entity_type,
             x,
             y,
             z,

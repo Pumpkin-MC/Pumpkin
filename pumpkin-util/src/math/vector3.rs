@@ -10,6 +10,21 @@ pub struct Vector3<T> {
     pub z: T,
 }
 
+impl Vector3<f32> {
+    pub fn new_from_euler(yaw: f32, pitch: f32) -> Self {
+        // TODO: is this because the player is not oriented in the right direction?
+        let rad_yaw = (yaw + 90.0).to_radians();
+        let rad_pitch = (pitch * -1.0).to_radians();
+
+        let cos_rad_pitch = f32::cos(rad_pitch);
+        Vector3 {
+            x: f32::cos(rad_yaw) * cos_rad_pitch,
+            y: f32::sin(rad_pitch),
+            z: f32::sin(rad_yaw) * cos_rad_pitch,
+        }
+    }
+}
+
 impl<T: Math + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Vector3 { x, y, z }
@@ -24,6 +39,14 @@ impl<T: Math + Copy> Vector3<T> {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
+        }
+    }
+
+    pub fn add_indv(&self, x: T, y: T, z: T) -> Self {
+        Vector3 {
+            x: self.x + x,
+            y: self.y + y,
+            z: self.z + z,
         }
     }
 
