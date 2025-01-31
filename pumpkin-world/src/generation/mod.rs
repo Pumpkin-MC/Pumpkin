@@ -8,6 +8,7 @@ mod generator;
 mod generic_generator;
 pub mod height_limit;
 mod implementation;
+pub mod multi_noise_sampler;
 pub mod noise;
 pub mod ore_sampler;
 mod positions;
@@ -17,11 +18,11 @@ mod seed;
 pub use generator::WorldGenerator;
 use implementation::{
     //overworld::biome::plains::PlainsGenerator,
-    test::{TestBiomeGenerator, TestGenerator, TestTerrainGenerator},
+    test::{TestGenerator, TestTerrainGenerator},
 };
 pub use seed::Seed;
 
-use generator::GeneratorInit;
+pub use generator::GeneratorInit;
 
 pub fn get_world_gen(seed: Seed) -> Box<dyn WorldGenerator> {
     // TODO decide which WorldGenerator to pick based on config.

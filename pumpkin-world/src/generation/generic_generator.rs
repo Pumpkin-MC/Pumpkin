@@ -2,17 +2,19 @@ use noise::{NoiseFn, Perlin};
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
+    biome::BiomeSupplier,
+    chunk::ChunkData,
     chunk::{ChunkData, Subchunks},
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
     WORLD_LOWEST_Y,
 };
 
 use super::{
-    generator::{BiomeGenerator, GeneratorInit, PerlinTerrainGenerator, WorldGenerator},
+    generator::{GeneratorInit, PerlinTerrainGenerator, WorldGenerator},
     Seed,
 };
 
-pub struct GenericGenerator<B: BiomeGenerator, T: PerlinTerrainGenerator> {
+pub struct GenericGenerator<B: BiomeSupplier + Send + Sync, T: PerlinTerrainGenerator> {
     biome_generator: B,
     terrain_generator: T,
     // TODO: May make this optional?. But would be pain to use in most biomes then. Maybe make a new trait like
@@ -20,8 +22,8 @@ pub struct GenericGenerator<B: BiomeGenerator, T: PerlinTerrainGenerator> {
     perlin: Perlin,
 }
 
-impl<B: BiomeGenerator + GeneratorInit, T: PerlinTerrainGenerator + GeneratorInit> GeneratorInit
-    for GenericGenerator<B, T>
+impl<B: BiomeSupplier + GeneratorInit + Send + Sync, T: PerlinTerrainGenerator + GeneratorInit>
+    GeneratorInit for GenericGenerator<B, T>
 {
     fn new(seed: Seed) -> Self {
         Self {
@@ -32,7 +34,9 @@ impl<B: BiomeGenerator + GeneratorInit, T: PerlinTerrainGenerator + GeneratorIni
     }
 }
 
-impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGenerator<B, T> {
+impl<B: BiomeSupplier + Send + Sync, T: PerlinTerrainGenerator> WorldGenerator
+    for GenericGenerator<B, T>
+{
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
         let mut subchunks = Subchunks::Single(0);
         self.terrain_generator.prepare_chunk(&at, &self.perlin);
@@ -44,14 +48,6 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
 
         for x in 0..16u8 {
             for z in 0..16u8 {
-                let biome = self.biome_generator.generate_biome(
-                    ChunkRelativeXZBlockCoordinates {
-                        x: x.into(),
-                        z: z.into(),
-                    }
-                    .with_chunk_coordinates(at),
-                );
-
                 // Iterate from the highest block to the lowest, in order to minimize the heightmap updates
                 for y in (WORLD_LOWEST_Y..chunk_height).rev() {
                     let coordinates = ChunkRelativeBlockCoordinates {
@@ -59,6 +55,10 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
                         y: y.into(),
                         z: z.into(),
                     };
+
+                    let biome = self
+                        .biome_generator
+                        .biome(coordinates.with_chunk_coordinates(at));
 
                     //coordinates,
                     self.terrain_generator.generate_block(
