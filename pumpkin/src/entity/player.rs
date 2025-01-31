@@ -21,7 +21,8 @@ use pumpkin_protocol::{
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-        CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
+        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent,
+        PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -135,6 +136,12 @@ pub struct Player {
     pub client_loaded: AtomicBool,
     /// timeout (in ticks) client has to report it has finished loading.
     pub client_loaded_timeout: AtomicU32,
+    /// The player's experience level
+    pub experience_level: AtomicI32,
+    /// The player's experience progress (0.0 to 1.0)
+    pub experience_progress: AtomicCell<f32>,
+    /// The player's total experience points
+    pub total_experience: AtomicI32,
 }
 
 impl Player {
@@ -216,6 +223,9 @@ impl Player {
                     |op| AtomicCell::new(op.level),
                 ),
             inventory: Mutex::new(PlayerInventory::new()),
+            experience_level: AtomicI32::new(0),
+            experience_progress: AtomicCell::new(0.0),
+            total_experience: AtomicI32::new(0),
         }
     }
 
@@ -724,7 +734,23 @@ impl Player {
             .send_packet(&CSystemChatMessage::new(text, overlay))
             .await;
     }
+
+    /// Sets the player's experience level and updates the client
+    pub async fn set_experience(&self, level: i32, progress: f32, total_exp: i32) {
+        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_progress.store(progress.clamp(0.0, 1.0));
+        self.total_experience.store(total_exp, Ordering::Relaxed);
+
+        self.client
+            .send_packet(&CSetExperience::new(
+                progress.clamp(0.0, 1.0),
+                total_exp.into(),
+                level.into(),
+            ))
+            .await;
+    }
 }
+
 #[async_trait]
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -734,12 +760,21 @@ impl NBTStorage for Player {
             self.inventory.lock().await.selected as i32,
         );
         self.abilities.lock().await.write_nbt(nbt).await;
+        nbt.put_int("XpLevel", self.experience_level.load(Ordering::Relaxed));
+        nbt.put_float("XpProgress", self.experience_progress.load());
+        nbt.put_int("XpTotal", self.total_experience.load(Ordering::Relaxed));
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
         self.abilities.lock().await.read_nbt(nbt).await;
+        self.experience_level
+            .store(nbt.get_int("XpLevel").unwrap_or(0), Ordering::Relaxed);
+        self.experience_progress
+            .store(nbt.get_float("XpProgress").unwrap_or(0.0));
+        self.total_experience
+            .store(nbt.get_int("XpTotal").unwrap_or(0), Ordering::Relaxed);
     }
 }
 
