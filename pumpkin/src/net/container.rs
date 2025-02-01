@@ -490,7 +490,7 @@ impl Player {
             .living_entity
             .entity
             .world
-            .current_players
+            .players
             .lock()
             .await
             .iter()
@@ -506,7 +506,7 @@ impl Player {
         players
     }
 
-    async fn send_container_changes(
+    pub async fn send_container_changes(
         &self,
         server: &Server,
         slot_index: usize,

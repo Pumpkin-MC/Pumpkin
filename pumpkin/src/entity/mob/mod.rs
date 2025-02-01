@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 use zombie::Zombie;
 
 use crate::{server::Server, world::World};
@@ -11,18 +11,20 @@ use crate::{server::Server, world::World};
 use super::{
     ai::{goal::Goal, path::Navigator},
     living::LivingEntity,
+    Entity, EntityBase,
 };
 
 pub mod zombie;
 
 pub struct MobEntity {
-    pub living_entity: Arc<LivingEntity>,
+    pub living_entity: LivingEntity,
     pub goals: Mutex<Vec<(Arc<dyn Goal>, bool)>>,
     pub navigator: Mutex<Navigator>,
 }
 
-impl MobEntity {
-    pub async fn tick(&self) {
+#[async_trait]
+impl EntityBase for MobEntity {
+    async fn tick(&self) {
         let mut goals = self.goals.lock().await;
         for (goal, running) in goals.iter_mut() {
             if *running {
@@ -38,6 +40,14 @@ impl MobEntity {
         let mut navigator = self.navigator.lock().await;
         navigator.tick(&self.living_entity).await;
     }
+
+    fn get_entity(&self) -> &Entity {
+        &self.living_entity.entity
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        Some(&self.living_entity)
+    }
 }
 
 pub async fn from_type(
@@ -45,15 +55,20 @@ pub async fn from_type(
     server: &Server,
     position: Vector3<f64>,
     world: &Arc<World>,
-) -> (Arc<MobEntity>, Uuid) {
-    let entity = server.add_mob_entity(entity_type, position, world).await;
+) -> Arc<dyn EntityBase> {
+    let entity = server.add_entity(position, entity_type, world);
+    let mob = MobEntity {
+        living_entity: LivingEntity::new(entity),
+        goals: Mutex::new(vec![]),
+        navigator: Mutex::new(Navigator::default()),
+    };
     #[expect(clippy::single_match)]
     match entity_type {
-        EntityType::Zombie => Zombie::make(&entity.0).await,
+        EntityType::Zombie => Zombie::make(&mob).await,
         // TODO
         _ => (),
     }
-    entity
+    Arc::new(mob)
 }
 
 impl MobEntity {

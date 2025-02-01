@@ -41,7 +41,7 @@ pub(crate) trait PerlinTerrainGenerator: Sync + Send {
 
     fn prepare_chunk(&self, at: &Vector2<i32>, perlin: &Perlin);
 
-    /// Dependens on the perlin noise height
+    /// Depends on the perlin noise height
     fn generate_block(
         &self,
         coordinates: ChunkRelativeBlockCoordinates,

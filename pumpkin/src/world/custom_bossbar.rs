@@ -9,11 +9,11 @@ use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
-pub enum BossbarUpdateError {
+pub enum BossbarUpdateError<'a> {
     #[error("Invalid resource location")]
     InvalidResourceLocation(String),
     #[error("No changes")]
-    NoChanges(String),
+    NoChanges(&'a str, Option<&'a str>),
 }
 
 /// Representing the stored custom boss bars from level.dat
@@ -148,9 +148,7 @@ impl CustomBossbars {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.value == value && bossbar.max == max_value {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "That's already the value of this bossbar",
-                )));
+                return Err(BossbarUpdateError::NoChanges("value", None));
             }
 
             let ratio = f64::from(value) / f64::from(max_value);
@@ -199,15 +197,11 @@ impl CustomBossbars {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.visible == new_visibility && new_visibility {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "The bossbar is already visible",
-                )));
+                return Err(BossbarUpdateError::NoChanges("visibility", Some("visible")));
             }
 
             if bossbar.visible == new_visibility && !new_visibility {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "The bossbar is already hidden",
-                )));
+                return Err(BossbarUpdateError::NoChanges("visibility", Some("hidden")));
             }
 
             bossbar.visible = new_visibility;
@@ -242,9 +236,7 @@ impl CustomBossbars {
         let bossbar = self.custom_bossbars.get_mut(resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.title == new_title {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "That's already the name of this bossbar",
-                )));
+                return Err(BossbarUpdateError::NoChanges("name", None));
             }
 
             bossbar.bossbar_data.title = new_title;
@@ -283,9 +275,7 @@ impl CustomBossbars {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.color == new_color {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "That's already the color of this bossbar",
-                )));
+                return Err(BossbarUpdateError::NoChanges("color", None));
             }
 
             bossbar.bossbar_data.color = new_color;
@@ -325,9 +315,7 @@ impl CustomBossbars {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.division == new_division {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "That's already the style of this bossbar",
-                )));
+                return Err(BossbarUpdateError::NoChanges("style", None));
             }
 
             bossbar.bossbar_data.division = new_division;
@@ -381,9 +369,7 @@ impl CustomBossbars {
                 .collect();
 
             if removed_players.is_empty() && added_players.is_empty() {
-                return Err(BossbarUpdateError::NoChanges(String::from(
-                    "Those players are already on the bossbar with nobody to add or remove",
-                )));
+                return Err(BossbarUpdateError::NoChanges("players", None));
             }
 
             if bossbar.visible {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 /// Packet compression
 pub struct CompressionConfig {
-    /// Wether compression is enabled
+    /// Whether compression is enabled
     pub enabled: bool,
     #[serde(flatten)]
     pub compression_info: CompressionInfo,

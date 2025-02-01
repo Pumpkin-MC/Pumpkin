@@ -8,7 +8,8 @@ use crate::command::CommandSender;
 
 impl CommandTree {
     /// Add a child [Node] to the root of this [`CommandTree`].
-    pub fn with_child(mut self, child: impl NodeBuilder) -> Self {
+    #[must_use]
+    pub fn then(mut self, child: impl NodeBuilder) -> Self {
         let node = child.build(&mut self);
         self.children.push(self.nodes.len());
         self.nodes.push(node);
@@ -16,6 +17,7 @@ impl CommandTree {
     }
 
     /// provide at least one name
+    #[must_use]
     pub fn new(
         names: impl IntoIterator<Item: Into<String>>,
         description: impl Into<String>,
@@ -37,6 +39,7 @@ impl CommandTree {
     /// desired type.
     ///
     /// Also see [`NonLeafNodeBuilder::execute`].
+    #[must_use]
     pub fn execute(mut self, executor: impl CommandExecutor + 'static + Send) -> Self {
         let node = Node {
             node_type: NodeType::ExecuteLeaf {
@@ -100,7 +103,8 @@ impl NodeBuilder for NonLeafNodeBuilder {
 
 impl NonLeafNodeBuilder {
     /// Add a child [Node] to this one.
-    pub fn with_child(mut self, child: Self) -> Self {
+    #[must_use]
+    pub fn then(mut self, child: Self) -> Self {
         self.child_nodes.push(child);
         self
     }
@@ -112,6 +116,7 @@ impl NonLeafNodeBuilder {
     /// desired type.
     ///
     /// Also see [`CommandTree::execute`].
+    #[must_use]
     pub fn execute(mut self, executor: impl CommandExecutor + 'static + Send) -> Self {
         self.leaf_nodes.push(LeafNodeBuilder {
             node_type: NodeType::ExecuteLeaf {
@@ -124,6 +129,7 @@ impl NonLeafNodeBuilder {
 }
 
 /// Matches a sting literal.
+#[must_use]
 pub fn literal(string: impl Into<String>) -> NonLeafNodeBuilder {
     NonLeafNodeBuilder {
         node_type: NodeType::Literal {
@@ -162,7 +168,7 @@ pub fn argument_default_name(
 ) -> NonLeafNodeBuilder {
     NonLeafNodeBuilder {
         node_type: NodeType::Argument {
-            name: consumer.default_name(),
+            name: consumer.default_name().to_string(),
             consumer: Arc::new(consumer),
         },
         child_nodes: Vec::new(),

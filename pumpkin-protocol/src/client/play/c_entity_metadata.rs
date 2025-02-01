@@ -30,7 +30,46 @@ pub struct Metadata<T> {
 }
 
 impl<T> Metadata<T> {
-    pub fn new(index: u8, typ: VarInt, value: T) -> Self {
-        Self { index, typ, value }
+    pub fn new(index: u8, typ: MetaDataType, value: T) -> Self {
+        Self {
+            index,
+            typ: VarInt(typ as i32),
+            value,
+        }
     }
+}
+
+#[repr(u8)]
+pub enum MetaDataType {
+    Byte,
+    Integer,
+    Long,
+    Float,
+    String,
+    TextComponent,
+    OptionalTextComponent,
+    ItemStack,
+    Boolean,
+    Rotation,
+    BlockPos,
+    OptionalBlockPos,
+    Facing,
+    OptionalUuid,
+    BlockState,
+    OptionalBlockState,
+    NbtCompound,
+    Particle,
+    ParticleList,
+    VillagerData,
+    OptionalInt,
+    EntityPose,
+    CatVariant,
+    WolfVariant,
+    FrogVariant,
+    OptionalGlobalPos,
+    PaintingVariant,
+    SnifferState,
+    ArmadilloState,
+    Vector3f,
+    QuaternionF,
 }

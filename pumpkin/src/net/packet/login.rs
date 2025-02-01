@@ -77,7 +77,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
 
     for (key, value) in &ADVANCED_CONFIG.server_links.custom {
         links.push(Link::new(
-            Label::TextComponent(TextComponent::text(key)),
+            Label::TextComponent(TextComponent::text(key).into()),
             value,
         ));
     }
@@ -93,13 +93,17 @@ impl Client {
         // TODO: If client is an operator or otherwise suitable elevated permissions, allow client to bypass this requirement.
         let max_players = BASIC_CONFIG.max_players;
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
-            self.kick("The server is currently full, please try again later")
-                .await;
+            self.kick(&TextComponent::translate(
+                "multiplayer.disconnect.server_full",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
         if !is_valid_player_name(&login_start.name) {
-            self.kick("Invalid characters in username").await;
+            self.kick(&TextComponent::text("Invalid characters in username"))
+                .await;
             return;
         }
         // default game profile, when no online mode
@@ -122,7 +126,7 @@ impl Client {
                         self.finish_login(&profile).await;
                         *gameprofile = Some(profile);
                     }
-                    Err(error) => self.kick(&error.to_string()).await,
+                    Err(error) => self.kick(&TextComponent::text(error.to_string())).await,
                 }
             }
         } else {
@@ -165,14 +169,14 @@ impl Client {
         let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
 
         if let Err(error) = self.set_encryption(Some(&shared_secret)).await {
-            self.kick(&error.to_string()).await;
+            self.kick(&TextComponent::text(error.to_string())).await;
             return;
         }
 
         let mut gameprofile = self.gameprofile.lock().await;
 
         let Some(profile) = gameprofile.as_mut() else {
-            self.kick("No Game profile").await;
+            self.kick(&TextComponent::text("No Game profile")).await;
             return;
         };
 
@@ -183,9 +187,19 @@ impl Client {
                 .await
             {
                 Ok(new_profile) => *profile = new_profile,
-                Err(e) => {
-                    self.kick(&e.to_string()).await;
-                    return;
+                Err(error) => {
+                    self.kick(&match error {
+                        AuthError::FailedResponse => TextComponent::translate(
+                            "multiplayer.disconnect.authservers_down",
+                            [].into(),
+                        ),
+                        AuthError::UnverifiedUsername => TextComponent::translate(
+                            "multiplayer.disconnect.unverified_username",
+                            [].into(),
+                        ),
+                        e => TextComponent::text(e.to_string()),
+                    })
+                    .await;
                 }
             }
         }
@@ -193,15 +207,22 @@ impl Client {
         // Don't allow duplicate UUIDs
         if let Some(online_player) = &server.get_player_by_uuid(profile.id).await {
             log::debug!("Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
-            self.kick("You are already connected to this server").await;
+            self.kick(&TextComponent::translate(
+                "multiplayer.disconnect.duplicate_login",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
         // Don't allow a duplicate username
         if let Some(online_player) = &server.get_player_by_name(&profile.name).await {
             log::debug!("A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
-            self.kick("A player with this username is already connected")
-                .await;
+            self.kick(&TextComponent::translate(
+                "multiplayer.disconnect.duplicate_login",
+                [].into(),
+            ))
+            .await;
             return;
         }
 
@@ -300,7 +321,7 @@ impl Client {
                     *self.gameprofile.lock().await = Some(profile);
                     *address = new_address;
                 }
-                Err(error) => self.kick(&error.to_string()).await,
+                Err(error) => self.kick(&TextComponent::text(error.to_string())).await,
             }
         }
     }

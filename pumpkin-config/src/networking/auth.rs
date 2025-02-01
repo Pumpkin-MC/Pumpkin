@@ -7,6 +7,8 @@ pub struct AuthenticationConfig {
     /// Whether to use Mojang authentication.
     pub enabled: bool,
     pub auth_url: Option<String>,
+    pub connect_timeout: u32,
+    pub read_timeout: u32,
     pub prevent_proxy_connections: bool,
     pub prevent_proxy_connection_auth_url: Option<String>,
     /// Player profile handling.
@@ -24,6 +26,8 @@ impl Default for AuthenticationConfig {
             textures: Default::default(),
             auth_url: None,
             prevent_proxy_connection_auth_url: None,
+            connect_timeout: 5000,
+            read_timeout: 5000,
         }
     }
 }

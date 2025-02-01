@@ -15,7 +15,7 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
-pub(crate) enum CommandError {
+pub enum CommandError {
     /// This error means that there was an error while parsing a previously consumed argument.
     /// That only happens when consumption is wrongly implemented, as it should ensure parsing may
     /// never fail.
@@ -315,6 +315,25 @@ impl CommandDispatcher {
             .insert(primary_name.to_string(), permission);
         self.commands
             .insert(primary_name.to_string(), Command::Tree(tree));
+    }
+
+    /// Remove a command from the dispatcher by its primary name.
+    pub(crate) fn unregister(&mut self, name: &str) {
+        let mut to_remove = Vec::new();
+        for (key, value) in &self.commands {
+            if key == name {
+                to_remove.push(key.clone());
+            } else if let Command::Alias(target) = value {
+                if target == name {
+                    to_remove.push(key.clone());
+                }
+            }
+        }
+
+        for key in to_remove {
+            self.commands.remove(&key);
+            self.permissions.remove(&key);
+        }
     }
 }
 

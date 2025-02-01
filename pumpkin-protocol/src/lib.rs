@@ -191,7 +191,7 @@ impl PositionFlag {
 
 pub enum Label {
     BuiltIn(LinkType),
-    TextComponent(TextComponent),
+    TextComponent(Box<TextComponent>),
 }
 
 impl Serialize for Label {

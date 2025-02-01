@@ -3,6 +3,7 @@ pub mod math;
 pub mod permission;
 pub mod random;
 pub mod text;
+pub mod translation;
 
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;

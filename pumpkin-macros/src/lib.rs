@@ -1,7 +1,71 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::{
+    parse::{Nothing, Parser},
+    parse_macro_input, Field, Fields, ItemStruct,
+};
 
 extern crate proc_macro;
+
+#[proc_macro_attribute]
+pub fn event(args: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let name = &input.ident;
+    let _ = parse_macro_input!(args as Nothing);
+
+    quote! {
+        #input
+
+        impl crate::plugin::Event for #name {
+            fn get_name_static() -> &'static str {
+                stringify!(#name)
+            }
+
+            fn get_name(&self) -> &'static str {
+                stringify!(#name)
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+        }
+    }
+    .into()
+}
+
+#[proc_macro_attribute]
+pub fn cancellable(args: TokenStream, input: TokenStream) -> TokenStream {
+    let mut item_struct = parse_macro_input!(input as ItemStruct);
+    let name = item_struct.ident.clone();
+    let _ = parse_macro_input!(args as Nothing);
+
+    if let Fields::Named(ref mut fields) = item_struct.fields {
+        fields.named.push(
+            Field::parse_named
+                .parse2(quote! { pub cancelled: bool })
+                .unwrap(),
+        );
+    }
+
+    quote! {
+        #item_struct
+
+        impl crate::plugin::Cancellable for #name {
+            fn cancelled(&self) -> bool {
+                self.cancelled
+            }
+
+            fn set_cancelled(&mut self, cancelled: bool) {
+                self.cancelled = cancelled;
+            }
+        }
+    }
+    .into()
+}
 
 #[proc_macro_attribute]
 pub fn client_packet(input: TokenStream, item: TokenStream) -> TokenStream {

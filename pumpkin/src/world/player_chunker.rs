@@ -2,10 +2,7 @@ use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
-use pumpkin_util::{
-    math::{get_section_cord, position::BlockPos, vector3::Vector3},
-    GameMode,
-};
+use pumpkin_util::math::{get_section_cord, position::BlockPos, vector3::Vector3};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;
@@ -40,13 +37,6 @@ pub async fn player_join(player: &Arc<Player>) {
 }
 
 pub async fn update_position(player: &Arc<Player>) {
-    if !player.abilities.lock().await.flying {
-        player
-            .living_entity
-            .update_fall_distance(player.gamemode.load() == GameMode::Creative)
-            .await;
-    }
-
     let entity = &player.living_entity.entity;
 
     let view_distance = get_view_distance(player).await;
