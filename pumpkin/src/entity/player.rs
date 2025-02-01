@@ -21,7 +21,7 @@ use pumpkin_protocol::{
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent,
+        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent, MetaDataType,
         PlayerAction,
     },
     server::play::{
@@ -41,7 +41,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{client::play::CUpdateTime, codec::var_int::VarInt};
 use pumpkin_protocol::{
-    client::play::{CSetEntityMetadata, Metadata},
+    client::play::Metadata,
     server::play::{SClickContainer, SKeepAlive},
 };
 use pumpkin_util::{
@@ -65,7 +65,7 @@ use pumpkin_world::{
 };
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use super::{Entity, EntityId, NBTStorage};
+use super::{item::ItemEntity, Entity, EntityId, NBTStorage};
 use crate::{
     command::{client_cmd_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
@@ -546,10 +546,10 @@ impl Player {
     /// Sends the mobs to just the player.
     // TODO: This should be optimized for larger servers based on current player chunk
     pub async fn send_mobs(&self, world: &World) {
-        let mobs = world.current_living_mobs.lock().await.clone();
-        for (uuid, mob) in mobs {
+        let entities = world.entities.lock().await.clone();
+        for (_, entity) in entities {
             self.client
-                .send_packet(&mob.living_entity.entity.create_spawn_packet(uuid))
+                .send_packet(&entity.get_entity().create_spawn_packet())
                 .await;
         }
     }
@@ -692,19 +692,18 @@ impl Player {
     }
 
     /// Send skin layers and used hand to all players
-    pub async fn update_client_information(&self) {
+    pub async fn send_client_information(&self) {
         let config = self.config.lock().await;
-        let world = self.world();
-        world
-            .broadcast_packet_all(&CSetEntityMetadata::new(
-                self.entity_id().into(),
-                Metadata::new(17, 0.into(), config.skin_parts),
-            ))
+        self.living_entity
+            .entity
+            .send_meta_data(Metadata::new(17, MetaDataType::Byte, config.skin_parts))
             .await;
-        world
-            .broadcast_packet_all(&CSetEntityMetadata::new(
-                self.entity_id().into(),
-                Metadata::new(18, 0.into(), config.main_hand as u8),
+        self.living_entity
+            .entity
+            .send_meta_data(Metadata::new(
+                18,
+                MetaDataType::Byte,
+                config.main_hand as u8,
             ))
             .await;
     }
@@ -724,6 +723,20 @@ impl Player {
                 target_name,
             ))
             .await;
+    }
+
+    pub async fn drop_item(&self, server: &Server) {
+        let inv = self.inventory.lock().await;
+        if let Some(item) = inv.held_item() {
+            let entity = server.add_entity(
+                self.living_entity.entity.pos.load(),
+                EntityType::Item,
+                self.world(),
+            );
+            let item_entity = Arc::new(ItemEntity::new(entity, item));
+            self.world().spawn_entity(item_entity.clone()).await;
+            item_entity.send_meta_packet().await;
+        }
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {

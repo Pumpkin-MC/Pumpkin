@@ -112,7 +112,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
 pub async fn close_all_in_container(player: &Player, container: &OpenContainer) {
     for id in container.all_player_ids() {
-        if let Some(remote_player) = player.world().get_player_by_entityid(id).await {
+        if let Some(remote_player) = player.world().get_player_by_id(id).await {
             remote_player.close_container().await;
         }
     }

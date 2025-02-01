@@ -115,7 +115,7 @@ async fn handle_packet(
                             let mut players: Vec<CString> = Vec::new();
                             for world in server.worlds.read().await.iter() {
                                 let mut world_players = world
-                                    .current_players
+                                    .players
                                     .lock()
                                     .await
                                     // Although there is no documented limit, we will limit to 4 players

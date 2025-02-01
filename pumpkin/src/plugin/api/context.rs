@@ -1,5 +1,6 @@
 use std::{fs, path::Path, sync::Arc};
 
+use crate::command::client_cmd_suggestions;
 use pumpkin_util::PermissionLvl;
 use tokio::sync::RwLock;
 
@@ -48,8 +49,37 @@ impl Context {
         tree: crate::command::tree::CommandTree,
         permission: PermissionLvl,
     ) {
-        let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-        dispatcher_lock.register(tree, permission);
+        {
+            let mut dispatcher_lock = self.server.command_dispatcher.write().await;
+            dispatcher_lock.register(tree, permission);
+        };
+
+        for world in self.server.worlds.read().await.iter() {
+            for player in world.players.lock().await.values() {
+                client_cmd_suggestions::send_c_commands_packet(
+                    player,
+                    &self.server.command_dispatcher,
+                )
+                .await;
+            }
+        }
+    }
+
+    pub async fn unregister_command(&self, name: &str) {
+        {
+            let mut dispatcher_lock = self.server.command_dispatcher.write().await;
+            dispatcher_lock.unregister(name);
+        };
+
+        for world in self.server.worlds.read().await.iter() {
+            for player in world.players.lock().await.values() {
+                client_cmd_suggestions::send_c_commands_packet(
+                    player,
+                    &self.server.command_dispatcher,
+                )
+                .await;
+            }
+        }
     }
 
     pub async fn register_event<E: Event + 'static, H>(

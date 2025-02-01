@@ -77,8 +77,7 @@ pub struct AttributeModifiers {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Modifier {
-    #[serde(rename = "type")]
-    pub type_val: String,
+    pub r#type: String,
     pub id: String,
     pub amount: f64,
     pub operation: Operation,

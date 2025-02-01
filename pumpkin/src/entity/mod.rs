@@ -3,6 +3,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use living::LivingEntity;
 use pumpkin_data::{
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -10,7 +11,8 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     client::play::{
-        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot, Metadata,
+        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot,
+        MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
 };
@@ -22,17 +24,27 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
-use uuid::Uuid;
+use serde::Serialize;
 
 use crate::world::World;
 
 pub mod ai;
-pub mod mob;
-
+pub mod item;
 pub mod living;
+pub mod mob;
 pub mod player;
 
 pub type EntityId = i32;
+
+#[async_trait]
+pub trait EntityBase: Send + Sync {
+    /// Gets Called every tick
+    async fn tick(&self) {}
+    /// Called when a player collides with the entity
+    async fn on_player_collision(&self) {}
+    fn get_entity(&self) -> &Entity;
+    fn get_living_entity(&self) -> Option<&LivingEntity>;
+}
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -212,12 +224,12 @@ impl Entity {
         self.world.remove_entity(self).await;
     }
 
-    pub fn create_spawn_packet(&self, uuid: Uuid) -> CSpawnEntity {
+    pub fn create_spawn_packet(&self) -> CSpawnEntity {
         let entity_loc = self.pos.load();
         let entity_vel = self.velocity.load();
         CSpawnEntity::new(
             VarInt(self.entity_id),
-            uuid,
+            self.entity_uuid,
             VarInt((self.entity_type) as i32),
             entity_loc.x,
             entity_loc.y,
@@ -295,8 +307,8 @@ impl Entity {
         } else {
             b &= !(1 << index);
         }
-        let packet = CSetEntityMetadata::new(self.entity_id.into(), Metadata::new(0, 0.into(), b));
-        self.world.broadcast_packet_all(&packet).await;
+        self.send_meta_data(Metadata::new(0, MetaDataType::Byte, b))
+            .await;
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -306,14 +318,33 @@ impl Entity {
             .await;
     }
 
+    pub async fn send_meta_data<T>(&self, meta: Metadata<T>)
+    where
+        T: Serialize,
+    {
+        self.world
+            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), meta))
+            .await;
+    }
+
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        let packet = CSetEntityMetadata::<VarInt>::new(
-            self.entity_id.into(),
-            Metadata::new(6, 21.into(), pose.into()),
-        );
-        self.world.broadcast_packet_all(&packet).await;
+        self.send_meta_data(Metadata::new(6, MetaDataType::EntityPose, VarInt(pose)))
+            .await;
+    }
+}
+
+#[async_trait]
+impl EntityBase for Entity {
+    async fn tick(&self) {}
+
+    fn get_entity(&self) -> &Entity {
+        self
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
     }
 }
 

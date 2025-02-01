@@ -13,7 +13,7 @@ use crate::{
     world::player_chunker,
 };
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
@@ -35,6 +35,7 @@ use pumpkin_protocol::{
         SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
     },
 };
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
@@ -659,7 +660,7 @@ impl Player {
                     self.gameprofile.name,
                     self.client.id,
                 );
-                self.update_client_information().await;
+                self.send_client_information().await;
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
@@ -718,8 +719,8 @@ impl Player {
                 }
 
                 let world = &entity.world;
-                let player_victim = world.get_player_by_entityid(entity_id.0).await;
-                let entity_victim = world.get_living_entity_by_entityid(entity_id.0).await;
+                let player_victim = world.get_player_by_id(entity_id.0).await;
+                let entity_victim = world.get_entity_by_id(entity_id.0).await;
                 if let Some(player_victim) = player_victim {
                     if player_victim.living_entity.health.load() <= 0.0 {
                         // you can trigger this from a non-modded / innocent client client,
@@ -728,11 +729,15 @@ impl Player {
                     }
                     self.attack(&player_victim).await;
                 } else if let Some(entity_victim) = entity_victim {
-                    if entity_victim.health.load() <= 0.0 {
-                        return;
+                    // Checks if victim is a living entity
+                    if let Some(entity_victim) = entity_victim.get_living_entity() {
+                        if entity_victim.health.load() <= 0.0 {
+                            return;
+                        }
+                        entity_victim.entity.set_pose(EntityPose::Dying).await;
+                        entity_victim.kill().await;
+                        world.clone().remove_entity(&entity_victim.entity).await;
                     }
-                    entity_victim.kill().await;
-                    world.clone().remove_mob_entity(entity_victim).await;
                     // TODO: block entities should be checked here (signs)
                 } else {
                     log::error!(
@@ -835,10 +840,10 @@ impl Player {
                             .await;
                     }
                 }
-                Status::DropItemStack
-                | Status::DropItem
-                | Status::ShootArrowOrFinishEating
-                | Status::SwapItem => {
+                Status::DropItemStack | Status::DropItem => {
+                    self.drop_item(server).await;
+                }
+                Status::ShootArrowOrFinishEating | Status::SwapItem => {
                     log::debug!("todo");
                 }
             },
@@ -1120,7 +1125,7 @@ impl Player {
 
             let world = self.world();
             // create new mob and uuid based on spawn egg id
-            let (mob, uuid) = mob::from_type(
+            let mob = mob::from_type(
                 EntityType::from_raw(*spawn_item_id).unwrap(),
                 server,
                 pos,
@@ -1129,12 +1134,10 @@ impl Player {
             .await;
 
             // set the rotation
-            mob.living_entity.entity.set_rotation(yaw, 0.0);
+            mob.get_entity().set_rotation(yaw, 0.0);
 
             // broadcast new mob to all players
-            world
-                .broadcast_packet_all(&mob.living_entity.entity.create_spawn_packet(uuid))
-                .await;
+            world.spawn_entity(mob).await;
 
             // TODO: send/configure additional commands/data based on type of entity (horse, slime, etc)
         } else {
@@ -1206,15 +1209,38 @@ impl Player {
             _ => {}
         }
 
-        let clicked_block_updated_able = false;
+        let (mut new_state, mut updateable) = server
+            .block_properties_manager
+            .get_state_data(
+                world,
+                &block,
+                face,
+                &clicked_block_pos,
+                &use_item_on,
+                &self.get_player_direction(),
+                true,
+            )
+            .await;
 
-        let final_block_pos = if clicked_block_state.replaceable || clicked_block_updated_able {
+        let final_block_pos = if clicked_block_state.replaceable || updateable {
             clicked_block_pos
         } else {
             let block_pos = BlockPos(location.0 + face.to_offset());
             let previous_block_state = world.get_block_state(&block_pos).await?;
+            (new_state, updateable) = server
+                .block_properties_manager
+                .get_state_data(
+                    world,
+                    &block,
+                    &face.opposite(),
+                    &block_pos,
+                    &use_item_on,
+                    &self.get_player_direction(),
+                    false,
+                )
+                .await;
 
-            if !previous_block_state.replaceable {
+            if !previous_block_state.replaceable && !updateable {
                 return Ok(true);
             }
 
@@ -1222,30 +1248,21 @@ impl Player {
         };
 
         // To this point we must have the new block state
-        let block_bounding_box =
-            get_block_collision_shapes(block.default_state_id).unwrap_or_default();
+        let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
         let mut intersects = false;
-        for player in world.get_nearby_players(entity.pos.load(), 20.0).await {
-            let bounding_box = player.1.living_entity.entity.bounding_box.load();
-            if bounding_box.intersects_block(&final_block_pos, &block_bounding_box) {
-                intersects = true;
+        for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
+            let player_box = player.1.living_entity.entity.bounding_box.load();
+            for shape in &shapes {
+                let block_box = BoundingBox::from_block_raw(&final_block_pos)
+                    .offset(BoundingBox::new_array(shape.min, shape.max));
+                if player_box.intersects(&block_box) {
+                    intersects = true;
+                    break;
+                }
             }
         }
         if !intersects {
-            let mapped_block_id = server
-                .block_properties_manager
-                .get_state_id(
-                    world,
-                    &block,
-                    face,
-                    &final_block_pos,
-                    &use_item_on,
-                    &self.get_player_direction(),
-                )
-                .await;
-            let _replaced_id = world
-                .set_block_state(&final_block_pos, mapped_block_id)
-                .await;
+            let _replaced_id = world.set_block_state(&final_block_pos, new_state).await;
             server
                 .block_manager
                 .on_placed(&block, self, final_block_pos, server)
