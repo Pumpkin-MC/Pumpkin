@@ -9,26 +9,25 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
+    biome::BiomeSupplier,
     block::block_state::BlockState,
     chunk::{ChunkData, Subchunks},
-    coordinates::{
-        ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates, XZBlockCoordinates,
-    },
+    coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
     generation::{
-        generator::{BiomeGenerator, GeneratorInit, TerrainGenerator},
+        generator::{GeneratorInit, TerrainGenerator},
         proto_chunk::ProtoChunk,
         Seed, WorldGenerator,
     },
     WORLD_LOWEST_Y, WORLD_MAX_Y,
 };
 
-pub struct TestGenerator<B: BiomeGenerator, T: TerrainGenerator> {
+pub struct TestGenerator<B: BiomeSupplier + Send + Sync, T: TerrainGenerator> {
     biome_generator: B,
     terrain_generator: T,
 }
 
-impl<B: BiomeGenerator + GeneratorInit, T: TerrainGenerator + GeneratorInit> GeneratorInit
-    for TestGenerator<B, T>
+impl<B: BiomeSupplier + GeneratorInit + Send + Sync, T: TerrainGenerator + GeneratorInit>
+    GeneratorInit for TestGenerator<B, T>
 {
     fn new(seed: Seed) -> Self {
         Self {
@@ -38,7 +37,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: TerrainGenerator + GeneratorInit> Gen
     }
 }
 
-impl<B: BiomeGenerator, T: TerrainGenerator> WorldGenerator for TestGenerator<B, T> {
+impl<B: BiomeSupplier + Send + Sync, T: TerrainGenerator> WorldGenerator for TestGenerator<B, T> {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
         let mut subchunks = Subchunks::Single(0);
         self.terrain_generator.prepare_chunk(&at);
@@ -79,21 +78,6 @@ impl<B: BiomeGenerator, T: TerrainGenerator> WorldGenerator for TestGenerator<B,
             heightmap: Default::default(),
             position: at,
         }
-    }
-}
-
-pub(crate) struct TestBiomeGenerator {}
-
-impl GeneratorInit for TestBiomeGenerator {
-    fn new(_: Seed) -> Self {
-        Self {}
-    }
-}
-
-impl BiomeGenerator for TestBiomeGenerator {
-    // TODO make generic over Biome and allow changing the Biome in the config.
-    fn generate_biome(&self, _: XZBlockCoordinates) -> Biome {
-        Biome::Plains
     }
 }
 

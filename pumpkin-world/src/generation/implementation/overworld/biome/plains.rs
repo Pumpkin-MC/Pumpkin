@@ -6,30 +6,13 @@ use rand::Rng;
 
 use crate::{
     chunk::Subchunks,
+    coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates},
     coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates, XZBlockCoordinates},
     generation::{
-        generator::{BiomeGenerator, GeneratorInit, PerlinTerrainGenerator},
-        generic_generator::GenericGenerator,
+        generator::{GeneratorInit, PerlinTerrainGenerator},
         Seed,
     },
 };
-
-pub type PlainsGenerator = GenericGenerator<PlainsBiomeGenerator, PlainsTerrainGenerator>;
-
-pub(crate) struct PlainsBiomeGenerator {}
-
-impl GeneratorInit for PlainsBiomeGenerator {
-    fn new(_: Seed) -> Self {
-        Self {}
-    }
-}
-
-impl BiomeGenerator for PlainsBiomeGenerator {
-    // TODO make generic over Biome and allow changing the Biome in the config.
-    fn generate_biome(&self, _: XZBlockCoordinates) -> Biome {
-        Biome::Plains
-    }
-}
 
 pub(crate) struct PlainsTerrainGenerator {}
 

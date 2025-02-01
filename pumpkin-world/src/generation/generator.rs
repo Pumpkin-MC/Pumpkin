@@ -16,10 +16,6 @@ pub trait WorldGenerator: Sync + Send {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData;
 }
 
-pub(crate) trait BiomeGenerator: Sync + Send {
-    fn generate_biome(&self, at: XZBlockCoordinates) -> Biome;
-}
-
 pub(crate) trait TerrainGenerator: Sync + Send {
     fn prepare_chunk(&self, at: &Vector2<i32>);
 
