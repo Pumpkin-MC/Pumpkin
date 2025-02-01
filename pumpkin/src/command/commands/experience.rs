@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
 use pumpkin_util::math::experience;
+use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
@@ -184,45 +185,25 @@ impl ExperienceExecutor {
     ) -> Result<(), &'static str> {
         match exp_type {
             ExpType::Levels => {
-                let current_level = target.experience_level.load(Ordering::Relaxed);
-                let new_level = if mode == Mode::Add {
-                    current_level + amount
+                if mode == Mode::Add {
+                    target.add_experience_levels(amount).await;
                 } else {
-                    amount
-                };
-
-                if new_level < 0 {
-                    return Err("commands.experience.set.points.invalid");
+                    target.set_experience_level(amount, true).await;
                 }
-
-                target.set_level(new_level).await;
             }
             ExpType::Points => {
                 if mode == Mode::Add {
-                    target.add_experience(amount).await;
+                    target.add_experience_points(amount).await;
                 } else {
-                    // When setting points, keep current level but check maximum
+                    // target.set_experience_points(amount).await; This could
                     let current_level = target.experience_level.load(Ordering::Relaxed);
-                    let current_progress = target.experience_progress.load();
-                    let current_total = experience::calculate_total_exp(current_level, current_progress);
-                    let next_level_total = experience::calculate_total_exp(current_level + 1, 0.0);
-                    let max_points_in_level = next_level_total - current_total;
+                    let current_max_points = experience::points_in_level(current_level);
 
-                    // Points can't exceed maximum for current level
-                    if amount > max_points_in_level {
+                    if amount > current_max_points {
                         return Err("commands.experience.set.points.invalid");
                     }
 
-                    // Calculate progress directly from points (0 to max_points_in_level)
-                    #[allow(clippy::cast_precision_loss)]
-                    let progress = (amount as f32) / (max_points_in_level as f32);
-                    let progress = progress.clamp(0.0, 1.0);
-
-                    // Convert local level points to global XP amount
-                    let total_exp = current_total + amount;
-                    target
-                        .set_experience(current_level, progress, total_exp)
-                        .await;
+                    target.set_experience_points(amount).await;
                 }
             }
         }
@@ -288,7 +269,10 @@ impl CommandExecutor for ExperienceExecutor {
                         }
                         Err(error_msg) => {
                             sender
-                                .send_message(TextComponent::translate(error_msg, [].into()))
+                                .send_message(
+                                    TextComponent::translate(error_msg, [].into())
+                                        .color(Color::Named(NamedColor::Red)),
+                                )
                                 .await;
                             continue;
                         }

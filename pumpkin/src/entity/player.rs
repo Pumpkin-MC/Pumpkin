@@ -21,8 +21,8 @@ use pumpkin_protocol::{
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent, MetaDataType,
-        PlayerAction,
+        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent,
+        MetaDataType, PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -47,10 +47,10 @@ use pumpkin_protocol::{
 use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, BoundingBoxSize},
+        experience,
         position::BlockPos,
         vector2::Vector2,
         vector3::Vector3,
-        experience
     },
     permission::PermissionLvl,
     text::TextComponent,
@@ -750,6 +750,7 @@ impl Player {
     }
 
     /// Sets the player's experience level and updates the client
+    #[allow(clippy::cast_precision_loss)]
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
@@ -764,67 +765,66 @@ impl Player {
             .await;
     }
 
-    /// Returns the amount of experience required to reach the next level from the current level
-    pub fn get_exp_to_next_level(&self) -> i32 {
-        experience::get_exp_to_next_level(self.experience_level.load(Ordering::Relaxed))
-    }
-
-    /// Adds experience points to the player
-    pub async fn add_experience(&self, exp: i32) {
-        let current_points = self.experience_points.load(Ordering::Relaxed);
-        let new_points = current_points + exp;
-        let current_level = self.experience_level.load(Ordering::Relaxed);
-        
-        let next_level_points = experience::get_exp_to_next_level(current_level);
-        let mut new_level = current_level;
-        let mut progress = self.experience_progress.load();
-        
-        #[allow(clippy::cast_precision_loss)]
-        let delta_progress = (exp as f32) / (next_level_points as f32);
-        progress += delta_progress;
-        
-        while progress >= 1.0 {
-            progress -= 1.0;
-            new_level += 1;
-        }
-        
-        while progress < 0.0 && new_level > 0 {
-            new_level -= 1;
-            progress += 1.0;
-        }
-        
-        progress = progress.clamp(0.0, 1.0);
-        
-        self.set_experience(new_level, progress, new_points).await;
-    }
-
     /// Sets the player's experience level directly
-    pub async fn set_level(&self, level: i32) {
+    #[allow(clippy::cast_precision_loss)]
+    pub async fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
         let progress = self.experience_progress.load();
-        let points = self.experience_points.load(Ordering::Relaxed);
-        self.set_experience(level, progress, points).await;
+        let mut points = self.experience_points.load(Ordering::Relaxed);
+
+        // If keep progress is true then calculate the number of points needed to keep the same progress scaled
+        if keep_progress {
+            // Get our current level
+            let current_level = self.experience_level.load(Ordering::Relaxed);
+            let current_max_points = experience::points_in_level(current_level);
+            // Calculate the max value for new level
+            let new_max_points = experience::points_in_level(new_level);
+            // Calculate the scaling factor
+            let scale = new_max_points as f32 / current_max_points as f32;
+            // Scale the points (Vanilla doesn't seem to recalculate progress so we won't)
+            points = (points as f32 * scale) as i32;
+        }
+
+        self.set_experience(new_level, progress, points).await;
     }
 
-    /// Returns the total amount of experience points required to reach a specific level
-    #[must_use]
-    pub fn get_total_exp_to_level(level: i32) -> i32 {
-        match level {
-            0..=16 => level * level + 6 * level,
-            17..=31 => {
-                ((2.5 * f64::from(level * level)) - (40.5 * f64::from(level)) + 360.0) as i32
-            }
-            _ => ((4.5 * f64::from(level * level)) - (162.5 * f64::from(level)) + 2220.0) as i32,
-        }
+    /// Add experience levels to the player
+    pub async fn add_experience_levels(&self, added_levels: i32) {
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let new_level = current_level + added_levels;
+        self.set_experience_level(new_level, true).await;
     }
 
-    /// Calculates level from total experience points
-    #[must_use]
-    pub fn get_level_from_total_exp(total_exp: i32) -> i32 {
-        match total_exp {
-            0..=352 => ((f64::from(total_exp) + 9.0).sqrt() - 3.0) as i32,
-            353..=1507 => (81.0 + (f64::from(total_exp) - 7839.0) / 40.0).sqrt() as i32,
-            _ => (325.0 + (f64::from(total_exp) - 54215.0) / 72.0).sqrt() as i32,
+    /// Set the player's experience points directly, Returns true if successful.
+    #[allow(clippy::cast_precision_loss)]
+    pub async fn set_experience_points(&self, new_points: i32) -> bool {
+        let current_points = self.experience_points.load(Ordering::Relaxed);
+
+        if new_points == current_points {
+            return true;
         }
+
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let max_points = experience::points_in_level(current_level);
+
+        if new_points < 0 || new_points > max_points {
+            return false;
+        }
+
+        let progress = new_points as f32 / max_points as f32;
+        self.set_experience(current_level, progress, new_points)
+            .await;
+        true
+    }
+
+    /// Add experience points to the player
+    pub async fn add_experience_points(&self, added_points: i32) {
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let current_points = self.experience_points.load(Ordering::Relaxed);
+        let total_exp = experience::points_to_level(current_level) + current_points;
+        let new_total_exp = total_exp + added_points;
+        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
+        let progress = experience::progress_in_level(new_level, new_points);
+        self.set_experience(new_level, progress, new_points).await;
     }
 }
 
@@ -837,12 +837,10 @@ impl NBTStorage for Player {
             self.inventory.lock().await.selected as i32,
         );
         self.abilities.lock().await.write_nbt(nbt).await;
-        
+
         // Store total XP instead of individual components
-        let total_exp = experience::calculate_total_exp(
-            self.experience_level.load(Ordering::Relaxed),
-            self.experience_progress.load()
-        );
+        let total_exp = experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
+            + self.experience_points.load(Ordering::Relaxed);
         nbt.put_int("XpTotal", total_exp);
     }
 
@@ -850,13 +848,14 @@ impl NBTStorage for Player {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
         self.abilities.lock().await.read_nbt(nbt).await;
-        
+
         // Load from total XP
         let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
-        let (level, progress) = experience::calculate_level_and_progress(total_exp);
+        let (level, points) = experience::total_to_level_and_points(total_exp);
+        let progress = experience::progress_in_level(level, points);
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress);
-        self.experience_points.store(total_exp, Ordering::Relaxed);
+        self.experience_points.store(points, Ordering::Relaxed);
     }
 }
 
