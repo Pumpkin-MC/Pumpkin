@@ -115,7 +115,7 @@ features.toml
 *.local.nbt
 
 
-.vscode/settings.json
+.vscode/
 
 # Documentation
 docs/.vitepress/dist
