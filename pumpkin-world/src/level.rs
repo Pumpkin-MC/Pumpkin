@@ -11,8 +11,9 @@ use tokio::{
 
 use crate::{
     chunk::{
-        anvil::AnvilChunkFormat, ChunkData, ChunkParsingError, ChunkReader, ChunkReadingError,
-        ChunkWriter,
+        db::{anvil_saver::AnvilSaver, ChunkStorage},
+        format::{anvil::AnvilChunkFormat, ChunkFormat, ChunkReadingError},
+        ChunkData, ChunkParsingError,
     },
     generation::{get_world_gen, Seed, WorldGenerator},
     lock::{anvil::AnvilLevelLocker, LevelLocker},
@@ -35,8 +36,8 @@ pub struct Level {
     level_folder: LevelFolder,
     loaded_chunks: Arc<DashMap<Vector2<i32>, Arc<RwLock<ChunkData>>>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
-    chunk_reader: Arc<dyn ChunkReader>,
-    chunk_writer: Arc<dyn ChunkWriter>,
+    chunk_format: Arc<dyn ChunkFormat>,
+    chunk_storage: Arc<dyn ChunkStorage>,
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
@@ -77,8 +78,8 @@ impl Level {
             world_gen,
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
-            chunk_reader: Arc::new(AnvilChunkFormat),
-            chunk_writer: Arc::new(AnvilChunkFormat),
+            chunk_format: Arc::new(AnvilChunkFormat),
+            chunk_storage: Arc::new(AnvilSaver),
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
@@ -203,22 +204,40 @@ impl Level {
     }
 
     pub async fn write_chunk(&self, chunk_to_write: (Vector2<i32>, Arc<RwLock<ChunkData>>)) {
-        let data = chunk_to_write.1.read().await;
-        if let Err(error) =
-            self.chunk_writer
-                .write_chunk(&data, &self.level_folder, &chunk_to_write.0)
-        {
+        if let Err(error) = self.chunk_storage.write_raw_chunk(
+            self.chunk_format
+                .save_chunk(&*chunk_to_write.1.read().await, &chunk_to_write.0)
+                .unwrap(),
+            &self.level_folder,
+            &chunk_to_write.0,
+        ) {
             log::error!("Failed writing Chunk to disk {}", error.to_string());
-        }
+        };
     }
 
     fn load_chunk_from_save(
-        chunk_reader: Arc<dyn ChunkReader>,
+        raw_chunk_reader: Arc<dyn ChunkStorage>,
+        chunk_reader: Arc<dyn ChunkFormat>,
         save_file: &LevelFolder,
         chunk_pos: Vector2<i32>,
     ) -> Result<Option<Arc<RwLock<ChunkData>>>, ChunkReadingError> {
-        match chunk_reader.read_chunk(save_file, &chunk_pos) {
-            Ok(data) => Ok(Some(Arc::new(RwLock::new(data)))),
+        match raw_chunk_reader
+            .read_raw_chunk(save_file, &chunk_pos)
+            .map_err(|_| ChunkReadingError::ChunkNotExist)
+        {
+            Ok(chunk_bytes) => {
+                match chunk_reader.read_chunk(chunk_bytes, &chunk_pos) {
+                    Ok(data) => Ok(Some(Arc::new(RwLock::new(data)))),
+                    Err(
+                        ChunkReadingError::ChunkNotExist
+                        | ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated),
+                    ) => {
+                        // This chunk was not generated yet.
+                        Ok(None)
+                    }
+                    Err(err) => Err(err),
+                }
+            }
             Err(
                 ChunkReadingError::ChunkNotExist
                 | ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated),
@@ -241,8 +260,8 @@ impl Level {
         chunks.par_iter().for_each(|at| {
             let channel = channel.clone();
             let loaded_chunks = self.loaded_chunks.clone();
-            let chunk_reader = self.chunk_reader.clone();
-            let chunk_writer = self.chunk_writer.clone();
+            let chunk_format = self.chunk_format.clone();
+            let chunk_storage = self.chunk_storage.clone();
             let level_folder = self.level_folder.clone();
             let world_gen = self.world_gen.clone();
             let chunk_pos = *at;
@@ -251,40 +270,46 @@ impl Level {
                 .get(&chunk_pos)
                 .map(|entry| entry.value().clone())
                 .unwrap_or_else(|| {
-                    let loaded_chunk =
-                        match Self::load_chunk_from_save(chunk_reader, &level_folder, chunk_pos) {
-                            Ok(chunk) => {
-                                // Save new Chunk
-                                if let Some(chunk) = &chunk {
-                                    if let Err(error) = chunk_writer.write_chunk(
-                                        &chunk.blocking_read(),
-                                        &level_folder,
-                                        &chunk_pos,
-                                    ) {
-                                        log::error!(
-                                            "Failed writing Chunk to disk {}",
-                                            error.to_string()
-                                        );
-                                    };
-                                }
-                                chunk
+                    let loaded_chunk = match Self::load_chunk_from_save(
+                        chunk_storage.clone(),
+                        chunk_format.clone(),
+                        &level_folder,
+                        chunk_pos,
+                    ) {
+                        Ok(chunk) => {
+                            // Save new Chunk
+                            if let Some(chunk) = &chunk {
+                                if let Err(error) = chunk_storage.write_raw_chunk(
+                                    chunk_format
+                                        .save_chunk(&chunk.blocking_read(), &chunk_pos)
+                                        .unwrap(),
+                                    &level_folder,
+                                    &chunk_pos,
+                                ) {
+                                    log::error!(
+                                        "Failed writing Chunk to disk {}",
+                                        error.to_string()
+                                    );
+                                };
                             }
-                            Err(err) => {
-                                log::error!(
-                                    "Failed to read chunk (regenerating) {:?}: {:?}",
-                                    chunk_pos,
-                                    err
-                                );
-                                None
-                            }
+                            chunk
                         }
-                        .unwrap_or_else(|| {
-                            Arc::new(RwLock::new(world_gen.generate_chunk(chunk_pos)))
-                            // Arc::new(RwLock::new(ChunkData {
-                            //     blocks: ChunkBlocks::default(),
-                            //     position: chunk_pos,
-                            // }))
-                        });
+                        Err(err) => {
+                            log::error!(
+                                "Failed to read chunk (regenerating) {:?}: {:?}",
+                                chunk_pos,
+                                err
+                            );
+                            None
+                        }
+                    }
+                    .unwrap_or_else(|| {
+                        Arc::new(RwLock::new(world_gen.generate_chunk(chunk_pos)))
+                        // Arc::new(RwLock::new(ChunkData {
+                        //     blocks: ChunkBlocks::default(),
+                        //     position: chunk_pos,
+                        // }))
+                    });
 
                     if let Some(data) = loaded_chunks.get(&chunk_pos) {
                         // Another thread populated in between the previous check and now
