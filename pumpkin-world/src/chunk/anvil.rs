@@ -455,7 +455,10 @@ impl AnvilChunkFormat {
             sections,
         };
 
-        fastnbt::to_bytes(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)
+        match pumpkin_nbt::serializer::to_bytes(&nbt, "ChunkNbt".to_string()) {
+            Ok(bytes) => Ok(bytes.into_iter().collect()),
+            Err(e) => Err(ChunkSerializingError::ErrorSerializingChunk(e)),
+        }
     }
 
     /// Returns the next free writable sector

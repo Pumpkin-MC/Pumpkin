@@ -1,8 +1,9 @@
 use fastnbt::LongArray;
 use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_nbt::deserializer::from_bytes_unnamed;
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with};
+use std::{collections::HashMap, io::Cursor, iter::repeat_with};
 use thiserror::Error;
 
 use crate::{
@@ -332,10 +333,11 @@ pub struct ChunkStatusWrapper {
 
 impl ChunkData {
     pub fn from_bytes(
-        chunk_data: &[u8],
+        mut chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        if fastnbt::from_bytes::<ChunkStatusWrapper>(chunk_data)
+        let mut cursor = Cursor::new(chunk_data);
+        if from_bytes_unnamed::<ChunkStatusWrapper>(&mut chunk_data)
             .map_err(|_| ChunkParsingError::FailedReadStatus)?
             .status
             != ChunkStatus::Full
@@ -343,7 +345,7 @@ impl ChunkData {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
+        let chunk_data = from_bytes_unnamed::<ChunkNbt>(&mut cursor)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
@@ -450,5 +452,5 @@ fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
 #[derive(Error, Debug)]
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
-    ErrorSerializingChunk(fastnbt::error::Error),
+    ErrorSerializingChunk(pumpkin_nbt::Error),
 }
