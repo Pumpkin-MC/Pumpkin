@@ -71,6 +71,7 @@ where
     let mut serializer = Serializer {
         output: BytesMut::new(),
         state: State::Root(None),
+        in_struct: false,
     };
     value.serialize_child(&mut serializer)?;
     Ok(serializer.output)
