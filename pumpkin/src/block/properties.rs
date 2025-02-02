@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::block::{
-    registry::{Block, State, BLOCKS},
+    block_registry::{Block, BLOCKS},
     BlockDirection,
 };
 

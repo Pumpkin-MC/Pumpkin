@@ -11,7 +11,7 @@ use bytes::{Buf, BufMut};
 
 mod deserializer;
 use thiserror::Error;
-pub mod packet;
+pub mod packet_id;
 mod serializer;
 
 use std::mem::size_of;

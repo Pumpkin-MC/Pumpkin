@@ -235,7 +235,7 @@ impl Level {
     pub fn fetch_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        channel: mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>,
+        channel: mpsc::Sender<Arc<RwLock<ChunkData>>>,
         rt: &Handle,
     ) {
         chunks.par_iter().for_each(|at| {
@@ -246,14 +246,11 @@ impl Level {
             let level_folder = self.level_folder.clone();
             let world_gen = self.world_gen.clone();
             let chunk_pos = *at;
-            let mut first_load = false;
 
             let chunk = loaded_chunks
                 .get(&chunk_pos)
                 .map(|entry| entry.value().clone())
                 .unwrap_or_else(|| {
-                    first_load = true;
-
                     let loaded_chunk =
                         match Self::load_chunk_from_save(chunk_reader, &level_folder, chunk_pos) {
                             Ok(chunk) => {
@@ -302,7 +299,7 @@ impl Level {
 
             rt.spawn(async move {
                 let _ = channel
-                    .send((chunk, first_load))
+                    .send(chunk)
                     .await
                     .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
             });

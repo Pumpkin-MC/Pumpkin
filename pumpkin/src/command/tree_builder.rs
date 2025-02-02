@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use super::args::DefaultNameArgConsumer;
 use super::CommandExecutor;
-use crate::command::args::{ArgumentConsumer, DefaultNameArgConsumer};
+use crate::command::args::ArgumentConsumer;
 use crate::command::tree::{CommandTree, Node, NodeType};
 use crate::command::CommandSender;
 
@@ -161,7 +162,7 @@ pub fn argument(
     }
 }
 
-/// same as [`crate::command::tree::builder::argument`], but uses default arg name of consumer
+/// same as [`crate::command::tree_builder::argument`], but uses default arg name of consumer
 pub fn argument_default_name(
     consumer: impl DefaultNameArgConsumer + 'static + Send,
 ) -> NonLeafNodeBuilder {

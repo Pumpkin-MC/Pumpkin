@@ -14,7 +14,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
-use pumpkin_world::block::registry::Block;
+use pumpkin_world::block::block_registry::Block;
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::entity::entity_registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
@@ -31,11 +31,13 @@ use std::{
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
-use crate::block::default_block_properties_manager;
+use crate::block::block_manager::BlockManager;
 use crate::block::properties::BlockPropertiesManager;
-use crate::block::registry::BlockRegistry;
+use crate::block::{default_block_manager, default_block_properties_manager};
+use crate::entity::ai::path::Navigator;
+use crate::entity::living::LivingEntity;
+use crate::entity::mob::MobEntity;
 use crate::entity::{Entity, EntityId};
-use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
@@ -61,10 +63,8 @@ pub struct Server {
     server_branding: CachedBranding,
     /// Saves and Dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
-    /// Block Behaviour
-    pub block_registry: Arc<BlockRegistry>,
-    /// Item Behaviour
-    pub item_registry: Arc<ItemRegistry>,
+    /// Saves and calls blocks blocks
+    pub block_manager: Arc<BlockManager>,
     /// Creates and stores block property registry and managed behaviours.
     pub block_properties_manager: Arc<BlockPropertiesManager>,
     /// Manages multiple worlds within the server.
@@ -136,8 +136,7 @@ impl Server {
                 DimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_registry: super::block::default_registry(),
-            item_registry: super::item::default_registry(),
+            block_manager: default_block_manager(),
             block_properties_manager: default_block_properties_manager(),
             auth_client,
             key_store: KeyStore::new(),

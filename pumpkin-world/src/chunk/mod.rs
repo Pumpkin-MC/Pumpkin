@@ -74,7 +74,6 @@ pub enum CompressionError {
     LZ4Error(std::io::Error),
 }
 
-#[derive(Clone)]
 pub struct ChunkData {
     /// See description in `Subchunks`
     pub subchunks: Subchunks,
@@ -93,7 +92,7 @@ pub struct ChunkData {
 /// chunk, what filled only air or only water.
 ///
 /// Multi means a normal chunk, what contains 24 subchunks.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug)]
 pub enum Subchunks {
     Single(u16),
     Multi(Box<[Subchunk; SUBCHUNKS_COUNT]>),

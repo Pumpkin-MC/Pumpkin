@@ -1,19 +1,15 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::Ordering, Arc},
-};
+use std::{collections::HashMap, sync::Arc};
 
 pub mod level_time;
 pub mod player_chunker;
 
 use crate::{
-    command::client_suggestions,
-    entity::{player::Player, Entity, EntityBase, EntityId},
+    command::client_cmd_suggestions,
+    entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity, EntityId},
     error::PumpkinError,
     plugin::{
         block::BlockBreakEvent,
         player::{PlayerJoinEvent, PlayerLeaveEvent},
-        world::{ChunkLoad, ChunkSave, ChunkSend},
     },
     server::Server,
     PLUGIN_MANAGER,
@@ -25,7 +21,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{
     client::play::CLevelEvent,
@@ -45,7 +40,7 @@ use pumpkin_util::text::{color::NamedColor, TextComponent};
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
 use pumpkin_world::{
-    block::registry::{
+    block::block_registry::{
         get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
     },
     coordinates::ChunkRelativeBlockCoordinates,
@@ -104,10 +99,9 @@ pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
     /// A map of active players within the world, keyed by their unique UUID.
-    pub players: Arc<Mutex<HashMap<uuid::Uuid, Arc<Player>>>>,
-    /// A map of active entities within the world, keyed by their unique UUID.
-    /// This does not include Players
-    pub entities: Arc<RwLock<HashMap<uuid::Uuid, Arc<dyn EntityBase>>>>,
+    pub current_players: Arc<Mutex<HashMap<uuid::Uuid, Arc<Player>>>>,
+    /// A map of active mob entities within the world, keyed by their unique UUID.
+    pub current_living_mobs: Arc<Mutex<HashMap<uuid::Uuid, Arc<MobEntity>>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -124,8 +118,8 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
-            players: Arc::new(Mutex::new(HashMap::new())),
-            entities: Arc::new(RwLock::new(HashMap::new())),
+            current_players: Arc::new(Mutex::new(HashMap::new())),
+            current_living_mobs: Arc::new(Mutex::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
@@ -242,29 +236,9 @@ impl World {
         for player in self.current_players.lock().await.values() {
             player.tick().await;
         }
-
-        let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
-
         // entities tick
-        for entity in entities_to_tick {
+        for entity in self.current_living_mobs.lock().await.values() {
             entity.tick().await;
-            // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
-            let mut collied_player = None;
-            for player in self.players.lock().await.values() {
-                if player
-                    .living_entity
-                    .entity
-                    .bounding_box
-                    .load()
-                    .intersects(&entity.get_entity().bounding_box.load())
-                {
-                    collied_player = Some(player.clone());
-                    break;
-                }
-            }
-            if let Some(player) = collied_player {
-                entity.on_player_collision(player).await;
-            }
         }
     }
 
@@ -330,7 +304,7 @@ impl World {
             .await;
         // permissions, i. e. the commands a player may use
         player.send_permission_lvl_update().await;
-        client_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
+        client_cmd_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
         // teleport
         let info = &self.level.level_info;
         let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
@@ -620,13 +594,11 @@ impl World {
         let level = self.level.clone();
 
         tokio::spawn(async move {
-            'main: while let Some((chunk, first_load)) = receiver.recv().await {
-                let position = chunk.read().await.position;
-
+            while let Some(chunk_data) = receiver.recv().await {
+                let chunk_data = chunk_data.read().await;
+                let packet = CChunkData(&chunk_data);
                 #[cfg(debug_assertions)]
-                if position == (0, 0).into() {
-                    let binding = chunk.read().await;
-                    let packet = CChunkData(&binding);
+                if chunk_data.position == (0, 0).into() {
                     let mut test = bytes::BytesMut::new();
                     packet.write(&mut test);
                     let len = test.len();
@@ -638,60 +610,21 @@ impl World {
                     );
                 }
 
-                let (world, chunk) = if level.is_chunk_watched(&position) {
-                    (player.world().clone(), chunk)
-                } else {
-                    send_cancellable! {{
-                        ChunkSave {
-                            world: player.world().clone(),
-                            chunk,
-                            cancelled: false,
-                        };
+                if !level.is_chunk_watched(&chunk_data.position) {
+                    log::trace!(
+                        "Received chunk {:?}, but it is no longer watched... cleaning",
+                        &chunk_data.position
+                    );
+                    level.clean_chunk(&chunk_data.position).await;
+                    continue;
+                }
 
-                        'after: {
-                            log::trace!(
-                                "Received chunk {:?}, but it is no longer watched... cleaning",
-                                &position
-                            );
-                            level.clean_chunk(&position).await;
-                            continue 'main;
-                        }
-                    }};
-                    (event.world, event.chunk)
-                };
-
-                let (world, chunk) = if first_load {
-                    send_cancellable! {{
-                        ChunkLoad {
-                            world,
-                            chunk,
-                            cancelled: false,
-                        };
-
-                        'cancelled: {
-                            continue 'main;
-                        }
-                    }}
-                    (event.world, event.chunk)
-                } else {
-                    (world, chunk)
-                };
-
-                if !player.client.closed.load(Ordering::Relaxed) {
-                    send_cancellable! {{
-                        ChunkSend {
-                            world,
-                            chunk,
-                            cancelled: false,
-                        };
-
-                        'after: {
-                            player
-                                .client
-                                .send_packet(&CChunkData(&*event.chunk.read().await))
-                                .await;
-                        }
-                    }};
+                if !player
+                    .client
+                    .closed
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    player.client.send_packet(&packet).await;
                 }
             }
 
@@ -710,11 +643,12 @@ impl World {
         None
     }
 
-    /// Gets a Entity by entity id
-    pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<dyn EntityBase>> {
-        for entity in self.entities.read().await.values() {
-            if entity.get_entity().entity_id == id {
-                return Some(entity.clone());
+    /// Gets a Living Entity by entity id
+    pub async fn get_living_entity_by_entityid(&self, id: EntityId) -> Option<Arc<LivingEntity>> {
+        for mob_entity in self.current_living_mobs.lock().await.values() {
+            let living_entity = &mob_entity.living_entity;
+            if living_entity.entity_id() == id {
+                return Some(living_entity.clone());
             }
         }
         None
@@ -892,8 +826,7 @@ impl World {
             &CRemovePlayerInfo::new(1.into(), &[uuid]),
         )
         .await;
-        self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
-            .await;
+        self.remove_entity(&player.living_entity.entity).await;
 
         let msg_comp = TextComponent::translate(
             "multiplayer.player.left",
@@ -926,16 +859,28 @@ impl World {
     ///
     /// * `uuid`: The unique UUID of the living entity to add.
     /// * `living_entity`: A `Arc<LivingEntity>` reference to the living entity object.
-    pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        self.broadcast_packet_all(&base_entity.create_spawn_packet())
-            .await;
-        let mut current_living_entities = self.entities.write().await;
-        current_living_entities.insert(base_entity.entity_uuid, entity);
+    pub async fn add_mob_entity(&self, uuid: uuid::Uuid, living_entity: Arc<MobEntity>) {
+        let mut current_living_entities = self.current_living_mobs.lock().await;
+        current_living_entities.insert(uuid, living_entity);
+    }
+
+    pub async fn remove_mob_entity(self: Arc<Self>, living_entity: Arc<LivingEntity>) {
+        let mut current_living_entities = self.current_living_mobs.lock().await;
+        current_living_entities
+            .remove(&living_entity.entity.entity_uuid)
+            .unwrap();
+
+        // TODO: does this work with collisions?
+        living_entity.entity.set_pose(EntityPose::Dying).await;
+
+        let world = self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+            world.remove_entity(&living_entity.entity).await;
+        });
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {
-        self.entities.write().await.remove(&entity.entity_uuid);
         self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
             .await;
     }
@@ -947,7 +892,7 @@ impl World {
         // Since we divide by 16 remnant can never exceed u8
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
-        let chunk = self.receive_chunk(chunk_coordinate).await.0;
+        let chunk = self.receive_chunk(chunk_coordinate).await;
         let replaced_block_state_id = chunk.read().await.subchunks.get_block(relative).unwrap();
         chunk
             .write()
@@ -967,10 +912,7 @@ impl World {
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Important: must be called from an async function (or changed to accept a tokio runtime
     /// handle)
-    pub fn receive_chunks(
-        &self,
-        chunks: Vec<Vector2<i32>>,
-    ) -> Receiver<(Arc<RwLock<ChunkData>>, bool)> {
+    pub fn receive_chunks(&self, chunks: Vec<Vector2<i32>>) -> Receiver<Arc<RwLock<ChunkData>>> {
         let (sender, receive) = mpsc::channel(chunks.len());
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
@@ -981,7 +923,7 @@ impl World {
         receive
     }
 
-    pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
+    pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
         let mut receiver = self.receive_chunks(vec![chunk_pos]);
         let chunk = receiver
             .recv()
@@ -1032,7 +974,7 @@ impl World {
     pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
         let (chunk, relative) = position.chunk_and_chunk_relative_position();
         let relative = ChunkRelativeBlockCoordinates::from(relative);
-        let chunk = self.receive_chunk(chunk).await.0;
+        let chunk = self.receive_chunk(chunk).await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         let Some(id) = chunk.subchunks.get_block(relative) else {
@@ -1046,7 +988,7 @@ impl World {
     pub async fn get_block(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_world::block::registry::Block, GetBlockError> {
+    ) -> Result<&pumpkin_world::block::block_registry::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1055,7 +997,7 @@ impl World {
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_world::block::registry::State, GetBlockError> {
+    ) -> Result<&pumpkin_world::block::block_registry::State, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1066,8 +1008,8 @@ impl World {
         position: &BlockPos,
     ) -> Result<
         (
-            &pumpkin_world::block::registry::Block,
-            &pumpkin_world::block::registry::State,
+            &pumpkin_world::block::block_registry::Block,
+            &pumpkin_world::block::block_registry::State,
         ),
         GetBlockError,
     > {

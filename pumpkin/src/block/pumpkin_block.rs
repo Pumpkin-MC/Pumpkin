@@ -1,11 +1,11 @@
-use crate::block::registry::BlockActionResult;
+use crate::block::block_manager::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
-use pumpkin_world::item::registry::Item;
+use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::item::item_registry::Item;
 
 pub trait BlockMetadata {
     const NAMESPACE: &'static str;
@@ -17,7 +17,7 @@ pub trait BlockMetadata {
 
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
-    async fn normal_use(
+    async fn on_use<'a>(
         &self,
         _block: &Block,
         _player: &Player,
@@ -25,7 +25,7 @@ pub trait PumpkinBlock: Send + Sync {
         _server: &Server,
     ) {
     }
-    async fn use_with_item(
+    async fn on_use_with_item<'a>(
         &self,
         _block: &Block,
         _player: &Player,
@@ -36,7 +36,7 @@ pub trait PumpkinBlock: Send + Sync {
         BlockActionResult::Continue
     }
 
-    async fn placed(
+    async fn on_placed<'a>(
         &self,
         _block: &Block,
         _player: &Player,
@@ -45,7 +45,7 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    async fn broken(
+    async fn on_broken<'a>(
         &self,
         _block: &Block,
         _player: &Player,
@@ -54,7 +54,7 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    async fn close(
+    async fn on_close<'a>(
         &self,
         _block: &Block,
         _player: &Player,

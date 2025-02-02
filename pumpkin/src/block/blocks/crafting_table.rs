@@ -1,5 +1,5 @@
+use crate::block::block_manager::BlockActionResult;
 use crate::block::pumpkin_block::PumpkinBlock;
-use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
@@ -7,14 +7,14 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{CraftingTable, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{block::registry::Block, item::registry::Item};
+use pumpkin_world::{block::block_registry::Block, item::item_registry::Item};
 
 #[pumpkin_block("minecraft:crafting_table")]
 pub struct CraftingTableBlock;
 
 #[async_trait]
 impl PumpkinBlock for CraftingTableBlock {
-    async fn normal_use(
+    async fn on_use<'a>(
         &self,
         block: &Block,
         player: &Player,
@@ -25,7 +25,7 @@ impl PumpkinBlock for CraftingTableBlock {
             .await;
     }
 
-    async fn use_with_item(
+    async fn on_use_with_item<'a>(
         &self,
         block: &Block,
         player: &Player,
@@ -38,11 +38,17 @@ impl PumpkinBlock for CraftingTableBlock {
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
+    async fn on_broken<'a>(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        server: &Server,
+    ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
 
-    async fn close(
+    async fn on_close<'a>(
         &self,
         _block: &Block,
         player: &Player,

@@ -9,7 +9,7 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    block::state::BlockState,
+    block::block_state::BlockState,
     chunk::{ChunkData, Subchunks},
     coordinates::{
         ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates, XZBlockCoordinates,

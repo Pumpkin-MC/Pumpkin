@@ -1,13 +1,8 @@
 use core::f32;
-use std::{
-    f32::consts::PI,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::sync::{atomic::AtomicBool, Arc};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use living::LivingEntity;
-use player::Player;
 use pumpkin_data::{
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -36,19 +31,8 @@ pub mod mob;
 
 pub mod living;
 pub mod player;
-pub mod projectile;
 
 pub type EntityId = i32;
-
-#[async_trait]
-pub trait EntityBase: Send + Sync {
-    /// Gets Called every tick
-    async fn tick(&self) {}
-    /// Called when a player collides with the entity
-    async fn on_player_collision(&self, _player: Arc<Player>) {}
-    fn get_entity(&self) -> &Entity;
-    fn get_living_entity(&self) -> Option<&LivingEntity>;
-}
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -172,20 +156,6 @@ impl Entity {
         }
     }
 
-    /// Returns entity rotation as vector
-    pub fn rotation(&self) -> Vector3<f32> {
-        // Convert degrees to radians if necessary
-        let yaw_rad = self.yaw.load() * (PI / 180.0);
-        let pitch_rad = self.pitch.load() * (PI / 180.0);
-
-        Vector3::new(
-            yaw_rad.cos() * pitch_rad.cos(),
-            pitch_rad.sin(),
-            yaw_rad.sin() * pitch_rad.cos(),
-        )
-        .normalize()
-    }
-
     /// Changes this entity's pitch and yaw to look at target
     pub async fn look_at(&self, target: Vector3<f64>) {
         let position = self.pos.load();
@@ -234,7 +204,7 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
-        self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
+        self.pitch.store(pitch);
     }
 
     /// Removes the Entity from their current World
