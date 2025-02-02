@@ -43,8 +43,7 @@ struct Particle {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ParticleOptions {
-    #[serde(rename = "type")]
-    typee: String,
+    r#type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<VarInt>,
 }

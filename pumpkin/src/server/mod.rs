@@ -34,9 +34,6 @@ use uuid::Uuid;
 use crate::block::block_manager::BlockManager;
 use crate::block::properties::BlockPropertiesManager;
 use crate::block::{default_block_manager, default_block_properties_manager};
-use crate::entity::ai::path::Navigator;
-use crate::entity::living::LivingEntity;
-use crate::entity::mob::MobEntity;
 use crate::entity::{Entity, EntityId};
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
@@ -207,22 +204,6 @@ impl Server {
         }
     }
 
-    pub async fn add_mob_entity(
-        &self,
-        entity_type: EntityType,
-        position: Vector3<f64>,
-        world: &Arc<World>,
-    ) -> (Arc<MobEntity>, Uuid) {
-        let (living_entity, uuid) = self.add_living_entity(position, entity_type, world);
-
-        let mob = Arc::new(MobEntity {
-            living_entity,
-            goals: Mutex::new(vec![]),
-            navigator: Mutex::new(Navigator::default()),
-        });
-        world.add_mob_entity(uuid, mob.clone()).await;
-        (mob, uuid)
-    }
     /// Adds a new living entity to the server. This does not Spawn the entity
     ///
     /// # Returns
@@ -232,12 +213,12 @@ impl Server {
     /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
     /// - `Arc<World>`: A reference to the world that the living entity was added to.
     /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
-    fn add_living_entity(
+    pub fn add_entity(
         &self,
         position: Vector3<f64>,
         entity_type: EntityType,
         world: &Arc<World>,
-    ) -> (Arc<LivingEntity>, Uuid) {
+    ) -> (Entity, Uuid) {
         let entity_id = self.new_entity_id();
 
         // TODO: this should be resolved to a integer using a macro when calling this function
@@ -254,7 +235,7 @@ impl Server {
 
         // TODO: standing eye height should be per mob
         let new_uuid = uuid::Uuid::new_v4();
-        let mob = Arc::new(LivingEntity::new(Entity::new(
+        let entity = Entity::new(
             entity_id,
             new_uuid,
             world.clone(),
@@ -263,9 +244,9 @@ impl Server {
             1.62,
             AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
             AtomicCell::new(bounding_box_size),
-        )));
+        );
 
-        (mob, new_uuid)
+        (entity, new_uuid)
     }
 
     pub async fn try_get_container(
@@ -380,7 +361,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.current_players.lock().await.iter() {
+            for (_, player) in world.players.lock().await.iter() {
                 if player.client.address.lock().await.ip() == ip {
                     players.push(player.clone());
                 }
@@ -395,7 +376,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.current_players.lock().await.iter() {
+            for (_, player) in world.players.lock().await.iter() {
                 players.push(player.clone());
             }
         }
@@ -441,7 +422,7 @@ impl Server {
     pub async fn get_player_count(&self) -> usize {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
-            count += world.current_players.lock().await.len();
+            count += world.players.lock().await.len();
         }
         count
     }
@@ -450,7 +431,7 @@ impl Server {
     pub async fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
-            count += world.current_players.lock().await.len();
+            count += world.players.lock().await.len();
             if count >= n {
                 return true;
             }

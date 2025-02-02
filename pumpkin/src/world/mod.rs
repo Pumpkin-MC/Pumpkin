@@ -5,7 +5,7 @@ pub mod player_chunker;
 
 use crate::{
     command::client_cmd_suggestions,
-    entity::{living::LivingEntity, mob::MobEntity, player::Player, Entity, EntityId},
+    entity::{player::Player, Entity, EntityBase, EntityId},
     error::PumpkinError,
     plugin::{
         block::BlockBreakEvent,
@@ -17,19 +17,16 @@ use crate::{
 use level_time::LevelTime;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    entity::{EntityPose, EntityType},
+    entity::EntityType,
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
 use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
-use pumpkin_protocol::{
-    client::play::CLevelEvent,
-    codec::{identifier::Identifier, var_int::VarInt},
-};
+use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
     client::play::{
         CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-        CSetEntityMetadata, CSpawnEntity, GameEvent, Metadata, PlayerAction,
+        CSpawnEntity, GameEvent, PlayerAction,
     },
     ClientPacket,
 };
@@ -99,9 +96,10 @@ pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
     /// A map of active players within the world, keyed by their unique UUID.
-    pub current_players: Arc<Mutex<HashMap<uuid::Uuid, Arc<Player>>>>,
-    /// A map of active mob entities within the world, keyed by their unique UUID.
-    pub current_living_mobs: Arc<Mutex<HashMap<uuid::Uuid, Arc<MobEntity>>>>,
+    pub players: Arc<Mutex<HashMap<uuid::Uuid, Arc<Player>>>>,
+    /// A map of active entities within the world, keyed by their unique UUID.
+    /// This does not include Players
+    pub entities: Arc<Mutex<HashMap<uuid::Uuid, Arc<dyn EntityBase>>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -118,8 +116,8 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
-            current_players: Arc::new(Mutex::new(HashMap::new())),
-            current_living_mobs: Arc::new(Mutex::new(HashMap::new())),
+            players: Arc::new(Mutex::new(HashMap::new())),
+            entities: Arc::new(Mutex::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
@@ -140,7 +138,7 @@ impl World {
     where
         P: ClientPacket,
     {
-        let current_players = self.current_players.lock().await;
+        let current_players = self.players.lock().await;
         for player in current_players.values() {
             player.client.send_packet(packet).await;
         }
@@ -171,7 +169,7 @@ impl World {
     where
         P: ClientPacket,
     {
-        let current_players = self.current_players.lock().await;
+        let current_players = self.players.lock().await;
         for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
             player.client.send_packet(packet).await;
         }
@@ -191,7 +189,7 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().gen::<f64>();
-        let players = self.current_players.lock().await;
+        let players = self.players.lock().await;
         for (_, player) in players.iter() {
             player
                 .play_sound(sound_id, category, position, volume, pitch, seed)
@@ -233,11 +231,11 @@ impl World {
             }
         }
         // player ticks
-        for player in self.current_players.lock().await.values() {
+        for player in self.players.lock().await.values() {
             player.tick().await;
         }
         // entities tick
-        for entity in self.current_living_mobs.lock().await.values() {
+        for entity in self.entities.lock().await.values() {
             entity.tick().await;
         }
     }
@@ -339,12 +337,12 @@ impl World {
             }],
         ))
         .await;
-        player.update_client_information().await;
+        player.send_client_information().await;
 
         // here we send all the infos of already joined players
         let mut entries = Vec::new();
         {
-            let current_players = self.current_players.lock().await;
+            let current_players = self.players.lock().await;
             for (_, playerr) in current_players
                 .iter()
                 .filter(|(c, _)| **c != player.gameprofile.id)
@@ -394,13 +392,7 @@ impl World {
         .await;
         // spawn players for our client
         let id = player.gameprofile.id;
-        for (_, existing_player) in self
-            .current_players
-            .lock()
-            .await
-            .iter()
-            .filter(|c| c.0 != &id)
-        {
+        for (_, existing_player) in self.players.lock().await.iter().filter(|c| c.0 != &id) {
             let entity = &existing_player.living_entity.entity;
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
@@ -426,14 +418,7 @@ impl World {
         }
         // entity meta data
         // set skin parts
-        if let Some(config) = player.client.config.lock().await.as_ref() {
-            let packet = CSetEntityMetadata::new(
-                entity_id.into(),
-                Metadata::new(17, VarInt(0), config.skin_parts),
-            );
-            log::debug!("Broadcasting skin for {}", player.gameprofile.name);
-            self.broadcast_packet_all(&packet).await;
-        }
+        player.send_client_information().await;
 
         // Start waiting for level chunks, Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
@@ -530,11 +515,6 @@ impl World {
             .await;
 
         let entity = &player.living_entity.entity;
-        let entity_id = entity.entity_id;
-
-        let skin_parts = player.config.lock().await.skin_parts;
-        let entity_metadata_packet =
-            CSetEntityMetadata::new(entity_id.into(), Metadata::new(17, VarInt(0), &skin_parts));
 
         self.broadcast_packet_except(
             &[player.gameprofile.id],
@@ -556,9 +536,9 @@ impl World {
             ),
         )
         .await;
+        player.send_client_information().await;
 
         player_chunker::player_join(player).await;
-        self.broadcast_packet_all(&entity_metadata_packet).await;
         // update commands
 
         player.set_health(20.0, 20, 20.0).await;
@@ -634,8 +614,8 @@ impl World {
     }
 
     /// Gets a Player by entity id
-    pub async fn get_player_by_entityid(&self, id: EntityId) -> Option<Arc<Player>> {
-        for player in self.current_players.lock().await.values() {
+    pub async fn get_player_by_id(&self, id: EntityId) -> Option<Arc<Player>> {
+        for player in self.players.lock().await.values() {
             if player.entity_id() == id {
                 return Some(player.clone());
             }
@@ -643,12 +623,11 @@ impl World {
         None
     }
 
-    /// Gets a Living Entity by entity id
-    pub async fn get_living_entity_by_entityid(&self, id: EntityId) -> Option<Arc<LivingEntity>> {
-        for mob_entity in self.current_living_mobs.lock().await.values() {
-            let living_entity = &mob_entity.living_entity;
-            if living_entity.entity_id() == id {
-                return Some(living_entity.clone());
+    /// Gets a Entity by entity id
+    pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<dyn EntityBase>> {
+        for entity in self.entities.lock().await.values() {
+            if entity.get_entity().entity_id == id {
+                return Some(entity.clone());
             }
         }
         None
@@ -656,7 +635,7 @@ impl World {
 
     /// Gets a Player by username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
-        for player in self.current_players.lock().await.values() {
+        for player in self.players.lock().await.values() {
             if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
                 return Some(player.clone());
             }
@@ -677,7 +656,7 @@ impl World {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not.
     pub async fn get_player_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<Player>> {
-        return self.current_players.lock().await.get(&id).cloned();
+        return self.players.lock().await.get(&id).cloned();
     }
 
     /// Gets a list of players who's location equals the given position in the world.
@@ -690,7 +669,7 @@ impl World {
     ///
     /// * `position`: The position the function will check.
     pub async fn get_players_by_pos(&self, position: BlockPos) -> HashMap<uuid::Uuid, Arc<Player>> {
-        self.current_players
+        self.players
             .lock()
             .await
             .iter()
@@ -720,7 +699,7 @@ impl World {
     ) -> HashMap<uuid::Uuid, Arc<Player>> {
         let radius_squared = radius.powi(2);
 
-        self.current_players
+        self.players
             .lock()
             .await
             .iter()
@@ -766,11 +745,11 @@ impl World {
     /// * `player`: An `Arc<Player>` reference to the player object.
     pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) {
         {
-            let mut current_players = self.current_players.lock().await;
+            let mut current_players = self.players.lock().await;
             current_players.insert(uuid, player.clone())
         };
 
-        let current_players = self.current_players.clone();
+        let current_players = self.players.clone();
         tokio::spawn(async move {
             let msg_comp = TextComponent::translate(
                 "multiplayer.player.joined",
@@ -815,7 +794,7 @@ impl World {
     /// - This function assumes `broadcast_packet_expect` and `remove_entity` are defined elsewhere.
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
     pub async fn remove_player(&self, player: Arc<Player>) {
-        self.current_players
+        self.players
             .lock()
             .await
             .remove(&player.gameprofile.id)
@@ -842,7 +821,7 @@ impl World {
             .await;
 
         if !event.cancelled {
-            let players = self.current_players.lock().await;
+            let players = self.players.lock().await;
             for player in players.values() {
                 player.send_system_message(&event.leave_message).await;
             }
@@ -859,25 +838,11 @@ impl World {
     ///
     /// * `uuid`: The unique UUID of the living entity to add.
     /// * `living_entity`: A `Arc<LivingEntity>` reference to the living entity object.
-    pub async fn add_mob_entity(&self, uuid: uuid::Uuid, living_entity: Arc<MobEntity>) {
-        let mut current_living_entities = self.current_living_mobs.lock().await;
-        current_living_entities.insert(uuid, living_entity);
-    }
-
-    pub async fn remove_mob_entity(self: Arc<Self>, living_entity: Arc<LivingEntity>) {
-        let mut current_living_entities = self.current_living_mobs.lock().await;
-        current_living_entities
-            .remove(&living_entity.entity.entity_uuid)
-            .unwrap();
-
-        // TODO: does this work with collisions?
-        living_entity.entity.set_pose(EntityPose::Dying).await;
-
-        let world = self.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            world.remove_entity(&living_entity.entity).await;
-        });
+    pub async fn spawn_entity(&self, uuid: uuid::Uuid, entity: Arc<dyn EntityBase>) {
+        self.broadcast_packet_all(&entity.get_entity().create_spawn_packet(uuid))
+            .await;
+        let mut current_living_entities = self.entities.lock().await;
+        current_living_entities.insert(uuid, entity);
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {

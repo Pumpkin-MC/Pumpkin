@@ -128,6 +128,19 @@ impl<T> From<Vector3<T>> for (T, T, T) {
     }
 }
 
+impl<T: Math + Copy> Vector3<T>
+where
+    T: Into<f64>,
+{
+    pub fn to_f64(&self) -> Vector3<f64> {
+        Vector3 {
+            x: self.x.into(),
+            y: self.y.into(),
+            z: self.z.into(),
+        }
+    }
+}
+
 pub trait Math:
     Mul<Output = Self>
     //+ Neg<Output = Self>
