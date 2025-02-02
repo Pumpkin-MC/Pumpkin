@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicI8;
-
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::{
@@ -13,17 +11,12 @@ use super::{living::LivingEntity, Entity, EntityBase};
 pub struct ItemEntity {
     entity: Entity,
     item: Slot,
-    pickup_delay: AtomicI8,
 }
 
 impl ItemEntity {
     pub fn new(entity: Entity, stack: &ItemStack) -> Self {
         let slot = Slot::from(stack);
-        Self {
-            entity,
-            item: slot,
-            pickup_delay: AtomicI8::new(10), // Vanilla
-        }
+        Self { entity, item: slot }
     }
     pub async fn send_meta_packet(&self) {
         self.entity
@@ -34,18 +27,7 @@ impl ItemEntity {
 
 #[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self) {
-        if self.pickup_delay.load(std::sync::atomic::Ordering::Relaxed) >= 0 {
-            self.pickup_delay
-                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-        }
-    }
-    async fn on_player_collision(&self) {
-        if self.pickup_delay.load(std::sync::atomic::Ordering::Relaxed) == 0 {
-            // check if inventory is full
-            self.entity.remove().await;
-        }
-    }
+    async fn tick(&self) {}
 
     fn get_entity(&self) -> &Entity {
         &self.entity
