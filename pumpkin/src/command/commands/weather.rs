@@ -1,0 +1,131 @@
+use async_trait::async_trait;
+use pumpkin_util::text::TextComponent;
+
+use crate::command::{
+    args::{time::TimeArgumentConsumer, ConsumedArgs, FindArg},
+    tree::builder::{argument, literal},
+    tree::CommandTree,
+    CommandError, CommandExecutor, CommandSender,
+};
+
+const NAMES: [&str; 1] = ["weather"];
+const DESCRIPTION: &str = "Changes the weather.";
+const ARG_DURATION: &str = "duration";
+
+struct WeatherExecutor {
+    mode: WeatherMode,
+}
+
+enum WeatherMode {
+    Clear,
+    Rain,
+    Thunder,
+    Query,
+}
+
+#[async_trait]
+impl CommandExecutor for WeatherExecutor {
+    async fn execute<'a>(
+        &self,
+        sender: &mut CommandSender<'a>,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs<'a>,
+    ) -> Result<(), CommandError> {
+        let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
+
+        if matches!(self.mode, WeatherMode::Query) {
+            let weather = world.weather.lock().await;
+            let msg = if weather.raining {
+                "commands.weather.query.rain"
+            } else {
+                "commands.weather.query.clear"
+            };
+            sender
+                .send_message(TextComponent::translate(msg, [].into()))
+                .await;
+            return Ok(());
+        }
+
+        let _duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
+        let mut weather = world.weather.lock().await;
+
+        match self.mode {
+            WeatherMode::Clear => {
+                weather.set_rain(world, false).await;
+                weather.set_thunder_level(world, 0.0).await;
+                weather.set_rain_level(world, 0.0).await;
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.weather.set.clear",
+                        [].into(),
+                    ))
+                    .await;
+            }
+            WeatherMode::Rain => {
+                weather.set_rain(world, true).await;
+                weather.set_thunder_level(world, 0.0).await;
+                weather.set_rain_level(world, 1.0).await;
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.weather.set.rain",
+                        [].into(),
+                    ))
+                    .await;
+            }
+            WeatherMode::Thunder => {
+                weather.set_rain(world, true).await;
+                weather.set_thunder_level(world, 1.0).await;
+                weather.set_rain_level(world, 1.0).await;
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.weather.set.thunder",
+                        [].into(),
+                    ))
+                    .await;
+            }
+            WeatherMode::Query => unreachable!(),
+        }
+
+        Ok(())
+    }
+}
+
+pub fn init_command_tree() -> CommandTree {
+    CommandTree::new(NAMES, DESCRIPTION)
+        .then(
+            literal("clear")
+                .then(
+                    argument(ARG_DURATION, TimeArgumentConsumer).execute(WeatherExecutor {
+                        mode: WeatherMode::Clear,
+                    }),
+                )
+                .execute(WeatherExecutor {
+                    mode: WeatherMode::Clear,
+                }),
+        )
+        .then(
+            literal("rain")
+                .then(
+                    argument(ARG_DURATION, TimeArgumentConsumer).execute(WeatherExecutor {
+                        mode: WeatherMode::Rain,
+                    }),
+                )
+                .execute(WeatherExecutor {
+                    mode: WeatherMode::Rain,
+                }),
+        )
+        .then(
+            literal("thunder")
+                .then(
+                    argument(ARG_DURATION, TimeArgumentConsumer).execute(WeatherExecutor {
+                        mode: WeatherMode::Thunder,
+                    }),
+                )
+                .execute(WeatherExecutor {
+                    mode: WeatherMode::Thunder,
+                }),
+        )
+        .then(literal("query").execute(WeatherExecutor {
+            mode: WeatherMode::Query,
+        }))
+}
