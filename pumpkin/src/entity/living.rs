@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
+use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, MetaDataType, Metadata};
 use pumpkin_util::math::vector3::Vector3;
 
 use super::{Entity, EntityId, NBTStorage};
@@ -58,11 +58,7 @@ impl LivingEntity {
         self.health.store(health);
         // tell everyone entities health changed
         self.entity
-            .world
-            .broadcast_packet_all(&CSetEntityMetadata::new(
-                self.entity.entity_id.into(),
-                Metadata::new(9, 3.into(), health),
-            ))
+            .send_meta_data(Metadata::new(9, MetaDataType::Float, health))
             .await;
     }
 

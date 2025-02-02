@@ -32,7 +32,6 @@ impl ArgumentConsumer for TextComponentArgConsumer {
         let text_component = parse_text_component(s);
 
         let Some(text_component) = text_component else {
-            dbg!(text_component);
             if s.starts_with('"') && s.ends_with('"') {
                 let s = s.replace('"', "");
                 return Some(Arg::TextComponent(TextComponent::text(s)));

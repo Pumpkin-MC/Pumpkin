@@ -2,6 +2,7 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
@@ -37,10 +38,11 @@ pub mod resource_location;
 pub mod rotation;
 pub mod simple;
 pub mod sound;
+pub mod sound_category;
 pub mod summonable_entities;
 pub mod textcomponent;
 
-/// see [`crate::commands::tree_builder::argument`]
+/// see [`crate::commands::tree::builder::argument`]
 #[async_trait]
 pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
     async fn consume<'a>(
@@ -94,9 +96,10 @@ pub enum Arg<'a> {
     Bool(bool),
     #[allow(unused)]
     Simple(&'a str),
+    SoundCategory(SoundCategory),
 }
 
-/// see [`crate::commands::tree_builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree_builder::NonLeafNodeBuilder::execute`]
+/// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]
 pub type ConsumedArgs<'a> = HashMap<&'a str, Arg<'a>>;
 
 pub(crate) trait GetCloned<K, V: Clone> {

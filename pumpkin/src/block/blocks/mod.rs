@@ -1,7 +1,7 @@
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::registry::Block;
 
 use crate::{entity::player::Player, server::Server};
 
@@ -86,7 +86,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
         if id_to_use == -1 {
             let new_id = server.new_container_id();
-            log::debug!("Creating new unqiue container ID: {}", new_id);
+            log::debug!("Creating new unique container ID: {}", new_id);
             let open_container = OpenContainer::new_empty_container::<C>(
                 entity_id,
                 Some(location),
@@ -97,7 +97,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
             player.open_container.store(Some(new_id.into()));
         } else {
-            log::debug!("Using previous unqiue container ID: {}", id_to_use);
+            log::debug!("Using previous unique container ID: {}", id_to_use);
             if let Some(unique_container) = open_containers.get_mut(&(id_to_use as u64)) {
                 unique_container.set_location(Some(location)).await;
                 unique_container.add_player(entity_id);
@@ -112,7 +112,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
 pub async fn close_all_in_container(player: &Player, container: &OpenContainer) {
     for id in container.all_player_ids() {
-        if let Some(remote_player) = player.world().get_player_by_entityid(id).await {
+        if let Some(remote_player) = player.world().get_player_by_id(id).await {
             remote_player.close_container().await;
         }
     }

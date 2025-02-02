@@ -221,7 +221,7 @@ mod test {
     }
 
     #[test]
-    fn test_simple_ser_de_unamed() {
+    fn test_simple_ser_de_unnamed() {
         let test = Test {
             byte: 123,
             short: 1342,

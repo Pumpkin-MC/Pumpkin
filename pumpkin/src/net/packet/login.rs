@@ -158,12 +158,6 @@ impl Client {
 
             *gameprofile = Some(profile);
         }
-
-        drop(gameprofile);
-
-        if let Some(reason) = self.can_not_join().await {
-            self.kick(&reason).await;
-        }
     }
 
     pub async fn handle_encryption_response(

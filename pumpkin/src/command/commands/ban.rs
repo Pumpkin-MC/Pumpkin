@@ -1,8 +1,7 @@
 use crate::{
     command::{
         args::{message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::CommandTree,
-        tree_builder::argument,
+        tree::{builder::argument, CommandTree},
         CommandError, CommandExecutor, CommandSender,
     },
     data::{

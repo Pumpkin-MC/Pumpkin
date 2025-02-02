@@ -1,8 +1,8 @@
 use crate::{
     command::{
         args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST},
@@ -33,7 +33,7 @@ impl CommandExecutor for BanListExecutor {
         match *list_type {
             "ips" => {
                 let lock = &BANNED_IP_LIST.read().await;
-                let entires = lock
+                let entries = lock
                     .banned_ips
                     .iter()
                     .map(|entry| {
@@ -45,11 +45,11 @@ impl CommandExecutor for BanListExecutor {
                     })
                     .collect();
 
-                handle_banlist(entires, sender).await;
+                handle_banlist(entries, sender).await;
             }
             "players" => {
                 let lock = &BANNED_PLAYER_LIST.read().await;
-                let entires = lock
+                let entries = lock
                     .banned_players
                     .iter()
                     .map(|entry| {
@@ -61,7 +61,7 @@ impl CommandExecutor for BanListExecutor {
                     })
                     .collect();
 
-                handle_banlist(entires, sender).await;
+                handle_banlist(entries, sender).await;
             }
             _ => {
                 return Err(CommandError::GeneralCommandIssue(

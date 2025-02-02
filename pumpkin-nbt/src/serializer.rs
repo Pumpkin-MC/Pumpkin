@@ -87,7 +87,7 @@ where
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
 }
-/// Serializes struct using Serde Serializer to unamed NBT
+/// Serializes struct using Serde Serializer to unnamed NBT
 pub fn to_writer_unnamed<T, W>(value: &T, mut writer: W) -> Result<()>
 where
     T: Serialize,

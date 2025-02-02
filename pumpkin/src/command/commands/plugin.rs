@@ -7,8 +7,10 @@ use pumpkin_util::{
 use crate::{
     command::{
         args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::CommandTree,
-        tree_builder::{argument, literal, require},
+        tree::{
+            builder::{argument, literal, require},
+            CommandTree,
+        },
         CommandError, CommandExecutor, CommandSender,
     },
     PLUGIN_MANAGER,

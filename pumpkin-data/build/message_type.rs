@@ -35,8 +35,8 @@ pub(crate) fn build() -> TokenStream {
             .expect("Failed to parse message_type.json");
     let mut variants = TokenStream::new();
 
-    for (name, paremter) in json.iter() {
-        let i = paremter.id;
+    for (name, typee) in json.iter() {
+        let i = typee.id;
         let name = ident(name.to_uppercase());
         variants.extend([quote! {
             pub const #name: u32 = #i;
