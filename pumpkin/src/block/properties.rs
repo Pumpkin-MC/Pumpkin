@@ -579,6 +579,7 @@ impl BlockPropertiesManager {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub async fn get_state_data(
         &self,
         world: &World,
