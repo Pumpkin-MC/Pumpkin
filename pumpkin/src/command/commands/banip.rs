@@ -3,8 +3,8 @@ use std::{net::IpAddr, str::FromStr};
 use crate::{
     command::{
         args::{message::MsgArgConsumer, simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{

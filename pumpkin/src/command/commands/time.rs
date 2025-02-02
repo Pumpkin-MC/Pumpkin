@@ -4,7 +4,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::FindArgDefaultName;
-use crate::command::tree_builder::{argument_default_name, literal};
+use crate::command::tree::builder::{argument_default_name, literal};
 use crate::command::{
     tree::CommandTree, CommandError, CommandExecutor, CommandSender, ConsumedArgs,
 };

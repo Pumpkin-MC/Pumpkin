@@ -1,8 +1,8 @@
 use crate::{
     command::{
         args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},

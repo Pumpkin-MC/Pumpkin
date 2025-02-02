@@ -86,6 +86,7 @@ pub struct BasicConfiguration {
     pub encryption: bool,
     /// The server's description displayed on the status screen.
     pub motd: String,
+    /// The server's ticks per second.
     pub tps: f32,
     /// The default game mode for players.
     pub default_gamemode: GameMode,

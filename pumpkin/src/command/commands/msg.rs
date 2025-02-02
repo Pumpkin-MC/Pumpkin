@@ -7,8 +7,8 @@ use crate::command::{
         message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs,
         FindArgDefaultName,
     },
+    tree::builder::{argument, argument_default_name},
     tree::CommandTree,
-    tree_builder::{argument, argument_default_name},
     CommandError, CommandExecutor, CommandSender,
 };
 use CommandError::InvalidConsumption;

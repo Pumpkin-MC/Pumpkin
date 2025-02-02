@@ -8,7 +8,7 @@ use serde::{
 
 #[derive(Debug, Clone)]
 pub struct Slot {
-    item_count: VarInt,
+    pub item_count: VarInt,
     item_id: Option<VarInt>,
     num_components_to_add: Option<VarInt>,
     num_components_to_remove: Option<VarInt>,

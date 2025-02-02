@@ -1,8 +1,8 @@
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
-use crate::block::block_manager::BlockActionResult;
 use crate::block::properties::Direction;
+use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
 use crate::{
@@ -42,14 +42,14 @@ use pumpkin_util::{
     text::TextComponent,
     GameMode,
 };
-use pumpkin_world::block::block_registry::get_block_collision_shapes;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::get_item_by_id;
+use pumpkin_world::block::registry::get_block_collision_shapes;
+use pumpkin_world::block::registry::Block;
+use pumpkin_world::item::registry::{get_item_by_id, get_name_by_id};
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
-    block::{block_registry::get_block_by_item, BlockDirection},
+    block::{registry::get_block_by_item, BlockDirection},
     entity::entity_registry::get_entity_id,
-    item::item_registry::get_spawn_egg,
+    item::registry::get_spawn_egg,
 };
 
 use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
@@ -235,10 +235,7 @@ impl Player {
             .on_ground
             .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
 
-        entity.set_rotation(
-            wrap_degrees(packet.yaw) % 360.0,
-            wrap_degrees(packet.pitch).clamp(-90.0, 90.0) % 360.0,
-        );
+        entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
         let entity_id = entity.entity_id;
         let Vector3 { x, y, z } = position;
@@ -315,7 +312,7 @@ impl Player {
             .store(rotation.ground, std::sync::atomic::Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
-            wrap_degrees(rotation.pitch).clamp(-90.0, 90.0) % 360.0,
+            wrap_degrees(rotation.pitch),
         );
         // send new position to all other players
         let entity_id = entity.entity_id;
@@ -368,7 +365,7 @@ impl Player {
             .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
     }
 
-    async fn update_single_slot(
+    pub async fn update_single_slot(
         &self,
         inventory: &mut tokio::sync::MutexGuard<'_, PlayerInventory>,
         slot: i16,
@@ -402,8 +399,9 @@ impl Player {
 
         let mut inventory = self.inventory().lock().await;
 
-        let source_slot = inventory.get_slot_with_item(block.item_id);
-        let mut dest_slot = inventory.get_pick_item_hotbar_slot() as usize;
+        // TODO: Max stack
+        let source_slot = inventory.get_slot_with_item(block.item_id, 64);
+        let mut dest_slot = inventory.get_empty_hotbar_slot() as usize;
 
         let dest_slot_data = match inventory.get_slot(dest_slot + 36) {
             Ok(Some(stack)) => Slot::from(&*stack),
@@ -792,8 +790,8 @@ impl Player {
 
                         if let Ok(block) = block {
                             server
-                                .block_manager
-                                .on_broken(block, &self, location, server)
+                                .block_registry
+                                .broken(block, &self, location, server)
                                 .await;
                         }
                     }
@@ -830,8 +828,8 @@ impl Player {
 
                     if let Ok(block) = block {
                         server
-                            .block_manager
-                            .on_broken(block, &self, location, server)
+                            .block_registry
+                            .broken(block, &self, location, server)
                             .await;
                     }
                 }
@@ -925,7 +923,7 @@ impl Player {
             {
                 // Using block with empty hand
                 server
-                    .block_manager
+                    .block_registry
                     .on_use(block, self, location, server)
                     .await;
             }
@@ -943,8 +941,8 @@ impl Player {
             .load(std::sync::atomic::Ordering::Relaxed)
         {
             let action_result = server
-                .block_manager
-                .on_use_with_item(block, self, location, item, server)
+                .block_registry
+                .use_with_item(block, self, location, item, server)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -971,19 +969,17 @@ impl Player {
             // Decrease Block count
             if self.gamemode.load() != GameMode::Creative {
                 let mut inventory = self.inventory().lock().await;
-                let item_slot = inventory.held_item_mut();
-                // This should never be possible
-                let Some(item_stack) = item_slot else {
+                if !inventory.decrease_current_stack(1) {
                     return Err(BlockPlacingError::InventoryInvalid.into());
-                };
-                item_stack.item_count -= 1;
-                if item_stack.item_count == 0 {
-                    *item_slot = None;
                 }
-
                 // TODO: this should be by use item on not currently selected as they might be different
                 let _ = self
-                    .handle_decrease_item(server, slot_id as i16, item_slot.as_ref(), &mut state_id)
+                    .handle_decrease_item(
+                        server,
+                        slot_id as i16,
+                        inventory.held_item(),
+                        &mut state_id,
+                    )
                     .await;
             }
         }
@@ -991,12 +987,17 @@ impl Player {
         Ok(())
     }
 
-    pub fn handle_use_item(&self, _use_item: &SUseItem) {
+    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
-        // TODO: handle packet correctly
-        log::error!("An item was used(SUseItem), but the packet is not implemented yet");
+        if let Some(held) = self.inventory().lock().await.held_item() {
+            // this is so ugly and slow brooo...
+            if let Some(item) = get_item_by_id(held.item_id) {
+                let name = get_name_by_id(item.id).unwrap();
+                server.item_registry.on_use(name, item, self, server).await;
+            }
+        }
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
@@ -1049,8 +1050,8 @@ impl Player {
                 if let Some(pos) = container.get_location() {
                     if let Some(block) = container.get_block() {
                         server
-                            .block_manager
-                            .on_close(&block, self, pos, server, container) //block, self, location, server)
+                            .block_registry
+                            .close(&block, self, pos, server, container) //block, self, location, server)
                             .await;
                     }
                 }
@@ -1247,7 +1248,7 @@ impl Player {
                 .set_block_state(&final_block_pos, mapped_block_id)
                 .await;
             server
-                .block_manager
+                .block_registry
                 .on_placed(&block, self, final_block_pos, server)
                 .await;
         }

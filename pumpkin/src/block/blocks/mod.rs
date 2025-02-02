@@ -1,7 +1,7 @@
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::registry::Block;
 
 use crate::{entity::player::Player, server::Server};
 

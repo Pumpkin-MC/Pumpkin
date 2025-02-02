@@ -1,20 +1,20 @@
-use crate::block::block_manager::BlockActionResult;
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_world::block::registry::Block;
+use pumpkin_world::item::registry::Item;
 
 #[pumpkin_block("minecraft:jukebox")]
 pub struct JukeboxBlock;
 
 #[async_trait]
 impl PumpkinBlock for JukeboxBlock {
-    async fn on_use<'a>(
+    async fn normal_use(
         &self,
         _block: &Block,
         player: &Player,
@@ -27,7 +27,7 @@ impl PumpkinBlock for JukeboxBlock {
         world.stop_record(location).await;
     }
 
-    async fn on_use_with_item<'a>(
+    async fn use_with_item(
         &self,
         _block: &Block,
         player: &Player,
@@ -57,13 +57,7 @@ impl PumpkinBlock for JukeboxBlock {
         BlockActionResult::Consume
     }
 
-    async fn on_broken<'a>(
-        &self,
-        _block: &Block,
-        player: &Player,
-        location: BlockPos,
-        _server: &Server,
-    ) {
+    async fn broken(&self, _block: &Block, player: &Player, location: BlockPos, _server: &Server) {
         // For now just stop the music at this position
         let world = &player.living_entity.entity.world;
 

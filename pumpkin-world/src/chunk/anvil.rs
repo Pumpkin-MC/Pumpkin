@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::{
-    block::block_registry::BLOCK_ID_TO_REGISTRY_ID, chunk::ChunkWritingError, level::LevelFolder,
+    block::registry::BLOCK_ID_TO_REGISTRY_ID, chunk::ChunkWritingError, level::LevelFolder,
 };
 
 use super::{

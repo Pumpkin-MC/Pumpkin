@@ -17,7 +17,7 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    bytebuf::{packet_id::Packet, ReadingError},
+    bytebuf::{packet::Packet, ReadingError},
     client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
     packet_decoder::PacketDecoder,
     packet_encoder::{PacketEncodeError, PacketEncoder},

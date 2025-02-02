@@ -2,7 +2,7 @@ use crate::crafting::check_if_matches_crafting;
 use crate::Container;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::registry::Block;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 use tokio::sync::Mutex;
