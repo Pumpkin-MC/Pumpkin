@@ -45,7 +45,8 @@ pub enum MonsterSpawnLightLevel {
 pub struct MonsterSpawnLightLevelTagged {
     min_inclusive: i32,
     max_inclusive: i32,
-    r#type: String,
+    #[serde(rename = "type")]
+    typee: String,
 }
 
 impl From<i32> for MonsterSpawnLightLevel {

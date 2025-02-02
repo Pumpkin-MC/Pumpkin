@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::block::{
-    block_registry::{Block, State, BLOCKS},
+    block_registry::{Block, BLOCKS},
     BlockDirection,
 };
 
@@ -17,7 +17,6 @@ pub enum BlockProperty {
     Powered(bool),
     SlabType(SlabPosition),
     StairShape(StairShape),
-    Layers(u8),
     Half(BlockHalf), // Add other properties as needed
 }
 
@@ -34,7 +33,7 @@ pub enum BlockHalf {
     Bottom,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum SlabPosition {
     Top,
     Bottom,
@@ -68,84 +67,40 @@ pub fn get_property_key(property_name: &str) -> Option<BlockProperty> {
         "shape" => Some(BlockProperty::StairShape(StairShape::Straight)),
         "half" => Some(BlockProperty::Half(BlockHalf::Bottom)),
         "powered" => Some(BlockProperty::Powered(false)),
-        "layers" => Some(BlockProperty::Layers(1)),
         "face" => Some(BlockProperty::Face(BlockFace::Wall)),
         _ => None,
     }
 }
 
 #[must_use]
-pub fn evaluate_layers(
-    block: &Block,
-    clicked_block: &Block,
-    clicked_block_state: &State,
-    face: BlockDirection,
-    use_item_on: &SUseItemOn,
-    properties: &BlockProperties,
-    _other: bool,
-) -> (String, bool) {
-    let state =
-        &properties.property_mappings[&(clicked_block_state.id - clicked_block.states[0].id)];
-    for property in state {
-        // Max
-        if property == "layers8" {
-            return (property.clone(), false);
-        }
-
-        if block.id == clicked_block.id {
-            dbg!(property);
-            // bro its is so hacky :crying:
-            let mut layer: u8 = property.replace("layers", "").parse().unwrap();
-            // lets add a new layer
-            layer += 1;
-            return (format!("{}{}", "layers", layer), true);
-        }
-    }
-
-    let y_pos = use_item_on.cursor_pos.y;
-    if (y_pos > 0.5 && face != BlockDirection::Bottom) || face == BlockDirection::Top {
-        return (format!("{}{}", "layers", "1"), false);
-    }
-
-    (format!("{}{}", "layers", "1"), false)
-}
-
-#[must_use]
 pub fn evaluate_property_type(
     block: &Block,
     clicked_block: &Block,
-    clicked_block_state: &State,
     face: BlockDirection,
     use_item_on: &SUseItemOn,
-    properties: &BlockProperties,
-    other: bool,
-) -> (String, bool) {
-    let state =
-        &properties.property_mappings[&(clicked_block_state.id - clicked_block.states[0].id)];
-    for property in state {
-        if property == "typedouble" {
-            return (property.clone(), false);
-        }
-
-        if block.id == clicked_block.id {
-            if property == "typebottom" && face == BlockDirection::Top {
-                return (format!("{}{}", "type", "double"), true);
-            }
-            if property == "typetop" && face == BlockDirection::Bottom {
-                return (format!("{}{}", "type", "double"), true);
-            }
-            if !other {
-                return (format!("{}{}", "type", "double"), true);
-            }
-        }
+) -> String {
+    if block.id == clicked_block.id && face == BlockDirection::Top {
+        return format!("{}{}", "type", "double");
     }
 
-    let y_pos = use_item_on.cursor_pos.y;
-    if (y_pos > 0.5 && face != BlockDirection::Bottom) || face == BlockDirection::Top {
-        return (format!("{}{}", "type", "top"), false);
+    if face == BlockDirection::Top {
+        return format!("{}{}", "type", "bottom");
     }
 
-    (format!("{}{}", "type", "bottom"), false)
+    if face == BlockDirection::North
+        || face == BlockDirection::South
+        || face == BlockDirection::West
+        || face == BlockDirection::East
+    {
+        let y_pos = use_item_on.cursor_pos.y;
+        if y_pos > 0.5 {
+            return format!("{}{}", "type", "top");
+        }
+
+        return format!("{}{}", "type", "bottom");
+    }
+
+    format!("{}{}", "type", "bottom")
 }
 
 #[must_use]
@@ -355,8 +310,8 @@ pub fn evaluate_property_block_face(dir: BlockDirection) -> String {
 #[must_use]
 pub fn evaluate_property_half(face: BlockDirection, use_item_on: &SUseItemOn) -> String {
     match face {
-        BlockDirection::Bottom => format!("{}{}", "half", "bottom"),
-        BlockDirection::Top => format!("{}{}", "half", "top"),
+        BlockDirection::Top => format!("{}{}", "half", "bottom"),
+        BlockDirection::Bottom => format!("{}{}", "half", "top"),
         _ => {
             if use_item_on.cursor_pos.y > 0.5 {
                 format!("{}{}", "half", "top")
@@ -428,8 +383,7 @@ impl BlockPropertiesManager {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub async fn get_state_data(
+    pub async fn get_state_id(
         &self,
         world: &World,
         block: &Block,
@@ -437,11 +391,9 @@ impl BlockPropertiesManager {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player_direction: &Direction,
-        other: bool,
-    ) -> (u16, bool) {
+    ) -> u16 {
         if let Some(properties) = self.properties_registry.get(&block.id) {
             let mut hmap_key: Vec<String> = Vec::with_capacity(block.properties.len());
-            let mut updateable = false;
 
             for raw_property in &block.properties {
                 let property = get_property_key(raw_property.name.as_str());
@@ -449,19 +401,7 @@ impl BlockPropertiesManager {
                     let state = match property {
                         BlockProperty::SlabType(_) => {
                             let clicked_block = world.get_block(block_pos).await.unwrap();
-                            let clicked_block_state =
-                                world.get_block_state(block_pos).await.unwrap();
-                            let (state, can_update) = evaluate_property_type(
-                                block,
-                                clicked_block,
-                                clicked_block_state,
-                                *face,
-                                use_item_on,
-                                properties,
-                                other,
-                            );
-                            updateable = can_update;
-                            state
+                            evaluate_property_type(block, clicked_block, *face, use_item_on)
                         }
                         BlockProperty::Waterlogged(_) => evaluate_property_waterlogged(block),
                         BlockProperty::Facing(_) => {
@@ -481,37 +421,17 @@ impl BlockPropertiesManager {
                         }
                         BlockProperty::Powered(_) => "poweredfalse".to_string(), // todo
                         BlockProperty::Face(_) => evaluate_property_block_face(*face),
-                        BlockProperty::Layers(_) => {
-                            let clicked_block = world.get_block(block_pos).await.unwrap();
-                            let clicked_block_state =
-                                world.get_block_state(block_pos).await.unwrap();
-                            let (state, can_update) = evaluate_layers(
-                                block,
-                                clicked_block,
-                                clicked_block_state,
-                                *face,
-                                use_item_on,
-                                properties,
-                                other,
-                            );
-                            updateable = can_update;
-                            state
-                        }
                     };
                     hmap_key.push(state.to_string());
                 } else {
                     log::warn!("Unknown Block Property: {}", &raw_property.name);
                     // if one property is not found everything will not work
-                    return (block.default_state_id, false);
+                    return block.default_state_id;
                 }
             }
             // Base state id plus offset
-            let mapping = properties.state_mappings.get(&hmap_key);
-            if let Some(mapping) = mapping {
-                return (block.states[0].id + mapping, updateable);
-            }
-            log::error!("Failed to get Block Properties mapping for {}", block.name);
+            return block.states[0].id + properties.state_mappings[&hmap_key];
         }
-        (block.default_state_id, false)
+        block.default_state_id
     }
 }

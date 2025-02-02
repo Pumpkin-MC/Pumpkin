@@ -92,15 +92,9 @@ impl Client {
         self.send_packet(&CFinishConfig::new()).await;
     }
 
-    pub async fn handle_config_acknowledged(&self) {
+    pub fn handle_config_acknowledged(&self) {
         log::debug!("Handling config acknowledge");
         self.connection_state.store(ConnectionState::Play);
-
-        if let Some(reason) = self.can_not_join().await {
-            self.kick(&reason).await;
-            return;
-        }
-
         self.make_player
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }

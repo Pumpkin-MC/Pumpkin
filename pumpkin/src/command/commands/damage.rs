@@ -8,11 +8,12 @@ use pumpkin_util::text::{
 use crate::command::{
     args::{
         bounded_num::BoundedNumArgumentConsumer,
-        damage_type::DamageTypeArgumentConsumer,
+        damage_type::DamageTypeArgumentConsumer, // Add this import
         entity::EntityArgumentConsumer,
         position_3d::Position3DArgumentConsumer,
         Arg,
         ConsumedArgs,
+        FindArg,
     },
     tree::CommandTree,
     tree_builder::{argument, literal},
@@ -33,36 +34,7 @@ fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
 }
 
 struct DamageLocationExecutor;
-struct DamageEntityExecutor(bool);
-
-async fn send_damage_result(
-    sender: &mut CommandSender<'_>,
-    success: bool,
-    amount: f32,
-    target_name: String,
-) {
-    if !success {
-        sender
-            .send_message(
-                TextComponent::translate("commands.damage.invulnerable", [].into())
-                    .color(Color::Named(NamedColor::Red)),
-            )
-            .await;
-        return;
-    }
-
-    sender
-        .send_message(TextComponent::translate(
-            "commands.damage.success",
-            [
-                TextComponent::text(amount.to_string()),
-                TextComponent::text(target_name),
-            ]
-            .into(),
-        ))
-        .await;
-}
-
+struct DamageEntityExecutor(bool); // true if has cause
 
 #[async_trait]
 impl CommandExecutor for DamageLocationExecutor {
@@ -93,12 +65,22 @@ impl CommandExecutor for DamageLocationExecutor {
 
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-        let success = target
+        target
             .living_entity
             .damage_with_context(amount, damage_type, Some(location), None, None)
             .await;
 
-        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
+        sender
+            .send_message(TextComponent::translate(
+                "commands.damage.success",
+                [
+                    TextComponent::text(amount.to_string()),
+                    TextComponent::text(target.gameprofile.name.clone()),
+                ]
+                .into(),
+            ))
+            .await;
+
         Ok(())
     }
 }
@@ -137,18 +119,21 @@ impl CommandExecutor for DamageEntityExecutor {
             None
         };
 
-        let success = target
+        target
             .living_entity
-            .damage_with_context(
-                amount,
-                damage_type,
-                None,
-                source.as_ref().map(|e| &e.living_entity.entity),
-                cause.as_ref().map(|e| &e.living_entity.entity),
-            )
+            .damage_with_context(amount, damage_type, None, source, cause)
             .await;
 
-        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
+        sender
+            .send_message(TextComponent::translate(
+                "commands.damage.success",
+                [
+                    TextComponent::text(amount.to_string()),
+                    TextComponent::text(target.gameprofile.name.clone()),
+                ]
+                .into(),
+            ))
+            .await;
 
         Ok(())
     }

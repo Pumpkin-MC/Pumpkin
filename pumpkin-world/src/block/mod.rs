@@ -46,14 +46,4 @@ impl BlockDirection {
         }
         .into()
     }
-    pub fn opposite(&self) -> BlockDirection {
-        match self {
-            BlockDirection::Bottom => BlockDirection::Top,
-            BlockDirection::Top => BlockDirection::Bottom,
-            BlockDirection::North => BlockDirection::South,
-            BlockDirection::South => BlockDirection::North,
-            BlockDirection::West => BlockDirection::East,
-            BlockDirection::East => BlockDirection::West,
-        }
-    }
 }

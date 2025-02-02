@@ -490,7 +490,7 @@ impl Player {
             .living_entity
             .entity
             .world
-            .players
+            .current_players
             .lock()
             .await
             .iter()

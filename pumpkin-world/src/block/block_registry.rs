@@ -3,8 +3,6 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use crate::loot::LootTable;
-
 pub static BLOCKS: LazyLock<TopLevel> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../assets/blocks.json"))
         .expect("Could not parse blocks.json registry.")
@@ -93,25 +91,30 @@ pub fn get_block_by_item<'a>(item_id: u16) -> Option<&'a Block> {
     BLOCKS_BY_ID.get(block_id)
 }
 
-pub fn get_block_collision_shapes(block_id: u16) -> Option<Vec<Shape>> {
+pub fn get_block_collision_shapes(block_id: u16) -> Option<Vec<f32>> {
     let block = BLOCKS_BY_ID.get(&BLOCK_ID_BY_STATE_ID[&block_id])?;
     let state = &block.states[STATE_INDEX_BY_STATE_ID[&block_id] as usize];
-    let mut shapes: Vec<Shape> = vec![];
+    let mut shapes: Vec<f32> = vec![];
     for i in 0..state.collision_shapes.len() {
         let shape = &BLOCKS.shapes[state.collision_shapes[i] as usize];
-        shapes.push(shape.clone());
+        shapes.push(shape.min[0]);
+        shapes.push(shape.min[1]);
+        shapes.push(shape.min[2]);
+        shapes.push(shape.max[0]);
+        shapes.push(shape.max[1]);
+        shapes.push(shape.max[2]);
     }
     Some(shapes)
 }
 
 #[expect(dead_code)]
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct TopLevel {
     block_entity_types: Vec<String>,
     shapes: Vec<Shape>,
     pub blocks: Vec<Block>,
 }
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Block {
     pub id: u16,
     pub item_id: u16,
@@ -119,7 +122,6 @@ pub struct Block {
     pub wall_variant_id: Option<u16>,
     pub translation_key: String,
     pub name: String,
-    pub loot_table: Option<LootTable>,
     pub properties: Vec<Property>,
     pub default_state_id: u16,
     pub states: Vec<State>,
@@ -141,7 +143,7 @@ pub struct State {
     pub block_entity_type: Option<u32>,
 }
 #[derive(Deserialize, Clone, Debug)]
-pub struct Shape {
-    pub min: [f64; 3],
-    pub max: [f64; 3],
+struct Shape {
+    min: [f32; 3],
+    max: [f32; 3],
 }

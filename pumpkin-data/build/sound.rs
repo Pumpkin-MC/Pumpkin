@@ -50,7 +50,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            pub const fn to_name(&self) -> &'static str {
+            pub fn to_name(&self) -> &'static str {
                 match self {
                     #type_to_name
                 }
