@@ -30,6 +30,8 @@ num-traits = "0.2"
 # Compression   
 flate2 = "1.0"
 lz4 = "1.28"
+zstd = "0.13.2"
+
 
 file-guard = "0.2"
 indexmap = "2.7"
