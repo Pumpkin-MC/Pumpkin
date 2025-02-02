@@ -336,8 +336,9 @@ impl ChunkData {
         mut chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let mut cursor = Cursor::new(chunk_data);
-        if from_bytes_unnamed::<ChunkStatusWrapper>(&mut chunk_data)
+        let chunk_clone = chunk_data.to_vec();
+        let mut cursor = Cursor::new(chunk_clone);
+        if from_bytes_unnamed::<ChunkStatusWrapper>(&mut cursor)
             .map_err(|_| ChunkParsingError::FailedReadStatus)?
             .status
             != ChunkStatus::Full
@@ -345,7 +346,7 @@ impl ChunkData {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = from_bytes_unnamed::<ChunkNbt>(&mut cursor)
+        let chunk_data = from_bytes_unnamed::<ChunkNbt>(&mut chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
