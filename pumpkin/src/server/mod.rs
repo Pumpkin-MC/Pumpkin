@@ -252,6 +252,7 @@ impl Server {
                 &bounding_box_size,
             )),
             AtomicCell::new(bounding_box_size),
+            false,
         )
     }
 
