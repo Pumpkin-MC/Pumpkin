@@ -1125,7 +1125,7 @@ impl Player {
 
             let world = self.world();
             // create new mob and uuid based on spawn egg id
-            let (mob, uuid) = mob::from_type(
+            let mob = mob::from_type(
                 EntityType::from_raw(*spawn_item_id).unwrap(),
                 server,
                 pos,
@@ -1137,7 +1137,7 @@ impl Player {
             mob.get_entity().set_rotation(yaw, 0.0);
 
             // broadcast new mob to all players
-            world.spawn_entity(uuid, mob).await;
+            world.spawn_entity(mob).await;
 
             // TODO: send/configure additional commands/data based on type of entity (horse, slime, etc)
         } else {

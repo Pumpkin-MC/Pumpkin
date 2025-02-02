@@ -29,7 +29,6 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
-use uuid::Uuid;
 
 use crate::block::block_manager::BlockManager;
 use crate::block::properties::BlockPropertiesManager;
@@ -218,7 +217,7 @@ impl Server {
         position: Vector3<f64>,
         entity_type: EntityType,
         world: &Arc<World>,
-    ) -> (Entity, Uuid) {
+    ) -> Entity {
         let entity_id = self.new_entity_id();
 
         // TODO: this should be resolved to a integer using a macro when calling this function
@@ -235,18 +234,21 @@ impl Server {
 
         // TODO: standing eye height should be per mob
         let new_uuid = uuid::Uuid::new_v4();
-        let entity = Entity::new(
+        Entity::new(
             entity_id,
             new_uuid,
             world.clone(),
             position,
             entity_type,
             1.62,
-            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            AtomicCell::new(BoundingBox::new_from_pos(
+                position.x,
+                position.y,
+                position.z,
+                &bounding_box_size,
+            )),
             AtomicCell::new(bounding_box_size),
-        );
-
-        (entity, new_uuid)
+        )
     }
 
     pub async fn try_get_container(

@@ -37,8 +37,8 @@ impl CommandExecutor for SummonExecutor {
         // TODO: Make this work in console
         if let Some(player) = sender.as_player() {
             let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
-            let (mob, uuid) = mob::from_type(entity, server, pos, player.world()).await;
-            player.world().spawn_entity(uuid, mob).await;
+            let mob = mob::from_type(entity, server, pos, player.world()).await;
+            player.world().spawn_entity(mob).await;
             sender
                 .send_message(TextComponent::translate(
                     "commands.summon.success",

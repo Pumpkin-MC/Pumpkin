@@ -5,7 +5,6 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 use zombie::Zombie;
 
 use crate::{server::Server, world::World};
@@ -61,8 +60,8 @@ pub async fn from_type(
     server: &Server,
     position: Vector3<f64>,
     world: &Arc<World>,
-) -> (Arc<dyn EntityBase>, Uuid) {
-    let (entity, uuid) = server.add_entity(position, entity_type, world);
+) -> Arc<dyn EntityBase> {
+    let entity = server.add_entity(position, entity_type, world);
     let mob = MobEntity {
         living_entity: LivingEntity::new(entity),
         goals: Mutex::new(vec![]),
@@ -74,7 +73,7 @@ pub async fn from_type(
         // TODO
         _ => (),
     }
-    (Arc::new(mob), uuid)
+    Arc::new(mob)
 }
 
 impl MobEntity {

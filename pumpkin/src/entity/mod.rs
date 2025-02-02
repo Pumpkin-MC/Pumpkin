@@ -26,7 +26,6 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::world::World;
 
@@ -40,7 +39,10 @@ pub type EntityId = i32;
 
 #[async_trait]
 pub trait EntityBase: Send + Sync {
-    async fn tick(&self);
+    /// Gets Called every tick
+    async fn tick(&self) {}
+    /// Called when a player collides with the entity
+    async fn on_player_collision(&self) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
     fn is_invulnerable_to(&self, damage_type: DamageType) -> bool;
@@ -230,12 +232,12 @@ impl Entity {
         self.world.remove_entity(self).await;
     }
 
-    pub fn create_spawn_packet(&self, uuid: Uuid) -> CSpawnEntity {
+    pub fn create_spawn_packet(&self) -> CSpawnEntity {
         let entity_loc = self.pos.load();
         let entity_vel = self.velocity.load();
         CSpawnEntity::new(
             VarInt(self.entity_id),
-            uuid,
+            self.entity_uuid,
             VarInt((self.entity_type) as i32),
             entity_loc.x,
             entity_loc.y,
@@ -336,7 +338,7 @@ impl Entity {
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        self.send_meta_data(Metadata::new(6, MetaDataType::EntityPose, pose))
+        self.send_meta_data(Metadata::new(6, MetaDataType::EntityPose, VarInt(pose)))
             .await;
     }
 }

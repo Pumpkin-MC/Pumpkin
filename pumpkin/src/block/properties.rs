@@ -58,7 +58,7 @@ pub enum Direction {
     West,
 }
 
-// TODO: We can automaticly parse them ig
+// TODO: We can automatically parse them ig
 #[must_use]
 pub fn get_property_key(property_name: &str) -> Option<BlockProperty> {
     match property_name {
@@ -93,7 +93,6 @@ pub fn evaluate_layers(
         }
 
         if block.id == clicked_block.id {
-            dbg!(property);
             // bro its is so hacky :crying:
             let mut layer: u8 = property.replace("layers", "").parse().unwrap();
             // lets add a new layer

@@ -234,9 +234,27 @@ impl World {
         for player in self.players.lock().await.values() {
             player.tick().await;
         }
+
         // entities tick
         for entity in self.entities.lock().await.values() {
             entity.tick().await;
+            // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
+            let mut collied = false;
+            for player in self.players.lock().await.values() {
+                if player
+                    .living_entity
+                    .entity
+                    .bounding_box
+                    .load()
+                    .intersects(&entity.get_entity().bounding_box.load())
+                {
+                    collied = true;
+                    break;
+                }
+            }
+            if collied {
+                entity.on_player_collision().await;
+            }
         }
     }
 
@@ -838,11 +856,12 @@ impl World {
     ///
     /// * `uuid`: The unique UUID of the living entity to add.
     /// * `living_entity`: A `Arc<LivingEntity>` reference to the living entity object.
-    pub async fn spawn_entity(&self, uuid: uuid::Uuid, entity: Arc<dyn EntityBase>) {
-        self.broadcast_packet_all(&entity.get_entity().create_spawn_packet(uuid))
+    pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
+        let base_entity = entity.get_entity();
+        self.broadcast_packet_all(&base_entity.create_spawn_packet())
             .await;
         let mut current_living_entities = self.entities.lock().await;
-        current_living_entities.insert(uuid, entity);
+        current_living_entities.insert(base_entity.entity_uuid, entity);
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {

@@ -1,6 +1,6 @@
 use super::{position::BlockPos, vector3::Vector3};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {
     pub min: Vector3<f64>,
     pub max: Vector3<f64>,
@@ -74,7 +74,7 @@ impl BoundingBox {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BoundingBoxSize {
     pub width: f64,
     pub height: f64,
