@@ -4,13 +4,14 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{chunk::ChunkWritingError, level::LevelFolder};
+use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 
 use super::anvil::AnvilChunkFormat;
 use super::{
     ChunkData, ChunkReader, ChunkReadingError, ChunkSerializingError, ChunkWriter,
-    CompressionError, FileLocksManager,
+    CompressionError, FILE_LOCK_MANAGER,
 };
 
 ///The side size of a region in chunks (one region is 32x32 chunks)
@@ -25,9 +26,6 @@ const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
 const SIGNATURE: [u8; 8] = (0xc3ff13183cca9d9a_u64).to_be_bytes();
-
-/// The size of the ChunkHeaders table in bytes
-const CHUNK_HEADER_BYTES_SIZE: usize = CHUNK_COUNT * size_of::<LinearChunkHeader>();
 
 #[derive(Default, Clone, Copy)]
 struct LinearChunkHeader {
@@ -68,20 +66,26 @@ struct LinearFile {
 pub struct LinearChunkFormat;
 
 impl LinearChunkHeader {
+    const CHUNK_HEADER_SIZE: usize = 8;
     fn from_bytes(bytes: &[u8]) -> Self {
-        let (size_bytes, timestamp_bytes) = bytes.split_at(4);
+        let mut bytes = bytes;
         LinearChunkHeader {
-            size: u32::from_be_bytes(size_bytes.try_into().unwrap()),
-            timestamp: u32::from_be_bytes(timestamp_bytes.try_into().unwrap()),
+            size: bytes.get_u32(),
+            timestamp: bytes.get_u32(),
         }
     }
 
     fn to_bytes(self) -> [u8; 8] {
-        let mut bytes = [0u8; 8];
-        bytes[0..4].copy_from_slice(&self.size.to_be_bytes());
-        bytes[4..8].copy_from_slice(&self.timestamp.to_be_bytes());
+        let mut bytes = Vec::with_capacity(LinearChunkHeader::CHUNK_HEADER_SIZE);
 
+        bytes.put_u32(self.size);
+        bytes.put_u32(self.timestamp);
+
+        // This should be a clear code error if the size of the header is not the expected
+        // so we can unwrap the conversion safely or panic the entire program if not
         bytes
+            .try_into()
+            .unwrap_or_else(|_| panic!("ChunkHeader Struct/Size Mismatch"))
     }
 }
 
@@ -112,26 +116,33 @@ impl LinearFileHeader {
         }
     }
     fn from_bytes(bytes: &[u8]) -> Self {
+        let mut buf = bytes;
+
         LinearFileHeader {
-            version: bytes[0].into(),
-            newest_timestamp: u64::from_be_bytes(bytes[1..9].try_into().unwrap()),
-            compression_level: bytes[9],
-            chunks_count: u16::from_be_bytes(bytes[10..12].try_into().unwrap()),
-            chunks_bytes: u32::from_be_bytes(bytes[12..16].try_into().unwrap()),
-            region_hash: u64::from_be_bytes(bytes[16..24].try_into().unwrap()),
+            version: buf.get_u8().into(),
+            newest_timestamp: buf.get_u64(),
+            compression_level: buf.get_u8(),
+            chunks_count: buf.get_u16(),
+            chunks_bytes: buf.get_u32(),
+            region_hash: buf.get_u64(),
         }
     }
 
     fn to_bytes(&self) -> [u8; Self::FILE_HEADER_SIZE] {
-        let mut bytes = [0u8; LinearFileHeader::FILE_HEADER_SIZE];
-        bytes[0] = self.version as u8;
-        bytes[1..9].copy_from_slice(&self.newest_timestamp.to_be_bytes());
-        bytes[9] = self.compression_level;
-        bytes[10..12].copy_from_slice(&self.chunks_count.to_be_bytes());
-        bytes[12..16].copy_from_slice(&self.chunks_bytes.to_be_bytes());
-        bytes[16..24].copy_from_slice(&self.region_hash.to_be_bytes());
+        let mut bytes: Vec<u8> = Vec::with_capacity(LinearFileHeader::FILE_HEADER_SIZE);
 
+        bytes.put_u8(self.version as u8);
+        bytes.put_u64(self.newest_timestamp);
+        bytes.put_u8(self.compression_level);
+        bytes.put_u16(self.chunks_count);
+        bytes.put_u32(self.chunks_bytes);
+        bytes.put_u64(self.region_hash);
+
+        // This should be a clear code error if the size of the header is not the expected
+        // so we can unwrap the conversion safely or panic the entire program if not
         bytes
+            .try_into()
+            .unwrap_or_else(|_| panic!("Header Struct/Size Mismatch"))
     }
 }
 
@@ -210,7 +221,8 @@ impl LinearFile {
         let buffer = zstd::decode_all(compressed_data.as_slice())
             .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
-        let (headers_buffer, chunks_buffer) = buffer.split_at(CHUNK_HEADER_BYTES_SIZE);
+        let (headers_buffer, chunks_buffer) =
+            buffer.split_at(LinearChunkHeader::CHUNK_HEADER_SIZE * CHUNK_COUNT);
 
         // Parse the chunk headers
         let chunk_headers: [LinearChunkHeader; CHUNK_COUNT] = headers_buffer
@@ -397,8 +409,7 @@ impl ChunkReader for LinearChunkFormat {
             .join(format!("./r.{}.{}.linear", region_x, region_z));
 
         tokio::task::block_in_place(|| {
-            let file_lock = FileLocksManager::get_file_lock(&path);
-            let _reader_lock = file_lock.blocking_read();
+            let _reader_guard = FILE_LOCK_MANAGER.get_read_guard(&path);
             //dbg!("Reading chunk at {:?}", at);
             LinearFile::load(&path)?.get_chunk(at)
         })
@@ -419,8 +430,7 @@ impl ChunkWriter for LinearChunkFormat {
             .join(format!("./r.{}.{}.linear", region_x, region_z));
 
         tokio::task::block_in_place(|| {
-            let file_lock = FileLocksManager::get_file_lock(&path);
-            let _writer_lock = file_lock.blocking_write();
+            let _writer_guard = FILE_LOCK_MANAGER.get_write_guard(&path);
             //dbg!("Writing chunk at {:?}", at);
 
             let mut file_data = match LinearFile::load(&path) {
