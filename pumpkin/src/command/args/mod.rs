@@ -43,6 +43,7 @@ pub mod sound;
 pub mod sound_category;
 pub mod summonable_entities;
 pub mod textcomponent;
+pub mod time;
 
 /// see [`crate::commands::tree::builder::argument`]
 #[async_trait]
@@ -94,6 +95,7 @@ pub enum Arg<'a> {
     BossbarStyle(BossbarDivisions),
     Msg(String),
     TextComponent(TextComponent),
+    Time(i32),
     Num(Result<Number, NotInBounds>),
     Bool(bool),
     #[allow(unused)]
