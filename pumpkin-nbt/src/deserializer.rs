@@ -77,7 +77,7 @@ impl<'de, T: Buf> de::Deserializer<'de> for &mut Deserializer<'de, T> {
         };
 
         if let Some(list_type) = list_type {
-            let remaining_values = self.input.get_u32();
+            let remaining_values = self.input.get_i32();
             return visitor.visit_seq(ListAccess {
                 de: self,
                 list_type,
@@ -126,7 +126,8 @@ impl<'de, T: Buf> de::Deserializer<'de> for &mut Deserializer<'de, T> {
 
             if self.is_named {
                 // Consume struct name
-                NbtTag::deserialize(self.input)?;
+                let len = self.input.get_u16() as usize;
+                self.input.advance(len);
             }
         }
 
@@ -190,7 +191,7 @@ impl<'de, T: Buf> MapAccess<'de> for CompoundAccess<'_, 'de, T> {
 
 struct ListAccess<'a, 'de: 'a, T: Buf> {
     de: &'a mut Deserializer<'de, T>,
-    remaining_values: u32,
+    remaining_values: i32,
     list_type: u8,
 }
 
@@ -201,7 +202,8 @@ impl<'de, T: Buf> SeqAccess<'de> for ListAccess<'_, 'de, T> {
     where
         E: DeserializeSeed<'de>,
     {
-        if self.remaining_values == 0 {
+        // Negative list length is allowed, so we have to check for it.
+        if self.remaining_values <= 0 {
             return Ok(None);
         }
 

@@ -20,6 +20,7 @@ pub trait SerializeChild {
 pub struct Serializer {
     output: BytesMut,
     state: State,
+    in_struct: bool,
 }
 
 // NBT has a different order of things, then most other formats
@@ -70,6 +71,7 @@ where
     let mut serializer = Serializer {
         output: BytesMut::new(),
         state: State::Root(None),
+        in_struct: false,
     };
     value.serialize_child(&mut serializer)?;
     Ok(serializer.output)
@@ -83,6 +85,7 @@ where
     let mut serializer = Serializer {
         output: BytesMut::new(),
         state: State::Root(None),
+        in_struct: false,
     };
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
@@ -105,6 +108,7 @@ where
     let mut serializer = Serializer {
         output: BytesMut::new(),
         state: State::Root(Some(name)),
+        in_struct: false,
     };
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
@@ -131,6 +135,7 @@ impl ser::Serializer for &mut Serializer {
     type SerializeStruct = Self;
     type SerializeStructVariant = Impossible<(), Error>;
 
+    // NBT doesn't have bool type, but it's most commonly represented as a byte
     fn serialize_bool(self, v: bool) -> Result<()> {
         self.serialize_i8(v as i8)?;
         Ok(())
@@ -201,10 +206,20 @@ impl ser::Serializer for &mut Serializer {
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        self.parse_state(STRING_ID)?;
-        if self.state == State::MapKey {
-            self.state = State::Named(v.to_string());
-            return Ok(());
+        match self.state {
+            State::FirstListElement { .. } => {
+                self.parse_state(STRING_ID)?;
+            }
+            State::MapKey => {
+                self.parse_state(STRING_ID)?;
+                self.state = State::Named(v.to_string());
+                return Ok(());
+            }
+            _ => (),
+        }
+
+        if self.in_struct {
+            self.parse_state(STRING_ID)?;
         }
 
         self.output
@@ -316,6 +331,11 @@ impl ser::Serializer for &mut Serializer {
                 self.state = State::FirstListElement {
                     len: len.unwrap() as i32,
                 };
+
+                if len == Some(0) {
+                    self.output.put_u8(END_ID);
+                    self.output.put_i32(0);
+                }
             }
         }
 
@@ -356,23 +376,28 @@ impl ser::Serializer for &mut Serializer {
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        self.output.put_u8(COMPOUND_ID);
-
         match &mut self.state {
             State::Root(root_name) => {
+                self.output.put_u8(COMPOUND_ID);
                 if let Some(root_name) = root_name {
                     self.output
                         .put(NbtTag::String(root_name.clone()).serialize_data());
                 }
             }
             State::Named(string) => {
+                self.output.put_u8(COMPOUND_ID);
                 self.output
                     .put(NbtTag::String(string.clone()).serialize_data());
             }
+            State::FirstListElement { .. } => self.parse_state(COMPOUND_ID)?,
+            State::ListElement => (),
+
             _ => {
                 unimplemented!()
             }
         }
+
+        self.in_struct = true;
 
         Ok(self)
     }
@@ -424,6 +449,7 @@ impl ser::SerializeStruct for &mut Serializer {
 
     fn end(self) -> Result<()> {
         self.output.put_u8(END_ID);
+        self.in_struct = false;
         Ok(())
     }
 }
