@@ -20,7 +20,6 @@ enum WeatherMode {
     Clear,
     Rain,
     Thunder,
-    Query,
 }
 
 #[async_trait]
@@ -32,20 +31,6 @@ impl CommandExecutor for WeatherExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
-
-        if matches!(self.mode, WeatherMode::Query) {
-            let weather = world.weather.lock().await;
-            let msg = if weather.raining {
-                "commands.weather.query.rain"
-            } else {
-                "commands.weather.query.clear"
-            };
-            sender
-                .send_message(TextComponent::translate(msg, [].into()))
-                .await;
-            return Ok(());
-        }
-
         let _duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
         let mut weather = world.weather.lock().await;
 
@@ -83,7 +68,6 @@ impl CommandExecutor for WeatherExecutor {
                     ))
                     .await;
             }
-            WeatherMode::Query => unreachable!(),
         }
 
         Ok(())
@@ -125,7 +109,4 @@ pub fn init_command_tree() -> CommandTree {
                     mode: WeatherMode::Thunder,
                 }),
         )
-        .then(literal("query").execute(WeatherExecutor {
-            mode: WeatherMode::Query,
-        }))
 }
