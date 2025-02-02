@@ -30,6 +30,7 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use serde::Serialize;
+use tokio::sync::RwLock;
 
 use crate::world::World;
 
@@ -61,7 +62,7 @@ pub struct Entity {
     /// The type of entity (e.g., player, zombie, item)
     pub entity_type: EntityType,
     /// The world in which the entity exists.
-    pub world: Arc<World>,
+    pub world: Arc<RwLock<Arc<World>>>,
     /// The entity's current position in the world
     pub pos: AtomicCell<Vector3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
@@ -124,7 +125,7 @@ impl Entity {
             block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
             chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
-            world,
+            world: Arc::new(RwLock::new(world)),
             // TODO: Load this from previous instance
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -210,6 +211,8 @@ impl Entity {
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CUpdateEntityRot::new(
                 self.entity_id.into(),
                 yaw as u8,
@@ -218,12 +221,16 @@ impl Entity {
             ))
             .await;
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), yaw as u8))
             .await;
     }
 
     pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CTeleportEntity::new(
                 self.entity_id.into(),
                 position,
@@ -248,7 +255,7 @@ impl Entity {
 
     /// Removes the Entity from their current World
     pub async fn remove(&self) {
-        self.world.remove_entity(self).await;
+        self.world.read().await.remove_entity(self).await;
     }
 
     pub fn create_spawn_packet(&self) -> CSpawnEntity {
@@ -341,6 +348,8 @@ impl Entity {
     /// Plays sound at this entity's position with the entity's sound category
     pub async fn play_sound(&self, sound: Sound) {
         self.world
+            .read()
+            .await
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load())
             .await;
     }
@@ -350,6 +359,8 @@ impl Entity {
         T: Serialize,
     {
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), meta))
             .await;
     }

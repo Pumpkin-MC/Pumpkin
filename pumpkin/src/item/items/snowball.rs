@@ -18,7 +18,7 @@ const POWER: f32 = 1.5;
 impl PumpkinItem for SnowBallItem {
     async fn normal_use(&self, _block: &Item, player: &Player, server: &Server) {
         let position = player.position();
-        let world = player.world();
+        let world = player.world().await;
         world
             .play_sound(
                 Sound::EntitySnowballThrow,
@@ -26,7 +26,7 @@ impl PumpkinItem for SnowBallItem {
                 &position,
             )
             .await;
-        let entity = server.add_entity(position, EntityType::Snowball, world);
+        let entity = server.add_entity(position, EntityType::Snowball, &world);
         let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();

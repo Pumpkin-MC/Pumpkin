@@ -34,7 +34,7 @@ pub async fn standard_on_broken_with_container(
 
 /// The standard open container creates a new container if a container of the same block
 /// type does not exist at the selected block location. If a container of the same type exists, the player
-/// is added to the currently connected players to that container.  
+/// is added to the currently connected players to that container.
 pub async fn standard_open_container<C: Container + Default + 'static>(
     block: &Block,
     player: &Player,
@@ -112,7 +112,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
 pub async fn close_all_in_container(player: &Player, container: &OpenContainer) {
     for id in container.all_player_ids() {
-        if let Some(remote_player) = player.world().get_player_by_id(id).await {
+        if let Some(remote_player) = player.world().await.get_player_by_id(id).await {
             remote_player.close_container().await;
         }
     }

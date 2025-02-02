@@ -22,8 +22,8 @@ use pumpkin_protocol::{
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent,
-        MetaDataType, PlayerAction,
+        CRemovePlayerInfo, CRespawn, CSetExperience, CSetHealth, CSpawnEntity, CSubtitle,
+        CSystemChatMessage, CTitleText, CUnloadChunk, GameEvent, MetaDataType, PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -75,7 +75,7 @@ use crate::{
         Client, PlayerConfig,
     },
     server::Server,
-    world::World,
+    world::{player_chunker, World},
 };
 use crate::{error::PumpkinError, net::GameProfile};
 
@@ -239,7 +239,7 @@ impl Player {
     /// Removes the Player out of the current World
     #[allow(unused_variables)]
     pub async fn remove(self: Arc<Self>) {
-        let world = self.world();
+        let world = self.world().await;
         self.cancel_tasks.notify_waiters();
 
         world.remove_player(self.clone()).await;
@@ -278,7 +278,7 @@ impl Player {
     }
 
     pub async fn attack(&self, victim: &Arc<Self>) {
-        let world = self.world();
+        let world = self.world().await;
         let victim_entity = &victim.living_entity.entity;
         let attacker_entity = &self.living_entity.entity;
         let config = &ADVANCED_CONFIG.pvp;
@@ -348,7 +348,7 @@ impl Player {
 
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
-        player_attack_sound(&pos, world, attack_type).await;
+        player_attack_sound(&pos, &world, attack_type).await;
 
         if matches!(attack_type, AttackType::Critical) {
             damage *= 1.5;
@@ -363,7 +363,7 @@ impl Player {
         match attack_type {
             AttackType::Knockback => knockback_strength += 1.0,
             AttackType::Sweeping => {
-                combat::spawn_sweep_particle(attacker_entity, world, &pos).await;
+                combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
             }
             _ => {}
         };
@@ -482,8 +482,8 @@ impl Player {
         self.living_entity.entity.entity_id
     }
 
-    pub const fn world(&self) -> &Arc<World> {
-        &self.living_entity.entity.world
+    pub async fn world(&self) -> Arc<World> {
+        self.living_entity.entity.world.read().await.clone()
     }
 
     pub fn position(&self) -> Vector3<f64> {
@@ -588,6 +588,131 @@ impl Player {
             .await;
     }
 
+    async fn unload_watched_chunks(&self, world: &World) {
+        let radial_chunks = self.watched_section.load().all_chunks_within();
+        let level = &world.level;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks);
+        level.clean_chunks(&chunks_to_clean).await;
+        let client = self.client.clone();
+        tokio::spawn(async move {
+            for chunk in chunks_to_clean {
+                if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                    break;
+                }
+                client
+                    .send_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                    .await;
+            }
+        });
+    }
+
+    pub async fn teleport_world(
+        self: Arc<Self>,
+        new_world: Arc<World>,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+    ) {
+        let current_world = self.living_entity.entity.world.read().await.clone();
+        let uuid = self.gameprofile.id;
+        current_world
+            .broadcast_packet_all(&CRemovePlayerInfo::new(1.into(), &[uuid]))
+            .await;
+        current_world
+            .players
+            .lock()
+            .await
+            .remove(&self.gameprofile.id);
+        self.client
+            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+            .await;
+        *self.living_entity.entity.world.write().await = new_world.clone();
+        new_world.players.lock().await.insert(uuid, self.clone());
+        self.unload_watched_chunks(&current_world).await;
+        self.watched_section.store(Cylindrical::new(
+            Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+            unsafe { NonZeroU8::new_unchecked(1) },
+        ));
+        let last_pos = self.living_entity.last_pos.load();
+        let death_dimension = self.world().await.dimension_type.name();
+        let death_location = BlockPos(Vector3::new(
+            last_pos.x.round() as i32,
+            last_pos.y.round() as i32,
+            last_pos.z.round() as i32,
+        ));
+        self.client
+            .send_packet(&CRespawn::new(
+                (new_world.dimension_type as u8).into(),
+                new_world.dimension_type.name(),
+                0, // seed
+                self.gamemode.load() as u8,
+                self.gamemode.load() as i8,
+                false,
+                false,
+                Some((death_dimension, death_location)),
+                0.into(),
+                0.into(),
+                1,
+            ))
+            .await;
+        self.send_abilities_update().await;
+        self.send_permission_lvl_update().await;
+        let info = &new_world.level.level_info;
+        let position = if let Some(pos) = position {
+            pos
+        } else {
+            Vector3::new(
+                f64::from(info.spawn_x),
+                f64::from(
+                    new_world
+                        .get_top_block(Vector2::new(
+                            f64::from(info.spawn_x) as i32,
+                            f64::from(info.spawn_x) as i32,
+                        ))
+                        .await
+                        + 1,
+                ),
+                f64::from(info.spawn_z),
+            )
+        };
+        let yaw = yaw.unwrap_or(info.spawn_angle);
+        let pitch = pitch.unwrap_or(10.0);
+        self.request_teleport(position, yaw, pitch).await;
+        self.living_entity.last_pos.store(position);
+        new_world
+            .worldborder
+            .lock()
+            .await
+            .init_client(&self.client)
+            .await;
+        self.client
+            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+            .await;
+        new_world
+            .broadcast_packet_except(
+                &[self.gameprofile.id],
+                &CSpawnEntity::new(
+                    self.living_entity.entity.entity_id.into(),
+                    self.gameprofile.id,
+                    (EntityType::Player as i32).into(),
+                    position.x,
+                    position.y,
+                    position.z,
+                    pitch,
+                    yaw,
+                    yaw,
+                    0.into(),
+                    0.0,
+                    0.0,
+                    0.0,
+                ),
+            )
+            .await;
+        self.send_client_information().await;
+        player_chunker::player_join(&self).await;
+        self.set_health(20.0, 20, 20.0).await;
+    }
+
     pub fn block_interaction_range(&self) -> f64 {
         if self.gamemode.load() == GameMode::Creative {
             5.0
@@ -685,6 +810,8 @@ impl Player {
         self.living_entity
             .entity
             .world
+            .read()
+            .await
             .broadcast_packet_all(&CPlayerInfoUpdate::new(
                 0x04,
                 &[pumpkin_protocol::client::play::Player {
@@ -743,10 +870,10 @@ impl Player {
             let entity = server.add_entity(
                 self.living_entity.entity.pos.load(),
                 EntityType::Item,
-                self.world(),
+                &self.world().await,
             );
             let item_entity = Arc::new(ItemEntity::new(entity, &item.clone()));
-            self.world().spawn_entity(item_entity.clone()).await;
+            self.world().await.spawn_entity(item_entity.clone()).await;
             item_entity.send_meta_packet().await;
             // decrase item in hotbar
             inv.decrease_current_stack(1);

@@ -24,7 +24,7 @@ impl PumpkinBlock for JukeboxBlock {
         // For now just stop the music at this position
         let world = &player.living_entity.entity.world;
 
-        world.stop_record(location).await;
+        world.read().await.stop_record(location).await;
     }
 
     async fn use_with_item(
@@ -52,7 +52,11 @@ impl PumpkinBlock for JukeboxBlock {
 
         //TODO: Update block state and block nbt
 
-        world.play_record(jukebox_song as i32, location).await;
+        world
+            .read()
+            .await
+            .play_record(jukebox_song as i32, location)
+            .await;
 
         BlockActionResult::Consume
     }
@@ -61,6 +65,6 @@ impl PumpkinBlock for JukeboxBlock {
         // For now just stop the music at this position
         let world = &player.living_entity.entity.world;
 
-        world.stop_record(location).await;
+        world.read().await.stop_record(location).await;
     }
 }

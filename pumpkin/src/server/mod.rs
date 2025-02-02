@@ -113,6 +113,18 @@ impl Server {
             DimensionType::Overworld,
         );
 
+        // DELETE ME
+        let world2 = World::load(
+            Dimension::OverWorld.into_level("./worlds/test".parse().unwrap()),
+            DimensionType::Overworld,
+        );
+
+        for x in -1..=1 {
+            for z in -1..=1 {
+                world2.level.mark_chunk_as_newly_watched(Vector2::new(x, z));
+            }
+        }
+
         // Spawn chunks are never unloaded
         for x in -1..=1 {
             for z in -1..=1 {
@@ -127,7 +139,7 @@ impl Server {
             // 0 is invalid
             entity_id: 2.into(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(world)]),
+            worlds: RwLock::new(vec![Arc::new(world), Arc::new(world2)]),
             dimensions: vec![
                 DimensionType::Overworld,
                 DimensionType::OverworldCaves,

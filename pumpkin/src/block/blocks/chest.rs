@@ -111,11 +111,13 @@ impl ChestBlock {
         if state == ChestState::IsClosed && num_players == 0 {
             player
                 .world()
+                .await
                 .play_block_sound(Sound::BlockChestClose, SoundCategory::Blocks, location)
                 .await;
         } else if state == ChestState::IsOpened && num_players == 1 {
             player
                 .world()
+                .await
                 .play_block_sound(Sound::BlockChestOpen, SoundCategory::Blocks, location)
                 .await;
         }

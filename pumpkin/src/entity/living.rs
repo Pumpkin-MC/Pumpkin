@@ -81,6 +81,8 @@ impl LivingEntity {
 
         self.entity
             .world
+            .read()
+            .await
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
                 damage_type.data().id.into(),
@@ -175,11 +177,15 @@ impl LivingEntity {
         // Spawns death smoke particles
         self.entity
             .world
+            .read()
+            .await
             .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 60))
             .await;
         // Plays the death sound and death animation
         self.entity
             .world
+            .read()
+            .await
             .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 3))
             .await;
     }

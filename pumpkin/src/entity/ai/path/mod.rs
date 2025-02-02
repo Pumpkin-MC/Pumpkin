@@ -72,6 +72,8 @@ impl Navigator {
             entity
                 .entity
                 .world
+                .read()
+                .await
                 .broadcast_packet_all(&CUpdateEntityPos::new(
                     entity.entity.entity_id.into(),
                     Vector3::new(

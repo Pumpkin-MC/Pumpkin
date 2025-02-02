@@ -18,7 +18,7 @@ const POWER: f32 = 1.5;
 impl PumpkinItem for EggItem {
     async fn normal_use(&self, _block: &Item, player: &Player, server: &Server) {
         let position = player.position();
-        let world = player.world();
+        let world = player.world().await;
         world
             .play_sound(
                 Sound::EntityEggThrow,
@@ -27,7 +27,7 @@ impl PumpkinItem for EggItem {
             )
             .await;
         // TODO: Implement eggs the right way, so there is a chance of spawning chickens
-        let entity = server.add_entity(position, EntityType::Egg, world);
+        let entity = server.add_entity(position, EntityType::Egg, &world);
         let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();

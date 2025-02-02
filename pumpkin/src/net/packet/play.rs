@@ -161,7 +161,7 @@ impl Player {
 
         let entity_id = entity.entity_id;
         let Vector3 { x, y, z } = position;
-        let world = &entity.world;
+        let world = entity.world.read().await;
 
         // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
         // let velocity = self.velocity;
@@ -244,7 +244,7 @@ impl Player {
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-        let world = &entity.world;
+        let world = &entity.world.read().await;
 
         // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
         // let velocity = self.velocity;
@@ -321,7 +321,7 @@ impl Player {
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
-        let world = &entity.world;
+        let world = &entity.world.read().await;
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
@@ -389,7 +389,8 @@ impl Player {
             return;
         }
 
-        let Ok(block) = self.world().get_block(&pick_item.pos).await else {
+        let world = self.world().await;
+        let Ok(block) = world.get_block(&pick_item.pos).await else {
             return;
         };
 
@@ -536,7 +537,7 @@ impl Player {
         };
 
         let id = self.entity_id();
-        let world = self.world();
+        let world = self.world().await;
         world
             .broadcast_packet_except(
                 &[self.gameprofile.id],
@@ -565,7 +566,7 @@ impl Player {
         log::info!("<chat>{}: {}", gameprofile.name, message);
 
         let entity = &self.living_entity.entity;
-        let world = &entity.world;
+        let world = &entity.world.read().await;
         world
             .broadcast_packet_all(&CPlayerChatMessage::new(
                 gameprofile.id,
@@ -673,7 +674,10 @@ impl Player {
                 if self.living_entity.health.load() > 0.0 {
                     return;
                 }
-                self.world().respawn_player(&self.clone(), false).await;
+                self.world()
+                    .await
+                    .respawn_player(&self.clone(), false)
+                    .await;
 
                 // Restore abilities based on gamemode after respawn
                 let mut abilities = self.abilities.lock().await;
@@ -716,7 +720,7 @@ impl Player {
                     return;
                 }
 
-                let world = &entity.world;
+                let world = entity.world.read().await;
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 let entity_victim = world.get_entity_by_id(entity_id.0).await;
                 if let Some(player_victim) = player_victim {
@@ -788,7 +792,7 @@ impl Player {
                         let location = player_action.location;
                         // Block break & block break sound
                         let entity = &self.living_entity.entity;
-                        let world = &entity.world;
+                        let world = &entity.world.read().await;
                         let block = world.get_block(&location).await;
 
                         world.break_block(&location, Some(self.clone())).await;
@@ -826,7 +830,7 @@ impl Player {
                     }
                     // Block break & block break sound
                     let entity = &self.living_entity.entity;
-                    let world = &entity.world;
+                    let world = &entity.world.read().await;
                     let block = world.get_block(&location).await;
 
                     world.break_block(&location, Some(self.clone())).await;
@@ -909,7 +913,7 @@ impl Player {
 
         let mut inventory = self.inventory().lock().await;
         let entity = &self.living_entity.entity;
-        let world = &entity.world;
+        let world = &entity.world.read().await;
         let slot_id = inventory.get_selected();
         let mut state_id = inventory.state_id;
         let item_slot = *inventory.held_item_mut();
@@ -1124,13 +1128,13 @@ impl Player {
             // create rotation like Vanilla
             let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
-            let world = self.world();
+            let world = self.world().await;
             // create new mob and uuid based on spawn egg id
             let mob = mob::from_type(
                 EntityType::from_raw(*spawn_item_id).unwrap(),
                 server,
                 pos,
-                world,
+                &world,
             )
             .await;
 
@@ -1170,7 +1174,7 @@ impl Player {
         face: &BlockDirection,
     ) -> Result<bool, Box<dyn PumpkinError>> {
         let entity = &self.living_entity.entity;
-        let world = &entity.world;
+        let world = &entity.world.read().await;
 
         let clicked_block_pos = BlockPos(location.0);
         let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;

@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::Ordering, Arc},
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc},
 };
 
 pub mod level_time;
@@ -113,6 +113,8 @@ pub struct World {
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in
     pub dimension_type: DimensionType,
+    /// Whether the world should tick
+    pub ticking: AtomicBool,
     // TODO: entities
 }
 
@@ -127,6 +129,7 @@ impl World {
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
+            ticking: AtomicBool::new(true),
         }
     }
 
@@ -227,6 +230,11 @@ impl World {
     }
 
     pub async fn tick(&self) {
+        // Skip ticking if the world is paused
+        if !self.ticking.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
         // world ticks
         {
             let mut level_time = self.level_time.lock().await;
@@ -475,7 +483,7 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.last_pos.load();
-        let death_dimension = player.world().dimension_type.name();
+        let death_dimension = player.world().await.dimension_type.name();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -618,11 +626,11 @@ impl World {
                 }
 
                 let (world, chunk) = if level.is_chunk_watched(&position) {
-                    (player.world().clone(), chunk)
+                    (player.world().await.clone(), chunk)
                 } else {
                     send_cancellable! {{
                         ChunkSave {
-                            world: player.world().clone(),
+                            world: player.world().await.clone(),
                             chunk,
                             cancelled: false,
                         };

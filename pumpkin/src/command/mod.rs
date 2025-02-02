@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use commands::{
     ban, banip, banlist, clear, damage, deop, experience, fill, gamemode, give, help, kick, kill,
     list, me, msg, op, pardon, pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop,
-    summon, teleport, time, title, worldborder,
+    summon, tcd, teleport, time, title, worldborder,
 };
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
@@ -97,11 +97,11 @@ impl CommandSender<'_> {
     }
 
     #[must_use]
-    pub fn world(&self) -> Option<&World> {
+    pub async fn world(&self) -> Option<Arc<World>> {
         match self {
             // TODO: maybe return first world when console
             CommandSender::Console | CommandSender::Rcon(..) => None,
-            CommandSender::Player(p) => Some(&p.living_entity.entity.world),
+            CommandSender::Player(p) => Some(p.living_entity.entity.world.read().await.clone()),
         }
     }
 }
@@ -144,6 +144,9 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(pardonip::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(experience::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(damage::init_command_tree(), PermissionLvl::Two);
+
+    // DELETE ME only for debugging purposes
+    dispatcher.register(tcd::init_command_tree(), PermissionLvl::Zero);
 
     dispatcher
 }

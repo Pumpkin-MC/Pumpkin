@@ -27,6 +27,7 @@ pub mod seed;
 pub mod setblock;
 pub mod stop;
 pub mod summon;
+pub mod tcd;
 pub mod teleport;
 pub mod time;
 pub mod title;

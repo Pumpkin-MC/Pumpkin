@@ -69,7 +69,7 @@ pub async fn update_position(player: &Arc<Player>) {
 
         // Make sure the watched section and the chunk watcher updates are async atomic. We want to
         // ensure what we unload when the player disconnects is correct
-        let level = &entity.world.level;
+        let level = &entity.world.read().await.level;
         level.mark_chunks_as_newly_watched(&loading_chunks);
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks);
         player.watched_section.store(new_cylindrical);
@@ -93,9 +93,11 @@ pub async fn update_position(player: &Arc<Player>) {
         }
 
         if !loading_chunks.is_empty() {
-            entity
-                .world
-                .spawn_world_chunks(player.clone(), loading_chunks, new_chunk_center);
+            entity.world.read().await.spawn_world_chunks(
+                player.clone(),
+                loading_chunks,
+                new_chunk_center,
+            );
         }
     }
 }
