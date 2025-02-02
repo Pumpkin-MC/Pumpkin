@@ -18,7 +18,18 @@ pub enum BlockProperty {
     SlabType(SlabPosition),
     StairShape(StairShape),
     Layers(u8),
-    Half(BlockHalf), // Add other properties as needed
+    Half(BlockHalf),
+    Axis(Axis),
+    Open(bool),
+    Age(u8),
+    Attachment(Attachment),
+    SignalFire(bool),
+    North(ConnectionDirection),
+    East(ConnectionDirection),
+    South(ConnectionDirection),
+    West(ConnectionDirection),
+    Down(ConnectionDirection),
+    Up(ConnectionDirection), // Add other properties as needed
 }
 
 #[derive(Clone, Debug)]
@@ -58,6 +69,30 @@ pub enum Direction {
     West,
 }
 
+#[derive(Clone, Debug)]
+pub enum Axis {
+    X,
+    Y,
+    Z,
+}
+
+#[derive(Clone, Debug)]
+pub enum Attachment {
+    Floor,
+    Ceiling,
+    SingleWall,
+    DoubleWall,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConnectionDirection {
+    True,
+    False,
+    Low,
+    None,
+    Tall,
+}
+
 // TODO: We can automatically parse them ig
 #[must_use]
 pub fn get_property_key(property_name: &str) -> Option<BlockProperty> {
@@ -70,7 +105,122 @@ pub fn get_property_key(property_name: &str) -> Option<BlockProperty> {
         "powered" => Some(BlockProperty::Powered(false)),
         "layers" => Some(BlockProperty::Layers(1)),
         "face" => Some(BlockProperty::Face(BlockFace::Wall)),
+        "axis" => Some(BlockProperty::Axis(Axis::Y)),
+        "open" => Some(BlockProperty::Open(false)),
+        "age" => Some(BlockProperty::Age(0)),
+        "attachment" => Some(BlockProperty::Attachment(Attachment::Floor)),
+        "signal_fire" => Some(BlockProperty::SignalFire(false)),
+        "north" => Some(BlockProperty::North(ConnectionDirection::False)),
+        "east" => Some(BlockProperty::East(ConnectionDirection::False)),
+        "south" => Some(BlockProperty::South(ConnectionDirection::False)),
+        "west" => Some(BlockProperty::West(ConnectionDirection::False)),
+        "down" => Some(BlockProperty::Down(ConnectionDirection::False)),
+        "up" => Some(BlockProperty::Up(ConnectionDirection::False)),
         _ => None,
+    }
+}
+
+#[must_use]
+pub async fn evaluate_fence_direction(
+    world: &World,
+    block_pos: &BlockPos,
+    placed_block: &Block,
+    face: BlockDirection,
+) -> String {
+    let direction = match face {
+        BlockDirection::North => "north".to_string(),
+        BlockDirection::East => "east".to_string(),
+        BlockDirection::South => "south".to_string(),
+        BlockDirection::West => "west".to_string(),
+        BlockDirection::Bottom => "down".to_string(),
+        BlockDirection::Top => "up".to_string(),
+    };
+    let other_side_block = BlockPos(block_pos.0.add(&face.to_offset()));
+    let block = world.get_block(&other_side_block).await.unwrap();
+    if placed_block.name.ends_with("_wall") {
+        if face == BlockDirection::Top {
+            if block.id != 0 {
+                return format!("{}{}", direction, "true");
+            }
+
+            let mut connections = 0u8;
+            let mut x = 0u8;
+            let mut z = 0u8;
+            for side in &[
+                BlockDirection::North,
+                BlockDirection::East,
+                BlockDirection::South,
+                BlockDirection::West,
+            ] {
+                let other_side_block = BlockPos(block_pos.0.add(&side.to_offset()));
+                let block = world.get_block(&other_side_block).await.unwrap();
+                if block.id != 0 {
+                    connections += 1;
+                    if *side == BlockDirection::North || *side == BlockDirection::South {
+                        x += 1;
+                    } else {
+                        z += 1;
+                    }
+                }
+            }
+            if connections > 2 || x == 2 || z == 2 {
+                return format!("{}{}", direction, "false");
+            }
+
+            return format!("{}{}", direction, "true");
+        }
+        if block.id != 0 {
+            let other_side_block = BlockPos(other_side_block.0.add(&Vector3::new(0, 1, 0)));
+            let block = world.get_block(&other_side_block).await.unwrap();
+            if block.id != 0 && block.name.ends_with("_wall") {
+                return format!("{}{}", direction, "tall");
+            }
+            return format!("{}{}", direction, "low");
+        }
+        return format!("{}{}", direction, "none");
+    }
+    if block.id != 0 {
+        return format!("{}{}", direction, "true");
+    }
+    format!("{}{}", direction, "false")
+}
+
+#[must_use]
+pub async fn evaluate_signal_fire(world: &World, block_pos: &BlockPos) -> String {
+    let other_side_block = BlockPos(block_pos.0.sub(&Vector3::new(0, 1, 0)));
+    let block = world.get_block(&other_side_block).await.unwrap();
+    if block.name == "hay_block" {
+        return "signal_firetrue".to_string();
+    }
+    "signal_firefalse".to_string()
+}
+
+#[must_use]
+pub async fn evaluate_attachment(
+    world: &World,
+    block_pos: &BlockPos,
+    face: BlockDirection,
+) -> String {
+    match face {
+        BlockDirection::Top => "attachmentceiling".to_string(),
+        BlockDirection::Bottom => "attachmentfloor".to_string(),
+        _ => {
+            let other_side_block = BlockPos(block_pos.0.sub(&face.to_offset()));
+            let block = world.get_block(&other_side_block).await.unwrap();
+            if block.id != 0 {
+                return "attachmentdouble_wall".to_string();
+            }
+            "attachmentsingle_wall".to_string()
+        }
+    }
+}
+
+#[must_use]
+pub fn evaluate_axis(face: BlockDirection) -> String {
+    match face {
+        BlockDirection::North | BlockDirection::South => "axisz".to_string(),
+        BlockDirection::East | BlockDirection::West => "axisx".to_string(),
+        BlockDirection::Top | BlockDirection::Bottom => "axisy".to_string(),
     }
 }
 
@@ -312,13 +462,14 @@ pub async fn evaluate_property_shape(
     format!("{}{}", "shape", "straight")
 }
 
+// For some reason some blocks uses this and others the inverted face ???
 #[must_use]
 pub fn evaluate_property_facing(face: BlockDirection, player_direction: &Direction) -> String {
     let facing = match face {
-        BlockDirection::North => "south",
-        BlockDirection::South => "north",
-        BlockDirection::East => "west",
-        BlockDirection::West => "east",
+        BlockDirection::North => "north",
+        BlockDirection::South => "south",
+        BlockDirection::East => "east",
+        BlockDirection::West => "west",
         BlockDirection::Top | BlockDirection::Bottom => match player_direction {
             Direction::North => "north",
             Direction::South => "south",
@@ -495,6 +646,44 @@ impl BlockPropertiesManager {
                             );
                             updateable = can_update;
                             state
+                        }
+                        BlockProperty::Axis(_) => evaluate_axis(*face),
+                        BlockProperty::Open(_) => "openfalse".to_string(),
+                        BlockProperty::Age(_) => "age0".to_string(),
+                        BlockProperty::Attachment(_) => {
+                            evaluate_attachment(world, block_pos, *face).await
+                        }
+                        BlockProperty::SignalFire(_) => {
+                            evaluate_signal_fire(world, block_pos).await
+                        }
+                        BlockProperty::North(_) => {
+                            evaluate_fence_direction(world, block_pos, block, BlockDirection::North)
+                                .await
+                        }
+                        BlockProperty::East(_) => {
+                            evaluate_fence_direction(world, block_pos, block, BlockDirection::East)
+                                .await
+                        }
+                        BlockProperty::South(_) => {
+                            evaluate_fence_direction(world, block_pos, block, BlockDirection::South)
+                                .await
+                        }
+                        BlockProperty::West(_) => {
+                            evaluate_fence_direction(world, block_pos, block, BlockDirection::West)
+                                .await
+                        }
+                        BlockProperty::Down(_) => {
+                            evaluate_fence_direction(
+                                world,
+                                block_pos,
+                                block,
+                                BlockDirection::Bottom,
+                            )
+                            .await
+                        }
+                        BlockProperty::Up(_) => {
+                            evaluate_fence_direction(world, block_pos, block, BlockDirection::Top)
+                                .await
                         }
                     };
                     hmap_key.push(state.to_string());
