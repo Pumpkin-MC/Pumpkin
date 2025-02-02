@@ -38,9 +38,13 @@ pub enum LinearVersion {
     #[default]
     ///Used for defaults and invalid values
     None = 0x00,
-    ///used by linear.py in xymb-endcrystalme/LinearRegionFileFormatTools
+    ///Defaylt implementation.
+    ///
+    /// The format is described in https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEAR.md
     V1 = 0x01,
-    ///Requires investigation about this value/version
+    ///Not supported yet nor sure is implemented in other projects/plugins.
+    ///
+    ///  The format is described in https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEARv2.md
     V2 = 0x02,
 }
 struct LinearFileHeader {
