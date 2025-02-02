@@ -49,7 +49,7 @@ use pumpkin_world::item::registry::{get_item_by_id, get_name_by_id};
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
     block::{registry::get_block_by_item, BlockDirection},
-    entity::entity_registry::get_entity_id,
+    entity::registry::get_entity_id,
     item::registry::get_spawn_egg,
 };
 

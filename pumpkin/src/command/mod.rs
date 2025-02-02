@@ -10,9 +10,7 @@ use crate::world::World;
 use args::ConsumedArgs;
 use async_trait::async_trait;
 use commands::{
-    ban, banip, banlist, clear, deop, experience, fill, gamemode, give, help, kick, kill, list, me,
-    msg, op, pardon, pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop, summon,
-    teleport, time, title, weather, worldborder,
+    ban, banip, banlist, clear, damage, deop, experience, fill, gamemode, give, help, kick, kill, list, me, msg, op, pardon, pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop, summon, teleport, time, title, weather, worldborder
 };
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
@@ -144,6 +142,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(pardonip::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(experience::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(weather::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(damage::init_command_tree(), PermissionLvl::Two);
 
     dispatcher
 }

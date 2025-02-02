@@ -33,15 +33,21 @@ The Documentation of Pumpkin can be found at <https://pumpkinmc.org/>
 
 ### Coding Guidelines
 
-Things need to be done before this Pull Request can be merged. Your CI also checks most of them automaticly and fill fail if something is not fulfilled
-Note: Pumpkin's clippy settings are relativly strict, this can be may frustrating but is necesarry so the code says clean and conssistent
+Things need to be done before this Pull Request can be merged. Your CI also checks most of them automatically and fill fail if something is not fulfilled
+Note: Pumpkin's clippy settings are relatively strict, this can be may frustrating but is necessary so the code says clean and conssistent
 **Basic**
 
-- **Code Formatting:** Code must be well-formatted and follow the project's style guidelines. You can achieve this by running `cargo fmt`.
-- **No Clippy Warnings:** Code should not produce any warnings from the Clippy linter. You can check for warnings using `cargo clippy --all-targets`.
+- **Title:** Use a concise and informative title that clearly communicates the purpose of the PR.  Anyone reviewing the PR should quickly understand the changes being proposed.  
+- **Description:** Provide a comprehensive description of the changes. Explain:
+- What was changed?
+- Why was this change necessary?
+- What is the impact of this change?
+- Are there any known issues or limitations?
+- Include any relevant context, such as related issues or discussions.
+- **No Clippy Warnings:** Address all warnings reported by the Clippy linter. You can check for warnings using `cargo clippy --all-targets`.
 - **Passing Unit Tests:** All existing unit tests must pass successfully. You can run the tests with `cargo test`.
 
-**Best Pratice**
+**Best Practice**
 
 - **Writing Unit Tests:** When adding new features or modifying existing code, consider adding unit tests to prevent regressions in the future. Refer to the Rust documentation for guidance on writing tests: https://doc.rust-lang.org/book/ch11-01-writing-tests.html
 - **Benchmarking:** If your changes might impact performance, consider adding benchmarks to track performance regressions or improvements. We use the Criterion library for benchmarking. Refer to their Quick Start guide for more information: https://github.com/bheisler/criterion.rs#quickstart

@@ -3,6 +3,7 @@ pub mod banip;
 pub mod banlist;
 pub mod bossbar;
 pub mod clear;
+pub mod damage;
 pub mod deop;
 pub mod experience;
 pub mod fill;

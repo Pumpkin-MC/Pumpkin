@@ -4,13 +4,13 @@ use pumpkin_util::math::vector3::Vector3;
 
 use super::{living::LivingEntity, Entity, EntityBase};
 
-pub struct ThrownItem {
+pub struct ThrownItemEntity {
     entity: Entity,
 }
 
 const DEG_PER_RAD_F32: f32 = 180.0 / PI;
 
-impl ThrownItem {
+impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y = (owner_pos.y + f64::from(owner.standing_eye_height)) - 0.1;
@@ -77,7 +77,7 @@ impl ThrownItem {
     }
 }
 
-impl EntityBase for ThrownItem {
+impl EntityBase for ThrownItemEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
     }

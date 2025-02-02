@@ -16,7 +16,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
-use pumpkin_world::entity::entity_registry::get_entity_by_id;
+use pumpkin_world::entity::registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -252,6 +252,7 @@ impl Server {
                 &bounding_box_size,
             )),
             AtomicCell::new(bounding_box_size),
+            false,
         )
     }
 

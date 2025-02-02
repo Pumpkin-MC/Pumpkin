@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
+    damage::DamageType,
     entity::EntityType,
     sound::{Sound, SoundCategory},
 };
@@ -183,6 +184,7 @@ impl Player {
                 1.62,
                 AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
                 AtomicCell::new(bounding_box_size),
+                matches!(gamemode, GameMode::Creative | GameMode::Spectator),
             )),
             config: Mutex::new(config),
             gameprofile,
@@ -354,7 +356,7 @@ impl Player {
 
         victim
             .living_entity
-            .damage(damage as f32, 34) // PlayerAttack
+            .damage(damage as f32, DamageType::PlayerAttack) // PlayerAttack
             .await;
 
         let mut knockback_strength = 1.0;
@@ -675,6 +677,11 @@ impl Player {
             abilities.set_for_gamemode(gamemode);
         };
         self.send_abilities_update().await;
+
+        self.living_entity.entity.invulnerable.store(
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.living_entity
             .entity
             .world
@@ -686,6 +693,7 @@ impl Player {
                 }],
             ))
             .await;
+
         #[allow(clippy::cast_precision_loss)]
         self.client
             .send_packet(&CGameEvent::new(
