@@ -9,6 +9,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
+    damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
 };
@@ -91,6 +92,10 @@ pub struct Entity {
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
     pub bounding_box_size: AtomicCell<BoundingBoxSize>,
+    /// Whether this entity is invulnerable to all damage
+    pub invulnerable: AtomicBool,
+    /// List of damage types this entity is immune to
+    pub damage_immunities: Vec<DamageType>,
 }
 
 impl Entity {
@@ -104,6 +109,7 @@ impl Entity {
         standing_eye_height: f32,
         bounding_box: AtomicCell<BoundingBox>,
         bounding_box_size: AtomicCell<BoundingBoxSize>,
+        invulnerable: bool,
     ) -> Self {
         let floor_x = position.x.floor() as i32;
         let floor_y = position.y.floor() as i32;
@@ -130,6 +136,8 @@ impl Entity {
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             bounding_box_size,
+            invulnerable: AtomicBool::new(invulnerable),
+            damage_immunities: Vec::new(),
         }
     }
 
@@ -351,6 +359,11 @@ impl Entity {
         let pose = pose as i32;
         self.send_meta_data(Metadata::new(6, MetaDataType::EntityPose, VarInt(pose)))
             .await;
+    }
+
+    pub fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
+        self.invulnerable.load(std::sync::atomic::Ordering::Relaxed)
+            || self.damage_immunities.contains(&damage_type)
     }
 }
 

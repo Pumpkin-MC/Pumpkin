@@ -8,13 +8,6 @@ pub struct LevelTime {
     pub rain_time: i64,
 }
 
-pub enum DayTime {
-    Day = 1000,
-    Night = 13000,
-    Noon = 6000,
-    Midnight = 18000,
-}
-
 impl Default for LevelTime {
     fn default() -> Self {
         Self::new()
