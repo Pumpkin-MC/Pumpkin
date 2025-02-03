@@ -10,7 +10,9 @@ use crate::world::World;
 use args::ConsumedArgs;
 use async_trait::async_trait;
 use commands::{
-    ban, banip, banlist, clear, damage, deop, experience, fill, gamemode, give, help, kick, kill, list, me, msg, op, pardon, pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop, summon, teleport, time, title, weather, worldborder
+    ban, banip, banlist, clear, damage, deop, experience, fill, gamemode, give, help, kick, kill,
+    list, me, msg, op, pardon, pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop,
+    summon, teleport, time, title, weather, worldborder,
 };
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;

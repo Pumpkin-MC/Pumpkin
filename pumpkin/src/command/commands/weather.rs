@@ -31,14 +31,14 @@ impl CommandExecutor for WeatherExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
-        let _duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
+        let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
         let mut weather = world.weather.lock().await;
 
         match self.mode {
             WeatherMode::Clear => {
-                weather.set_rain(world, false).await;
-                weather.set_thunder_level(world, 0.0).await;
-                weather.set_rain_level(world, 0.0).await;
+                weather
+                    .set_weather_parameters(world, duration, 0, false, false)
+                    .await;
                 sender
                     .send_message(TextComponent::translate(
                         "commands.weather.set.clear",
@@ -47,9 +47,9 @@ impl CommandExecutor for WeatherExecutor {
                     .await;
             }
             WeatherMode::Rain => {
-                weather.set_rain(world, true).await;
-                weather.set_thunder_level(world, 0.0).await;
-                weather.set_rain_level(world, 1.0).await;
+                weather
+                    .set_weather_parameters(world, 0, duration, true, false)
+                    .await;
                 sender
                     .send_message(TextComponent::translate(
                         "commands.weather.set.rain",
@@ -58,9 +58,9 @@ impl CommandExecutor for WeatherExecutor {
                     .await;
             }
             WeatherMode::Thunder => {
-                weather.set_rain(world, true).await;
-                weather.set_thunder_level(world, 1.0).await;
-                weather.set_rain_level(world, 1.0).await;
+                weather
+                    .set_weather_parameters(world, 0, duration, true, true)
+                    .await;
                 sender
                     .send_message(TextComponent::translate(
                         "commands.weather.set.thunder",

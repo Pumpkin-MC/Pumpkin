@@ -241,6 +241,12 @@ impl World {
                 level_time.send_time(self).await;
             }
         }
+
+        {
+            let mut weather = self.weather.lock().await;
+            weather.tick_weather(self).await;
+        };
+
         // player ticks
         for player in self.players.lock().await.values() {
             player.tick().await;
@@ -474,21 +480,23 @@ impl World {
                 .client
                 .send_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
                 .await;
+
+            // Calculate rain and thunder levels directly from public fields
+            let rain_level = weather.rain_level.clamp(0.0, 1.0);
+            let thunder_level = weather.thunder_level.clamp(0.0, 1.0);
+
+            player
+                .client
+                .send_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
+                .await;
+            player
+                .client
+                .send_packet(&CGameEvent::new(
+                    GameEvent::ThunderLevelChange,
+                    thunder_level,
+                ))
+                .await;
         }
-        player
-            .client
-            .send_packet(&CGameEvent::new(
-                GameEvent::RainLevelChange,
-                weather.rain_level,
-            ))
-            .await;
-        player
-            .client
-            .send_packet(&CGameEvent::new(
-                GameEvent::ThunderLevelChange,
-                weather.thunder_level,
-            ))
-            .await;
 
         // Spawn in initial chunks
         player_chunker::player_join(&player).await;
