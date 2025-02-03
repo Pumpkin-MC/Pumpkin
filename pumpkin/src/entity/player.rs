@@ -29,8 +29,8 @@ use pumpkin_protocol::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
         SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock, SPlayerAbilities,
         SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
-        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign,
-        SUseItem, SUseItemOn,
+        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUseItem,
+        SUseItemOn,
     },
     RawPacket, ServerPacket,
 };
@@ -991,9 +991,6 @@ impl Player {
             }
             SSwingArm::PACKET_ID => {
                 self.handle_swing_arm(SSwingArm::read(bytebuf)?).await;
-            }
-            SUpdateSign::PACKET_ID => {
-                self.handle_sign_update(SUpdateSign::read(bytebuf)?).await;
             }
             SUseItemOn::PACKET_ID => {
                 self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
