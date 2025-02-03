@@ -245,3 +245,8 @@ mod block_state;
 pub fn block_state(item: TokenStream) -> TokenStream {
     block_state::block_state_impl(item)
 }
+mod block;
+#[proc_macro]
+pub fn block_entity(item: TokenStream) -> TokenStream {
+    block::block_entity_impl(item)
+}

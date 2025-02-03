@@ -17,10 +17,13 @@ use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
-use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem};
+use pumpkin_macros::block_entity;
+use pumpkin_protocol::client::play::{
+    CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem,
+};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::server::play::SCookieResponse as SPCookieResponse;
+use pumpkin_protocol::server::play::{SCookieResponse as SPCookieResponse, SUpdateSign};
 use pumpkin_protocol::{
     client::play::{
         Animation, CAcknowledgeBlockChange, CCommandSuggestions, CEntityAnimation, CHeadRot,
@@ -43,6 +46,7 @@ use pumpkin_util::{
     text::TextComponent,
     GameMode,
 };
+use pumpkin_world::block::interactive::sign::Sign;
 use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::item::registry::{get_item_by_id, get_name_by_id};
@@ -992,6 +996,30 @@ impl Player {
         Ok(())
     }
 
+    pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
+        let world = &self.living_entity.entity.world;
+        let updated_sign = Sign::new(
+            sign_data.location,
+            sign_data.is_front_text,
+            [
+                sign_data.line_1,
+                sign_data.line_2,
+                sign_data.line_3,
+                sign_data.line_4,
+            ],
+        );
+
+        world
+            .broadcast_packet_all(&CBlockEntityData::new(
+                sign_data.location,
+                VarInt(block_entity!("sign") as i32),
+                pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign)
+                    .unwrap()
+                    .to_vec(),
+            ))
+            .await;
+    }
+
     pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
@@ -1272,6 +1300,30 @@ impl Player {
         self.client
             .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
             .await;
+
+        self.send_sign_packet(block, final_block_pos, face).await;
+
+        // Block was placed successfully, decrement inventory
         Ok(true)
+    }
+
+    /// Checks if block placed was a sign, then opens a dialog
+    async fn send_sign_packet(
+        &self,
+        block: Block,
+        block_position: BlockPos,
+        selected_face: &BlockDirection,
+    ) {
+        if block.states.iter().any(|state| {
+            state.block_entity_type == Some(block_entity!("sign"))
+                || state.block_entity_type == Some(block_entity!("hanging_sign"))
+        }) {
+            self.client
+                .send_packet(&COpenSignEditor::new(
+                    block_position,
+                    selected_face.to_offset().z == 1,
+                ))
+                .await;
+        }
     }
 }

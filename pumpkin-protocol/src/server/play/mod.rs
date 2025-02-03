@@ -24,6 +24,7 @@ mod player_rotation;
 mod set_creative_slot;
 mod set_held_item;
 mod swing_arm;
+mod update_sign;
 mod use_item;
 mod use_item_on;
 
@@ -53,5 +54,6 @@ pub use player_rotation::*;
 pub use set_creative_slot::*;
 pub use set_held_item::*;
 pub use swing_arm::*;
+pub use update_sign::*;
 pub use use_item::*;
 pub use use_item_on::*;
