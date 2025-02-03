@@ -158,6 +158,29 @@ where
     }
 }
 
+impl<T: Math + Copy> Vector3<T>
+where
+    T: Into<f32>,
+{
+    pub fn to_f32(&self) -> Vector3<f32> {
+        Vector3 {
+            x: self.x.into(),
+            y: self.y.into(),
+            z: self.z.into(),
+        }
+    }
+}
+
+impl Vector3<f64> {
+    pub fn as_f32(&self) -> Vector3<f32> {
+        Vector3 {
+            x: self.x as f32,
+            y: self.y as f32,
+            z: self.z as f32,
+        }
+    }
+}
+
 pub trait Math:
     Mul<Output = Self>
     //+ Neg<Output = Self>
