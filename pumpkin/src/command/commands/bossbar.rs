@@ -9,8 +9,8 @@ use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
+use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::tree::CommandTree;
-use crate::command::tree_builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 use crate::world::bossbar::Bossbar;

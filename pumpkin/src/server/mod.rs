@@ -14,9 +14,9 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
-use pumpkin_world::entity::entity_registry::get_entity_by_id;
+use pumpkin_world::entity::registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -29,15 +29,12 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
-use uuid::Uuid;
 
-use crate::block::block_manager::BlockManager;
+use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
-use crate::block::{default_block_manager, default_block_properties_manager};
-use crate::entity::ai::path::Navigator;
-use crate::entity::living::LivingEntity;
-use crate::entity::mob::MobEntity;
+use crate::block::registry::BlockRegistry;
 use crate::entity::{Entity, EntityId};
+use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
@@ -63,8 +60,10 @@ pub struct Server {
     server_branding: CachedBranding,
     /// Saves and Dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
-    /// Saves and calls blocks blocks
-    pub block_manager: Arc<BlockManager>,
+    /// Block Behaviour
+    pub block_registry: Arc<BlockRegistry>,
+    /// Item Behaviour
+    pub item_registry: Arc<ItemRegistry>,
     /// Creates and stores block property registry and managed behaviours.
     pub block_properties_manager: Arc<BlockPropertiesManager>,
     /// Manages multiple worlds within the server.
@@ -136,7 +135,8 @@ impl Server {
                 DimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_manager: default_block_manager(),
+            block_registry: super::block::default_registry(),
+            item_registry: super::item::default_registry(),
             block_properties_manager: default_block_properties_manager(),
             auth_client,
             key_store: KeyStore::new(),
@@ -207,22 +207,6 @@ impl Server {
         }
     }
 
-    pub async fn add_mob_entity(
-        &self,
-        entity_type: EntityType,
-        position: Vector3<f64>,
-        world: &Arc<World>,
-    ) -> (Arc<MobEntity>, Uuid) {
-        let (living_entity, uuid) = self.add_living_entity(position, entity_type, world);
-
-        let mob = Arc::new(MobEntity {
-            living_entity,
-            goals: Mutex::new(vec![]),
-            navigator: Mutex::new(Navigator::default()),
-        });
-        world.add_mob_entity(uuid, mob.clone()).await;
-        (mob, uuid)
-    }
     /// Adds a new living entity to the server. This does not Spawn the entity
     ///
     /// # Returns
@@ -232,12 +216,12 @@ impl Server {
     /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
     /// - `Arc<World>`: A reference to the world that the living entity was added to.
     /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
-    fn add_living_entity(
+    pub fn add_entity(
         &self,
         position: Vector3<f64>,
         entity_type: EntityType,
         world: &Arc<World>,
-    ) -> (Arc<LivingEntity>, Uuid) {
+    ) -> Entity {
         let entity_id = self.new_entity_id();
 
         // TODO: this should be resolved to a integer using a macro when calling this function
@@ -254,18 +238,22 @@ impl Server {
 
         // TODO: standing eye height should be per mob
         let new_uuid = uuid::Uuid::new_v4();
-        let mob = Arc::new(LivingEntity::new(Entity::new(
+        Entity::new(
             entity_id,
             new_uuid,
             world.clone(),
             position,
             entity_type,
             1.62,
-            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            AtomicCell::new(BoundingBox::new_from_pos(
+                position.x,
+                position.y,
+                position.z,
+                &bounding_box_size,
+            )),
             AtomicCell::new(bounding_box_size),
-        )));
-
-        (mob, new_uuid)
+            false,
+        )
     }
 
     pub async fn try_get_container(
@@ -380,7 +368,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.current_players.lock().await.iter() {
+            for (_, player) in world.players.lock().await.iter() {
                 if player.client.address.lock().await.ip() == ip {
                     players.push(player.clone());
                 }
@@ -395,7 +383,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.current_players.lock().await.iter() {
+            for (_, player) in world.players.lock().await.iter() {
                 players.push(player.clone());
             }
         }
@@ -441,7 +429,7 @@ impl Server {
     pub async fn get_player_count(&self) -> usize {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
-            count += world.current_players.lock().await.len();
+            count += world.players.lock().await.len();
         }
         count
     }
@@ -450,7 +438,7 @@ impl Server {
     pub async fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
-            count += world.current_players.lock().await.len();
+            count += world.players.lock().await.len();
             if count >= n {
                 return true;
             }

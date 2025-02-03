@@ -11,17 +11,19 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
+    damage::DamageType,
     entity::EntityType,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
-    bytebuf::packet_id::Packet,
+    bytebuf::packet::Packet,
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-        CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent, PlayerAction,
+        CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage, CTitleText, GameEvent,
+        MetaDataType, PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -40,12 +42,13 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{client::play::CUpdateTime, codec::var_int::VarInt};
 use pumpkin_protocol::{
-    client::play::{CSetEntityMetadata, Metadata},
+    client::play::Metadata,
     server::play::{SClickContainer, SKeepAlive},
 };
 use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, BoundingBoxSize},
+        experience,
         position::BlockPos,
         vector2::Vector2,
         vector3::Vector3,
@@ -57,15 +60,15 @@ use pumpkin_util::{
 use pumpkin_world::{
     cylindrical_chunk_iterator::Cylindrical,
     item::{
-        item_registry::{get_item_by_id, Operation},
+        registry::{get_item_by_id, Operation},
         ItemStack,
     },
 };
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use super::{Entity, EntityId, NBTStorage};
+use super::{item::ItemEntity, Entity, EntityId, NBTStorage};
 use crate::{
-    command::{client_cmd_suggestions, dispatcher::CommandDispatcher},
+    command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
     net::{
         combat::{self, player_attack_sound, AttackType},
@@ -135,6 +138,12 @@ pub struct Player {
     pub client_loaded: AtomicBool,
     /// timeout (in ticks) client has to report it has finished loading.
     pub client_loaded_timeout: AtomicU32,
+    /// The player's experience level
+    pub experience_level: AtomicI32,
+    /// The player's experience progress (0.0 to 1.0)
+    pub experience_progress: AtomicCell<f32>,
+    /// The player's total experience points
+    pub experience_points: AtomicI32,
 }
 
 impl Player {
@@ -175,6 +184,7 @@ impl Player {
                 1.62,
                 AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
                 AtomicCell::new(bounding_box_size),
+                matches!(gamemode, GameMode::Creative | GameMode::Spectator),
             )),
             config: Mutex::new(config),
             gameprofile,
@@ -216,6 +226,9 @@ impl Player {
                     |op| AtomicCell::new(op.level),
                 ),
             inventory: Mutex::new(PlayerInventory::new()),
+            experience_level: AtomicI32::new(0),
+            experience_progress: AtomicCell::new(0.0),
+            experience_points: AtomicI32::new(0),
         }
     }
 
@@ -343,7 +356,7 @@ impl Player {
 
         victim
             .living_entity
-            .damage(damage as f32, 34) // PlayerAttack
+            .damage(damage as f32, DamageType::PlayerAttack) // PlayerAttack
             .await;
 
         let mut knockback_strength = 1.0;
@@ -473,6 +486,10 @@ impl Player {
         &self.living_entity.entity.world
     }
 
+    pub fn position(&self) -> Vector3<f64> {
+        self.living_entity.entity.pos.load()
+    }
+
     /// Updates the current abilities the Player has
     pub async fn send_abilities_update(&self) {
         let mut b = 0i8;
@@ -517,7 +534,7 @@ impl Player {
     ) {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
-        client_cmd_suggestions::send_c_commands_packet(self, command_dispatcher).await;
+        client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
 
     /// Sends the world time to just the player.
@@ -535,10 +552,10 @@ impl Player {
     /// Sends the mobs to just the player.
     // TODO: This should be optimized for larger servers based on current player chunk
     pub async fn send_mobs(&self, world: &World) {
-        let mobs = world.current_living_mobs.lock().await.clone();
-        for (uuid, mob) in mobs {
+        let entities = world.entities.read().await.clone();
+        for (_, entity) in entities {
             self.client
-                .send_packet(&mob.living_entity.entity.create_spawn_packet(uuid))
+                .send_packet(&entity.get_entity().create_spawn_packet())
                 .await;
         }
     }
@@ -660,6 +677,11 @@ impl Player {
             abilities.set_for_gamemode(gamemode);
         };
         self.send_abilities_update().await;
+
+        self.living_entity.entity.invulnerable.store(
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.living_entity
             .entity
             .world
@@ -671,6 +693,7 @@ impl Player {
                 }],
             ))
             .await;
+
         #[allow(clippy::cast_precision_loss)]
         self.client
             .send_packet(&CGameEvent::new(
@@ -681,19 +704,18 @@ impl Player {
     }
 
     /// Send skin layers and used hand to all players
-    pub async fn update_client_information(&self) {
+    pub async fn send_client_information(&self) {
         let config = self.config.lock().await;
-        let world = self.world();
-        world
-            .broadcast_packet_all(&CSetEntityMetadata::new(
-                self.entity_id().into(),
-                Metadata::new(17, 0.into(), config.skin_parts),
-            ))
+        self.living_entity
+            .entity
+            .send_meta_data(Metadata::new(17, MetaDataType::Byte, config.skin_parts))
             .await;
-        world
-            .broadcast_packet_all(&CSetEntityMetadata::new(
-                self.entity_id().into(),
-                Metadata::new(18, 0.into(), config.main_hand as u8),
+        self.living_entity
+            .entity
+            .send_meta_data(Metadata::new(
+                18,
+                MetaDataType::Byte,
+                config.main_hand as u8,
             ))
             .await;
     }
@@ -715,6 +737,22 @@ impl Player {
             .await;
     }
 
+    pub async fn drop_item(&self, server: &Server) {
+        let mut inv = self.inventory.lock().await;
+        if let Some(item) = inv.held_item_mut() {
+            let entity = server.add_entity(
+                self.living_entity.entity.pos.load(),
+                EntityType::Item,
+                self.world(),
+            );
+            let item_entity = Arc::new(ItemEntity::new(entity, &item.clone()));
+            self.world().spawn_entity(item_entity.clone()).await;
+            item_entity.send_meta_packet().await;
+            // decrase item in hotbar
+            inv.decrease_current_stack(1);
+        }
+    }
+
     pub async fn send_system_message(&self, text: &TextComponent) {
         self.send_system_message_raw(text, false).await;
     }
@@ -724,7 +762,86 @@ impl Player {
             .send_packet(&CSystemChatMessage::new(text, overlay))
             .await;
     }
+
+    /// Sets the player's experience level and updates the client
+    #[allow(clippy::cast_precision_loss)]
+    pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
+        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_progress.store(progress.clamp(0.0, 1.0));
+        self.experience_points.store(points, Ordering::Relaxed);
+
+        self.client
+            .send_packet(&CSetExperience::new(
+                progress.clamp(0.0, 1.0),
+                level.into(),
+                points.into(),
+            ))
+            .await;
+    }
+
+    /// Sets the player's experience level directly
+    #[allow(clippy::cast_precision_loss)]
+    pub async fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
+        let progress = self.experience_progress.load();
+        let mut points = self.experience_points.load(Ordering::Relaxed);
+
+        // If keep progress is true then calculate the number of points needed to keep the same progress scaled
+        if keep_progress {
+            // Get our current level
+            let current_level = self.experience_level.load(Ordering::Relaxed);
+            let current_max_points = experience::points_in_level(current_level);
+            // Calculate the max value for new level
+            let new_max_points = experience::points_in_level(new_level);
+            // Calculate the scaling factor
+            let scale = new_max_points as f32 / current_max_points as f32;
+            // Scale the points (Vanilla doesn't seem to recalculate progress so we won't)
+            points = (points as f32 * scale) as i32;
+        }
+
+        self.set_experience(new_level, progress, points).await;
+    }
+
+    /// Add experience levels to the player
+    pub async fn add_experience_levels(&self, added_levels: i32) {
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let new_level = current_level + added_levels;
+        self.set_experience_level(new_level, true).await;
+    }
+
+    /// Set the player's experience points directly, Returns true if successful.
+    #[allow(clippy::cast_precision_loss)]
+    pub async fn set_experience_points(&self, new_points: i32) -> bool {
+        let current_points = self.experience_points.load(Ordering::Relaxed);
+
+        if new_points == current_points {
+            return true;
+        }
+
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let max_points = experience::points_in_level(current_level);
+
+        if new_points < 0 || new_points > max_points {
+            return false;
+        }
+
+        let progress = new_points as f32 / max_points as f32;
+        self.set_experience(current_level, progress, new_points)
+            .await;
+        true
+    }
+
+    /// Add experience points to the player
+    pub async fn add_experience_points(&self, added_points: i32) {
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let current_points = self.experience_points.load(Ordering::Relaxed);
+        let total_exp = experience::points_to_level(current_level) + current_points;
+        let new_total_exp = total_exp + added_points;
+        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
+        let progress = experience::progress_in_level(new_level, new_points);
+        self.set_experience(new_level, progress, new_points).await;
+    }
 }
+
 #[async_trait]
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -734,12 +851,25 @@ impl NBTStorage for Player {
             self.inventory.lock().await.selected as i32,
         );
         self.abilities.lock().await.write_nbt(nbt).await;
+
+        // Store total XP instead of individual components
+        let total_exp = experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
+            + self.experience_points.load(Ordering::Relaxed);
+        nbt.put_int("XpTotal", total_exp);
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
         self.abilities.lock().await.read_nbt(nbt).await;
+
+        // Load from total XP
+        let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
+        let (level, points) = experience::total_to_level_and_points(total_exp);
+        let progress = experience::progress_in_level(level, points);
+        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_progress.store(progress);
+        self.experience_points.store(points, Ordering::Relaxed);
     }
 }
 
@@ -869,7 +999,10 @@ impl Player {
                 self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
                     .await?;
             }
-            SUseItem::PACKET_ID => self.handle_use_item(&SUseItem::read(bytebuf)?),
+            SUseItem::PACKET_ID => {
+                self.handle_use_item(&SUseItem::read(bytebuf)?, server)
+                    .await;
+            }
             SCommandSuggestion::PACKET_ID => {
                 self.handle_command_suggestion(SCommandSuggestion::read(bytebuf)?, server)
                     .await;

@@ -6,7 +6,7 @@ pub(crate) fn block_entity_impl(item: TokenStream) -> TokenStream {
     let block_entity_name = input_string.trim_matches('"');
 
     quote! {
-        pumpkin_world::block::block_registry::BLOCKS
+        pumpkin_world::block::registry::BLOCKS
             .block_entity_types
             .iter()
             .position(|block_type| *block_type == #block_entity_name)

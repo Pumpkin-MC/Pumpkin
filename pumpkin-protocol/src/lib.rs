@@ -1,6 +1,6 @@
 use std::num::NonZeroU16;
 
-use bytebuf::{packet_id::Packet, ReadingError};
+use bytebuf::{packet::Packet, ReadingError};
 use bytes::{Buf, BufMut, Bytes};
 use codec::{identifier::Identifier, var_int::VarInt};
 use pumpkin_util::text::{style::Style, TextComponent};

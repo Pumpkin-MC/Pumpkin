@@ -2,7 +2,10 @@ use super::{args::ArgumentConsumer, CommandExecutor};
 use crate::command::CommandSender;
 use std::{collections::VecDeque, fmt::Debug, sync::Arc};
 
-/// see [`crate::commands::tree_builder::argument`]
+pub mod builder;
+pub mod format;
+
+/// see [`crate::commands::tree::builder::argument`]
 pub type RawArgs<'a> = Vec<&'a str>;
 
 #[derive(Debug, Clone)]

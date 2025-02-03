@@ -1,16 +1,23 @@
 use core::f32;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    f32::consts::PI,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use living::LivingEntity;
+use player::Player;
 use pumpkin_data::{
+    damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     client::play::{
-        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot, Metadata,
+        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot,
+        MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
 };
@@ -22,17 +29,28 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
-use uuid::Uuid;
+use serde::Serialize;
 
 use crate::world::World;
 
 pub mod ai;
-pub mod mob;
-
+pub mod item;
 pub mod living;
+pub mod mob;
 pub mod player;
+pub mod projectile;
 
 pub type EntityId = i32;
+
+#[async_trait]
+pub trait EntityBase: Send + Sync {
+    /// Gets Called every tick
+    async fn tick(&self) {}
+    /// Called when a player collides with the entity
+    async fn on_player_collision(&self, _player: Arc<Player>) {}
+    fn get_entity(&self) -> &Entity;
+    fn get_living_entity(&self) -> Option<&LivingEntity>;
+}
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -74,6 +92,10 @@ pub struct Entity {
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
     pub bounding_box_size: AtomicCell<BoundingBoxSize>,
+    /// Whether this entity is invulnerable to all damage
+    pub invulnerable: AtomicBool,
+    /// List of damage types this entity is immune to
+    pub damage_immunities: Vec<DamageType>,
 }
 
 impl Entity {
@@ -87,6 +109,7 @@ impl Entity {
         standing_eye_height: f32,
         bounding_box: AtomicCell<BoundingBox>,
         bounding_box_size: AtomicCell<BoundingBoxSize>,
+        invulnerable: bool,
     ) -> Self {
         let floor_x = position.x.floor() as i32;
         let floor_y = position.y.floor() as i32;
@@ -113,6 +136,8 @@ impl Entity {
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             bounding_box_size,
+            invulnerable: AtomicBool::new(invulnerable),
+            damage_immunities: Vec::new(),
         }
     }
 
@@ -154,6 +179,20 @@ impl Entity {
                 }
             }
         }
+    }
+
+    /// Returns entity rotation as vector
+    pub fn rotation(&self) -> Vector3<f32> {
+        // Convert degrees to radians if necessary
+        let yaw_rad = self.yaw.load() * (PI / 180.0);
+        let pitch_rad = self.pitch.load() * (PI / 180.0);
+
+        Vector3::new(
+            yaw_rad.cos() * pitch_rad.cos(),
+            pitch_rad.sin(),
+            yaw_rad.sin() * pitch_rad.cos(),
+        )
+        .normalize()
     }
 
     /// Changes this entity's pitch and yaw to look at target
@@ -204,7 +243,7 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
-        self.pitch.store(pitch);
+        self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
     }
 
     /// Removes the Entity from their current World
@@ -212,12 +251,12 @@ impl Entity {
         self.world.remove_entity(self).await;
     }
 
-    pub fn create_spawn_packet(&self, uuid: Uuid) -> CSpawnEntity {
+    pub fn create_spawn_packet(&self) -> CSpawnEntity {
         let entity_loc = self.pos.load();
         let entity_vel = self.velocity.load();
         CSpawnEntity::new(
             VarInt(self.entity_id),
-            uuid,
+            self.entity_uuid,
             VarInt((self.entity_type) as i32),
             entity_loc.x,
             entity_loc.y,
@@ -295,8 +334,8 @@ impl Entity {
         } else {
             b &= !(1 << index);
         }
-        let packet = CSetEntityMetadata::new(self.entity_id.into(), Metadata::new(0, 0.into(), b));
-        self.world.broadcast_packet_all(&packet).await;
+        self.send_meta_data(Metadata::new(0, MetaDataType::Byte, b))
+            .await;
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -306,14 +345,38 @@ impl Entity {
             .await;
     }
 
+    pub async fn send_meta_data<T>(&self, meta: Metadata<T>)
+    where
+        T: Serialize,
+    {
+        self.world
+            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), meta))
+            .await;
+    }
+
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        let packet = CSetEntityMetadata::<VarInt>::new(
-            self.entity_id.into(),
-            Metadata::new(6, 21.into(), pose.into()),
-        );
-        self.world.broadcast_packet_all(&packet).await;
+        self.send_meta_data(Metadata::new(6, MetaDataType::EntityPose, VarInt(pose)))
+            .await;
+    }
+
+    pub fn is_invulnerable_to(&self, damage_type: DamageType) -> bool {
+        self.invulnerable.load(std::sync::atomic::Ordering::Relaxed)
+            || self.damage_immunities.contains(&damage_type)
+    }
+}
+
+#[async_trait]
+impl EntityBase for Entity {
+    async fn tick(&self) {}
+
+    fn get_entity(&self) -> &Entity {
+        self
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
     }
 }
 

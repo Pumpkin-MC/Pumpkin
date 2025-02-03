@@ -16,7 +16,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_world::item::registry::Item;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
@@ -490,7 +490,7 @@ impl Player {
             .living_entity
             .entity
             .world
-            .current_players
+            .players
             .lock()
             .await
             .iter()
@@ -506,7 +506,7 @@ impl Player {
         players
     }
 
-    async fn send_container_changes(
+    pub async fn send_container_changes(
         &self,
         server: &Server,
         slot_index: usize,

@@ -2,19 +2,19 @@ use blocks::chest::ChestBlock;
 use blocks::furnace::FurnaceBlock;
 use properties::BlockPropertiesManager;
 
-use crate::block::block_manager::BlockManager;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
+use crate::block::registry::BlockRegistry;
 use std::sync::Arc;
 
-pub mod block_manager;
 mod blocks;
 pub mod properties;
 pub mod pumpkin_block;
+pub mod registry;
 
 #[must_use]
-pub fn default_block_manager() -> Arc<BlockManager> {
-    let mut manager = BlockManager::default();
+pub fn default_registry() -> Arc<BlockRegistry> {
+    let mut manager = BlockRegistry::default();
 
     manager.register(JukeboxBlock);
     manager.register(CraftingTableBlock);

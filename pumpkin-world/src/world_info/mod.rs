@@ -21,13 +21,14 @@ pub(crate) trait WorldInfoWriter: Sync + Send {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
+#[serde(default)]
 pub struct LevelData {
     // true if cheats are enabled.
     pub allow_commands: bool,
     // An integer displaying the data version.
     pub data_version: i32,
     // The current difficulty setting.
-    pub difficulty: Difficulty,
+    pub difficulty: u8,
     // the generation settings for each dimension.
     pub world_gen_settings: WorldGenSettings,
     // The Unix time in milliseconds when the level was last loaded.
@@ -40,6 +41,8 @@ pub struct LevelData {
     pub spawn_y: i32,
     // The Z coordinate of the world spawn.
     pub spawn_z: i32,
+    // The Yaw rotation of the world spawn.
+    pub spawn_angle: f32,
     #[serde(rename = "version")]
     // The NBT version of the level
     pub nbt_version: i32,
@@ -97,13 +100,14 @@ impl Default for LevelData {
             allow_commands: true,
             // TODO
             data_version: -1,
-            difficulty: Difficulty::Normal,
+            difficulty: Difficulty::Normal as u8,
             world_gen_settings: Default::default(),
             last_played: -1,
             level_name: "world".to_string(),
             spawn_x: 0,
             spawn_y: 200,
             spawn_z: 0,
+            spawn_angle: 0.0,
             nbt_version: -1,
             version: Default::default(),
         }

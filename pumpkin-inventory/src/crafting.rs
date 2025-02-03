@@ -1,7 +1,7 @@
 use pumpkin_registry::{
     flatten_3x3, get_tag_values, IngredientSlot, IngredientType, RecipeResult, TagCategory, RECIPES,
 };
-use pumpkin_world::item::item_registry::get_item;
+use pumpkin_world::item::registry::get_item;
 use pumpkin_world::item::ItemStack;
 use rayon::prelude::*;
 

@@ -59,6 +59,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
                 spawn_x: info.spawn_x,
                 spawn_y: info.spawn_y,
                 spawn_z: info.spawn_z,
+                spawn_angle: info.spawn_angle,
                 nbt_version: info.nbt_version,
                 version: info.version,
             },

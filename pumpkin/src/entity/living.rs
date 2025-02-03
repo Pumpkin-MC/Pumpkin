@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicI32;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, CSetEntityMetadata, Metadata};
+use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, MetaDataType, Metadata};
 use pumpkin_util::math::vector3::Vector3;
 
 use super::{Entity, EntityId, NBTStorage};
@@ -58,11 +58,7 @@ impl LivingEntity {
         self.health.store(health);
         // tell everyone entities health changed
         self.entity
-            .world
-            .broadcast_packet_all(&CSetEntityMetadata::new(
-                self.entity.entity_id.into(),
-                Metadata::new(9, 3.into(), health),
-            ))
+            .send_meta_data(Metadata::new(9, MetaDataType::Float, health))
             .await;
     }
 
@@ -70,16 +66,27 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
-    // TODO add damage_type enum
-    pub async fn damage(&self, amount: f32, damage_type: u8) {
+    pub async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) -> bool {
+        // Check invulnerability before applying damage
+        if self.entity.is_invulnerable_to(damage_type) {
+            return false;
+        }
+
         self.entity
             .world
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
-                damage_type.into(),
-                None,
-                None,
-                None,
+                damage_type.data().id.into(),
+                source.map(|e| e.entity_id.into()),
+                cause.map(|e| e.entity_id.into()),
+                position,
             ))
             .await;
 
@@ -90,6 +97,13 @@ impl LivingEntity {
         } else {
             self.set_health(new_health).await;
         }
+
+        true
+    }
+
+    pub async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+        self.damage_with_context(amount, damage_type, None, None, None)
+            .await
     }
 
     /// Returns if the entity was damaged or not
@@ -136,7 +150,7 @@ impl LivingEntity {
                 .play_sound(Self::get_fall_sound(fall_distance as i32))
                 .await;
             // TODO: Play block fall sound
-            self.damage(damage, 10).await; // Fall
+            self.damage(damage, DamageType::Fall).await; // Fall
         } else if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance

@@ -8,8 +8,8 @@ use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::args::ConsumedArgs;
 use crate::command::args::FindArg;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
-use crate::command::tree_builder::{argument, literal};
 use crate::command::CommandError;
 use crate::command::{CommandExecutor, CommandSender};
 
