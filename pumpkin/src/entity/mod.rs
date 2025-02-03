@@ -99,7 +99,7 @@ pub struct Entity {
 }
 
 impl Entity {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         entity_id: EntityId,
         entity_uuid: uuid::Uuid,
