@@ -31,4 +31,5 @@ pub mod teleport;
 pub mod time;
 pub mod title;
 pub mod transfer;
+pub mod weather;
 pub mod worldborder;

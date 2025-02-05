@@ -60,7 +60,10 @@ use worldborder::Worldborder;
 pub mod bossbar;
 pub mod custom_bossbar;
 pub mod scoreboard;
+pub mod weather;
 pub mod worldborder;
+
+use weather::Weather;
 
 #[derive(Debug, Error)]
 pub enum GetBlockError {
@@ -113,6 +116,8 @@ pub struct World {
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in
     pub dimension_type: DimensionType,
+    /// The world's weather, including rain and thunder levels
+    pub weather: Mutex<Weather>,
     // TODO: entities
 }
 
@@ -127,6 +132,7 @@ impl World {
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
+            weather: Mutex::new(Weather::new()),
         }
     }
 
@@ -235,6 +241,12 @@ impl World {
                 level_time.send_time(self).await;
             }
         }
+
+        {
+            let mut weather = self.weather.lock().await;
+            weather.tick_weather(self).await;
+        };
+
         // player ticks
         for player in self.players.lock().await.values() {
             player.tick().await;
@@ -460,6 +472,31 @@ impl World {
 
         // Sends initial time
         player.send_time(self).await;
+
+        // Send initial weather state
+        let weather = self.weather.lock().await;
+        if weather.raining {
+            player
+                .client
+                .send_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
+                .await;
+
+            // Calculate rain and thunder levels directly from public fields
+            let rain_level = weather.rain_level.clamp(0.0, 1.0);
+            let thunder_level = weather.thunder_level.clamp(0.0, 1.0);
+
+            player
+                .client
+                .send_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
+                .await;
+            player
+                .client
+                .send_packet(&CGameEvent::new(
+                    GameEvent::ThunderLevelChange,
+                    thunder_level,
+                ))
+                .await;
+        }
 
         // Spawn in initial chunks
         player_chunker::player_join(&player).await;

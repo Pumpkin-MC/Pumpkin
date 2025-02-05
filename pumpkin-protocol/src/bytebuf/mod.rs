@@ -14,8 +14,6 @@ use thiserror::Error;
 pub mod packet;
 mod serializer;
 
-use std::mem::size_of;
-
 #[derive(Debug, Error)]
 pub enum ReadingError {
     /// End-of-File
@@ -29,28 +27,14 @@ pub enum ReadingError {
     Message(String),
 }
 
+impl From<bytes::TryGetError> for ReadingError {
+    fn from(error: bytes::TryGetError) -> Self {
+        Self::EOF(error.requested.to_string())
+    }
+}
+
 pub trait ByteBuf: Buf {
     fn try_get_bool(&mut self) -> Result<bool, ReadingError>;
-
-    fn try_get_u8(&mut self) -> Result<u8, ReadingError>;
-
-    fn try_get_i8(&mut self) -> Result<i8, ReadingError>;
-
-    fn try_get_u16(&mut self) -> Result<u16, ReadingError>;
-
-    fn try_get_i16(&mut self) -> Result<i16, ReadingError>;
-
-    fn try_get_u32(&mut self) -> Result<u32, ReadingError>;
-
-    fn try_get_i32(&mut self) -> Result<i32, ReadingError>;
-
-    fn try_get_u64(&mut self) -> Result<u64, ReadingError>;
-
-    fn try_get_i64(&mut self) -> Result<i64, ReadingError>;
-
-    fn try_get_f32(&mut self) -> Result<f32, ReadingError>;
-
-    fn try_get_f64(&mut self) -> Result<f64, ReadingError>;
 
     fn try_copy_to_bytes(&mut self, len: usize) -> Result<bytes::Bytes, ReadingError>;
 
@@ -59,8 +43,6 @@ pub trait ByteBuf: Buf {
         len: usize,
         max_length: usize,
     ) -> Result<bytes::Bytes, ReadingError>;
-
-    fn try_copy_to_slice(&mut self, dst: &mut [u8]) -> Result<(), ReadingError>;
 
     fn try_get_var_int(&mut self) -> Result<VarInt, ReadingError>;
 
@@ -94,86 +76,6 @@ impl<T: Buf> ByteBuf for T {
         Ok(self.try_get_u8()? != 0)
     }
 
-    fn try_get_u8(&mut self) -> Result<u8, ReadingError> {
-        if size_of::<u8>() <= self.remaining() {
-            Ok(self.get_u8())
-        } else {
-            Err(ReadingError::EOF("u8".to_string()))
-        }
-    }
-
-    fn try_get_i8(&mut self) -> Result<i8, ReadingError> {
-        if size_of::<i8>() <= self.remaining() {
-            Ok(self.get_i8())
-        } else {
-            Err(ReadingError::EOF("i8".to_string()))
-        }
-    }
-
-    fn try_get_u16(&mut self) -> Result<u16, ReadingError> {
-        if size_of::<u16>() <= self.remaining() {
-            Ok(self.get_u16())
-        } else {
-            Err(ReadingError::EOF("u16".to_string()))
-        }
-    }
-
-    fn try_get_i16(&mut self) -> Result<i16, ReadingError> {
-        if size_of::<i16>() <= self.remaining() {
-            Ok(self.get_i16())
-        } else {
-            Err(ReadingError::EOF("i16".to_string()))
-        }
-    }
-
-    fn try_get_u32(&mut self) -> Result<u32, ReadingError> {
-        if size_of::<u32>() <= self.remaining() {
-            Ok(self.get_u32())
-        } else {
-            Err(ReadingError::EOF("u32".to_string()))
-        }
-    }
-
-    fn try_get_i32(&mut self) -> Result<i32, ReadingError> {
-        if size_of::<i32>() <= self.remaining() {
-            Ok(self.get_i32())
-        } else {
-            Err(ReadingError::EOF("i32".to_string()))
-        }
-    }
-
-    fn try_get_u64(&mut self) -> Result<u64, ReadingError> {
-        if size_of::<u64>() <= self.remaining() {
-            Ok(self.get_u64())
-        } else {
-            Err(ReadingError::EOF("u64".to_string()))
-        }
-    }
-
-    fn try_get_i64(&mut self) -> Result<i64, ReadingError> {
-        if size_of::<i64>() <= self.remaining() {
-            Ok(self.get_i64())
-        } else {
-            Err(ReadingError::EOF("i64".to_string()))
-        }
-    }
-
-    fn try_get_f32(&mut self) -> Result<f32, ReadingError> {
-        if size_of::<f32>() <= self.remaining() {
-            Ok(self.get_f32())
-        } else {
-            Err(ReadingError::EOF("f32".to_string()))
-        }
-    }
-
-    fn try_get_f64(&mut self) -> Result<f64, ReadingError> {
-        if size_of::<f64>() <= self.remaining() {
-            Ok(self.get_f64())
-        } else {
-            Err(ReadingError::EOF("f64".to_string()))
-        }
-    }
-
     fn try_copy_to_bytes(&mut self, len: usize) -> Result<bytes::Bytes, ReadingError> {
         if self.remaining() >= len {
             Ok(self.copy_to_bytes(len))
@@ -196,15 +98,6 @@ impl<T: Buf> ByteBuf for T {
             Ok(self.copy_to_bytes(len))
         } else {
             Err(ReadingError::Message("Unable to copy bytes".to_string()))
-        }
-    }
-
-    fn try_copy_to_slice(&mut self, dst: &mut [u8]) -> Result<(), ReadingError> {
-        if self.remaining() >= dst.len() {
-            self.copy_to_slice(dst);
-            Ok(())
-        } else {
-            Err(ReadingError::Message("Unable to copy slice".to_string()))
         }
     }
 
