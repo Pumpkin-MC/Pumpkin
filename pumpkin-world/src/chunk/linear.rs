@@ -14,18 +14,18 @@ use super::{
     CompressionError, FILE_LOCK_MANAGER,
 };
 
-///The side size of a region in chunks (one region is 32x32 chunks)
+/// The side size of a region in chunks (one region is 32x32 chunks)
 const REGION_SIZE: usize = 32;
 
-///The number of bits that identify two chunks in the same region
+/// The number of bits that identify two chunks in the same region
 const SUBREGION_BITS: u8 = pumpkin_util::math::ceil_log2(REGION_SIZE as u32);
 
-///The number of chunks in a region
+/// The number of chunks in a region
 const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
-const SIGNATURE: [u8; 8] = (0xc3ff13183cca9d9a_u64).to_be_bytes();
+const SIGNATURE: [u8; 8] = u64::to_be_bytes(0xc3ff13183cca9d9a);
 
 #[derive(Default, Clone, Copy)]
 struct LinearChunkHeader {
@@ -36,29 +36,29 @@ struct LinearChunkHeader {
 #[derive(Default, PartialEq, Eq, Clone, Copy)]
 pub enum LinearVersion {
     #[default]
-    ///Used for defaults and invalid values
+    /// Represents an invalid or uninitialized version.
     None = 0x00,
-    ///Defaylt implementation.
+    /// Version 1 of the Linear Region File Format. (Default)
     ///
-    /// The format is described in https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEAR.md
+    /// Described in: https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEAR.md
     V1 = 0x01,
-    ///Not supported yet nor sure is implemented in other projects/plugins.
+    /// Version 2 of the Linear Region File Format (currently unsupported).
     ///
-    ///  The format is described in https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEARv2.md
+    /// Described in: https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEARv2.md
     V2 = 0x02,
 }
 struct LinearFileHeader {
-    /// ( 0.. 1 Bytes) The Version of the file format
+    /// ( 0.. 1 Bytes) The version of the Linear Region File format.
     version: LinearVersion,
-    /// ( 1.. 9 Bytes) The newest chunk timestamp
+    /// ( 1.. 9 Bytes) The timestamp of the newest chunk in the region file.
     newest_timestamp: u64,
-    /// ( 9..10 Bytes) The zstd compression level used
+    /// ( 9..10 Bytes) The zstd compression level used for chunk data.
     compression_level: u8,
-    /// (10..12 Bytes) The count of non 0 size chunks
+    /// (10..12 Bytes) The number of non-zero-size chunks in the region file.
     chunks_count: u16,
-    /// (12..16 Bytes) size of the Compressed Chunk Heades Bytes (fixed size) + Chunk Data Bytes (dynamic size)
+    /// (12..16 Bytes) The total size in bytes of the compressed chunk headers and chunk data.
     chunks_bytes: u32,
-    /// (16..24 Bytes) hash of the region file (apparently not used)
+    /// (16..24 Bytes) A hash of the region file (unused).
     region_hash: u64,
 }
 struct LinearFile {
