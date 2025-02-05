@@ -12,7 +12,7 @@ use crate::{
     entity::{player::Player, Entity, EntityBase, EntityId},
     error::PumpkinError,
     plugin::{
-        block::BlockBreakEvent,
+        block::block_break::BlockBreakEvent,
         player::{PlayerJoinEvent, PlayerLeaveEvent},
         world::{ChunkLoad, ChunkSave, ChunkSend},
     },
