@@ -267,14 +267,14 @@ impl LinearFile {
             [headers_buffer.as_slice(), self.chunks_data.as_slice()]
                 .concat()
                 .as_slice(),
-            ADVANCED_CONFIG.chunk.compression.compression_level as i32,
+            ADVANCED_CONFIG.chunk.compression.level as i32,
         )
         .map_err(|err| ChunkWritingError::Compression(CompressionError::ZstdError(err)))?;
 
         // Update the header
         let file_header = LinearFileHeader {
             chunks_bytes: compressed_buffer.len() as u32,
-            compression_level: ADVANCED_CONFIG.chunk.compression.compression_level as u8,
+            compression_level: ADVANCED_CONFIG.chunk.compression.level as u8,
             chunks_count: self
                 .chunks_headers
                 .iter()

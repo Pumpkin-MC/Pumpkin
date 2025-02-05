@@ -6,20 +6,20 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct ChunkConfig {
     pub compression: ChunkCompression,
-    pub file_format: ChunkFormat,
+    pub format: ChunkFormat,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct ChunkCompression {
-    pub compression_algorithm: Compression,
-    pub compression_level: u32,
+    pub algorithm: Compression,
+    pub level: u32,
 }
 
 impl Default for ChunkCompression {
     fn default() -> Self {
         Self {
-            compression_algorithm: Compression::LZ4,
-            compression_level: 6,
+            algorithm: Compression::LZ4,
+            level: 6,
         }
     }
 }

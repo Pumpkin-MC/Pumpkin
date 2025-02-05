@@ -254,17 +254,9 @@ impl ChunkWriter for AnvilChunkFormat {
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         // Compress chunk data
-        let compression: Compression = ADVANCED_CONFIG
-            .chunk
-            .compression
-            .compression_algorithm
-            .clone()
-            .into();
+        let compression: Compression = ADVANCED_CONFIG.chunk.compression.algorithm.clone().into();
         let compressed_data = compression
-            .compress_data(
-                &raw_bytes,
-                ADVANCED_CONFIG.chunk.compression.compression_level,
-            )
+            .compress_data(&raw_bytes, ADVANCED_CONFIG.chunk.compression.level)
             .map_err(ChunkWritingError::Compression)?;
 
         // Length of compressed data + compression type

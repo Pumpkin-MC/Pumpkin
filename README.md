@@ -49,9 +49,9 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Lighting
   - [x] Entity Spawning
   - [x] Bossbar
-  - [x] Chunk Loading
+  - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
-  - [x] Chunk Saving
+  - [x] Chunk Saving (Vanilla, Linear)
   - [x] World Time
   - [x] Scoreboard
   - [x] World Borders

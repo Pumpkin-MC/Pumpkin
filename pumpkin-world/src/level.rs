@@ -73,23 +73,19 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
-        let format_reader: Arc<dyn ChunkReader> = match ADVANCED_CONFIG.chunk.file_format {
-            ChunkFormat::Anvil => Arc::new(AnvilChunkFormat),
-            ChunkFormat::Linear => Arc::new(LinearChunkFormat),
-        };
-
-        let format_writer: Arc<dyn ChunkWriter> = match ADVANCED_CONFIG.chunk.file_format {
-            ChunkFormat::Anvil => Arc::new(AnvilChunkFormat),
-            ChunkFormat::Linear => Arc::new(LinearChunkFormat),
-        };
+        let chunk_format: (Arc<dyn ChunkReader>, Arc<dyn ChunkWriter>) =
+            match ADVANCED_CONFIG.chunk.format {
+                ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
+                ChunkFormat::Linear => (Arc::new(LinearChunkFormat), Arc::new(LinearChunkFormat)),
+            };
 
         Self {
             seed,
             world_gen,
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
-            chunk_reader: format_reader,
-            chunk_writer: format_writer,
+            chunk_reader: chunk_format.0,
+            chunk_writer: chunk_format.1,
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
