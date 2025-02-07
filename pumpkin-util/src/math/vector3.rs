@@ -19,11 +19,23 @@ impl<T: Math + Copy> Vector3<T> {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
+    pub fn horizontal_length_squared(&self) -> T {
+        self.x * self.x + self.z * self.z
+    }
+
     pub fn add(&self, other: &Vector3<T>) -> Self {
         Vector3 {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
+        }
+    }
+
+    pub fn add_raw(&self, x: T, y: T, z: T) -> Self {
+        Vector3 {
+            x: self.x + x,
+            y: self.y + y,
+            z: self.z + z,
         }
     }
 
@@ -59,6 +71,11 @@ impl<T: Math + Copy + Float> Vector3<T> {
     pub fn length(&self) -> T {
         self.length_squared().sqrt()
     }
+
+    pub fn horizontal_length(&self) -> T {
+        self.horizontal_length_squared().sqrt()
+    }
+
     pub fn normalize(&self) -> Self {
         let length = self.length();
         Vector3 {

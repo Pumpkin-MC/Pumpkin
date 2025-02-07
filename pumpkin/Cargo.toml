@@ -33,6 +33,7 @@ uuid.workspace = true
 tokio.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
+async-trait.workspace = true
 
 # config
 serde.workspace = true
@@ -40,50 +41,48 @@ serde_json.workspace = true
 
 bytes.workspace = true
 
-rand = "0.8.5"
+rand = "0.8"
 
 num-bigint = "0.4"
 
 # Console line reading
-rustyline = "15.0.0"
+rustyline = "15.0"
 
 # encryption
-rsa = "0.9.7"
-rsa-der = "0.3.0"
+rsa = "0.9"
+rsa-der = "0.3"
 
 # authentication
-reqwest = { version = "0.12.12", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "http2",
     "json",
     "macos-system-configuration",
     "rustls-tls",
 ] }
 
-sha1 = "0.10.6"
+sha1 = "0.10"
 
 # velocity en
-hmac = "0.12.1"
-sha2 = "0.10.8"
+hmac = "0.12"
+sha2 = "0.10"
 
-base64 = "0.22.1"
+base64 = "0.22"
 
 # icon loading
-png = "0.17.16"
+png = "0.17"
 
 # logging
-simple_logger = { version = "5.0.0", features = ["threads"] }
+simple_logger = { version = "5.0", features = ["threads"] }
 # Remove time in favor of chrono?
-time = "0.3.37"
+time = "0.3"
 
-chrono = { version = "0.4.39", features = ["serde"]}
-
-# commands
-async-trait = "0.1.85"
+chrono = { version = "0.4", features = ["serde"]}
 
 # plugins
-libloading = "0.8.6"
+libloading = "0.8"
+
 [build-dependencies]
-git-version = "0.3.9"
+git-version = "0.3"
 # This makes it so the entire project doesn't recompile on each build on linux.
 [target.'cfg(target_os = "windows")'.build-dependencies]
-tauri-winres= "0.2.0"
+tauri-winres= "0.3"

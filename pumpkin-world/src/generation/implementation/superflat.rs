@@ -2,7 +2,7 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
-    block::block_state::BlockState,
+    block::state::BlockState,
     coordinates::XZBlockCoordinates,
     generation::{
         generator::{BiomeGenerator, GeneratorInit, TerrainGenerator},

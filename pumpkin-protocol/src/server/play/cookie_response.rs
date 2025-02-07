@@ -1,17 +1,16 @@
-use bytes::Buf;
-use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
-use pumpkin_macros::server_packet;
-
 use crate::{
     bytebuf::{ByteBuf, ReadingError},
     codec::identifier::Identifier,
     ServerPacket, VarInt,
 };
+use bytes::Buf;
+use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
+use pumpkin_macros::server_packet;
 
-#[server_packet(CONFIG_COOKIE_RESPONSE)]
-/// Response to a Cookie Request (configuration) from the server.
+#[server_packet(PLAY_COOKIE_RESPONSE)]
+/// Response to a Cookie Request (play) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 kiB in size.
-pub struct SConfigCookieResponse {
+pub struct SCookieResponse {
     pub key: Identifier,
     pub has_payload: bool,
     pub payload_length: Option<VarInt>,
@@ -20,9 +19,9 @@ pub struct SConfigCookieResponse {
 
 const MAX_COOKIE_LENGTH: usize = 5120;
 
-impl ServerPacket for SConfigCookieResponse {
+impl ServerPacket for SCookieResponse {
     fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
-        let key = bytebuf.try_get_identifer()?;
+        let key = bytebuf.try_get_identifier()?;
         let has_payload = bytebuf.try_get_bool()?;
 
         if !has_payload {

@@ -59,14 +59,12 @@ impl ClientPacket for CUpdateObjectives<'_> {
     }
 }
 
-#[repr(u8)]
 pub enum Mode {
     Add,
     Remove,
     Update,
 }
 
-#[repr(i32)]
 pub enum RenderType {
     Integer,
     Hearts,

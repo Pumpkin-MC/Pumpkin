@@ -19,7 +19,6 @@ impl<T: WindowPropertyTrait> WindowProperty<T> {
         (self.window_property.to_id(), self.value)
     }
 }
-#[repr(u8)]
 pub enum Furnace {
     FireIcon,
     MaximumFuelBurnTime,
@@ -46,35 +45,29 @@ impl WindowPropertyTrait for EnchantmentTable {
         }) as i16
     }
 }
-#[repr(u8)]
 pub enum Beacon {
     PowerLevel,
     FirstPotionEffect,
     SecondPotionEffect,
 }
 
-#[repr(u8)]
 pub enum Anvil {
     RepairCost,
 }
 
-#[repr(u8)]
 pub enum BrewingStand {
     BrewTime,
     FuelTime,
 }
 
-#[repr(u8)]
 pub enum Stonecutter {
     SelectedRecipe,
 }
 
-#[repr(u8)]
 pub enum Loom {
     SelectedPattern,
 }
 
-#[repr(u8)]
 pub enum Lectern {
     PageNumber,
 }

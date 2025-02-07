@@ -12,7 +12,6 @@ pub(crate) fn build() -> TokenStream {
     let variants = array_to_tokenstream(sound_categories);
 
     quote! {
-        #[repr(u8)]
         pub enum ScoreboardDisplaySlot {
             #variants
         }

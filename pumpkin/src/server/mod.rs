@@ -13,10 +13,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::GameMode;
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
-use pumpkin_world::entity::entity_registry::get_entity_by_id;
+use pumpkin_world::entity::registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -30,10 +29,11 @@ use std::{
 };
 use tokio::sync::{Mutex, RwLock};
 
-use crate::block::block_manager::BlockManager;
+use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
-use crate::block::{default_block_manager, default_block_properties_manager};
+use crate::block::registry::BlockRegistry;
 use crate::entity::{Entity, EntityId};
+use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
@@ -59,8 +59,10 @@ pub struct Server {
     server_branding: CachedBranding,
     /// Saves and Dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
-    /// Saves and calls blocks blocks
-    pub block_manager: Arc<BlockManager>,
+    /// Block Behaviour
+    pub block_registry: Arc<BlockRegistry>,
+    /// Item Behaviour
+    pub item_registry: Arc<ItemRegistry>,
     /// Creates and stores block property registry and managed behaviours.
     pub block_properties_manager: Arc<BlockPropertiesManager>,
     /// Manages multiple worlds within the server.
@@ -132,7 +134,8 @@ impl Server {
                 DimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_manager: default_block_manager(),
+            block_registry: super::block::default_registry(),
+            item_registry: super::item::default_registry(),
             block_properties_manager: default_block_properties_manager(),
             auth_client,
             key_store: KeyStore::new(),
@@ -169,10 +172,7 @@ impl Server {
     /// You still have to spawn the Player in the World to make then to let them Join and make them Visible
     pub async fn add_player(&self, client: Arc<Client>) -> (Arc<Player>, Arc<World>) {
         let entity_id = self.new_entity_id();
-        let gamemode = match BASIC_CONFIG.default_gamemode {
-            GameMode::Undefined => GameMode::Survival,
-            game_mode => game_mode,
-        };
+        let gamemode = BASIC_CONFIG.default_gamemode;
         // Basically the default world
         // TODO: select default from config
         let world = &self.worlds.read().await[0];
@@ -248,6 +248,7 @@ impl Server {
                 &bounding_box_size,
             )),
             AtomicCell::new(bounding_box_size),
+            false,
         )
     }
 

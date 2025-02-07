@@ -12,7 +12,6 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         #[derive(Clone, Copy)]
-        #[repr(u8)]
         pub enum Biome {
             #variants
         }

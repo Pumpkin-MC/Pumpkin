@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::{
-    block::block_registry::BLOCK_ID_TO_REGISTRY_ID, chunk::ChunkWritingError, level::LevelFolder,
+    block::registry::BLOCK_ID_TO_REGISTRY_ID, chunk::ChunkWritingError, level::LevelFolder,
 };
 
 use super::{
@@ -26,7 +26,6 @@ const WORLD_DATA_VERSION: i32 = 4189;
 pub struct AnvilChunkFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
 pub enum Compression {
     /// GZip Compression
     GZip = 1,
@@ -253,17 +252,9 @@ impl ChunkWriter for AnvilChunkFormat {
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         // Compress chunk data
-        let compression: Compression = ADVANCED_CONFIG
-            .chunk
-            .compression
-            .compression_algorithm
-            .clone()
-            .into();
+        let compression: Compression = ADVANCED_CONFIG.chunk.compression.algorithm.clone().into();
         let compressed_data = compression
-            .compress_data(
-                &raw_bytes,
-                ADVANCED_CONFIG.chunk.compression.compression_level,
-            )
+            .compress_data(&raw_bytes, ADVANCED_CONFIG.chunk.compression.level)
             .map_err(ChunkWritingError::Compression)?;
 
         // Length of compressed data + compression type
@@ -528,8 +519,8 @@ mod tests {
     fn test_writing() {
         let generator = get_world_gen(Seed(0));
         let level_folder = LevelFolder {
-            root_folder: PathBuf::from("./tmp"),
-            region_folder: PathBuf::from("./tmp/region"),
+            root_folder: PathBuf::from("./tmp_Anvil"),
+            region_folder: PathBuf::from("./tmp_Anvil/region"),
         };
         if fs::exists(&level_folder.root_folder).unwrap() {
             fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");

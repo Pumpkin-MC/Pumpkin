@@ -3,8 +3,8 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_world::block::registry::Block;
+use pumpkin_world::item::registry::Item;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -16,11 +16,11 @@ pub enum BlockActionResult {
 }
 
 #[derive(Default)]
-pub struct BlockManager {
+pub struct BlockRegistry {
     blocks: HashMap<String, Arc<dyn PumpkinBlock>>,
 }
 
-impl BlockManager {
+impl BlockRegistry {
     pub fn register<T: PumpkinBlock + BlockMetadata + 'static>(&mut self, block: T) {
         self.blocks.insert(block.name(), Arc::new(block));
     }
@@ -34,11 +34,13 @@ impl BlockManager {
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.on_use(block, player, location, server).await;
+            pumpkin_block
+                .normal_use(block, player, location, server)
+                .await;
         }
     }
 
-    pub async fn on_use_with_item(
+    pub async fn use_with_item(
         &self,
         block: &Block,
         player: &Player,
@@ -49,7 +51,7 @@ impl BlockManager {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .on_use_with_item(block, player, location, item, server)
+                .use_with_item(block, player, location, item, server)
                 .await;
         }
         BlockActionResult::Continue
@@ -64,13 +66,11 @@ impl BlockManager {
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
-                .on_placed(block, player, location, server)
-                .await;
+            pumpkin_block.placed(block, player, location, server).await;
         }
     }
 
-    pub async fn on_broken(
+    pub async fn broken(
         &self,
         block: &Block,
         player: &Player,
@@ -79,13 +79,11 @@ impl BlockManager {
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
-                .on_broken(block, player, location, server)
-                .await;
+            pumpkin_block.broken(block, player, location, server).await;
         }
     }
 
-    pub async fn on_close(
+    pub async fn close(
         &self,
         block: &Block,
         player: &Player,
@@ -96,7 +94,7 @@ impl BlockManager {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_close(block, player, location, server, container)
+                .close(block, player, location, server, container)
                 .await;
         }
     }
