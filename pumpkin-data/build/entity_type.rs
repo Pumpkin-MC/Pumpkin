@@ -4,6 +4,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::quote;
 use serde::Deserialize;
+use syn::LitInt;
 
 use crate::ident;
 
@@ -22,9 +23,10 @@ pub(crate) fn build() -> TokenStream {
 
     for (item, id) in json.iter() {
         let id = id.id as u8;
+        let id_lit = LitInt::new(&id.to_string(), proc_macro2::Span::call_site());
         let name = ident(item.to_pascal_case());
         variants.extend([quote! {
-            #name = #id,
+            #name = #id_lit,
         }]);
     }
 
@@ -54,7 +56,6 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-        #[repr(u8)]
         pub enum EntityType {
             #variants
         }

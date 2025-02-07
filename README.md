@@ -14,17 +14,13 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 ![image](https://github.com/user-attachments/assets/7e2e865e-b150-4675-a2d5-b52f9900378e)
 
-## What Pumpkin wants to achieve
+## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
 - **Compatibility**: Supports the latest Minecraft server version and adheres to vanilla game mechanics.
 - **Security**: Prioritizes security by preventing known security exploits.
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.
-
-## What Pumpkin will not
-
-- Be compatible with plugins or mods for other servers
 
 > [!IMPORTANT]
 > Pumpkin is currently under heavy development.
@@ -48,10 +44,11 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Loading
   - [x] Lighting
   - [x] Entity Spawning
+  - [x] Item drops
   - [x] Bossbar
-  - [x] Chunk Loading
+  - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
-  - [x] Chunk Saving
+  - [x] Chunk Saving (Vanilla, Linear)
   - [x] World Time
   - [x] Scoreboard
   - [x] World Borders
@@ -59,15 +56,17 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [ ] Redstone
   - [ ] Liquid Physics
 - Player
-  - [x] Player Skins
-  - [x] Player Client brand
-  - [x] Player Teleport
-  - [x] Player Movement
-  - [x] Player Animation
-  - [x] Player Inventory
-  - [x] Player Combat
+  - [x] Skins
+  - [x] Client brand
+  - [x] Teleport
+  - [x] Movement
+  - [x] Animation
+  - [x] Inventory
+  - [x] Combat
+  - [x] Experience
+  - [x] Hunger
 - Entities
-  - [ ] Non-Living (Minecart, Eggs...)
+  - [x] Non-Living (Minecart, Eggs...)
   - [x] Players
   - [x] Mobs
   - [x] Animals
@@ -82,6 +81,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Chat
   - [x] Commands
   - [x] Permissions
+  - [x] Translations
 - Proxy
   - [x] Bungeecord
   - [x] Velocity

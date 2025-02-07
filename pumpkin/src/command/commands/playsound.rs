@@ -9,8 +9,8 @@ use crate::command::{
         position_3d::Position3DArgumentConsumer, sound::SoundArgumentConsumer,
         sound_category::SoundCategoryArgumentConsumer, Arg, ConsumedArgs, FindArg,
     },
+    tree::builder::argument,
     tree::CommandTree,
-    tree_builder::argument,
     CommandError, CommandExecutor, CommandSender,
 };
 

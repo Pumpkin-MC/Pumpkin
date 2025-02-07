@@ -1,8 +1,8 @@
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
-use crate::block::block_manager::BlockActionResult;
 use crate::block::properties::Direction;
+use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
 use crate::{
@@ -10,17 +10,20 @@ use crate::{
     entity::player::{ChatMode, Hand, Player},
     error::PumpkinError,
     server::Server,
-    world::player_chunker,
+    world::chunker,
 };
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
-use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem};
+use pumpkin_macros::block_entity;
+use pumpkin_protocol::client::play::{
+    CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem,
+};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::server::play::SCookieResponse as SPCookieResponse;
+use pumpkin_protocol::server::play::{SCookieResponse as SPCookieResponse, SUpdateSign};
 use pumpkin_protocol::{
     client::play::{
         Animation, CAcknowledgeBlockChange, CCommandSuggestions, CEntityAnimation, CHeadRot,
@@ -43,14 +46,15 @@ use pumpkin_util::{
     text::TextComponent,
     GameMode,
 };
-use pumpkin_world::block::block_registry::get_block_collision_shapes;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::get_item_by_id;
+use pumpkin_world::block::interactive::sign::Sign;
+use pumpkin_world::block::registry::get_block_collision_shapes;
+use pumpkin_world::block::registry::Block;
+use pumpkin_world::item::registry::{get_item_by_id, get_name_by_id};
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::{
-    block::{block_registry::get_block_by_item, BlockDirection},
-    entity::entity_registry::get_entity_id,
-    item::item_registry::get_spawn_egg,
+    block::{registry::get_block_by_item, BlockDirection},
+    entity::registry::get_entity_id,
+    item::registry::get_spawn_egg,
 };
 
 use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
@@ -155,6 +159,14 @@ impl Player {
         let last_pos = entity.pos.load();
         self.living_entity.set_pos(position);
 
+        let height_difference = position.y - last_pos.y;
+        if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+            && !packet.ground
+            && height_difference > 0.0
+        {
+            self.jump().await;
+        }
+
         entity
             .on_ground
             .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
@@ -191,7 +203,6 @@ impl Player {
             )
             .await;
         if !self.abilities.lock().await.flying {
-            let height_difference = position.y - last_pos.y;
             self.living_entity
                 .update_fall_distance(
                     height_difference,
@@ -200,7 +211,13 @@ impl Player {
                 )
                 .await;
         }
-        player_chunker::update_position(self).await;
+        chunker::update_position(self).await;
+        self.progress_motion(Vector3::new(
+            position.x - last_pos.x,
+            position.y - last_pos.y,
+            position.z - last_pos.z,
+        ))
+        .await;
     }
 
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
@@ -232,14 +249,18 @@ impl Player {
         let last_pos = entity.pos.load();
         self.living_entity.set_pos(position);
 
+        let height_difference = position.y - last_pos.y;
+        if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+            && !packet.ground
+            && height_difference > 0.0
+        {
+            self.jump().await;
+        }
         entity
             .on_ground
             .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
 
-        entity.set_rotation(
-            wrap_degrees(packet.yaw) % 360.0,
-            wrap_degrees(packet.pitch).clamp(-90.0, 90.0) % 360.0,
-        );
+        entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
         let entity_id = entity.entity_id;
         let Vector3 { x, y, z } = position;
@@ -286,7 +307,6 @@ impl Player {
             )
             .await;
         if !self.abilities.lock().await.flying {
-            let height_difference = position.y - last_pos.y;
             self.living_entity
                 .update_fall_distance(
                     height_difference,
@@ -295,7 +315,13 @@ impl Player {
                 )
                 .await;
         }
-        player_chunker::update_position(self).await;
+        chunker::update_position(self).await;
+        self.progress_motion(Vector3::new(
+            position.x - last_pos.x,
+            position.y - last_pos.y,
+            position.z - last_pos.z,
+        ))
+        .await;
     }
 
     pub async fn handle_rotation(&self, rotation: SPlayerRotation) {
@@ -316,7 +342,7 @@ impl Player {
             .store(rotation.ground, std::sync::atomic::Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
-            wrap_degrees(rotation.pitch).clamp(-90.0, 90.0) % 360.0,
+            wrap_degrees(rotation.pitch),
         );
         // send new position to all other players
         let entity_id = entity.entity_id;
@@ -613,9 +639,9 @@ impl Player {
                 return;
             }
 
-            let (update_skin, update_watched) = {
+            let (update_settings, update_watched) = {
                 let mut config = self.config.lock().await;
-                let update_skin = config.main_hand != main_hand
+                let update_settings = config.main_hand != main_hand
                     || config.skin_parts != client_information.skin_parts;
 
                 let old_view_distance = config.view_distance;
@@ -648,14 +674,14 @@ impl Player {
                     text_filtering: client_information.text_filtering,
                     server_listing: client_information.server_listing,
                 };
-                (update_skin, update_watched)
+                (update_settings, update_watched)
             };
 
             if update_watched {
-                player_chunker::update_position(self).await;
+                chunker::update_position(self).await;
             }
 
-            if update_skin {
+            if update_settings {
                 log::debug!(
                     "Player {} ({}) updated their skin.",
                     self.gameprofile.name,
@@ -798,11 +824,14 @@ impl Player {
 
                         if let Ok(block) = block {
                             server
-                                .block_manager
-                                .on_broken(block, &self, location, server)
+                                .block_registry
+                                .broken(block, &self, location, server)
                                 .await;
                         }
                     }
+                    self.client
+                        .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
+                        .await;
                 }
                 Status::CancelledDigging => {
                     if !self.can_interact_with_block_at(&player_action.location, 1.0) {
@@ -815,6 +844,9 @@ impl Player {
                     }
                     self.current_block_destroy_stage
                         .store(0, std::sync::atomic::Ordering::Relaxed);
+                    self.client
+                        .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
+                        .await;
                 }
                 Status::FinishedDigging => {
                     // TODO: do validation
@@ -836,10 +868,13 @@ impl Player {
 
                     if let Ok(block) = block {
                         server
-                            .block_manager
-                            .on_broken(block, &self, location, server)
+                            .block_registry
+                            .broken(block, &self, location, server)
                             .await;
                     }
+                    self.client
+                        .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
+                        .await;
                 }
                 Status::DropItemStack | Status::DropItem => {
                     self.drop_item(server).await;
@@ -850,10 +885,6 @@ impl Player {
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
         }
-
-        self.client
-            .send_packet(&CAcknowledgeBlockChange::new(player_action.sequence))
-            .await;
     }
 
     pub async fn handle_keep_alive(&self, keep_alive: SKeepAlive) {
@@ -931,7 +962,7 @@ impl Player {
             {
                 // Using block with empty hand
                 server
-                    .block_manager
+                    .block_registry
                     .on_use(block, self, location, server)
                     .await;
             }
@@ -949,8 +980,8 @@ impl Player {
             .load(std::sync::atomic::Ordering::Relaxed)
         {
             let action_result = server
-                .block_manager
-                .on_use_with_item(block, self, location, item, server)
+                .block_registry
+                .use_with_item(block, self, location, item, server)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -995,12 +1026,41 @@ impl Player {
         Ok(())
     }
 
-    pub fn handle_use_item(&self, _use_item: &SUseItem) {
+    pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
+        let world = &self.living_entity.entity.world;
+        let updated_sign = Sign::new(
+            sign_data.location,
+            sign_data.is_front_text,
+            [
+                sign_data.line_1,
+                sign_data.line_2,
+                sign_data.line_3,
+                sign_data.line_4,
+            ],
+        );
+
+        world
+            .broadcast_packet_all(&CBlockEntityData::new(
+                sign_data.location,
+                VarInt(block_entity!("sign") as i32),
+                pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign)
+                    .unwrap()
+                    .to_vec(),
+            ))
+            .await;
+    }
+
+    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
-        // TODO: handle packet correctly
-        log::error!("An item was used(SUseItem), but the packet is not implemented yet");
+        if let Some(held) = self.inventory().lock().await.held_item() {
+            // this is so ugly and slow brooo...
+            if let Some(item) = get_item_by_id(held.item_id) {
+                let name = get_name_by_id(item.id).unwrap();
+                server.item_registry.on_use(name, item, self, server).await;
+            }
+        }
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
@@ -1053,8 +1113,8 @@ impl Player {
                 if let Some(pos) = container.get_location() {
                     if let Some(block) = container.get_block() {
                         server
-                            .block_manager
-                            .on_close(&block, self, pos, server, container) //block, self, location, server)
+                            .block_registry
+                            .close(&block, self, pos, server, container) //block, self, location, server)
                             .await;
                     }
                 }
@@ -1263,13 +1323,37 @@ impl Player {
         if !intersects {
             let _replaced_id = world.set_block_state(&final_block_pos, new_state).await;
             server
-                .block_manager
+                .block_registry
                 .on_placed(&block, self, final_block_pos, server)
                 .await;
         }
         self.client
             .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
             .await;
+
+        self.send_sign_packet(block, final_block_pos, face).await;
+
+        // Block was placed successfully, decrement inventory
         Ok(true)
+    }
+
+    /// Checks if block placed was a sign, then opens a dialog
+    async fn send_sign_packet(
+        &self,
+        block: Block,
+        block_position: BlockPos,
+        selected_face: &BlockDirection,
+    ) {
+        if block.states.iter().any(|state| {
+            state.block_entity_type == Some(block_entity!("sign"))
+                || state.block_entity_type == Some(block_entity!("hanging_sign"))
+        }) {
+            self.client
+                .send_packet(&COpenSignEditor::new(
+                    block_position,
+                    selected_face.to_offset().z == 1,
+                ))
+                .await;
+        }
     }
 }

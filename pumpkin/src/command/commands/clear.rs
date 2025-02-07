@@ -9,8 +9,8 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
+use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
-use crate::command::tree_builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use crate::entity::player::Player;
 use CommandError::InvalidConsumption;

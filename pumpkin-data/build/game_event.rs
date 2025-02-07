@@ -12,7 +12,6 @@ pub(crate) fn build() -> TokenStream {
     let variants = array_to_tokenstream(game_events);
 
     quote! {
-        #[repr(u8)]
         pub enum GameEvent {
             #variants
         }

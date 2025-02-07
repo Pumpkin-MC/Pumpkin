@@ -8,8 +8,8 @@ use crate::command::args::command::CommandTreeArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
+use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::tree::{Command, CommandTree};
-use crate::command::tree_builder::{argument, argument_default_name};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 

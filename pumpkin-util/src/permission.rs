@@ -10,7 +10,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// - `Three`:  `admin`: Player or executor can use commands related to multiplayer management.
 /// - `Four`: `owner`: Player or executor can use all of the commands, including commands related to server management.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-#[repr(i8)]
 pub enum PermissionLvl {
     #[default]
     Zero = 0,

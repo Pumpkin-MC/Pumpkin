@@ -22,6 +22,10 @@ pub fn get_item(name: &str) -> Option<&Item> {
     ITEMS.get(&name.replace("minecraft:", ""))
 }
 
+pub fn get_name_by_id<'a>(item_id: u16) -> Option<&'a String> {
+    ITEMS_REGISTRY_NAME_BY_ID.get(&item_id)
+}
+
 pub fn get_item_by_id<'a>(item_id: u16) -> Option<&'a Item> {
     ITEMS.values().find(|&item| item.id == item_id)
 }

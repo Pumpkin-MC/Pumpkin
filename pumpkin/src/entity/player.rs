@@ -11,13 +11,14 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
+    damage::DamageType,
     entity::EntityType,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
-    bytebuf::packet_id::Packet,
+    bytebuf::packet::Packet,
     client::play::{
         CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus, CGameEvent, CHurtAnimation,
         CKeepAlive, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
@@ -28,8 +29,8 @@ use pumpkin_protocol::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
         SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock, SPlayerAbilities,
         SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
-        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUseItem,
-        SUseItemOn,
+        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign,
+        SUseItem, SUseItemOn,
     },
     RawPacket, ServerPacket,
 };
@@ -59,20 +60,22 @@ use pumpkin_util::{
 use pumpkin_world::{
     cylindrical_chunk_iterator::Cylindrical,
     item::{
-        item_registry::{get_item_by_id, Operation},
+        registry::{get_item_by_id, Operation},
         ItemStack,
     },
 };
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use super::{item::ItemEntity, Entity, EntityId, NBTStorage};
+use super::{
+    combat::{self, player_attack_sound, AttackType},
+    hunger::HungerManager,
+    item::ItemEntity,
+    Entity, EntityId, NBTStorage,
+};
 use crate::{
-    command::{client_cmd_suggestions, dispatcher::CommandDispatcher},
+    command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
-    net::{
-        combat::{self, player_attack_sound, AttackType},
-        Client, PlayerConfig,
-    },
+    net::{Client, PlayerConfig},
     server::Server,
     world::World,
 };
@@ -96,10 +99,8 @@ pub struct Player {
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
-    /// The player's hunger level.
-    pub food: AtomicI32,
-    /// The player's food saturation level.
-    pub food_saturation: AtomicCell<f32>,
+    /// The Hunger Manager manages Players hunger level
+    pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
@@ -183,14 +184,14 @@ impl Player {
                 1.62,
                 AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
                 AtomicCell::new(bounding_box_size),
+                matches!(gamemode, GameMode::Creative | GameMode::Spectator),
             )),
             config: Mutex::new(config),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
             // TODO: Load this from previous instance
-            food: AtomicI32::new(20),
-            food_saturation: AtomicCell::new(20.0),
+            hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicU8::new(0),
             open_container: AtomicCell::new(None),
             carried_item: AtomicCell::new(None),
@@ -354,7 +355,7 @@ impl Player {
 
         victim
             .living_entity
-            .damage(damage as f32, 34) // PlayerAttack
+            .damage(damage as f32, DamageType::PlayerAttack) // PlayerAttack
             .await;
 
         let mut knockback_strength = 1.0;
@@ -430,8 +431,10 @@ impl Player {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         self.living_entity.tick();
-        self.tick_client_load_timeout();
+        self.hunger_manager.tick(self).await;
 
+        // timeout/keep alive handling
+        self.tick_client_load_timeout();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
             // We never got a response from our last keep alive we send
             if self
@@ -449,6 +452,29 @@ impl Player {
             self.keep_alive_id
                 .store(id, std::sync::atomic::Ordering::Relaxed);
             self.client.send_packet(&CKeepAlive::new(id)).await;
+        }
+    }
+
+    pub async fn jump(&self) {
+        if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+            self.add_exhaustion(0.2).await;
+        } else {
+            self.add_exhaustion(0.05).await;
+        }
+    }
+
+    #[expect(clippy::cast_precision_loss)]
+    pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
+        // TODO: Swming, Glding...
+        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
+            let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
+            if delta > 0 {
+                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+                    self.add_exhaustion(0.1 * delta as f32 * 0.01).await;
+                } else {
+                    self.add_exhaustion(0.0 * delta as f32 * 0.01).await;
+                }
+            }
         }
     }
 
@@ -482,6 +508,10 @@ impl Player {
 
     pub const fn world(&self) -> &Arc<World> {
         &self.living_entity.entity.world
+    }
+
+    pub fn position(&self) -> Vector3<f64> {
+        self.living_entity.entity.pos.load()
     }
 
     /// Updates the current abilities the Player has
@@ -528,7 +558,7 @@ impl Player {
     ) {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
-        client_cmd_suggestions::send_c_commands_packet(self, command_dispatcher).await;
+        client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
 
     /// Sends the world time to just the player.
@@ -629,13 +659,38 @@ impl Player {
         self.client.close();
     }
 
-    pub async fn set_health(&self, health: f32, food: i32, food_saturation: f32) {
-        self.living_entity.set_health(health).await;
-        self.food.store(food, std::sync::atomic::Ordering::Relaxed);
-        self.food_saturation.store(food_saturation);
+    pub fn can_food_heal(&self) -> bool {
+        let health = self.living_entity.health.load();
+        let max_health = 20.0; // TODO
+        health > 0.0 && health < max_health
+    }
+
+    pub async fn add_exhaustion(&self, exhaustion: f32) {
+        let abilities = self.abilities.lock().await;
+        if abilities.invulnerable {
+            return;
+        }
+        self.hunger_manager.add_exhausten(exhaustion);
+    }
+
+    pub async fn heal(&self, additional_health: f32) {
+        self.living_entity.heal(additional_health).await;
+        self.send_health().await;
+    }
+
+    pub async fn send_health(&self) {
         self.client
-            .send_packet(&CSetHealth::new(health, food.into(), food_saturation))
+            .send_packet(&CSetHealth::new(
+                self.living_entity.health.load(),
+                self.hunger_manager.level.load().into(),
+                self.hunger_manager.saturation.load(),
+            ))
             .await;
+    }
+
+    pub async fn set_health(&self, health: f32) {
+        self.living_entity.set_health(health).await;
+        self.send_health().await;
     }
 
     pub fn tick_client_load_timeout(&self) {
@@ -671,6 +726,11 @@ impl Player {
             abilities.set_for_gamemode(gamemode);
         };
         self.send_abilities_update().await;
+
+        self.living_entity.entity.invulnerable.store(
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.living_entity
             .entity
             .world
@@ -682,6 +742,7 @@ impl Player {
                 }],
             ))
             .await;
+
         #[allow(clippy::cast_precision_loss)]
         self.client
             .send_packet(&CGameEvent::new(
@@ -980,11 +1041,17 @@ impl Player {
             SSwingArm::PACKET_ID => {
                 self.handle_swing_arm(SSwingArm::read(bytebuf)?).await;
             }
+            SUpdateSign::PACKET_ID => {
+                self.handle_sign_update(SUpdateSign::read(bytebuf)?).await;
+            }
             SUseItemOn::PACKET_ID => {
                 self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
                     .await?;
             }
-            SUseItem::PACKET_ID => self.handle_use_item(&SUseItem::read(bytebuf)?),
+            SUseItem::PACKET_ID => {
+                self.handle_use_item(&SUseItem::read(bytebuf)?, server)
+                    .await;
+            }
             SCommandSuggestion::PACKET_ID => {
                 self.handle_command_suggestion(SCommandSuggestion::read(bytebuf)?, server)
                     .await;
@@ -1078,7 +1145,7 @@ impl Abilities {
     pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {
-                self.flying = false; // Start not flying
+                // self.flying = false; // Start not flying
                 self.allow_flying = true;
                 self.creative = true;
                 self.invulnerable = true;
@@ -1089,7 +1156,7 @@ impl Abilities {
                 self.creative = false;
                 self.invulnerable = true;
             }
-            GameMode::Survival | GameMode::Adventure | GameMode::Undefined => {
+            _ => {
                 self.flying = false;
                 self.allow_flying = false;
                 self.creative = false;
@@ -1101,7 +1168,6 @@ impl Abilities {
 
 /// Represents the player's dominant hand.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
 pub enum Hand {
     /// Usually the player's off-hand.
     Left,

@@ -8,12 +8,12 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
-    block::block_registry::{get_block, Block},
-    item::item_registry::Item,
+    block::registry::{get_block, Block},
+    item::registry::Item,
 };
 
 use crate::{
-    block::{block_manager::BlockActionResult, pumpkin_block::PumpkinBlock},
+    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,
     server::Server,
 };
@@ -29,7 +29,7 @@ pub struct ChestBlock;
 
 #[async_trait]
 impl PumpkinBlock for ChestBlock {
-    async fn on_use<'a>(
+    async fn normal_use(
         &self,
         block: &Block,
         player: &Player,
@@ -40,7 +40,7 @@ impl PumpkinBlock for ChestBlock {
             .await;
     }
 
-    async fn on_use_with_item<'a>(
+    async fn use_with_item(
         &self,
         block: &Block,
         player: &Player,
@@ -53,17 +53,11 @@ impl PumpkinBlock for ChestBlock {
         BlockActionResult::Consume
     }
 
-    async fn on_broken<'a>(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        server: &Server,
-    ) {
+    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
 
-    async fn on_close<'a>(
+    async fn close(
         &self,
         _block: &Block,
         player: &Player,

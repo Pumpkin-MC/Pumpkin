@@ -5,7 +5,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[client_packet(STATUS_PONG_RESPONSE)]
 pub struct CPingResponse {
-    payload: i64, // must responde with the same as in `SPingRequest`
+    payload: i64, // must respond with the same as in `SPingRequest`
 }
 
 impl CPingResponse {

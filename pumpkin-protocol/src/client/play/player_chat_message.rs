@@ -67,12 +67,11 @@ pub struct PreviousMessage<'a> {
 }
 
 #[derive(Serialize)]
-#[repr(i32)]
 pub enum FilterType {
     /// Message is not filtered at all
-    PassThrough = 0,
+    PassThrough,
     /// Message is fully filtered
-    FullyFiltered = 1,
+    FullyFiltered,
     /// Only some characters in the message are filtered
-    PartiallyFiltered(BitSet) = 2,
+    PartiallyFiltered(BitSet),
 }

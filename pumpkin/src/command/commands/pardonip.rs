@@ -3,8 +3,8 @@ use std::{net::IpAddr, str::FromStr};
 use crate::{
     command::{
         args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{banned_ip_data::BANNED_IP_LIST, SaveJSONConfiguration},

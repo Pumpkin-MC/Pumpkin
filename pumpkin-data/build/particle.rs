@@ -12,7 +12,6 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        #[repr(u8)]
         pub enum Particle {
             #variants
         }

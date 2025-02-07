@@ -8,7 +8,7 @@ use serde::Serialize;
 pub struct CTakeItemEntity {
     /// The Entity ID of the Item Entity
     entity_id: VarInt,
-    /// The Entity ID of the Entitiy who is collecting the Item
+    /// The Entity ID of the Entity who is collecting the Item
     collector_entity_id: VarInt,
     /// The Number of items in the Stack
     stack_amount: VarInt,

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct AuthenticationConfig {
     /// Whether to use Mojang authentication.
     pub enabled: bool,
-    pub auth_url: Option<String>,
+    pub url: Option<String>,
     pub connect_timeout: u32,
     pub read_timeout: u32,
     pub prevent_proxy_connections: bool,
@@ -24,7 +24,7 @@ impl Default for AuthenticationConfig {
             prevent_proxy_connections: false,
             player_profile: Default::default(),
             textures: Default::default(),
-            auth_url: None,
+            url: None,
             prevent_proxy_connection_auth_url: None,
             connect_timeout: 5000,
             read_timeout: 5000,

@@ -1,9 +1,14 @@
+// Not warn event sending macros
+#![allow(unused_labels)]
+
 use crate::net::{lan_broadcast, query, rcon::RCONServer, Client};
 use crate::server::{ticker::Ticker, Server};
+use log::{LevelFilter, Log};
 use plugin::PluginManager;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_util::text::TextComponent;
 use rustyline::DefaultEditor;
+use simple_logger::SimpleLogger;
 use std::{
     net::SocketAddr,
     sync::{Arc, LazyLock},
@@ -19,6 +24,7 @@ pub mod command;
 pub mod data;
 pub mod entity;
 pub mod error;
+pub mod item;
 pub mod net;
 pub mod plugin;
 pub mod server;
@@ -28,6 +34,43 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 
 pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
+
+pub static LOGGER_IMPL: LazyLock<Option<(Box<dyn Log>, LevelFilter)>> = LazyLock::new(|| {
+    if ADVANCED_CONFIG.logging.enabled {
+        let mut logger = SimpleLogger::new();
+
+        if ADVANCED_CONFIG.logging.timestamp {
+            logger = logger.with_timestamp_format(time::macros::format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second]"
+            ));
+        } else {
+            logger = logger.without_timestamps();
+        }
+
+        Some((
+            Box::new(
+                logger
+                    .with_level(LevelFilter::Info)
+                    .with_colors(ADVANCED_CONFIG.logging.color)
+                    .with_threads(ADVANCED_CONFIG.logging.threads)
+                    .env(),
+            ),
+            LevelFilter::Info,
+        ))
+    } else {
+        None
+    }
+});
+
+#[macro_export]
+macro_rules! init_log {
+    () => {
+        if let Some((logger_impl, level)) = &*pumpkin::LOGGER_IMPL {
+            log::set_max_level(*level);
+            log::set_logger(logger_impl).unwrap();
+        }
+    };
+}
 
 pub struct PumpkinServer {
     pub server: Arc<Server>,

@@ -61,11 +61,12 @@ impl CachedBranding {
     pub fn get_branding(&self) -> CPluginMessage {
         CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
     }
+    const BRAND: &str = "Pumpkin";
+    const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
     fn build_brand() -> Vec<u8> {
-        let brand = "Pumpkin";
         let mut buf = Vec::new();
-        VarInt(brand.len() as i32).encode(&mut buf);
-        buf.extend_from_slice(brand.as_bytes());
+        VarInt(Self::BRAND.len() as i32).encode(&mut buf);
+        buf.extend_from_slice(Self::BRAND_BYTES);
         buf
     }
 }

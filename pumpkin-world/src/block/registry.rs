@@ -104,10 +104,9 @@ pub fn get_block_collision_shapes(block_id: u16) -> Option<Vec<Shape>> {
     Some(shapes)
 }
 
-#[expect(dead_code)]
 #[derive(Deserialize, Clone)]
 pub struct TopLevel {
-    block_entity_types: Vec<String>,
+    pub block_entity_types: Vec<String>,
     shapes: Vec<Shape>,
     pub blocks: Vec<Block>,
 }

@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use dashmap::{DashMap, Entry};
 use num_traits::Zero;
+use pumpkin_config::{chunk::ChunkFormat, ADVANCED_CONFIG};
 use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::{
@@ -11,8 +12,8 @@ use tokio::{
 
 use crate::{
     chunk::{
-        anvil::AnvilChunkFormat, ChunkData, ChunkParsingError, ChunkReader, ChunkReadingError,
-        ChunkWriter,
+        anvil::AnvilChunkFormat, linear::LinearChunkFormat, ChunkData, ChunkParsingError,
+        ChunkReader, ChunkReadingError, ChunkWriter,
     },
     generation::{get_world_gen, Seed, WorldGenerator},
     lock::{anvil::AnvilLevelLocker, LevelLocker},
@@ -72,13 +73,19 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
+        let chunk_format: (Arc<dyn ChunkReader>, Arc<dyn ChunkWriter>) =
+            match ADVANCED_CONFIG.chunk.format {
+                ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
+                ChunkFormat::Linear => (Arc::new(LinearChunkFormat), Arc::new(LinearChunkFormat)),
+            };
+
         Self {
             seed,
             world_gen,
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
-            chunk_reader: Arc::new(AnvilChunkFormat),
-            chunk_writer: Arc::new(AnvilChunkFormat),
+            chunk_reader: chunk_format.0,
+            chunk_writer: chunk_format.1,
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
@@ -235,7 +242,7 @@ impl Level {
     pub fn fetch_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        channel: mpsc::Sender<Arc<RwLock<ChunkData>>>,
+        channel: mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>,
         rt: &Handle,
     ) {
         chunks.par_iter().for_each(|at| {
@@ -246,11 +253,14 @@ impl Level {
             let level_folder = self.level_folder.clone();
             let world_gen = self.world_gen.clone();
             let chunk_pos = *at;
+            let mut first_load = false;
 
             let chunk = loaded_chunks
                 .get(&chunk_pos)
                 .map(|entry| entry.value().clone())
                 .unwrap_or_else(|| {
+                    first_load = true;
+
                     let loaded_chunk =
                         match Self::load_chunk_from_save(chunk_reader, &level_folder, chunk_pos) {
                             Ok(chunk) => {
@@ -299,7 +309,7 @@ impl Level {
 
             rt.spawn(async move {
                 let _ = channel
-                    .send(chunk)
+                    .send((chunk, first_load))
                     .await
                     .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
             });

@@ -34,16 +34,12 @@ impl ArgumentConsumer for GamemodeArgumentConsumer {
         let s = args.pop()?;
 
         if let Ok(id) = s.parse::<i8>() {
-            match GameMode::from(id) {
-                GameMode::Undefined => {}
-                gamemode => return Some(Arg::GameMode(gamemode)),
-            };
+            if let Ok(gamemode) = GameMode::try_from(id) {
+                return Some(Arg::GameMode(gamemode));
+            }
         };
 
-        match GameMode::from_str(s) {
-            Err(_) | Ok(GameMode::Undefined) => None,
-            Ok(gamemode) => Some(Arg::GameMode(gamemode)),
-        }
+        GameMode::from_str(s).map_or_else(|_| None, |gamemode| Some(Arg::GameMode(gamemode)))
     }
 
     async fn suggest<'a>(

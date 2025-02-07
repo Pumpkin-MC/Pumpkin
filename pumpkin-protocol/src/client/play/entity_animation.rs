@@ -22,7 +22,6 @@ impl CEntityAnimation {
 }
 
 #[derive(Debug)]
-#[repr(u8)]
 pub enum Animation {
     SwingMainArm,
     LeaveBed = 2,

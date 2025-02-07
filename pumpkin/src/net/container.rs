@@ -16,7 +16,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_world::item::registry::Item;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 

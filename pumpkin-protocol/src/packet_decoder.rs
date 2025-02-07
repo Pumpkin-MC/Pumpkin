@@ -10,9 +10,9 @@ use crate::{
 
 type Cipher = cfb8::Decryptor<aes::Aes128>;
 
-// Decoder: Client -> Server
-// Supports ZLib decoding/decompression
-// Supports Aes128 Encryption
+/// Decoder: Client -> Server
+/// Supports ZLib decoding/decompression
+/// Supports Aes128 Encryption
 #[derive(Default)]
 pub struct PacketDecoder {
     buf: BytesMut,
