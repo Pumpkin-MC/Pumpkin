@@ -6,9 +6,9 @@ use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::{deserializer::from_bytes, LongArray};
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Write, iter::repeat_with};
 use std::{
     collections::HashMap,
+    io::Write,
     iter::repeat_with,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
