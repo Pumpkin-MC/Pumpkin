@@ -1,5 +1,4 @@
 use bytes::*;
-use fastnbt::LongArray;
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
@@ -434,7 +433,7 @@ impl AnvilChunkFormat {
             sections.push(ChunkSection {
                 y: i as i8 - 4,
                 block_states: Some(ChunkSectionBlockStates {
-                    data: Some(LongArray::new(section_longs)),
+                    data: Some(section_longs),
                     palette: palette
                         .into_iter()
                         .map(|entry| PaletteEntry {

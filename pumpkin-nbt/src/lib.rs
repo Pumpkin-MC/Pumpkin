@@ -294,7 +294,19 @@ mod test {
     }
 
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Egg {
+        food: String,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Breakfast {
+        food: Egg,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct TestList {
+        option: Option<Egg>,
+        nested_compound: Breakfast,
         compounds: Vec<Test>,
         list_string: Vec<String>,
         empty: Vec<Test>,
@@ -321,12 +333,21 @@ mod test {
         };
 
         let list_compound = TestList {
+            option: Some(Egg {
+                food: "Skibid".to_string(),
+            }),
+            nested_compound: Breakfast {
+                food: Egg {
+                    food: "Over easy".to_string(),
+                },
+            },
             compounds: vec![test1, test2],
             list_string: vec!["".to_string(), "abcbcbcbbc".to_string()],
             empty: vec![],
         };
 
         let mut bytes = to_bytes_unnamed(&list_compound).unwrap();
+        println!("{:02x?}", bytes.clone().into_iter().collect::<Vec<u8>>());
         let recreated_struct: TestList = from_bytes_unnamed(&mut bytes).unwrap();
         assert_eq!(list_compound, recreated_struct);
     }
@@ -352,6 +373,12 @@ mod test {
         };
 
         let list_compound = TestList {
+            option: None,
+            nested_compound: Breakfast {
+                food: Egg {
+                    food: "Over easy".to_string(),
+                },
+            },
             compounds: vec![test1, test2],
             list_string: vec!["".to_string(), "abcbcbcbbc".to_string()],
             empty: vec![],

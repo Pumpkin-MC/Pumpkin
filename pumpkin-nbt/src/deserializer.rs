@@ -1,6 +1,6 @@
 use crate::*;
 use bytes::Buf;
-use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{forward_to_deserialize_any, Deserialize};
 use std::io::Cursor;
 
@@ -60,7 +60,7 @@ where
 impl<'de, T: Buf> de::Deserializer<'de> for &mut Deserializer<'de, T> {
     type Error = Error;
 
-    forward_to_deserialize_any!(i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 seq char str string bytes byte_buf tuple tuple_struct enum ignored_any unit unit_struct option newtype_struct);
+    forward_to_deserialize_any!(i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 seq char str string bytes byte_buf tuple tuple_struct newtype_struct ignored_any unit unit_struct);
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
     where
@@ -145,6 +145,27 @@ impl<'de, T: Buf> de::Deserializer<'de> for &mut Deserializer<'de, T> {
         V: Visitor<'de>,
     {
         self.deserialize_map(visitor)
+    }
+
+    //Only does unit variants for now, until someone decides it is time
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let variant = get_nbt_string(self.input).map_err(|_| Error::Cesu8DecodingError)?;
+        visitor.visit_enum(variant.into_deserializer()) //Only work for unit variants
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_some(self) //None is not encoded, so no need for it
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>

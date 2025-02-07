@@ -36,8 +36,6 @@ indexmap = "2.7.1"
 
 enum_dispatch = "0.3.13"
 
-fastnbt = { git = "https://github.com/owengage/fastnbt.git" }
-
 noise = "0.9.0"
 
 rand = "0.8.5"

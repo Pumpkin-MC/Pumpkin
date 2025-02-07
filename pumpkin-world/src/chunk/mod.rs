@@ -1,9 +1,8 @@
-use fastnbt::LongArray;
 use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_nbt::deserializer::from_bytes_unnamed;
+use pumpkin_nbt::{deserializer::from_bytes, LongArray};
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Cursor, iter::repeat_with};
+use std::{collections::HashMap, io::Write, iter::repeat_with};
 use thiserror::Error;
 
 use crate::{
@@ -127,10 +126,10 @@ struct PaletteEntry {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
-    // #[serde(with = "LongArray")]
-    motion_blocking: LongArray,
-    // #[serde(with = "LongArray")]
-    world_surface: LongArray,
+    #[serde(with = "LongArray")]
+    motion_blocking: Vec<i64>,
+    #[serde(with = "LongArray")]
+    world_surface: Vec<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -142,8 +141,8 @@ struct ChunkSection {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct ChunkSectionBlockStates {
-    //  #[serde(with = "LongArray")]
-    data: Option<LongArray>,
+    #[serde(with = "LongArray")]
+    data: Option<Vec<i64>>,
     palette: Vec<PaletteEntry>,
 }
 
@@ -168,8 +167,8 @@ impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
             // 0 packed into an i64 7 times.
-            motion_blocking: LongArray::new(vec![0; 37]),
-            world_surface: LongArray::new(vec![0; 37]),
+            motion_blocking: vec![0; 37],
+            world_surface: vec![0; 37],
         }
     }
 }
@@ -324,30 +323,28 @@ impl ChunkData {
     }
 }
 
-// I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct ChunkStatusWrapper {
-    status: ChunkStatus,
-}
-
 impl ChunkData {
     pub fn from_bytes(
         mut chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_clone = chunk_data.to_vec();
-        let mut cursor = Cursor::new(chunk_clone);
-        if from_bytes_unnamed::<ChunkStatusWrapper>(&mut cursor)
-            .map_err(|_| ChunkParsingError::FailedReadStatus)?
-            .status
-            != ChunkStatus::Full
-        {
+        // if from_bytes_unnamed::<ChunkStatusWrapper>(&mut chunk_data)
+        //     .map_err(|_| ChunkParsingError::FailedReadStatus)?
+        //     .status
+        //     != ChunkStatus::Full
+        // {
+        //     return Err(ChunkParsingError::ChunkNotGenerated);
+        // }
+
+        let mut file = std::fs::File::create("a.nbt").unwrap();
+        file.write_all(chunk_data).unwrap();
+
+        let chunk_data = from_bytes::<ChunkNbt>(&mut chunk_data)
+            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+
+        if chunk_data.status != ChunkStatus::Full {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
-
-        let chunk_data = from_bytes_unnamed::<ChunkNbt>(&mut chunk_data)
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
             log::error!(
