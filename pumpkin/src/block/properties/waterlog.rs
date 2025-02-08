@@ -27,8 +27,8 @@ impl BlockProperty for Waterlogged {
         _other: bool,
     ) -> String {
         if block.name == "water" {
-            return Waterlogged::True.value();
+            return Self::True.value();
         }
-        Waterlogged::False.value()
+        Self::False.value()
     }
 }

@@ -266,7 +266,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let values = variants.clone().enumerate().map(|(i, v)| {
         let mut value = v.to_string().to_snake_case();
-        if property_values.len() > 0 && i < property_values.len() {
+        if !property_values.is_empty() && i < property_values.len() {
             value = property_values[i].to_string();
         }
         quote! {
@@ -276,7 +276,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let from_values = variants.clone().enumerate().map(|(i, v)| {
         let mut value = v.to_string().to_lowercase();
-        if property_values.len() > 0 && i < property_values.len() {
+        if !property_values.is_empty() && i < property_values.len() {
             value = property_values[i].to_string();
         }
         quote! {

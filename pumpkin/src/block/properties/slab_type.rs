@@ -33,15 +33,15 @@ impl BlockProperty for SlabType {
         let clicked_block = world.get_block(block_pos).await.unwrap();
 
         if block.id == clicked_block.id && !other {
-            return SlabType::Double.value();
+            return Self::Double.value();
         }
 
         let y_pos = use_item_on.cursor_pos.y;
         if (y_pos > 0.5 && face != &BlockDirection::Bottom) || face == &BlockDirection::Top {
-            return SlabType::Top.value();
+            return Self::Top.value();
         }
 
-        SlabType::Bottom.value()
+        Self::Bottom.value()
     }
 
     async fn can_update(
@@ -56,25 +56,23 @@ impl BlockProperty for SlabType {
         if other {
             let y = use_item_on.cursor_pos.y;
             match face {
-                BlockDirection::Top => return value == SlabType::Bottom.value(),
-                BlockDirection::Bottom => return value == SlabType::Top.value(),
+                BlockDirection::Top => return value == Self::Bottom.value(),
+                BlockDirection::Bottom => return value == Self::Top.value(),
                 _ => {
                     if y < 0.5 {
-                        return value == SlabType::Top.value();
-                    } else {
-                        return value == SlabType::Bottom.value();
+                        return value == Self::Top.value();
                     }
+                    return value == Self::Bottom.value();
                 }
             }
-        } else {
-            if value == SlabType::Double.value() {
-                return false;
-            }
-            match face {
-                BlockDirection::Top => value == SlabType::Bottom.value(),
-                BlockDirection::Bottom => value == SlabType::Top.value(),
-                _ => false,
-            }
+        }
+        if value == Self::Double.value() {
+            return false;
+        }
+        match face {
+            BlockDirection::Top => value == Self::Bottom.value(),
+            BlockDirection::Bottom => value == Self::Top.value(),
+            _ => false,
         }
     }
 }

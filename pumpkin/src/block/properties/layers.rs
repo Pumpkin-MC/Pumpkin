@@ -46,11 +46,11 @@ impl BlockProperty for Layers {
                 let mut layer: u8 = property.parse().unwrap();
                 // lets add a new layer
                 layer += 1;
-                return Layers::from_value(layer.to_string()).value();
+                return Self::from_value(layer.to_string()).value();
             }
         }
 
-        Layers::Lay1.value()
+        Self::Lay1.value()
     }
 
     async fn can_update(
@@ -62,10 +62,10 @@ impl BlockProperty for Layers {
         _use_item_on: &SUseItemOn,
         other: bool,
     ) -> bool {
-        if value == Layers::Lay8.value() {
+        if value == Self::Lay8.value() {
             return false;
         }
-        if value == Layers::Lay1.value() {
+        if value == Self::Lay1.value() {
             return true;
         }
         if !other {

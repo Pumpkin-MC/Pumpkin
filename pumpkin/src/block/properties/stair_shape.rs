@@ -32,7 +32,7 @@ impl BlockProperty for StairShape {
         properties: &BlockProperties,
         _other: bool,
     ) -> String {
-        let block_half = evaluate_half(face, use_item_on);
+        let block_half = evaluate_half(*face, use_item_on);
         let (front_block_pos, back_block_pos) = calculate_positions(player_direction, block_pos);
 
         let front_block_and_state = world.get_block_and_block_state(&front_block_pos).await;
@@ -45,7 +45,7 @@ impl BlockProperty for StairShape {
 
                     let key = state.id - block.states[0].id;
                     if let Some(properties) = properties.property_mappings.get(&key) {
-                        if properties.contains(&StairShape::Straight.value())
+                        if properties.contains(&Self::Straight.value())
                             && properties.contains(&block_half)
                         {
                             let is_facing_north = properties.contains(&Facing::North.value());
@@ -58,7 +58,7 @@ impl BlockProperty for StairShape {
                                 || (is_facing_south && *player_direction == Direction::East)
                                 || (is_facing_east && *player_direction == Direction::North)
                             {
-                                return StairShape::OuterRight.value();
+                                return Self::OuterRight.value();
                             }
 
                             if (is_facing_north && *player_direction == Direction::East)
@@ -66,7 +66,7 @@ impl BlockProperty for StairShape {
                                 || (is_facing_south && *player_direction == Direction::West)
                                 || (is_facing_east && *player_direction == Direction::South)
                             {
-                                return StairShape::OuterLeft.value();
+                                return Self::OuterLeft.value();
                             }
                         }
                     }
@@ -86,7 +86,7 @@ impl BlockProperty for StairShape {
 
                     let key = state.id - block.states[0].id;
                     if let Some(properties) = properties.property_mappings.get(&key) {
-                        if properties.contains(&StairShape::Straight.value())
+                        if properties.contains(&Self::Straight.value())
                             && properties.contains(&block_half)
                         {
                             let is_facing_north = properties.contains(&Facing::North.value());
@@ -99,7 +99,7 @@ impl BlockProperty for StairShape {
                                 || (is_facing_south && *player_direction == Direction::East)
                                 || (is_facing_east && *player_direction == Direction::North)
                             {
-                                return StairShape::InnerRight.value();
+                                return Self::InnerRight.value();
                             }
 
                             if (is_facing_north && *player_direction == Direction::East)
@@ -107,7 +107,7 @@ impl BlockProperty for StairShape {
                                 || (is_facing_south && *player_direction == Direction::West)
                                 || (is_facing_east && *player_direction == Direction::South)
                             {
-                                return StairShape::InnerLeft.value();
+                                return Self::InnerLeft.value();
                             }
                         }
                     }
@@ -124,7 +124,7 @@ impl BlockProperty for StairShape {
         //       We should implement a block update mechanism (e.g., tracking state changes and triggering
         //       a server-wide or chunk-level update) so that neighbors properly recalculate their shape.
 
-        StairShape::Straight.value()
+        Self::Straight.value()
     }
 }
 

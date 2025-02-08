@@ -26,11 +26,11 @@ impl BlockProperty for Half {
         _properties: &BlockProperties,
         _other: bool,
     ) -> String {
-        evaluate_half(face, use_item_on)
+        evaluate_half(*face, use_item_on)
     }
 }
 
-pub fn evaluate_half(face: &BlockDirection, use_item_on: &SUseItemOn) -> String {
+pub fn evaluate_half(face: BlockDirection, use_item_on: &SUseItemOn) -> String {
     match face {
         BlockDirection::Bottom => Half::Bottom.value(),
         BlockDirection::Top => Half::Top.value(),

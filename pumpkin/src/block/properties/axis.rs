@@ -28,9 +28,9 @@ impl BlockProperty for Axis {
         _other: bool,
     ) -> String {
         match face {
-            BlockDirection::North | BlockDirection::South => Axis::Z.value(),
-            BlockDirection::East | BlockDirection::West => Axis::X.value(),
-            BlockDirection::Top | BlockDirection::Bottom => Axis::Y.value(),
+            BlockDirection::North | BlockDirection::South => Self::Z.value(),
+            BlockDirection::East | BlockDirection::West => Self::X.value(),
+            BlockDirection::Top | BlockDirection::Bottom => Self::Y.value(),
         }
     }
 }

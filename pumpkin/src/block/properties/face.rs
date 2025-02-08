@@ -28,9 +28,9 @@ impl BlockProperty for Face {
         _other: bool,
     ) -> String {
         let face = match face {
-            BlockDirection::Top => Face::Ceiling,
-            BlockDirection::Bottom => Face::Floor,
-            _ => Face::Wall,
+            BlockDirection::Top => Self::Ceiling,
+            BlockDirection::Bottom => Self::Floor,
+            _ => Self::Wall,
         };
         face.value()
     }

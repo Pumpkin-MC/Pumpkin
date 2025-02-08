@@ -1206,6 +1206,7 @@ impl Player {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
         block: Block,
@@ -1259,8 +1260,8 @@ impl Player {
         let mut updateable = server
             .block_properties_manager
             .can_update(
-                &clicked_block,
-                &clicked_block_state,
+                clicked_block,
+                clicked_block_state,
                 face,
                 &use_item_on,
                 false,

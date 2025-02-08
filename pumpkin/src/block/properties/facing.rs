@@ -30,15 +30,15 @@ impl BlockProperty for Facing {
     ) -> String {
         // Some blocks have also facing with top and bottom
         let facing = match face {
-            BlockDirection::North => Facing::North,
-            BlockDirection::South => Facing::South,
-            BlockDirection::East => Facing::East,
-            BlockDirection::West => Facing::West,
+            BlockDirection::North => Self::North,
+            BlockDirection::South => Self::South,
+            BlockDirection::East => Self::East,
+            BlockDirection::West => Self::West,
             BlockDirection::Top | BlockDirection::Bottom => match player_direction {
-                Direction::North => Facing::North,
-                Direction::South => Facing::South,
-                Direction::East => Facing::East,
-                Direction::West => Facing::West,
+                Direction::North => Self::North,
+                Direction::South => Self::South,
+                Direction::East => Self::East,
+                Direction::West => Self::West,
             },
         };
         facing.value()

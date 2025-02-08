@@ -29,15 +29,15 @@ impl BlockProperty for Attachment {
         _other: bool,
     ) -> String {
         match face {
-            BlockDirection::Top => Attachment::Ceiling.value(),
-            BlockDirection::Bottom => Attachment::Floor.value(),
+            BlockDirection::Top => Self::Ceiling.value(),
+            BlockDirection::Bottom => Self::Floor.value(),
             _ => {
                 let other_side_block = BlockPos(block_pos.0.sub(&face.to_offset()));
                 let block = world.get_block(&other_side_block).await.unwrap();
                 if block.id != 0 {
-                    return Attachment::DoubleWall.value();
+                    return Self::DoubleWall.value();
                 }
-                Attachment::SingleWall.value()
+                Self::SingleWall.value()
             }
         }
     }

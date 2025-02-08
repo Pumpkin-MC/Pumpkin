@@ -42,6 +42,7 @@ pub trait BlockPropertyMetadata: Sync + Send {
 }
 
 #[async_trait]
+#[allow(clippy::too_many_arguments)]
 pub trait BlockProperty: Sync + Send + BlockPropertyMetadata {
     async fn on_place(
         &self,
@@ -111,9 +112,7 @@ impl BlockPropertiesManager {
                 let key: Vec<String> = combination
                     .iter()
                     .enumerate()
-                    .map(|(prop_idx, &state_idx)| {
-                        format!("{}", properties[prop_idx].values[state_idx])
-                    })
+                    .map(|(prop_idx, &state_idx)| properties[prop_idx].values[state_idx].clone())
                     .collect();
 
                 forward_map.insert(key.clone(), i as u16);
@@ -145,12 +144,18 @@ impl BlockPropertiesManager {
         if let Some(properties) = self.properties_registry.get(&block.id) {
             let key = block_state.id - block.states[0].id;
             let property_states = properties.property_mappings.get(&key).unwrap();
-            for i in 0..property_states.len() {
+            for (i, property_value) in property_states.iter().enumerate() {
                 let property_name = block.properties[i].name.clone();
-                let property_value = property_states[i].clone();
                 if let Some(property) = self.registered_properties.get(&property_name) {
                     if property
-                        .can_update(property_value, block, block_state, face, use_item_on, other)
+                        .can_update(
+                            property_value.clone(),
+                            block,
+                            block_state,
+                            face,
+                            use_item_on,
+                            other,
+                        )
                         .await
                     {
                         return true;
@@ -161,6 +166,7 @@ impl BlockPropertiesManager {
         false
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn on_place_state(
         &self,
         world: &World,
