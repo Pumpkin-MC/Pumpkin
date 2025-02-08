@@ -1,3 +1,4 @@
+use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
@@ -234,6 +235,74 @@ pub fn pumpkin_item(input: TokenStream, item: TokenStream) -> TokenStream {
         impl #impl_generics crate::item::pumpkin_item::ItemMetadata for #name #ty_generics {
             const NAMESPACE: &'static str = #namespace;
             const ID: &'static str = #id;
+        }
+    };
+
+    gen.into()
+}
+
+#[proc_macro_attribute]
+pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
+    let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
+    let name = &ast.ident;
+    let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
+
+    let input_string = input.to_string();
+    let input_parts: Vec<&str> = input_string.split("[").collect();
+    let property_name = input_parts[0].trim_ascii().trim_matches(&['"', ','][..]);
+    let mut property_values: Vec<&str> = Vec::new();
+    if input_parts.len() > 1 {
+        property_values = input_parts[1]
+            .trim_matches(']')
+            .split(", ")
+            .map(|p| p.trim_ascii().trim_matches(&['"', ','][..]))
+            .collect::<Vec<&str>>();
+    }
+
+    let item: proc_macro2::TokenStream = item.into();
+
+    let variants = match ast.data {
+        syn::Data::Enum(enum_item) => enum_item.variants.into_iter().map(|v| v.ident),
+        _ => panic!("Block properties can only be enums"),
+    };
+
+    let values = variants.clone().enumerate().map(|(i, v)| {
+        let mut value = v.to_string().to_snake_case();
+        if property_values.len() > 0 && i < property_values.len() {
+            value = property_values[i].to_string();
+        }
+        quote! {
+            Self::#v => #value.to_string(),
+        }
+    });
+
+    let from_values = variants.clone().enumerate().map(|(i, v)| {
+        let mut value = v.to_string().to_lowercase();
+        if property_values.len() > 0 && i < property_values.len() {
+            value = property_values[i].to_string();
+        }
+        quote! {
+            #value => Self::#v,
+        }
+    });
+
+    let gen = quote! {
+        #item
+        impl #impl_generics crate::block::properties::BlockPropertyMetadata for #name #ty_generics {
+            fn name(&self) -> &'static str {
+                #property_name
+            }
+            fn value(&self) -> String {
+                match self {
+                    #(#values)*
+                }
+            }
+            fn from_value(value: String) -> Self {
+                match value.as_str() {
+                    #(#from_values)*
+                    _ => panic!("Invalid value for block property"),
+                }
+            }
         }
     };
 
