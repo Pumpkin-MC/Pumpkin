@@ -14,11 +14,13 @@ pub struct DamageTypeArgumentConsumer;
 
 impl GetClientSideArgParser for DamageTypeArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
-        ArgumentType::ResourceLocation
+        ArgumentType::Resource {
+            identifier: "damage_type",
+        }
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
-        Some(SuggestionProviders::AskServer)
+        None
     }
 }
 
@@ -30,15 +32,12 @@ impl ArgumentConsumer for DamageTypeArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        let name = args.pop()?;
 
         // Create a static damage type first
-        let damage_type = DamageType::from_name(s)?;
+        let damage_type = DamageType::from_name(name)?;
         // Find matching static damage type from values array
-        DamageType::values()
-            .iter()
-            .find(|&&dt| std::mem::discriminant(&dt) == std::mem::discriminant(&damage_type))
-            .map(Arg::DamageType)
+        Some(Arg::DamageType(damage_type))
     }
 
     async fn suggest<'a>(
@@ -47,12 +46,7 @@ impl ArgumentConsumer for DamageTypeArgumentConsumer {
         _server: &'a Server,
         _input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        // Get all available damage types
-        let suggestions = DamageType::values()
-            .iter()
-            .map(|dt| CommandSuggestion::new(dt.to_name().to_string(), None))
-            .collect();
-        Ok(Some(suggestions))
+        Ok(None)
     }
 }
 

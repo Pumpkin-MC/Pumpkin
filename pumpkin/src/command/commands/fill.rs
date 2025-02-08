@@ -41,7 +41,7 @@ impl CommandExecutor for SetblockExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
@@ -67,7 +67,9 @@ impl CommandExecutor for SetblockExecutor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3 { x, y, z });
-                            world.break_block(&block_position, None).await;
+                            world
+                                .break_block(server, &block_position, None, false)
+                                .await;
                             world.set_block_state(&block_position, block_state_id).await;
                             placed_blocks += 1;
                         }

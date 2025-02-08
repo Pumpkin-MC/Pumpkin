@@ -2,10 +2,10 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
-use pumpkin_world::item::registry::Item;
 
 pub trait BlockMetadata {
     const NAMESPACE: &'static str;

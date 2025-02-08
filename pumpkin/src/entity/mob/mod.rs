@@ -64,7 +64,7 @@ pub async fn from_type(
     };
     #[expect(clippy::single_match)]
     match entity_type {
-        EntityType::Zombie => Zombie::make(&mob).await,
+        EntityType::ZOMBIE => Zombie::make(&mob).await,
         // TODO
         _ => (),
     }

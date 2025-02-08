@@ -6,10 +6,11 @@ use crate::item::pumpkin_item::PumpkinItem;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_macros::pumpkin_item;
-use pumpkin_world::item::registry::Item;
-#[pumpkin_item("minecraft:snowball")]
+
+#[pumpkin_item("snowball")]
 pub struct SnowBallItem;
 
 const POWER: f32 = 1.5;
@@ -26,7 +27,7 @@ impl PumpkinItem for SnowBallItem {
                 &position,
             )
             .await;
-        let entity = server.add_entity(position, EntityType::Snowball, world);
+        let entity = server.add_entity(position, EntityType::SNOWBALL, world);
         let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();

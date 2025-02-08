@@ -19,7 +19,6 @@ impl CGameEvent {
     }
 }
 
-#[repr(u8)]
 pub enum GameEvent {
     NoRespawnBlockAvailable,
     BeginRaining,

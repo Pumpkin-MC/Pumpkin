@@ -1,4 +1,5 @@
 use crate::VarInt;
+use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeSeq;
 use serde::{
@@ -131,8 +132,9 @@ impl Serialize for Slot {
 impl Slot {
     pub fn to_item(self) -> Option<ItemStack> {
         let item_id = self.item_id?.0.try_into().unwrap();
+        let item = Item::from_id(item_id)?;
         Some(ItemStack {
-            item_id,
+            item,
             item_count: self.item_count.0.try_into().unwrap(),
         })
     }
@@ -153,7 +155,7 @@ impl From<&ItemStack> for Slot {
     fn from(item: &ItemStack) -> Self {
         Slot {
             item_count: item.item_count.into(),
-            item_id: Some(VarInt(item.item_id as i32)),
+            item_id: Some(VarInt(item.item.id as i32)),
             // TODO: add these
             num_components_to_add: None,
             num_components_to_remove: None,

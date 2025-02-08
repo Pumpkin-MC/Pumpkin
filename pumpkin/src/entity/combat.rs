@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -74,8 +72,8 @@ pub async fn handle_knockback(
     let saved_velo = victim_entity.velocity.load();
     victim_entity.knockback(
         strength * 0.5,
-        f64::from((yaw * (PI / 180.0)).sin()),
-        f64::from(-(yaw * (PI / 180.0)).cos()),
+        f64::from((yaw.to_radians()).sin()),
+        f64::from(-(yaw.to_radians()).cos()),
     );
 
     let entity_id = VarInt(victim_entity.entity_id);
@@ -98,8 +96,8 @@ pub async fn handle_knockback(
 
 pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
     let yaw = attacker_entity.yaw.load();
-    let d = -f64::from((yaw * (PI / 180.0)).sin());
-    let e = f64::from((yaw * (PI / 180.0)).cos());
+    let d = -f64::from((yaw.to_radians()).sin());
+    let e = f64::from((yaw.to_radians()).cos());
 
     let scale = 0.5;
     // TODO: use entity height

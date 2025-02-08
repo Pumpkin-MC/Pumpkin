@@ -2,7 +2,6 @@ use std::{ffi::CString, io::Cursor};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-#[repr(u8)]
 pub enum PacketType {
     // There could be other types but they are not documented
     // Besides these types are enough to get server status

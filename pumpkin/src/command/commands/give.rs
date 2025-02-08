@@ -56,7 +56,6 @@ impl CommandExecutor for GiveExecutor {
         for target in targets {
             target.give_items(item, item_count as u32).await;
         }
-
         let msg = if targets.len() == 1 {
             TextComponent::translate(
                 "commands.give.success.single",

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     screen::WindowType,
     sound::{Sound, SoundCategory},
@@ -7,10 +8,7 @@ use pumpkin_inventory::{Chest, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    block::registry::{get_block, Block},
-    item::registry::Item,
-};
+use pumpkin_world::block::registry::{get_block, Block};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},

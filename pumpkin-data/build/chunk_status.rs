@@ -1,8 +1,6 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::quote;
-
-use crate::ident;
+use quote::{format_ident, quote};
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/chunk_status.json");
@@ -14,7 +12,7 @@ pub(crate) fn build() -> TokenStream {
 
     for status in chunk_status.iter() {
         let full_name = format!("minecraft:{status}");
-        let name = ident(status.to_pascal_case());
+        let name = format_ident!("{}", status.to_pascal_case());
         variants.extend([quote! {
             #[serde(rename = #full_name)]
             #name,

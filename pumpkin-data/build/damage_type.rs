@@ -1,8 +1,9 @@
-use heck::{ToPascalCase, ToShoutySnakeCase};
+use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::collections::HashMap;
+use syn::{Ident, LitInt};
 
 #[derive(Deserialize)]
 struct DamageTypeEntry {
@@ -12,10 +13,26 @@ struct DamageTypeEntry {
 
 #[derive(Deserialize)]
 pub struct DamageTypeData {
-    death_message_type: Option<String>,
+    death_message_type: Option<DeathMessageType>,
     exhaustion: f32,
     message_id: String,
-    scaling: String,
+    scaling: DamageScaling,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum DamageScaling {
+    Never,
+    WhenCausedByLivingNonPlayer,
+    Always,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum DeathMessageType {
+    Default,
+    FallVariants,
+    IntentionalGameDesign,
 }
 
 pub(crate) fn build() -> TokenStream {
@@ -29,40 +46,38 @@ pub(crate) fn build() -> TokenStream {
     let mut enum_variants = Vec::new();
 
     for (name, entry) in damage_types {
-        let const_ident = crate::ident(name.to_shouty_snake_case());
-        let enum_ident = crate::ident(name.to_pascal_case());
+        let const_ident = format_ident!("{}", name.to_shouty_snake_case());
 
-        enum_variants.push(enum_ident.clone());
+        enum_variants.push(const_ident.clone());
 
         let data = &entry.components;
         let death_message_type = match &data.death_message_type {
-            Some(msg) => quote! { Some(#msg) },
+            Some(msg) => {
+                let msg_ident = Ident::new(&format!("{:?}", msg), proc_macro2::Span::call_site());
+                quote! { Some(DeathMessageType::#msg_ident) }
+            }
             None => quote! { None },
         };
 
         let exhaustion = data.exhaustion;
         let message_id = &data.message_id;
-        let scaling = &data.scaling;
-        let id = entry.id;
+        let scaling_ident = Ident::new(
+            &format!("{:?}", data.scaling),
+            proc_macro2::Span::call_site(),
+        );
+        let scaling = quote! {DamageScaling::#scaling_ident};
+        let id_lit = LitInt::new(&entry.id.to_string(), proc_macro2::Span::call_site());
 
         constants.push(quote! {
-            pub const #const_ident: DamageTypeData = DamageTypeData {
+            pub const #const_ident: DamageType = DamageType {
                 death_message_type: #death_message_type,
                 exhaustion: #exhaustion,
                 message_id: #message_id,
                 scaling: #scaling,
-                id: #id,
+                id: #id_lit,
             };
         });
     }
-
-    let enum_arms = enum_variants.iter().map(|variant| {
-        let const_name = variant.to_string().to_shouty_snake_case();
-        let const_ident = crate::ident(&const_name);
-        quote! {
-            DamageType::#variant => &#const_ident,
-        }
-    });
 
     let type_name_pairs = enum_variants.iter().map(|variant| {
         let name = variant.to_string();
@@ -73,54 +88,32 @@ pub(crate) fn build() -> TokenStream {
         }
     });
 
-    let type_to_name_pairs = enum_variants.iter().map(|variant| {
-        let name = variant.to_string();
-        let name_lowercase = name.to_lowercase();
-        let resource_name = format!("minecraft:{}", name_lowercase);
-        quote! {
-            Self::#variant => #resource_name
-        }
-    });
-
-    // Create array of all variants for values() method
-    let variant_array = enum_variants.iter().map(|variant| {
-        quote! {
-            DamageType::#variant
-        }
-    });
-
     quote! {
-        #[derive(Clone, Debug)]
-        pub struct DamageTypeData {
-            pub death_message_type: Option<&'static str>,
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct DamageType {
+            pub death_message_type: Option<DeathMessageType>,
             pub exhaustion: f32,
             pub message_id: &'static str,
-            pub scaling: &'static str,
+            pub scaling: DamageScaling,
             pub id: u32,
         }
 
-        #(#constants)*
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub enum DeathMessageType {
+            Default,
+            FallVariants,
+            IntentionalGameDesign,
+        }
 
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        #[repr(u8)]
-        pub enum DamageType {
-            #(#enum_variants,)*
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub enum DamageScaling {
+            Never,
+            WhenCausedByLivingNonPlayer,
+            Always,
         }
 
         impl DamageType {
-            pub const fn data(&self) -> &'static DamageTypeData {
-                match self {
-                    #(#enum_arms)*
-                }
-            }
-
-            #[doc = r" Get all possible damage types"]
-            pub fn values() -> &'static [DamageType] {
-                static VALUES: &[DamageType] = &[
-                    #(#variant_array,)*
-                ];
-                VALUES
-            }
+            #(#constants)*
 
             #[doc = r" Try to parse a damage type from a resource location string"]
             pub fn from_name(name: &str) -> Option<Self> {
@@ -130,12 +123,6 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Get the resource location string for this damage type"]
-            pub const fn to_name(&self) -> &'static str {
-                match self {
-                    #(#type_to_name_pairs,)*
-                }
-            }
         }
     }
 }

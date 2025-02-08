@@ -46,7 +46,7 @@ impl CommandExecutor for KillExecutor {
                     Some(TextComponent::text(name.clone())),
                 ));
 
-            if entity.entity_type == entity::EntityType::Player {
+            if entity.entity_type == entity::EntityType::PLAYER {
                 entity_display = entity_display.click_event(ClickEvent::SuggestCommand(
                     format!("/tell {} ", name.clone()).into(),
                 ));

@@ -18,7 +18,7 @@ pub struct SPluginMessage {
 impl ServerPacket for SPluginMessage {
     fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
         Ok(Self {
-            channel: bytebuf.try_get_identifer()?,
+            channel: bytebuf.try_get_identifier()?,
             data: bytebuf.try_copy_to_bytes_len(bytebuf.remaining(), MAX_PAYLOAD_SIZE)?,
         })
     }

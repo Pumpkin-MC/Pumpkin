@@ -22,7 +22,7 @@ impl ItemEntity {
         let slot = Slot::from(stack);
         Self {
             entity,
-            id: stack.item_id,
+            id: stack.item.id,
             count: stack.item_count,
             item: slot,
             pickup_delay: AtomicI8::new(10), // Vanilla

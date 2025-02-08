@@ -34,7 +34,7 @@ The Documentation of Pumpkin can be found at <https://pumpkinmc.org/>
 ### Coding Guidelines
 
 Things need to be done before this Pull Request can be merged. Your CI also checks most of them automatically and fill fail if something is not fulfilled
-Note: Pumpkin's clippy settings are relatively strict, this can be may frustrating but is necessary so the code says clean and conssistent
+Note: Pumpkin's clippy settings are relatively strict, this can be may frustrating but is necessary so the code says clean and consistent
 **Basic**
 
 - **Title:** Use a concise and informative title that clearly communicates the purpose of the PR.  Anyone reviewing the PR should quickly understand the changes being proposed.  

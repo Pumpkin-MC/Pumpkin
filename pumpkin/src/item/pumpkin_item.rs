@@ -1,16 +1,12 @@
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
-use pumpkin_world::item::registry::Item;
 
 pub trait ItemMetadata {
-    const NAMESPACE: &'static str;
-    const ID: &'static str;
-    fn name(&self) -> String {
-        format!("{}:{}", Self::NAMESPACE, Self::ID)
-    }
+    const ID: u16;
 }
 
 #[async_trait]

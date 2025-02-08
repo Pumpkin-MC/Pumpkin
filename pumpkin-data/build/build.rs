@@ -1,9 +1,8 @@
-use quote::quote;
+use quote::{format_ident, quote};
 use std::{env, fs, path::Path, process::Command};
 
 use heck::ToPascalCase;
-use proc_macro2::{Span, TokenStream};
-use syn::Ident;
+use proc_macro2::TokenStream;
 
 mod biome;
 mod chunk_status;
@@ -11,6 +10,7 @@ mod damage_type;
 mod entity_pose;
 mod entity_type;
 mod game_event;
+mod item;
 mod message_type;
 mod noise_parameter;
 mod packet;
@@ -19,6 +19,7 @@ mod scoreboard_slot;
 mod screen;
 mod sound;
 mod sound_category;
+mod spawn_egg;
 mod world_event;
 
 pub fn main() {
@@ -37,13 +38,15 @@ pub fn main() {
     write_generated_file(biome::build(), "biome.rs");
     write_generated_file(damage_type::build(), "damage_type.rs");
     write_generated_file(message_type::build(), "message_type.rs");
+    write_generated_file(spawn_egg::build(), "spawn_egg.rs");
+    write_generated_file(item::build(), "item.rs");
 }
 
-pub fn array_to_tokenstream(array: Vec<String>) -> TokenStream {
+pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
     let mut variants = TokenStream::new();
 
     for item in array.iter() {
-        let name = ident(item.to_pascal_case());
+        let name = format_ident!("{}", item.to_pascal_case());
         variants.extend([quote! {
             #name,
         }]);
@@ -61,13 +64,4 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     // Try to format the output for debugging purposes.
     // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("rustfmt").arg(path).output();
-}
-
-pub fn ident<I: AsRef<str>>(s: I) -> Ident {
-    let s = s.as_ref().trim();
-
-    // Parse the ident from a str. If the string is a Rust keyword, stick an
-    // underscore in front.
-    syn::parse_str::<Ident>(s)
-        .unwrap_or_else(|_| Ident::new(format!("_{s}").as_str(), Span::call_site()))
 }

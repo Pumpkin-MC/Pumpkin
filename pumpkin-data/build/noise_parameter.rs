@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use serde::Deserialize;
-
-use crate::ident;
 
 #[derive(Deserialize)]
 pub struct DoublePerlinNoiseParameters {
@@ -23,7 +21,7 @@ pub(crate) fn build() -> TokenStream {
 
     for (name, parameter) in json.iter() {
         let raw_name = format!("minecraft:{name}");
-        let name = ident(name.to_uppercase());
+        let name = format_ident!("{}", name.to_uppercase());
         let first_octave = parameter.first_octave;
         let amplitudes = &parameter.amplitudes;
         variants.extend([quote! {

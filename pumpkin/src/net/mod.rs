@@ -46,7 +46,6 @@ use tokio::sync::Mutex;
 use thiserror::Error;
 use uuid::Uuid;
 mod authentication;
-pub mod combat;
 mod container;
 pub mod lan_broadcast;
 mod packet;

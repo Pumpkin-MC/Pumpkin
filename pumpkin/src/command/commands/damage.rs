@@ -82,9 +82,9 @@ impl CommandExecutor for DamageLocationExecutor {
 
         let damage_type = args
             .get(ARG_DAMAGE_TYPE)
-            .map_or(DamageType::Generic, |arg| match arg {
-                Arg::DamageType(dt) => **dt,
-                _ => DamageType::Generic,
+            .map_or(DamageType::GENERIC, |arg| match arg {
+                Arg::DamageType(dt) => *dt,
+                _ => DamageType::GENERIC,
             });
 
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
@@ -122,9 +122,9 @@ impl CommandExecutor for DamageEntityExecutor {
 
         let damage_type = args
             .get(ARG_DAMAGE_TYPE)
-            .map_or(DamageType::Generic, |arg| match arg {
-                Arg::DamageType(dt) => **dt,
-                _ => DamageType::Generic,
+            .map_or(DamageType::GENERIC, |arg| match arg {
+                Arg::DamageType(dt) => *dt,
+                _ => DamageType::GENERIC,
             });
 
         let source = EntityArgumentConsumer::find_arg(args, ARG_ENTITY).ok();

@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use serde::Deserialize;
-
-use crate::ident;
 
 #[derive(Deserialize)]
 pub struct Packets {
@@ -40,7 +38,7 @@ pub(crate) fn parse_packets(packets: HashMap<String, Vec<String>>) -> proc_macro
         for (id, packet_name) in packet.1.iter().enumerate() {
             let packet_id = id as i32;
             let name = format!("{phase}_{packet_name}").to_uppercase();
-            let name = ident(name);
+            let name = format_ident!("{}", name);
             consts.extend([quote! {
                 pub const #name: i32 = #packet_id;
             }]);

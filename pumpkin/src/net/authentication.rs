@@ -70,7 +70,7 @@ pub async fn authenticate(
         let auth_url = ADVANCED_CONFIG
             .networking
             .authentication
-            .auth_url
+            .url
             .as_deref()
             .unwrap_or(MOJANG_AUTHENTICATION_URL);
 

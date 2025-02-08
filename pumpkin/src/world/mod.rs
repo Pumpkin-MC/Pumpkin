@@ -3,10 +3,11 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 
-pub mod level_time;
-pub mod player_chunker;
+pub mod chunker;
+pub mod time;
 
 use crate::{
+    block,
     command::client_suggestions,
     entity::{player::Player, Entity, EntityBase, EntityId},
     error::PumpkinError,
@@ -18,7 +19,7 @@ use crate::{
     server::Server,
     PLUGIN_MANAGER,
 };
-use level_time::LevelTime;
+use border::Worldborder;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     entity::EntityType,
@@ -50,17 +51,20 @@ use pumpkin_world::{
 use rand::{thread_rng, Rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
+use time::LevelTime;
 use tokio::sync::{mpsc::Receiver, Mutex};
 use tokio::{
     runtime::Handle,
     sync::{mpsc, RwLock},
 };
-use worldborder::Worldborder;
 
+pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
 pub mod scoreboard;
-pub mod worldborder;
+pub mod weather;
+
+use weather::Weather;
 
 #[derive(Debug, Error)]
 pub enum GetBlockError {
@@ -113,6 +117,8 @@ pub struct World {
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in
     pub dimension_type: DimensionType,
+    /// The world's weather, including rain and thunder levels
+    pub weather: Mutex<Weather>,
     // TODO: entities
 }
 
@@ -127,6 +133,7 @@ impl World {
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
+            weather: Mutex::new(Weather::new()),
         }
     }
 
@@ -217,13 +224,23 @@ impl World {
     }
 
     pub async fn play_record(&self, record_id: i32, position: BlockPos) {
-        self.broadcast_packet_all(&CLevelEvent::new(1010, position, record_id, false))
-            .await;
+        self.broadcast_packet_all(&CLevelEvent::new(
+            WorldEvent::JukeboxStartsPlaying as i32,
+            position,
+            record_id,
+            false,
+        ))
+        .await;
     }
 
     pub async fn stop_record(&self, position: BlockPos) {
-        self.broadcast_packet_all(&CLevelEvent::new(1011, position, 0, false))
-            .await;
+        self.broadcast_packet_all(&CLevelEvent::new(
+            WorldEvent::JukeboxStopsPlaying as i32,
+            position,
+            0,
+            false,
+        ))
+        .await;
     }
 
     pub async fn tick(&self) {
@@ -235,6 +252,12 @@ impl World {
                 level_time.send_time(self).await;
             }
         }
+
+        {
+            let mut weather = self.weather.lock().await;
+            weather.tick_weather(self).await;
+        };
+
         // player ticks
         for player in self.players.lock().await.values() {
             player.tick().await;
@@ -401,17 +424,13 @@ impl World {
             &CSpawnEntity::new(
                 entity_id.into(),
                 gameprofile.id,
-                (EntityType::Player as i32).into(),
-                position.x,
-                position.y,
-                position.z,
+                i32::from(EntityType::PLAYER.id).into(),
+                position,
                 pitch,
                 yaw,
                 yaw,
                 0.into(),
-                0.0,
-                0.0,
-                0.0,
+                Vector3::new(0.0, 0.0, 0.0),
             ),
         )
         .await;
@@ -427,17 +446,13 @@ impl World {
                 .send_packet(&CSpawnEntity::new(
                     existing_player.entity_id().into(),
                     gameprofile.id,
-                    (EntityType::Player as i32).into(),
-                    pos.x,
-                    pos.y,
-                    pos.z,
+                    i32::from(EntityType::PLAYER.id).into(),
+                    pos,
                     entity.yaw.load(),
                     entity.pitch.load(),
                     entity.head_yaw.load(),
                     0.into(),
-                    0.0,
-                    0.0,
-                    0.0,
+                    Vector3::new(0.0, 0.0, 0.0),
                 ))
                 .await;
         }
@@ -461,8 +476,33 @@ impl World {
         // Sends initial time
         player.send_time(self).await;
 
+        // Send initial weather state
+        let weather = self.weather.lock().await;
+        if weather.raining {
+            player
+                .client
+                .send_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
+                .await;
+
+            // Calculate rain and thunder levels directly from public fields
+            let rain_level = weather.rain_level.clamp(0.0, 1.0);
+            let thunder_level = weather.thunder_level.clamp(0.0, 1.0);
+
+            player
+                .client
+                .send_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
+                .await;
+            player
+                .client
+                .send_packet(&CGameEvent::new(
+                    GameEvent::ThunderLevelChange,
+                    thunder_level,
+                ))
+                .await;
+        }
+
         // Spawn in initial chunks
-        player_chunker::player_join(&player).await;
+        chunker::player_join(&player).await;
 
         // if let Some(bossbars) = self..lock().await.get_player_bars(&player.gameprofile.id) {
         //     for bossbar in bossbars {
@@ -547,26 +587,22 @@ impl World {
             &CSpawnEntity::new(
                 entity.entity_id.into(),
                 player.gameprofile.id,
-                (EntityType::Player as i32).into(),
-                position.x,
-                position.y,
-                position.z,
+                i32::from(EntityType::PLAYER.id).into(),
+                position,
                 pitch,
                 yaw,
                 yaw,
                 0.into(),
-                0.0,
-                0.0,
-                0.0,
+                Vector3::new(0.0, 0.0, 0.0),
             ),
         )
         .await;
         player.send_client_information().await;
 
-        player_chunker::player_join(player).await;
+        chunker::player_join(player).await;
         // update commands
 
-        player.set_health(20.0, 20, 20.0).await;
+        player.set_health(20.0).await;
     }
 
     /// IMPORTANT: Chunks have to be non-empty
@@ -978,7 +1014,13 @@ impl World {
         chunk
     }
 
-    pub async fn break_block(&self, position: &BlockPos, cause: Option<Arc<Player>>) {
+    pub async fn break_block(
+        self: &Arc<Self>,
+        server: &Server,
+        position: &BlockPos,
+        cause: Option<Arc<Player>>,
+        drop: bool,
+    ) {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
 
@@ -997,6 +1039,10 @@ impl World {
                 broken_block_state_id.into(),
                 false,
             );
+
+            if drop {
+                block::drop_loot(server, self, block, position).await;
+            }
 
             match cause {
                 Some(player) => {

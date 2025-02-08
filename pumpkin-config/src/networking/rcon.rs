@@ -33,22 +33,22 @@ impl Default for RCONConfig {
 #[serde(default)]
 pub struct RCONLogging {
     /// Whether successful RCON logins should be logged.
-    pub log_logged_successfully: bool,
+    pub logged_successfully: bool,
     /// Whether failed RCON login attempts with incorrect passwords should be logged.
-    pub log_wrong_password: bool,
+    pub wrong_password: bool,
     /// Whether all RCON commands, regardless of success or failure, should be logged.
-    pub log_commands: bool,
+    pub commands: bool,
     /// Whether RCON quit commands should be logged.
-    pub log_quit: bool,
+    pub quit: bool,
 }
 
 impl Default for RCONLogging {
     fn default() -> Self {
         Self {
-            log_logged_successfully: true,
-            log_wrong_password: true,
-            log_commands: true,
-            log_quit: true,
+            logged_successfully: true,
+            wrong_password: true,
+            commands: true,
+            quit: true,
         }
     }
 }

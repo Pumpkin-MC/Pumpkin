@@ -43,8 +43,8 @@ fn yaw_pitch_facing_position(
     let yaw_radians = -direction_vector.x.atan2(direction_vector.z);
     let pitch_radians = (-direction_vector.y).asin();
 
-    let yaw_degrees = yaw_radians * 180.0 / std::f64::consts::PI;
-    let pitch_degrees = pitch_radians * 180.0 / std::f64::consts::PI;
+    let yaw_degrees = yaw_radians.to_degrees();
+    let pitch_degrees = pitch_radians.to_degrees();
 
     (yaw_degrees as f32, pitch_degrees as f32)
 }

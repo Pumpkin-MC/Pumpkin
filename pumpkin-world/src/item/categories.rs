@@ -10,7 +10,7 @@ impl ItemStack {
             838, // Diamond
             843, // Netherite
         ]
-        .contains(&self.item_id)
+        .contains(&self.item.id)
     }
 
     pub fn is_helmet(&self) -> bool {
@@ -24,7 +24,7 @@ impl ItemStack {
             872, // Iron
             864,
         ]
-        .contains(&self.item_id)
+        .contains(&self.item.id)
     }
 
     pub fn is_chestplate(&self) -> bool {
@@ -38,7 +38,7 @@ impl ItemStack {
             865, // Elytra
             773,
         ]
-        .contains(&self.item_id)
+        .contains(&self.item.id)
     }
 
     pub fn is_leggings(&self) -> bool {
@@ -51,7 +51,7 @@ impl ItemStack {
             874, // Iron
             866,
         ]
-        .contains(&self.item_id)
+        .contains(&self.item.id)
     }
 
     pub fn is_boots(&self) -> bool {
@@ -64,6 +64,6 @@ impl ItemStack {
             875, // Iron
             867,
         ]
-        .contains(&self.item_id)
+        .contains(&self.item.id)
     }
 }

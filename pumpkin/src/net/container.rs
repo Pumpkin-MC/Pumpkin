@@ -1,5 +1,6 @@
 use crate::entity::player::Player;
 use crate::server::Server;
+use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::container_click::{
     Click, ClickType, KeyClick, MouseClick, MouseDragState, MouseDragType,
@@ -16,7 +17,6 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
-use pumpkin_world::item::registry::Item;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
@@ -323,7 +323,7 @@ impl Player {
                     let find_condition = |(slot_number, slot): (usize, &mut Option<ItemStack>)| {
                         // TODO: Check for max item count here
                         match slot {
-                            Some(item) => (item.item_id == item_in_pressed_slot.item_id
+                            Some(item) => (item.item.id == item_in_pressed_slot.item.id
                                 && item.item_count != 64)
                                 .then_some(slot_number),
                             None => Some(slot_number),
@@ -411,7 +411,7 @@ impl Player {
         **item = None;
 
         for slot in slots.iter_mut().filter_map(|slot| slot.as_mut()) {
-            if slot.item_id == carried_item.item_id {
+            if slot.item.id == carried_item.item.id {
                 // TODO: Check for max stack size
                 if slot.item_count + carried_item.item_count <= 64 {
                     slot.item_count = 0;
@@ -553,14 +553,14 @@ impl Player {
         }
     }
 
-    async fn pickup_items(&self, item: &Item, mut amount: u32) {
+    async fn pickup_items(&self, item: Item, mut amount: u32) {
         let max_stack = item.components.max_stack_size;
         let mut inventory = self.inventory().lock().await;
         let slots = inventory.slots_with_hotbar_first();
 
         let matching_slots = slots.filter_map(|slot| {
             if let Some(item_slot) = slot.as_mut() {
-                (item_slot.item_id == item.id && item_slot.item_count < max_stack).then(|| {
+                (item_slot.item.id == item.id && item_slot.item_count < max_stack).then(|| {
                     let item_count = item_slot.item_count;
                     (item_slot, item_count)
                 })
@@ -577,12 +577,12 @@ impl Player {
             if let Some(amount_left) = amount.checked_sub(u32::from(amount_to_add)) {
                 amount = amount_left;
                 *slot = ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: item.components.max_stack_size,
                 };
             } else {
                 *slot = ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: max_stack - (amount_to_add - amount as u8),
                 };
                 return;
@@ -599,12 +599,12 @@ impl Player {
             if let Some(remaining_amount) = amount.checked_sub(u32::from(max_stack)) {
                 amount = remaining_amount;
                 *slot = Some(ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: max_stack,
                 });
             } else {
                 *slot = Some(ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: amount as u8,
                 });
                 return;
@@ -618,7 +618,7 @@ impl Player {
     /// Add items to inventory if there's space, else drop them to the ground.
     ///
     /// This method automatically syncs changes with the client.
-    pub async fn give_items(&self, item: &Item, amount: u32) {
+    pub async fn give_items(&self, item: Item, amount: u32) {
         self.pickup_items(item, amount).await;
         self.set_container_content(None).await;
     }

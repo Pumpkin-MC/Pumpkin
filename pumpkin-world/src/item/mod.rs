@@ -1,6 +1,6 @@
+use pumpkin_data::item::Item;
+
 mod categories;
-pub mod registry;
-pub use registry::ITEMS;
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 /// Item Rarity
@@ -13,23 +13,18 @@ pub enum Rarity {
 
 #[derive(Clone, Copy, Debug)]
 pub struct ItemStack {
-    // This ID is the numerical protocol ID, not the usual minecraft::block ID.
-    pub item_id: u16,
     pub item_count: u8,
-    // TODO: Add Item Components
+    pub item: Item,
 }
 
 impl PartialEq for ItemStack {
     fn eq(&self, other: &Self) -> bool {
-        self.item_id == other.item_id
+        self.item.id == other.item.id
     }
 }
 
 impl ItemStack {
-    pub fn new(item_count: u8, item_id: u16) -> Self {
-        Self {
-            item_count,
-            item_id,
-        }
+    pub fn new(item_count: u8, item: Item) -> Self {
+        Self { item_count, item }
     }
 }

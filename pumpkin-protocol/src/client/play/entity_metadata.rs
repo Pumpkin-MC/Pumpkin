@@ -39,7 +39,6 @@ impl<T> Metadata<T> {
     }
 }
 
-#[repr(u8)]
 pub enum MetaDataType {
     Byte,
     Integer,

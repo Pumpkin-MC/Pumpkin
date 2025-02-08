@@ -54,6 +54,12 @@ impl LivingEntity {
         self.entity.set_pos(position);
     }
 
+    pub async fn heal(&self, additional_health: f32) {
+        assert!(additional_health > 0.0);
+        self.set_health(self.health.load() + additional_health)
+            .await;
+    }
+
     pub async fn set_health(&self, health: f32) {
         self.health.store(health);
         // tell everyone entities health changed
@@ -75,7 +81,7 @@ impl LivingEntity {
         cause: Option<&Entity>,
     ) -> bool {
         // Check invulnerability before applying damage
-        if self.entity.is_invulnerable_to(damage_type) {
+        if self.entity.is_invulnerable_to(&damage_type) {
             return false;
         }
 
@@ -83,7 +89,7 @@ impl LivingEntity {
             .world
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
-                damage_type.data().id.into(),
+                damage_type.id.into(),
                 source.map(|e| e.entity_id.into()),
                 cause.map(|e| e.entity_id.into()),
                 position,
@@ -150,7 +156,7 @@ impl LivingEntity {
                 .play_sound(Self::get_fall_sound(fall_distance as i32))
                 .await;
             // TODO: Play block fall sound
-            self.damage(damage, DamageType::Fall).await; // Fall
+            self.damage(damage, DamageType::FALL).await; // Fall
         } else if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance

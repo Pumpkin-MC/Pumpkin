@@ -34,7 +34,7 @@ impl CommandExecutor for SetblockExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
@@ -46,7 +46,7 @@ impl CommandExecutor for SetblockExecutor {
 
         let success = match mode {
             Mode::Destroy => {
-                world.break_block(&pos, None).await;
+                world.clone().break_block(server, &pos, None, false).await;
                 world.set_block_state(&pos, block_state_id).await;
                 true
             }

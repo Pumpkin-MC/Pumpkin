@@ -1,10 +1,10 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
+use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
-use pumpkin_world::item::registry::Item;
 use std::collections::HashMap;
 use std::sync::Arc;
 

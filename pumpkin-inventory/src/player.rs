@@ -135,7 +135,7 @@ impl PlayerInventory {
     pub fn get_slot_with_item(&self, item_id: u16, max_stack: u8) -> Option<usize> {
         for slot in 9..=44 {
             match &self.items[slot - 9] {
-                Some(item) if item.item_id == item_id && item.item_count <= max_stack => {
+                Some(item) if item.item.id == item_id && item.item_count <= max_stack => {
                     return Some(slot)
                 }
                 _ => continue,

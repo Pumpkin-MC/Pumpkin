@@ -2,24 +2,15 @@ use async_trait::async_trait;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-use crate::command::args::FindArgDefaultName;
-use crate::command::tree::builder::{argument_default_name, literal};
+use crate::command::args::{time::TimeArgumentConsumer, FindArg};
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{
     tree::CommandTree, CommandError, CommandExecutor, CommandSender, ConsumedArgs,
 };
 
 const NAMES: [&str; 1] = ["time"];
-
 const DESCRIPTION: &str = "Query the world time.";
-
-// TODO: This should be either higher or not bounded
-fn arg_number() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new()
-        .name("time")
-        .min(0)
-        .max(24000)
-}
+const ARG_TIME: &str = "time";
 
 #[derive(Clone, Copy)]
 enum PresetTime {
@@ -27,6 +18,17 @@ enum PresetTime {
     Noon,
     Night,
     Midnight,
+}
+
+impl PresetTime {
+    fn to_ticks(self) -> i32 {
+        match self {
+            Self::Day => 1000,
+            Self::Noon => 6000,
+            Self::Night => 13000,
+            Self::Midnight => 18000,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -100,27 +102,19 @@ impl CommandExecutor for TimeChangeExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let time_count = if let Mode::Set(Some(preset)) = &self.0 {
-            match preset {
-                PresetTime::Day => 1000,
-                PresetTime::Noon => 6000,
-                PresetTime::Night => 13000,
-                PresetTime::Midnight => 18000,
-            }
+            preset.to_ticks()
+        } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
+            ticks
         } else {
-            match arg_number().find_arg_default_name(args) {
-                Err(_) => 1,
-                Ok(Ok(count)) => count,
-                Ok(Err(())) => {
-                    sender
-                        .send_message(
-                            TextComponent::text("Time is too large or too small.")
-                                .color(Color::Named(NamedColor::Red)),
-                        )
-                        .await;
-                    return Ok(());
-                }
-            }
+            sender
+                .send_message(
+                    TextComponent::text("Invalid time specified.")
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
+            return Ok(());
         };
+
         let mode = self.0;
         // TODO: Maybe ask player for world, or get the current world
         let worlds = server.worlds.read().await;
@@ -159,8 +153,9 @@ impl CommandExecutor for TimeChangeExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
-            literal("add")
-                .then(argument_default_name(arg_number()).execute(TimeChangeExecutor(Mode::Add))),
+            literal("add").then(
+                argument(ARG_TIME, TimeArgumentConsumer).execute(TimeChangeExecutor(Mode::Add)),
+            ),
         )
         .then(
             literal("query")
@@ -183,7 +178,7 @@ pub fn init_command_tree() -> CommandTree {
                         .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Midnight)))),
                 )
                 .then(
-                    argument_default_name(arg_number())
+                    argument(ARG_TIME, TimeArgumentConsumer)
                         .execute(TimeChangeExecutor(Mode::Set(None))),
                 ),
         )

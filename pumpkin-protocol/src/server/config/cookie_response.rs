@@ -22,7 +22,7 @@ const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl ServerPacket for SConfigCookieResponse {
     fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
-        let key = bytebuf.try_get_identifer()?;
+        let key = bytebuf.try_get_identifier()?;
         let has_payload = bytebuf.try_get_bool()?;
 
         if !has_payload {
