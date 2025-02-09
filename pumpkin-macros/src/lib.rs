@@ -1,4 +1,4 @@
-use heck::ToSnakeCase;
+use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro::TokenStream;
 use pumpkin_data::item::Item;
 use quote::quote;
@@ -259,30 +259,97 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let item: proc_macro2::TokenStream = item.into();
 
-    let variants = match ast.data {
-        syn::Data::Enum(enum_item) => enum_item.variants.into_iter().map(|v| v.ident),
-        _ => panic!("Block properties can only be enums"),
+    let (variants, is_enum): (Vec<proc_macro2::Ident>, bool) = match ast.data {
+        syn::Data::Enum(enum_item) => (
+            enum_item.variants.into_iter().map(|v| v.ident).collect(),
+            true,
+        ),
+        syn::Data::Struct(struct_type) => {
+            let fields = match struct_type.fields {
+                Fields::Named(_) => panic!("Block properties can't have named fields"),
+                Fields::Unnamed(fields) => fields.unnamed,
+                Fields::Unit => panic!("Block properties must have fields"),
+            };
+            if fields.len() != 1 {
+                panic!("Block properties structs must have exactly one field");
+            }
+            let struct_type = match fields.first().unwrap().ty {
+                syn::Type::Path(ref type_path) => {
+                    type_path.path.segments.first().unwrap().ident.to_string()
+                }
+                _ => panic!("Block properties can only have primitive types"),
+            };
+            match struct_type.as_str() {
+                "bool" => (
+                    vec![
+                        proc_macro2::Ident::new("true", proc_macro2::Span::call_site()),
+                        proc_macro2::Ident::new("false", proc_macro2::Span::call_site()),
+                    ],
+                    false,
+                ),
+                _ => panic!("This type is not supported (Why not implement it yourself?)"),
+            }
+        }
+        _ => panic!("Block properties can only be enums or structs"),
     };
 
-    let values = variants.clone().enumerate().map(|(i, v)| {
-        let mut value = v.to_string().to_snake_case();
-        if !property_values.is_empty() && i < property_values.len() {
-            value = property_values[i].to_string();
+    let values = variants.iter().enumerate().map(|(i, v)| match is_enum {
+        true => {
+            let mut value = v.to_string().to_snake_case();
+            if !property_values.is_empty() && i < property_values.len() {
+                value = property_values[i].to_string();
+            }
+            quote! {
+                Self::#v => #value.to_string(),
+            }
         }
-        quote! {
-            Self::#v => #value.to_string(),
+        false => {
+            let value = v.to_string();
+            quote! {
+                Self(#v) => #value.to_string(),
+            }
         }
     });
 
-    let from_values = variants.clone().enumerate().map(|(i, v)| {
-        let mut value = v.to_string().to_lowercase();
-        if !property_values.is_empty() && i < property_values.len() {
-            value = property_values[i].to_string();
+    let from_values = variants.iter().enumerate().map(|(i, v)| match is_enum {
+        true => {
+            let mut value = v.to_string().to_snake_case();
+            if !property_values.is_empty() && i < property_values.len() {
+                value = property_values[i].to_string();
+            }
+            quote! {
+                #value => Self::#v,
+            }
         }
-        quote! {
-            #value => Self::#v,
+        false => {
+            let value = v.to_string();
+            quote! {
+                #value => Self(#v),
+            }
         }
     });
+
+    let extra_fns = variants.iter().enumerate().map(|(_, v)| {
+        let title = proc_macro2::Ident::new(
+            &v.to_string().to_pascal_case(),
+            proc_macro2::Span::call_site(),
+        );
+        return quote! {
+            pub fn #title() -> Self {
+                Self(#v)
+            }
+        };
+    });
+
+    let extra = if is_enum {
+        quote! {}
+    } else {
+        quote! {
+            impl #name {
+                #(#extra_fns)*
+            }
+        }
+    };
 
     let gen = quote! {
         #item
@@ -302,6 +369,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
+        #extra
     };
 
     gen.into()

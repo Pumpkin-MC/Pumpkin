@@ -8,10 +8,7 @@ use pumpkin_world::block::{registry::Block, BlockDirection};
 use super::{BlockProperties, BlockProperty, BlockPropertyMetadata, Direction};
 
 #[block_property("waterlogged")]
-pub enum Waterlogged {
-    True,
-    False,
-}
+pub struct Waterlogged(bool);
 
 #[async_trait]
 impl BlockProperty for Waterlogged {
@@ -27,8 +24,8 @@ impl BlockProperty for Waterlogged {
         _other: bool,
     ) -> String {
         if block.name == "water" {
-            return Self::True.value();
+            return Self::True().value();
         }
-        Self::False.value()
+        Self::False().value()
     }
 }

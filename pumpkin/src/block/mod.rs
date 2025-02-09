@@ -83,14 +83,14 @@ pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
     manager.register(Half::Bottom);
     manager.register(Layers::Lay1);
     manager.register(North::False);
-    manager.register(Open::False);
-    manager.register(Powered::False);
-    manager.register(SignalFire::False);
+    manager.register(Open::False());
+    manager.register(Powered::False());
+    manager.register(SignalFire::False());
     manager.register(SlabType::Bottom);
     manager.register(South::False);
     manager.register(StairShape::Straight);
     manager.register(Up::False);
-    manager.register(Waterlogged::False);
+    manager.register(Waterlogged::False());
     manager.register(West::False);
 
     manager.build_properties_registry();

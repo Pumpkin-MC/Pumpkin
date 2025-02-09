@@ -8,10 +8,7 @@ use pumpkin_world::block::{registry::Block, BlockDirection};
 use super::{BlockProperties, BlockProperty, BlockPropertyMetadata, Direction};
 
 #[block_property("signal_fire")]
-pub enum SignalFire {
-    True,
-    False,
-}
+pub struct SignalFire(bool);
 
 #[async_trait]
 impl BlockProperty for SignalFire {
@@ -29,8 +26,8 @@ impl BlockProperty for SignalFire {
         let other_side_block = BlockPos(block_pos.0.sub(&Vector3::new(0, 1, 0)));
         let block = world.get_block(&other_side_block).await.unwrap();
         if block.name == "hay_block" {
-            return Self::True.value();
+            return Self::True().value();
         }
-        Self::False.value()
+        Self::False().value()
     }
 }
