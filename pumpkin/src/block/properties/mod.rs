@@ -3,9 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{
-    registry::{Block, State, BLOCKS},
-    BlockDirection,
+use pumpkin_world::{
+    block::{
+        registry::{Block, State, BLOCKS},
+        BlockDirection,
+    },
+    item::ItemStack,
 };
 
 pub(crate) mod age;
@@ -68,6 +71,10 @@ pub trait BlockProperty: Sync + Send + BlockPropertyMetadata {
         _other: bool,
     ) -> bool {
         block_state.replaceable
+    }
+
+    async fn on_interact(&self, value: String, _block: &Block, _item: &ItemStack) -> String {
+        value
     }
 }
 
@@ -210,5 +217,35 @@ impl BlockPropertiesManager {
             log::error!("Failed to get Block Properties mapping for {}", block.name);
         }
         block.default_state_id
+    }
+
+    pub async fn on_interact(&self, block: &Block, block_state: &State, item: &ItemStack) -> u16 {
+        if let Some(properties) = self.properties_registry.get(&block.id) {
+            if let Some(states) = properties
+                .property_mappings
+                .get(&(block_state.id - block.states[0].id))
+            {
+                let mut hmap_key: Vec<String> = Vec::with_capacity(block.properties.len());
+
+                for (i, raw_property) in block.properties.iter().enumerate() {
+                    let property = self.registered_properties.get(&raw_property.name);
+                    if let Some(property) = property {
+                        let state = property.on_interact(states[i].clone(), block, item).await;
+                        hmap_key.push(state);
+                    } else {
+                        log::warn!("Unknown Block Property: {}", &raw_property.name);
+                        // if one property is not found everything will not work
+                        return block.default_state_id;
+                    }
+                }
+                // Base state id plus offset
+                let mapping = properties.state_mappings.get(&hmap_key);
+                if let Some(mapping) = mapping {
+                    return block.states[0].id + mapping;
+                }
+                log::error!("Failed to get Block Properties mapping for {}", block.name);
+            }
+        }
+        block_state.id
     }
 }

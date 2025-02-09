@@ -969,6 +969,15 @@ impl Player {
                     .block_registry
                     .on_use(block, self, location, server)
                     .await;
+                let block_state = world.get_block_state(&location).await?;
+                let new_state = server
+                    .block_properties_manager
+                    .on_interact(block, block_state, &ItemStack::new(0, Item::AIR))
+                    .await;
+                world.set_block_state(&location, new_state).await;
+                self.client
+                    .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence))
+                    .await;
             }
             return Ok(());
         };
@@ -981,6 +990,15 @@ impl Player {
             let action_result = server
                 .block_registry
                 .use_with_item(block, self, location, &stack.item, server)
+                .await;
+            let block_state = world.get_block_state(&location).await?;
+            let new_state = server
+                .block_properties_manager
+                .on_interact(block, block_state, &ItemStack::new(0, Item::AIR))
+                .await;
+            world.set_block_state(&location, new_state).await;
+            self.client
+                .send_packet(&CAcknowledgeBlockChange::new(use_item_on.sequence.clone()))
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1293,8 +1311,9 @@ impl Player {
         };
 
         let new_state = server
-            .block_properties_manager
-            .on_place_state(
+            .block_registry
+            .on_place(
+                server,
                 world,
                 &block,
                 final_face,

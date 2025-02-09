@@ -1,5 +1,4 @@
-use blocks::chest::ChestBlock;
-use blocks::furnace::FurnaceBlock;
+use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock};
 use properties::{
     age::Age,
     attachment::Attachment,
@@ -46,6 +45,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CraftingTableBlock);
     manager.register(FurnaceBlock);
     manager.register(ChestBlock);
+    manager.register(LeverBlock);
 
     Arc::new(manager)
 }

@@ -158,6 +158,22 @@ where
     }
 }
 
+impl<T: Math + Copy> Vector3<T>
+where
+    T: Into<f64>,
+{
+    pub fn to_i32(&self) -> Vector3<i32> {
+        let x: f64 = self.x.into();
+        let y: f64 = self.y.into();
+        let z: f64 = self.z.into();
+        Vector3 {
+            x: x.round() as i32,
+            y: y.round() as i32,
+            z: z.round() as i32,
+        }
+    }
+}
+
 pub trait Math:
     Mul<Output = Self>
     //+ Neg<Output = Self>

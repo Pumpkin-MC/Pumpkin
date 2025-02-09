@@ -1,12 +1,17 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
+use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
+use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use super::properties::Direction;
 
 pub enum BlockActionResult {
     /// Allow other actions to be executed
@@ -55,6 +60,47 @@ impl BlockRegistry {
                 .await;
         }
         BlockActionResult::Continue
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn on_place(
+        &self,
+        server: &Server,
+        world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
+        use_item_on: &SUseItemOn,
+        player_direction: &Direction,
+        other: bool,
+    ) -> u16 {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .on_place(
+                    server,
+                    world,
+                    block,
+                    face,
+                    block_pos,
+                    use_item_on,
+                    player_direction,
+                    other,
+                )
+                .await;
+        }
+        server
+            .block_properties_manager
+            .on_place_state(
+                world,
+                block,
+                face,
+                block_pos,
+                use_item_on,
+                player_direction,
+                other,
+            )
+            .await
     }
 
     pub async fn on_placed(
