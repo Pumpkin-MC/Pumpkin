@@ -329,16 +329,16 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
 
-    let extra_fns = variants.iter().enumerate().map(|(_, v)| {
+    let extra_fns = variants.iter().map(|v| {
         let title = proc_macro2::Ident::new(
             &v.to_string().to_pascal_case(),
             proc_macro2::Span::call_site(),
         );
-        return quote! {
+        quote! {
             pub fn #title() -> Self {
                 Self(#v)
             }
-        };
+        }
     });
 
     let extra = if is_enum {
