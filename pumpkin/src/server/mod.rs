@@ -17,9 +17,12 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
+use rustyline::history::FileHistory;
+use rustyline::{DefaultEditor, Editor};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
+use std::sync::LazyLock;
 use std::{
     sync::{
         atomic::{AtomicI32, Ordering},
@@ -48,6 +51,9 @@ mod key_store;
 pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.4";
+
+pub static RL: LazyLock<Mutex<Editor<(), FileHistory>>> =
+    LazyLock::new(|| Mutex::new(DefaultEditor::new().unwrap()));
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -491,6 +497,7 @@ impl Server {
         for player in self.get_all_players().await {
             player.kick(kick_message.clone()).await;
         }
+        let _ = RL.lock().await.save_history("data/history.txt");
         self.save().await;
     }
 }
