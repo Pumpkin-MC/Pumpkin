@@ -31,6 +31,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::sleep;
 
 use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
@@ -493,11 +494,18 @@ impl Server {
         );
 
         // TODO: Gracefully stop
-        let kick_message = kick_msg.unwrap_or_else(|| TextComponent::text("Server stopped"));
+        let kick_message = kick_msg
+            .unwrap_or_else(|| TextComponent::text("Server stopped").color_named(NamedColor::Red));
         for player in self.get_all_players().await {
             player.kick(kick_message.clone()).await;
         }
-        let _ = RL.lock().await.save_history("data/history.txt");
+        if let Ok(mut rl) = RL.try_lock() {
+            let _ = rl.save_history("data/history.txt");
+        } else {
+            log::warn!("Failed to save history");
+        };
+        // Time enough to send the kick message and the last packets
+        sleep(Duration::from_millis(5)).await;
         self.save().await;
     }
 }
