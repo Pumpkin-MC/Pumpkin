@@ -36,9 +36,15 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
+#[cfg(unix)]
+use std::sync::io::{self};
 use std::sync::LazyLock;
+#[cfg(unix)]
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
 
+#[cfg(unix)]
+use crate::server::Server;
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin::{init_log, PumpkinServer};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
@@ -100,6 +106,13 @@ async fn main() {
     let pumpkin_server = PumpkinServer::new().await;
     pumpkin_server.init_plugins().await;
 
+    #[cfg(unix)]
+    tokio::spawn(async {
+        setup_sighandler(&pumpkin_server.server)
+            .await
+            .expect("Unable to setup signal handlers");
+    });
+
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
     log::info!(
         "You now can connect to the server, Listening on {}",
@@ -107,4 +120,17 @@ async fn main() {
     );
 
     pumpkin_server.start().await;
+}
+
+// Unix signal handling
+#[cfg(unix)]
+async fn setup_sighandler(server: Arc<Server>) -> io::Result<()> {
+    if signal(SignalKind::interrupt())?.recv().await.is_some()
+        || signal(SignalKind::hangup())?.recv().await.is_some()
+        || signal(SignalKind::terminate())?.recv().await.is_some()
+    {
+        server.handle_stop(None).await;
+    }
+
+    Ok(())
 }
