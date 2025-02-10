@@ -13,8 +13,8 @@ use crate::{
     error::PumpkinError,
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{PlayerJoinEvent, PlayerLeaveEvent},
-        world::{ChunkLoad, ChunkSave, ChunkSend},
+        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
     },
     server::Server,
     PLUGIN_MANAGER,
