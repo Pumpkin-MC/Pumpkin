@@ -37,8 +37,6 @@ compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
 use std::sync::LazyLock;
-#[cfg(unix)]
-use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
@@ -65,9 +63,6 @@ pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_VERSION: &str = env!("GIT_VERSION");
 
-static PUMPKIN_SERVER: LazyLock<PumpkinServer> = LazyLock::new(|| {
-    tokio::runtime::Handle::current().block_on(async { PumpkinServer::new().await })
-});
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
@@ -102,26 +97,14 @@ async fn main() {
     log::info!("Report Issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
     log::info!("Join our Discord for community support https://discord.com/invite/wT8XjrjKkf");
 
-    PUMPKIN_SERVER.init_plugins().await;
-
-    // Unix signal handling
-    #[cfg(unix)]
-    tokio::spawn(async {
-        if signal(SignalKind::interrupt())?.recv().await.is_some()
-            || signal(SignalKind::hangup())?.recv().await.is_some()
-            || signal(SignalKind::terminate())?.recv().await.is_some()
-        {
-            PUMPKIN_SERVER.server.handle_stop(None).await;
-        }
-
-        Ok::<(), std::io::Error>(())
-    });
+    let pumpkin_server = PumpkinServer::new().await;
+    pumpkin_server.init_plugins().await;
 
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
     log::info!(
         "You now can connect to the server, Listening on {}",
-        PUMPKIN_SERVER.server_addr
+        pumpkin_server.server_addr
     );
 
-    PUMPKIN_SERVER.start().await;
+    pumpkin_server.start().await;
 }
