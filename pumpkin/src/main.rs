@@ -36,9 +36,12 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
-#[cfg(unix)]
-use std::sync::io::{self};
 use std::sync::LazyLock;
+#[cfg(unix)]
+use std::sync::{
+    io::{self},
+    Arc,
+};
 #[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
