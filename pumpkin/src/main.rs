@@ -112,7 +112,7 @@ async fn main() {
             pumpkin_server.server.handle_stop(None).await;
         }
 
-        Ok::<(), E>(())
+        Ok::<(), std::io::Error>(())
     });
 
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
