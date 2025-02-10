@@ -111,7 +111,7 @@ async fn main() {
 
     #[cfg(unix)]
     tokio::spawn(async {
-        setup_sighandler(&pumpkin_server.server)
+        setup_sighandler(pumpkin_server.server)
             .await
             .expect("Unable to setup signal handlers");
     });
