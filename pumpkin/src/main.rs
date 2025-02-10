@@ -38,17 +38,10 @@ compile_error!("Compiling for WASI targets is not supported!");
 use plugin::PluginManager;
 use std::sync::LazyLock;
 #[cfg(unix)]
-use std::{
-    io::{self},
-    sync::Arc,
-};
-#[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
-#[cfg(unix)]
-use pumpkin::server::Server;
 use pumpkin::{init_log, PumpkinServer};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::TextComponent;
@@ -119,7 +112,7 @@ async fn main() {
             pumpkin_server.server.handle_stop(None).await;
         }
 
-        Ok(())
+        Ok::<(), E>(())
     });
 
     log::info!("Started Server took {}ms", time.elapsed().as_millis());
