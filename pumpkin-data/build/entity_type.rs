@@ -16,26 +16,30 @@ pub struct EntityType {
     pub eye_height: f32,
 }
 
-impl ToTokens for EntityType {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let id = LitInt::new(&self.id.to_string(), proc_macro2::Span::call_site());
+pub struct NamedEntityType<'a>(&'a str, &'a EntityType);
 
-        let max_health = match self.max_health {
+impl<'a> ToTokens for NamedEntityType<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = self.0;
+        let entity = self.1;
+        let id = LitInt::new(&entity.id.to_string(), proc_macro2::Span::call_site());
+
+        let max_health = match entity.max_health {
             Some(mh) => quote! { Some(#mh) },
             None => quote! { None },
         };
 
-        let attackable = match self.attackable {
+        let attackable = match entity.attackable {
             Some(a) => quote! { Some(#a) },
             None => quote! { None },
         };
 
-        let summonable = self.summonable;
-        let fire_immune = self.fire_immune;
-        let eye_height = self.eye_height;
+        let summonable = entity.summonable;
+        let fire_immune = entity.fire_immune;
+        let eye_height = entity.eye_height;
 
-        let dimension0 = self.dimension[0];
-        let dimension1 = self.dimension[1];
+        let dimension0 = entity.dimension[0];
+        let dimension1 = entity.dimension[1];
 
         tokens.extend(quote! {
             EntityType {
@@ -46,6 +50,7 @@ impl ToTokens for EntityType {
                 fire_immune: #fire_immune,
                 dimension: [#dimension0, #dimension1], // Correctly construct the array
                 eye_height: #eye_height,
+                resource_name: #name,
             }
         });
     }
@@ -67,7 +72,7 @@ pub(crate) fn build() -> TokenStream {
         let id_lit = LitInt::new(&id.to_string(), proc_macro2::Span::call_site());
         let upper_name = format_ident!("{}", name.to_uppercase());
 
-        let entity_tokens = entity.to_token_stream();
+        let entity_tokens = NamedEntityType(name, entity).to_token_stream();
 
         consts.extend(quote! {
             pub const #upper_name: EntityType = #entity_tokens;
@@ -91,6 +96,7 @@ pub(crate) fn build() -> TokenStream {
             pub fire_immune: bool,
             pub dimension: [f32; 2],
             pub eye_height: f32,
+            pub resource_name: &'static str,
         }
 
         impl EntityType {
