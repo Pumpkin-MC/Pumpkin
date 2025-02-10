@@ -994,7 +994,7 @@ impl Player {
             let block_state = world.get_block_state(&location).await?;
             let new_state = server
                 .block_properties_manager
-                .on_interact(block, block_state, &ItemStack::new(0, Item::AIR))
+                .on_interact(block, block_state, &stack)
                 .await;
             world.set_block_state(&location, new_state).await;
             self.client
