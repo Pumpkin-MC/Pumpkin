@@ -45,10 +45,7 @@ impl CommandExecutor for MsgExecutor {
                         &TextComponent::text(target.gameprofile.name.clone())
                             .hover_event(HoverEvent::show_entity(
                                 target.living_entity.entity.entity_uuid.to_string(),
-                                Some(
-                                    format!("{:?}", target.living_entity.entity.entity_type)
-                                        .to_lowercase(),
-                                ),
+                                target.living_entity.entity.entity_type.resource_name.into(),
                                 Some(TextComponent::text(target.gameprofile.name.clone())),
                             ))
                             .click_event(ClickEvent::SuggestCommand(
@@ -66,10 +63,7 @@ impl CommandExecutor for MsgExecutor {
                     &TextComponent::text(player.gameprofile.name.clone())
                         .hover_event(HoverEvent::show_entity(
                             player.living_entity.entity.entity_uuid.to_string(),
-                            Some(
-                                format!("{:?}", player.living_entity.entity.entity_type)
-                                    .to_lowercase(),
-                            ),
+                            player.living_entity.entity.entity_type.resource_name.into(),
                             Some(TextComponent::text(player.gameprofile.name.clone())),
                         ))
                         .click_event(ClickEvent::SuggestCommand(

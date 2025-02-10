@@ -42,7 +42,7 @@ impl CommandExecutor for KillExecutor {
             let mut entity_display =
                 TextComponent::text(name.clone()).hover_event(HoverEvent::show_entity(
                     entity.entity_uuid.to_string(),
-                    Some(format!("{:?}", entity.entity_type).to_lowercase()),
+                    entity.entity_type.resource_name.into(),
                     Some(TextComponent::text(name.clone())),
                 ));
 
@@ -88,7 +88,7 @@ impl CommandExecutor for KillSelfExecutor {
                 [TextComponent::text(name.clone())
                     .hover_event(HoverEvent::show_entity(
                         entity.entity_uuid.to_string(),
-                        Some(format!("{:?}", entity.entity_type).to_lowercase()),
+                        entity.entity_type.resource_name.into(),
                         Some(TextComponent::text(name.clone())),
                     ))
                     .click_event(ClickEvent::SuggestCommand(

@@ -72,10 +72,12 @@ impl CommandExecutor for GiveExecutor {
                     TextComponent::text(targets[0].gameprofile.name.to_string())
                         .hover_event(HoverEvent::show_entity(
                             targets[0].living_entity.entity.entity_uuid.to_string(),
-                            Some(
-                                format!("{:?}", targets[0].living_entity.entity.entity_type)
-                                    .to_lowercase(),
-                            ),
+                            targets[0]
+                                .living_entity
+                                .entity
+                                .entity_type
+                                .resource_name
+                                .into(),
                             Some(TextComponent::text(targets[0].gameprofile.name.clone())),
                         ))
                         .click_event(ClickEvent::SuggestCommand(
