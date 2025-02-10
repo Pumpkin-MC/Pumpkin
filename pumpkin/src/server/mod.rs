@@ -12,6 +12,7 @@ use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
@@ -475,5 +476,21 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.tick().await;
         }
+    }
+
+    pub async fn handle_stop(&self, kick_msg: Option<TextComponent>) {
+        log::warn!(
+            "{}",
+            TextComponent::text("Received interrupt signal; stopping server...")
+                .color_named(NamedColor::Red)
+                .to_pretty_console()
+        );
+
+        // TODO: Gracefully stop
+        let kick_message = kick_msg.unwrap_or_else(|| TextComponent::text("Server stopped"));
+        for player in self.get_all_players().await {
+            player.kick(kick_message.clone()).await;
+        }
+        self.save().await;
     }
 }

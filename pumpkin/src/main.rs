@@ -36,20 +36,13 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
-use std::{
-    io::{self},
-    sync::LazyLock,
-};
-#[cfg(not(unix))]
-use tokio::signal::ctrl_c;
-#[cfg(unix)]
-use tokio::signal::unix::{signal, SignalKind};
+use std::sync::LazyLock;
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin::{init_log, PumpkinServer};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::TextComponent;
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -104,12 +97,6 @@ async fn main() {
     log::info!("Report Issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
     log::info!("Join our Discord for community support https://discord.com/invite/wT8XjrjKkf");
 
-    tokio::spawn(async {
-        setup_sighandler()
-            .await
-            .expect("Unable to setup signal handlers");
-    });
-
     let pumpkin_server = PumpkinServer::new().await;
     pumpkin_server.init_plugins().await;
 
@@ -120,42 +107,4 @@ async fn main() {
     );
 
     pumpkin_server.start().await;
-}
-
-fn handle_interrupt() {
-    log::warn!(
-        "{}",
-        TextComponent::text("Received interrupt signal; stopping server...")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
-    );
-    std::process::exit(0);
-}
-
-// Non-UNIX Ctrl-C handling
-#[cfg(not(unix))]
-async fn setup_sighandler() -> io::Result<()> {
-    if ctrl_c().await.is_ok() {
-        handle_interrupt();
-    }
-
-    Ok(())
-}
-
-// Unix signal handling
-#[cfg(unix)]
-async fn setup_sighandler() -> io::Result<()> {
-    if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    if signal(SignalKind::terminate())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    Ok(())
 }

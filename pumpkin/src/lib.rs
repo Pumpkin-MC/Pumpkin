@@ -7,6 +7,7 @@ use log::{LevelFilter, Log};
 use plugin::PluginManager;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_util::text::TextComponent;
+use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use simple_logger::SimpleLogger;
 use std::{
@@ -230,6 +231,9 @@ impl PumpkinServer {
 fn setup_console(server: Arc<Server>) {
     tokio::spawn(async move {
         let mut rl = DefaultEditor::new().unwrap();
+        if rl.load_history("data/history.txt").is_err() {
+            log::info!("No previous history; creating new history file.");
+        }
         loop {
             // maybe put this into config ?
             let readline = rl.readline("$ ");
@@ -241,6 +245,12 @@ fn setup_console(server: Arc<Server>) {
                     dispatcher
                         .handle_command(&mut command::CommandSender::Console, &server, &line)
                         .await;
+                }
+                Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+                    // TODO: Save history on all kind of exit
+                    let _ = rl.save_history("data/history.txt");
+                    server.handle_stop(None).await;
+                    std::process::exit(0);
                 }
                 Err(_) => {
                     // TODO: we can handle CTRL+C and stuff here
