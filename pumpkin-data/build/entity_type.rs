@@ -18,7 +18,7 @@ pub struct EntityType {
 
 pub struct NamedEntityType<'a>(&'a str, &'a EntityType);
 
-impl<'a> ToTokens for NamedEntityType<'a> {
+impl ToTokens for NamedEntityType<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = self.0;
         let entity = self.1;
