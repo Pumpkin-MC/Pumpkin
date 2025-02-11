@@ -494,8 +494,10 @@ impl Server {
         );
 
         // TODO: Gracefully stop
-        let kick_message = kick_msg
-            .unwrap_or_else(|| TextComponent::text("Server stopped").color_named(NamedColor::Red));
+        let kick_message = kick_msg.unwrap_or_else(|| {
+            TextComponent::translate("multiplayer.disconnect.server_shutdown", vec![])
+                .color_named(NamedColor::Red)
+        });
         for player in self.get_all_players().await {
             player.kick(kick_message.clone()).await;
         }
