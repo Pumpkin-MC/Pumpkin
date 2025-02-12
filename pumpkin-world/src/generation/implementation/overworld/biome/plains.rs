@@ -1,8 +1,10 @@
 use noise::Perlin;
 use pumpkin_data::chunk::Biome;
 use pumpkin_macros::block_state;
-use pumpkin_util::math::vector2::Vector2;
-use rand::Rng;
+use pumpkin_util::{
+    math::vector2::Vector2,
+    random::{self, xoroshiro128::Xoroshiro, RandomImpl},
+};
 
 use crate::{
     chunk::Subchunks,
@@ -63,12 +65,15 @@ impl PerlinTerrainGenerator for PlainsTerrainGenerator {
         } else if y == chunk_height - 2 {
             subchunks.set_block(coordinates, block_state!("grass_block").state_id);
         } else if y == chunk_height - 1 {
+            let seed = random::get_seed();
+            let mut random = Xoroshiro::from_seed(seed);
+
             // TODO: generate flowers and grass
-            let grass: u8 = rand::thread_rng().gen_range(0..7);
+            let grass = random.next_bounded_i32(8);
             if grass == 3 {
-                let flower: u8 = rand::thread_rng().gen_range(0..20);
+                let flower = random.next_bounded_i32(20);
                 if flower == 6 {
-                    match rand::thread_rng().gen_range(0..4) {
+                    match random.next_bounded_i32(5) {
                         0 => {
                             subchunks.set_block(coordinates, block_state!("dandelion").state_id);
                         }

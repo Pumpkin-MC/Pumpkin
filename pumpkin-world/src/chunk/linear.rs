@@ -461,6 +461,7 @@ mod tests {
     use pumpkin_util::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
+    use temp_dir::TempDir;
 
     use crate::chunk::ChunkWriter;
     use crate::generation::{get_world_gen, Seed};
@@ -485,15 +486,13 @@ mod tests {
     #[test]
     fn test_writing() {
         let generator = get_world_gen(Seed(0));
-        let level_folder = LevelFolder {
-            root_folder: PathBuf::from("./tmp_Linear"),
-            region_folder: PathBuf::from("./tmp_Linear/region"),
-        };
-        if fs::exists(&level_folder.root_folder).unwrap() {
-            fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
-        }
 
-        fs::create_dir_all(&level_folder.region_folder).expect("Could not create directory");
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = LevelFolder {
+            root_folder: temp_dir.path().to_path_buf(),
+            region_folder: temp_dir.path().join("region"),
+        };
+        fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
 
         // Generate chunks
         let mut chunks = vec![];
@@ -529,8 +528,6 @@ mod tests {
                 assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
             }
         }
-
-        fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
 
         println!("Checked chunks successfully");
     }

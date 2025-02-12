@@ -7,6 +7,9 @@ use crate::{generation::Seed, level::LevelFolder};
 
 pub mod anvil;
 
+pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: u32 = 4080; // 1.21.2
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: u32 = 4189; // 1.21.4
+
 pub(crate) trait WorldInfoReader {
     fn read_world_info(&self, level_folder: &LevelFolder) -> Result<LevelData, WorldInfoError>;
 }
@@ -21,12 +24,9 @@ pub(crate) trait WorldInfoWriter: Sync + Send {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
-#[serde(default)]
 pub struct LevelData {
-    // true if cheats are enabled.
-    pub allow_commands: bool,
     // An integer displaying the data version.
-    pub data_version: i32,
+    pub data_version: u32,
     // The current difficulty setting.
     pub difficulty: u8,
     // the generation settings for each dimension.
@@ -58,7 +58,7 @@ pub struct WorldGenSettings {
 }
 
 fn get_or_create_seed() -> Seed {
-    // TODO: if there is a seed in the config (!= 0) use it. Otherwise make a random one
+    // TODO: if there is a seed in the config (!= "") use it. Otherwise make a random one
     Seed::from(BASIC_CONFIG.seed.as_str())
 }
 
@@ -78,7 +78,9 @@ pub struct WorldVersion {
     // An integer displaying the data version.
     pub id: i32,
     // Whether the version is a snapshot or not.
-    pub snapshot: bool,
+    // TODO: fast_nbt doesnt support bools
+    // pub snapshot: bool,
+
     // Developing series. In 1.18 experimental snapshots, it was set to "ccpreview". In others, set to "main".
     pub series: String,
 }
@@ -88,7 +90,6 @@ impl Default for WorldVersion {
         Self {
             name: "1.24.4".to_string(),
             id: -1,
-            snapshot: false,
             series: "main".to_string(),
         }
     }
@@ -97,9 +98,8 @@ impl Default for WorldVersion {
 impl Default for LevelData {
     fn default() -> Self {
         Self {
-            allow_commands: true,
-            // TODO
-            data_version: -1,
+            // TODO: Define defaults somewhere
+            data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             difficulty: Difficulty::Normal as u8,
             world_gen_settings: Default::default(),
             last_played: -1,
@@ -122,6 +122,8 @@ pub enum WorldInfoError {
     InfoNotFound,
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+    #[error("Unsupported world data version: {0}")]
+    UnsupportedVersion(u32),
 }
 
 impl From<std::io::Error> for WorldInfoError {

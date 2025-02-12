@@ -27,13 +27,13 @@ impl CommandExecutor for StopExecutor {
             )
             .await;
 
-        // TODO: Gracefully stop
-
         let kick_message = TextComponent::text("Server stopped");
         for player in server.get_all_players().await {
             player.kick(kick_message.clone()).await;
         }
         server.save().await;
+
+        // TODO: Gracefully stop
         std::process::exit(0)
     }
 }

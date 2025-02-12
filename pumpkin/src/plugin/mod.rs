@@ -369,10 +369,10 @@ impl PluginManager {
         // Take a snapshot of handlers to avoid lifetime issues
         let handlers = self.handlers.read().await;
 
-        log::debug!("Firing event: {}", E::get_name_static());
+        log::trace!("Firing event: {}", E::get_name_static());
 
         if let Some(handlers_vec) = handlers.get(&E::get_name_static()) {
-            log::debug!(
+            log::trace!(
                 "Found {} handlers for event: {}",
                 handlers_vec.len(),
                 E::get_name_static()
