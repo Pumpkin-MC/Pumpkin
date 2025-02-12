@@ -7,7 +7,8 @@ use log::{LevelFilter, Log};
 use plugin::PluginManager;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_util::text::TextComponent;
-use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
+use server::RL;
 use simple_logger::SimpleLogger;
 use std::{
     net::SocketAddr,
@@ -229,18 +230,24 @@ impl PumpkinServer {
 
 fn setup_console(server: Arc<Server>) {
     tokio::spawn(async move {
-        let mut rl = DefaultEditor::new().unwrap();
+        if RL.lock().await.load_history("data/history.txt").is_err() {
+            log::info!("No previous history; creating new history file.");
+        }
         loop {
             // maybe put this into config ?
-            let readline = rl.readline("$ ");
+            let readline = RL.lock().await.readline("$ ");
 
             match readline {
                 Ok(line) => {
-                    rl.add_history_entry(line.as_str()).unwrap();
+                    RL.lock().await.add_history_entry(line.as_str()).unwrap();
                     let dispatcher = server.command_dispatcher.read().await;
                     dispatcher
                         .handle_command(&mut command::CommandSender::Console, &server, &line)
                         .await;
+                }
+                Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+                    server.handle_stop(None).await;
+                    std::process::exit(0);
                 }
                 Err(_) => {
                     // TODO: we can handle CTRL+C and stuff here

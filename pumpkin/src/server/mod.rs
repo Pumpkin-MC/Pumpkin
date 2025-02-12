@@ -12,13 +12,17 @@ use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
+use rustyline::history::FileHistory;
+use rustyline::{DefaultEditor, Editor};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
+use std::sync::LazyLock;
 use std::{
     sync::{
         atomic::{AtomicI32, Ordering},
@@ -27,6 +31,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::sleep;
 
 use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
@@ -47,6 +52,9 @@ mod key_store;
 pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.4";
+
+pub static RL: LazyLock<Mutex<Editor<(), FileHistory>>> =
+    LazyLock::new(|| Mutex::new(DefaultEditor::new().unwrap()));
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -475,5 +483,31 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.tick().await;
         }
+    }
+
+    pub async fn handle_stop(&self, kick_msg: Option<TextComponent>) {
+        log::warn!(
+            "{}",
+            TextComponent::text("Received interrupt signal; stopping server...")
+                .color_named(NamedColor::Red)
+                .to_pretty_console()
+        );
+
+        // TODO: Gracefully stop
+        let kick_message = kick_msg.unwrap_or_else(|| {
+            TextComponent::translate("multiplayer.disconnect.server_shutdown", vec![])
+                .color_named(NamedColor::Red)
+        });
+        for player in self.get_all_players().await {
+            player.kick(kick_message.clone()).await;
+        }
+        if let Ok(mut rl) = RL.try_lock() {
+            let _ = rl.save_history("data/history.txt");
+        } else {
+            log::warn!("Failed to save history");
+        };
+        // Time enough to send the kick message and the last packets
+        sleep(Duration::from_millis(5)).await;
+        self.save().await;
     }
 }
