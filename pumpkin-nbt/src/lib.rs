@@ -204,7 +204,10 @@ impl_array!(BytesArray, "byte");
 #[cfg(test)]
 mod test {
     use serde::{Deserialize, Serialize};
+    use std::vec;
 
+    use crate::deserializer::from_bytes;
+    use crate::serializer::to_bytes;
     use crate::BytesArray;
     use crate::IntArray;
     use crate::LongArray;
@@ -236,6 +239,23 @@ mod test {
         assert_eq!(test, recreated_struct);
     }
 
+    #[test]
+    fn test_simple_ser_de_named() {
+        let name = String::from("Test");
+        let test = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+        let mut bytes = to_bytes(&test, name).unwrap();
+        let recreated_struct: Test = from_bytes(&mut bytes).unwrap();
+
+        assert_eq!(test, recreated_struct);
+    }
+
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct TestArray {
         #[serde(with = "BytesArray")]
@@ -257,5 +277,115 @@ mod test {
         let recreated_struct: TestArray = from_bytes_unnamed(&mut bytes).unwrap();
 
         assert_eq!(test, recreated_struct);
+    }
+
+    #[test]
+    fn test_simple_ser_de_array_named() {
+        let name = String::from("Test");
+        let test = TestArray {
+            byte_array: vec![0, 3, 2],
+            int_array: vec![13, 1321, 2],
+            long_array: vec![1, 0, 200301, 1],
+        };
+        let mut bytes = to_bytes(&test, name).unwrap();
+        let recreated_struct: TestArray = from_bytes(&mut bytes).unwrap();
+
+        assert_eq!(test, recreated_struct);
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Egg {
+        food: String,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Breakfast {
+        food: Egg,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct TestList {
+        option: Option<Egg>,
+        nested_compound: Breakfast,
+        compounds: Vec<Test>,
+        list_string: Vec<String>,
+        empty: Vec<Test>,
+    }
+
+    #[test]
+    fn test_list() {
+        let test1 = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+
+        let test2 = Test {
+            byte: 13,
+            short: 342,
+            int: -4313,
+            long: -132334,
+            float: -69.420,
+            string: "Hello compounds".to_string(),
+        };
+
+        let list_compound = TestList {
+            option: Some(Egg {
+                food: "Skibid".to_string(),
+            }),
+            nested_compound: Breakfast {
+                food: Egg {
+                    food: "Over easy".to_string(),
+                },
+            },
+            compounds: vec![test1, test2],
+            list_string: vec!["".to_string(), "abcbcbcbbc".to_string()],
+            empty: vec![],
+        };
+
+        let mut bytes = to_bytes_unnamed(&list_compound).unwrap();
+        println!("{:02x?}", bytes.clone().into_iter().collect::<Vec<u8>>());
+        let recreated_struct: TestList = from_bytes_unnamed(&mut bytes).unwrap();
+        assert_eq!(list_compound, recreated_struct);
+    }
+
+    #[test]
+    fn test_list_named() {
+        let test1 = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+
+        let test2 = Test {
+            byte: 13,
+            short: 342,
+            int: -4313,
+            long: -132334,
+            float: -69.420,
+            string: "Hello compounds".to_string(),
+        };
+
+        let list_compound = TestList {
+            option: None,
+            nested_compound: Breakfast {
+                food: Egg {
+                    food: "Over easy".to_string(),
+                },
+            },
+            compounds: vec![test1, test2],
+            list_string: vec!["".to_string(), "abcbcbcbbc".to_string()],
+            empty: vec![],
+        };
+
+        let mut bytes = to_bytes(&list_compound, "a".to_string()).unwrap();
+        let recreated_struct: TestList = from_bytes(&mut bytes).unwrap();
+        assert_eq!(list_compound, recreated_struct);
     }
 }

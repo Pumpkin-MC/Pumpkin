@@ -1,5 +1,4 @@
 use bytes::*;
-use fastnbt::LongArray;
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
@@ -425,7 +424,7 @@ impl AnvilChunkFormat {
             sections.push(ChunkSection {
                 y: i as i8 - 4,
                 block_states: Some(ChunkSectionBlockStates {
-                    data: Some(LongArray::new(section_longs)),
+                    data: Some(section_longs),
                     palette: palette
                         .into_iter()
                         .map(|entry| PaletteEntry {
@@ -446,7 +445,10 @@ impl AnvilChunkFormat {
             sections,
         };
 
-        fastnbt::to_bytes(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)
+        match pumpkin_nbt::serializer::to_bytes(&nbt, "ChunkNbt".to_string()) {
+            Ok(bytes) => Ok(bytes.into_iter().collect()),
+            Err(e) => Err(ChunkSerializingError::ErrorSerializingChunk(e)),
+        }
     }
 
     /// Returns the next free writable sector
