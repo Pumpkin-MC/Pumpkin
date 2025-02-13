@@ -357,7 +357,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.players.lock().await.iter() {
+            for (_, player) in world.players.read().await.iter() {
                 if player.client.address.lock().await.ip() == ip {
                     players.push(player.clone());
                 }
@@ -372,7 +372,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.players.lock().await.iter() {
+            for (_, player) in world.players.read().await.iter() {
                 players.push(player.clone());
             }
         }
@@ -418,7 +418,7 @@ impl Server {
     pub async fn get_player_count(&self) -> usize {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
-            count += world.players.lock().await.len();
+            count += world.players.read().await.len();
         }
         count
     }
@@ -427,7 +427,7 @@ impl Server {
     pub async fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
-            count += world.players.lock().await.len();
+            count += world.players.read().await.len();
             if count >= n {
                 return true;
             }

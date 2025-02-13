@@ -106,7 +106,7 @@ pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
     /// A map of active players within the world, keyed by their unique UUID.
-    pub players: Arc<Mutex<HashMap<uuid::Uuid, Arc<Player>>>>,
+    pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include Players
     pub entities: Arc<RwLock<HashMap<uuid::Uuid, Arc<dyn EntityBase>>>>,
@@ -128,7 +128,7 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
-            players: Arc::new(Mutex::new(HashMap::new())),
+            players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
@@ -151,7 +151,7 @@ impl World {
     where
         P: ClientPacket,
     {
-        let current_players = self.players.lock().await;
+        let current_players = self.players.read().await;
         for player in current_players.values() {
             player.client.send_packet(packet).await;
         }
@@ -182,7 +182,7 @@ impl World {
     where
         P: ClientPacket,
     {
-        let current_players = self.players.lock().await;
+        let current_players = self.players.read().await;
         for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
             player.client.send_packet(packet).await;
         }
@@ -196,7 +196,7 @@ impl World {
         particle_count: i32,
         pariticle: Particle,
     ) {
-        let players = self.players.lock().await;
+        let players = self.players.read().await;
         for (_, player) in players.iter() {
             player
                 .spawn_particle(position, offset, max_speed, particle_count, pariticle)
@@ -218,7 +218,7 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().gen::<f64>();
-        let players = self.players.lock().await;
+        let players = self.players.read().await;
         for (_, player) in players.iter() {
             player
                 .play_sound(sound_id, category, position, volume, pitch, seed)
@@ -276,7 +276,7 @@ impl World {
         };
 
         // player ticks
-        for player in self.players.lock().await.values() {
+        for player in self.players.read().await.values() {
             player.tick().await;
         }
 
@@ -287,7 +287,7 @@ impl World {
             entity.tick().await;
             // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
             let mut collied_player = None;
-            for player in self.players.lock().await.values() {
+            for player in self.players.read().await.values() {
                 if player
                     .living_entity
                     .entity
@@ -407,7 +407,7 @@ impl World {
         // here we send all the infos of already joined players
         let mut entries = Vec::new();
         {
-            let current_players = self.players.lock().await;
+            let current_players = self.players.read().await;
             for (_, playerr) in current_players
                 .iter()
                 .filter(|(c, _)| **c != player.gameprofile.id)
@@ -453,7 +453,7 @@ impl World {
         .await;
         // spawn players for our client
         let id = player.gameprofile.id;
-        for (_, existing_player) in self.players.lock().await.iter().filter(|c| c.0 != &id) {
+        for (_, existing_player) in self.players.read().await.iter().filter(|c| c.0 != &id) {
             let entity = &existing_player.living_entity.entity;
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
@@ -744,7 +744,7 @@ impl World {
 
     /// Gets a Player by entity id
     pub async fn get_player_by_id(&self, id: EntityId) -> Option<Arc<Player>> {
-        for player in self.players.lock().await.values() {
+        for player in self.players.read().await.values() {
             if player.entity_id() == id {
                 return Some(player.clone());
             }
@@ -764,7 +764,7 @@ impl World {
 
     /// Gets a Player by username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
-        for player in self.players.lock().await.values() {
+        for player in self.players.read().await.values() {
             if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
                 return Some(player.clone());
             }
@@ -785,7 +785,7 @@ impl World {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not.
     pub async fn get_player_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<Player>> {
-        return self.players.lock().await.get(&id).cloned();
+        return self.players.read().await.get(&id).cloned();
     }
 
     /// Gets a list of players who's location equals the given position in the world.
@@ -799,7 +799,7 @@ impl World {
     /// * `position`: The position the function will check.
     pub async fn get_players_by_pos(&self, position: BlockPos) -> HashMap<uuid::Uuid, Arc<Player>> {
         self.players
-            .lock()
+            .read()
             .await
             .iter()
             .filter_map(|(uuid, player)| {
@@ -829,7 +829,7 @@ impl World {
         let radius_squared = radius.powi(2);
 
         self.players
-            .lock()
+            .read()
             .await
             .iter()
             .filter_map(|(id, player)| {
@@ -874,7 +874,7 @@ impl World {
     /// * `player`: An `Arc<Player>` reference to the player object.
     pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) {
         {
-            let mut current_players = self.players.lock().await;
+            let mut current_players = self.players.write().await;
             current_players.insert(uuid, player.clone())
         };
 
@@ -895,7 +895,7 @@ impl World {
 
             if !event.cancelled {
                 let current_players = current_players.clone();
-                let players = current_players.lock().await;
+                let players = current_players.read().await;
                 for player in players.values() {
                     player.send_system_message(&event.join_message).await;
                 }
@@ -925,7 +925,7 @@ impl World {
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
     pub async fn remove_player(&self, player: Arc<Player>, fire_event: bool) {
         self.players
-            .lock()
+            .write()
             .await
             .remove(&player.gameprofile.id)
             .unwrap();
@@ -953,7 +953,7 @@ impl World {
                 .await;
 
             if !event.cancelled {
-                let players = self.players.lock().await;
+                let players = self.players.read().await;
                 for player in players.values() {
                     player.send_system_message(&event.leave_message).await;
                 }

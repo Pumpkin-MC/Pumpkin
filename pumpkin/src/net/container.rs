@@ -493,7 +493,7 @@ impl Player {
             .read()
             .await
             .players
-            .lock()
+            .read()
             .await
             .iter()
             .filter_map(|(token, player)| {

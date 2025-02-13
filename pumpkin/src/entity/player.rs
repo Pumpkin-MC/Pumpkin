@@ -635,7 +635,7 @@ impl Player {
         let uuid = self.gameprofile.id;
         current_world.remove_player(self.clone(), false).await;
         *self.living_entity.entity.world.write().await = new_world.clone();
-        new_world.players.lock().await.insert(uuid, self.clone());
+        new_world.players.write().await.insert(uuid, self.clone());
         self.unload_watched_chunks(&current_world).await;
         let last_pos = self.living_entity.last_pos.load();
         let death_dimension = self.world().await.dimension_type.name();
