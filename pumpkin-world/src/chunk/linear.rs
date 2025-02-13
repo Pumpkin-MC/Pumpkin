@@ -1,27 +1,15 @@
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{chunk::ChunkWritingError, level::LevelFolder};
+use crate::chunk::anvil::AnvilChunkFile;
+use crate::chunks_io::{ChunkSerializer, LoadedData};
 use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_util::math::vector2::Vector2;
 
-use super::anvil::AnvilChunkFormat;
-use super::{
-    ChunkData, ChunkReader, ChunkReadingError, ChunkSerializingError, ChunkWriter,
-    CompressionError, FILE_LOCK_MANAGER,
-};
-
-/// The side size of a region in chunks (one region is 32x32 chunks)
-const REGION_SIZE: usize = 32;
-
-/// The number of bits that identify two chunks in the same region
-const SUBREGION_BITS: u8 = pumpkin_util::math::ceil_log2(REGION_SIZE as u32);
-
-/// The number of chunks in a region
-const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
+use super::anvil::{AnvilChunkFormat, CHUNK_COUNT, SUBREGION_BITS};
+use super::{ChunkData, ChunkReadingError, ChunkWritingError};
 
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
@@ -61,13 +49,10 @@ struct LinearFileHeader {
     /// (16..24 Bytes) A hash of the region file (unused).
     region_hash: u64,
 }
-struct LinearFile {
+pub struct LinearFile {
     chunks_headers: Box<[LinearChunkHeader; CHUNK_COUNT]>,
     chunks_data: Vec<u8>,
 }
-
-#[derive(Clone, Default)]
-pub struct LinearChunkFormat;
 
 impl LinearChunkHeader {
     const CHUNK_HEADER_SIZE: usize = 8;
@@ -151,50 +136,95 @@ impl LinearFileHeader {
 }
 
 impl LinearFile {
-    fn new() -> Self {
+    const fn get_chunk_index(at: Vector2<i32>) -> usize {
+        // we need only the 5 last bits of the x and z coordinates
+        let decode_x = at.x - ((at.x >> SUBREGION_BITS) << SUBREGION_BITS);
+        let decode_z = at.z - ((at.z >> SUBREGION_BITS) << SUBREGION_BITS);
+
+        // we calculate the index of the chunk in the region file
+        ((decode_z << SUBREGION_BITS) + decode_x) as usize
+    }
+    fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
+        if bytes[0..8] != SIGNATURE {
+            error!("Signature at the start of the file is invalid");
+            return Err(ChunkReadingError::InvalidHeader);
+        }
+
+        if bytes[bytes.len() - 8..] != SIGNATURE {
+            error!("Signature at the end of the file is invalid");
+            return Err(ChunkReadingError::InvalidHeader);
+        }
+
+        Ok(())
+    }
+}
+
+impl Default for LinearFile {
+    fn default() -> Self {
         LinearFile {
             chunks_headers: Box::new([LinearChunkHeader::default(); CHUNK_COUNT]),
             chunks_data: vec![],
         }
     }
-    fn check_signature(file: &mut File) -> Result<(), ChunkReadingError> {
-        let mut signature = [0; 8];
+}
 
-        file.seek(SeekFrom::Start(0))
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?; //seek to the start of the file
-        file.read_exact(&mut signature)
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-        if signature != SIGNATURE {
-            error!("Signature at the start of the file is invalid");
-            return Err(ChunkReadingError::InvalidHeader);
-        }
+impl ChunkSerializer for LinearFile {
+    type Data = ChunkData;
 
-        file.seek(SeekFrom::End(-8))
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?; //seek to the end of the file
-        file.read_exact(&mut signature)
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-        if signature != SIGNATURE {
-            error!("Signature at the end of the file is invalid");
-            return Err(ChunkReadingError::InvalidHeader);
-        }
-
-        file.rewind()
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?; //rewind the file
-
-        Ok(())
+    fn get_chunk_key(chunk: Vector2<i32>) -> String {
+        let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
+        format!("./r.{}.{}.linear", region_x, region_z)
     }
 
-    fn load(path: &Path) -> Result<Self, ChunkReadingError> {
-        let mut file = OpenOptions::new()
-            .read(true)
-            .truncate(false)
-            .open(path)
-            .map_err(|err| match err.kind() {
-                std::io::ErrorKind::NotFound => ChunkReadingError::ChunkNotExist,
-                kind => ChunkReadingError::IoError(kind),
-            })?;
+    fn to_bytes(&self) -> Vec<u8> {
+        // Parse the headers to a buffer
+        let headers_buffer: Vec<u8> = self
+            .chunks_headers
+            .iter()
+            .flat_map(|header| header.to_bytes())
+            .collect();
 
-        Self::check_signature(&mut file)?;
+        // Compress the data buffer
+        let compressed_buffer = zstd::encode_all(
+            [headers_buffer.as_slice(), self.chunks_data.as_slice()]
+                .concat()
+                .as_slice(),
+            ADVANCED_CONFIG.chunk.compression.level as i32,
+        )
+        .unwrap();
+
+        let file_header = LinearFileHeader {
+            chunks_bytes: compressed_buffer.len() as u32,
+            compression_level: ADVANCED_CONFIG.chunk.compression.level as u8,
+            chunks_count: self
+                .chunks_headers
+                .iter()
+                .filter(|&header| header.size != 0)
+                .count() as u16,
+            newest_timestamp: self
+                .chunks_headers
+                .iter()
+                .map(|header| header.timestamp)
+                .max()
+                .unwrap_or(0) as u64,
+            version: LinearVersion::V1,
+            region_hash: 0,
+        }
+        .to_bytes();
+
+        [
+            SIGNATURE.as_slice(),
+            file_header.as_slice(),
+            compressed_buffer.as_slice(),
+            SIGNATURE.as_slice(),
+        ]
+        .concat()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
+        Self::check_signature(bytes)?;
+
+        let mut file = Cursor::new(bytes);
 
         // Skip the signature and read the header
         let mut header_bytes = [0; LinearFileHeader::FILE_HEADER_SIZE];
@@ -253,97 +283,11 @@ impl LinearFile {
         })
     }
 
-    fn save(&self, path: &Path) -> Result<(), ChunkWritingError> {
-        // Parse the headers to a buffer
-        let headers_buffer: Vec<u8> = self
-            .chunks_headers
-            .as_ref()
-            .iter()
-            .flat_map(|header| header.to_bytes())
-            .collect();
-
-        // Compress the data buffer
-        let compressed_buffer = zstd::encode_all(
-            [headers_buffer.as_slice(), self.chunks_data.as_slice()]
-                .concat()
-                .as_slice(),
-            ADVANCED_CONFIG.chunk.compression.level as i32,
-        )
-        .map_err(|err| ChunkWritingError::Compression(CompressionError::ZstdError(err)))?;
-
-        // Update the header
-        let file_header = LinearFileHeader {
-            chunks_bytes: compressed_buffer.len() as u32,
-            compression_level: ADVANCED_CONFIG.chunk.compression.level as u8,
-            chunks_count: self
-                .chunks_headers
-                .iter()
-                .filter(|&header| header.size != 0)
-                .count() as u16,
-            newest_timestamp: self
-                .chunks_headers
-                .iter()
-                .map(|header| header.timestamp)
-                .max()
-                .unwrap_or(0) as u64,
-            version: LinearVersion::V1,
-            region_hash: 0,
-        }
-        .to_bytes();
-
-        // Write/OverWrite the data to the file
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)
-            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
-
-        file.write_all(
-            [
-                SIGNATURE.as_slice(),
-                file_header.as_slice(),
-                compressed_buffer.as_slice(),
-                SIGNATURE.as_slice(),
-            ]
-            .concat()
-            .as_slice(),
-        )
-        .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
-
-        Ok(())
-    }
-
-    fn get_chunk(
-        &self,
-        at: &pumpkin_util::math::vector2::Vector2<i32>,
-    ) -> Result<ChunkData, ChunkReadingError> {
-        // We check if the chunk exists
-        let chunk_index: usize = LinearChunkFormat::get_chunk_index(at);
-
-        let chunk_size = self.chunks_headers[chunk_index].size as usize;
-        if chunk_size == 0 {
-            return Err(ChunkReadingError::ChunkNotExist);
-        }
-
-        // We iterate over the headers to sum the size of the chunks until the desired one
-        let mut offset: usize = 0;
-        for i in 0..chunk_index {
-            offset += self.chunks_headers[i].size as usize;
-        }
-
-        ChunkData::from_bytes(&self.chunks_data[offset..offset + chunk_size], *at)
-            .map_err(ChunkReadingError::ParsingError)
-    }
-
-    fn put_chunk(
-        &mut self,
-        chunk: &ChunkData,
-        at: &pumpkin_util::math::vector2::Vector2<i32>,
-    ) -> Result<(), ChunkSerializingError> {
-        let chunk_index: usize = LinearChunkFormat::get_chunk_index(at);
+    fn add_chunk_data(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError> {
+        let chunk_index: usize = LinearFile::get_chunk_index(chunk_data.position);
         let chunk_raw = AnvilChunkFormat {} //We use Anvil format to serialize the chunk
-            .to_bytes(chunk)?;
+            .to_bytes(chunk_data)
+            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let new_chunk_size = chunk_raw.len();
         let old_chunk_size = self.chunks_headers[chunk_index].size as usize;
@@ -383,76 +327,29 @@ impl LinearFile {
 
         Ok(())
     }
-}
 
-impl LinearChunkFormat {
-    const fn get_region_coords(at: &pumpkin_util::math::vector2::Vector2<i32>) -> (i32, i32) {
-        (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS) // Divide by 32 for the region coordinates
-    }
-
-    const fn get_chunk_index(at: &pumpkin_util::math::vector2::Vector2<i32>) -> usize {
-        // we need only the 5 last bits of the x and z coordinates
-        let decode_x = at.x - ((at.x >> SUBREGION_BITS) << SUBREGION_BITS);
-        let decode_z = at.z - ((at.z >> SUBREGION_BITS) << SUBREGION_BITS);
-
-        // we calculate the index of the chunk in the region file
-        ((decode_z << SUBREGION_BITS) + decode_x) as usize
-    }
-}
-
-impl ChunkReader for LinearChunkFormat {
-    fn read_chunk(
+    fn get_chunk_data(
         &self,
-        save_file: &LevelFolder,
-        at: &pumpkin_util::math::vector2::Vector2<i32>,
-    ) -> Result<ChunkData, ChunkReadingError> {
-        let (region_x, region_z) = LinearChunkFormat::get_region_coords(at);
+        chunk: Vector2<i32>,
+    ) -> Result<LoadedData<Self::Data>, ChunkReadingError> {
+        // We check if the chunk exists
+        let chunk_index: usize = LinearFile::get_chunk_index(chunk);
 
-        let path = save_file
-            .region_folder
-            .join(format!("./r.{}.{}.linear", region_x, region_z));
+        let chunk_size = self.chunks_headers[chunk_index].size as usize;
+        if chunk_size == 0 {
+            return Ok(LoadedData::Missing(chunk));
+        }
 
-        tokio::task::block_in_place(|| {
-            let _reader_guard = FILE_LOCK_MANAGER.get_read_guard(&path);
-            //dbg!("Reading chunk at {:?}", at);
-            LinearFile::load(&path)?.get_chunk(at)
-        })
-    }
-}
+        // We iterate over the headers to sum the size of the chunks until the desired one
+        let mut offset: usize = 0;
+        for i in 0..chunk_index {
+            offset += self.chunks_headers[i].size as usize;
+        }
 
-impl ChunkWriter for LinearChunkFormat {
-    fn write_chunk(
-        &self,
-        chunk: &ChunkData,
-        level_folder: &LevelFolder,
-        at: &pumpkin_util::math::vector2::Vector2<i32>,
-    ) -> Result<(), ChunkWritingError> {
-        let (region_x, region_z) = LinearChunkFormat::get_region_coords(at);
-
-        let path = level_folder
-            .region_folder
-            .join(format!("./r.{}.{}.linear", region_x, region_z));
-
-        tokio::task::block_in_place(|| {
-            let _writer_guard = FILE_LOCK_MANAGER.get_write_guard(&path);
-            //dbg!("Writing chunk at {:?}", at);
-
-            let mut file_data = match LinearFile::load(&path) {
-                Ok(file_data) => file_data,
-                Err(ChunkReadingError::ChunkNotExist) => LinearFile::new(),
-                Err(ChunkReadingError::IoError(err)) => {
-                    error!("Error reading the data before write: {}", err);
-                    return Err(ChunkWritingError::IoError(err));
-                }
-                Err(_) => return Err(ChunkWritingError::IoError(std::io::ErrorKind::Other)),
-            };
-
-            file_data
-                .put_chunk(chunk, at)
-                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
-
-            file_data.save(&path)
-        })
+        Ok(LoadedData::Loaded(
+            ChunkData::from_bytes(&self.chunks_data[offset..offset + chunk_size], chunk)
+                .map_err(ChunkReadingError::ParsingError)?,
+        ))
     }
 }
 
@@ -462,24 +359,25 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use crate::chunk::ChunkWriter;
+    use crate::chunk::linear::LinearFile;
+    use crate::chunks_io::{ChunkFileManager, ChunkIO, LoadedData};
     use crate::generation::{get_world_gen, Seed};
-    use crate::{
-        chunk::{linear::LinearChunkFormat, ChunkReader, ChunkReadingError},
-        level::LevelFolder,
-    };
+    use crate::level::LevelFolder;
 
     #[test]
     fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let result = LinearChunkFormat.read_chunk(
+        let chunk_saver = ChunkFileManager::<LinearFile>::default();
+        let result = chunk_saver.load_chunks(
             &LevelFolder {
                 root_folder: PathBuf::from(""),
                 region_folder: region_path,
             },
-            &Vector2::new(0, 0),
+            &[Vector2::new(0, 0)],
         );
-        assert!(matches!(result, Err(ChunkReadingError::ChunkNotExist)));
+        assert!(
+            matches!(result, Ok(chunks) if chunks.len() == 1 && matches!(chunks[0], LoadedData::Missing(_)))
+        );
     }
 
     #[test]
@@ -494,6 +392,7 @@ mod tests {
         }
 
         fs::create_dir_all(&level_folder.region_folder).expect("Could not create directory");
+        let chunk_saver = ChunkFileManager::<LinearFile>::default();
 
         // Generate chunks
         let mut chunks = vec![];
@@ -506,20 +405,28 @@ mod tests {
 
         for i in 0..5 {
             println!("Iteration {}", i + 1);
-            for (at, chunk) in &chunks {
-                LinearChunkFormat
-                    .write_chunk(chunk, &level_folder, at)
-                    .expect("Failed to write chunk");
-            }
+            chunk_saver
+                .save_chunks(
+                    &level_folder,
+                    &chunks
+                        .iter()
+                        .map(|(at, chunk)| (*at, chunk))
+                        .collect::<Vec<_>>(),
+                )
+                .expect("Failed to write chunk");
 
-            let mut read_chunks = vec![];
-            for (at, _chunk) in &chunks {
-                read_chunks.push(
-                    LinearChunkFormat
-                        .read_chunk(&level_folder, at)
-                        .expect("Could not read chunk"),
-                );
-            }
+            let read_chunks = chunk_saver
+                .load_chunks(
+                    &level_folder,
+                    &chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
+                )
+                .expect("Could not read chunk")
+                .into_iter()
+                .filter_map(|chunk| match chunk {
+                    LoadedData::Loaded(chunk) => Some(chunk),
+                    LoadedData::Missing(_) => None,
+                })
+                .collect::<Vec<_>>();
 
             for (at, chunk) in &chunks {
                 let read_chunk = read_chunks
