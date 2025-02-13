@@ -4,6 +4,7 @@ use pumpkin_util::math::vector2::Vector2;
 pub mod biome;
 pub mod block;
 pub mod chunk;
+pub mod chunks_io;
 pub mod coordinates;
 pub mod cylindrical_chunk_iterator;
 pub mod dimension;
