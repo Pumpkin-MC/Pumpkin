@@ -1,7 +1,8 @@
+use crate::deserializer::ReadAdaptor;
 use crate::tag::NbtTag;
 use crate::{get_nbt_string, Error, Nbt, END_ID};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::io::{Cursor, Write};
+use bytes::{BufMut, Bytes, BytesMut};
+use std::io::{Read, Write};
 use std::vec::IntoIter;
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
@@ -16,18 +17,21 @@ impl NbtCompound {
         }
     }
 
-    pub fn deserialize_content(bytes: &mut impl Buf) -> Result<NbtCompound, Error> {
+    pub fn deserialize_content<R>(reader: &mut ReadAdaptor<R>) -> Result<NbtCompound, Error>
+    where
+        R: Read,
+    {
         let mut compound = NbtCompound::new();
 
-        while bytes.has_remaining() {
-            let tag_id = bytes.get_u8();
+        while reader.is_eof()? {
+            let tag_id = reader.get_u8_be()?;
             if tag_id == END_ID {
                 break;
             }
 
-            let name = get_nbt_string(bytes).map_err(|_| Error::Cesu8DecodingError)?;
+            let name = get_nbt_string(reader)?;
 
-            if let Ok(tag) = NbtTag::deserialize_data(bytes, tag_id) {
+            if let Ok(tag) = NbtTag::deserialize_data(reader, tag_id) {
                 compound.put(&name, tag);
             } else {
                 break;
@@ -35,12 +39,6 @@ impl NbtCompound {
         }
 
         Ok(compound)
-    }
-
-    pub fn deserialize_content_from_cursor(
-        cursor: &mut Cursor<&[u8]>,
-    ) -> Result<NbtCompound, Error> {
-        Self::deserialize_content(cursor)
     }
 
     pub fn serialize_content(&self) -> Bytes {

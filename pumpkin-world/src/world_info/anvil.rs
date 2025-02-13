@@ -48,22 +48,10 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
-        let level = LevelDat {
-            data: LevelData {
-                allow_commands: info.allow_commands,
-                data_version: info.data_version,
-                difficulty: info.difficulty,
-                world_gen_settings: info.world_gen_settings,
-                last_played: since_the_epoch.as_millis() as i64,
-                level_name: info.level_name,
-                spawn_x: info.spawn_x,
-                spawn_y: info.spawn_y,
-                spawn_z: info.spawn_z,
-                spawn_angle: info.spawn_angle,
-                nbt_version: info.nbt_version,
-                version: info.version,
-            },
-        };
+        let mut level_data = info.clone();
+        level_data.last_played = since_the_epoch.as_millis() as i64;
+        let level = LevelDat { data: level_data };
+
         // convert it into nbt
         let nbt = pumpkin_nbt::serializer::to_bytes_unnamed(&level).unwrap();
         // now compress using GZip, TODO: im not sure about the to_vec, but writer is not implemented for BytesMut, see https://github.com/tokio-rs/bytes/pull/478

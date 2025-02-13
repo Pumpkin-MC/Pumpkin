@@ -1,12 +1,12 @@
 use std::{
     fmt::Display,
-    io::{self, Cursor, Write},
+    io::{self, Read, Write},
     ops::Deref,
 };
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use cesu8::Cesu8DecodingError;
+use bytes::{BufMut, Bytes, BytesMut};
 use compound::NbtCompound;
+use deserializer::ReadAdaptor;
 use serde::{de, ser};
 use serde::{Deserialize, Deserializer};
 use tag::NbtTag;
@@ -45,6 +45,10 @@ pub enum Error {
     SerdeError(String),
     #[error("NBT doesn't support this type {0}")]
     UnsupportedType(String),
+    #[error("NBT reading was cut short {0}")]
+    Incomplete(io::Error),
+    #[error("Negative list length {0}")]
+    NegativeLength(i32),
 }
 
 impl ser::Error for Error {
@@ -73,26 +77,28 @@ impl Nbt {
         }
     }
 
-    pub fn read(bytes: &mut impl Buf) -> Result<Nbt, Error> {
-        let tag_type_id = bytes.get_u8();
+    pub fn read<R>(reader: &mut ReadAdaptor<R>) -> Result<Nbt, Error>
+    where
+        R: Read,
+    {
+        let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
         }
 
         Ok(Nbt {
-            name: get_nbt_string(bytes).map_err(|_| Error::Cesu8DecodingError)?,
-            root_tag: NbtCompound::deserialize_content(bytes)?,
+            name: get_nbt_string(reader)?,
+            root_tag: NbtCompound::deserialize_content(reader)?,
         })
     }
 
-    pub fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Nbt, Error> {
-        Self::read(cursor)
-    }
-
     /// Reads NBT tag, that doesn't contain the name of root compound.
-    pub fn read_unnamed(bytes: &mut impl Buf) -> Result<Nbt, Error> {
-        let tag_type_id = bytes.get_u8();
+    pub fn read_unnamed<R>(reader: &mut ReadAdaptor<R>) -> Result<Nbt, Error>
+    where
+        R: Read,
+    {
+        let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
@@ -100,13 +106,8 @@ impl Nbt {
 
         Ok(Nbt {
             name: String::new(),
-            root_tag: NbtCompound::deserialize_content(bytes)
-                .map_err(|_| Error::Cesu8DecodingError)?,
+            root_tag: NbtCompound::deserialize_content(reader)?,
         })
-    }
-
-    pub fn read_unnamed_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Nbt, Error> {
-        Self::read_unnamed(cursor)
     }
 
     pub fn write(&self) -> Bytes {
@@ -166,10 +167,10 @@ impl AsMut<NbtCompound> for Nbt {
     }
 }
 
-pub fn get_nbt_string(bytes: &mut impl Buf) -> Result<String, Cesu8DecodingError> {
-    let len = bytes.get_u16() as usize;
-    let string_bytes = bytes.copy_to_bytes(len);
-    let string = cesu8::from_java_cesu8(&string_bytes)?;
+pub fn get_nbt_string<R: Read>(bytes: &mut ReadAdaptor<R>) -> Result<String, Error> {
+    let len = bytes.get_u16_be()? as usize;
+    let string_bytes = bytes.read_to_bytes(len)?;
+    let string = cesu8::from_java_cesu8(&string_bytes).map_err(|_| Error::Cesu8DecodingError)?;
     Ok(string.to_string())
 }
 
@@ -203,7 +204,10 @@ impl_array!(BytesArray, "byte");
 
 #[cfg(test)]
 mod test {
+    use flate2::read::GzDecoder;
     use serde::{Deserialize, Serialize};
+
+    use pumpkin_world::world_info::LevelData;
 
     use crate::BytesArray;
     use crate::IntArray;
@@ -230,8 +234,8 @@ mod test {
             float: 1.00,
             string: "Hello test".to_string(),
         };
-        let mut bytes = to_bytes_unnamed(&test).unwrap();
-        let recreated_struct: Test = from_bytes_unnamed(&mut bytes).unwrap();
+        let bytes = to_bytes_unnamed(&test).unwrap();
+        let recreated_struct: Test = from_bytes_unnamed(&mut &bytes[..]).unwrap();
 
         assert_eq!(test, recreated_struct);
     }
@@ -253,9 +257,26 @@ mod test {
             int_array: vec![13, 1321, 2],
             long_array: vec![1, 0, 200301, 1],
         };
-        let mut bytes = to_bytes_unnamed(&test).unwrap();
-        let recreated_struct: TestArray = from_bytes_unnamed(&mut bytes).unwrap();
+        let bytes = to_bytes_unnamed(&test).unwrap();
+        let recreated_struct: TestArray = from_bytes_unnamed(&mut &bytes[..]).unwrap();
 
         assert_eq!(test, recreated_struct);
+    }
+
+    #[test]
+    fn test_serialize_deserialize() {
+        #[derive(Serialize, Deserialize)]
+        struct LevelDat {
+            // This tag contains all the level data.
+            #[serde(rename = "Data")]
+            data: LevelData,
+        }
+
+        let raw_compressed_nbt = include_bytes!("../assets/level.dat");
+
+        let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
+        let level_dat: LevelDat = from_bytes_unnamed(&mut decoder).unwrap();
+
+        assert_eq!(level_dat.data.world_gen_settings.seed, 1);
     }
 }

@@ -1,7 +1,7 @@
-use std::io::Cursor;
-
 use bytes::{Bytes, BytesMut};
 use compound::NbtCompound;
+use deserializer::ReadAdaptor;
+use io::Read;
 
 use crate::*;
 
@@ -82,87 +82,96 @@ impl NbtTag {
         bytes.freeze()
     }
 
-    pub fn deserialize(bytes: &mut impl Buf) -> Result<NbtTag, Error> {
-        let tag_id = bytes.get_u8();
-        Self::deserialize_data(bytes, tag_id)
+    pub fn deserialize<R>(reader: &mut ReadAdaptor<R>) -> Result<NbtTag, Error>
+    where
+        R: Read,
+    {
+        let tag_id = reader.get_u8_be()?;
+        Self::deserialize_data(reader, tag_id)
     }
 
-    pub fn deserialize_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<NbtTag, Error> {
-        Self::deserialize(cursor)
-    }
-
-    pub fn deserialize_data(bytes: &mut impl Buf, tag_id: u8) -> Result<NbtTag, Error> {
+    pub fn deserialize_data<R>(reader: &mut ReadAdaptor<R>, tag_id: u8) -> Result<NbtTag, Error>
+    where
+        R: Read,
+    {
         match tag_id {
             END_ID => Ok(NbtTag::End),
             BYTE_ID => {
-                let byte = bytes.get_i8();
+                let byte = reader.get_i8_be()?;
                 Ok(NbtTag::Byte(byte))
             }
             SHORT_ID => {
-                let short = bytes.get_i16();
+                let short = reader.get_i16_be()?;
                 Ok(NbtTag::Short(short))
             }
             INT_ID => {
-                let int = bytes.get_i32();
+                let int = reader.get_i32_be()?;
                 Ok(NbtTag::Int(int))
             }
             LONG_ID => {
-                let long = bytes.get_i64();
+                let long = reader.get_i64_be()?;
                 Ok(NbtTag::Long(long))
             }
             FLOAT_ID => {
-                let float = bytes.get_f32();
+                let float = reader.get_f32_be()?;
                 Ok(NbtTag::Float(float))
             }
             DOUBLE_ID => {
-                let double = bytes.get_f64();
+                let double = reader.get_f64_be()?;
                 Ok(NbtTag::Double(double))
             }
             BYTE_ARRAY_ID => {
-                let len = bytes.get_i32() as usize;
-                let byte_array = bytes.copy_to_bytes(len);
+                let len = reader.get_i32_be()? as usize;
+                let byte_array = reader.read_to_bytes(len)?;
                 Ok(NbtTag::ByteArray(byte_array))
             }
-            STRING_ID => Ok(NbtTag::String(get_nbt_string(bytes).unwrap())),
+            STRING_ID => Ok(NbtTag::String(get_nbt_string(reader)?)),
             LIST_ID => {
-                let tag_type_id = bytes.get_u8();
-                let len = bytes.get_i32();
+                let tag_type_id = reader.get_u8_be()?;
+                let len = reader.get_i32_be()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
                 let mut list = Vec::with_capacity(len as usize);
                 for _ in 0..len {
-                    let tag = NbtTag::deserialize_data(bytes, tag_type_id)?;
+                    let tag = NbtTag::deserialize_data(reader, tag_type_id)?;
                     assert_eq!(tag.get_type_id(), tag_type_id);
                     list.push(tag);
                 }
                 Ok(NbtTag::List(list))
             }
-            COMPOUND_ID => Ok(NbtTag::Compound(NbtCompound::deserialize_content(bytes)?)),
+            COMPOUND_ID => Ok(NbtTag::Compound(NbtCompound::deserialize_content(reader)?)),
             INT_ARRAY_ID => {
-                let len = bytes.get_i32() as usize;
+                let len = reader.get_i32_be()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                let len = len as usize;
                 let mut int_array = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let int = bytes.get_i32();
+                    let int = reader.get_i32_be()?;
                     int_array.push(int);
                 }
                 Ok(NbtTag::IntArray(int_array))
             }
             LONG_ARRAY_ID => {
-                let len = bytes.get_i32() as usize;
+                let len = reader.get_i32_be()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                let len = len as usize;
                 let mut long_array = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let long = bytes.get_i64();
+                    let long = reader.get_i64_be()?;
                     long_array.push(long);
                 }
                 Ok(NbtTag::LongArray(long_array))
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }
-    }
-
-    pub fn deserialize_data_from_cursor(
-        cursor: &mut Cursor<&[u8]>,
-        tag_id: u8,
-    ) -> Result<NbtTag, Error> {
-        Self::deserialize_data(cursor, tag_id)
     }
 
     pub fn extract_byte(&self) -> Option<i8> {
