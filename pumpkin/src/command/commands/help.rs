@@ -128,6 +128,12 @@ impl CommandExecutor for BaseHelpExecutor {
                 Command::Tree(tree) => Some(tree),
                 Command::Alias(_) => None,
             })
+            .filter(|tree| {
+                dispatcher
+                    .permissions
+                    .get(&tree.names[0])
+                    .map_or(true, |perm| sender.has_permission_lvl(*perm))
+            })
             .collect();
 
         commands.sort_by(|a, b| a.names[0].cmp(&b.names[0]));
