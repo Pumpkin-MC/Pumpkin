@@ -39,7 +39,7 @@ impl CommandExecutor for GamemodeTargetSelf {
 
         if let Player(target) = sender {
             if target.gamemode.load() != gamemode {
-                target.set_gamemode(gamemode).await;
+                target.clone().set_gamemode(gamemode).await;
                 let gamemode_string = format!("{gamemode:?}").to_lowercase();
                 let gamemode_string = format!("gameMode.{gamemode_string}");
                 target
@@ -77,7 +77,7 @@ impl CommandExecutor for GamemodeTargetPlayer {
 
         for target in targets {
             if target.gamemode.load() != gamemode {
-                target.set_gamemode(gamemode).await;
+                target.clone().set_gamemode(gamemode).await;
                 let gamemode_string = format!("{gamemode:?}").to_lowercase();
                 let gamemode_string = format!("gameMode.{gamemode_string}");
                 target

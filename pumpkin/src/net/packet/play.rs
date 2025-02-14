@@ -5,6 +5,7 @@ use crate::block::properties::Direction;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
+use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -20,7 +21,7 @@ use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::world::CHAT;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
-use pumpkin_macros::block_entity;
+use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
     CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem,
 };
@@ -573,7 +574,7 @@ impl Player {
             .await;
     }
 
-    pub async fn handle_chat_message(&self, chat_message: SChatMessage) {
+    pub async fn handle_chat_message(self: Arc<Self>, chat_message: SChatMessage) {
         let message = chat_message.message;
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
@@ -590,26 +591,53 @@ impl Player {
         }
 
         let gameprofile = &self.gameprofile;
-        log::info!("<chat>{}: {}", gameprofile.name, message);
+        send_cancellable! {{
+            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
 
-        let entity = &self.living_entity.entity;
-        let world = &entity.world.read().await;
-        world
-            .broadcast_packet_all(&CPlayerChatMessage::new(
-                gameprofile.id,
-                1.into(),
-                chat_message.signature.as_deref(),
-                &message,
-                chat_message.timestamp,
-                chat_message.salt,
-                &[],
-                Some(TextComponent::text(message.clone())),
-                FilterType::PassThrough,
-                (CHAT + 1).into(),
-                TextComponent::text(gameprofile.name.clone()),
-                None,
-            ))
-            .await;
+            'after: {
+                log::info!("<chat>{}: {}", gameprofile.name, message);
+
+                let entity = &self.living_entity.entity;
+                if event.recipients.is_empty() {
+                let world = &entity.world.read().await;
+                world
+                    .broadcast_packet_all(&CPlayerChatMessage::new(
+                        gameprofile.id,
+                        1.into(),
+                        chat_message.signature.as_deref(),
+                        &event.message,
+                        chat_message.timestamp,
+                        chat_message.salt,
+                        &[],
+                        Some(TextComponent::text(event.message.clone())),
+                        FilterType::PassThrough,
+                        (CHAT + 1).into(),
+                        TextComponent::text(gameprofile.name.clone()),
+                        None,
+                    ))
+                    .await;
+                } else {
+                    for recipient in event.recipients {
+                        recipient.client.send_packet(
+                            &CPlayerChatMessage::new(
+                                gameprofile.id,
+                                1.into(),
+                                chat_message.signature.as_deref(),
+                                &event.message,
+                                chat_message.timestamp,
+                                chat_message.salt,
+                                &[],
+                                Some(TextComponent::text(event.message.clone())),
+                                FilterType::PassThrough,
+                                (CHAT + 1).into(),
+                                TextComponent::text(gameprofile.name.clone()),
+                                None,
+                            ),
+                        ).await;
+                    }
+                }
+            }
+        }}
 
         /* server.broadcast_packet(
             self,

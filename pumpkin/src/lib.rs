@@ -202,25 +202,26 @@ impl PumpkinServer {
                     .make_player
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
-                    let (player, world) = server.add_player(client).await;
-                    world
-                        .spawn_player(&BASIC_CONFIG, player.clone(), &server)
-                        .await;
+                    if let Some((player, world)) = server.add_player(client, client_addr).await {
+                        world
+                            .spawn_player(&BASIC_CONFIG, player.clone(), &server)
+                            .await;
 
-                    // poll Player
-                    while !player
-                        .client
-                        .closed
-                        .load(core::sync::atomic::Ordering::Relaxed)
-                    {
-                        let open = poll(&player.client, connection_reader.clone()).await;
-                        if open {
-                            player.process_packets(&server).await;
-                        };
+                        // poll Player
+                        while !player
+                            .client
+                            .closed
+                            .load(core::sync::atomic::Ordering::Relaxed)
+                        {
+                            let open = poll(&player.client, connection_reader.clone()).await;
+                            if open {
+                                player.process_packets(&server).await;
+                            };
+                        }
+                        log::debug!("Cleaning up player for id {}", id);
+                        player.remove().await;
+                        server.remove_player().await;
                     }
-                    log::debug!("Cleaning up player for id {}", id);
-                    player.remove().await;
-                    server.remove_player().await;
                 }
             });
         }

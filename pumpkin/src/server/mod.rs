@@ -5,6 +5,7 @@ use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::entity::EntityType;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
+use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{client::config::CPluginMessage, ClientPacket};
 use pumpkin_registry::{DimensionType, Registry};
@@ -17,7 +18,7 @@ use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::AtomicU32;
 use std::{
     sync::{
@@ -34,6 +35,7 @@ use crate::block::registry::BlockRegistry;
 use crate::entity::{Entity, EntityId};
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
+use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::{default_dispatcher, dispatcher::CommandDispatcher},
@@ -169,7 +171,11 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the Player in the World to make then to let them Join and make them Visible
-    pub async fn add_player(&self, client: Arc<Client>) -> (Arc<Player>, Arc<World>) {
+    pub async fn add_player(
+        &self,
+        client: Arc<Client>,
+        ip_address: SocketAddr,
+    ) -> Option<(Arc<Player>, Arc<World>)> {
         let entity_id = self.new_entity_id();
         let gamemode = BASIC_CONFIG.default_gamemode;
         // Basically the default world
@@ -177,18 +183,29 @@ impl Server {
         let world = &self.worlds.read().await[0];
 
         let player = Arc::new(Player::new(client, world.clone(), entity_id, gamemode).await);
-        world
-            .add_player(player.gameprofile.id, player.clone())
-            .await;
-        // TODO: Config if we want increase online
-        if let Some(config) = player.client.config.lock().await.as_ref() {
-            // TODO: Config so we can also just ignore this hehe
-            if config.server_listing {
-                self.server_listing.lock().await.add_player();
-            }
-        }
+        send_cancellable! {{
+            PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"), ip_address);
 
-        (player, world.clone())
+            'after: {
+                world
+                    .add_player(player.gameprofile.id, player.clone())
+                    .await;
+                // TODO: Config if we want increase online
+                if let Some(config) = player.client.config.lock().await.as_ref() {
+                    // TODO: Config so we can also just ignore this hehe
+                    if config.server_listing {
+                        self.server_listing.lock().await.add_player();
+                    }
+                }
+
+                Some((player, world.clone()))
+            }
+
+            'cancelled: {
+                player.kick(event.kick_message).await;
+                None
+            }
+        }}
     }
 
     pub async fn remove_player(&self) {
