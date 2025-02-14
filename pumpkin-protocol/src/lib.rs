@@ -82,10 +82,12 @@ pub struct RawPacket {
     pub bytebuf: Bytes,
 }
 
+// TODO: Have the input be `impl Write`
 pub trait ClientPacket: Packet {
     fn write(&self, bytebuf: &mut impl BufMut);
 }
 
+// TODO: Have the input be `impl Read`
 pub trait ServerPacket: Packet + Sized {
     fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError>;
 }

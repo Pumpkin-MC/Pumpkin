@@ -47,7 +47,9 @@ impl ClientPacket for CUpdateObjectives<'_> {
                     NumberFormat::Styled(style) => {
                         p.put_var_int(&VarInt(1));
                         // TODO
-                        p.put_slice(&pumpkin_nbt::serializer::to_bytes_unnamed(style).unwrap());
+                        let mut style_buf = Vec::new();
+                        pumpkin_nbt::serializer::to_bytes_unnamed(style, &mut style_buf).unwrap();
+                        p.put_slice(&style_buf);
                     }
                     NumberFormat::Fixed(text_component) => {
                         p.put_var_int(&VarInt(2));

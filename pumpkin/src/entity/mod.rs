@@ -400,24 +400,20 @@ impl NBTStorage for Entity {
         let position = self.pos.load();
         nbt.put(
             "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
+            NbtTag::List(
+                vec![position.x.into(), position.y.into(), position.z.into()].into_boxed_slice(),
+            ),
         );
         let velocity = self.velocity.load();
         nbt.put(
             "Motion",
-            NbtTag::List(vec![
-                velocity.x.into(),
-                velocity.y.into(),
-                velocity.z.into(),
-            ]),
+            NbtTag::List(
+                vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
+            ),
         );
         nbt.put(
             "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
         );
 
         // todo more...

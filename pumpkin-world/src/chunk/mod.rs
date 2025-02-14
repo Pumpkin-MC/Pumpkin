@@ -2,8 +2,8 @@ use dashmap::{
     mapref::one::{Ref, RefMut},
     DashMap,
 };
-use fastnbt::LongArray;
 use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_nbt::deserializer::from_bytes;
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -168,9 +168,9 @@ struct PaletteEntry {
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
     // #[serde(with = "LongArray")]
-    motion_blocking: LongArray,
+    motion_blocking: Box<[i64]>,
     // #[serde(with = "LongArray")]
-    world_surface: LongArray,
+    world_surface: Box<[i64]>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -183,7 +183,7 @@ struct ChunkSection {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct ChunkSectionBlockStates {
     //  #[serde(with = "LongArray")]
-    data: Option<LongArray>,
+    data: Option<Box<[i64]>>,
     palette: Vec<PaletteEntry>,
 }
 
@@ -234,8 +234,8 @@ impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
             // 0 packed into an i64 7 times.
-            motion_blocking: LongArray::new(vec![0; 37]),
-            world_surface: LongArray::new(vec![0; 37]),
+            motion_blocking: vec![0; 37].into_boxed_slice(),
+            world_surface: vec![0; 37].into_boxed_slice(),
         }
     }
 }
@@ -402,15 +402,15 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        if fastnbt::from_bytes::<ChunkStatusWrapper>(chunk_data)
-            .map_err(|_| ChunkParsingError::FailedReadStatus)?
+        if from_bytes::<ChunkStatusWrapper>(chunk_data)
+            .map_err(ChunkParsingError::FailedReadStatus)?
             .status
             != ChunkStatus::Full
         {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
+        let chunk_data = from_bytes::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
@@ -502,8 +502,8 @@ impl ChunkData {
 
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
-    #[error("Failed reading chunk status")]
-    FailedReadStatus,
+    #[error("Failed reading chunk status {0}")]
+    FailedReadStatus(pumpkin_nbt::Error),
     #[error("The chunk isn't generated yet")]
     ChunkNotGenerated,
     #[error("Error deserializing chunk: {0}")]
@@ -517,5 +517,5 @@ fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
 #[derive(Error, Debug)]
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
-    ErrorSerializingChunk(fastnbt::error::Error),
+    ErrorSerializingChunk(pumpkin_nbt::Error),
 }

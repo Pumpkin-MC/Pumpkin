@@ -10,11 +10,11 @@ use crate::VarInt;
 pub struct CBlockEntityData {
     location: BlockPos,
     r#type: VarInt,
-    nbt_data: Vec<u8>,
+    nbt_data: Box<[u8]>,
 }
 
 impl CBlockEntityData {
-    pub fn new(location: BlockPos, r#type: VarInt, nbt_data: Vec<u8>) -> Self {
+    pub fn new(location: BlockPos, r#type: VarInt, nbt_data: Box<[u8]>) -> Self {
         Self {
             location,
             r#type,

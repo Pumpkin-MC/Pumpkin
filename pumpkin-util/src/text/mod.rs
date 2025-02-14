@@ -172,8 +172,10 @@ impl pumpkin_nbt::serializer::SerializeChild for TextComponent {
 }
 
 impl TextComponent {
-    pub fn encode(&self) -> bytes::BytesMut {
-        pumpkin_nbt::serializer::to_bytes_text_component(self).unwrap()
+    pub fn encode(&self) -> Box<[u8]> {
+        let mut buf = Vec::new();
+        pumpkin_nbt::serializer::to_bytes_text_component(self, &mut buf).unwrap();
+        buf.into()
     }
 
     pub fn color(mut self, color: Color) -> Self {

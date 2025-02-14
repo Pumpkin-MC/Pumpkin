@@ -1069,13 +1069,13 @@ impl Player {
             ],
         );
 
+        let mut sign_buf = Vec::new();
+        pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign, &mut sign_buf).unwrap();
         world
             .broadcast_packet_all(&CBlockEntityData::new(
                 sign_data.location,
                 VarInt(block_entity!("sign") as i32),
-                pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign)
-                    .unwrap()
-                    .to_vec(),
+                sign_buf.into_boxed_slice(),
             ))
             .await;
     }

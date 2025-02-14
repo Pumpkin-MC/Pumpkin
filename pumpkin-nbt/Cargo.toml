@@ -9,3 +9,7 @@ thiserror.workspace = true
 bytes.workspace = true
 
 cesu8 = "1.1"
+
+[dev-dependencies]
+flate2 = "1.0"
+pumpkin-world = { path = "../pumpkin-world" }
