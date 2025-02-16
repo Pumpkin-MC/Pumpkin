@@ -173,7 +173,6 @@ impl CommandDispatcher {
             ));
         };
 
-
         match permission.as_str() {
             "" => {
                 if src.has_permission_lvl(*permission_lvl) {

@@ -237,7 +237,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
-            permissions: AtomicCell::new(vec![])
+            permissions: AtomicCell::new(vec![]),
         }
     }
 

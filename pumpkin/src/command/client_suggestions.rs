@@ -32,10 +32,11 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
                 }
             }
             _ => {
-                if !cmd_src.has_permission(permission) && !cmd_src.has_permission_lvl(*permission_lvl) {
+                if !cmd_src.has_permission(permission)
+                    && !cmd_src.has_permission_lvl(*permission_lvl)
+                {
                     continue;
                 }
-
             }
         };
 

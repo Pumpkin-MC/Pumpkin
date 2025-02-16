@@ -93,7 +93,6 @@ impl CommandSender<'_> {
         match self {
             CommandSender::Console | CommandSender::Rcon(_) => true,
             CommandSender::Player(p) => {
-
                 p.permissions.take().contains(&permission.to_string()) || permission.is_empty()
             }
         }
