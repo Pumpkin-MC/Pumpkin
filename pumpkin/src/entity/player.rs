@@ -646,7 +646,7 @@ impl Player {
         client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
 
-    pub async fn set_permission(self: &Arc<Self>, permission: &str) {
+    pub fn set_permission(self: &Arc<Self>, permission: &str) {
         let mut permissions = self.permissions.take();
         if !permissions.contains(&permission.to_string()) {
             permissions.push(permission.to_string());
@@ -654,7 +654,7 @@ impl Player {
         }
     }
 
-    pub async fn remove_permission(self: &Arc<Self>, permission: &str) {
+    pub fn remove_permission(self: &Arc<Self>, permission: &str) {
         let mut permissions = self.permissions.take();
         if permissions.contains(&permission.to_string()) {
             let index = permissions.iter().position(|r| r == permission).unwrap();

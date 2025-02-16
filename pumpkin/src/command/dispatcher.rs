@@ -179,7 +179,6 @@ impl CommandDispatcher {
                 if src.has_permission_lvl(*permission_lvl) {
                     Ok(())
                 } else {
-                    eprintln!("Error: Insufficient permission level");
                     Err(PermissionDenied)
                 }
             }
@@ -187,7 +186,6 @@ impl CommandDispatcher {
                 if src.has_permission(permission) || src.has_permission_lvl(*permission_lvl) {
                     Ok(())
                 } else {
-                    eprintln!("Error: Permission denied");
                     Err(PermissionDenied)
                 }
             }
