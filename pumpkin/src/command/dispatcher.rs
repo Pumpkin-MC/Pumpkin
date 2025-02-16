@@ -177,12 +177,26 @@ impl CommandDispatcher {
             ));
         };
 
-
-        if src.has_permission_lvl(*permission_lvl) || src.has_permission(permission.as_str()) {
-            Ok(())
+        println!("{} || {} || playerlevel: {}", permission, permission_lvl, src.permission_lvl());
+        if permission.eq("") {
+            if src.has_permission_lvl(*permission_lvl) {
+                Ok(())
+            } else {
+                eprintln!("Error validating permissions 0");
+                Err(PermissionDenied)
+            }
         } else {
-            Err(PermissionDenied)
+            if src.has_permission(permission) {
+                Ok(())
+            } else if src.has_permission_lvl(*permission_lvl) {
+                Ok(())
+            } else {
+                eprintln!("Permission denied 0");
+                Err(PermissionDenied)
+            }
         }?;
+
+
 
 
 

@@ -84,7 +84,7 @@ impl Context {
     ) {
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, permission, PermissionLvl::Zero);
+            dispatcher_lock.register(tree, permission, PermissionLvl::Four);
         };
 
         for world in self.server.worlds.read().await.iter() {

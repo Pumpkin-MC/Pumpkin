@@ -1,0 +1,14 @@
+{
+  "users": [
+    {
+      "uuid": "ed41f1f5-975f-4a3d-9994-f945ad5a666d",
+      "permissions": [],
+      "meta": {
+        "prefix": "",
+        "suffix": ""
+      },
+      "group": "default"
+    }
+  ],
+  "groups": []
+}
