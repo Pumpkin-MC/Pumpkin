@@ -80,9 +80,9 @@ impl CommandExecutor for SoundExecutor {
 
         // Get target players, defaults to sender if not specified
         let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS) {
-            players.to_vec()
+            players
         } else if let Some(player) = sender.as_player() {
-            vec![player.clone()]
+            &[player.clone()]
         } else {
             return Ok(());
         };
@@ -115,7 +115,7 @@ impl CommandExecutor for SoundExecutor {
         let mut players_who_heard = 0;
 
         // Play sound for each target player
-        for target in &targets {
+        for target in targets {
             let pos = position.unwrap_or(target.living_entity.entity.pos.load());
 
             // Check if player can hear the sound based on volume and distance
@@ -134,10 +134,7 @@ impl CommandExecutor for SoundExecutor {
         // Send appropriate message based on results
         if players_who_heard == 0 {
             sender
-                .send_message(TextComponent::translate(
-                    "commands.playsound.failed",
-                    [].into(),
-                ))
+                .send_message(TextComponent::translate("commands.playsound.failed", []))
                 .await;
         } else {
             let sound_name = sound.to_name();
@@ -148,8 +145,7 @@ impl CommandExecutor for SoundExecutor {
                         [
                             TextComponent::text(sound_name),
                             TextComponent::text(targets[0].gameprofile.name.clone()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             } else {
@@ -159,8 +155,7 @@ impl CommandExecutor for SoundExecutor {
                         [
                             TextComponent::text(sound_name),
                             TextComponent::text(players_who_heard.to_string()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             }

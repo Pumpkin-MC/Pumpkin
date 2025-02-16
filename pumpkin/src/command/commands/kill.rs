@@ -52,11 +52,11 @@ impl CommandExecutor for KillExecutor {
                 ));
             }
 
-            TextComponent::translate("commands.kill.success.single", [entity_display].into())
+            TextComponent::translate("commands.kill.success.single", [entity_display])
         } else {
             TextComponent::translate(
                 "commands.kill.success.multiple",
-                [TextComponent::text(target_count.to_string())].into(),
+                [TextComponent::text(target_count.to_string())],
             )
         };
 
@@ -93,8 +93,7 @@ impl CommandExecutor for KillSelfExecutor {
                     ))
                     .click_event(ClickEvent::SuggestCommand(
                         format!("/tell {} ", name.clone()).into(),
-                    ))]
-                .into(),
+                    ))],
             ))
             .await;
 

@@ -55,7 +55,7 @@ impl LivingEntity {
         }
     }
 
-    pub async fn send_equipment_changes(&self, equipment: Vec<(EquipmentSlot, ItemStack)>) {
+    pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
         let equipment: Vec<(EquipmentSlot, Slot)> = equipment
             .iter()
             .map(|(slot, stack)| (*slot, Slot::from(stack)))

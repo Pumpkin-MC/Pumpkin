@@ -95,7 +95,7 @@ impl Client {
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.server_full",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -189,13 +189,12 @@ impl Client {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
                     self.kick(&match error {
-                        AuthError::FailedResponse => TextComponent::translate(
-                            "multiplayer.disconnect.authservers_down",
-                            [].into(),
-                        ),
+                        AuthError::FailedResponse => {
+                            TextComponent::translate("multiplayer.disconnect.authservers_down", [])
+                        }
                         AuthError::UnverifiedUsername => TextComponent::translate(
                             "multiplayer.disconnect.unverified_username",
-                            [].into(),
+                            [],
                         ),
                         e => TextComponent::text(e.to_string()),
                     })
@@ -209,7 +208,7 @@ impl Client {
             log::debug!("Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -220,7 +219,7 @@ impl Client {
             log::debug!("A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
-                [].into(),
+                [],
             ))
             .await;
             return;

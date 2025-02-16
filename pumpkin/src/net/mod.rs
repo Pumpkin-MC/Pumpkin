@@ -552,15 +552,14 @@ impl Client {
         if let Some(entry) = banned_players.get_entry(profile) {
             let text = TextComponent::translate(
                 "multiplayer.disconnect.banned.reason",
-                vec![TextComponent::text(entry.reason.clone())],
+                [TextComponent::text(entry.reason.clone())],
             );
             return Some(match entry.expires {
                 Some(expires) => text.add_child(TextComponent::translate(
                     "multiplayer.disconnect.banned.expiration",
                     [TextComponent::text(
                         expires.format("%F at %T %Z").to_string(),
-                    )]
-                    .into(),
+                    )],
                 )),
                 None => text,
             });
@@ -572,15 +571,14 @@ impl Client {
         if let Some(entry) = banned_ips.get_entry(&address.ip()) {
             let text = TextComponent::translate(
                 "multiplayer.disconnect.banned_ip.reason",
-                vec![TextComponent::text(entry.reason.clone())],
+                [TextComponent::text(entry.reason.clone())],
             );
             return Some(match entry.expires {
                 Some(expires) => text.add_child(TextComponent::translate(
                     "multiplayer.disconnect.banned_ip.expiration",
                     [TextComponent::text(
                         expires.format("%F at %T %Z").to_string(),
-                    )]
-                    .into(),
+                    )],
                 )),
                 None => text,
             });

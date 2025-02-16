@@ -48,7 +48,7 @@ pub struct CachedStatus {
 
 pub struct CachedBranding {
     /// Cached Server brand buffer so we don't have to rebuild them every time a player joins
-    cached_server_brand: Vec<u8>,
+    cached_server_brand: Box<[u8]>,
 }
 
 impl CachedBranding {
@@ -63,11 +63,11 @@ impl CachedBranding {
     }
     const BRAND: &str = "Pumpkin";
     const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
-    fn build_brand() -> Vec<u8> {
+    fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
         VarInt(Self::BRAND.len() as i32).encode(&mut buf);
         buf.extend_from_slice(Self::BRAND_BYTES);
-        buf
+        buf.into_boxed_slice()
     }
 }
 

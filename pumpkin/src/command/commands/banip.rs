@@ -83,10 +83,7 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
 
     let Some(target_ip) = parse_ip(target, server).await else {
         sender
-            .send_message(TextComponent::translate(
-                "commands.banip.invalid",
-                [].into(),
-            ))
+            .send_message(TextComponent::translate("commands.banip.invalid", []))
             .await;
         return;
     };
@@ -95,7 +92,7 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
 
     if banned_ips.get_entry(&target_ip).is_some() {
         sender
-            .send_message(TextComponent::translate("commands.banip.failed", [].into()))
+            .send_message(TextComponent::translate("commands.banip.failed", []))
             .await;
         return;
     }
@@ -124,8 +121,7 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
             [
                 TextComponent::text(target_ip.to_string()),
                 TextComponent::text(reason),
-            ]
-            .into(),
+            ],
         ))
         .await;
 
@@ -135,8 +131,7 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
             [
                 TextComponent::text(affected.len().to_string()),
                 TextComponent::text(names),
-            ]
-            .into(),
+            ],
         ))
         .await;
 
@@ -144,7 +139,7 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
         target
             .kick(TextComponent::translate(
                 "multiplayer.disconnect.ip_banned",
-                [].into(),
+                [],
             ))
             .await;
     }

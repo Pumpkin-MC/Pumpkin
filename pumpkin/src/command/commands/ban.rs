@@ -70,7 +70,7 @@ async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: Option<
 
     if banned_players.get_entry(&player.gameprofile).is_some() {
         sender
-            .send_message(TextComponent::translate("commands.ban.failed", [].into()))
+            .send_message(TextComponent::translate("commands.ban.failed", []))
             .await;
         return;
     }
@@ -92,15 +92,14 @@ async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: Option<
             [
                 TextComponent::text(player.gameprofile.name.clone()),
                 TextComponent::text(reason),
-            ]
-            .into(),
+            ],
         ))
         .await;
 
     player
         .kick(TextComponent::translate(
             "multiplayer.disconnect.banned",
-            [].into(),
+            [],
         ))
         .await;
 }
