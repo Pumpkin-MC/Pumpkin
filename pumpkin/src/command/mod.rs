@@ -80,21 +80,22 @@ impl CommandSender<'_> {
         }
     }
 
-
     #[must_use]
-        pub fn has_permission_lvl(&self, lvl: PermissionLvl) -> bool {
-            match self {
-                CommandSender::Console | CommandSender::Rcon(_) => true,
-                CommandSender::Player(p) => p.permission_lvl.load().ge(&lvl),
-            }
+    pub fn has_permission_lvl(&self, lvl: PermissionLvl) -> bool {
+        match self {
+            CommandSender::Console | CommandSender::Rcon(_) => true,
+            CommandSender::Player(p) => p.permission_lvl.load().ge(&lvl),
         }
-
+    }
 
     #[must_use]
     pub fn has_permission(&self, permission: &str) -> bool {
         match self {
             CommandSender::Console | CommandSender::Rcon(_) => true,
-            CommandSender::Player(p) => p.permissions.contains(&permission.to_string()) || permission == "",
+            CommandSender::Player(p) => {
+
+                p.permissions.take().contains(&permission.to_string()) || permission.is_empty()
+            }
         }
     }
 
@@ -120,46 +121,173 @@ impl CommandSender<'_> {
 pub fn default_dispatcher() -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
 
-
-    dispatcher.register(pumpkin::init_command_tree(), "pumpkin.pumpkin", PermissionLvl::Zero);
-    dispatcher.register(help::init_command_tree(), "pumpkin.help", PermissionLvl::Zero);
-    dispatcher.register(list::init_command_tree(), "pumpkin.list", PermissionLvl::Zero);
+    dispatcher.register(
+        pumpkin::init_command_tree(),
+        "pumpkin.pumpkin",
+        PermissionLvl::Zero,
+    );
+    dispatcher.register(
+        help::init_command_tree(),
+        "pumpkin.help",
+        PermissionLvl::Zero,
+    );
+    dispatcher.register(
+        list::init_command_tree(),
+        "pumpkin.list",
+        PermissionLvl::Zero,
+    );
     dispatcher.register(me::init_command_tree(), "pumpkin.me", PermissionLvl::Zero);
     dispatcher.register(msg::init_command_tree(), "pumpkin.msg", PermissionLvl::Zero);
 
-    dispatcher.register(kill::init_command_tree(), "pumpkin.kill", PermissionLvl::Two);
-    dispatcher.register(worldborder::init_command_tree(), "pumpkin.worldborder", PermissionLvl::Two);
-    dispatcher.register(teleport::init_command_tree(), "pumpkin.teleport", PermissionLvl::Two);
-    dispatcher.register(time::init_command_tree(), "pumpkin.time", PermissionLvl::Two);
-    dispatcher.register(give::init_command_tree(), "pumpkin.give", PermissionLvl::Two);
-    dispatcher.register(clear::init_command_tree(), "pumpkin.clear", PermissionLvl::Two);
-    dispatcher.register(setblock::init_command_tree(), "pumpkin.setblock", PermissionLvl::Two);
-    dispatcher.register(seed::init_command_tree(), "pumpkin.seed", PermissionLvl::Two);
-    dispatcher.register(fill::init_command_tree(), "pumpkin.fill", PermissionLvl::Two);
-    dispatcher.register(playsound::init_command_tree(), "pumpkin.playsound", PermissionLvl::Two);
-    dispatcher.register(title::init_command_tree(), "pumpkin.title", PermissionLvl::Two);
-    dispatcher.register(summon::init_command_tree(), "pumpkin.summon", PermissionLvl::Two);
-    dispatcher.register(experience::init_command_tree(), "pumpkin.experience", PermissionLvl::Two);
-    dispatcher.register(weather::init_command_tree(), "pumpkin.weather", PermissionLvl::Two);
-    dispatcher.register(particle::init_command_tree(), "pumpkin.particle", PermissionLvl::Two);
-    dispatcher.register(damage::init_command_tree(), "pumpkin.damage", PermissionLvl::Two);
-    dispatcher.register(bossbar::init_command_tree(), "pumpkin.bossbar", PermissionLvl::Two);
+    dispatcher.register(
+        kill::init_command_tree(),
+        "pumpkin.kill",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        worldborder::init_command_tree(),
+        "pumpkin.worldborder",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        teleport::init_command_tree(),
+        "pumpkin.teleport",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        time::init_command_tree(),
+        "pumpkin.time",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        give::init_command_tree(),
+        "pumpkin.give",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        clear::init_command_tree(),
+        "pumpkin.clear",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        setblock::init_command_tree(),
+        "pumpkin.setblock",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        seed::init_command_tree(),
+        "pumpkin.seed",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        fill::init_command_tree(),
+        "pumpkin.fill",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        playsound::init_command_tree(),
+        "pumpkin.playsound",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        title::init_command_tree(),
+        "pumpkin.title",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        summon::init_command_tree(),
+        "pumpkin.summon",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        experience::init_command_tree(),
+        "pumpkin.experience",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        weather::init_command_tree(),
+        "pumpkin.weather",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        particle::init_command_tree(),
+        "pumpkin.particle",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        damage::init_command_tree(),
+        "pumpkin.damage",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        bossbar::init_command_tree(),
+        "pumpkin.bossbar",
+        PermissionLvl::Two,
+    );
     dispatcher.register(say::init_command_tree(), "pumpkin.say", PermissionLvl::Two);
-    dispatcher.register(gamemode::init_command_tree(), "pumpkin.gamemode", PermissionLvl::Two);
-    dispatcher.register(transfer::init_command_tree(), "pumpkin.transfer", PermissionLvl::Two);
+    dispatcher.register(
+        gamemode::init_command_tree(),
+        "pumpkin.gamemode",
+        PermissionLvl::Two,
+    );
+    dispatcher.register(
+        transfer::init_command_tree(),
+        "pumpkin.transfer",
+        PermissionLvl::Two,
+    );
 
     dispatcher.register(op::init_command_tree(), "pumpkin.op", PermissionLvl::Three);
-    dispatcher.register(deop::init_command_tree(), "pumpkin.deop", PermissionLvl::Three);
-    dispatcher.register(kick::init_command_tree(), "pumpkin.kick", PermissionLvl::Three);
-    dispatcher.register(plugin::init_command_tree(), "pumpkin.plugin", PermissionLvl::Three);
-    dispatcher.register(plugins::init_command_tree(), "pumpkin.plugins", PermissionLvl::Three);
-    dispatcher.register(ban::init_command_tree(), "pumpkin.ban", PermissionLvl::Three);
-    dispatcher.register(banip::init_command_tree(), "pumpkin.banip", PermissionLvl::Three);
-    dispatcher.register(banlist::init_command_tree(), "pumpkin.banlist", PermissionLvl::Three);
-    dispatcher.register(pardon::init_command_tree(), "pumpkin.pardon", PermissionLvl::Three);
-    dispatcher.register(pardonip::init_command_tree(), "pumpkin.pardonip", PermissionLvl::Three);
+    dispatcher.register(
+        deop::init_command_tree(),
+        "pumpkin.deop",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        kick::init_command_tree(),
+        "pumpkin.kick",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        plugin::init_command_tree(),
+        "pumpkin.plugin",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        plugins::init_command_tree(),
+        "pumpkin.plugins",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        ban::init_command_tree(),
+        "pumpkin.ban",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        banip::init_command_tree(),
+        "pumpkin.banip",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        banlist::init_command_tree(),
+        "pumpkin.banlist",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        pardon::init_command_tree(),
+        "pumpkin.pardon",
+        PermissionLvl::Three,
+    );
+    dispatcher.register(
+        pardonip::init_command_tree(),
+        "pumpkin.pardonip",
+        PermissionLvl::Three,
+    );
 
-    dispatcher.register(stop::init_command_tree(), "pumpkin.stop", PermissionLvl::Four);
+    dispatcher.register(
+        stop::init_command_tree(),
+        "pumpkin.stop",
+        PermissionLvl::Four,
+    );
 
     dispatcher
 }

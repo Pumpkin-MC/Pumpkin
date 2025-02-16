@@ -1,16 +1,13 @@
-use std::{fs, path::Path, sync::Arc};
-
+use super::{Event, EventPriority, PluginMetadata};
 use crate::command::client_suggestions;
-use pumpkin_util::PermissionLvl;
-use tokio::sync::RwLock;
-
 use crate::{
     entity::player::Player,
     plugin::{EventHandler, HandlerMap, TypedEventHandler},
     server::Server,
 };
-
-use super::{Event, EventPriority, PluginMetadata};
+use pumpkin_config::BASIC_CONFIG;
+use std::{fs, path::Path, sync::Arc};
+use tokio::sync::RwLock;
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -80,11 +77,10 @@ impl Context {
         &self,
         tree: crate::command::tree::CommandTree,
         permission: &str,
-
     ) {
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, permission, PermissionLvl::Three);
+            dispatcher_lock.register(tree, permission, BASIC_CONFIG.op_permission_level);
         };
 
         for world in self.server.worlds.read().await.iter() {

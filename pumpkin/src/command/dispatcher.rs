@@ -13,7 +13,6 @@ use crate::error::PumpkinError;
 use crate::server::Server;
 use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -72,10 +71,7 @@ impl CommandDispatcher {
             match e.into_string_or_pumpkin_error(cmd) {
                 Ok(err) => {
                     sender
-                        .send_message(
-                            TextComponent::text(err)
-                                .color_named(NamedColor::Red),
-                        )
+                        .send_message(TextComponent::text(err).color_named(NamedColor::Red))
                         .await;
                 }
                 Err(pumpkin_error) => {
@@ -173,32 +169,29 @@ impl CommandDispatcher {
 
         let Some(permission_lvl) = self.permission_lvl.get(key) else {
             return Err(GeneralCommandIssue(
-                "Permission for Command not found 1".to_string()
+                "Permission for Command not found 1".to_string(),
             ));
         };
 
-        println!("{} || {} || playerlevel: {}", permission, permission_lvl, src.permission_lvl());
-        if permission.eq("") {
-            if src.has_permission_lvl(*permission_lvl) {
-                Ok(())
-            } else {
-                eprintln!("Error validating permissions 0");
-                Err(PermissionDenied)
+
+        match permission.as_str() {
+            "" => {
+                if src.has_permission_lvl(*permission_lvl) {
+                    Ok(())
+                } else {
+                    eprintln!("Error: Insufficient permission level");
+                    Err(PermissionDenied)
+                }
             }
-        } else {
-            if src.has_permission(permission) {
-                Ok(())
-            } else if src.has_permission_lvl(*permission_lvl) {
-                Ok(())
-            } else {
-                eprintln!("Permission denied 0");
-                Err(PermissionDenied)
+            _ => {
+                if src.has_permission(permission) || src.has_permission_lvl(*permission_lvl) {
+                    Ok(())
+                } else {
+                    eprintln!("Error: Permission denied");
+                    Err(PermissionDenied)
+                }
             }
         }?;
-
-
-
-
 
         let tree = self.get_tree(key)?;
 
@@ -327,7 +320,12 @@ impl CommandDispatcher {
     }
 
     /// Register a command with the dispatcher.
-    pub(crate) fn register(&mut self, tree: CommandTree, permission: &str, permission_lvl: PermissionLvl) {
+    pub(crate) fn register(
+        &mut self,
+        tree: CommandTree,
+        permission: &str,
+        permission_lvl: PermissionLvl,
+    ) {
         let mut names = tree.names.iter();
 
         let primary_name = names.next().expect("at least one name must be provided");
@@ -335,13 +333,15 @@ impl CommandDispatcher {
         for name in names {
             self.commands
                 .insert(name.to_string(), Command::Alias(primary_name.to_string()));
-            self.permissions.insert(name.to_string(), permission.to_string());
+            self.permissions
+                .insert(name.to_string(), permission.to_string());
             self.permission_lvl.insert(name.to_string(), permission_lvl);
         }
 
         self.permissions
             .insert(primary_name.to_string(), permission.to_string());
-        self.permission_lvl.insert(primary_name.to_string(), permission_lvl);
+        self.permission_lvl
+            .insert(primary_name.to_string(), permission_lvl);
         self.commands
             .insert(primary_name.to_string(), Command::Tree(tree));
     }

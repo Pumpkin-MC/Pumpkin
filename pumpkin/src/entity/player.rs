@@ -135,7 +135,7 @@ pub struct Player {
     /// The players op permission level
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// The players permissions
-    pub permissions: Vec<String>,
+    pub permissions: AtomicCell<Vec<String>>,
     /// Tell tasks to stop if we are closing
     cancel_tasks: Notify,
     /// whether the client has reported it has loaded
@@ -237,7 +237,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
-            permissions: vec![],
+            permissions: AtomicCell::new(vec![])
         }
     }
 
@@ -644,6 +644,23 @@ impl Player {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
         client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
+    }
+
+    pub async fn set_permission(self: &Arc<Self>, permission: &str) {
+        let mut permissions = self.permissions.take();
+        if !permissions.contains(&permission.to_string()) {
+            permissions.push(permission.to_string());
+            self.permissions.store(permissions);
+        }
+    }
+
+    pub async fn remove_permission(self: &Arc<Self>, permission: &str) {
+        let mut permissions = self.permissions.take();
+        if permissions.contains(&permission.to_string()) {
+            let index = permissions.iter().position(|r| r == permission).unwrap();
+            permissions.remove(index);
+            self.permissions.store(permissions);
+        }
     }
 
     /// Sends the world time to just the player.

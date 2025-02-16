@@ -176,15 +176,15 @@ impl CommandExecutor for UnloadExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
-        require(|sender| sender.has_permission("pumpkin.plugin.manage") || sender.has_permission_lvl(PermissionLvl::Three))
-            .then(
-                literal("load")
-                    .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(LoadExecutor)),
-            )
-            .then(
-                literal("unload")
-                    .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(UnloadExecutor)),
-            )
-            .then(literal("list").execute(ListExecutor)),
+        require(|sender| {
+            sender.has_permission("pumpkin.plugin.manage")
+                || sender.has_permission_lvl(PermissionLvl::Three)
+        })
+        .then(literal("load").then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(LoadExecutor)))
+        .then(
+            literal("unload")
+                .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(UnloadExecutor)),
+        )
+        .then(literal("list").execute(ListExecutor)),
     )
 }
