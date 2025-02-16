@@ -52,6 +52,7 @@ use pumpkin_world::{
     coordinates::ChunkRelativeBlockCoordinates,
 };
 use rand::{thread_rng, Rng};
+use rayon::{iter::ParallelIterator, slice::ParallelSlice};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
@@ -1032,7 +1033,12 @@ impl World {
         let level = self.level.clone();
         let rt = Handle::current();
         rayon::spawn(move || {
-            level.fetch_chunks(&chunks, sender, &rt);
+            // Split the chunks into 64 chunks per request
+            // this way simulate an in order request
+            // which improves login experience
+            chunks.par_chunks(64).for_each(|chunks| {
+                level.fetch_chunks(chunks, sender.clone(), &rt);
+            });
         });
         receive
     }
