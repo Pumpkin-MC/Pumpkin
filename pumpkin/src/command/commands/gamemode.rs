@@ -45,7 +45,7 @@ impl CommandExecutor for GamemodeTargetSelf {
                 target
                     .send_system_message(&TextComponent::translate(
                         "commands.gamemode.success.self",
-                        [TextComponent::translate(gamemode_string, [].into())].into(),
+                        [TextComponent::translate(gamemode_string, [])],
                     ))
                     .await;
             }
@@ -83,7 +83,7 @@ impl CommandExecutor for GamemodeTargetPlayer {
                 target
                     .send_system_message(&TextComponent::translate(
                         "gameMode.changed",
-                        [TextComponent::translate(gamemode_string.clone(), [].into())].into(),
+                        [TextComponent::translate(gamemode_string.clone(), [])],
                     ))
                     .await;
                 if target_count == 1 {
@@ -92,9 +92,8 @@ impl CommandExecutor for GamemodeTargetPlayer {
                             "commands.gamemode.success.other",
                             [
                                 TextComponent::text(target.gameprofile.name.clone()),
-                                TextComponent::translate(gamemode_string, [].into()),
-                            ]
-                            .into(),
+                                TextComponent::translate(gamemode_string, []),
+                            ],
                         ))
                         .await;
                 }

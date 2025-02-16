@@ -52,7 +52,7 @@ impl CommandExecutor for ParticleExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.particle.success",
-                    [TextComponent::text(format!("{particle:?}"))].into(),
+                    [TextComponent::text(format!("{particle:?}"))],
                 ))
                 .await;
         }

@@ -67,21 +67,21 @@ impl CommandExecutor for TimeQueryExecutor {
                 let curr_time = level_time.query_daytime();
                 TextComponent::translate(
                     "commands.time.query",
-                    [TextComponent::text(curr_time.to_string())].into(),
+                    [TextComponent::text(curr_time.to_string())],
                 )
             }
             QueryMode::GameTime => {
                 let curr_time = level_time.query_gametime();
                 TextComponent::translate(
                     "commands.time.query",
-                    [TextComponent::text(curr_time.to_string())].into(),
+                    [TextComponent::text(curr_time.to_string())],
                 )
             }
             QueryMode::Day => {
                 let curr_time = level_time.query_day();
                 TextComponent::translate(
                     "commands.time.query",
-                    [TextComponent::text(curr_time.to_string())].into(),
+                    [TextComponent::text(curr_time.to_string())],
                 )
             }
         };
@@ -131,7 +131,7 @@ impl CommandExecutor for TimeChangeExecutor {
                 let curr_time = level_time.query_daytime();
                 TextComponent::translate(
                     "commands.time.add",
-                    [TextComponent::text(curr_time.to_string())].into(),
+                    [TextComponent::text(curr_time.to_string())],
                 )
             }
             Mode::Set(_) => {
@@ -140,7 +140,7 @@ impl CommandExecutor for TimeChangeExecutor {
                 level_time.send_time(world).await;
                 TextComponent::translate(
                     "commands.time.set",
-                    [TextComponent::text(time_count.to_string())].into(),
+                    [TextComponent::text(time_count.to_string())],
                 )
             }
         };

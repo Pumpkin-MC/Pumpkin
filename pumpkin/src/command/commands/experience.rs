@@ -59,8 +59,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(target.gameprofile.name.clone()),
                             TextComponent::text(level.to_string()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             }
@@ -72,8 +71,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(target.gameprofile.name.clone()),
                             TextComponent::text(points.to_string()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             }
@@ -95,8 +93,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -104,8 +101,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -116,8 +112,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -125,8 +120,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -137,8 +131,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -146,8 +139,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -158,8 +150,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -167,8 +158,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -236,7 +226,7 @@ impl CommandExecutor for ExperienceExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.experience.set.points.invalid",
-                            [].into(),
+                            [],
                         ))
                         .await;
                     return Ok(());
@@ -246,7 +236,7 @@ impl CommandExecutor for ExperienceExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.experience.set.points.invalid",
-                            [].into(),
+                            [],
                         ))
                         .await;
                     return Ok(());
@@ -270,7 +260,7 @@ impl CommandExecutor for ExperienceExecutor {
                         Err(error_msg) => {
                             sender
                                 .send_message(
-                                    TextComponent::translate(error_msg, [].into())
+                                    TextComponent::translate(error_msg, [])
                                         .color(Color::Named(NamedColor::Red)),
                                 )
                                 .await;

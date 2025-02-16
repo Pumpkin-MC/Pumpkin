@@ -884,7 +884,7 @@ impl World {
         tokio::spawn(async move {
             let msg_comp = TextComponent::translate(
                 "multiplayer.player.joined",
-                [TextComponent::text(player.gameprofile.name.clone())].into(),
+                [TextComponent::text(player.gameprofile.name.clone())],
             )
             .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
@@ -943,7 +943,7 @@ impl World {
         if fire_event {
             let msg_comp = TextComponent::translate(
                 "multiplayer.player.left",
-                [TextComponent::text(player.gameprofile.name.clone())].into(),
+                [TextComponent::text(player.gameprofile.name.clone())],
             )
             .color_named(NamedColor::Yellow);
             let event = PlayerLeaveEvent::new(player.clone(), msg_comp);

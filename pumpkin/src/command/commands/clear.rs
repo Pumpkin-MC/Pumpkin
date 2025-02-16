@@ -40,12 +40,12 @@ fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> Text
     match targets {
         [target] if item_count == 0 => TextComponent::translate(
             "clear.failed.single",
-            vec![TextComponent::text(target.gameprofile.name.clone())],
+            [TextComponent::text(target.gameprofile.name.clone())],
         )
         .color_named(NamedColor::Red),
         [target] => TextComponent::translate(
             "commands.clear.success.single",
-            vec![
+            [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(target.gameprofile.name.clone())
                     .click_event(ClickEvent::SuggestCommand(
@@ -60,12 +60,12 @@ fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> Text
         ),
         targets if item_count == 0 => TextComponent::translate(
             "clear.failed.multiple",
-            vec![TextComponent::text(targets.len().to_string())],
+            [TextComponent::text(targets.len().to_string())],
         )
         .color_named(NamedColor::Red),
         targets => TextComponent::translate(
             "commands.clear.success.multiple",
-            vec![
+            [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(targets.len().to_string()),
             ],

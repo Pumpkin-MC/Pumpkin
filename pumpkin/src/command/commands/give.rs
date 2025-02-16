@@ -83,8 +83,7 @@ impl CommandExecutor for GiveExecutor {
                         .click_event(ClickEvent::SuggestCommand(
                             format!("/tell {} ", targets[0].gameprofile.name.clone()).into(),
                         )),
-                ]
-                .into(),
+                ],
             )
         } else {
             TextComponent::translate(
@@ -100,8 +99,7 @@ impl CommandExecutor for GiveExecutor {
                             tag: None,
                         }),
                     TextComponent::text(targets.len().to_string()),
-                ]
-                .into(),
+                ],
             )
         };
         sender.send_message(msg).await;

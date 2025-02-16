@@ -91,14 +91,15 @@ impl TextComponent {
         })
     }
 
-    pub fn translate<K>(key: K, with: Vec<TextComponent>) -> Self
+    pub fn translate<K, W>(key: K, with: W) -> Self
     where
         K: Into<Cow<'static, str>>,
+        W: Into<Vec<TextComponent>>,
     {
         Self(TextComponentBase {
             content: TextContent::Translate {
                 translate: key.into(),
-                with: with.into_iter().map(|x| x.0).collect(),
+                with: with.into().into_iter().map(|x| x.0).collect(),
             },
             style: Style::default(),
             extra: vec![],
@@ -271,7 +272,7 @@ mod test {
     fn test_serialize_text_component() {
         let msg_comp = TextComponent::translate(
             "multiplayer.player.joined",
-            [TextComponent::text("NAME".to_string())].into(),
+            [TextComponent::text("NAME".to_string())],
         )
         .color_named(NamedColor::Yellow);
 

@@ -42,7 +42,7 @@ impl CommandExecutor for SummonExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.summon.success",
-                    [TextComponent::text(format!("{entity:?}"))].into(),
+                    [TextComponent::text(format!("{entity:?}"))],
                 ))
                 .await;
         }

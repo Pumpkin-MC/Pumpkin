@@ -143,7 +143,7 @@ impl Player {
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -232,7 +232,7 @@ impl Player {
         {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -329,7 +329,7 @@ impl Player {
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -483,7 +483,7 @@ impl Player {
         inventory.set_selected(dest_slot as u32);
         let empty = &ItemStack::new(0, Item::AIR);
         let stack = inventory.held_item().unwrap_or(empty);
-        let equipment = vec![(EquipmentSlot::MainHand, *stack)];
+        let equipment = &[(EquipmentSlot::MainHand, *stack)];
         self.living_entity.send_equipment_changes(equipment).await;
         self.client
             .send_packet(&CSetHeldItem::new(dest_slot as i8))
@@ -587,7 +587,7 @@ impl Player {
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.illegal_characters",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -759,7 +759,7 @@ impl Player {
                     // this can't be triggered from a non-modded client.
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.invalid_entity_attacked",
-                        [].into(),
+                        [],
                     ))
                     .await;
                     return;
@@ -793,7 +793,7 @@ impl Player {
                     );
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.invalid_entity_attacked",
-                        [].into(),
+                        [],
                     ))
                     .await;
                     return;
@@ -1141,7 +1141,7 @@ impl Player {
         inv.set_selected(slot as u32);
         let empty = &ItemStack::new(0, Item::AIR);
         let stack = inv.held_item().unwrap_or(empty);
-        let equipment = vec![(EquipmentSlot::MainHand, *stack)];
+        let equipment = &[(EquipmentSlot::MainHand, *stack)];
         self.living_entity.send_equipment_changes(equipment).await;
     }
 
