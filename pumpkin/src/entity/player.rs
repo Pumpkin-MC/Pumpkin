@@ -134,6 +134,8 @@ pub struct Player {
     pub last_attacked_ticks: AtomicU32,
     /// The players op permission level
     pub permission_lvl: AtomicCell<PermissionLvl>,
+    /// The players permissions
+    pub permissions: Vec<String>,
     /// Tell tasks to stop if we are closing
     cancel_tasks: Notify,
     /// whether the client has reported it has loaded
@@ -235,6 +237,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            permissions: vec![],
         }
     }
 

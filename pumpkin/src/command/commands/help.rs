@@ -132,7 +132,7 @@ impl CommandExecutor for BaseHelpExecutor {
                 dispatcher
                     .permissions
                     .get(&tree.names[0])
-                    .map_or(true, |perm| sender.has_permission_lvl(*perm))
+                    .map_or(true, |perm| sender.has_permission(perm))
             })
             .collect();
 

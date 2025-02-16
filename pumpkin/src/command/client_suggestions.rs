@@ -20,11 +20,11 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
             continue;
         };
 
-        let Some(permission) = dispatcher.get_permission_lvl(key) else {
+        let Some(permission) = dispatcher.get_permission(key) else {
             continue;
         };
 
-        if !cmd_src.has_permission_lvl(permission) {
+        if !cmd_src.has_permission(permission) {
             continue;
         }
 

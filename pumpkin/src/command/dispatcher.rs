@@ -55,7 +55,7 @@ impl CommandError {
 #[derive(Default)]
 pub struct CommandDispatcher {
     pub(crate) commands: HashMap<String, Command>,
-    pub(crate) permissions: HashMap<String, PermissionLvl>,
+    pub(crate) permissions: HashMap<String, String>,
 }
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
@@ -169,7 +169,7 @@ impl CommandDispatcher {
             ));
         };
 
-        if !src.has_permission_lvl(*permission) {
+        if !src.has_permission(permission.as_str()) {
             return Err(PermissionDenied);
         }
 
@@ -206,8 +206,8 @@ impl CommandDispatcher {
         }
     }
 
-    pub(crate) fn get_permission_lvl(&self, key: &str) -> Option<PermissionLvl> {
-        self.permissions.get(key).copied()
+    pub(crate) fn get_permission(&self, key: &str) -> Option<&String> {
+        self.permissions.get(key)
     }
 
     async fn try_is_fitting_path<'a>(
@@ -300,7 +300,7 @@ impl CommandDispatcher {
     }
 
     /// Register a command with the dispatcher.
-    pub(crate) fn register(&mut self, tree: CommandTree, permission: PermissionLvl) {
+    pub(crate) fn register(&mut self, tree: CommandTree, permission: &str, permission_lvl: PermissionLvl) {
         let mut names = tree.names.iter();
 
         let primary_name = names.next().expect("at least one name must be provided");
@@ -308,11 +308,11 @@ impl CommandDispatcher {
         for name in names {
             self.commands
                 .insert(name.to_string(), Command::Alias(primary_name.to_string()));
-            self.permissions.insert(name.to_string(), permission);
+            self.permissions.insert(name.to_string(), permission.to_string());
         }
 
         self.permissions
-            .insert(primary_name.to_string(), permission);
+            .insert(primary_name.to_string(), permission.to_string());
         self.commands
             .insert(primary_name.to_string(), Command::Tree(tree));
     }
@@ -339,12 +339,13 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
+    use pumpkin_util::PermissionLvl;
+
     use crate::command::{default_dispatcher, tree::CommandTree};
-    use pumpkin_util::permission::PermissionLvl;
     #[test]
     fn test_dynamic_command() {
         let mut dispatcher = default_dispatcher();
         let tree = CommandTree::new(["test"], "test_desc");
-        dispatcher.register(tree, PermissionLvl::Zero);
+        dispatcher.register(tree, "", PermissionLvl::Zero);
     }
 }
