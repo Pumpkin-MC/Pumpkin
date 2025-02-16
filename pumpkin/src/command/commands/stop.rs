@@ -26,14 +26,7 @@ impl CommandExecutor for StopExecutor {
                     .color_named(NamedColor::Red),
             )
             .await;
-
-        // TODO: Gracefully stop
-
-        let kick_message = TextComponent::text("Server stopped");
-        for player in server.get_all_players().await {
-            player.kick(kick_message.clone()).await;
-        }
-        server.save().await;
+        server.handle_stop(None).await;
         std::process::exit(0)
     }
 }
