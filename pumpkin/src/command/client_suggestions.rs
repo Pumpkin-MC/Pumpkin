@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_protocol::client::play::{CCommands, ProtoNode, ProtoNodeType};
 use tokio::sync::RwLock;
-
+use crate::command::dispatcher::CommandError::{GeneralCommandIssue, PermissionDenied};
 use crate::entity::player::Player;
 
 use super::{
@@ -24,9 +24,15 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
             continue;
         };
 
-        if !cmd_src.has_permission(permission) {
+        let Some(permission_lvl) = dispatcher.permission_lvl.get(key) else {
             continue;
-        }
+        };
+        if cmd_src.has_permission_lvl(*permission_lvl) || cmd_src.has_permission(permission.as_str()) {
+
+        } else {
+            continue;
+        };
+
 
         let (is_executable, child_nodes) =
             nodes_to_proto_node_builders(&cmd_src, &tree.nodes, &tree.children);

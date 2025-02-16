@@ -13,6 +13,7 @@ use crate::error::PumpkinError;
 use crate::server::Server;
 use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -56,6 +57,7 @@ impl CommandError {
 pub struct CommandDispatcher {
     pub(crate) commands: HashMap<String, Command>,
     pub(crate) permissions: HashMap<String, String>,
+    pub(crate) permission_lvl: HashMap<String, PermissionLvl>,
 }
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
@@ -72,7 +74,7 @@ impl CommandDispatcher {
                     sender
                         .send_message(
                             TextComponent::text(err)
-                                .color_named(pumpkin_util::text::color::NamedColor::Red),
+                                .color_named(NamedColor::Red),
                         )
                         .await;
                 }
@@ -165,13 +167,24 @@ impl CommandDispatcher {
 
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
-                "Permission for Command not found".to_string(),
+                "Permission for Command not found 0".to_string(),
             ));
         };
 
-        if !src.has_permission(permission.as_str()) {
-            return Err(PermissionDenied);
-        }
+        let Some(permission_lvl) = self.permission_lvl.get(key) else {
+            return Err(GeneralCommandIssue(
+                "Permission for Command not found 1".to_string()
+            ));
+        };
+
+
+        if src.has_permission_lvl(*permission_lvl) || src.has_permission(permission.as_str()) {
+            Ok(())
+        } else {
+            Err(PermissionDenied)
+        }?;
+
+
 
         let tree = self.get_tree(key)?;
 
@@ -309,10 +322,12 @@ impl CommandDispatcher {
             self.commands
                 .insert(name.to_string(), Command::Alias(primary_name.to_string()));
             self.permissions.insert(name.to_string(), permission.to_string());
+            self.permission_lvl.insert(name.to_string(), permission_lvl);
         }
 
         self.permissions
             .insert(primary_name.to_string(), permission.to_string());
+        self.permission_lvl.insert(primary_name.to_string(), permission_lvl);
         self.commands
             .insert(primary_name.to_string(), Command::Tree(tree));
     }
