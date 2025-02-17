@@ -989,7 +989,10 @@ impl Player {
                 EntityType::ITEM,
                 &self.world().await,
             );
-            let item_entity = Arc::new(ItemEntity::new(entity, &ItemStack::new(drop_amount, item.item)));
+            let item_entity = Arc::new(ItemEntity::new(
+                entity,
+                &ItemStack::new(drop_amount, item.item),
+            ));
             self.world().await.spawn_entity(item_entity.clone()).await;
             item_entity.send_meta_packet().await;
             // decrase item in hotbar
