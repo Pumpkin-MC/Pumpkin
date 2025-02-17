@@ -928,8 +928,11 @@ impl Player {
                     }
                     self.update_sequence(player_action.sequence.0);
                 }
-                Status::DropItemStack | Status::DropItem => {
-                    self.drop_item(server).await;
+                Status::DropItem => {
+                    self.drop_item(server, false).await;
+                }
+                Status::DropItemStack => {
+                    self.drop_item(server, true).await;
                 }
                 Status::ShootArrowOrFinishEating | Status::SwapItem => {
                     log::debug!("todo");

@@ -980,19 +980,20 @@ impl Player {
             .await;
     }
 
-    pub async fn drop_item(&self, server: &Server) {
+    pub async fn drop_item(&self, server: &Server, drop_stack: bool) {
         let mut inv = self.inventory.lock().await;
         if let Some(item) = inv.held_item_mut() {
+            let drop_amount = if drop_stack { item.item_count } else { 1 };
             let entity = server.add_entity(
                 self.living_entity.entity.pos.load(),
                 EntityType::ITEM,
                 &self.world().await,
             );
-            let item_entity = Arc::new(ItemEntity::new(entity, &item.clone()));
+            let item_entity = Arc::new(ItemEntity::new(entity, &ItemStack::new(drop_amount, item.item)));
             self.world().await.spawn_entity(item_entity.clone()).await;
             item_entity.send_meta_packet().await;
             // decrase item in hotbar
-            inv.decrease_current_stack(1);
+            inv.decrease_current_stack(drop_amount);
         }
     }
 
