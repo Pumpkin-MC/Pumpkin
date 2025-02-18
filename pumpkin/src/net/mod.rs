@@ -108,12 +108,17 @@ impl Default for PlayerConfig {
     }
 }
 
+pub enum PacketHandlerState {
+    PacketReady,
+    Stop,
+}
+
 /// Everything which makes a Connection with our Server is a `Client`.
 /// Client will become Players when they reach the `Play` state
 pub struct Client {
     /// The client id. This is good for coorelating a connection with a player
     /// Only used for logging purposes
-    pub id: u16,
+    pub id: usize,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
@@ -135,7 +140,7 @@ pub struct Client {
     /// The packet decoder for incoming packets.
     pub dec: Arc<Mutex<PacketDecoder>>,
     /// A channel for sending packets to the client.
-    pub server_packets_channel: mpsc::Sender<()>,
+    pub server_packets_channel: mpsc::Sender<PacketHandlerState>,
     /// A queue of raw packets received from the client, waiting to be processed.
     pub client_packets_queue: Arc<Mutex<VecDeque<RawPacket>>>,
     /// Indicates whether the client should be converted into a player.
@@ -144,7 +149,11 @@ pub struct Client {
 
 impl Client {
     #[must_use]
-    pub fn new(server_packets_channel: mpsc::Sender<()>, address: SocketAddr, id: u16) -> Self {
+    pub fn new(
+        server_packets_channel: mpsc::Sender<PacketHandlerState>,
+        address: SocketAddr,
+        id: usize,
+    ) -> Self {
         Self {
             id,
             protocol_version: AtomicI32::new(0),
@@ -249,7 +258,10 @@ impl Client {
             return;
         }
 
-        let _ = self.server_packets_channel.send(()).await;
+        let _ = self
+            .server_packets_channel
+            .send(PacketHandlerState::PacketReady)
+            .await;
 
         /* let mut writer = self.connection_writer.lock().await;
         if let Err(error) = writer.write_all(&enc.take()).await {
@@ -296,7 +308,10 @@ impl Client {
         let mut enc = self.enc.lock().await;
         enc.append_packet(packet)?;
 
-        let _ = self.server_packets_channel.send(()).await;
+        let _ = self
+            .server_packets_channel
+            .send(PacketHandlerState::PacketReady)
+            .await;
 
         /* let mut writer = self.connection_writer.lock().await;
         let _ = writer.write_all(&enc.take()).await; */
@@ -538,7 +553,7 @@ impl Client {
             log::warn!("Failed to kick {}: {}", self.id, err.to_string());
         }
         log::debug!("Closing connection for {}", self.id);
-        self.close();
+        self.close().await;
     }
 
     /// Checks if the client can join the server.
@@ -596,9 +611,14 @@ impl Client {
     /// # Notes
     ///
     /// This function does not attempt to send any disconnect packets to the client.
-    pub fn close(&self) {
+    pub async fn close(&self) {
         self.closed
             .store(true, std::sync::atomic::Ordering::Relaxed);
+        // We dont care if this fails because if it doesn that means the task has already stopped
+        let _ = self
+            .server_packets_channel
+            .send(PacketHandlerState::Stop)
+            .await;
         log::debug!("Closed connection for {}", self.id);
     }
 }

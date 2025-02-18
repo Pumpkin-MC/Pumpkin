@@ -46,7 +46,7 @@ rand = "0.8"
 num-bigint = "0.4"
 
 # Console line reading
-rustyline = "15.0"
+rustyline-async = "0.4.5"
 
 # encryption
 rsa = "0.9"
@@ -72,11 +72,12 @@ base64 = "0.22"
 png = "0.17"
 
 # logging
-simple_logger = { version = "5.0", features = ["threads"] }
+simplelog = { version = "0.12.2", features = ["ansi_term"] }
+
 # Remove time in favor of chrono?
 time = "0.3"
 
-chrono = { version = "0.4", features = ["serde"]}
+chrono = { version = "0.4", features = ["serde"] }
 
 # plugins
 libloading = "0.8"
@@ -85,4 +86,4 @@ libloading = "0.8"
 git-version = "0.3"
 # This makes it so the entire project doesn't recompile on each build on linux.
 [target.'cfg(target_os = "windows")'.build-dependencies]
-tauri-winres= "0.3"
+tauri-winres = "0.3"

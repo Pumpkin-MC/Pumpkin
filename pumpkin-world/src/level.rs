@@ -97,6 +97,14 @@ impl Level {
         log::info!("Saving level...");
 
         // chunks are automatically saved when all players get removed
+        // TODO: Await chunks that have been called by this ^
+
+        // save all stragling chunks
+        for chunk in self.loaded_chunks.iter() {
+            let pos = chunk.key();
+            let chunk = chunk.value();
+            self.write_chunk((*pos, chunk.clone())).await;
+        }
 
         // then lets save the world info
         self.world_info_writer

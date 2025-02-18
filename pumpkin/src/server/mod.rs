@@ -112,10 +112,8 @@ impl Server {
         );
 
         // Spawn chunks are never unloaded
-        for x in -1..=1 {
-            for z in -1..=1 {
-                world.level.mark_chunk_as_newly_watched(Vector2::new(x, z));
-            }
+        for chunk in Self::spawn_chunks() {
+            world.level.mark_chunk_as_newly_watched(chunk);
         }
 
         Self {
@@ -142,6 +140,14 @@ impl Server {
             server_branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
         }
+    }
+
+    const SPAWN_CHUNK_RADIUS: i32 = 1;
+
+    pub fn spawn_chunks() -> impl Iterator<Item = Vector2<i32>> {
+        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).flat_map(|x| {
+            (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).map(move |z| Vector2::new(x, z))
+        })
     }
 
     /// Adds a new player to the server.
