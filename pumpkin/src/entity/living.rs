@@ -64,7 +64,10 @@ impl LivingEntity {
             .world
             .read()
             .await
-            .broadcast_packet_all(&CSetEquipment::new(self.entity_id().into(), equipment))
+            .broadcast_packet_except(
+                &[self.entity.entity_uuid],
+                &CSetEquipment::new(self.entity_id().into(), equipment),
+            )
             .await;
     }
 
