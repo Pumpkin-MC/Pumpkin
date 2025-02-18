@@ -144,4 +144,8 @@ impl Context {
         };
         handlers_vec.push(Box::new(typed_handler));
     }
+
+    pub async fn update_suggestions(&self, player: Arc<Player>) {
+        client_suggestions::send_c_commands_packet(&player, &self.server.command_dispatcher).await;
+    }
 }
