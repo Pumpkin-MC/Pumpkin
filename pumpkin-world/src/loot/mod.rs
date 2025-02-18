@@ -1,4 +1,7 @@
+use entry::LootPoolEntryTypes;
 use serde::Deserialize;
+
+mod entry;
 
 #[expect(dead_code)]
 #[derive(Deserialize, Clone)]
@@ -11,15 +14,15 @@ pub struct LootTable {
 #[derive(Deserialize, Clone)]
 pub struct LootPool {
     entries: Vec<LootPoolEntry>,
+    rolls: f32, // TODO
+    bonus_rolls: f32,
 }
 
 #[expect(dead_code)]
 #[derive(Deserialize, Clone)]
 pub struct LootPoolEntry {
-    // TODO
-    r#type: Option<String>,
-    // TODO
-    name: Option<String>,
+    #[serde(flatten)]
+    content: LootPoolEntryTypes,
 }
 
 #[derive(Deserialize, Clone)]
