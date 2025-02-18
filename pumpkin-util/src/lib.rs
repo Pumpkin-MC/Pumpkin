@@ -1,10 +1,10 @@
+pub mod atomic_linked_list;
 pub mod gamemode;
 pub mod math;
 pub mod permission;
 pub mod random;
 pub mod text;
 pub mod translation;
-pub mod atomic_linked_list;
 
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;

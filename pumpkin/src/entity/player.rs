@@ -8,6 +8,21 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::{
+    combat::{self, player_attack_sound, AttackType},
+    hunger::HungerManager,
+    item::ItemEntity,
+    Entity, EntityBase, EntityId, NBTStorage,
+};
+use crate::{
+    block,
+    command::{client_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    net::{Client, PlayerConfig},
+    server::Server,
+    world::World,
+};
+use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
@@ -48,6 +63,7 @@ use pumpkin_protocol::{
     client::play::Metadata,
     server::play::{SClickContainer, SKeepAlive},
 };
+use pumpkin_util::atomic_linked_list::AtomicLinkedList;
 use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, EntityDimensions},
@@ -62,22 +78,6 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
 use tokio::sync::{Mutex, Notify, RwLock};
-use pumpkin_util::atomic_linked_list::AtomicLinkedList;
-use super::{
-    combat::{self, player_attack_sound, AttackType},
-    hunger::HungerManager,
-    item::ItemEntity,
-    Entity, EntityBase, EntityId, NBTStorage,
-};
-use crate::{
-    block,
-    command::{client_suggestions, dispatcher::CommandDispatcher},
-    data::op_data::OPERATOR_CONFIG,
-    net::{Client, PlayerConfig},
-    server::Server,
-    world::World,
-};
-use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
 

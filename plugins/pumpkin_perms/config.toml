@@ -1,2 +1,0 @@
-storage_method = "SQLITE"
-database_url = "database.db"

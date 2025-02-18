@@ -93,7 +93,11 @@ impl CommandSender<'_> {
         match self {
             CommandSender::Console | CommandSender::Rcon(_) => true,
             CommandSender::Player(p) => {
-                let permissions = p.get_permissions().iter().map(std::string::String::as_str).collect::<Vec<_>>();
+                let permissions = p
+                    .get_permissions()
+                    .iter()
+                    .map(std::string::String::as_str)
+                    .collect::<Vec<_>>();
                 permissions.contains(&permission)
             }
         }

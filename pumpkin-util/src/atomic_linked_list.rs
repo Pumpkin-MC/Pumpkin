@@ -1,7 +1,5 @@
-
 use core::sync::atomic::{AtomicPtr, Ordering};
 // use core::marker::PhantomData;
-
 
 struct Node<T> {
     data: T,
@@ -84,11 +82,9 @@ impl<T: PartialEq> AtomicLinkedList<T> {
         false // Exceeded maximum attempts
     }
 
-
     /// add a new element to the front of the list, but will abort
     /// if it fails to do so atomically after the given number of attempts.
     pub fn push_front_timeout(&self, data: T, max_attempts: u64) -> Result<(), T> {
-
         let max_attempts = core::cmp::max(max_attempts, 1); // ensure we try at least once
 
         let node_ptr = Box::into_raw(Box::new(Node::new(data)));
@@ -96,7 +92,6 @@ impl<T: PartialEq> AtomicLinkedList<T> {
         // start the first attempt by obtaining the current head pointer
         let mut orig_head_ptr = self.head.load(Ordering::Acquire);
         for _attempt in 0..max_attempts {
-
             // the new "node" will become the new head, so set the node's `next` pointer to `orig_head_ptr`
             // SAFE: we know the node_ptr is valid since we just created it above.
             unsafe {
@@ -104,7 +99,12 @@ impl<T: PartialEq> AtomicLinkedList<T> {
             }
 
             // now try to atomically swap the new `node_ptr` into the current `head` ptr
-            match self.head.compare_exchange_weak(orig_head_ptr, node_ptr, Ordering::AcqRel, Ordering::Acquire) {
+            match self.head.compare_exchange_weak(
+                orig_head_ptr,
+                node_ptr,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 // If compare_exchange succeeds, then the `head` ptr was properly updated, i.e.,
                 // no other thread was interleaved and snuck in to change `head` since we last loaded it.
                 Ok(_old_head_ptr) => return Ok(()),
@@ -120,19 +120,16 @@ impl<T: PartialEq> AtomicLinkedList<T> {
         // Here, we exceeded the number of max attempts, so we failed.
         // Reclaim the Boxed `Node`, drop the Box, and return the inner data of type `T`.
         // SAFE: no one has touched this node except for us when we created it above.
-        let reclaimed_node = unsafe {
-            Box::from_raw(node_ptr)
-        };
+        let reclaimed_node = unsafe { Box::from_raw(node_ptr) };
 
         Err(reclaimed_node.data)
     }
-
 
     /// returns a forward iterator through this linked list.
     pub fn iter(&self) -> AtomicLinkedListIter<T> {
         AtomicLinkedListIter {
             curr: &self.head, //load(Ordering::Acquire),
-            // _phantom: PhantomData,
+                              // _phantom: PhantomData,
         }
     }
 
@@ -141,11 +138,10 @@ impl<T: PartialEq> AtomicLinkedList<T> {
     pub fn iter_mut(&self) -> AtomicLinkedListIterMut<T> {
         AtomicLinkedListIterMut {
             curr: &self.head, //load(Ordering::Acquire),
-            // _phantom: PhantomData,
+                              // _phantom: PhantomData,
         }
     }
 }
-
 
 pub struct AtomicLinkedListIter<'a, T: 'a> {
     curr: &'a AtomicPtr<Node<T>>,
@@ -166,8 +162,6 @@ impl<'a, T: 'a> Iterator for AtomicLinkedListIter<'a, T> {
     }
 }
 
-
-
 pub struct AtomicLinkedListIterMut<'a, T: 'a> {
     curr: &'a AtomicPtr<Node<T>>,
     // _phantom: PhantomData<&'a T>, // we don't need this with the &'a above
@@ -186,4 +180,3 @@ impl<'a, T: 'a> Iterator for AtomicLinkedListIterMut<'a, T> {
         Some(&mut curr_node.data)
     }
 }
-
