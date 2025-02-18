@@ -428,8 +428,7 @@ impl Player {
 
         let mut inventory = self.inventory().lock().await;
 
-        // TODO: Max stack
-        let source_slot = inventory.get_slot_with_item(block.item_id, 64);
+        let source_slot = inventory.get_slot_with_item(block.item_id);
         let mut dest_slot = inventory.get_empty_hotbar_slot() as usize;
 
         let dest_slot_data = match inventory.get_slot(dest_slot + 36) {
