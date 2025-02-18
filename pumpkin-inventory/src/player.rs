@@ -6,6 +6,17 @@ use pumpkin_world::item::ItemStack;
 use std::iter::Chain;
 use std::slice::IterMut;
 
+/*
+    Inventory Layout:
+    - 0: Crafting Output
+    - 1-4: Crafting Input
+    - 5-8: Armor
+    - 9-35: Main Inventory
+    - 36-44: Hotbar
+    - 45: Offhand
+
+*/
+
 pub struct PlayerInventory {
     // Main Inventory + Hotbar
     crafting: [Option<ItemStack>; 4],
@@ -169,14 +180,14 @@ impl PlayerInventory {
             .unwrap_or(Item::AIR)
             .components
             .max_stack_size;
-        // Check hotbar slots (26-35) first
+        // Check hotbar slots (27-35) first
         if let Some(index) = self.items[27..36].iter().position(|slot| {
             slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
         }) {
             return Some(index + 27 + 9);
         }
 
-        // Then check main inventory slots (0-25)
+        // Then check main inventory slots (0-26)
         if let Some(index) = self.items[0..27].iter().position(|slot| {
             slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
         }) {
@@ -187,12 +198,12 @@ impl PlayerInventory {
     }
 
     pub fn get_empty_slot(&self) -> Option<usize> {
-        // Check hotbar slots (26-35) first
+        // Check hotbar slots (27-35) first
         if let Some(index) = self.items[27..36].iter().position(|slot| slot.is_none()) {
             return Some(index + 27 + 9);
         }
 
-        // Then check main inventory slots (0-25)
+        // Then check main inventory slots (0-26)
         if let Some(index) = self.items[0..27].iter().position(|slot| slot.is_none()) {
             return Some(index + 9);
         }
