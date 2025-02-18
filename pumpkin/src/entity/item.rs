@@ -71,8 +71,6 @@ impl EntityBase for ItemEntity {
 
                         self.count
                             .store(overflow, std::sync::atomic::Ordering::Relaxed);
-
-                        player.update_single_slot(&mut inv, slot as i16, item).await;
                     } else {
                         // Add the item to the stack
                         stack.item_count += self.count.load(std::sync::atomic::Ordering::Relaxed);
@@ -87,7 +85,6 @@ impl EntityBase for ItemEntity {
                             ))
                             .await;
                         self.entity.remove().await;
-                        player.update_single_slot(&mut inv, slot as i16, item).await;
                     }
                 } else {
                     // Add the item as a new stack
@@ -104,8 +101,8 @@ impl EntityBase for ItemEntity {
                         ))
                         .await;
                     self.entity.remove().await;
-                    player.update_single_slot(&mut inv, slot as i16, item).await;
                 }
+                player.update_single_slot(&mut inv, slot as i16, item).await;
             }
         }
     }
