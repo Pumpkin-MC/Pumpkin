@@ -20,7 +20,11 @@ impl<T> Node<T> {
 pub struct AtomicLinkedList<T> {
     head: AtomicPtr<Node<T>>,
 }
-
+impl<T: PartialEq> Default for AtomicLinkedList<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<T: PartialEq> AtomicLinkedList<T> {
     /// Create a new empty AtomicLinkedList.
     ///
@@ -33,7 +37,7 @@ impl<T: PartialEq> AtomicLinkedList<T> {
 
     /// add a new element to the front of the list.
     pub fn push_front(&self, data: T) -> Result<(), T> {
-        self.push_front_timeout(data, u64::max_value())
+        self.push_front_timeout(data, u64::MAX)
     }
 
     pub fn remove(&self, value: &T) -> bool {
@@ -152,7 +156,7 @@ impl<'a, T: 'a> Iterator for AtomicLinkedListIter<'a, T> {
 
     fn next(&mut self) -> Option<&'a T> {
         let curr_ptr = self.curr.load(Ordering::Acquire);
-        if curr_ptr == (0 as *mut _) {
+        if curr_ptr.is_null() {
             return None;
         }
         // SAFE: curr_ptr was checked for null
@@ -173,7 +177,7 @@ impl<'a, T: 'a> Iterator for AtomicLinkedListIterMut<'a, T> {
 
     fn next(&mut self) -> Option<&'a mut T> {
         let curr_ptr = self.curr.load(Ordering::Acquire);
-        if curr_ptr == (0 as *mut _) {
+        if curr_ptr.is_null() {
             return None;
         }
         // SAFE: curr_ptr was checked for null

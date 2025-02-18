@@ -27,18 +27,16 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
         };
         match permission.as_str() {
             "" => {
-                if !cmd_src.has_permission_lvl(*permission_lvl) {
-                    continue;
+                if cmd_src.has_permission_lvl(*permission_lvl) {} else {
+                    continue
                 }
             }
             _ => {
-                if !cmd_src.has_permission(permission)
-                    && !cmd_src.has_permission_lvl(*permission_lvl)
-                {
-                    continue;
+                if cmd_src.has_permission(permission) || cmd_src.has_permission_lvl(*permission_lvl) {} else {
+                    continue
                 }
             }
-        };
+        }
 
         let (is_executable, child_nodes) =
             nodes_to_proto_node_builders(&cmd_src, &tree.nodes, &tree.children);

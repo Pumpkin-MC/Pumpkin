@@ -135,7 +135,7 @@ pub struct Player {
     /// The players op permission level
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// The players permissions
-    pub permissions: AtomicLinkedList<String>,
+    permissions: AtomicLinkedList<String>,
     /// Tell tasks to stop if we are closing
     cancel_tasks: Notify,
     /// whether the client has reported it has loaded
@@ -646,22 +646,23 @@ impl Player {
         client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
 
+    /// Adds a permission to the player
     pub fn set_permission(self: &Arc<Self>, permission: &str) {
-        let mut permissions = self.permissions.push_front(permission.to_string()); // Acquire write lock
-        /*if !permissions.contains(&permission.to_string()) {
-            permissions.push(permission.to_string());
-        }*/
-        // The lock is automatically released when 'permissions' goes out of scope.
+        if !self.permissions.iter().any(|p| p == permission) {
+            self.permissions.push_front(permission.to_string()).unwrap();
+        }
+    }
+    /// Removes a permission from the player
+    pub fn remove_permission(self: &Arc<Self>, permission: &str) {
+        if self.permissions.iter().any(|p| p == permission) {
+            self.permissions.remove(&permission.to_string());
+        }
     }
 
-    pub fn remove_permission(self: &Arc<Self>, permission: &str) {
-        self.permissions.remove(&permission.to_string());
-        /*let mut permissions = self.permissions.write().await; // Acquire write lock
-        if let Some(index) = permissions.iter().position(|r| r == permission) {
-            permissions.remove(index);
-        }*/
-        // The lock is automatically released when 'permissions' goes out of scope.
-    }    /// Sends the world time to just the player.
+    pub fn get_permissions(&self) -> &AtomicLinkedList<String> {
+        &self.permissions
+    }
+    /// Sends the world time to just the player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
         self.client
