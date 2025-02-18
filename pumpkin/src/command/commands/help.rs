@@ -99,6 +99,7 @@ impl CommandExecutor for CommandHelpExecutor {
 struct BaseHelpExecutor;
 
 #[async_trait]
+#[allow(clippy::too_many_lines)]
 impl CommandExecutor for BaseHelpExecutor {
     async fn execute<'a>(
         &self,
@@ -132,18 +133,36 @@ impl CommandExecutor for BaseHelpExecutor {
                 dispatcher
                     .permissions
                     .get(&tree.names[0])
-                    .map_or(true, |perm| sender.has_permission(perm))
+                    .map_or(true, |perm| {
+                        sender.has_permission(perm)
+                            || dispatcher
+                                .permission_lvl
+                                .get(&tree.names[0])
+                                .is_some_and(|lvl| sender.has_permission_lvl(*lvl))
+                    })
             })
             .collect();
 
         commands.sort_by(|a, b| a.names[0].cmp(&b.names[0]));
 
-        let total_pages = (commands.len() as i32 + COMMANDS_PER_PAGE - 1) / COMMANDS_PER_PAGE;
-        let page = page_number.min(total_pages);
+        if commands.is_empty() {
+            sender
+                .send_message(
+                    TextComponent::text("There are no commands to display!")
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
 
-        let start = (page - 1) * COMMANDS_PER_PAGE;
-        let end = start + COMMANDS_PER_PAGE;
-        let page_commands = &commands[start as usize..end.min(commands.len() as i32) as usize];
+            return Ok(());
+        }
+
+        let total_pages =
+            ((commands.len() as i32 + COMMANDS_PER_PAGE - 1) / COMMANDS_PER_PAGE).max(1);
+        let page = page_number.clamp(1, total_pages);
+
+        let start = ((page - 1) * COMMANDS_PER_PAGE).max(0) as usize;
+        let end = (start + COMMANDS_PER_PAGE as usize).min(commands.len());
+        let page_commands = &commands[start..end];
 
         let arrow_left = if page > 1 {
             let cmd = format!("/help {}", page - 1);
