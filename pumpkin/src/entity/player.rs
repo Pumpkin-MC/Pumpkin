@@ -62,7 +62,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
 use tokio::sync::{Mutex, Notify, RwLock};
-
+use pumpkin_util::atomic_linked_list::AtomicLinkedList;
 use super::{
     combat::{self, player_attack_sound, AttackType},
     hunger::HungerManager,
@@ -135,7 +135,7 @@ pub struct Player {
     /// The players op permission level
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// The players permissions
-    pub permissions: AtomicCell<Vec<String>>,
+    pub permissions: AtomicLinkedList<String>,
     /// Tell tasks to stop if we are closing
     cancel_tasks: Notify,
     /// whether the client has reported it has loaded
@@ -237,7 +237,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
-            permissions: AtomicCell::new(vec![]),
+            permissions: AtomicLinkedList::new(),
         }
     }
 
@@ -647,23 +647,21 @@ impl Player {
     }
 
     pub fn set_permission(self: &Arc<Self>, permission: &str) {
-        let mut permissions = self.permissions.take();
-        if !permissions.contains(&permission.to_string()) {
+        let mut permissions = self.permissions.push_front(permission.to_string()); // Acquire write lock
+        /*if !permissions.contains(&permission.to_string()) {
             permissions.push(permission.to_string());
-            self.permissions.store(permissions);
-        }
+        }*/
+        // The lock is automatically released when 'permissions' goes out of scope.
     }
 
     pub fn remove_permission(self: &Arc<Self>, permission: &str) {
-        let mut permissions = self.permissions.take();
-        if permissions.contains(&permission.to_string()) {
-            let index = permissions.iter().position(|r| r == permission).unwrap();
+        self.permissions.remove(&permission.to_string());
+        /*let mut permissions = self.permissions.write().await; // Acquire write lock
+        if let Some(index) = permissions.iter().position(|r| r == permission) {
             permissions.remove(index);
-            self.permissions.store(permissions);
-        }
-    }
-
-    /// Sends the world time to just the player.
+        }*/
+        // The lock is automatically released when 'permissions' goes out of scope.
+    }    /// Sends the world time to just the player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
         self.client

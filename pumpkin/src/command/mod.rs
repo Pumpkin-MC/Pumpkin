@@ -93,7 +93,9 @@ impl CommandSender<'_> {
         match self {
             CommandSender::Console | CommandSender::Rcon(_) => true,
             CommandSender::Player(p) => {
-                p.permissions.take().contains(&permission.to_string()) || permission.is_empty()
+                let permissions = p.permissions.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+                println!("{}, {:?}", permission.to_string(), permissions.clone());
+                permissions.contains(&permission)
             }
         }
     }
