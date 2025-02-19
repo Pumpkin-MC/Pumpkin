@@ -51,7 +51,9 @@ impl ItemStack {
 
                 if entry.starts_with('#') {
                     // Check if block is in the tag group
-                    if let Some(blocks) = get_tag_values(RegistryKey::Block, &entry[1..]) {
+                    if let Some(blocks) =
+                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
+                    {
                         if blocks.iter().flatten().any(|s| s == block) {
                             return speed;
                         }
@@ -84,7 +86,9 @@ impl ItemStack {
 
                 if entry.starts_with('#') {
                     // Check if block exists within the tag group
-                    if let Some(blocks) = get_tag_values(RegistryKey::Block, &entry[1..]) {
+                    if let Some(blocks) =
+                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
+                    {
                         if blocks.iter().flatten().any(|s| s == block) {
                             return correct_for_drops;
                         }
