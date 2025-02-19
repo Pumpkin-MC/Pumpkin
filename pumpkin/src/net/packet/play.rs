@@ -469,7 +469,7 @@ impl Player {
                     .await;
 
                 // Check if there is any empty slot in the player inventory
-                if let Some(slot_index) = inventory.get_empty_slot() {
+                if let Some(slot_index) = inventory.get_empty_slot_no_order() {
                     inventory.state_id += 1;
                     self.update_single_slot(&mut inventory, slot_index as i16, dest_slot_data)
                         .await;

@@ -152,7 +152,7 @@ impl PlayerInventory {
     /// Checks if we can merge an existing item into an Stack or if a any new Slot is empty
     pub fn collect_item_slot(&self, item_id: u16) -> Option<usize> {
         // Lets try to merge first
-        if let Some(stack) = self.get_slot_with_item(item_id) {
+        if let Some(stack) = self.get_nonfull_slot_with_item(item_id) {
             return Some(stack);
         }
         if let Some(empty) = self.get_empty_slot() {
@@ -175,7 +175,7 @@ impl PlayerInventory {
         self.selected
     }
 
-    pub fn get_slot_with_item(&self, item_id: u16) -> Option<usize> {
+    pub fn get_nonfull_slot_with_item(&self, item_id: u16) -> Option<usize> {
         let max_stack = Item::from_id(item_id)
             .unwrap_or(Item::AIR)
             .components
@@ -197,6 +197,17 @@ impl PlayerInventory {
         None
     }
 
+    pub fn get_slot_with_item(&self, item_id: u16) -> Option<usize> {
+        for slot in 9..=44 {
+            match &self.items[slot - 9] {
+                Some(item) if item.item.id == item_id => return Some(slot),
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
     pub fn get_empty_slot(&self) -> Option<usize> {
         // Check hotbar slots (27-35) first
         if let Some(index) = self.items[27..36].iter().position(|slot| slot.is_none()) {
@@ -209,6 +220,13 @@ impl PlayerInventory {
         }
 
         None
+    }
+
+    pub fn get_empty_slot_no_order(&self) -> Option<usize> {
+        self.items
+            .iter()
+            .position(|slot| slot.is_none())
+            .map(|index| index + 9)
     }
 
     pub fn slots(&self) -> Vec<Option<&ItemStack>> {
