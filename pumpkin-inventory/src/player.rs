@@ -180,6 +180,15 @@ impl PlayerInventory {
             .unwrap_or(Item::AIR)
             .components
             .max_stack_size;
+
+        // Check selected slot
+        if let Some(item) = &self.items[self.selected as usize + 36 - 9] {
+            if item.item.id == item_id && item.item_count < max_stack {
+                // + 9 - 9 is 0
+                return Some(self.selected as usize + 36);
+            }
+        }
+
         // Check hotbar slots (27-35) first
         if let Some(index) = self.items[27..36].iter().position(|slot| {
             slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
