@@ -167,6 +167,7 @@ impl Level {
     }
 
     pub fn mark_chunk_as_newly_watched(&self, chunk: Vector2<i32>) {
+        log::trace!("{:?} marked as newly watched", chunk);
         match self.chunk_watchers.entry(chunk) {
             Entry::Occupied(mut occupied) => {
                 let value = occupied.get_mut();
@@ -195,6 +196,7 @@ impl Level {
 
     /// Returns whether the chunk should be removed from memory
     pub fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
+        log::trace!("{:?} marked as no longer watched", chunk);
         match self.chunk_watchers.entry(chunk) {
             Entry::Occupied(mut occupied) => {
                 let value = occupied.get_mut();
@@ -225,6 +227,7 @@ impl Level {
     }
 
     pub async fn clean_chunk(&self, chunk: &Vector2<i32>) {
+        log::trace!("{:?} is being cleaned", chunk);
         if let Some(data) = self.loaded_chunks.remove(chunk) {
             self.write_chunk(data).await;
         }

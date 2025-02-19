@@ -228,23 +228,26 @@ impl PumpkinServer {
             );
 
             let (tx, mut rx) = tokio::sync::mpsc::channel(64);
-            let (connection_reader, connection_writer) = connection.into_split();
-            let connection_reader = Arc::new(Mutex::new(connection_reader));
-            let connection_writer = Arc::new(Mutex::new(connection_writer));
+            let (mut connection_reader, connection_writer) = connection.into_split();
 
             let client = Arc::new(Client::new(tx, client_addr, id));
 
             let client_clone = client.clone();
             // This task will be cleaned up on its own
             tokio::spawn(async move {
-                // We clone ownership of a tx into here thru the client so this will never drop
+                let mut connection_writer = connection_writer;
+
+                // We clone ownership of `tx` into here thru the client so this will never drop
                 // since there is always a tx in memory. We need to explicitly tell the recv to stop
                 while let Some(notif) = rx.recv().await {
                     match notif {
                         PacketHandlerState::PacketReady => {
-                            let mut enc = client_clone.enc.lock().await;
-                            let buf = enc.take();
-                            if let Err(e) = connection_writer.lock().await.write_all(&buf).await {
+                            let buf = {
+                                let mut enc = client_clone.enc.lock().await;
+                                enc.take()
+                            };
+
+                            if let Err(e) = connection_writer.write_all(&buf).await {
                                 log::warn!("Failed to write packet to client: {e}");
                                 client_clone.close().await;
                                 break;
@@ -264,7 +267,7 @@ impl PumpkinServer {
                         .make_player
                         .load(std::sync::atomic::Ordering::Relaxed)
                 {
-                    let open = poll(&client, connection_reader.clone()).await;
+                    let open = poll(&client, &mut connection_reader).await;
                     if open {
                         client.process_packets(&server).await;
                     };
@@ -284,7 +287,7 @@ impl PumpkinServer {
                         .closed
                         .load(core::sync::atomic::Ordering::Relaxed)
                     {
-                        let open = poll(&player.client, connection_reader.clone()).await;
+                        let open = poll(&player.client, &mut connection_reader).await;
                         if open {
                             player.process_packets(&server).await;
                         };
@@ -384,7 +387,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<Readline> {
     })
 }
 
-async fn poll(client: &Client, connection_reader: Arc<Mutex<OwnedReadHalf>>) -> bool {
+async fn poll(client: &Client, connection_reader: &mut OwnedReadHalf) -> bool {
     loop {
         if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
             // If we manually close (like a kick) we dont want to keep reading bytes
@@ -409,7 +412,7 @@ async fn poll(client: &Client, connection_reader: Arc<Mutex<OwnedReadHalf>>) -> 
         dec.reserve(4096);
         let mut buf = dec.take_capacity();
 
-        let bytes_read = connection_reader.lock().await.read_buf(&mut buf).await;
+        let bytes_read = connection_reader.read_buf(&mut buf).await;
         match bytes_read {
             Ok(cnt) => {
                 //log::debug!("Read {} bytes", cnt);

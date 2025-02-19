@@ -252,10 +252,12 @@ impl Client {
             return;
         }
 
-        let mut enc = self.enc.lock().await;
-        if let Err(error) = enc.append_packet(packet) {
-            self.kick(&TextComponent::text(error.to_string())).await;
-            return;
+        {
+            let mut enc = self.enc.lock().await;
+            if let Err(error) = enc.append_packet(packet) {
+                self.kick(&TextComponent::text(error.to_string())).await;
+                return;
+            }
         }
 
         let _ = self
