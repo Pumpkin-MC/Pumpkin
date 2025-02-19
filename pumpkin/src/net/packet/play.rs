@@ -434,7 +434,7 @@ impl Player {
 
         let dest_slot_data = match inventory.get_slot(dest_slot + 36) {
             Ok(Some(stack)) => *stack,
-            _ => return,
+            _ => ItemStack::new(0, Item::AIR),
         };
 
         // Early return if no source slot and not in creative mode
