@@ -397,14 +397,15 @@ impl Player {
         &self,
         inventory: &mut tokio::sync::MutexGuard<'_, PlayerInventory>,
         slot: i16,
-        slot_data: Slot,
+        stack: ItemStack,
     ) {
         inventory.state_id += 1;
+        let slot_data = Slot::from(&stack);
         let dest_packet = CSetContainerSlot::new(0, inventory.state_id as i32, slot, &slot_data);
         self.client.send_packet(&dest_packet).await;
 
         if inventory
-            .set_slot(slot as usize, slot_data.to_item(), false)
+            .set_slot(slot as usize, Some(stack), false)
             .is_err()
         {
             log::error!("Pick item set slot error!");
@@ -432,8 +433,8 @@ impl Player {
         let mut dest_slot = inventory.get_empty_hotbar_slot() as usize;
 
         let dest_slot_data = match inventory.get_slot(dest_slot + 36) {
-            Ok(Some(stack)) => Slot::from(&*stack),
-            _ => Slot::from(None),
+            Ok(Some(stack)) => *stack,
+            _ => return,
         };
 
         // Early return if no source slot and not in creative mode
@@ -451,7 +452,7 @@ impl Player {
 
                 // Update destination slot
                 let source_slot_data = match inventory.get_slot(slot_index) {
-                    Ok(Some(stack)) => Slot::from(&*stack),
+                    Ok(Some(stack)) => *stack,
                     _ => return,
                 };
                 self.update_single_slot(&mut inventory, dest_slot as i16 + 36, source_slot_data)
@@ -464,8 +465,7 @@ impl Player {
             None if self.gamemode.load() == GameMode::Creative => {
                 // Case where item is not present, if in creative mode create the item
                 let item_stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
-                let slot_data = Slot::from(&item_stack);
-                self.update_single_slot(&mut inventory, dest_slot as i16 + 36, slot_data)
+                self.update_single_slot(&mut inventory, dest_slot as i16 + 36, item_stack)
                     .await;
 
                 // Check if there is any empty slot in the player inventory
