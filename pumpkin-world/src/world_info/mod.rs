@@ -7,6 +7,9 @@ use crate::{generation::Seed, level::LevelFolder};
 
 pub mod anvil;
 
+pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4080; // 1.21.2
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4189; // 1.21.4
+
 pub(crate) trait WorldInfoReader {
     fn read_world_info(&self, level_folder: &LevelFolder) -> Result<LevelData, WorldInfoError>;
 }
@@ -98,7 +101,7 @@ pub struct DataPacks {
 }
 
 fn get_or_create_seed() -> Seed {
-    // TODO: if there is a seed in the config (!= 0) use it. Otherwise make a random one
+    // TODO: if there is a seed in the config (!= "") use it. Otherwise make a random one
     Seed::from(BASIC_CONFIG.seed.as_str())
 }
 
@@ -152,7 +155,7 @@ impl Default for LevelData {
                 disabled: vec![],
                 enabled: vec!["vanilla".to_string()],
             },
-            data_version: -1,
+            data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             day_time: 0,
             difficulty: Difficulty::Normal as i8,
             difficulty_locked: false,
@@ -177,6 +180,8 @@ pub enum WorldInfoError {
     InfoNotFound,
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+    #[error("Unsupported world data version: {0}")]
+    UnsupportedVersion(i32),
 }
 
 impl From<std::io::Error> for WorldInfoError {

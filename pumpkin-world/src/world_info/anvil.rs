@@ -1,27 +1,69 @@
 use std::{
     fs::OpenOptions,
+    io::Read,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
 use serde::{Deserialize, Serialize};
 
-use crate::level::LevelFolder;
+use crate::{
+    level::LevelFolder,
+    world_info::{MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION},
+};
 
 use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 
-const LEVEL_DAT_FILE_NAME: &str = "level.dat";
+pub const LEVEL_DAT_FILE_NAME: &str = "level.dat";
+pub const LEVEL_DAT_BACKUP_FILE_NAME: &str = "level.dat_old";
 
 pub struct AnvilLevelInfo;
+
+fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
+    // Define a struct that only has the data version. This is necessary because if a user tries to
+    // load a world with different data, they will get a generic "Failed to deserialize level.dat error".
+    // When only checking for the data version, we can determine if we can support the full
+    // deserializiation before going through with it.
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct LevelData {
+        #[allow(dead_code)]
+        data_version: i32,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct LevelDat {
+        #[allow(dead_code)]
+        data: LevelData,
+    }
+
+    let info: LevelDat = pumpkin_nbt::from_bytes(raw_nbt)
+        .map_err(|e|{
+            log::error!("The world.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
+            WorldInfoError::DeserializationError(e.to_string())})?;
+
+    let data_version = info.data.data_version;
+
+    if !(MINIMUM_SUPPORTED_WORLD_DATA_VERSION..=MAXIMUM_SUPPORTED_WORLD_DATA_VERSION)
+        .contains(&data_version)
+    {
+        Err(WorldInfoError::UnsupportedVersion(data_version))
+    } else {
+        Ok(())
+    }
+}
 
 impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &LevelFolder) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.root_folder.join(LEVEL_DAT_FILE_NAME);
 
         let world_info_file = OpenOptions::new().read(true).open(path)?;
-        let compression_reader = GzDecoder::new(world_info_file);
-        let info = from_bytes::<LevelDat>(compression_reader)
+        let mut compression_reader = GzDecoder::new(world_info_file);
+        let mut buf = Vec::new();
+        let _ = compression_reader.read_to_end(&mut buf)?;
+
+        check_file_data_version(&buf)?;
+        let info = pumpkin_nbt::from_bytes::<LevelDat>(&buf[..])
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
 
         // TODO: check version
@@ -55,7 +97,8 @@ impl WorldInfoWriter for AnvilLevelInfo {
         // write compressed data into file
         let compression_writer = GzEncoder::new(world_info_file, Compression::best());
         // TODO: Proper error handling
-        to_bytes(&level, compression_writer).expect("Failed to write level.dat to disk");
+        pumpkin_nbt::to_bytes(&level, compression_writer)
+            .expect("Failed to write level.dat to disk");
         Ok(())
     }
 }
@@ -70,18 +113,19 @@ pub struct LevelDat {
 #[cfg(test)]
 mod test {
 
-    use std::sync::LazyLock;
+    use std::{fs, sync::LazyLock};
 
     use flate2::read::GzDecoder;
     use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
     use temp_dir::TempDir;
 
     use crate::{
+        global_path,
         level::LevelFolder,
-        world_info::{DataPacks, LevelData, WorldGenSettings, WorldVersion},
+        world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
     };
 
-    use super::{AnvilLevelInfo, LevelDat, WorldInfoReader, WorldInfoWriter};
+    use super::{AnvilLevelInfo, LevelDat, WorldInfoReader, WorldInfoWriter, LEVEL_DAT_FILE_NAME};
 
     #[test]
     fn test_preserve_level_dat_seed() {
@@ -149,7 +193,7 @@ mod test {
 
     #[test]
     fn test_deserialize_level_dat() {
-        let raw_compressed_nbt = include_bytes!("../../assets/level.dat");
+        let raw_compressed_nbt = include_bytes!("../../assets/level_1_21_4.dat");
         assert!(!raw_compressed_nbt.is_empty());
 
         let decoder = GzDecoder::new(&raw_compressed_nbt[..]);
@@ -169,5 +213,24 @@ mod test {
             from_bytes(&serialized[..]).expect("Failed to decode from bytes");
 
         assert_eq!(level_dat_again, *LEVEL_DAT);
+    }
+
+    #[test]
+    fn failed_deserialize_old_level_dat() {
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = LevelFolder {
+            root_folder: temp_dir.path().to_path_buf(),
+            region_folder: temp_dir.path().join("region"),
+        };
+
+        let test_dat = global_path!("../../assets/level_1_20.dat");
+        fs::copy(test_dat, level_folder.root_folder.join(LEVEL_DAT_FILE_NAME)).unwrap();
+
+        let result = AnvilLevelInfo.read_world_info(&level_folder);
+        match result {
+            Ok(_) => panic!("This should fail!"),
+            Err(WorldInfoError::UnsupportedVersion(_)) => {}
+            Err(_) => panic!("Wrong error!"),
+        }
     }
 }

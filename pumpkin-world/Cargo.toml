@@ -39,7 +39,6 @@ indexmap = "2.7"
 enum_dispatch = "0.3"
 
 noise = "0.9"
-rand = "0.8"
 
 # Had to use custom, because google's is broken, I made a PR.
 serde_json5 = { git = "https://github.com/kralverde/serde_json5.git" }

@@ -730,7 +730,6 @@ mod octave_perline_noise_sampler_test {
 
 #[cfg(test)]
 mod perlin_noise_sampler_test {
-    use std::{fs, path::Path};
 
     use pumpkin_util::{
         assert_eq_delta,

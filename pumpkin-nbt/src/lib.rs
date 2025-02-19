@@ -17,6 +17,9 @@ pub mod deserializer;
 pub mod serializer;
 pub mod tag;
 
+pub use deserializer::{from_bytes, from_bytes_unnamed};
+pub use serializer::{to_bytes, to_bytes_named, to_bytes_unnamed};
+
 // This NBT crate is inspired from CrabNBT
 
 pub const END_ID: u8 = 0x00;

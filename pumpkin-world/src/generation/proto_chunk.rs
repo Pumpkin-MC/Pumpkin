@@ -233,7 +233,7 @@ impl<'a> ProtoChunk<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::{fs, path::Path, sync::LazyLock};
+    use std::sync::LazyLock;
 
     use pumpkin_util::math::vector2::Vector2;
 

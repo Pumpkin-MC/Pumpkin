@@ -206,6 +206,8 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.save().await;
         }
+
+        log::info!("Completed world save");
     }
 
     /// Adds a new living entity to the server. This does not Spawn the entity

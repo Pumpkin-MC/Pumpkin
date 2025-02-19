@@ -20,22 +20,27 @@ pub const WORLD_MAX_Y: i16 = WORLD_HEIGHT as i16 - WORLD_LOWEST_Y.abs();
 pub const DIRECT_PALETTE_BITS: u32 = 15;
 
 #[macro_export]
+macro_rules! global_path {
+    ($path:expr) => {{
+        use std::path::Path;
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join(file!())
+            .parent()
+            .unwrap()
+            .join($path)
+    }};
+}
+
+#[macro_export]
 macro_rules! read_data_from_file {
-    ($path:expr) => {
-        serde_json::from_str(
-            &fs::read_to_string(
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .parent()
-                    .unwrap()
-                    .join(file!())
-                    .parent()
-                    .unwrap()
-                    .join($path),
-            )
-            .expect("no data file"),
-        )
-        .expect("failed to decode data")
-    };
+    ($path:expr) => {{
+        use std::fs;
+        use $crate::global_path;
+        serde_json::from_str(&fs::read_to_string(global_path!($path)).expect("no data file"))
+            .expect("failed to decode data")
+    }};
 }
 
 // TODO: is there a way to do in-file benches?

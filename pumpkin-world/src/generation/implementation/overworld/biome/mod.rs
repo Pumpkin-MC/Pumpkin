@@ -4,8 +4,6 @@ use pumpkin_macros::block_state;
 
 use crate::{block::BlockState, coordinates::ChunkRelativeBlockCoordinates};
 
-pub mod plains;
-
 pub fn generate_tree(
     chunk_relative_coordinates: ChunkRelativeBlockCoordinates,
 ) -> Vec<(ChunkRelativeBlockCoordinates, BlockState)> {
