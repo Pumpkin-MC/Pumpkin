@@ -169,7 +169,7 @@ impl CommandDispatcher {
 
         let Some(permission_lvl) = self.permission_lvl.get(key) else {
             return Err(GeneralCommandIssue(
-                "Permission for Command not found 1".to_string(),
+                "Permission for command {key} not found".to_string(),
             ));
         };
 
