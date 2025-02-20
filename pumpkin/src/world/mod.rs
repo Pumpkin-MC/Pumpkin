@@ -28,10 +28,12 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::client::play::{
-    CBlockUpdate, CDisguisedChatMessage, CRespawn, CSetBlockDestroyStage, CWorldEvent,
-};
+use pumpkin_protocol::client::play::CSetBlockDestroyStage;
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
+use pumpkin_protocol::{
+    client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent},
+    codec::var_int::VarInt,
+};
 use pumpkin_protocol::{
     client::play::{
         CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
@@ -979,6 +981,32 @@ impl World {
             .await;
         let mut current_living_entities = self.entities.write().await;
         current_living_entities.insert(base_entity.entity_uuid, entity);
+    }
+
+    pub async fn add_entity(&self, entity: &Entity, direction: Vector3<f32>) {
+        // TODO: add to list
+
+        log::info!("x: {}", direction.x);
+        log::info!("y: {}", direction.y);
+        log::info!("z: {}", direction.z);
+
+        let po = entity.pos.load();
+        self.broadcast_packet_all(&CSpawnEntity::new(
+            VarInt(entity.entity_id),
+            entity.entity_uuid,
+            VarInt(i32::from(EntityType::POTION.id)),
+            Vector3::new(po.x, po.y, po.z), // + f64::from(cursor_pos.x),
+            // po.y,
+            // po.z, // + f64::from(cursor_pos.z),
+            10.0,
+            0.0, // head_yaw,
+            0.0, // opposite_yaw,
+            0.into(),
+            Vector3::new(direction.x.into(), direction.y.into(), direction.z.into()),
+            // direction.y,
+            // direction.z,
+        ))
+        .await;
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {

@@ -347,8 +347,9 @@ impl Player {
             }
         }
 
+        // change
         world
-            .play_sound(Sound::EntityPlayerHurt, SoundCategory::Players, &pos)
+            .play_sound(Sound::EntityPlayerHurt, SoundCategory::Neutral, &pos)
             .await;
 
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
