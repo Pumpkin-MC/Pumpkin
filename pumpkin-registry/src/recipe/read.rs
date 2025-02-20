@@ -1,10 +1,11 @@
 use crate::flatten_3x3;
-use crate::recipe::read::ingredients::{IngredientSlot, Ingredients};
+use crate::recipe::read::ingredients::Ingredients;
 use crate::recipe::read::SpecialCraftingType::{
     ArmorDye, BannerDuplicate, BookCloning, Firework, RepairItem, ShieldDecoration,
     ShulkerboxColoring, SuspiciousStew, TippedArrow,
 };
 use crate::recipe::recipe_formats::{ShapedCrafting, ShapelessCrafting};
+use pumpkin_data::tag::RegistryEntryList;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{de, Deserialize, Deserializer};
 use std::collections::HashMap;
@@ -73,107 +74,12 @@ impl FromStr for RecipeType {
     }
 }
 pub mod ingredients {
-    use serde::de::{Error, SeqAccess, Visitor};
-    use serde::{de, Deserialize, Deserializer};
-    use std::collections::HashMap;
+    use pumpkin_data::tag::RegistryEntryList;
+    use serde::de::{SeqAccess, Visitor};
+    use serde::{Deserialize, Deserializer};
     use std::fmt::Formatter;
-    use std::hash::Hash;
 
-    #[derive(Clone, PartialEq, Debug, Eq, Hash)]
-    pub enum IngredientType {
-        Item(String),
-        Tag(String),
-    }
-
-    impl IngredientType {
-        pub fn to_all_types(&self, item_tags: &HashMap<String, Vec<String>>) -> Vec<String> {
-            match &self {
-                IngredientType::Tag(tag) => item_tags.get(tag).unwrap().clone(),
-                IngredientType::Item(s) => vec![s.to_string()],
-            }
-        }
-    }
-
-    struct IngredientTypeVisitor;
-    impl Visitor<'_> for IngredientTypeVisitor {
-        type Value = IngredientType;
-        fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-            write!(formatter, "valid item type")
-        }
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: Error,
-        {
-            match v.strip_prefix('#') {
-                Some(tag) => Ok(IngredientType::Tag(tag.to_string())),
-                None => Ok(IngredientType::Item(v.to_string())),
-            }
-        }
-    }
-    impl<'de> Deserialize<'de> for IngredientType {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            deserializer.deserialize_str(IngredientTypeVisitor)
-        }
-    }
-
-    #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-    pub enum IngredientSlot {
-        Single(IngredientType),
-        Many(Vec<IngredientType>),
-    }
-
-    impl PartialEq<IngredientType> for IngredientSlot {
-        fn eq(&self, other: &IngredientType) -> bool {
-            match self {
-                IngredientSlot::Single(ingredient) => other == ingredient,
-                IngredientSlot::Many(ingredients) => ingredients.contains(other),
-            }
-        }
-    }
-
-    impl<'de> Deserialize<'de> for IngredientSlot {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            struct SlotTypeVisitor;
-            impl<'de> Visitor<'de> for SlotTypeVisitor {
-                fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                    write!(formatter, "valid ingredient slot")
-                }
-
-                type Value = IngredientSlot;
-
-                fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-                where
-                    E: de::Error,
-                {
-                    Ok(IngredientSlot::Single(IngredientTypeVisitor.visit_str(v)?))
-                }
-
-                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-                where
-                    A: SeqAccess<'de>,
-                {
-                    let mut ingredients: Vec<IngredientType> = vec![];
-                    while let Some(element) = seq.next_element()? {
-                        ingredients.push(element)
-                    }
-                    if ingredients.len() == 1 {
-                        Ok(IngredientSlot::Single(ingredients[0].clone()))
-                    } else {
-                        Ok(IngredientSlot::Many(ingredients))
-                    }
-                }
-            }
-            deserializer.deserialize_any(SlotTypeVisitor)
-        }
-    }
-
-    pub struct Ingredients(pub Vec<IngredientSlot>);
+    pub struct Ingredients(pub Vec<RegistryEntryList>);
     impl<'de> Deserialize<'de> for Ingredients {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
@@ -293,7 +199,7 @@ impl<'de> Deserialize<'de> for RecipeResult {
         deserializer.deserialize_any(ResultVisitor)
     }
 }
-pub struct RecipeKeys(pub(super) HashMap<char, IngredientSlot>);
+pub struct RecipeKeys(pub(super) HashMap<char, RegistryEntryList>);
 
 impl<'de> Deserialize<'de> for RecipeKeys {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -302,7 +208,7 @@ impl<'de> Deserialize<'de> for RecipeKeys {
     {
         struct KeyVisitor;
         impl<'de> Visitor<'de> for KeyVisitor {
-            type Value = HashMap<char, IngredientSlot>;
+            type Value = HashMap<char, RegistryEntryList>;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 write!(formatter, "existing key inside recipe")
@@ -316,7 +222,7 @@ impl<'de> Deserialize<'de> for RecipeKeys {
                 while let Some(next) = map.next_key()? {
                     let test: &str = next;
                     let c: char = test.chars().next().unwrap();
-                    let ingredient_type: IngredientSlot = map.next_value()?;
+                    let ingredient_type: RegistryEntryList = map.next_value()?;
                     return_map.insert(c, ingredient_type);
                 }
                 Ok(return_map)
@@ -379,15 +285,15 @@ impl<'de> Deserialize<'de> for Recipe {
                 let mut pattern: Option<Vec<&str>> = None;
                 let mut result: Option<RecipeResult> = None;
                 let mut ingredients: Option<Ingredients> = None;
-                let mut ingredient: Option<IngredientSlot> = None;
-                let mut addition: Option<IngredientSlot> = None;
-                let mut base: Option<IngredientSlot> = None;
-                let mut template: Option<IngredientSlot> = None;
+                let mut ingredient: Option<RegistryEntryList> = None;
+                let mut addition: Option<RegistryEntryList> = None;
+                let mut base: Option<RegistryEntryList> = None;
+                let mut template: Option<RegistryEntryList> = None;
                 let mut cookingtime: Option<u16> = None;
                 let mut experience: Option<f32> = None;
                 let mut show_notification: Option<bool> = None;
-                let mut transmute_input: Option<IngredientSlot> = None;
-                let mut transmute_material: Option<IngredientSlot> = None;
+                let mut transmute_input: Option<RegistryEntryList> = None;
+                let mut transmute_material: Option<RegistryEntryList> = None;
                 while let Some(key) = map.next_key()? {
                     (match key {
                         Fields::Type => visit_option(&mut map, &mut recipe_type, "type"),
@@ -521,12 +427,12 @@ fn visit_option<'de, T: Deserialize<'de>, Map: MapAccess<'de>>(
 
 pub struct Recipe {
     pub recipe_type: RecipeType,
-    pattern: Vec<[[Option<IngredientSlot>; 3]; 3]>,
+    pattern: Vec<[[Option<RegistryEntryList>; 3]; 3]>,
     result: RecipeResult,
 }
 
 impl Recipe {
-    pub fn pattern(&self) -> &[[[Option<IngredientSlot>; 3]; 3]] {
+    pub fn pattern(&self) -> &[[[Option<RegistryEntryList>; 3]; 3]] {
         &self.pattern
     }
 
@@ -556,7 +462,7 @@ impl RecipeTrait for Test {
         self.recipe_type
     }
 
-    fn pattern(&self) -> Vec<[[Option<IngredientSlot>; 3]; 3]> {
+    fn pattern(&self) -> Vec<[[Option<RegistryEntryList>; 3]; 3]> {
         vec![[const { [const { None }; 3] }; 3]]
     }
 
@@ -573,7 +479,7 @@ impl<T: RecipeTrait> From<T> for Recipe {
 pub trait RecipeTrait: Sized {
     fn recipe_type(&self) -> RecipeType;
 
-    fn pattern(&self) -> Vec<[[Option<IngredientSlot>; 3]; 3]>;
+    fn pattern(&self) -> Vec<[[Option<RegistryEntryList>; 3]; 3]>;
 
     fn result(self) -> RecipeResult;
 

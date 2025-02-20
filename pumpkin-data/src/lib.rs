@@ -1,3 +1,9 @@
+pub mod tag;
+
+pub mod item {
+    include!(concat!(env!("OUT_DIR"), "/item.rs"));
+}
+
 pub mod packet {
     include!(concat!(env!("OUT_DIR"), "/packet.rs"));
 }
@@ -26,6 +32,7 @@ pub mod game_event {
 }
 
 pub mod entity {
+    include!(concat!(env!("OUT_DIR"), "/spawn_egg.rs"));
     include!(concat!(env!("OUT_DIR"), "/entity_type.rs"));
     include!(concat!(env!("OUT_DIR"), "/entity_pose.rs"));
 }
@@ -37,4 +44,12 @@ pub mod world {
 
 pub mod scoreboard {
     include!(concat!(env!("OUT_DIR"), "/scoreboard_slot.rs"));
+}
+
+pub mod damage {
+    include!(concat!(env!("OUT_DIR"), "/damage_type.rs"));
+}
+
+pub mod fluid {
+    include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }

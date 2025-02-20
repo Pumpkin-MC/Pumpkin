@@ -1,42 +1,31 @@
 use pumpkin_util::random::RandomDeriver;
 
-use crate::block::BlockState;
+use crate::{block::BlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter};
 
 use super::{
-    chunk_noise::ChunkNoiseState,
-    noise::{
-        clamped_map,
-        density::{component_functions::ComponentReference, NoisePos, NoisePosImpl},
+    noise::clamped_map,
+    noise_router::{
+        chunk_density_function::ChunkNoiseFunctionSampleOptions, density_function::NoisePos,
     },
 };
 
 pub struct OreVeinSampler {
-    vein_toggle: Box<dyn ComponentReference<ChunkNoiseState>>,
-    vein_ridged: Box<dyn ComponentReference<ChunkNoiseState>>,
-    vein_gap: Box<dyn ComponentReference<ChunkNoiseState>>,
     random_deriver: RandomDeriver,
 }
 
 impl OreVeinSampler {
-    pub fn new(
-        vein_toggle: Box<dyn ComponentReference<ChunkNoiseState>>,
-        vein_ridged: Box<dyn ComponentReference<ChunkNoiseState>>,
-        vein_gap: Box<dyn ComponentReference<ChunkNoiseState>>,
-        random_deriver: RandomDeriver,
-    ) -> Self {
-        Self {
-            vein_toggle,
-            vein_ridged,
-            vein_gap,
-            random_deriver,
-        }
+    pub fn new(random_deriver: RandomDeriver) -> Self {
+        Self { random_deriver }
     }
-}
 
-impl OreVeinSampler {
-    pub fn sample(&mut self, pos: &NoisePos, state: &ChunkNoiseState) -> Option<BlockState> {
-        let vein_sample = self.vein_toggle.sample_mut(pos, state);
-        let vein_type: &VeinType = if vein_sample > 0f64 {
+    pub fn sample(
+        &self,
+        router: &mut ChunkNoiseRouter,
+        pos: &impl NoisePos,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> Option<BlockState> {
+        let vein_toggle = router.vein_toggle(pos, sample_options);
+        let vein_type: &VeinType = if vein_toggle > 0f64 {
             &vein_type::COPPER
         } else {
             &vein_type::IRON
@@ -48,10 +37,12 @@ impl OreVeinSampler {
         if (max_to_y >= 0) && (y_to_min >= 0) {
             let closest_to_bound = max_to_y.min(y_to_min);
             let mapped_diff = clamped_map(closest_to_bound as f64, 0f64, 20f64, -0.2f64, 0f64);
-            let abs_sample = vein_sample.abs();
+            let abs_sample = vein_toggle.abs();
             if abs_sample + mapped_diff >= 0.4f32 as f64 {
                 let mut random = self.random_deriver.split_pos(pos.x(), block_y, pos.z());
-                if random.next_f32() <= 0.7f32 && self.vein_ridged.sample_mut(pos, state) < 0f64 {
+
+                let vein_ridged_sample = router.vein_ridged(pos, sample_options);
+                if random.next_f32() <= 0.7f32 && vein_ridged_sample < 0f64 {
                     let clamped_sample = clamped_map(
                         abs_sample,
                         0.4f32 as f64,
@@ -60,8 +51,9 @@ impl OreVeinSampler {
                         0.3f32 as f64,
                     );
 
+                    let vein_gap = router.vein_gap(pos, sample_options);
                     return if (random.next_f32() as f64) < clamped_sample
-                        && self.vein_gap.sample_mut(pos, state) > (-0.3f32 as f64)
+                        && vein_gap > (-0.3f32 as f64)
                     {
                         Some(if random.next_f32() < 0.02f32 {
                             vein_type.raw_ore

@@ -94,13 +94,25 @@ impl<B: BufMut> ser::Serializer for &mut Serializer<B> {
     }
     fn serialize_newtype_struct<T>(
         self,
-        _name: &'static str,
-        _value: &T,
+        name: &'static str,
+        value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        unimplemented!()
+        // TODO: This is super sketchy... is there a way to do it better? Can we choose what
+        // serializer to use on a struct somehow from within the struct?
+        if name == "TextComponent" {
+            let mut buf = Vec::new();
+            let mut nbt_serializer = pumpkin_nbt::serializer::Serializer::new(&mut buf, None);
+            value
+                .serialize(&mut nbt_serializer)
+                .expect("Failed to serialize NBT for TextComponent within the network serializer");
+
+            self.serialize_bytes(&buf)
+        } else {
+            value.serialize(self)
+        }
     }
     fn serialize_newtype_variant<T>(
         self,

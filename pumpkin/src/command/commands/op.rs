@@ -1,8 +1,8 @@
 use crate::{
     command::{
         args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
@@ -39,7 +39,7 @@ impl CommandExecutor for OpExecutor {
 
             if player.permission_lvl.load() == new_level {
                 sender
-                    .send_message(TextComponent::translate("commands.op.failed", [].into()))
+                    .send_message(TextComponent::translate("commands.op.failed", []))
                     .await;
                 continue;
             }
@@ -70,7 +70,7 @@ impl CommandExecutor for OpExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.op.success",
-                    [TextComponent::text(player_name.clone())].into(),
+                    [TextComponent::text(player_name.clone())],
                 ))
                 .await;
         }

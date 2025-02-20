@@ -1,9 +1,6 @@
 use num_traits::Float;
-pub mod config;
-pub mod density;
 pub mod perlin;
-pub mod router;
-mod simplex;
+pub mod simplex;
 
 #[inline]
 pub fn lerp<T>(delta: T, start: T, end: T) -> T

@@ -9,10 +9,9 @@ pub(crate) fn build() -> TokenStream {
     let game_events: Vec<String> =
         serde_json::from_str(include_str!("../../assets/game_event.json"))
             .expect("Failed to parse game_event.json");
-    let variants = array_to_tokenstream(game_events);
+    let variants = array_to_tokenstream(&game_events);
 
     quote! {
-        #[repr(u8)]
         pub enum GameEvent {
             #variants
         }

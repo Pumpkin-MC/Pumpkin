@@ -1,26 +1,18 @@
-use std::sync::LazyLock;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use syn::{parse_macro_input, parse_quote, ImplItem, ItemFn, ItemImpl, ItemStruct};
 
-static PLUGIN_METHODS: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 #[proc_macro_attribute]
-pub fn plugin_method(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as ItemFn);
     let fn_name = &input_fn.sig.ident;
     let fn_inputs = &input_fn.sig.inputs;
     let fn_output = &input_fn.sig.output;
     let fn_body = &input_fn.block;
-
-    let struct_name = if attr.is_empty() {
-        "MyPlugin".to_string()
-    } else {
-        attr.to_string().trim().to_string()
-    };
 
     let method = quote! {
         #[allow(unused_mut)]
@@ -32,35 +24,18 @@ pub fn plugin_method(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     .to_string();
 
-    PLUGIN_METHODS
-        .lock()
-        .unwrap()
-        .entry(struct_name)
-        .or_default()
-        .push(method);
+    PLUGIN_METHODS.lock().unwrap().push(method);
 
     TokenStream::new()
 }
 
 #[proc_macro_attribute]
-pub fn plugin_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the input struct
     let input_struct = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input_struct.ident;
 
-    // Get the custom name from attribute or use the struct's name
-    let struct_name = if attr.is_empty() {
-        struct_ident.clone()
-    } else {
-        let attr_str = attr.to_string();
-        quote::format_ident!("{}", attr_str.trim())
-    };
-
-    let methods = PLUGIN_METHODS
-        .lock()
-        .unwrap()
-        .remove(&struct_name.to_string())
-        .unwrap_or_default();
+    let methods = PLUGIN_METHODS.lock().unwrap();
 
     let methods: Vec<proc_macro2::TokenStream> = methods
         .iter()
@@ -108,7 +83,7 @@ pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             method.block = if use_global {
                 parse_quote!({
-                    GLOBAL_RUNTIME.block_on(async move {
+                    crate::GLOBAL_RUNTIME.block_on(async move {
                         #original_body
                     })
                 })

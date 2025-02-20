@@ -2,10 +2,8 @@ use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
 use pumpkin_util::text::style::Style;
-use quote::quote;
+use quote::{format_ident, quote};
 use serde::{Deserialize, Serialize};
-
-use crate::ident;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RawChatType {
@@ -37,7 +35,7 @@ pub(crate) fn build() -> TokenStream {
 
     for (name, typee) in json.iter() {
         let i = typee.id;
-        let name = ident(name.to_uppercase());
+        let name = format_ident!("{}", name.to_uppercase());
         variants.extend([quote! {
             pub const #name: u32 = #i;
         }]);

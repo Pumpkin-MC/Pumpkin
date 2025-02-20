@@ -7,14 +7,14 @@ pub struct CompressionConfig {
     /// Whether compression is enabled
     pub enabled: bool,
     #[serde(flatten)]
-    pub compression_info: CompressionInfo,
+    pub info: CompressionInfo,
 }
 
 impl Default for CompressionConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            compression_info: Default::default(),
+            info: Default::default(),
         }
     }
 }

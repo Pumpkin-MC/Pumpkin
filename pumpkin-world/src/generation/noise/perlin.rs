@@ -1,10 +1,10 @@
 use num_traits::Pow;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_util::random::RandomGenerator;
-use std::sync::Arc;
 
 use super::{lerp3, GRADIENTS};
 
+#[derive(Clone)]
 pub struct PerlinNoiseSampler {
     permutation: [u8; 256],
     x_origin: f64,
@@ -133,6 +133,7 @@ impl PerlinNoiseSampler {
     }
 }
 
+#[derive(Clone)]
 pub struct OctavePerlinNoiseSampler {
     octave_samplers: Box<[Option<PerlinNoiseSampler>]>,
     amplitudes: Box<[f64]>,
@@ -295,8 +296,8 @@ impl OctavePerlinNoiseSampler {
 
 #[derive(Clone)]
 pub struct DoublePerlinNoiseSampler {
-    first_sampler: Arc<OctavePerlinNoiseSampler>,
-    second_sampler: Arc<OctavePerlinNoiseSampler>,
+    first_sampler: OctavePerlinNoiseSampler,
+    second_sampler: OctavePerlinNoiseSampler,
     amplitude: f64,
     max_value: f64,
 }
@@ -335,8 +336,8 @@ impl DoublePerlinNoiseSampler {
         let max_value = (first_sampler.max_value + second_sampler.max_value) * amplitude;
 
         Self {
-            first_sampler: first_sampler.into(),
-            second_sampler: second_sampler.into(),
+            first_sampler,
+            second_sampler,
             amplitude,
             max_value,
         }
@@ -729,7 +730,6 @@ mod octave_perline_noise_sampler_test {
 
 #[cfg(test)]
 mod perlin_noise_sampler_test {
-    use std::{fs, path::Path};
 
     use pumpkin_util::{
         assert_eq_delta,

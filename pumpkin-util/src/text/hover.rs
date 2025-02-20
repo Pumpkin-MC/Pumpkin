@@ -38,13 +38,13 @@ impl HoverEvent {
     pub fn show_text(text: TextComponent) -> Self {
         Self::ShowText(vec![text.0])
     }
-    pub fn show_entity<P>(id: P, kind: Option<P>, name: Option<TextComponent>) -> Self
+    pub fn show_entity<P>(id: P, kind: P, name: Option<TextComponent>) -> Self
     where
         P: Into<Cow<'static, str>>,
     {
         Self::ShowEntity {
             id: id.into(),
-            r#type: kind.map(|kind| kind.into()),
+            r#type: Some(kind.into()),
             name: match name {
                 Some(name) => Some(vec![name.0]),
                 None => None,

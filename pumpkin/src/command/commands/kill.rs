@@ -6,8 +6,8 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
+use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
-use crate::command::tree_builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use CommandError::InvalidConsumption;
 
@@ -42,21 +42,21 @@ impl CommandExecutor for KillExecutor {
             let mut entity_display =
                 TextComponent::text(name.clone()).hover_event(HoverEvent::show_entity(
                     entity.entity_uuid.to_string(),
-                    Some(format!("{:?}", entity.entity_type).to_lowercase()),
+                    entity.entity_type.resource_name.into(),
                     Some(TextComponent::text(name.clone())),
                 ));
 
-            if entity.entity_type == entity::EntityType::Player {
+            if entity.entity_type == entity::EntityType::PLAYER {
                 entity_display = entity_display.click_event(ClickEvent::SuggestCommand(
                     format!("/tell {} ", name.clone()).into(),
                 ));
             }
 
-            TextComponent::translate("commands.kill.success.single", [entity_display].into())
+            TextComponent::translate("commands.kill.success.single", [entity_display])
         } else {
             TextComponent::translate(
                 "commands.kill.success.multiple",
-                [TextComponent::text(target_count.to_string())].into(),
+                [TextComponent::text(target_count.to_string())],
             )
         };
 
@@ -88,13 +88,12 @@ impl CommandExecutor for KillSelfExecutor {
                 [TextComponent::text(name.clone())
                     .hover_event(HoverEvent::show_entity(
                         entity.entity_uuid.to_string(),
-                        Some(format!("{:?}", entity.entity_type).to_lowercase()),
+                        entity.entity_type.resource_name.into(),
                         Some(TextComponent::text(name.clone())),
                     ))
                     .click_event(ClickEvent::SuggestCommand(
                         format!("/tell {} ", name.clone()).into(),
-                    ))]
-                .into(),
+                    ))],
             ))
             .await;
 

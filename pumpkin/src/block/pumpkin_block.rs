@@ -1,11 +1,16 @@
-use crate::block::block_manager::BlockActionResult;
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::World;
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
+use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_world::block::registry::Block;
+use pumpkin_world::block::BlockDirection;
+
+use super::properties::Direction;
 
 pub trait BlockMetadata {
     const NAMESPACE: &'static str;
@@ -17,7 +22,7 @@ pub trait BlockMetadata {
 
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
-    async fn on_use<'a>(
+    async fn normal_use(
         &self,
         _block: &Block,
         _player: &Player,
@@ -25,7 +30,7 @@ pub trait PumpkinBlock: Send + Sync {
         _server: &Server,
     ) {
     }
-    async fn on_use_with_item<'a>(
+    async fn use_with_item(
         &self,
         _block: &Block,
         _player: &Player,
@@ -36,7 +41,33 @@ pub trait PumpkinBlock: Send + Sync {
         BlockActionResult::Continue
     }
 
-    async fn on_placed<'a>(
+    #[allow(clippy::too_many_arguments)]
+    async fn on_place(
+        &self,
+        server: &Server,
+        world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
+        use_item_on: &SUseItemOn,
+        player_direction: &Direction,
+        other: bool,
+    ) -> u16 {
+        server
+            .block_properties_manager
+            .on_place_state(
+                world,
+                block,
+                face,
+                block_pos,
+                use_item_on,
+                player_direction,
+                other,
+            )
+            .await
+    }
+
+    async fn placed(
         &self,
         _block: &Block,
         _player: &Player,
@@ -45,7 +76,7 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    async fn on_broken<'a>(
+    async fn broken(
         &self,
         _block: &Block,
         _player: &Player,
@@ -54,7 +85,7 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    async fn on_close<'a>(
+    async fn close(
         &self,
         _block: &Block,
         _player: &Player,

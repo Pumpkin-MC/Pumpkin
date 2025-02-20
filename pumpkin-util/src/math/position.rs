@@ -27,6 +27,13 @@ impl BlockPos {
         };
         (chunk_coordinate, relative)
     }
+    pub fn from_i64(encoded_position: i64) -> Self {
+        BlockPos(Vector3 {
+            x: (encoded_position >> 38) as i32,
+            y: (encoded_position << 52 >> 52) as i32,
+            z: (encoded_position << 26 >> 38) as i32,
+        })
+    }
 }
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

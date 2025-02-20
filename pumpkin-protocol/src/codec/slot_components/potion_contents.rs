@@ -54,28 +54,26 @@ impl<'de> Deserialize<'de> for PotionContents {
                     .next_element::<bool>()?
                     .ok_or(de::Error::custom("Failed to decode bool"))?;
 
-                let potion_id: Option<VarInt>;
-                if has_potion_id {
-                    potion_id = Some(
+                let potion_id: Option<VarInt> = if has_potion_id {
+                    Some(
                         seq.next_element::<VarInt>()?
                             .ok_or(de::Error::custom("Failed to decode VarInt"))?,
-                    );
+                    )
                 } else {
-                    potion_id = None
-                }
+                    None
+                };
 
                 let has_custom_color = seq
                     .next_element::<bool>()?
                     .ok_or(de::Error::custom("Failed to decode bool"))?;
-                let custom_color: Option<u32>;
-                if has_custom_color {
-                    custom_color = Some(
+                let custom_color: Option<u32> = if has_custom_color {
+                    Some(
                         seq.next_element::<u32>()?
                             .ok_or(de::Error::custom("Failed to decode bool"))?,
-                    );
+                    )
                 } else {
-                    custom_color = None;
-                }
+                    None
+                };
 
                 let number_of_custom_effects = seq
                     .next_element::<VarInt>()?
@@ -90,7 +88,7 @@ impl<'de> Deserialize<'de> for PotionContents {
                     match component_type.0.try_into() {
                         Ok(StructuredComponentType::PotionContents) => {
                             log::info!("yesir");
-                            let has_potion_id = seq
+                            let _has_potion_id = seq
                                 .next_element::<PotionContents>()?
                                 .ok_or(de::Error::custom("Failed to decode potion"))?;
                             // let potion_id = seq

@@ -34,6 +34,8 @@ impl Goal for TargetGoal {
             .living_entity
             .entity
             .world
+            .read()
+            .await
             .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
             .await;
         // we can't use filter, because of async clousrers

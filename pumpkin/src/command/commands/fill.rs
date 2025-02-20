@@ -1,8 +1,8 @@
 use crate::command::args::block::BlockArgumentConsumer;
 use crate::command::args::position_block::BlockPosArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
+use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
-use crate::command::tree_builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 use async_trait::async_trait;
@@ -41,7 +41,7 @@ impl CommandExecutor for SetblockExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
@@ -58,7 +58,10 @@ impl CommandExecutor for SetblockExecutor {
         let end_y = from.0.y.max(to.0.y);
         let end_z = from.0.z.max(to.0.z);
 
-        let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
+        let world = sender
+            .world()
+            .await
+            .ok_or(CommandError::InvalidRequirement)?;
         let mut placed_blocks = 0;
 
         match mode {
@@ -67,7 +70,9 @@ impl CommandExecutor for SetblockExecutor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3 { x, y, z });
-                            world.break_block(&block_position, None).await;
+                            world
+                                .break_block(server, &block_position, None, false)
+                                .await;
                             world.set_block_state(&block_position, block_state_id).await;
                             placed_blocks += 1;
                         }
@@ -146,7 +151,7 @@ impl CommandExecutor for SetblockExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.fill.success",
-                [TextComponent::text(placed_blocks.to_string())].into(),
+                [TextComponent::text(placed_blocks.to_string())],
             ))
             .await;
 

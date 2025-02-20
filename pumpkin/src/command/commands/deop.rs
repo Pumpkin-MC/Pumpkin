@@ -1,8 +1,8 @@
 use crate::{
     command::{
         args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
@@ -51,7 +51,7 @@ impl CommandExecutor for DeopExecutor {
             let player_name = &player.gameprofile.name;
             let msg = TextComponent::translate(
                 "commands.deop.success",
-                [TextComponent::text(player_name.clone())].into(),
+                [TextComponent::text(player_name.clone())],
             );
             sender.send_message(msg).await;
         }

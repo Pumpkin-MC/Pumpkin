@@ -9,7 +9,7 @@ use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::simple::SimpleArgConsumer;
 use crate::command::args::{Arg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
-use crate::command::tree_builder::{argument, argument_default_name, require};
+use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{
     args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
 };

@@ -8,8 +8,8 @@ use crate::command::args::command::CommandTreeArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
+use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::tree::{Command, CommandTree};
-use crate::command::tree_builder::{argument, argument_default_name};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 
@@ -127,6 +127,12 @@ impl CommandExecutor for BaseHelpExecutor {
             .filter_map(|cmd| match cmd {
                 Command::Tree(tree) => Some(tree),
                 Command::Alias(_) => None,
+            })
+            .filter(|tree| {
+                dispatcher
+                    .permissions
+                    .get(&tree.names[0])
+                    .map_or(true, |perm| sender.has_permission_lvl(*perm))
             })
             .collect();
 

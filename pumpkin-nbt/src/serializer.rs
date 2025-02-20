@@ -1,4 +1,3 @@
-use bytes::{BufMut, BytesMut};
 use serde::ser::Impossible;
 use serde::{ser, Serialize};
 use std::io::Write;
@@ -6,20 +5,95 @@ use std::io::Write;
 use crate::tag::NbtTag;
 use crate::{
     Error, BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, FLOAT_ID, INT_ARRAY_ID, INT_ID,
-    LIST_ID, LONG_ARRAY_ID, LONG_ID, SHORT_ID, STRING_ID,
+    LIST_ID, LONG_ARRAY_ID, LONG_ID, NBT_ARRAY_TAG, NBT_BYTE_ARRAY_TAG, NBT_INT_ARRAY_TAG,
+    NBT_LONG_ARRAY_TAG, SHORT_ID, STRING_ID,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub trait SerializeChild {
-    fn serialize_child<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: ser::Serializer;
+#[derive(Debug)]
+pub struct WriteAdaptor<W: Write> {
+    writer: W,
 }
 
-pub struct Serializer {
-    output: BytesMut,
+impl<W: Write> WriteAdaptor<W> {
+    pub fn new(w: W) -> Self {
+        Self { writer: w }
+    }
+}
+
+impl<W: Write> WriteAdaptor<W> {
+    //TODO: Macroize this
+    pub fn write_u8_be(&mut self, value: u8) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_i8_be(&mut self, value: i8) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_u16_be(&mut self, value: u16) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_i16_be(&mut self, value: i16) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_i32_be(&mut self, value: i32) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_i64_be(&mut self, value: i64) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_f32_be(&mut self, value: f32) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_f64_be(&mut self, value: f64) -> Result<()> {
+        let buf = value.to_be_bytes();
+        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+
+    pub fn write_slice(&mut self, value: &[u8]) -> Result<()> {
+        self.writer.write_all(value).map_err(Error::Incomplete)?;
+        Ok(())
+    }
+}
+
+pub struct Serializer<W: Write> {
+    output: WriteAdaptor<W>,
     state: State,
+    handled_root: bool,
+    expected_list_tag: u8,
+}
+
+impl<W: Write> Serializer<W> {
+    pub fn new(output: W, name: Option<String>) -> Self {
+        Self {
+            output: WriteAdaptor::new(output),
+            state: State::Root(name),
+            handled_root: false,
+            expected_list_tag: 0,
+        }
+    }
 }
 
 // NBT has a different order of things, then most other formats
@@ -31,22 +105,28 @@ enum State {
     Named(String),
     // Used by maps, to check if key is String
     MapKey,
-    FirstListElement { len: i32 },
+    FirstListElement {
+        len: i32,
+    },
     ListElement,
-    Array { name: String, array_type: String },
+    CheckedListElement,
+    Array {
+        name: String,
+        array_type: &'static str,
+    },
 }
 
-impl Serializer {
+impl<W: Write> Serializer<W> {
     fn parse_state(&mut self, tag: u8) -> Result<()> {
         match &mut self.state {
             State::Named(name) | State::Array { name, .. } => {
-                self.output.put_u8(tag);
-                self.output
-                    .put(NbtTag::String(name.clone()).serialize_data());
+                self.output.write_u8_be(tag)?;
+                NbtTag::String(name.clone()).serialize_data(&mut self.output)?;
             }
             State::FirstListElement { len } => {
-                self.output.put_u8(tag);
-                self.output.put_i32(*len);
+                self.output.write_u8_be(tag)?;
+                self.output.write_i32_be(*len)?;
+                self.expected_list_tag = tag;
             }
             State::MapKey => {
                 if tag != STRING_ID {
@@ -55,76 +135,74 @@ impl Serializer {
                     )));
                 }
             }
-            State::ListElement => {}
-            _ => return Err(Error::SerdeError("Invalid Serializer state!".to_string())),
+            State::ListElement => {
+                // Rust rules mandate this is all the same type
+            }
+            State::CheckedListElement => {
+                if tag != self.expected_list_tag {
+                    return Err(Error::SerdeError(format!(
+                        "List values must all be of the same type! Expected {} but found {}!",
+                        self.expected_list_tag, tag
+                    )));
+                }
+            }
+            State::Root(root_name) => {
+                if self.handled_root {
+                    return Err(Error::SerdeError(
+                        "Invalid state: already handled root component!".to_string(),
+                    ));
+                } else {
+                    if tag != COMPOUND_ID {
+                        return Err(Error::SerdeError(format!(
+                            "Invalid state: root is not a compound! ({})",
+                            tag
+                        )));
+                    }
+                    self.handled_root = true;
+                    self.output.write_u8_be(tag)?;
+                    if let Some(root_name) = root_name {
+                        NbtTag::String(root_name.clone()).serialize_data(&mut self.output)?;
+                    }
+                }
+            }
         };
         Ok(())
     }
 }
 
-/// Serializes struct using Serde Serializer to unnamed (network) NBT (Exclusive to TextComponent)
-pub fn to_bytes_text_component<T>(value: &T) -> Result<BytesMut>
-where
-    T: SerializeChild,
-{
-    let mut serializer = Serializer {
-        output: BytesMut::new(),
-        state: State::Root(None),
-    };
-    value.serialize_child(&mut serializer)?;
-    Ok(serializer.output)
-}
-
 /// Serializes struct using Serde Serializer to unnamed (network) NBT
-pub fn to_bytes_unnamed<T>(value: &T) -> Result<BytesMut>
+pub fn to_bytes_unnamed<T>(value: &T, w: impl Write) -> Result<()>
 where
     T: Serialize,
 {
-    let mut serializer = Serializer {
-        output: BytesMut::new(),
-        state: State::Root(None),
-    };
+    let mut serializer = Serializer::new(w, None);
     value.serialize(&mut serializer)?;
-    Ok(serializer.output)
-}
-/// Serializes struct using Serde Serializer to unnamed NBT
-pub fn to_writer_unnamed<T, W>(value: &T, mut writer: W) -> Result<()>
-where
-    T: Serialize,
-    W: Write,
-{
-    writer.write_all(&to_bytes_unnamed(value)?).unwrap();
     Ok(())
 }
 
 /// Serializes struct using Serde Serializer to normal NBT
-pub fn to_bytes<T>(value: &T, name: String) -> Result<BytesMut>
+pub fn to_bytes_named<T>(value: &T, name: String, w: impl Write) -> Result<()>
 where
     T: Serialize,
 {
-    let mut serializer = Serializer {
-        output: BytesMut::new(),
-        state: State::Root(Some(name)),
-    };
+    let mut serializer = Serializer::new(w, Some(name));
     value.serialize(&mut serializer)?;
-    Ok(serializer.output)
-}
-
-pub fn to_writer<T, W>(value: &T, name: String, mut writer: W) -> Result<()>
-where
-    T: Serialize,
-    W: Write,
-{
-    writer.write_all(&to_bytes(value, name)?).unwrap();
     Ok(())
 }
 
-impl ser::Serializer for &mut Serializer {
+pub fn to_bytes<T>(value: &T, w: impl Write) -> Result<()>
+where
+    T: Serialize,
+{
+    to_bytes_named(value, String::new(), w)
+}
+
+impl<W: Write> ser::Serializer for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
     type SerializeSeq = Self;
-    type SerializeTuple = Impossible<(), Error>;
+    type SerializeTuple = Self;
     type SerializeTupleStruct = Impossible<(), Error>;
     type SerializeTupleVariant = Impossible<(), Error>;
     type SerializeMap = Self;
@@ -138,61 +216,68 @@ impl ser::Serializer for &mut Serializer {
 
     fn serialize_i8(self, v: i8) -> Result<()> {
         self.parse_state(BYTE_ID)?;
-        self.output.put_i8(v);
+        self.output.write_i8_be(v)?;
         Ok(())
     }
 
     fn serialize_i16(self, v: i16) -> Result<()> {
         self.parse_state(SHORT_ID)?;
-        self.output.put_i16(v);
+        self.output.write_i16_be(v)?;
         Ok(())
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
         self.parse_state(INT_ID)?;
-        self.output.put_i32(v);
+        self.output.write_i32_be(v)?;
         Ok(())
     }
 
     fn serialize_i64(self, v: i64) -> Result<()> {
         self.parse_state(LONG_ID)?;
-        self.output.put_i64(v);
+        self.output.write_i64_be(v)?;
         Ok(())
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
-        self.parse_state(BYTE_ID)?;
-        self.output.put_u8(v);
-        Ok(())
+        match self.state {
+            State::Named(_) => Err(Error::UnsupportedType(
+                "u8; NBT only supports signed values".to_string(),
+            )),
+            _ => {
+                self.parse_state(BYTE_ID)?;
+                self.output.write_u8_be(v)?;
+                Ok(())
+            }
+        }
     }
 
-    fn serialize_u16(self, v: u16) -> Result<()> {
-        self.parse_state(SHORT_ID)?;
-        self.output.put_u16(v);
-        Ok(())
+    fn serialize_u16(self, _v: u16) -> Result<()> {
+        Err(Error::UnsupportedType(
+            "u16; NBT only supports signed values".to_string(),
+        ))
     }
 
-    fn serialize_u32(self, v: u32) -> Result<()> {
-        self.parse_state(INT_ID)?;
-        self.output.put_u32(v);
-        Ok(())
+    fn serialize_u32(self, _v: u32) -> Result<()> {
+        Err(Error::UnsupportedType(
+            "u32; NBT only supports signed values".to_string(),
+        ))
     }
 
-    fn serialize_u64(self, v: u64) -> Result<()> {
-        self.parse_state(LONG_ID)?;
-        self.output.put_u64(v);
-        Ok(())
+    fn serialize_u64(self, _v: u64) -> Result<()> {
+        Err(Error::UnsupportedType(
+            "u64; NBT only supports signed values".to_string(),
+        ))
     }
 
     fn serialize_f32(self, v: f32) -> Result<()> {
         self.parse_state(FLOAT_ID)?;
-        self.output.put_f32(v);
+        self.output.write_f32_be(v)?;
         Ok(())
     }
 
     fn serialize_f64(self, v: f64) -> Result<()> {
         self.parse_state(DOUBLE_ID)?;
-        self.output.put_f64(v);
+        self.output.write_f64_be(v)?;
         Ok(())
     }
 
@@ -202,21 +287,27 @@ impl ser::Serializer for &mut Serializer {
 
     fn serialize_str(self, v: &str) -> Result<()> {
         self.parse_state(STRING_ID)?;
+
         if self.state == State::MapKey {
             self.state = State::Named(v.to_string());
-            return Ok(());
+        } else {
+            NbtTag::String(v.to_string()).serialize_data(&mut self.output)?;
         }
 
-        self.output
-            .put(NbtTag::String(v.to_string()).serialize_data());
         Ok(())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
         self.parse_state(LIST_ID)?;
-        self.output.put_u8(BYTE_ID);
-        self.output.put_i32(v.len() as i32);
-        self.output.put_slice(v);
+        self.output.write_u8_be(BYTE_ID)?;
+
+        let len = v.len();
+        if len > i32::MAX as usize {
+            return Err(Error::LargeLength(len));
+        }
+
+        self.output.write_i32_be(len as i32)?;
+        self.output.write_slice(v)?;
         Ok(())
     }
 
@@ -267,63 +358,69 @@ impl ser::Serializer for &mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if name != "nbt_array" {
-            return Err(Error::SerdeError(
-                "new_type variant supports only nbt_array".to_string(),
-            ));
+        if name == NBT_ARRAY_TAG {
+            let name = match self.state {
+                State::Named(ref name) => name.clone(),
+                _ => return Err(Error::SerdeError("Invalid Serializer state!".to_string())),
+            };
+
+            self.state = State::Array {
+                name,
+                array_type: variant,
+            };
+        } else {
+            return Err(Error::UnsupportedType("newtype variant".to_string()));
         }
-
-        let name = match self.state {
-            State::Named(ref name) => name.clone(),
-            _ => return Err(Error::SerdeError("Invalid Serializer state!".to_string())),
-        };
-
-        self.state = State::Array {
-            name,
-            array_type: variant.to_string(),
-        };
-
-        value.serialize(self)?;
-
-        Ok(())
+        value.serialize(self)
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
-        if len.is_none() {
+        let Some(len) = len else {
             return Err(Error::SerdeError(
                 "Length of the sequence must be known first!".to_string(),
             ));
+        };
+        if len > i32::MAX as usize {
+            return Err(Error::LargeLength(len));
         }
 
         match &mut self.state {
             State::Array { array_type, .. } => {
-                let id = match array_type.as_str() {
-                    "byte" => BYTE_ARRAY_ID,
-                    "int" => INT_ARRAY_ID,
-                    "long" => LONG_ARRAY_ID,
+                let (id, expected_tag) = match *array_type {
+                    NBT_BYTE_ARRAY_TAG => (BYTE_ARRAY_ID, BYTE_ID),
+                    NBT_INT_ARRAY_TAG => (INT_ARRAY_ID, INT_ID),
+                    NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
                     _ => {
                         return Err(Error::SerdeError(
                             "Array supports only byte, int, long".to_string(),
                         ))
                     }
                 };
+
                 self.parse_state(id)?;
-                self.output.put_i32(len.unwrap() as i32);
-                self.state = State::ListElement;
+                self.output.write_i32_be(len as i32)?;
+
+                // We can mark anything as an nbt array list, so mark as needed to be checked
+                self.expected_list_tag = expected_tag;
+                self.state = State::CheckedListElement;
             }
             _ => {
                 self.parse_state(LIST_ID)?;
-                self.state = State::FirstListElement {
-                    len: len.unwrap() as i32,
-                };
+                self.state = State::FirstListElement { len: len as i32 };
+                if len == 0 {
+                    // If we have no elements, FirstListElement state will never be invoked; so
+                    // write the (unknown) list type and length here.
+                    self.output.write_u8_be(END_ID)?;
+                    self.output.write_i32_be(0)?;
+                }
             }
         }
 
         Ok(self)
     }
 
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
-        Err(Error::UnsupportedType("tuple".to_string()))
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
+        self.serialize_seq(Some(len))
     }
 
     fn serialize_tuple_struct(
@@ -345,35 +442,12 @@ impl ser::Serializer for &mut Serializer {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-        if let State::FirstListElement { .. } = self.state {
-            self.parse_state(COMPOUND_ID)?;
-        } else if let State::ListElement = self.state {
-            return Ok(self);
-        } else {
-            self.output.put_u8(COMPOUND_ID);
-        }
+        self.parse_state(COMPOUND_ID)?;
         Ok(self)
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        self.output.put_u8(COMPOUND_ID);
-
-        match &mut self.state {
-            State::Root(root_name) => {
-                if let Some(root_name) = root_name {
-                    self.output
-                        .put(NbtTag::String(root_name.clone()).serialize_data());
-                }
-            }
-            State::Named(string) => {
-                self.output
-                    .put(NbtTag::String(string.clone()).serialize_data());
-            }
-            _ => {
-                unimplemented!()
-            }
-        }
-
+        self.parse_state(COMPOUND_ID)?;
         Ok(self)
     }
 
@@ -392,7 +466,25 @@ impl ser::Serializer for &mut Serializer {
     }
 }
 
-impl ser::SerializeSeq for &mut Serializer {
+impl<W: Write> ser::SerializeTuple for &mut Serializer<W> {
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_element<T>(&mut self, value: &T) -> std::result::Result<(), Self::Error>
+    where
+        T: ?Sized + Serialize,
+    {
+        value.serialize(&mut **self)?;
+        self.state = State::CheckedListElement;
+        Ok(())
+    }
+
+    fn end(self) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl<W: Write> ser::SerializeSeq for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
@@ -410,7 +502,7 @@ impl ser::SerializeSeq for &mut Serializer {
     }
 }
 
-impl ser::SerializeStruct for &mut Serializer {
+impl<W: Write> ser::SerializeStruct for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
@@ -423,12 +515,12 @@ impl ser::SerializeStruct for &mut Serializer {
     }
 
     fn end(self) -> Result<()> {
-        self.output.put_u8(END_ID);
+        self.output.write_u8_be(END_ID)?;
         Ok(())
     }
 }
 
-impl ser::SerializeMap for &mut Serializer {
+impl<W: Write> ser::SerializeMap for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
@@ -448,7 +540,7 @@ impl ser::SerializeMap for &mut Serializer {
     }
 
     fn end(self) -> Result<()> {
-        self.output.put_u8(END_ID);
+        self.output.write_u8_be(END_ID)?;
         Ok(())
     }
 }

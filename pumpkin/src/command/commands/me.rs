@@ -4,8 +4,8 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     args::{message::MsgArgConsumer, Arg, ConsumedArgs},
+    tree::builder::argument,
     tree::CommandTree,
-    tree_builder::argument,
     CommandError, CommandExecutor, CommandSender,
 };
 use CommandError::InvalidConsumption;

@@ -8,8 +8,8 @@ use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::args::ConsumedArgs;
 use crate::command::args::FindArg;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
-use crate::command::tree_builder::{argument, literal};
 use crate::command::CommandError;
 use crate::command::{CommandExecutor, CommandSender};
 
@@ -43,8 +43,8 @@ fn yaw_pitch_facing_position(
     let yaw_radians = -direction_vector.x.atan2(direction_vector.z);
     let pitch_radians = (-direction_vector.y).asin();
 
-    let yaw_degrees = yaw_radians * 180.0 / std::f64::consts::PI;
-    let pitch_degrees = pitch_radians * 180.0 / std::f64::consts::PI;
+    let yaw_degrees = yaw_radians.to_degrees();
+    let pitch_degrees = pitch_radians.to_degrees();
 
     (yaw_degrees as f32, pitch_degrees as f32)
 }
@@ -195,10 +195,7 @@ impl CommandExecutor for TpSelfToEntityExecutor {
             }
             _ => {
                 sender
-                    .send_message(TextComponent::translate(
-                        "permissions.requires.player",
-                        [].into(),
-                    ))
+                    .send_message(TextComponent::translate("permissions.requires.player", []))
                     .await;
             }
         };
@@ -226,10 +223,7 @@ impl CommandExecutor for TpSelfToPosExecutor {
             }
             _ => {
                 sender
-                    .send_message(TextComponent::translate(
-                        "permissions.requires.player",
-                        [].into(),
-                    ))
+                    .send_message(TextComponent::translate("permissions.requires.player", []))
                     .await;
             }
         };

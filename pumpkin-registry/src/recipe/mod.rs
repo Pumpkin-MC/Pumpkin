@@ -1,9 +1,7 @@
 mod read;
 mod recipe_formats;
 
-pub use read::{
-    ingredients::IngredientSlot, ingredients::IngredientType, Recipe, RecipeResult, RecipeType,
-};
+pub use read::{Recipe, RecipeResult, RecipeType};
 use std::sync::LazyLock;
 pub fn flatten_3x3<T: Clone>(input: [[Option<T>; 3]; 3]) -> [[Option<T>; 3]; 3] {
     let mut final_output = [const { [const { None }; 3] }; 3];

@@ -22,7 +22,7 @@ impl Identifier {
     }
 }
 impl Codec<Self> for Identifier {
-    /// The maximum number of bytes a `Identifer` is the same as for a normal String.
+    /// The maximum number of bytes a `Identifier` is the same as for a normal String.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(i16::MAX as usize) };
 
     fn written_size(&self) -> usize {
@@ -34,10 +34,10 @@ impl Codec<Self> for Identifier {
     }
 
     fn decode(read: &mut impl Buf) -> Result<Self, DecodeError> {
-        let identifer = read
+        let identifier = read
             .try_get_string_len(Self::MAX_SIZE.get())
             .map_err(|_| DecodeError::Incomplete)?;
-        match identifer.split_once(":") {
+        match identifier.split_once(":") {
             Some((namespace, path)) => Ok(Identifier {
                 namespace: namespace.to_string(),
                 path: path.to_string(),
@@ -77,11 +77,11 @@ impl<'de> Deserialize<'de> for Identifier {
                 self.visit_str(&v)
             }
 
-            fn visit_str<E>(self, identifer: &str) -> Result<Self::Value, E>
+            fn visit_str<E>(self, identifier: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                match identifer.split_once(":") {
+                match identifier.split_once(":") {
                     Some((namespace, path)) => Ok(Identifier {
                         namespace: namespace.to_string(),
                         path: path.to_string(),

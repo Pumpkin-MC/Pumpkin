@@ -1,8 +1,8 @@
 use crate::{
     command::{
         args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
+        tree::builder::argument,
         tree::CommandTree,
-        tree_builder::argument,
         CommandError, CommandExecutor, CommandSender,
     },
     data::{banned_player_data::BANNED_PLAYER_LIST, SaveJSONConfiguration},
@@ -41,10 +41,7 @@ impl CommandExecutor for PardonExecutor {
             lock.banned_players.remove(idx);
         } else {
             sender
-                .send_message(TextComponent::translate(
-                    "commands.pardon.failed",
-                    [].into(),
-                ))
+                .send_message(TextComponent::translate("commands.pardon.failed", []))
                 .await;
             return Ok(());
         }
@@ -54,7 +51,7 @@ impl CommandExecutor for PardonExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.pardon.success",
-                [TextComponent::text(target)].into(),
+                [TextComponent::text(target)],
             ))
             .await;
         Ok(())

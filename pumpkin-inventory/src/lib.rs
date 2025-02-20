@@ -36,7 +36,7 @@ pub trait Container: Sync + Send {
         if taking_crafted {
             match (all_slots[slot].as_mut(), carried_item.as_mut()) {
                 (Some(s1), Some(s2)) => {
-                    if s1.item_id == s2.item_id {
+                    if s1.item.id == s2.item.id {
                         handle_item_change(all_slots[slot], carried_item, mouse_click);
                     }
                 }
@@ -152,7 +152,7 @@ pub fn handle_item_change(
     match (current_slot.as_mut(), carried_slot.as_mut()) {
         // Swap or combine current and carried
         (Some(current), Some(carried)) => {
-            if current.item_id == carried.item_id {
+            if current.item.id == carried.item.id {
                 combine_stacks(carried_slot, current, mouse_click);
             } else if mouse_click == MouseClick::Left {
                 let carried = *carried;

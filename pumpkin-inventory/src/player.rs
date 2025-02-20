@@ -115,15 +115,34 @@ impl PlayerInventory {
         self.items[self.selected as usize + 36 - 9].as_ref()
     }
 
+    pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
+        self.held_item()
+            .map_or_else(|| 1.0, |e| e.get_speed(block_name))
+    }
+
     pub fn held_item_mut(&mut self) -> &mut Option<ItemStack> {
         debug_assert!((0..9).contains(&self.selected));
         &mut self.items[self.selected as usize + 36 - 9]
     }
 
-    pub fn get_slot_with_item(&self, item_id: u16) -> Option<usize> {
+    pub fn decrease_current_stack(&mut self, amount: u8) -> bool {
+        let held_item = self.held_item_mut();
+        if let Some(item_stack) = held_item {
+            item_stack.item_count -= amount;
+            if item_stack.item_count == 0 {
+                *held_item = None;
+            }
+            return true;
+        };
+        false
+    }
+
+    pub fn get_slot_with_item(&self, item_id: u16, max_stack: u8) -> Option<usize> {
         for slot in 9..=44 {
             match &self.items[slot - 9] {
-                Some(item) if item.item_id == item_id => return Some(slot),
+                Some(item) if item.item.id == item_id && item.item_count <= max_stack => {
+                    return Some(slot)
+                }
                 _ => continue,
             }
         }
@@ -131,7 +150,20 @@ impl PlayerInventory {
         None
     }
 
-    pub fn get_pick_item_hotbar_slot(&self) -> u32 {
+    /// Checks if we can merge an existing item into an Stack or if a any new Slot is empty
+    pub fn collect_item_slot(&self, item_id: u16) -> Option<usize> {
+        // Lets try to merge first
+        // TODO: Max stack size
+        if let Some(stack) = self.get_slot_with_item(item_id, 64) {
+            return Some(stack);
+        }
+        if let Some(empty) = self.get_empty_slot() {
+            return Some(empty);
+        }
+        None
+    }
+
+    pub fn get_empty_hotbar_slot(&self) -> u32 {
         if self.items[self.selected as usize + 36 - 9].is_none() {
             return self.selected;
         }
@@ -146,7 +178,10 @@ impl PlayerInventory {
     }
 
     pub fn get_empty_slot(&self) -> Option<usize> {
-        (9..=44).find(|&slot| self.items[slot - 9].is_none())
+        self.items
+            .iter()
+            .position(|slot| slot.is_none())
+            .map(|index| index + 9)
     }
 
     pub fn slots(&self) -> Vec<Option<&ItemStack>> {

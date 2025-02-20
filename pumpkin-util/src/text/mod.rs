@@ -15,8 +15,7 @@ pub mod hover;
 pub mod style;
 
 /// Represents a Text component
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TextComponent(pub TextComponentBase);
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -92,14 +91,15 @@ impl TextComponent {
         })
     }
 
-    pub fn translate<K>(key: K, with: Vec<TextComponent>) -> Self
+    pub fn translate<K, W>(key: K, with: W) -> Self
     where
         K: Into<Cow<'static, str>>,
+        W: Into<Vec<TextComponent>>,
     {
         Self(TextComponentBase {
             content: TextContent::Translate {
                 translate: key.into(),
-                with: with.into_iter().map(|x| x.0).collect(),
+                with: with.into().into_iter().map(|x| x.0).collect(),
             },
             style: Style::default(),
             extra: vec![],
@@ -153,27 +153,14 @@ impl TextComponent {
     }
 }
 
-impl serde::Serialize for TextComponent {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(&self.encode())
-    }
-}
-
-impl pumpkin_nbt::serializer::SerializeChild for TextComponent {
-    fn serialize_child<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
 impl TextComponent {
-    pub fn encode(&self) -> bytes::BytesMut {
-        pumpkin_nbt::serializer::to_bytes_text_component(self).unwrap()
+    pub fn encode(&self) -> Box<[u8]> {
+        let mut buf = Vec::new();
+        // TODO: Properly handle errors
+        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0, &mut buf)
+            .expect("Failed to serialize text component NBT for encode");
+
+        buf.into_boxed_slice()
     }
 
     pub fn color(mut self, color: Color) -> Self {
@@ -273,4 +260,34 @@ pub enum TextContent {
     /// A keybind identifier
     /// https://minecraft.wiki/w/Controls#Configurable_controls
     Keybind { keybind: Cow<'static, str> },
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_nbt::serializer::to_bytes_unnamed;
+
+    use crate::text::{color::NamedColor, TextComponent};
+
+    #[test]
+    fn test_serialize_text_component() {
+        let msg_comp = TextComponent::translate(
+            "multiplayer.player.joined",
+            [TextComponent::text("NAME".to_string())],
+        )
+        .color_named(NamedColor::Yellow);
+
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&msg_comp.0, &mut bytes).unwrap();
+
+        let expected_bytes = [
+            0x0A, 0x08, 0x00, 0x09, 0x74, 0x72, 0x61, 0x6E, 0x73, 0x6C, 0x61, 0x74, 0x65, 0x00,
+            0x19, 0x6D, 0x75, 0x6C, 0x74, 0x69, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x2E, 0x70,
+            0x6C, 0x61, 0x79, 0x65, 0x72, 0x2E, 0x6A, 0x6F, 0x69, 0x6E, 0x65, 0x64, 0x09, 0x00,
+            0x04, 0x77, 0x69, 0x74, 0x68, 0x0A, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x04, 0x74,
+            0x65, 0x78, 0x74, 0x00, 0x04, 0x4E, 0x41, 0x4D, 0x45, 0x00, 0x08, 0x00, 0x05, 0x63,
+            0x6F, 0x6C, 0x6F, 0x72, 0x00, 0x06, 0x79, 0x65, 0x6C, 0x6C, 0x6F, 0x77, 0x00,
+        ];
+
+        assert_eq!(bytes, expected_bytes);
+    }
 }

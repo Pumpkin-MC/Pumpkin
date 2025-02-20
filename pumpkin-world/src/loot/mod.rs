@@ -26,12 +26,12 @@ pub struct LootPoolEntry {
 #[serde(rename = "snake_case")]
 pub enum LootTableType {
     #[serde(rename = "minecraft:empty")]
-    /// Nothing will be droped
+    /// Nothing will be dropped
     Empty,
     #[serde(rename = "minecraft:block")]
-    /// A Block will be droped
+    /// A Block will be dropped
     Block,
     #[serde(rename = "minecraft:chest")]
-    /// A Item will be droped
+    /// A Item will be dropped
     Chest,
 }

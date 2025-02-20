@@ -1,5 +1,6 @@
 use crate::codec::slot_components::PotionContents;
 use crate::VarInt;
+use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeSeq;
 use serde::{
@@ -9,7 +10,7 @@ use serde::{
 
 #[derive(Debug, Clone)]
 pub struct Slot {
-    item_count: VarInt,
+    pub item_count: VarInt,
     item_id: Option<VarInt>,
     num_components_to_add: Option<VarInt>,
     num_components_to_remove: Option<VarInt>,
@@ -96,7 +97,7 @@ impl<'de> Deserialize<'de> for Slot {
                     match component_type.0.try_into() {
                         Ok(StructuredComponentType::PotionContents) => {
                             log::info!("yesir");
-                            let has_potion_id = seq
+                            let _has_potion_id = seq
                                 .next_element::<PotionContents>()?
                                 .ok_or(de::Error::custom("Failed to decode potion"))?;
                             // let potion_id = seq
@@ -193,8 +194,9 @@ impl Serialize for Slot {
 impl Slot {
     pub fn to_item(self) -> Option<ItemStack> {
         let item_id = self.item_id?.0.try_into().unwrap();
+        let item = Item::from_id(item_id)?;
         Some(ItemStack {
-            item_id,
+            item,
             item_count: self.item_count.0.try_into().unwrap(),
         })
     }
@@ -215,7 +217,7 @@ impl From<&ItemStack> for Slot {
     fn from(item: &ItemStack) -> Self {
         Slot {
             item_count: item.item_count.into(),
-            item_id: Some(VarInt(item.item_id as i32)),
+            item_id: Some(VarInt(item.item.id as i32)),
             // TODO: add these
             num_components_to_add: None,
             num_components_to_remove: None,
@@ -231,9 +233,9 @@ impl From<Option<&ItemStack>> for Slot {
     }
 }
 
-impl From<&Option<ItemStack>> for Slot {
-    fn from(item: &Option<ItemStack>) -> Self {
-        item.map(|stack| Self::from(&stack))
-            .unwrap_or(Slot::empty())
-    }
-}
+// impl From<&Option<ItemStack>> for Slot {
+//     fn from(item: &Option<ItemStack>) -> Self {
+//         item.map(|stack| Self::from(&stack))
+//             .unwrap_or(Slot::empty())
+//     }
+// }

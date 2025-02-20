@@ -116,7 +116,7 @@ async fn handle_packet(
                             for world in server.worlds.read().await.iter() {
                                 let mut world_players = world
                                     .players
-                                    .lock()
+                                    .read()
                                     .await
                                     // Although there is no documented limit, we will limit to 4 players
                                     .values()

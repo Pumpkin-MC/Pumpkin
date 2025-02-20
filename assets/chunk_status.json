@@ -1,1 +1,14 @@
-["empty","structure_starts","structure_references","biomes","noise","surface","carvers","features","initialize_light","light","spawn","full"]
+[
+  "empty",
+  "structure_starts",
+  "structure_references",
+  "biomes",
+  "noise",
+  "surface",
+  "carvers",
+  "features",
+  "initialize_light",
+  "light",
+  "spawn",
+  "full"
+]

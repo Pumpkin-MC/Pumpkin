@@ -89,12 +89,12 @@ impl RCONClient {
                 if packet.get_body() == password {
                     self.send(ClientboundPacket::AuthResponse, packet.get_id(), "")
                         .await?;
-                    if config.logging.log_logged_successfully {
+                    if config.logging.logged_successfully {
                         log::info!("RCON ({}): Client logged in successfully", self.address);
                     }
                     self.logged_in = true;
                 } else {
-                    if config.logging.log_wrong_password {
+                    if config.logging.wrong_password {
                         log::info!("RCON ({}): Client has tried wrong password", self.address);
                     }
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
@@ -121,7 +121,7 @@ impl RCONClient {
 
                     let output = output.lock().await;
                     for line in output.iter() {
-                        if config.logging.log_commands {
+                        if config.logging.commands {
                             log::info!("RCON ({}): {}", self.address, line);
                         }
                         self.send(ClientboundPacket::Output, packet.get_id(), line)

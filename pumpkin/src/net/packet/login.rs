@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_protocol::{
     client::{
-        config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks},
+        config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks, CUpdateTags},
         login::{CLoginSuccess, CSetCompression},
     },
     codec::var_int::VarInt,
@@ -95,7 +95,7 @@ impl Client {
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.server_full",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -189,13 +189,12 @@ impl Client {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
                     self.kick(&match error {
-                        AuthError::FailedResponse => TextComponent::translate(
-                            "multiplayer.disconnect.authservers_down",
-                            [].into(),
-                        ),
+                        AuthError::FailedResponse => {
+                            TextComponent::translate("multiplayer.disconnect.authservers_down", [])
+                        }
                         AuthError::UnverifiedUsername => TextComponent::translate(
                             "multiplayer.disconnect.unverified_username",
-                            [].into(),
+                            [],
                         ),
                         e => TextComponent::text(e.to_string()),
                     })
@@ -209,7 +208,7 @@ impl Client {
             log::debug!("Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -220,7 +219,7 @@ impl Client {
             log::debug!("A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
-                [].into(),
+                [],
             ))
             .await;
             return;
@@ -233,11 +232,7 @@ impl Client {
     }
 
     async fn enable_compression(&self) {
-        let compression = ADVANCED_CONFIG
-            .networking
-            .packet_compression
-            .compression_info
-            .clone();
+        let compression = ADVANCED_CONFIG.networking.packet_compression.info.clone();
         self.send_packet(&CSetCompression::new(compression.threshold.into()))
             .await;
         self.set_compression(Some(compression)).await;
@@ -334,17 +329,14 @@ impl Client {
         let resource_config = &ADVANCED_CONFIG.resource_pack;
         if resource_config.enabled {
             let resource_pack = CConfigAddResourcePack::new(
-                Uuid::new_v3(
-                    &uuid::Uuid::NAMESPACE_DNS,
-                    resource_config.resource_pack_url.as_bytes(),
-                ),
-                &resource_config.resource_pack_url,
-                &resource_config.resource_pack_sha1,
+                Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes()),
+                &resource_config.url,
+                &resource_config.sha1,
                 resource_config.force,
-                if resource_config.prompt_message.is_empty() {
+                if resource_config.message.is_empty() {
                     None
                 } else {
-                    Some(TextComponent::text(&resource_config.prompt_message))
+                    Some(TextComponent::text(&resource_config.message))
                 },
             );
 
@@ -358,6 +350,14 @@ impl Client {
             ))
             .await;
         }
+
+        // TODO: Is this the right place to send them?
+        // send tags
+        self.send_packet(&CUpdateTags::new(&[
+            pumpkin_data::tag::RegistryKey::Block,
+            pumpkin_data::tag::RegistryKey::Fluid,
+        ]))
+        .await;
 
         // known data packs
         self.send_packet(&CKnownPacks::new(&[KnownPack {

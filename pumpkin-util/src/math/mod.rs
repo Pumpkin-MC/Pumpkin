@@ -1,6 +1,7 @@
-use num_traits::PrimInt;
+use num_traits::{One, PrimInt, Zero};
 
 pub mod boundingbox;
+pub mod experience;
 pub mod position;
 pub mod vector2;
 pub mod vector3;
@@ -67,11 +68,11 @@ pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
 #[inline]
 pub fn floor_div<T>(x: T, y: T) -> T
 where
-    T: PrimInt + From<i8>,
+    T: PrimInt + Zero + One,
 {
     let div = x / y;
-    if (x ^ y) < 0.into() && div * y != x {
-        div - 1.into()
+    if (x ^ y) < T::zero() && div * y != x {
+        div - T::one()
     } else {
         div
     }
@@ -80,10 +81,10 @@ where
 #[inline]
 pub fn floor_mod<T>(x: T, y: T) -> T
 where
-    T: PrimInt + From<i8>,
+    T: PrimInt + Zero,
 {
     let rem = x % y;
-    if (x ^ y) < 0.into() && rem != 0.into() {
+    if (x ^ y) < T::zero() && rem != T::zero() {
         rem + y
     } else {
         rem

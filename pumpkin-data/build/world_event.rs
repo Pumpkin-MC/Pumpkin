@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::quote;
-
-use crate::ident;
+use quote::{format_ident, quote};
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/world_event.json");
@@ -15,7 +13,7 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
 
     for (event, id) in events.iter() {
-        let name = ident(event.to_pascal_case());
+        let name = format_ident!("{}", event.to_pascal_case());
         variants.extend([quote! {
             #name = #id,
         }]);

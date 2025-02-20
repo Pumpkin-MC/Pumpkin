@@ -22,7 +22,9 @@ impl CommandExecutor for PumpkinExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let seed = match sender {
-            CommandSender::Player(player) => player.living_entity.entity.world.level.seed.0,
+            CommandSender::Player(player) => {
+                player.living_entity.entity.world.read().await.level.seed.0
+            }
             // TODO: Maybe ask player for world, or get the current world
             _ => match server.worlds.read().await.first() {
                 Some(world) => world.level.seed.0,
@@ -41,11 +43,10 @@ impl CommandExecutor for PumpkinExecutor {
                 [TextComponent::text(seed.clone())
                     .hover_event(HoverEvent::show_text(TextComponent::translate(
                         Cow::from("chat.copy.click"),
-                        vec![],
+                        [],
                     )))
                     .click_event(ClickEvent::CopyToClipboard(Cow::from(seed)))
-                    .color_named(NamedColor::Green)]
-                .into(),
+                    .color_named(NamedColor::Green)],
             ))
             .await;
         Ok(())

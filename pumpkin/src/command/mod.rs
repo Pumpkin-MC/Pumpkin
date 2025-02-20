@@ -10,9 +10,9 @@ use crate::world::World;
 use args::ConsumedArgs;
 use async_trait::async_trait;
 use commands::{
-    ban, banip, banlist, clear, deop, fill, gamemode, give, help, kick, kill, list, me, msg, op,
-    pardon, pardonip, playsound, plugin, plugins, pumpkin, say, setblock, stop, summon, teleport,
-    time, title, worldborder,
+    ban, banip, banlist, clear, damage, deop, experience, fill, gamemode, give, help, kick, kill,
+    list, me, msg, op, pardon, pardonip, particle, playsound, plugin, plugins, pumpkin, say,
+    setblock, stop, summon, teleport, time, title, weather, worldborder,
 };
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
@@ -20,12 +20,10 @@ use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::TextComponent;
 
 pub mod args;
-pub mod client_cmd_suggestions;
+pub mod client_suggestions;
 mod commands;
 pub mod dispatcher;
 pub mod tree;
-pub mod tree_builder;
-mod tree_format;
 
 pub enum CommandSender<'a> {
     Rcon(&'a tokio::sync::Mutex<Vec<String>>),
@@ -99,11 +97,11 @@ impl CommandSender<'_> {
     }
 
     #[must_use]
-    pub fn world(&self) -> Option<&World> {
+    pub async fn world(&self) -> Option<Arc<World>> {
         match self {
             // TODO: maybe return first world when console
             CommandSender::Console | CommandSender::Rcon(..) => None,
-            CommandSender::Player(p) => Some(&p.living_entity.entity.world),
+            CommandSender::Player(p) => Some(p.living_entity.entity.world.read().await.clone()),
         }
     }
 }
@@ -112,38 +110,46 @@ impl CommandSender<'_> {
 pub fn default_dispatcher() -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
 
+    // Zero
     dispatcher.register(pumpkin::init_command_tree(), PermissionLvl::Zero);
-    dispatcher.register(bossbar::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(say::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(gamemode::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(stop::init_command_tree(), PermissionLvl::Four);
     dispatcher.register(help::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(list::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(transfer::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(me::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(msg::init_command_tree(), PermissionLvl::Zero);
+    // Two
     dispatcher.register(kill::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(kick::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(plugin::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(plugins::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(worldborder::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(teleport::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(time::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(give::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(list::init_command_tree(), PermissionLvl::Zero);
     dispatcher.register(clear::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(setblock::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(seed::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(transfer::init_command_tree(), PermissionLvl::Zero);
     dispatcher.register(fill::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(op::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(deop::init_command_tree(), PermissionLvl::Three);
-    dispatcher.register(me::init_command_tree(), PermissionLvl::Zero);
     dispatcher.register(playsound::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(title::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(summon::init_command_tree(), PermissionLvl::Two);
-    dispatcher.register(msg::init_command_tree(), PermissionLvl::Zero);
+    dispatcher.register(experience::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(weather::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(particle::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(damage::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(bossbar::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(say::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(gamemode::init_command_tree(), PermissionLvl::Two);
+    // Three
+    dispatcher.register(op::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(deop::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(kick::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(plugin::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(plugins::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(ban::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(banip::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(banlist::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(pardon::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(pardonip::init_command_tree(), PermissionLvl::Three);
+    // Four
+    dispatcher.register(stop::init_command_tree(), PermissionLvl::Four);
 
     dispatcher
 }

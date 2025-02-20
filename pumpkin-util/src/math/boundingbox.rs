@@ -1,21 +1,21 @@
 use super::{position::BlockPos, vector3::Vector3};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {
     pub min: Vector3<f64>,
     pub max: Vector3<f64>,
 }
 
 impl BoundingBox {
-    pub fn new_default(size: &BoundingBoxSize) -> Self {
+    pub fn new_default(size: &EntityDimensions) -> Self {
         Self::new_from_pos(0., 0., 0., size)
     }
 
-    pub fn new_from_pos(x: f64, y: f64, z: f64, size: &BoundingBoxSize) -> Self {
-        let f = size.width / 2.;
+    pub fn new_from_pos(x: f64, y: f64, z: f64, size: &EntityDimensions) -> Self {
+        let f = size.width as f64 / 2.;
         Self {
             min: Vector3::new(x - f, y, z - f),
-            max: Vector3::new(x + f, y + size.height, z + f),
+            max: Vector3::new(x + f, y + size.height as f64, z + f),
         }
     }
 
@@ -74,8 +74,8 @@ impl BoundingBox {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct BoundingBoxSize {
-    pub width: f64,
-    pub height: f64,
+#[derive(Clone, Copy, Debug)]
+pub struct EntityDimensions {
+    pub width: f32,
+    pub height: f32,
 }

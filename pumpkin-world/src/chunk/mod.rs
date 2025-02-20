@@ -1,8 +1,17 @@
-use fastnbt::LongArray;
+use dashmap::{
+    mapref::one::{Ref, RefMut},
+    DashMap,
+};
 use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_nbt::{deserializer::from_bytes, nbt_long_array};
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with};
+use std::{
+    collections::HashMap,
+    iter::repeat_with,
+    path::{Path, PathBuf},
+    sync::{Arc, LazyLock},
+};
 use thiserror::Error;
 
 use crate::{
@@ -13,12 +22,16 @@ use crate::{
 };
 
 pub mod anvil;
+pub mod linear;
 
 pub const CHUNK_AREA: usize = 16 * 16;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
 pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;
 pub const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
 
+/// File locks manager to prevent multiple threads from writing to the same file at the same time
+/// but allowing multiple threads to read from the same file at the same time.
+static FILE_LOCK_MANAGER: LazyLock<Arc<FileLocksManager>> = LazyLock::new(Arc::default);
 pub trait ChunkReader: Sync + Send {
     fn read_chunk(
         &self,
@@ -72,8 +85,36 @@ pub enum CompressionError {
     GZipError(std::io::Error),
     #[error("Error while working with LZ4 compression: {0}")]
     LZ4Error(std::io::Error),
+    #[error("Error while working with zstd compression: {0}")]
+    ZstdError(std::io::Error),
 }
 
+/// A guard that allows reading from a file while preventing writing to it
+/// This is used to prevent writes while a read is in progress.
+/// (dont suffer for "write starvation" problem)
+///
+/// When the guard is dropped, the file is unlocked.
+pub struct FileReadGuard<'a> {
+    _guard: Ref<'a, PathBuf, ()>,
+}
+
+/// A guard that allows writing to a file while preventing reading from it
+/// This is used to prevent multiple threads from writing to the same file at the same time.
+/// (dont suffer for "write starvation" problem)
+///
+/// When the guard is dropped, the file is unlocked.
+pub struct FileWriteGuard<'a> {
+    _guard: RefMut<'a, PathBuf, ()>,
+}
+
+/// Central File Lock Manager for chunk files
+/// This is used to prevent multiple threads from writing to the same file at the same time
+#[derive(Clone, Default)]
+pub struct FileLocksManager {
+    locks: DashMap<PathBuf, ()>,
+}
+
+#[derive(Clone)]
 pub struct ChunkData {
     /// See description in `Subchunks`
     pub subchunks: Subchunks,
@@ -92,7 +133,7 @@ pub struct ChunkData {
 /// chunk, what filled only air or only water.
 ///
 /// Multi means a normal chunk, what contains 24 subchunks.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Subchunks {
     Single(u16),
     Multi(Box<[Subchunk; SUBCHUNKS_COUNT]>),
@@ -120,29 +161,34 @@ pub enum Subchunk {
 struct PaletteEntry {
     // block name
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
-    // #[serde(with = "LongArray")]
-    motion_blocking: LongArray,
-    // #[serde(with = "LongArray")]
-    world_surface: LongArray,
+    #[serde(serialize_with = "nbt_long_array")]
+    motion_blocking: Box<[i64]>,
+    #[serde(serialize_with = "nbt_long_array")]
+    world_surface: Box<[i64]>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChunkSection {
     #[serde(rename = "Y")]
     y: i8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     block_states: Option<ChunkSectionBlockStates>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct ChunkSectionBlockStates {
-    //  #[serde(with = "LongArray")]
-    data: Option<LongArray>,
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    data: Option<Box<[i64]>>,
     palette: Vec<PaletteEntry>,
 }
 
@@ -162,13 +208,39 @@ struct ChunkNbt {
     heightmaps: ChunkHeightmaps,
 }
 
+impl FileLocksManager {
+    pub fn get_read_guard(&self, path: &Path) -> FileReadGuard {
+        if let Some(lock) = self.locks.get(path) {
+            FileReadGuard { _guard: lock }
+        } else {
+            FileReadGuard {
+                _guard: self
+                    .locks
+                    .entry(path.to_path_buf())
+                    .or_insert(())
+                    .downgrade(),
+            }
+        }
+    }
+
+    pub fn get_write_guard(&self, path: &Path) -> FileWriteGuard {
+        FileWriteGuard {
+            _guard: self.locks.entry(path.to_path_buf()).or_insert(()),
+        }
+    }
+
+    pub fn remove_file_lock(path: &Path) {
+        FILE_LOCK_MANAGER.locks.remove(path);
+    }
+}
+
 /// The Heightmap for a completely empty chunk
 impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
             // 0 packed into an i64 7 times.
-            motion_blocking: LongArray::new(vec![0; 37]),
-            world_surface: LongArray::new(vec![0; 37]),
+            motion_blocking: vec![0; 37].into_boxed_slice(),
+            world_surface: vec![0; 37].into_boxed_slice(),
         }
     }
 }
@@ -335,15 +407,15 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        if fastnbt::from_bytes::<ChunkStatusWrapper>(chunk_data)
-            .map_err(|_| ChunkParsingError::FailedReadStatus)?
+        if from_bytes::<ChunkStatusWrapper>(chunk_data)
+            .map_err(ChunkParsingError::FailedReadStatus)?
             .status
             != ChunkStatus::Full
         {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = fastnbt::from_bytes::<ChunkNbt>(chunk_data)
+        let chunk_data = from_bytes::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
@@ -435,8 +507,8 @@ impl ChunkData {
 
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
-    #[error("Failed reading chunk status")]
-    FailedReadStatus,
+    #[error("Failed reading chunk status {0}")]
+    FailedReadStatus(pumpkin_nbt::Error),
     #[error("The chunk isn't generated yet")]
     ChunkNotGenerated,
     #[error("Error deserializing chunk: {0}")]
@@ -450,5 +522,5 @@ fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
 #[derive(Error, Debug)]
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
-    ErrorSerializingChunk(fastnbt::error::Error),
+    ErrorSerializingChunk(pumpkin_nbt::Error),
 }

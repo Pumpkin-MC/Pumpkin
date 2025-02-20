@@ -9,7 +9,6 @@ use tokio::io::AsyncReadExt;
 
 /// Client -> Server
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(i32)]
 pub enum ServerboundPacket {
     /// Typically, the first packet sent by the client, which is used to authenticate the connection with the server.
     Auth = 2,
@@ -29,7 +28,6 @@ impl ServerboundPacket {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(i32)]
 /// Server -> Client
 pub enum ClientboundPacket {
     /// This packet is a notification of the connection's current auth status. When the server receives an auth request, it will respond with an empty `SERVERDATA_RESPONSE_VALUE`,

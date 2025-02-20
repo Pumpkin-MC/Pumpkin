@@ -8,11 +8,10 @@ pub(crate) fn build() -> TokenStream {
 
     let poses: Vec<String> = serde_json::from_str(include_str!("../../assets/entity_pose.json"))
         .expect("Failed to parse entity_pose.json");
-    let variants = array_to_tokenstream(poses);
+    let variants = array_to_tokenstream(&poses);
 
     quote! {
         #[derive(Clone, Copy)]
-        #[repr(u8)]
         pub enum EntityPose {
             #variants
         }

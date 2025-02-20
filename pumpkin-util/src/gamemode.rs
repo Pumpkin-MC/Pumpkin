@@ -6,24 +6,23 @@ use serde::{Deserialize, Serialize};
 pub struct ParseGameModeError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[repr(i8)]
 pub enum GameMode {
-    Undefined = -1,
     Survival,
     Creative,
     Adventure,
     Spectator,
 }
 
-impl From<i8> for GameMode {
-    fn from(value: i8) -> Self {
+impl TryFrom<i8> for GameMode {
+    type Error = ();
+
+    fn try_from(value: i8) -> Result<Self, Self::Error> {
         match value {
-            -1 => Self::Undefined,
-            0 => Self::Survival,
-            1 => Self::Creative,
-            2 => Self::Adventure,
-            3 => Self::Spectator,
-            _ => Self::Undefined,
+            0 => Ok(Self::Survival),
+            1 => Ok(Self::Creative),
+            2 => Ok(Self::Adventure),
+            3 => Ok(Self::Spectator),
+            _ => Err(()),
         }
     }
 }

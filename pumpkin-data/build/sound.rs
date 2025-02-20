@@ -1,21 +1,21 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 
-use crate::{array_to_tokenstream, ident};
+use crate::array_to_tokenstream;
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/sounds.json");
 
     let sound: Vec<String> = serde_json::from_str(include_str!("../../assets/sounds.json"))
         .expect("Failed to parse sounds.json");
-    let variants = array_to_tokenstream(sound.clone());
+    let variants = array_to_tokenstream(&sound);
 
     let type_from_name = &sound
         .iter()
         .map(|sound| {
             let id = &sound;
-            let name = ident(sound.to_pascal_case());
+            let name = format_ident!("{}", sound.to_pascal_case());
 
             quote! {
                 #id => Some(Self::#name),
@@ -27,7 +27,7 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|sound| {
             let id = &sound;
-            let name = ident(sound.to_pascal_case());
+            let name = format_ident!("{}", sound.to_pascal_case());
 
             quote! {
                 Self::#name => #id,
