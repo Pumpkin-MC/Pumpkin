@@ -68,7 +68,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Combat
   - [x] Experience
   - [x] Hunger
-  - [x] Stack Limits
   - [ ] Off Hand
   - [ ] Advancements 
 - Entities
