@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use pumpkin_util::text::{color::NamedColor, hover::HoverEvent, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
 
 use crate::{
-    command::{
-        args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
-    },
     PLUGIN_MANAGER,
+    command::{
+        CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
+    },
 };
 
 const NAMES: [&str; 1] = ["plugins"];

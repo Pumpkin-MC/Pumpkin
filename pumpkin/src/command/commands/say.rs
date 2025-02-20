@@ -3,10 +3,10 @@ use pumpkin_data::world::SAY_COMMAND;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    args::{message::MsgArgConsumer, Arg, ConsumedArgs},
-    tree::builder::argument,
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{Arg, ConsumedArgs, message::MsgArgConsumer},
+    tree::CommandTree,
+    tree::builder::argument,
 };
 use CommandError::InvalidConsumption;
 

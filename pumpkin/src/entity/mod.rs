@@ -1,5 +1,5 @@
 use core::f32;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;

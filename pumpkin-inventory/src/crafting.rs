@@ -1,8 +1,8 @@
 use pumpkin_data::{
     item::Item,
-    tag::{get_tag_values, RegistryEntryList, RegistryKey, TagType},
+    tag::{RegistryEntryList, RegistryKey, TagType, get_tag_values},
 };
-use pumpkin_registry::{flatten_3x3, RecipeResult, RECIPES};
+use pumpkin_registry::{RECIPES, RecipeResult, flatten_3x3};
 use pumpkin_world::item::ItemStack;
 use rayon::prelude::*;
 

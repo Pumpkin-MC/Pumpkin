@@ -6,6 +6,7 @@ use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2};
 use crate::{block::BlockState, generation::section_coords};
 
 use super::{
+    GlobalRandomConfig,
     aquifer_sampler::{
         AquiferSampler, AquiferSamplerImpl, FluidLevelSampler, SeaLevelAquiferSampler,
         WorldAquiferSampler,
@@ -23,7 +24,6 @@ use super::{
     },
     ore_sampler::OreVeinSampler,
     positions::chunk_pos,
-    GlobalRandomConfig,
 };
 
 pub const STONE_BLOCK: BlockState = block_state!("stone");

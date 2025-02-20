@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_world::{
-    bench_create_and_populate_noise, GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
+    GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS, bench_create_and_populate_noise,
 };
 
 fn criterion_benchmark(c: &mut Criterion) {

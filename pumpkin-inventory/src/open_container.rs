@@ -1,5 +1,5 @@
-use crate::crafting::check_if_matches_crafting;
 use crate::Container;
+use crate::crafting::check_if_matches_crafting;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
@@ -34,11 +34,7 @@ impl OpenContainer {
 
     pub fn remove_player(&mut self, player_id: i32) {
         if let Some(index) = self.players.iter().enumerate().find_map(|(index, id)| {
-            if *id == player_id {
-                Some(index)
-            } else {
-                None
-            }
+            if *id == player_id { Some(index) } else { None }
         }) {
             self.players.remove(index);
         }

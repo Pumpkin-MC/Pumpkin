@@ -4,8 +4,8 @@ use pumpkin_macros::server_packet;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
 #[server_packet(PLAY_INTERACT)]

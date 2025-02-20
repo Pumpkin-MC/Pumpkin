@@ -1,13 +1,13 @@
 use async_trait::async_trait;
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 
+use crate::command::CommandError;
 use crate::command::args::message::MsgArgConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::builder::argument;
 use crate::command::tree::CommandTree;
-use crate::command::CommandError;
+use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender};
 use CommandError::InvalidConsumption;
 

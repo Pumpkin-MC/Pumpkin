@@ -1,7 +1,7 @@
 use std::hash::Hash;
 
 use num_traits::Pow;
-use pumpkin_util::random::{legacy_rand::LegacyRand, RandomImpl};
+use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
 
 use super::GRADIENTS;
 
@@ -274,7 +274,7 @@ impl OctaveSimplexNoiseSampler {
 
 #[cfg(test)]
 mod octave_simplex_noise_sampler_test {
-    use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomImpl};
+    use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
     use crate::generation::noise::simplex::OctaveSimplexNoiseSampler;
 
@@ -410,7 +410,7 @@ mod octave_simplex_noise_sampler_test {
 #[cfg(test)]
 mod simplex_noise_sampler_test {
 
-    use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomImpl};
+    use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
     use crate::generation::noise::simplex::SimplexNoiseSampler;
 

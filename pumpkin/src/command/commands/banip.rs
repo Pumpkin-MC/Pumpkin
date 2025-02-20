@@ -2,19 +2,19 @@ use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
-        args::{message::MsgArgConsumer, simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
     data::{
-        banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST, SaveJSONConfiguration,
+        SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
     },
     server::Server,
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["ban-ip"];
 const DESCRIPTION: &str = "bans a player-ip";

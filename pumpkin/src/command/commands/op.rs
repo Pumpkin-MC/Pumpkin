@@ -1,16 +1,16 @@
 use crate::{
     command::{
-        args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, players::PlayersArgumentConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
 };
-use async_trait::async_trait;
-use pumpkin_config::{op::Op, BASIC_CONFIG};
-use pumpkin_util::text::TextComponent;
 use CommandError::InvalidConsumption;
+use async_trait::async_trait;
+use pumpkin_config::{BASIC_CONFIG, op::Op};
+use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["op"];
 const DESCRIPTION: &str = "Grants operator status to a player.";

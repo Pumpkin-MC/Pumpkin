@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::CTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -11,7 +11,7 @@ use crate::command::args::{Arg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{
-    args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
 
 const NAMES: [&str; 1] = ["transfer"];

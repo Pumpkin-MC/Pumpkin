@@ -1,6 +1,6 @@
 use std::num::NonZeroI32;
 
-use pumpkin_protocol::{server::handshake::SHandShake, ConnectionState, CURRENT_MC_PROTOCOL};
+use pumpkin_protocol::{CURRENT_MC_PROTOCOL, ConnectionState, server::handshake::SHandShake};
 use pumpkin_util::text::TextComponent;
 
 use crate::{net::Client, server::CURRENT_MC_VERSION};

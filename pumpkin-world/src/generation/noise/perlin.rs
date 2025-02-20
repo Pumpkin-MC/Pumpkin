@@ -2,7 +2,7 @@ use num_traits::Pow;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_util::random::RandomGenerator;
 
-use super::{lerp3, GRADIENTS};
+use super::{GRADIENTS, lerp3};
 
 #[derive(Clone)]
 pub struct PerlinNoiseSampler {
@@ -357,7 +357,7 @@ mod double_perlin_noise_sampler_test {
     use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
     use pumpkin_data::chunk::DoublePerlinNoiseParameters;
     use pumpkin_util::random::{
-        legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl,
+        RandomGenerator, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
     };
 
     #[test]
@@ -560,7 +560,7 @@ mod double_perlin_noise_sampler_test {
 #[cfg(test)]
 mod octave_perline_noise_sampler_test {
     use pumpkin_util::random::{
-        legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl,
+        RandomGenerator, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
     };
 
     use super::OctavePerlinNoiseSampler;
@@ -733,7 +733,7 @@ mod perlin_noise_sampler_test {
 
     use pumpkin_util::{
         assert_eq_delta,
-        random::{xoroshiro128::Xoroshiro, RandomDeriverImpl, RandomGenerator, RandomImpl},
+        random::{RandomDeriverImpl, RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro},
     };
 
     use crate::{generation::noise::perlin::PerlinNoiseSampler, read_data_from_file};
@@ -1268,7 +1268,9 @@ mod perlin_noise_sampler_test {
         assert_eq!(first, -15);
         assert_eq!(
             amplitudes,
-            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            [
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+            ]
         );
     }
 

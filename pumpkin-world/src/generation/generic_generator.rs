@@ -2,14 +2,14 @@ use noise::{NoiseFn, Perlin};
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
+    WORLD_LOWEST_Y,
     chunk::{ChunkData, Subchunks},
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
-    WORLD_LOWEST_Y,
 };
 
 use super::{
-    generator::{BiomeGenerator, GeneratorInit, PerlinTerrainGenerator, WorldGenerator},
     Seed,
+    generator::{BiomeGenerator, GeneratorInit, PerlinTerrainGenerator, WorldGenerator},
 };
 
 pub struct GenericGenerator<B: BiomeGenerator, T: PerlinTerrainGenerator> {

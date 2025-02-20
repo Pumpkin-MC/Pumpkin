@@ -1,9 +1,9 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::net::{lan_broadcast, query, rcon::RCONServer, Client};
-use crate::server::{ticker::Ticker, Server};
-use log::{logger, Level, LevelFilter, Log};
+use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
+use crate::server::{Server, ticker::Ticker};
+use log::{Level, LevelFilter, Log, logger};
 use net::PacketHandlerState;
 use plugin::PluginManager;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
@@ -11,8 +11,8 @@ use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
 use std::{
     net::SocketAddr,
     sync::{Arc, LazyLock},
@@ -22,7 +22,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{tcp::OwnedReadHalf, TcpListener},
+    net::{TcpListener, tcp::OwnedReadHalf},
     sync::Mutex,
 };
 

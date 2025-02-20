@@ -4,8 +4,8 @@ use pumpkin_macros::block_property;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::{
-    registry::{Block, State},
     BlockDirection,
+    registry::{Block, State},
 };
 
 use super::{BlockProperties, BlockProperty, BlockPropertyMetadata, Direction};

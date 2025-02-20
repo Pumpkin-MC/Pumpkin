@@ -14,13 +14,13 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::entity::{entity_from_egg, EntityType};
+use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::world::CHAT;
-use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_macros::block_entity;
 use pumpkin_protocol::client::play::{
     CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
@@ -45,14 +45,14 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
+    GameMode,
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
-    GameMode,
 };
 use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::registry::Block;
-use pumpkin_world::block::{registry::get_block_by_item, BlockDirection};
+use pumpkin_world::block::registry::get_block_collision_shapes;
+use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
 use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
@@ -928,10 +928,10 @@ impl Player {
                     self.update_sequence(player_action.sequence.0);
                 }
                 Status::DropItem => {
-                    self.drop_item(server, false).await;
+                    self.drop_held_item(server, false).await;
                 }
                 Status::DropItemStack => {
-                    self.drop_item(server, true).await;
+                    self.drop_held_item(server, true).await;
                 }
                 Status::ShootArrowOrFinishEating | Status::SwapItem => {
                     log::debug!("todo");
@@ -1149,20 +1149,23 @@ impl Player {
 
     pub async fn handle_set_creative_slot(
         &self,
+        server: &Server,
         packet: SSetCreativeSlot,
     ) -> Result<(), InventoryError> {
         if self.gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
         let valid_slot = packet.slot >= 0 && packet.slot <= 45;
+        let item_stack = packet.clicked_item.to_item();
         if valid_slot {
-            self.inventory().lock().await.set_slot(
-                packet.slot as usize,
-                packet.clicked_item.to_item(),
-                true,
-            )?;
+            self.inventory()
+                .lock()
+                .await
+                .set_slot(packet.slot as usize, item_stack, true)?;
+        } else {
+            // Item drop
+            self.drop_item(server, item_stack.unwrap()).await;
         };
-        // TODO: The Item was dropped per drag and drop,
         Ok(())
     }
 

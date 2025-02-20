@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use base64::{engine::general_purpose, Engine};
-use pumpkin_config::{networking::auth::TextureConfig, ADVANCED_CONFIG};
+use base64::{Engine, engine::general_purpose};
+use pumpkin_config::{ADVANCED_CONFIG, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;

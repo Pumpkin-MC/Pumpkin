@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_inventory::Container;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use crate::entity::player::Player;
 use CommandError::InvalidConsumption;

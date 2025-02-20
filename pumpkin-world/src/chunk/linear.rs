@@ -464,9 +464,9 @@ mod tests {
     use temp_dir::TempDir;
 
     use crate::chunk::ChunkWriter;
-    use crate::generation::{get_world_gen, Seed};
+    use crate::generation::{Seed, get_world_gen};
     use crate::{
-        chunk::{linear::LinearChunkFormat, ChunkReader, ChunkReadingError},
+        chunk::{ChunkReader, ChunkReadingError, linear::LinearChunkFormat},
         level::LevelFolder,
     };
 

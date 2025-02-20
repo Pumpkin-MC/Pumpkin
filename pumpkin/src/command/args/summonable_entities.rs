@@ -6,8 +6,8 @@ use crate::{command::dispatcher::CommandError, server::Server};
 
 use super::{
     super::{
-        args::{ArgumentConsumer, RawArgs},
         CommandSender,
+        args::{ArgumentConsumer, RawArgs},
     },
     Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };

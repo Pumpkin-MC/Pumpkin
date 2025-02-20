@@ -45,7 +45,7 @@ macro_rules! read_data_from_file {
 
 // TODO: is there a way to do in-file benches?
 pub use generation::{
-    noise_router::proto_noise_router::GlobalProtoNoiseRouter, GlobalRandomConfig,
+    GlobalRandomConfig, noise_router::proto_noise_router::GlobalProtoNoiseRouter,
 };
 pub use noise_router::NOISE_ROUTER_ASTS;
 

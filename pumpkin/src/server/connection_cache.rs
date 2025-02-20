@@ -6,12 +6,12 @@ use std::{
     path::Path,
 };
 
-use base64::{engine::general_purpose, Engine as _};
-use pumpkin_config::{BasicConfiguration, BASIC_CONFIG};
+use base64::{Engine as _, engine::general_purpose};
+use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
 use pumpkin_protocol::{
+    CURRENT_MC_PROTOCOL, Players, StatusResponse, Version,
     client::{config::CPluginMessage, status::CStatusResponse},
-    codec::{var_int::VarInt, Codec},
-    Players, StatusResponse, Version, CURRENT_MC_PROTOCOL,
+    codec::{Codec, var_int::VarInt},
 };
 
 use super::CURRENT_MC_VERSION;

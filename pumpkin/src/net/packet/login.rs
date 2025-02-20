@@ -2,24 +2,24 @@ use std::sync::LazyLock;
 
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_protocol::{
+    ConnectionState, KnownPack, Label, Link, LinkType,
     client::{
         config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks, CUpdateTags},
         login::{CLoginSuccess, CSetCompression},
     },
     codec::var_int::VarInt,
     server::login::{SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart},
-    ConnectionState, KnownPack, Label, Link, LinkType,
 };
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
 use crate::{
     net::{
+        Client, GameProfile,
         authentication::{self, AuthError},
         offline_uuid,
         packet::is_valid_player_name,
         proxy::{bungeecord, velocity},
-        Client, GameProfile,
     },
     server::Server,
 };
@@ -205,7 +205,14 @@ impl Client {
 
         // Don't allow duplicate UUIDs
         if let Some(online_player) = &server.get_player_by_uuid(profile.id).await {
-            log::debug!("Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
+            log::debug!(
+                "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')",
+                &self.address.lock().await,
+                &profile.name,
+                &profile.id,
+                &online_player.client.address.lock().await,
+                &online_player.gameprofile.name
+            );
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
                 [],
@@ -216,7 +223,14 @@ impl Client {
 
         // Don't allow a duplicate username
         if let Some(online_player) = &server.get_player_by_name(&profile.name).await {
-            log::debug!("A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
+            log::debug!(
+                "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')",
+                &self.address.lock().await,
+                &profile.name,
+                &profile.id,
+                &online_player.client.address.lock().await,
+                &online_player.gameprofile.name
+            );
             self.kick(&TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
                 [],
@@ -295,11 +309,11 @@ impl Client {
     pub fn handle_login_cookie_response(&self, packet: SLoginCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-        "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
-        packet.key.to_string(),
-        packet.has_payload,
-        packet.payload_length.unwrap_or(VarInt::from(0)).0
-    );
+            "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            packet.key.to_string(),
+            packet.has_payload,
+            packet.payload_length.unwrap_or(VarInt::from(0)).0
+        );
     }
     pub async fn handle_plugin_response(&self, plugin_response: SLoginPluginResponse) {
         log::debug!("Handling plugin");

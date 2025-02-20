@@ -2,21 +2,21 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::Container;
 use pumpkin_inventory::container_click::{
-    Click, ClickType, KeyClick, MouseClick, MouseDragState, MouseDragType,
+    Click, ClickType, DropType, KeyClick, MouseClick, MouseDragState, MouseDragType,
 };
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
-use pumpkin_inventory::Container;
-use pumpkin_inventory::{container_click, InventoryError, OptionallyCombinedContainer};
+use pumpkin_inventory::{InventoryError, OptionallyCombinedContainer, container_click};
 use pumpkin_protocol::client::play::{
     CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
-use pumpkin_util::text::TextComponent;
 use pumpkin_util::GameMode;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
@@ -157,6 +157,7 @@ impl Player {
 
         let click_slot = click.slot;
         self.match_click_behaviour(
+            server,
             opened_container.as_deref_mut(),
             click,
             drag_handler,
@@ -219,6 +220,7 @@ impl Player {
 
     async fn match_click_behaviour(
         &self,
+        server: &Server,
         opened_container: Option<&mut Box<dyn Container>>,
         click: Click,
         drag_handler: &DragHandler,
@@ -228,6 +230,7 @@ impl Player {
         match click.click_type {
             ClickType::MouseClick(mouse_click) => {
                 self.mouse_click(
+                    server,
                     opened_container,
                     mouse_click,
                     click.slot,
@@ -273,8 +276,18 @@ impl Player {
                 self.mouse_drag(drag_handler, opened_container, drag_state)
                     .await
             }
-            ClickType::DropType(_drop_type) => {
-                log::debug!("todo");
+            ClickType::DropType(drop_type) => {
+                let carried_item = self.carried_item.load();
+                if let Some(item) = carried_item {
+                    match drop_type {
+                        DropType::FullStack => self.drop_item(server, item).await,
+                        DropType::SingleItem => {
+                            let mut item = item;
+                            item.item_count = 1;
+                            self.drop_item(server, item).await;
+                        }
+                    };
+                }
                 Ok(())
             }
         }
@@ -282,6 +295,7 @@ impl Player {
 
     async fn mouse_click(
         &self,
+        server: &Server,
         opened_container: Option<&mut Box<dyn Container>>,
         mouse_click: MouseClick,
         slot: container_click::Slot,
@@ -289,9 +303,9 @@ impl Player {
     ) -> Result<(), InventoryError> {
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
+        let mut carried_item = self.carried_item.load();
         match slot {
             container_click::Slot::Normal(slot) => {
-                let mut carried_item = self.carried_item.load();
                 let res = container.handle_item_change(
                     &mut carried_item,
                     slot,
@@ -301,7 +315,19 @@ impl Player {
                 self.carried_item.store(carried_item);
                 res
             }
-            container_click::Slot::OutsideInventory => Ok(()),
+            container_click::Slot::OutsideInventory => {
+                if let Some(item) = carried_item {
+                    match mouse_click {
+                        MouseClick::Left => self.drop_item(server, item).await,
+                        MouseClick::Right => {
+                            let mut item = item;
+                            item.item_count = 1;
+                            self.drop_item(server, item).await;
+                        }
+                    };
+                }
+                Ok(())
+            }
         }
     }
 
