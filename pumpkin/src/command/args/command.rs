@@ -45,7 +45,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
 
     async fn suggest<'a>(
         &'a self,
-        _sender: &CommandSender<'a>,
+        sender: &CommandSender<'a>,
         server: &'a Server,
         input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
@@ -56,10 +56,16 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
         let dispatcher = server.command_dispatcher.read().await;
         let suggestions = dispatcher
             .commands
-            .keys()
-            .filter(|suggestion| suggestion.starts_with(input))
-            .map(|suggestion| CommandSuggestion::new(suggestion.to_string(), None))
+            .iter()
+            .filter(|(command_name, _)| {
+                (sender.has_permission(dispatcher.permissions.get(*command_name).unwrap())
+                    || sender
+                        .has_permission_lvl(*dispatcher.permission_lvl.get(*command_name).unwrap()))
+                    && command_name.starts_with(input)
+            })
+            .map(|(command_name, _)| CommandSuggestion::new(command_name.to_string(), None))
             .collect();
+
         Ok(Some(suggestions))
     }
 }

@@ -8,6 +8,21 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::{
+    combat::{self, player_attack_sound, AttackType},
+    hunger::HungerManager,
+    item::ItemEntity,
+    Entity, EntityBase, EntityId, NBTStorage,
+};
+use crate::{
+    block,
+    command::{client_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    net::{Client, PlayerConfig},
+    server::Server,
+    world::World,
+};
+use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
@@ -48,6 +63,7 @@ use pumpkin_protocol::{
     client::play::Metadata,
     server::play::{SClickContainer, SKeepAlive},
 };
+use pumpkin_util::atomic_linked_list::AtomicLinkedList;
 use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, EntityDimensions},
@@ -62,22 +78,6 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
 use tokio::sync::{Mutex, Notify, RwLock};
-
-use super::{
-    combat::{self, player_attack_sound, AttackType},
-    hunger::HungerManager,
-    item::ItemEntity,
-    Entity, EntityBase, EntityId, NBTStorage,
-};
-use crate::{
-    block,
-    command::{client_suggestions, dispatcher::CommandDispatcher},
-    data::op_data::OPERATOR_CONFIG,
-    net::{Client, PlayerConfig},
-    server::Server,
-    world::World,
-};
-use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
 
@@ -134,6 +134,8 @@ pub struct Player {
     pub last_attacked_ticks: AtomicU32,
     /// The players op permission level
     pub permission_lvl: AtomicCell<PermissionLvl>,
+    /// The players permissions
+    permissions: AtomicLinkedList<String>,
     /// Tell tasks to stop if we are closing
     cancel_tasks: Notify,
     /// whether the client has reported it has loaded
@@ -235,6 +237,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            permissions: AtomicLinkedList::new(),
         }
     }
 
@@ -643,6 +646,22 @@ impl Player {
         client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
 
+    /// Adds a permission to the player
+    pub fn set_permission(self: &Arc<Self>, permission: &str) {
+        if !self.permissions.iter().any(|p| p == permission) {
+            self.permissions.push_front(permission.to_string()).unwrap();
+        }
+    }
+    /// Removes a permission from the player
+    pub fn remove_permission(self: &Arc<Self>, permission: &str) {
+        if self.permissions.iter().any(|p| p == permission) {
+            self.permissions.remove(&permission.to_string());
+        }
+    }
+
+    pub fn get_permissions(&self) -> &AtomicLinkedList<String> {
+        &self.permissions
+    }
     /// Sends the world time to just the player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;

@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
-use pumpkin_protocol::client::play::{CCommands, ProtoNode, ProtoNodeType};
-use tokio::sync::RwLock;
-
-use crate::entity::player::Player;
-
 use super::{
     dispatcher::CommandDispatcher,
     tree::{Node, NodeType},
 };
+use crate::entity::player::Player;
+use pumpkin_protocol::client::play::{CCommands, ProtoNode, ProtoNodeType};
+use tokio::sync::RwLock;
 
 pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<CommandDispatcher>) {
     let cmd_src = super::CommandSender::Player(player.clone());
@@ -20,12 +18,27 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
             continue;
         };
 
-        let Some(permission) = dispatcher.get_permission_lvl(key) else {
+        let Some(permission) = dispatcher.get_permission(key) else {
             continue;
         };
 
-        if !cmd_src.has_permission_lvl(permission) {
+        let Some(permission_lvl) = dispatcher.permission_lvl.get(key) else {
             continue;
+        };
+        match permission.as_str() {
+            "" => {
+                if cmd_src.has_permission_lvl(*permission_lvl) {
+                } else {
+                    continue;
+                }
+            }
+            _ => {
+                if cmd_src.has_permission(permission) || cmd_src.has_permission_lvl(*permission_lvl)
+                {
+                } else {
+                    continue;
+                }
+            }
         }
 
         let (is_executable, child_nodes) =

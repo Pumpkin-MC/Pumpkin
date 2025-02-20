@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// - `Two`: `gamemaster`: Player or executor can use more commands and player can use command blocks.
 /// - `Three`:  `admin`: Player or executor can use commands related to multiplayer management.
 /// - `Four`: `owner`: Player or executor can use all of the commands, including commands related to server management.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 pub enum PermissionLvl {
     #[default]
     Zero = 0,
@@ -17,6 +17,12 @@ pub enum PermissionLvl {
     Two = 2,
     Three = 3,
     Four = 4,
+}
+
+impl std::fmt::Display for PermissionLvl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl PartialOrd for PermissionLvl {

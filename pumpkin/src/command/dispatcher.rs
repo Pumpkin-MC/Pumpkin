@@ -55,7 +55,8 @@ impl CommandError {
 #[derive(Default)]
 pub struct CommandDispatcher {
     pub(crate) commands: HashMap<String, Command>,
-    pub(crate) permissions: HashMap<String, PermissionLvl>,
+    pub(crate) permissions: HashMap<String, String>,
+    pub(crate) permission_lvl: HashMap<String, PermissionLvl>,
 }
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
@@ -70,10 +71,7 @@ impl CommandDispatcher {
             match e.into_string_or_pumpkin_error(cmd) {
                 Ok(err) => {
                     sender
-                        .send_message(
-                            TextComponent::text(err)
-                                .color_named(pumpkin_util::text::color::NamedColor::Red),
-                        )
+                        .send_message(TextComponent::text(err).color_named(NamedColor::Red))
                         .await;
                 }
                 Err(pumpkin_error) => {
@@ -165,13 +163,32 @@ impl CommandDispatcher {
 
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
-                "Permission for Command not found".to_string(),
+                "Permission for Command not found 0".to_string(),
             ));
         };
 
-        if !src.has_permission_lvl(*permission) {
-            return Err(PermissionDenied);
-        }
+        let Some(permission_lvl) = self.permission_lvl.get(key) else {
+            return Err(GeneralCommandIssue(
+                "Permission for command {key} not found".to_string(),
+            ));
+        };
+
+        match permission.as_str() {
+            "" => {
+                if src.has_permission_lvl(*permission_lvl) {
+                    Ok(())
+                } else {
+                    Err(PermissionDenied)
+                }
+            }
+            _ => {
+                if src.has_permission(permission) || src.has_permission_lvl(*permission_lvl) {
+                    Ok(())
+                } else {
+                    Err(PermissionDenied)
+                }
+            }
+        }?;
 
         let tree = self.get_tree(key)?;
 
@@ -206,8 +223,8 @@ impl CommandDispatcher {
         }
     }
 
-    pub(crate) fn get_permission_lvl(&self, key: &str) -> Option<PermissionLvl> {
-        self.permissions.get(key).copied()
+    pub(crate) fn get_permission(&self, key: &str) -> Option<&String> {
+        self.permissions.get(key)
     }
 
     async fn try_is_fitting_path<'a>(
@@ -300,7 +317,12 @@ impl CommandDispatcher {
     }
 
     /// Register a command with the dispatcher.
-    pub(crate) fn register(&mut self, tree: CommandTree, permission: PermissionLvl) {
+    pub(crate) fn register(
+        &mut self,
+        tree: CommandTree,
+        permission: &str,
+        permission_lvl: PermissionLvl,
+    ) {
         let mut names = tree.names.iter();
 
         let primary_name = names.next().expect("at least one name must be provided");
@@ -308,11 +330,15 @@ impl CommandDispatcher {
         for name in names {
             self.commands
                 .insert(name.to_string(), Command::Alias(primary_name.to_string()));
-            self.permissions.insert(name.to_string(), permission);
+            self.permissions
+                .insert(name.to_string(), permission.to_string());
+            self.permission_lvl.insert(name.to_string(), permission_lvl);
         }
 
         self.permissions
-            .insert(primary_name.to_string(), permission);
+            .insert(primary_name.to_string(), permission.to_string());
+        self.permission_lvl
+            .insert(primary_name.to_string(), permission_lvl);
         self.commands
             .insert(primary_name.to_string(), Command::Tree(tree));
     }
@@ -339,12 +365,13 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
+    use pumpkin_util::PermissionLvl;
+
     use crate::command::{default_dispatcher, tree::CommandTree};
-    use pumpkin_util::permission::PermissionLvl;
     #[test]
     fn test_dynamic_command() {
         let mut dispatcher = default_dispatcher();
         let tree = CommandTree::new(["test"], "test_desc");
-        dispatcher.register(tree, PermissionLvl::Zero);
+        dispatcher.register(tree, "", PermissionLvl::Zero);
     }
 }
