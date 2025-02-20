@@ -3,6 +3,7 @@ use crossbeam::atomic::AtomicCell;
 use key_store::KeyStore;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_protocol::client::login::CEncryptionRequest;
@@ -322,7 +323,7 @@ impl Server {
             });
             threaded_world
                 .broadcast_packet_all(&CLevelEvent::new(
-                    2007,
+                    WorldEvent::InstantSplashPotionSplashed as i32,
                     landed_block_position,
                     8_364_543,
                     false,

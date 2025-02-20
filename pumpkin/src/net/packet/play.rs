@@ -1149,7 +1149,7 @@ impl Player {
         log::info!("yaw: {}", yaw);
         log::info!("head: {}", head);
         log::info!("before: {:?}", entity_position.y);
-        log::info!("seh: {:?}", self.living_entity.entity.standing_eye_height);
+        log::info!("standing eye height: {:?}", self.living_entity.entity.standing_eye_height);
         let offset_position = entity_position.add_raw(
             0.0,
             f64::from(self.living_entity.entity.standing_eye_height),
