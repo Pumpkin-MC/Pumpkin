@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use bytes::{Buf, BufMut};
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
 use crate::bytebuf::{ByteBuf, ByteBufMut};
 

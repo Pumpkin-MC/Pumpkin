@@ -1,7 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::command::CommandTreeArgumentConsumer;
@@ -132,7 +132,7 @@ impl CommandExecutor for BaseHelpExecutor {
                 dispatcher
                     .permissions
                     .get(&tree.names[0])
-                    .map_or(true, |perm| sender.has_permission_lvl(*perm))
+                    .is_none_or(|perm| sender.has_permission_lvl(*perm))
             })
             .collect();
 

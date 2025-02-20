@@ -3,8 +3,8 @@ use std::{num::NonZeroUsize, ops::Deref};
 use super::{Codec, DecodeError};
 use bytes::{Buf, BufMut};
 use serde::{
-    de::{SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
+    de::{SeqAccess, Visitor},
 };
 
 pub type VarIntType = i32;

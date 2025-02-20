@@ -1,13 +1,13 @@
 use crate::flatten_3x3;
-use crate::recipe::read::ingredients::Ingredients;
 use crate::recipe::read::SpecialCraftingType::{
     ArmorDye, BannerDuplicate, BookCloning, Firework, RepairItem, ShieldDecoration,
     ShulkerboxColoring, SuspiciousStew, TippedArrow,
 };
+use crate::recipe::read::ingredients::Ingredients;
 use crate::recipe::recipe_formats::{ShapedCrafting, ShapelessCrafting};
 use pumpkin_data::tag::RegistryEntryList;
 use serde::de::{Error, MapAccess, Visitor};
-use serde::{de, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::str::FromStr;

@@ -1,15 +1,15 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
 };
 
 pub mod chunker;
 pub mod time;
 
 use crate::{
-    block,
+    PLUGIN_MANAGER, block,
     command::client_suggestions,
-    entity::{player::Player, Entity, EntityBase, EntityId},
+    entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
     plugin::{
         block::block_break::BlockBreakEvent,
@@ -17,7 +17,6 @@ use crate::{
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
     },
     server::Server,
-    PLUGIN_MANAGER,
 };
 use border::Worldborder;
 use pumpkin_config::BasicConfiguration;
@@ -31,18 +30,18 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
     CBlockUpdate, CDisguisedChatMessage, CRespawn, CSetBlockDestroyStage, CWorldEvent,
 };
-use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
+    ClientPacket,
     client::play::{
         CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
         CSpawnEntity, GameEvent, PlayerAction,
     },
-    ClientPacket,
 };
+use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_registry::DimensionType;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
 use pumpkin_world::{
@@ -51,14 +50,14 @@ use pumpkin_world::{
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
-use tokio::sync::{mpsc::Receiver, Mutex};
+use tokio::sync::{Mutex, mpsc::Receiver};
 use tokio::{
     runtime::Handle,
-    sync::{mpsc, RwLock},
+    sync::{RwLock, mpsc},
 };
 
 pub mod border;
@@ -219,7 +218,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = thread_rng().gen::<f64>();
+        let seed = thread_rng().r#gen::<f64>();
         let players = self.players.read().await;
         for (_, player) in players.iter() {
             player

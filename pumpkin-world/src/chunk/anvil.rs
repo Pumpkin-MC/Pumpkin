@@ -427,7 +427,7 @@ impl AnvilChunkFormat {
                     palette: palette
                         .into_iter()
                         .map(|entry| PaletteEntry {
-                            name: entry.1 .0.to_string(),
+                            name: entry.1.0.to_string(),
                             properties: {
                                 /*
                                 let properties = &get_block(entry.1 .0).unwrap().properties;
@@ -505,9 +505,9 @@ mod tests {
     use temp_dir::TempDir;
 
     use crate::chunk::ChunkWriter;
-    use crate::generation::{get_world_gen, Seed};
+    use crate::generation::{Seed, get_world_gen};
     use crate::{
-        chunk::{anvil::AnvilChunkFormat, ChunkReader, ChunkReadingError},
+        chunk::{ChunkReader, ChunkReadingError, anvil::AnvilChunkFormat},
         level::LevelFolder,
     };
 

@@ -21,7 +21,7 @@ use implementation::{
     //overworld::biome::plains::PlainsGenerator,
     test::TestGenerator,
 };
-use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomDeriver, RandomImpl};
+use pumpkin_util::random::{RandomDeriver, RandomImpl, xoroshiro128::Xoroshiro};
 pub use seed::Seed;
 
 use generator::GeneratorInit;

@@ -266,7 +266,7 @@ pub enum TextContent {
 mod test {
     use pumpkin_nbt::serializer::to_bytes_unnamed;
 
-    use crate::text::{color::NamedColor, TextComponent};
+    use crate::text::{TextComponent, color::NamedColor};
 
     #[test]
     fn test_serialize_text_component() {

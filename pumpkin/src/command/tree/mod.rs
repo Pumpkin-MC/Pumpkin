@@ -1,4 +1,4 @@
-use super::{args::ArgumentConsumer, CommandExecutor};
+use super::{CommandExecutor, args::ArgumentConsumer};
 use crate::command::CommandSender;
 use std::{collections::VecDeque, fmt::Debug, sync::Arc};
 

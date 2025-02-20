@@ -7,12 +7,12 @@ use crate::{
 };
 use core::str;
 use pumpkin_protocol::{
+    ConnectionState,
     client::config::{CFinishConfig, CRegistryData},
     codec::var_int::VarInt,
     server::config::{
         SClientInformationConfig, SConfigCookieResponse, SKnownPacks, SPluginMessage,
     },
-    ConnectionState,
 };
 use pumpkin_util::text::TextComponent;
 

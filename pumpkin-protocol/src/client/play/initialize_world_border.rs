@@ -2,7 +2,7 @@ use pumpkin_data::packet::clientbound::PLAY_INITIALIZE_BORDER;
 use pumpkin_macros::client_packet;
 use serde::Serialize;
 
-use crate::{codec::var_long::VarLong, VarInt};
+use crate::{VarInt, codec::var_long::VarLong};
 
 #[derive(Serialize)]
 #[client_packet(PLAY_INITIALIZE_BORDER)]

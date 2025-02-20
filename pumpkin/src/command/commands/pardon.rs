@@ -1,15 +1,15 @@
 use crate::{
     command::{
-        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{banned_player_data::BANNED_PLAYER_LIST, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, banned_player_data::BANNED_PLAYER_LIST},
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["pardon"];
 const DESCRIPTION: &str = "unbans a player";

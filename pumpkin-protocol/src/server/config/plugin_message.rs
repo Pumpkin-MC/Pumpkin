@@ -3,9 +3,9 @@ use pumpkin_data::packet::serverbound::CONFIG_CUSTOM_PAYLOAD;
 use pumpkin_macros::server_packet;
 
 use crate::{
+    ServerPacket,
     bytebuf::{ByteBuf, ReadingError},
     codec::identifier::Identifier,
-    ServerPacket,
 };
 const MAX_PAYLOAD_SIZE: usize = 1048576;
 

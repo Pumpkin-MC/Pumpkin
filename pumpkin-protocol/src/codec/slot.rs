@@ -3,8 +3,8 @@ use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeSeq;
 use serde::{
-    de::{self, SeqAccess},
     Deserialize, Serialize, Serializer,
+    de::{self, SeqAccess},
 };
 
 #[derive(Debug, Clone)]

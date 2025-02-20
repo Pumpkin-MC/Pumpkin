@@ -1,18 +1,18 @@
 use async_trait::async_trait;
 
-use crate::command::args::gamemode::GamemodeArgumentConsumer;
 use crate::command::args::GetCloned;
+use crate::command::args::gamemode::GamemodeArgumentConsumer;
 
 use crate::TextComponent;
 
 use crate::command::args::players::PlayersArgumentConsumer;
 
+use crate::command::CommandSender::Player;
 use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
-use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
-use crate::command::CommandSender::Player;
+use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::net::GameProfile;
 
-use super::{banlist_serializer::BannedPlayerEntry, LoadJSONConfiguration, SaveJSONConfiguration};
+use super::{LoadJSONConfiguration, SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry};
 
 pub static BANNED_PLAYER_LIST: LazyLock<tokio::sync::RwLock<BannedPlayerList>> =
     LazyLock::new(|| tokio::sync::RwLock::new(BannedPlayerList::load()));

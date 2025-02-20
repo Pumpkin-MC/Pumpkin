@@ -1,5 +1,5 @@
-use crate::codec::slot::Slot;
 use crate::VarInt;
+use crate::codec::slot::Slot;
 
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_SLOT;
 use pumpkin_macros::client_packet;

@@ -7,7 +7,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 
 use crate::{
-    entity::{player::Player, Entity},
+    entity::{Entity, player::Player},
     world::World,
 };
 
@@ -50,11 +50,7 @@ impl AttackType {
             return Self::Sweeping;
         }
 
-        if is_strong {
-            Self::Strong
-        } else {
-            Self::Weak
-        }
+        if is_strong { Self::Strong } else { Self::Weak }
     }
 }
 

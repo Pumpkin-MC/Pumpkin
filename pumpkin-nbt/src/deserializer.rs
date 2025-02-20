@@ -1,7 +1,7 @@
 use crate::*;
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
-use serde::{forward_to_deserialize_any, Deserialize};
+use serde::{Deserialize, forward_to_deserialize_any};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

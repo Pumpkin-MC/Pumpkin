@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
 
-use crate::command::args::{time::TimeArgumentConsumer, FindArg};
+use crate::command::args::{FindArg, time::TimeArgumentConsumer};
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{
-    tree::CommandTree, CommandError, CommandExecutor, CommandSender, ConsumedArgs,
+    CommandError, CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree,
 };
 
 const NAMES: [&str; 1] = ["time"];

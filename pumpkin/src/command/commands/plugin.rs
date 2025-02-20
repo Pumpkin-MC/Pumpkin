@@ -1,19 +1,19 @@
 use async_trait::async_trait;
 use pumpkin_util::{
-    text::{color::NamedColor, hover::HoverEvent, TextComponent},
     PermissionLvl,
+    text::{TextComponent, color::NamedColor, hover::HoverEvent},
 };
 
 use crate::{
-    command::{
-        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::{
-            builder::{argument, literal, require},
-            CommandTree,
-        },
-        CommandError, CommandExecutor, CommandSender,
-    },
     PLUGIN_MANAGER,
+    command::{
+        CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+        tree::{
+            CommandTree,
+            builder::{argument, literal, require},
+        },
+    },
 };
 
 use crate::command::CommandError::InvalidConsumption;

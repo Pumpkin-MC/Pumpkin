@@ -1,5 +1,6 @@
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock};
 use properties::{
+    BlockPropertiesManager,
     age::Age,
     attachment::Attachment,
     axis::Axis,
@@ -14,7 +15,6 @@ use properties::{
     slab_type::SlabType,
     stair_shape::StairShape,
     waterlog::Waterlogged,
-    BlockPropertiesManager,
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;

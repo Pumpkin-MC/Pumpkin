@@ -1,4 +1,4 @@
-use pumpkin_util::random::{get_seed, java_string_hash, legacy_rand::LegacyRand, RandomImpl};
+use pumpkin_util::random::{RandomImpl, get_seed, java_string_hash, legacy_rand::LegacyRand};
 
 #[derive(Clone, Copy)]
 pub struct Seed(pub u64);

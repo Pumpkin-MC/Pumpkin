@@ -8,7 +8,7 @@ use pumpkin_inventory::{Chest, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::{get_block, Block};
+use pumpkin_world::block::registry::{Block, get_block};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},

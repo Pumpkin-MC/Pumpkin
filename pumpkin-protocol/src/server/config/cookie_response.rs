@@ -3,9 +3,9 @@ use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::server_packet;
 
 use crate::{
+    ServerPacket, VarInt,
     bytebuf::{ByteBuf, ReadingError},
     codec::identifier::Identifier,
-    ServerPacket, VarInt,
 };
 
 #[server_packet(CONFIG_COOKIE_RESPONSE)]

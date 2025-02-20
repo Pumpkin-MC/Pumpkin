@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 
 use crate::command::args::ConsumedArgs;
 use crate::command::tree::CommandTree;

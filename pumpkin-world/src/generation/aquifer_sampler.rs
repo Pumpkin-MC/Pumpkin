@@ -14,7 +14,7 @@ use super::{
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{NoisePos, UnblendedNoisePos},
     },
-    positions::{block_pos, chunk_pos, MIN_HEIGHT_CELL},
+    positions::{MIN_HEIGHT_CELL, block_pos, chunk_pos},
     proto_chunk::StandardChunkFluidLevelSampler,
     section_coords,
 };
@@ -214,18 +214,10 @@ impl WorldAquiferSampler {
 
                 let o = halved_diff - scaled_level.abs();
                 let q = if scaled_level > 0f64 {
-                    if o > 0f64 {
-                        o / 1.5f64
-                    } else {
-                        o / 2.5f64
-                    }
+                    if o > 0f64 { o / 1.5f64 } else { o / 2.5f64 }
                 } else {
                     let p = 3f64 + o;
-                    if p > 0f64 {
-                        p / 3f64
-                    } else {
-                        p / 10f64
-                    }
+                    if p > 0f64 { p / 3f64 } else { p / 10f64 }
                 };
 
                 let r = if (-2f64..=2f64).contains(&q) {
@@ -661,6 +653,7 @@ mod test {
     use crate::{
         block::BlockState,
         generation::{
+            GlobalRandomConfig,
             chunk_noise::{
                 BlockStateSampler, ChainedBlockStateSampler, ChunkNoiseGenerator,
                 ChunkNoiseHeightEstimator, LAVA_BLOCK, WATER_BLOCK,
@@ -674,7 +667,6 @@ mod test {
             },
             positions::chunk_pos,
             proto_chunk::StandardChunkFluidLevelSampler,
-            GlobalRandomConfig,
         },
         noise_router::NOISE_ROUTER_ASTS,
     };

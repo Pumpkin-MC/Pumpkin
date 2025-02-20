@@ -1,10 +1,10 @@
 use crate::command::{
-    args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
 use async_trait::async_trait;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::borrow::Cow;
 
 const NAMES: [&str; 1] = ["seed"];
@@ -31,7 +31,7 @@ impl CommandExecutor for PumpkinExecutor {
                 None => {
                     return Err(CommandError::GeneralCommandIssue(
                         "Unable to get Seed".to_string(),
-                    ))
+                    ));
                 }
             },
         };

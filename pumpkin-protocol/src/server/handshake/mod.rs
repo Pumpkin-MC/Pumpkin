@@ -3,8 +3,8 @@ use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::server_packet;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ConnectionState, ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
 #[server_packet(HANDSHAKE_INTENTION)]

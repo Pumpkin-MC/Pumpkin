@@ -1,7 +1,7 @@
 use crate::{
+    ServerPacket, VarInt,
     bytebuf::{ByteBuf, ReadingError},
     codec::identifier::Identifier,
-    ServerPacket, VarInt,
 };
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;

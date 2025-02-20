@@ -3,8 +3,8 @@ use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
 use pumpkin_macros::server_packet;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
 #[server_packet(PLAY_PLAYER_COMMAND)]

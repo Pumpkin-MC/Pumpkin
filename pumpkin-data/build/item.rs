@@ -1,6 +1,6 @@
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
 include!("../src/tag.rs");
