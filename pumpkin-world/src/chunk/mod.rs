@@ -1,24 +1,14 @@
-use dashmap::{
-    DashMap,
-    mapref::one::{Ref, RefMut},
-};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::{deserializer::from_bytes, nbt_long_array};
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    iter::repeat_with,
-    path::{Path, PathBuf},
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashMap, iter::repeat_with};
 use thiserror::Error;
 
 use crate::{
     WORLD_HEIGHT,
     block::BlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
-    level::LevelFolder,
 };
 
 pub mod anvil;
@@ -28,26 +18,6 @@ pub const CHUNK_AREA: usize = 16 * 16;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
 pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;
 pub const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
-
-/// File locks manager to prevent multiple threads from writing to the same file at the same time
-/// but allowing multiple threads to read from the same file at the same time.
-static FILE_LOCK_MANAGER: LazyLock<Arc<FileLocksManager>> = LazyLock::new(Arc::default);
-pub trait ChunkReader: Sync + Send {
-    fn read_chunk(
-        &self,
-        save_file: &LevelFolder,
-        at: &Vector2<i32>,
-    ) -> Result<ChunkData, ChunkReadingError>;
-}
-
-pub trait ChunkWriter: Send + Sync {
-    fn write_chunk(
-        &self,
-        chunk: &ChunkData,
-        level_folder: &LevelFolder,
-        at: &Vector2<i32>,
-    ) -> Result<(), ChunkWritingError>;
-}
 
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
@@ -89,31 +59,6 @@ pub enum CompressionError {
     ZstdError(std::io::Error),
 }
 
-/// A guard that allows reading from a file while preventing writing to it
-/// This is used to prevent writes while a read is in progress.
-/// (dont suffer for "write starvation" problem)
-///
-/// When the guard is dropped, the file is unlocked.
-pub struct FileReadGuard<'a> {
-    _guard: Ref<'a, PathBuf, ()>,
-}
-
-/// A guard that allows writing to a file while preventing reading from it
-/// This is used to prevent multiple threads from writing to the same file at the same time.
-/// (dont suffer for "write starvation" problem)
-///
-/// When the guard is dropped, the file is unlocked.
-pub struct FileWriteGuard<'a> {
-    _guard: RefMut<'a, PathBuf, ()>,
-}
-
-/// Central File Lock Manager for chunk files
-/// This is used to prevent multiple threads from writing to the same file at the same time
-#[derive(Clone, Default)]
-pub struct FileLocksManager {
-    locks: DashMap<PathBuf, ()>,
-}
-
 #[derive(Clone)]
 pub struct ChunkData {
     /// See description in `Subchunks`
@@ -125,7 +70,7 @@ pub struct ChunkData {
 
 /// # Subchunks
 /// Subchunks - its an areas in chunk, what are 16 blocks in height.
-/// Current amouth is 24.
+/// Current amount is 24.
 ///
 /// Subchunks can be single and multi.
 ///
@@ -206,32 +151,6 @@ struct ChunkNbt {
     #[serde(rename = "sections")]
     sections: Vec<ChunkSection>,
     heightmaps: ChunkHeightmaps,
-}
-
-impl FileLocksManager {
-    pub fn get_read_guard(&self, path: &Path) -> FileReadGuard {
-        if let Some(lock) = self.locks.get(path) {
-            FileReadGuard { _guard: lock }
-        } else {
-            FileReadGuard {
-                _guard: self
-                    .locks
-                    .entry(path.to_path_buf())
-                    .or_insert(())
-                    .downgrade(),
-            }
-        }
-    }
-
-    pub fn get_write_guard(&self, path: &Path) -> FileWriteGuard {
-        FileWriteGuard {
-            _guard: self.locks.entry(path.to_path_buf()).or_insert(()),
-        }
-    }
-
-    pub fn remove_file_lock(path: &Path) {
-        FILE_LOCK_MANAGER.locks.remove(path);
-    }
 }
 
 /// The Heightmap for a completely empty chunk
