@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_REMOVE;
 use pumpkin_macros::client_packet;
-use serde::{ser::SerializeSeq, Serialize};
+use serde::{Serialize, ser::SerializeSeq};
 
 use crate::VarInt;
 

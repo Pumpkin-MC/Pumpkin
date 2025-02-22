@@ -1,6 +1,6 @@
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 use bytes::{Buf, Bytes};
 use pumpkin_data::packet::serverbound::LOGIN_CUSTOM_QUERY_ANSWER;

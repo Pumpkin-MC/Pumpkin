@@ -2,14 +2,14 @@ use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
 use pumpkin_util::math::experience;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use crate::entity::player::Player;
 

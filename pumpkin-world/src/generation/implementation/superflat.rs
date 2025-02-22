@@ -5,9 +5,9 @@ use crate::{
     block::state::BlockState,
     coordinates::XZBlockCoordinates,
     generation::{
+        Seed,
         generator::{BiomeGenerator, GeneratorInit, TerrainGenerator},
         generic_generator::GenericGenerator,
-        Seed,
     },
 };
 

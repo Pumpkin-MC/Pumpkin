@@ -2,20 +2,20 @@ use async_trait::async_trait;
 use pumpkin_util::{
     math::vector2::Vector2,
     text::{
-        color::{Color, NamedColor},
         TextComponent,
+        color::{Color, NamedColor},
     },
 };
 
 use crate::{
     command::{
-        args::{
-            bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
-            ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
-        },
-        tree::builder::{argument_default_name, literal},
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{
+            ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
+            bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
+        },
+        tree::CommandTree,
+        tree::builder::{argument_default_name, literal},
     },
     server::Server,
 };

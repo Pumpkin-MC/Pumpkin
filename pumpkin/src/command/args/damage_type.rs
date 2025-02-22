@@ -3,10 +3,10 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use crate::command::{
+    CommandSender,
     args::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser},
     dispatcher::CommandError,
     tree::RawArgs,
-    CommandSender,
 };
 use crate::server::Server;
 

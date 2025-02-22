@@ -3,7 +3,7 @@ use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
 use pumpkin_macros::client_packet;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::{bytebuf::ByteBufMut, ClientPacket, PositionFlag, VarInt};
+use crate::{ClientPacket, PositionFlag, VarInt, bytebuf::ByteBufMut};
 
 #[client_packet(PLAY_PLAYER_POSITION)]
 pub struct CPlayerPosition<'a> {

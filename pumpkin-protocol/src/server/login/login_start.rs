@@ -3,8 +3,8 @@ use pumpkin_data::packet::serverbound::LOGIN_HELLO;
 use pumpkin_macros::server_packet;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
 #[server_packet(LOGIN_HELLO)]

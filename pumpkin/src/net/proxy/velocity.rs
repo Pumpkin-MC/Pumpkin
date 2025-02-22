@@ -7,8 +7,8 @@ use bytes::{BufMut, BytesMut};
 use hmac::{Hmac, Mac};
 use pumpkin_config::networking::proxy::VelocityConfig;
 use pumpkin_protocol::{
-    bytebuf::ByteBuf, client::login::CLoginPluginRequest, server::login::SLoginPluginResponse,
-    Property,
+    Property, bytebuf::ByteBuf, client::login::CLoginPluginRequest,
+    server::login::SLoginPluginResponse,
 };
 use rand::Rng;
 use sha2::Sha256;
@@ -45,7 +45,7 @@ pub enum VelocityError {
 
 pub async fn velocity_login(client: &Client) {
     // TODO: validate packet transaction id from plugin response with this
-    let velocity_message_id: i32 = rand::thread_rng().gen();
+    let velocity_message_id: i32 = rand::thread_rng().r#gen();
 
     let mut buf = BytesMut::new();
     buf.put_u8(MAX_SUPPORTED_FORWARDING_VERSION);

@@ -1,9 +1,21 @@
 use crate::container_click::MouseClick;
 use crate::crafting::check_if_matches_crafting;
-use crate::{handle_item_change, Container, InventoryError, WindowType};
+use crate::{Container, InventoryError, WindowType, handle_item_change};
+use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
 use std::iter::Chain;
 use std::slice::IterMut;
+
+/*
+    Inventory Layout:
+    - 0: Crafting Output
+    - 1-4: Crafting Input
+    - 5-8: Armor
+    - 9-35: Main Inventory
+    - 36-44: Hotbar
+    - 45: Offhand
+
+*/
 
 pub struct PlayerInventory {
     // Main Inventory + Hotbar
@@ -137,24 +149,10 @@ impl PlayerInventory {
         false
     }
 
-    pub fn get_slot_with_item(&self, item_id: u16, max_stack: u8) -> Option<usize> {
-        for slot in 9..=44 {
-            match &self.items[slot - 9] {
-                Some(item) if item.item.id == item_id && item.item_count <= max_stack => {
-                    return Some(slot)
-                }
-                _ => continue,
-            }
-        }
-
-        None
-    }
-
     /// Checks if we can merge an existing item into an Stack or if a any new Slot is empty
     pub fn collect_item_slot(&self, item_id: u16) -> Option<usize> {
         // Lets try to merge first
-        // TODO: Max stack size
-        if let Some(stack) = self.get_slot_with_item(item_id, 64) {
+        if let Some(stack) = self.get_nonfull_slot_with_item(item_id) {
             return Some(stack);
         }
         if let Some(empty) = self.get_empty_slot() {
@@ -177,7 +175,63 @@ impl PlayerInventory {
         self.selected
     }
 
+    pub fn get_nonfull_slot_with_item(&self, item_id: u16) -> Option<usize> {
+        let max_stack = Item::from_id(item_id)
+            .unwrap_or(Item::AIR)
+            .components
+            .max_stack_size;
+
+        // Check selected slot
+        if let Some(item) = &self.items[self.selected as usize + 36 - 9] {
+            if item.item.id == item_id && item.item_count < max_stack {
+                // + 9 - 9 is 0
+                return Some(self.selected as usize + 36);
+            }
+        }
+
+        // Check hotbar slots (27-35) first
+        if let Some(index) = self.items[27..36].iter().position(|slot| {
+            slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
+        }) {
+            return Some(index + 27 + 9);
+        }
+
+        // Then check main inventory slots (0-26)
+        if let Some(index) = self.items[0..27].iter().position(|slot| {
+            slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
+        }) {
+            return Some(index + 9);
+        }
+
+        None
+    }
+
+    pub fn get_slot_with_item(&self, item_id: u16) -> Option<usize> {
+        for slot in 9..=44 {
+            match &self.items[slot - 9] {
+                Some(item) if item.item.id == item_id => return Some(slot),
+                _ => continue,
+            }
+        }
+
+        None
+    }
+
     pub fn get_empty_slot(&self) -> Option<usize> {
+        // Check hotbar slots (27-35) first
+        if let Some(index) = self.items[27..36].iter().position(|slot| slot.is_none()) {
+            return Some(index + 27 + 9);
+        }
+
+        // Then check main inventory slots (0-26)
+        if let Some(index) = self.items[0..27].iter().position(|slot| slot.is_none()) {
+            return Some(index + 9);
+        }
+
+        None
+    }
+
+    pub fn get_empty_slot_no_order(&self) -> Option<usize> {
         self.items
             .iter()
             .position(|slot| slot.is_none())

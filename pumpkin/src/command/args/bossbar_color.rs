@@ -1,9 +1,9 @@
+use crate::command::CommandSender;
 use crate::command::args::{
     Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
-use crate::command::CommandSender;
 use crate::server::Server;
 use crate::world::bossbar::BossbarColor;
 use async_trait::async_trait;

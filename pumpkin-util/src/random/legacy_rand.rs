@@ -1,5 +1,5 @@
 use super::{
-    gaussian::GaussianGenerator, hash_block_pos, java_string_hash, RandomDeriverImpl, RandomImpl,
+    RandomDeriverImpl, RandomImpl, gaussian::GaussianGenerator, hash_block_pos, java_string_hash,
 };
 
 pub struct LegacyRand {
@@ -121,7 +121,7 @@ impl RandomDeriverImpl for LegacySplitter {
 
 #[cfg(test)]
 mod test {
-    use crate::random::{legacy_rand::LegacySplitter, RandomDeriverImpl, RandomImpl};
+    use crate::random::{RandomDeriverImpl, RandomImpl, legacy_rand::LegacySplitter};
 
     use super::LegacyRand;
 

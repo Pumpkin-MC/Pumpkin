@@ -210,13 +210,13 @@ impl_array!(nbt_byte_array, NBT_BYTE_ARRAY_TAG);
 #[cfg(test)]
 mod test {
 
+    use crate::Error;
     use crate::deserializer::from_bytes;
     use crate::nbt_byte_array;
     use crate::nbt_int_array;
     use crate::nbt_long_array;
     use crate::serializer::to_bytes;
     use crate::serializer::to_bytes_named;
-    use crate::Error;
     use crate::{deserializer::from_bytes_unnamed, serializer::to_bytes_unnamed};
     use serde::{Deserialize, Serialize};
 

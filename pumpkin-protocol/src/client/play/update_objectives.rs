@@ -3,7 +3,7 @@ use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
 use pumpkin_macros::client_packet;
 use pumpkin_util::text::TextComponent;
 
-use crate::{bytebuf::ByteBufMut, ClientPacket, NumberFormat, VarInt};
+use crate::{ClientPacket, NumberFormat, VarInt, bytebuf::ByteBufMut};
 
 #[client_packet(PLAY_SET_OBJECTIVE)]
 pub struct CUpdateObjectives<'a> {

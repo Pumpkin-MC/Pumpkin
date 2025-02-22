@@ -2,7 +2,7 @@ use std::f32::{self};
 
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{living::LivingEntity, Entity, EntityBase};
+use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct ThrownItemEntity {
     entity: Entity,

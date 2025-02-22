@@ -5,10 +5,10 @@ use pumpkin_protocol::client::play::{
 
 use crate::{
     command::{
+        CommandSender,
         args::SplitSingleWhitespaceIncludingEmptyParts,
         dispatcher::CommandError,
         tree::{CommandTree, RawArgs},
-        CommandSender,
     },
     server::Server,
 };

@@ -14,13 +14,13 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::entity::{entity_from_egg, EntityType};
+use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::world::CHAT;
-use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_macros::block_entity;
 use pumpkin_protocol::client::play::{
     CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
@@ -45,14 +45,14 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
+    GameMode,
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
-    GameMode,
 };
 use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::registry::Block;
-use pumpkin_world::block::{registry::get_block_by_item, BlockDirection};
+use pumpkin_world::block::registry::get_block_collision_shapes;
+use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
 use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
@@ -397,14 +397,15 @@ impl Player {
         &self,
         inventory: &mut tokio::sync::MutexGuard<'_, PlayerInventory>,
         slot: i16,
-        slot_data: Slot,
+        stack: ItemStack,
     ) {
         inventory.state_id += 1;
+        let slot_data = Slot::from(&stack);
         let dest_packet = CSetContainerSlot::new(0, inventory.state_id as i32, slot, &slot_data);
         self.client.send_packet(&dest_packet).await;
 
         if inventory
-            .set_slot(slot as usize, slot_data.to_item(), false)
+            .set_slot(slot as usize, Some(stack), false)
             .is_err()
         {
             log::error!("Pick item set slot error!");
@@ -428,13 +429,12 @@ impl Player {
 
         let mut inventory = self.inventory().lock().await;
 
-        // TODO: Max stack
-        let source_slot = inventory.get_slot_with_item(block.item_id, 64);
+        let source_slot = inventory.get_slot_with_item(block.item_id);
         let mut dest_slot = inventory.get_empty_hotbar_slot() as usize;
 
         let dest_slot_data = match inventory.get_slot(dest_slot + 36) {
-            Ok(Some(stack)) => Slot::from(&*stack),
-            _ => Slot::from(None),
+            Ok(Some(stack)) => *stack,
+            _ => ItemStack::new(0, Item::AIR),
         };
 
         // Early return if no source slot and not in creative mode
@@ -452,7 +452,7 @@ impl Player {
 
                 // Update destination slot
                 let source_slot_data = match inventory.get_slot(slot_index) {
-                    Ok(Some(stack)) => Slot::from(&*stack),
+                    Ok(Some(stack)) => *stack,
                     _ => return,
                 };
                 self.update_single_slot(&mut inventory, dest_slot as i16 + 36, source_slot_data)
@@ -465,12 +465,11 @@ impl Player {
             None if self.gamemode.load() == GameMode::Creative => {
                 // Case where item is not present, if in creative mode create the item
                 let item_stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
-                let slot_data = Slot::from(&item_stack);
-                self.update_single_slot(&mut inventory, dest_slot as i16 + 36, slot_data)
+                self.update_single_slot(&mut inventory, dest_slot as i16 + 36, item_stack)
                     .await;
 
                 // Check if there is any empty slot in the player inventory
-                if let Some(slot_index) = inventory.get_empty_slot() {
+                if let Some(slot_index) = inventory.get_empty_slot_no_order() {
                     inventory.state_id += 1;
                     self.update_single_slot(&mut inventory, slot_index as i16, dest_slot_data)
                         .await;
@@ -929,10 +928,10 @@ impl Player {
                     self.update_sequence(player_action.sequence.0);
                 }
                 Status::DropItem => {
-                    self.drop_item(server, false).await;
+                    self.drop_held_item(server, false).await;
                 }
                 Status::DropItemStack => {
-                    self.drop_item(server, true).await;
+                    self.drop_held_item(server, true).await;
                 }
                 Status::ShootArrowOrFinishEating | Status::SwapItem => {
                     log::debug!("todo");
@@ -1150,20 +1149,23 @@ impl Player {
 
     pub async fn handle_set_creative_slot(
         &self,
+        server: &Server,
         packet: SSetCreativeSlot,
     ) -> Result<(), InventoryError> {
         if self.gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
         let valid_slot = packet.slot >= 0 && packet.slot <= 45;
+        let item_stack = packet.clicked_item.to_item();
         if valid_slot {
-            self.inventory().lock().await.set_slot(
-                packet.slot as usize,
-                packet.clicked_item.to_item(),
-                true,
-            )?;
+            self.inventory()
+                .lock()
+                .await
+                .set_slot(packet.slot as usize, item_stack, true)?;
+        } else {
+            // Item drop
+            self.drop_item(server, item_stack.unwrap()).await;
         };
-        // TODO: The Item was dropped per drag and drop,
         Ok(())
     }
 

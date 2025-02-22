@@ -1,4 +1,4 @@
-use super::{gaussian::GaussianGenerator, hash_block_pos, RandomDeriverImpl, RandomImpl};
+use super::{RandomDeriverImpl, RandomImpl, gaussian::GaussianGenerator, hash_block_pos};
 
 pub struct Xoroshiro {
     lo: u64,
@@ -154,7 +154,7 @@ impl RandomDeriverImpl for XoroshiroSplitter {
 mod tests {
     use crate::random::{RandomDeriverImpl, RandomImpl};
 
-    use super::{mix_stafford_13, Xoroshiro};
+    use super::{Xoroshiro, mix_stafford_13};
 
     // Values checked against results from the equivalent Java source
 

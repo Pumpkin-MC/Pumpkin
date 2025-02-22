@@ -1,7 +1,7 @@
 use crate::deserializer::ReadAdaptor;
 use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
-use crate::{get_nbt_string, Error, Nbt, END_ID};
+use crate::{END_ID, Error, Nbt, get_nbt_string};
 use std::io::{ErrorKind, Read, Write};
 use std::vec::IntoIter;
 

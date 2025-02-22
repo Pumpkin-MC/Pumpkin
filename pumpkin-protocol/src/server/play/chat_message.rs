@@ -3,8 +3,8 @@ use pumpkin_data::packet::serverbound::PLAY_CHAT;
 use pumpkin_macros::server_packet;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     FixedBitSet, ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
 // derive(Deserialize)]

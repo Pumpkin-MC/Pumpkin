@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    args::{time::TimeArgumentConsumer, ConsumedArgs, FindArg},
-    tree::builder::{argument, literal},
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{ConsumedArgs, FindArg, time::TimeArgumentConsumer},
+    tree::CommandTree,
+    tree::builder::{argument, literal},
 };
 
 const NAMES: [&str; 1] = ["weather"];

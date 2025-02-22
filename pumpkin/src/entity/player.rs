@@ -2,8 +2,8 @@ use pumpkin_world::block::registry::State;
 use std::{
     num::NonZeroU8,
     sync::{
-        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -21,6 +21,7 @@ use pumpkin_data::{
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
+    RawPacket, ServerPacket,
     bytebuf::packet::Packet,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus,
@@ -35,7 +36,6 @@ use pumpkin_protocol::{
         SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign,
         SUseItem, SUseItemOn,
     },
-    RawPacket, ServerPacket,
 };
 use pumpkin_protocol::{
     client::play::CSoundEffect,
@@ -49,6 +49,7 @@ use pumpkin_protocol::{
     server::play::{SClickContainer, SKeepAlive},
 };
 use pumpkin_util::{
+    GameMode,
     math::{
         boundingbox::{BoundingBox, EntityDimensions},
         experience,
@@ -58,16 +59,15 @@ use pumpkin_util::{
     },
     permission::PermissionLvl,
     text::TextComponent,
-    GameMode,
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use super::{
-    combat::{self, player_attack_sound, AttackType},
+    Entity, EntityBase, EntityId, NBTStorage,
+    combat::{self, AttackType, player_attack_sound},
     hunger::HungerManager,
     item::ItemEntity,
-    Entity, EntityBase, EntityId, NBTStorage,
 };
 use crate::{
     block,
@@ -982,22 +982,23 @@ impl Player {
             .await;
     }
 
-    pub async fn drop_item(&self, server: &Server, drop_stack: bool) {
+    pub async fn drop_item(&self, server: &Server, stack: ItemStack) {
+        let entity = server.add_entity(
+            self.living_entity.entity.pos.load(),
+            EntityType::ITEM,
+            &self.world().await,
+        );
+        let item_entity = Arc::new(ItemEntity::new(entity, stack));
+        self.world().await.spawn_entity(item_entity.clone()).await;
+        item_entity.send_meta_packet().await;
+    }
+
+    pub async fn drop_held_item(&self, server: &Server, drop_stack: bool) {
         let mut inv = self.inventory.lock().await;
         if let Some(item) = inv.held_item_mut() {
             let drop_amount = if drop_stack { item.item_count } else { 1 };
-            let entity = server.add_entity(
-                self.living_entity.entity.pos.load(),
-                EntityType::ITEM,
-                &self.world().await,
-            );
-            let item_entity = Arc::new(ItemEntity::new(
-                entity,
-                &ItemStack::new(drop_amount, item.item),
-            ));
-            self.world().await.spawn_entity(item_entity.clone()).await;
-            item_entity.send_meta_packet().await;
-            // decrase item in hotbar
+            self.drop_item(server, ItemStack::new(drop_amount, item.item))
+                .await;
             inv.decrease_current_stack(drop_amount);
         }
     }
@@ -1243,7 +1244,7 @@ impl Player {
                     .await;
             }
             SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
+                self.handle_set_creative_slot(server, SSetCreativeSlot::read(bytebuf)?)
                     .await?;
             }
             SSwingArm::PACKET_ID => {
