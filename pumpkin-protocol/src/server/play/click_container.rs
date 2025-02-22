@@ -6,6 +6,7 @@ use serde::de::SeqAccess;
 use serde::{Deserialize, de};
 
 #[server_packet(PLAY_CONTAINER_CLICK)]
+#[derive(Debug)]
 pub struct SClickContainer {
     pub window_id: VarInt,
     pub state_id: VarInt,
@@ -86,7 +87,7 @@ impl<'de> Deserialize<'de> for SClickContainer {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub enum SlotActionType {
     /// Performs a normal slot click. This can pickup or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
     Pickup,

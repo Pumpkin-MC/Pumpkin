@@ -2,6 +2,7 @@ use crate::InventoryError;
 use pumpkin_protocol::server::play::SlotActionType;
 use pumpkin_world::item::ItemStack;
 
+#[derive(Debug)]
 pub struct Click {
     pub slot: Slot,
     pub click_type: ClickType,
@@ -18,7 +19,7 @@ impl Click {
                 click_type: ClickType::CreativePickItem,
                 slot: Slot::Normal(slot.try_into().or(Err(InventoryError::InvalidSlot))?),
             }),
-            SlotActionType::Throw => Self::new_drop_item(button),
+            SlotActionType::Throw => Self::new_drop_item(button, slot),
             SlotActionType::QuickCraft => Self::new_drag_item(button, slot),
             SlotActionType::PickupAll => Ok(Self {
                 click_type: ClickType::DoubleClick,
@@ -66,15 +67,22 @@ impl Click {
         })
     }
 
-    fn new_drop_item(button: i8) -> Result<Self, InventoryError> {
+    fn new_drop_item(button: i8, slot: i16) -> Result<Self, InventoryError> {
         let drop_type = match button {
             0 => DropType::SingleItem,
             1 => DropType::FullStack,
             _ => Err(InventoryError::InvalidPacket)?,
         };
+        let slot = match slot {
+            -999 => Slot::OutsideInventory,
+            _ => {
+                let slot = slot.try_into().unwrap_or(0);
+                Slot::Normal(slot)
+            }
+        };
         Ok(Self {
             click_type: ClickType::DropType(drop_type),
-            slot: Slot::OutsideInventory,
+            slot,
         })
     }
 
@@ -120,7 +128,7 @@ pub enum KeyClick {
     Slot(u8),
     Offhand,
 }
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum Slot {
     Normal(usize),
     OutsideInventory,

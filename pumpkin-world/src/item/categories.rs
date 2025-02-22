@@ -1,14 +1,16 @@
+use pumpkin_data::item::Item;
+
 use crate::item::ItemStack;
 
 impl ItemStack {
     pub fn is_sword(&self) -> bool {
         [
-            818, // Wooden
-            823, // Stone
-            828, // Gold
-            833, // Iron
-            838, // Diamond
-            843, // Netherite
+            Item::WOODEN_SWORD.id,    // Wooden
+            Item::STONE_SWORD.id,     // Stone
+            Item::GOLDEN_SWORD.id,    // Gold
+            Item::IRON_SWORD.id,      // Iron
+            Item::DIAMOND_SWORD.id,   // Diamond
+            Item::NETHERITE_SWORD.id, // Netherite
         ]
         .contains(&self.item.id)
     }
@@ -16,13 +18,13 @@ impl ItemStack {
     pub fn is_helmet(&self) -> bool {
         [
             // Leather
-            856, // Netherite
-            876, // Turtle helmet
-            794, // Chainmail
-            860, // Diamond
-            868, // Gold
-            872, // Iron
-            864,
+            Item::NETHERITE_HELMET.id, // Netherite
+            Item::TURTLE_HELMET.id,    // Turtle helmet
+            Item::CHAINMAIL_HELMET.id, // Chainmail
+            Item::DIAMOND_HELMET.id,   // Diamond
+            Item::GOLDEN_HELMET.id,    // Gold
+            Item::IRON_HELMET.id,      // Iron
+            Item::LEATHER_HELMET.id,
         ]
         .contains(&self.item.id)
     }
@@ -30,13 +32,13 @@ impl ItemStack {
     pub fn is_chestplate(&self) -> bool {
         [
             // Leather
-            857, // Netherite
-            877, // Chainmail
-            861, // Diamond
-            869, // Gold
-            873, // Iron
-            865, // Elytra
-            773,
+            Item::NETHERITE_CHESTPLATE.id, // Netherite
+            Item::CHAINMAIL_CHESTPLATE.id, // Chainmail
+            Item::DIAMOND_CHESTPLATE.id,   // Diamond
+            Item::GOLDEN_CHESTPLATE.id,    // Gold
+            Item::IRON_CHESTPLATE.id,      // Iron
+            Item::ELYTRA.id,               // Elytra
+            Item::LEATHER_CHESTPLATE.id,
         ]
         .contains(&self.item.id)
     }
@@ -44,12 +46,12 @@ impl ItemStack {
     pub fn is_leggings(&self) -> bool {
         [
             // Leather
-            858, // Netherite
-            878, // Chainmail
-            862, // Diamond
-            870, // Gold
-            874, // Iron
-            866,
+            Item::NETHERITE_LEGGINGS.id, // Netherite
+            Item::CHAINMAIL_LEGGINGS.id, // Chainmail
+            Item::DIAMOND_LEGGINGS.id,   // Diamond
+            Item::GOLDEN_LEGGINGS.id,    // Gold
+            Item::IRON_LEGGINGS.id,      // Iron
+            Item::LEATHER_LEGGINGS.id,
         ]
         .contains(&self.item.id)
     }
@@ -57,12 +59,12 @@ impl ItemStack {
     pub fn is_boots(&self) -> bool {
         [
             // Leather
-            859, // Netherite
-            879, // Chainmail
-            863, // Diamond
-            871, // Gold
-            875, // Iron
-            867,
+            Item::NETHERITE_BOOTS.id, // Netherite
+            Item::CHAINMAIL_BOOTS.id, // Chainmail
+            Item::DIAMOND_BOOTS.id,   // Diamond
+            Item::GOLDEN_BOOTS.id,    // Gold
+            Item::IRON_BOOTS.id,      // Iron
+            Item::LEATHER_BOOTS.id,
         ]
         .contains(&self.item.id)
     }

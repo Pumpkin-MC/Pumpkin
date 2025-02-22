@@ -122,6 +122,10 @@ impl PlayerInventory {
         self.selected + 36
     }
 
+    pub fn increment_state_id(&mut self) {
+        self.state_id = self.state_id % 100 + 1;
+    }
+
     pub fn held_item(&self) -> Option<&ItemStack> {
         debug_assert!((0..9).contains(&self.selected));
         self.items[self.selected as usize + 36 - 9].as_ref()

@@ -399,7 +399,7 @@ impl Player {
         slot: i16,
         stack: ItemStack,
     ) {
-        inventory.state_id += 1;
+        inventory.increment_state_id();
         let slot_data = Slot::from(&stack);
         let dest_packet = CSetContainerSlot::new(0, inventory.state_id as i32, slot, &slot_data);
         self.client.send_packet(&dest_packet).await;
@@ -470,7 +470,7 @@ impl Player {
 
                 // Check if there is any empty slot in the player inventory
                 if let Some(slot_index) = inventory.get_empty_slot_no_order() {
-                    inventory.state_id += 1;
+                    inventory.increment_state_id();
                     self.update_single_slot(&mut inventory, slot_index as i16, dest_slot_data)
                         .await;
                 }
@@ -1180,9 +1180,6 @@ impl Player {
         //     return;
         // };
         // window_id 0 represents both 9x1 Generic AND inventory here
-        let mut inventory = self.inventory().lock().await;
-
-        inventory.state_id = 0;
         let open_container = self.open_container.load();
         if let Some(id) = open_container {
             let mut open_containers = server.open_containers.write().await;
@@ -1198,6 +1195,13 @@ impl Player {
                 }
                 // Remove the player from the container
                 container.remove_player(self.entity_id());
+
+                let mut inventory = self.inventory().lock().await;
+                if inventory.state_id >= 2 {
+                    inventory.state_id -= 2;
+                } else {
+                    inventory.state_id = 0;
+                }
             }
             self.open_container.store(None);
         }
