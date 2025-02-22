@@ -44,8 +44,8 @@ impl CSpawnEntity {
             data,
             velocity: Vector3::new(
                 (velocity.x.clamp(-3.9, 3.9) * 8000.0) as i16,
-                (velocity.x.clamp(-3.9, 3.9) * 8000.0) as i16,
-                (velocity.x.clamp(-3.9, 3.9) * 8000.0) as i16,
+                (velocity.y.clamp(-3.9, 3.9) * 8000.0) as i16,
+                (velocity.z.clamp(-3.9, 3.9) * 8000.0) as i16,
             ),
         }
     }

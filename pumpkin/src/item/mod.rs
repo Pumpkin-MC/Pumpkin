@@ -1,4 +1,4 @@
-use items::{egg::EggItem, snowball::SnowBallItem};
+use items::{egg::EggItem, snowball::SnowBallItem, splash_potion::SplashPotionItem};
 use registry::ItemRegistry;
 
 use std::sync::Arc;
@@ -13,6 +13,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
 
     manager.register(SnowBallItem);
     manager.register(EggItem);
+    manager.register(SplashPotionItem);
 
     Arc::new(manager)
 }

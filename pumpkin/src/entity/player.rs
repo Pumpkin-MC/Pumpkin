@@ -179,6 +179,7 @@ impl Player {
         Self {
             living_entity: LivingEntity::new(Entity::new(
                 entity_id,
+                None,
                 player_uuid,
                 world,
                 Vector3::new(0.0, 0.0, 0.0),
@@ -388,6 +389,24 @@ impl Player {
         }
 
         if config.swing {}
+    }
+
+    pub async fn damage(&self, damage: u32) {
+        let world = self.world().await;
+        let config = &ADVANCED_CONFIG.pvp;
+        let living_entity = self.get_living_entity();
+        let entity = self.get_entity();
+
+        if let Some(living) = living_entity {
+            living.damage(damage as f32, DamageType::THROWN).await;
+        }
+
+        if config.hurt_animation {
+            let entity_id = VarInt(entity.entity_id);
+            world
+                .broadcast_packet_all(&CHurtAnimation::new(&entity_id, 0.0))
+                .await;
+        }
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {

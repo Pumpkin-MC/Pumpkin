@@ -29,7 +29,7 @@ use pumpkin_util::math::{
 use serde::Serialize;
 use tokio::sync::RwLock;
 
-use crate::world::World;
+use crate::{server::Server, world::World};
 
 pub mod ai;
 pub mod hunger;
@@ -46,17 +46,20 @@ pub type EntityId = i32;
 #[async_trait]
 pub trait EntityBase: Send + Sync {
     /// Gets Called every tick
-    async fn tick(&self) {}
+    async fn tick(&self, _server: &Server) {}
     /// Called when a player collides with the entity
     async fn on_player_collision(&self, _player: Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    async fn on_entity_destroy(&self, _entity: &Entity, _world: &World) {}
 }
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: EntityId,
+    /// The potential owner for this entity (e.g. the player who threw a snowball)
+    pub owner_id: Option<EntityId>,
     /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
     /// The type of entity (e.g., player, zombie, item)
@@ -103,6 +106,7 @@ impl Entity {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         entity_id: EntityId,
+        owner_id: Option<EntityId>,
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
         position: Vector3<f64>,
@@ -118,6 +122,7 @@ impl Entity {
 
         Self {
             entity_id,
+            owner_id,
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
@@ -383,7 +388,7 @@ impl Entity {
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn tick(&self) {}
+    async fn tick(&self, _server: &Server) {}
 
     fn get_entity(&self) -> &Entity {
         self

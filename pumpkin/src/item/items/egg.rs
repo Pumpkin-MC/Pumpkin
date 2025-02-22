@@ -17,7 +17,7 @@ const POWER: f32 = 1.5;
 
 #[async_trait]
 impl PumpkinItem for EggItem {
-    async fn normal_use(&self, _block: &Item, player: &Player, server: &Server) {
+    async fn normal_use(&self, _item: &Item, player: &Player, server: &Server) {
         let position = player.position();
         let world = player.world().await;
         world
@@ -28,8 +28,14 @@ impl PumpkinItem for EggItem {
             )
             .await;
         // TODO: Implement eggs the right way, so there is a chance of spawning chickens
-        let entity = server.add_entity(position, EntityType::EGG, &world);
-        let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
+        let entity = server.add_entity_with_owner(
+            position,
+            EntityType::EGG,
+            Some(player.entity_id()),
+            &world,
+        );
+        let snowball =
+            ThrownItemEntity::new(entity, &player.living_entity.entity, 3 * 20, Item::EGG);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();
         snowball.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);

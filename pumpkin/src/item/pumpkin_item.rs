@@ -1,5 +1,7 @@
 use crate::entity::player::Player;
+use crate::entity::Entity;
 use crate::server::Server;
+use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
@@ -21,4 +23,5 @@ pub trait PumpkinItem: Send + Sync {
         _server: &Server,
     ) {
     }
+    async fn on_entity_destroy(&self, _item: &Item, _entity: &Entity, _world: &World) {}
 }

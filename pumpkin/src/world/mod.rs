@@ -29,11 +29,8 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::CSetBlockDestroyStage;
+use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
-use pumpkin_protocol::{
-    client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent},
-    codec::var_int::VarInt,
-};
 use pumpkin_protocol::{
     client::play::{
         CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
@@ -264,7 +261,7 @@ impl World {
         .await;
     }
 
-    pub async fn tick(&self) {
+    pub async fn tick(&self, server: &Server) {
         // world ticks
         {
             let mut level_time = self.level_time.lock().await;
@@ -288,9 +285,9 @@ impl World {
 
         // entities tick
         for entity in entities_to_tick {
-            entity.tick().await;
+            entity.tick(server).await;
             // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
-            let mut collied_player = None;
+            let mut collided_player = None;
             for player in self.players.read().await.values() {
                 if player
                     .living_entity
@@ -299,11 +296,11 @@ impl World {
                     .load()
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
-                    collied_player = Some(player.clone());
+                    collided_player = Some(player.clone());
                     break;
                 }
             }
-            if let Some(player) = collied_player {
+            if let Some(player) = collided_player {
                 entity.on_player_collision(player).await;
             }
         }
@@ -981,32 +978,6 @@ impl World {
             .await;
         let mut current_living_entities = self.entities.write().await;
         current_living_entities.insert(base_entity.entity_uuid, entity);
-    }
-
-    pub async fn add_entity(&self, entity: &Entity, direction: Vector3<f32>) {
-        // TODO: add to list
-
-        log::info!("x: {}", direction.x);
-        log::info!("y: {}", direction.y);
-        log::info!("z: {}", direction.z);
-
-        let po = entity.pos.load();
-        self.broadcast_packet_all(&CSpawnEntity::new(
-            VarInt(entity.entity_id),
-            entity.entity_uuid,
-            VarInt(i32::from(EntityType::POTION.id)),
-            Vector3::new(po.x, po.y, po.z), // + f64::from(cursor_pos.x),
-            // po.y,
-            // po.z, // + f64::from(cursor_pos.z),
-            10.0,
-            0.0, // head_yaw,
-            0.0, // opposite_yaw,
-            0.into(),
-            Vector3::new(direction.x.into(), direction.y.into(), direction.z.into()),
-            // direction.y,
-            // direction.z,
-        ))
-        .await;
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {

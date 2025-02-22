@@ -213,18 +213,23 @@ impl Server {
     }
 
     /// Adds a new living entity to the server. This does not Spawn the entity
+    /// This also adds an optional owner to the entity.
+    ///
+    /// # Arguments
+    ///
+    /// * `position`: The position in the world where the entity will be created.
+    /// * `entity_type`: The type of the entity. This also controls the bounding box size.
+    /// * `owner_id`: An `Option<EntityId>` containing the entity of the owner, if it exists.
+    /// * `world`: A reference to the world which the entity will be added to.
     ///
     /// # Returns
     ///
-    /// A tuple containing:
-    ///
-    /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
-    /// - `Arc<World>`: A reference to the world that the living entity was added to.
-    /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
-    pub fn add_entity(
+    /// An `Entity` containing the newly created entity.
+    pub fn add_entity_with_owner(
         &self,
         position: Vector3<f64>,
         entity_type: EntityType,
+        owner_id: Option<EntityId>,
         world: &Arc<World>,
     ) -> Entity {
         let entity_id = self.new_entity_id();
@@ -238,6 +243,7 @@ impl Server {
         let new_uuid = uuid::Uuid::new_v4();
         Entity::new(
             entity_id,
+            owner_id,
             new_uuid,
             world.clone(),
             position,
@@ -252,6 +258,26 @@ impl Server {
             AtomicCell::new(bounding_box_size),
             false,
         )
+    }
+
+    /// Adds a new living entity to the server. This does not Spawn the entity
+    ///
+    /// # Arguments
+    ///
+    /// * `position`: The position in the world where the entity will be created.
+    /// * `entity_type`: The type of the entity. This also controls the bounding box size.
+    /// * `world`: A reference to the world which the entity will be added to.
+    ///
+    /// # Returns
+    ///
+    /// An `Entity` containing the newly created entity.
+    pub fn add_entity(
+        &self,
+        position: Vector3<f64>,
+        entity_type: EntityType,
+        world: &Arc<World>,
+    ) -> Entity {
+        self.add_entity_with_owner(position, entity_type, None, world)
     }
 
     pub async fn try_get_container(
@@ -271,8 +297,8 @@ impl Server {
         &self,
         entity_type: EntityType,
         location: Vector3<f64>,
-        pitch: f32,
-        yaw: f32,
+        _pitch: f32,
+        _yaw: f32,
     ) -> (Arc<Entity>, Arc<World>, uuid::Uuid) {
         let world = &self.worlds.read().await[0];
         let new_uuid = uuid::Uuid::new_v4();
@@ -294,6 +320,7 @@ impl Server {
 
         let entity = Arc::new(Entity::new(
             entity_id,
+            None,
             new_uuid,
             world.clone(),
             location,
@@ -306,9 +333,9 @@ impl Server {
 
         entity.set_pos(location);
 
-        let entity_direction = Vector3::new_from_euler(yaw, pitch);
+        // let entity_direction = Vector3::new_from_euler(yaw.into(), pitch.into());
 
-        world.add_entity(&entity.clone(), entity_direction).await;
+        // world.add_entity(&entity.clone(), entity_direction).await;
 
         let threaded_entity = entity.clone();
         let threaded_location = location;
@@ -325,6 +352,7 @@ impl Server {
                 .broadcast_packet_all(&CLevelEvent::new(
                     WorldEvent::InstantSplashPotionSplashed as i32,
                     landed_block_position,
+                    // TODO: RGB color as an integer (e.g. 8364543 for #7FA1FF).
                     8_364_543,
                     false,
                 ))
@@ -552,7 +580,7 @@ impl Server {
 
     async fn tick(&self) {
         for world in self.worlds.read().await.iter() {
-            world.tick().await;
+            world.tick(self).await;
         }
     }
 }
