@@ -3,11 +3,9 @@ use crossbeam::atomic::AtomicCell;
 use key_store::KeyStore;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_protocol::client::login::CEncryptionRequest;
-use pumpkin_protocol::client::play::CLevelEvent;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
@@ -290,78 +288,6 @@ impl Server {
             .get(&container_id)?
             .try_open(player_id)
             .cloned()
-    }
-
-    // TODO: refactor
-    pub async fn add_potion_entity(
-        &self,
-        entity_type: EntityType,
-        location: Vector3<f64>,
-        _pitch: f32,
-        _yaw: f32,
-    ) -> (Arc<Entity>, Arc<World>, uuid::Uuid) {
-        let world = &self.worlds.read().await[0];
-        let new_uuid = uuid::Uuid::new_v4();
-        let entity_id = self.new_entity_id();
-
-        // TODO: this should be resolved to a integer using a macro when calling this function
-        let bounding_box_size = EntityDimensions {
-            width: entity_type.dimension[0],
-            height: entity_type.dimension[1],
-        };
-
-        let bounding_box =
-            BoundingBox::new_from_pos(location.x, location.y, location.z, &bounding_box_size);
-
-        // let bounding_box_size = BoundingBoxSize {
-        //     width: 0.6,
-        //     height: 1.8,
-        // };
-
-        let entity = Arc::new(Entity::new(
-            entity_id,
-            None,
-            new_uuid,
-            world.clone(),
-            location,
-            entity_type,
-            1.62,
-            AtomicCell::new(bounding_box),
-            AtomicCell::new(bounding_box_size),
-            true,
-        ));
-
-        entity.set_pos(location);
-
-        // let entity_direction = Vector3::new_from_euler(yaw.into(), pitch.into());
-
-        // world.add_entity(&entity.clone(), entity_direction).await;
-
-        let threaded_entity = entity.clone();
-        let threaded_location = location;
-        let threaded_world = world.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            // TODO: calculate position of final block, should be based on ticks no separate thread
-            let landed_block_position = BlockPos(Vector3 {
-                x: threaded_location.x as i32,
-                y: (threaded_location.y - 1.62) as i32,
-                z: threaded_location.z as i32,
-            });
-            threaded_world
-                .broadcast_packet_all(&CLevelEvent::new(
-                    WorldEvent::InstantSplashPotionSplashed as i32,
-                    landed_block_position,
-                    // TODO: RGB color as an integer (e.g. 8364543 for #7FA1FF).
-                    8_364_543,
-                    false,
-                ))
-                .await;
-            threaded_entity.remove().await;
-            // current_living_entities.remove(&living_entity.entity.entity_uuid);
-        });
-
-        (entity, world.clone(), new_uuid)
     }
 
     /// Returns the first id with a matching location and block type. If this is used with unique

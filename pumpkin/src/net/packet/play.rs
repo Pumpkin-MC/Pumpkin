@@ -1131,36 +1131,6 @@ impl Player {
         if let Some(held) = self.inventory().lock().await.held_item() {
             server.item_registry.on_use(&held.item, self, server).await;
         }
-        // self.world()
-        //     .await
-        //     .play_sound(
-        //         Sound::EntitySplashPotionThrow,
-        //         pumpkin_data::sound::SoundCategory::Players,
-        //         &self.living_entity.entity.pos.load(),
-        //     )
-        //     .await;
-
-        // let entity_position = self.living_entity.entity.pos.load();
-        // let pitch = self.living_entity.entity.pitch.load();
-        // let yaw = self.living_entity.entity.yaw.load();
-        // let head = self.living_entity.entity.head_yaw.load();
-        // log::info!("pitch: {}", pitch);
-        // log::info!("yaw: {}", yaw);
-        // log::info!("head: {}", head);
-        // log::info!("before: {:?}", entity_position.y);
-        // log::info!(
-        //     "standing eye height: {:?}",
-        //     self.living_entity.entity.standing_eye_height
-        // );
-        // let offset_position = entity_position.add_raw(
-        //     0.0,
-        //     f64::from(self.living_entity.entity.standing_eye_height),
-        //     0.0,
-        // );
-        // log::info!("after: {:?}", offset_position.y);
-        // server
-        //     .add_potion_entity(EntityType::POTION, offset_position, pitch, yaw)
-        //     .await;
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
