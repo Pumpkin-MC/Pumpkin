@@ -1,5 +1,5 @@
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::{get_tag_values, RegistryKey};
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 
 mod categories;
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
