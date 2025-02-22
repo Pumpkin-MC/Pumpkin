@@ -133,9 +133,20 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .unwrap_or(LevelFilter::Info);
 
         if ADVANCED_CONFIG.commands.use_console {
-            let (rl, stdout) = Readline::new("$ ".to_owned()).unwrap();
-            let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-            Some((ReadlineLogWrapper::new(logger, Some(rl)), level))
+            match Readline::new("$ ".to_owned()) {
+                Ok((rl, stdout)) => {
+                    let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
+                    Some((ReadlineLogWrapper::new(logger, Some(rl)), level))
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to initialize console input ({}), falling back to simple logger",
+                        e
+                    );
+                    let logger = simplelog::SimpleLogger::new(level, config.build());
+                    Some((ReadlineLogWrapper::new(logger, None), level))
+                }
+            }
         } else {
             let logger = simplelog::SimpleLogger::new(level, config.build());
             Some((ReadlineLogWrapper::new(logger, None), level))
