@@ -4,13 +4,13 @@ use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{
-        args::{
-            players::PlayersArgumentConsumer, textcomponent::TextComponentArgConsumer, Arg,
-            ConsumedArgs, FindArg,
-        },
-        tree::builder::{argument, literal},
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{
+            Arg, ConsumedArgs, FindArg, players::PlayersArgumentConsumer,
+            textcomponent::TextComponentArgConsumer,
+        },
+        tree::CommandTree,
+        tree::builder::{argument, literal},
     },
     entity::player::TitleMode,
 };

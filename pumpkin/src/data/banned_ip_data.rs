@@ -3,7 +3,7 @@ use std::{net::IpAddr, path::Path, sync::LazyLock};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
-use super::{banlist_serializer::BannedIpEntry, LoadJSONConfiguration, SaveJSONConfiguration};
+use super::{LoadJSONConfiguration, SaveJSONConfiguration, banlist_serializer::BannedIpEntry};
 
 pub static BANNED_IP_LIST: LazyLock<tokio::sync::RwLock<BannedIpList>> =
     LazyLock::new(|| tokio::sync::RwLock::new(BannedIpList::load()));

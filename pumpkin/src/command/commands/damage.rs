@@ -1,19 +1,19 @@
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::text::{
-    color::{Color, NamedColor},
     TextComponent,
+    color::{Color, NamedColor},
 };
 
 use crate::command::{
-    args::{
-        bounded_num::BoundedNumArgumentConsumer, damage_type::DamageTypeArgumentConsumer,
-        entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer, Arg, ConsumedArgs,
-        FindArg,
-    },
-    tree::builder::{argument, literal},
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        damage_type::DamageTypeArgumentConsumer, entity::EntityArgumentConsumer,
+        position_3d::Position3DArgumentConsumer,
+    },
+    tree::CommandTree,
+    tree::builder::{argument, literal},
 };
 
 const NAMES: [&str; 1] = ["damage"];

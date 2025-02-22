@@ -3,7 +3,7 @@ use pumpkin_macros::client_packet;
 use pumpkin_util::math::position::BlockPos;
 use serde::Serialize;
 
-use crate::{codec::identifier::Identifier, VarInt};
+use crate::{VarInt, codec::identifier::Identifier};
 
 #[derive(Serialize)]
 #[client_packet(PLAY_RESPAWN)]

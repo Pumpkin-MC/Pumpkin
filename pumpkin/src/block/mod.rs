@@ -1,5 +1,6 @@
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock};
 use properties::{
+    BlockPropertiesManager,
     age::Age,
     attachment::Attachment,
     axis::Axis,
@@ -14,7 +15,6 @@ use properties::{
     slab_type::SlabType,
     stair_shape::StairShape,
     waterlog::Waterlogged,
-    BlockPropertiesManager,
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -62,7 +62,7 @@ pub async fn drop_loot(server: &Server, world: &Arc<World>, block: &Block, pos: 
     let entity = server.add_entity(pos, EntityType::ITEM, world);
     let item_entity = Arc::new(ItemEntity::new(
         entity,
-        &ItemStack::new(1, Item::from_id(block.item_id).unwrap()),
+        ItemStack::new(1, Item::from_id(block.item_id).unwrap()),
     ));
     world.spawn_entity(item_entity.clone()).await;
     item_entity.send_meta_packet().await;

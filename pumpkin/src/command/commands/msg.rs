@@ -1,15 +1,15 @@
 use async_trait::async_trait;
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
-use pumpkin_util::text::{click::ClickEvent, hover::HoverEvent, TextComponent};
+use pumpkin_util::text::{TextComponent, click::ClickEvent, hover::HoverEvent};
 
 use crate::command::{
-    args::{
-        message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs,
-        FindArgDefaultName,
-    },
-    tree::builder::{argument, argument_default_name},
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs, FindArgDefaultName, message::MsgArgConsumer,
+        players::PlayersArgumentConsumer,
+    },
+    tree::CommandTree,
+    tree::builder::{argument, argument_default_name},
 };
 use CommandError::InvalidConsumption;
 

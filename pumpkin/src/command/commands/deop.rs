@@ -1,15 +1,15 @@
 use crate::{
     command::{
-        args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, players::PlayersArgumentConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["deop"];
 const DESCRIPTION: &str = "Revokes operator status from a player.";

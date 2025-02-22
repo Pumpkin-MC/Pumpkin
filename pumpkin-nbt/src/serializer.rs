@@ -1,10 +1,10 @@
 use serde::ser::Impossible;
-use serde::{ser, Serialize};
+use serde::{Serialize, ser};
 use std::io::Write;
 
 use crate::tag::NbtTag;
 use crate::{
-    Error, BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, FLOAT_ID, INT_ARRAY_ID, INT_ID,
+    BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
     LIST_ID, LONG_ARRAY_ID, LONG_ID, NBT_ARRAY_TAG, NBT_BYTE_ARRAY_TAG, NBT_INT_ARRAY_TAG,
     NBT_LONG_ARRAY_TAG, SHORT_ID, STRING_ID,
 };
@@ -393,7 +393,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
                     _ => {
                         return Err(Error::SerdeError(
                             "Array supports only byte, int, long".to_string(),
-                        ))
+                        ));
                     }
                 };
 

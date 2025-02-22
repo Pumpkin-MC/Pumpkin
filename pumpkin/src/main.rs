@@ -44,13 +44,13 @@ use std::{
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
-use pumpkin::{init_log, stop_server, PumpkinServer, SHOULD_STOP};
+use pumpkin::{PumpkinServer, SHOULD_STOP, init_log, stop_server};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -88,7 +88,9 @@ async fn main() {
         std::process::exit(1);
     }));
 
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",);
+    log::info!(
+        "Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
+    );
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",

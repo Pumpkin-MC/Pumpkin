@@ -1,4 +1,4 @@
-use crate::{codec::identifier::Identifier, VarInt};
+use crate::{VarInt, codec::identifier::Identifier};
 use pumpkin_data::packet::clientbound::CONFIG_STORE_COOKIE;
 use pumpkin_macros::client_packet;
 

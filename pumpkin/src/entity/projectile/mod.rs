@@ -10,7 +10,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::server::Server;
 
-use super::{living::LivingEntity, player::Player, Entity, EntityBase};
+use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ThrownItemEntity {
     entity: Entity,

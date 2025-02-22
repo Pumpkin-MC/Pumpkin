@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::LazyLock;
 
+use crate::generation::GlobalRandomConfig;
 use crate::generation::noise_router::chunk_density_function::{
     ChunkNoiseFunctionSampleOptions, SampleAction,
 };
@@ -12,9 +13,8 @@ use crate::generation::noise_router::chunk_noise_router::{
     ChunkNoiseDensityFunction, ChunkNoiseFunctionComponent,
 };
 use crate::generation::noise_router::proto_noise_router::{
-    recursive_build_proto_stack, DoublePerlinNoiseBuilder, ProtoNoiseFunctionComponent,
+    DoublePerlinNoiseBuilder, ProtoNoiseFunctionComponent, recursive_build_proto_stack,
 };
-use crate::generation::GlobalRandomConfig;
 use crate::noise_router::NOISE_ROUTER_ASTS;
 use crate::read_data_from_file;
 use crate::{

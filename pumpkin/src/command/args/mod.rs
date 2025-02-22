@@ -8,14 +8,14 @@ use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
-    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
     GameMode,
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
 };
 
 use super::{
+    CommandSender,
     dispatcher::CommandError,
     tree::{CommandTree, RawArgs},
-    CommandSender,
 };
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};

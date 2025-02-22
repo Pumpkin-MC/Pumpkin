@@ -5,7 +5,7 @@ use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, Suggestion
 use pumpkin_util::GameMode;
 
 use crate::{
-    command::{dispatcher::CommandError, tree::RawArgs, CommandSender},
+    command::{CommandSender, dispatcher::CommandError, tree::RawArgs},
     server::Server,
 };
 

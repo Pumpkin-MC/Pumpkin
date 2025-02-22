@@ -1,4 +1,4 @@
-use crate::entity::{player::Player, Entity};
+use crate::entity::{Entity, player::Player};
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::item::Item;

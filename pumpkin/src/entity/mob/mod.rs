@@ -9,9 +9,9 @@ use zombie::Zombie;
 use crate::{server::Server, world::World};
 
 use super::{
+    Entity, EntityBase,
     ai::{goal::Goal, path::Navigator},
     living::LivingEntity,
-    Entity, EntityBase,
 };
 
 pub mod zombie;
@@ -62,7 +62,6 @@ pub async fn from_type(
         goals: Mutex::new(vec![]),
         navigator: Mutex::new(Navigator::default()),
     };
-    #[expect(clippy::single_match)]
     match entity_type {
         EntityType::ZOMBIE => Zombie::make(&mob).await,
         // TODO

@@ -1,8 +1,8 @@
-use crate::codec::slot::StructuredComponentType;
 use crate::VarInt;
+use crate::codec::slot::StructuredComponentType;
 use serde::{
-    de::{self, SeqAccess},
     Deserialize,
+    de::{self, SeqAccess},
 };
 
 #[derive(serde::Serialize, Debug, Clone)]

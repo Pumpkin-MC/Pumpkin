@@ -2,16 +2,16 @@ use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
-        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{banned_ip_data::BANNED_IP_LIST, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, banned_ip_data::BANNED_IP_LIST},
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["pardon-ip"];
 const DESCRIPTION: &str = "unbans a ip";

@@ -5,8 +5,8 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     block::{
-        registry::{Block, State, BLOCKS},
         BlockDirection,
+        registry::{BLOCKS, Block, State},
     },
     item::ItemStack,
 };

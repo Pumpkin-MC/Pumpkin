@@ -4,7 +4,7 @@ pub mod block_pos {
     use pumpkin_util::math::vector3::Vector3;
 
     use super::{
-        BITS_X, BITS_Y, BITS_Z, BIT_SHIFT_X, BIT_SHIFT_Z, SIZE_BITS_X, SIZE_BITS_Y, SIZE_BITS_Z,
+        BIT_SHIFT_X, BIT_SHIFT_Z, BITS_X, BITS_Y, BITS_Z, SIZE_BITS_X, SIZE_BITS_Y, SIZE_BITS_Z,
     };
 
     #[inline]

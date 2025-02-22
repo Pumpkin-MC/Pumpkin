@@ -1,4 +1,4 @@
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_world::block::registry::Block;
 
 use super::BlockEvent;

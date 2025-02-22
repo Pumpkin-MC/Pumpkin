@@ -1,5 +1,5 @@
-use crate::entity::player::Player;
 use crate::entity::Entity;
+use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;

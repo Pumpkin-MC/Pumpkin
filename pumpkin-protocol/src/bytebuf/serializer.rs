@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use bytes::BufMut;
 use serde::{
-    ser::{self},
     Serialize,
+    ser::{self},
 };
 use thiserror::Error;
 

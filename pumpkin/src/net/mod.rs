@@ -3,8 +3,8 @@ use std::{
     net::SocketAddr,
     num::NonZeroU8,
     sync::{
-        atomic::{AtomicBool, AtomicI32},
         Arc,
+        atomic::{AtomicBool, AtomicI32},
     },
 };
 
@@ -17,7 +17,9 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    bytebuf::{packet::Packet, ReadingError},
+    ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
+    ServerPacket,
+    bytebuf::{ReadingError, packet::Packet},
     client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
     packet_decoder::PacketDecoder,
     packet_encoder::{PacketEncodeError, PacketEncoder},
@@ -33,15 +35,13 @@ use pumpkin_protocol::{
         },
         status::{SStatusPingRequest, SStatusRequest},
     },
-    ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
-    ServerPacket,
 };
-use pumpkin_util::{text::TextComponent, ProfileAction};
+use pumpkin_util::{ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 use thiserror::Error;
 use uuid::Uuid;

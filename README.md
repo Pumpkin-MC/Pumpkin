@@ -55,6 +55,9 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Saving
   - [ ] Redstone
   - [ ] Liquid Physics
+  - [ ] Biomes
+  - [ ] Vegetation
+  - [ ] Player Data Saving
 - Player
   - [x] Skins
   - [x] Client brand
@@ -65,6 +68,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Combat
   - [x] Experience
   - [x] Hunger
+  - [ ] Off Hand
+  - [ ] Advancements 
 - Entities
   - [x] Non-Living (Minecart, Eggs...)
   - [x] Players
@@ -72,6 +77,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Animals
   - [x] Entity AI
   - [ ] Boss
+  - [ ] Villagers
+  - [ ] Mobs Inventory
 - Server
   - [x] Plugins
   - [x] Query

@@ -1,18 +1,18 @@
 use crate::{
     command::{
-        args::{message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::{builder::argument, CommandTree},
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, message::MsgArgConsumer, players::PlayersArgumentConsumer},
+        tree::{CommandTree, builder::argument},
     },
     data::{
-        banlist_serializer::BannedPlayerEntry, banned_player_data::BANNED_PLAYER_LIST,
-        SaveJSONConfiguration,
+        SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry,
+        banned_player_data::BANNED_PLAYER_LIST,
     },
     entity::player::Player,
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["ban"];
 const DESCRIPTION: &str = "bans a player";

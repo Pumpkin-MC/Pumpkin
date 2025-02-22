@@ -6,7 +6,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{
-        args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
+        CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
     },
     entity::player::Player,
 };

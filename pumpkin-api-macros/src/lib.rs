@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use std::sync::LazyLock;
 use std::sync::Mutex;
-use syn::{parse_macro_input, parse_quote, ImplItem, ItemFn, ItemImpl, ItemStruct};
+use syn::{ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
 
 static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 

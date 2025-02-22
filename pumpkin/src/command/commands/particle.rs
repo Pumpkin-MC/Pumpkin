@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::command::{
-    args::{
-        bounded_num::BoundedNumArgumentConsumer, particle::ParticleArgumentConsumer,
-        position_3d::Position3DArgumentConsumer, ConsumedArgs, FindArg,
-    },
-    tree::{builder::argument, CommandTree},
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        particle::ParticleArgumentConsumer, position_3d::Position3DArgumentConsumer,
+    },
+    tree::{CommandTree, builder::argument},
 };
 const NAMES: [&str; 1] = ["particle"];
 
