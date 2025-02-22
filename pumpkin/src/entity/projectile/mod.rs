@@ -106,13 +106,14 @@ impl ThrownItemEntity {
 #[async_trait]
 impl EntityBase for ThrownItemEntity {
     async fn tick(&self, server: &Server) {
-        // TODO: Add gravity
+        // Gravity for thrown potion, projectile is 0.03;
+        let gravity = Vector3::new(0.0, -0.05, 0.0);
 
         // Moves throwable to next location
         let previous_velocity = self.entity.velocity.load();
         let previous_position = self.entity.pos.load();
 
-        let new_velocity = previous_velocity.multiply(0.99, 0.99, 0.99);
+        let new_velocity = previous_velocity.add(&gravity).multiply(0.99, 0.99, 0.99);
         let new_position = previous_position.add(&new_velocity);
 
         self.entity.velocity.store(new_velocity);
@@ -149,6 +150,7 @@ impl EntityBase for ThrownItemEntity {
     async fn on_player_collision(&self, player: Arc<Player>) {
         // Only damage player if thrower is not the collision
         // TODO: does this mean snowballs thrown upwards should do nothing?
+        // TODO: Add on_destroy function here
         if let Some(id) = self.entity.owner_id {
             if player.entity_id() != id {
                 player.damage(1).await;
