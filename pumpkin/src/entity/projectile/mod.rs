@@ -14,7 +14,7 @@ use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ThrownItemEntity {
     entity: Entity,
-    // TODO: remove this for onCollsionWithBlock function
+    // TODO: remove this for onCollisionWithBlock function
     time_to_destruct: u32,
     last_tick_time: AtomicCell<u32>,
     item: Item,

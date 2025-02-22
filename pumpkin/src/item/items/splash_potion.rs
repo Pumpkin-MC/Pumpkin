@@ -19,7 +19,7 @@ use pumpkin_util::math::vector3::Vector3;
 #[pumpkin_item("splash_potion")]
 pub struct SplashPotionItem;
 
-const POWER: f32 = 1.5;
+const POWER: f32 = 1.0;
 
 #[async_trait]
 impl PumpkinItem for SplashPotionItem {
