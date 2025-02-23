@@ -211,3 +211,432 @@ impl Container for Furnace {
         slots
     }
 }
+
+#[derive(Default)]
+pub struct Anvil {
+    input_left: Option<ItemStack>,
+    input_right: Option<ItemStack>,
+    output: Option<ItemStack>,
+    _repair_cost: i32,
+}
+
+impl Container for Anvil {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Anvil
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Anvil"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![
+            &mut self.input_left,
+            &mut self.input_right,
+            &mut self.output,
+        ]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![
+            self.input_left.as_ref(),
+            self.input_right.as_ref(),
+            self.output.as_ref(),
+        ]
+    }
+
+    fn craft(&mut self) -> bool {
+        /*
+        TODO: repair logic
+        let new_output = match (&self.input_left, &self.input_right) {
+            (Some(left), Some(right)) if left.item.id == right.item.id => {
+                let mut combined = left.clone();
+                combined.item_count += right.item_count;
+                combined.item_count = combined.item_count.min(64);
+                Some(combined)
+            }
+            _ => None,
+        };
+
+        if self.output != new_output {
+            self.output = new_output;
+            true
+        } else {
+            false
+        }*/
+
+        false
+    }
+
+    fn crafting_output_slot(&self) -> Option<usize> {
+        Some(2)
+    }
+
+    fn slot_in_crafting_input_slots(&self, slot: &usize) -> bool {
+        *slot == 0 || *slot == 1
+    }
+
+    fn recipe_used(&mut self) {
+        if self.output.take().is_some() {
+            self.input_left.take();
+            self.input_right.take();
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Beacon {
+    payment: Option<ItemStack>,
+}
+
+impl Container for Beacon {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Beacon
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Beacon"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![&mut self.payment]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![self.payment.as_ref()]
+    }
+}
+
+#[derive(Default)]
+pub struct BrewingStand {
+    bottles: [Option<ItemStack>; 3],
+    ingredient: Option<ItemStack>,
+    fuel: Option<ItemStack>,
+}
+
+impl Container for BrewingStand {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::BrewingStand
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Brewing Stand"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        let mut slots = self.bottles.iter_mut().collect::<Vec<_>>();
+        slots.push(&mut self.ingredient);
+        slots.push(&mut self.fuel);
+        slots
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        let mut slots = self.bottles.iter().map(|s| s.as_ref()).collect::<Vec<_>>();
+        slots.push(self.ingredient.as_ref());
+        slots.push(self.fuel.as_ref());
+        slots
+    }
+}
+
+#[derive(Default)]
+pub struct Hopper {
+    items: [Option<ItemStack>; 5],
+}
+
+impl Container for Hopper {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Hopper
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Hopper"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        self.items.iter_mut().collect()
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        self.items.iter().map(|s| s.as_ref()).collect()
+    }
+}
+
+#[derive(Default)]
+pub struct ShulkerBox {
+    items: [Option<ItemStack>; 27],
+}
+
+impl Container for ShulkerBox {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::ShulkerBox
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Shulker Box"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        self.items.iter_mut().collect()
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        self.items.iter().map(|s| s.as_ref()).collect()
+    }
+}
+
+#[derive(Default)]
+pub struct Dispenser {
+    items: [Option<ItemStack>; 9],
+}
+
+impl Container for Dispenser {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Generic3x3
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Dispenser"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        self.items.iter_mut().collect()
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        self.items.iter().map(|s| s.as_ref()).collect()
+    }
+}
+
+#[derive(Default)]
+pub struct Dropper {
+    items: [Option<ItemStack>; 9],
+}
+
+impl Container for Dropper {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Generic3x3
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Dropper"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        self.items.iter_mut().collect()
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        self.items.iter().map(|s| s.as_ref()).collect()
+    }
+}
+
+#[derive(Default)]
+pub struct Stonecutter {
+    input: Option<ItemStack>,
+    output: Option<ItemStack>,
+}
+
+impl Container for Stonecutter {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Stonecutter
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Stonecutter"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![&mut self.input, &mut self.output]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![self.input.as_ref(), self.output.as_ref()]
+    }
+
+    fn craft(&mut self) -> bool {
+        /*
+        TODO: Add stonecutter craft logic
+
+        let new_output = self.input.as_ref().and_then(|input| {
+            pumpkin_registry::get_stonecutter_recipe(input.item.id)
+                .map(|recipe| ItemStack::new(recipe.result, recipe.count))
+        });
+
+        if self.output != new_output {
+            self.output = new_output;
+            true
+        } else {
+            false
+        }*/
+        false
+    }
+
+    fn crafting_output_slot(&self) -> Option<usize> {
+        Some(1)
+    }
+
+    fn slot_in_crafting_input_slots(&self, slot: &usize) -> bool {
+        *slot == 0
+    }
+
+    fn recipe_used(&mut self) {
+        if self.output.take().is_some() {
+            self.input.take();
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Loom {
+    banner: Option<ItemStack>,
+    dye: Option<ItemStack>,
+    pattern: Option<ItemStack>,
+    output: Option<ItemStack>,
+}
+
+impl Container for Loom {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Loom
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Loom"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![
+            &mut self.banner,
+            &mut self.dye,
+            &mut self.pattern,
+            &mut self.output,
+        ]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![
+            self.banner.as_ref(),
+            self.dye.as_ref(),
+            self.pattern.as_ref(),
+            self.output.as_ref(),
+        ]
+    }
+}
+
+#[derive(Default)]
+pub struct EnchantingTable {
+    item: Option<ItemStack>,
+    lapis: Option<ItemStack>,
+}
+
+impl Container for EnchantingTable {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Enchantment
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Enchanting Table"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![&mut self.item, &mut self.lapis]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![self.item.as_ref(), self.lapis.as_ref()]
+    }
+}
+
+#[derive(Default)]
+pub struct Grindstone {
+    input_top: Option<ItemStack>,
+    input_bottom: Option<ItemStack>,
+    output: Option<ItemStack>,
+}
+
+impl Container for Grindstone {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Grindstone
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Grindstone"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![
+            &mut self.input_top,
+            &mut self.input_bottom,
+            &mut self.output,
+        ]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![
+            self.input_top.as_ref(),
+            self.input_bottom.as_ref(),
+            self.output.as_ref(),
+        ]
+    }
+
+    fn craft(&mut self) -> bool {
+        /*
+        TODO: implement grindstone logic
+
+        let new_output = match (&self.input_top, &self.input_bottom) {
+            (Some(top), Some(bottom)) if top.item.id == bottom.item.id => {
+                let mut combined = top.clone();
+                combined.item_count += bottom.item_count;
+                combined.item_count = combined.item_count.min(64);
+                Some(combined)
+            }
+            (Some(item), None) | (None, Some(item)) => Some(item.clone()),
+            _ => None,
+        };
+
+        if self.output != new_output {
+            self.output = new_output;
+            true
+        } else {
+            false
+        }*/
+        false
+    }
+
+    fn crafting_output_slot(&self) -> Option<usize> {
+        Some(2)
+    }
+
+    fn slot_in_crafting_input_slots(&self, slot: &usize) -> bool {
+        *slot == 0 || *slot == 1
+    }
+
+    fn recipe_used(&mut self) {
+        if self.output.take().is_some() {
+            self.input_top.take();
+            self.input_bottom.take();
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Lectern {
+    book: Option<ItemStack>,
+}
+
+impl Container for Lectern {
+    fn window_type(&self) -> &'static WindowType {
+        &WindowType::Lectern
+    }
+
+    fn window_name(&self) -> &'static str {
+        "Lectern"
+    }
+
+    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+        vec![&mut self.book]
+    }
+
+    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+        vec![self.book.as_ref()]
+    }
+}
