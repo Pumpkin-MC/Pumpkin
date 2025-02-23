@@ -9,6 +9,7 @@ use crate::{VarInt, codec::bit_set::BitSet};
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage<'a> {
+    #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
     index: VarInt,
     message_signature: Option<&'a [u8]>,

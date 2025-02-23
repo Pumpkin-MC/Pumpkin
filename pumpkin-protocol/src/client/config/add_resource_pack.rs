@@ -8,6 +8,7 @@ use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
 #[derive(Serialize)]
 #[packet(CONFIG_RESOURCE_PACK_PUSH)]
 pub struct CConfigAddResourcePack<'a> {
+    #[serde(with = "uuid::serde::compact")]
     uuid: &'a uuid::Uuid,
     url: &'a str,
     hash: &'a str, // max 40
