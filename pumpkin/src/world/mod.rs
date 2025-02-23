@@ -55,10 +55,7 @@ use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
 use tokio::sync::{Mutex, mpsc::Receiver};
-use tokio::{
-    runtime::Handle,
-    sync::{RwLock, mpsc},
-};
+use tokio::sync::{RwLock, mpsc};
 
 pub mod border;
 pub mod bossbar;
@@ -633,6 +630,7 @@ impl World {
         self.send_world_info(player, position, yaw, pitch).await;
     }
 
+    // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
     fn spawn_world_chunks(
         &self,
@@ -1028,14 +1026,16 @@ impl World {
         let (sender, receive) = mpsc::channel(chunks.len());
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
-        let rt = Handle::current();
+        let chunks = chunks.to_vec();
 
-        // Split the chunks into 64 chunks groups, this helps with the initial loading
-        // of the world where allows to wait less chunks to be retrived before
-        // starting to send them to the player.
-        chunks
-            .chunks(64)
-            .for_each(|chunks| level.fetch_chunks(chunks, sender.clone(), &rt));
+        tokio::spawn(async move {
+            // Split the chunks into 64 chunks groups, this helps with the initial loading
+            // of the world where allows to wait less chunks to be retrived before
+            // starting to send them to the player.
+            for chunk_group in chunks.chunks(64) {
+                level.fetch_chunks(chunk_group, sender.clone()).await;
+            }
+        });
 
         receive
     }

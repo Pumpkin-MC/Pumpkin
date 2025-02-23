@@ -1,12 +1,17 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::anvil::AnvilChunkFile;
 use crate::chunks_io::{ChunkSerializer, LoadedData};
+use async_trait::async_trait;
 use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_util::math::vector2::Vector2;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use tokio::sync::Notify;
 
 use super::anvil::{CHUNK_COUNT, SUBREGION_BITS, chunk_to_bytes};
 use super::{ChunkData, ChunkReadingError, ChunkWritingError};
@@ -51,7 +56,7 @@ struct LinearFileHeader {
 }
 pub struct LinearFile {
     chunks_headers: [LinearChunkHeader; CHUNK_COUNT],
-    chunks_data: [Option<Vec<u8>>; CHUNK_COUNT],
+    chunks_data: [Option<Arc<[u8]>>; CHUNK_COUNT],
 }
 
 impl LinearChunkHeader {
@@ -168,6 +173,7 @@ impl Default for LinearFile {
     }
 }
 
+#[async_trait]
 impl ChunkSerializer for LinearFile {
     type Data = ChunkData;
 
@@ -176,7 +182,7 @@ impl ChunkSerializer for LinearFile {
         format!("./r.{}.{}.linear", region_x, region_z)
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Box<[u8]> {
         // Parse the headers to a buffer
         let headers_buffer: Vec<u8> = self
             .chunks_headers
@@ -192,7 +198,7 @@ impl ChunkSerializer for LinearFile {
 
         let mut chunks_bytes = Vec::with_capacity(uncompressed_size as usize);
         for chunk in self.chunks_data.iter().flatten() {
-            chunks_bytes.put_slice(chunk.as_slice());
+            chunks_bytes.put_slice(chunk);
         }
 
         // Compress the data buffer
@@ -230,6 +236,7 @@ impl ChunkSerializer for LinearFile {
             SIGNATURE.as_slice(),
         ]
         .concat()
+        .into_boxed_slice()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
@@ -302,7 +309,7 @@ impl ChunkSerializer for LinearFile {
         })
     }
 
-    fn add_chunks_data(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
+    fn add_chunk_data(&mut self, chunks_data: &[Self::Data]) -> Result<(), ChunkWritingError> {
         for chunk_data in chunks_data {
             let index = LinearFile::get_chunk_index(&chunk_data.position);
             let chunk_raw = chunk_to_bytes(chunk_data)
@@ -316,30 +323,60 @@ impl ChunkSerializer for LinearFile {
                 .as_secs() as u32;
 
             // We update the data buffer
-            self.chunks_data[index] = Some(chunk_raw);
+            self.chunks_data[index] = Some(chunk_raw.into());
         }
 
         Ok(())
     }
 
-    fn get_chunks_data(
+    async fn stream_chunk_data(
         &self,
         chunks: &[Vector2<i32>],
-    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {
-        chunks
-            .iter()
-            .map(|&at| {
-                let index = LinearFile::get_chunk_index(&at);
-                let chunk = &self.chunks_data[index];
-                match chunk {
-                    Some(chunk_bytes) => match ChunkData::from_bytes(chunk_bytes, at) {
+        channel: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
+    ) {
+        let notify = Arc::new(Notify::new());
+        let mut chunk_data = Vec::with_capacity(chunks.len());
+
+        for chunk in chunks {
+            let index = LinearFile::get_chunk_index(chunk);
+            if let Some(data) = &self.chunks_data[index] {
+                chunk_data.push((*chunk, data.clone(), channel.clone()))
+            } else {
+                channel
+                    .send(LoadedData::Missing(*chunk))
+                    .await
+                    .expect("Failed to stream missing message from linear chunk serializer!");
+            }
+        }
+
+        if chunk_data.is_empty() {
+            return;
+        }
+
+        let internal_notify = notify.clone();
+        let finished_before_await_notify = Arc::new(AtomicBool::new(false));
+        let finished_fast = finished_before_await_notify.clone();
+        rayon::spawn(move || {
+            chunk_data
+                .into_par_iter()
+                .for_each(|(at, chunk_bytes, channel)| {
+                    let result = match ChunkData::from_bytes(&chunk_bytes, at) {
                         Ok(chunk) => LoadedData::Loaded(chunk),
                         Err(err) => LoadedData::Error((at, ChunkReadingError::ParsingError(err))),
-                    },
-                    None => LoadedData::Missing(at),
-                }
-            })
-            .collect::<Vec<_>>()
+                    };
+
+                    channel
+                        .blocking_send(result)
+                        .expect("Failed to stream data from linear chunk serializer!");
+                });
+            finished_fast.store(true, std::sync::atomic::Ordering::Relaxed);
+            internal_notify.notify_waiters();
+        });
+
+        if finished_before_await_notify.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        notify.notified().await;
     }
 }
 
@@ -349,7 +386,9 @@ mod tests {
     use pumpkin_util::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use temp_dir::TempDir;
+    use tokio::sync::{RwLock, mpsc};
 
     use crate::generation::{Seed, get_world_gen};
     use crate::{
@@ -362,16 +401,23 @@ mod tests {
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
         let chunk_saver = ChunkFileManager::<LinearFile>::default();
+        let (send, mut recv) = mpsc::channel(1);
 
-        let chunks = chunk_saver
-            .load_chunks(
+        chunk_saver
+            .stream_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
                 },
                 &[Vector2::new(0, 0)],
+                send,
             )
             .await;
+
+        let mut chunks = Vec::new();
+        while let Some(chunk) = recv.recv().await {
+            chunks.push(chunk);
+        }
 
         assert!(chunks.len() == 1 && matches!(chunks[0], LoadedData::Missing(_)));
     }
@@ -403,28 +449,35 @@ mod tests {
                 .save_chunks(
                     &level_folder,
                     chunks
-                        .iter()
-                        .map(|(at, chunk)| (*at, chunk))
+                        .clone()
+                        .into_iter()
+                        .map(|(at, chunk)| (at, Arc::new(RwLock::new(chunk))))
                         .collect::<Vec<_>>(),
                 )
                 .await
                 .expect("Failed to write chunk");
 
-            let read_chunks = chunk_saver
-                .load_chunks(
+            let (send, mut recv) = mpsc::channel(chunks.len());
+            chunk_saver
+                .stream_chunks(
                     &level_folder,
                     &chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
+                    send,
                 )
-                .await
-                .into_iter()
-                .filter_map(|chunk| match chunk {
-                    LoadedData::Loaded(chunk) => Some(chunk),
-                    LoadedData::Missing(_) => None,
+                .await;
+
+            let mut read_chunks = Vec::new();
+            while let Some(chunk) = recv.recv().await {
+                match chunk {
+                    LoadedData::Loaded(chunk) => {
+                        read_chunks.push(chunk);
+                    }
+                    LoadedData::Missing(_) => {}
                     LoadedData::Error((position, error)) => {
                         panic!("Error reading chunk at {:?} | Error: {:?}", position, error)
                     }
-                })
-                .collect::<Vec<_>>();
+                };
+            }
 
             for (at, chunk) in &chunks {
                 let read_chunk = read_chunks

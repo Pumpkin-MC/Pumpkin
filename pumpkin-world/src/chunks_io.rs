@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     error,
     io::ErrorKind,
-    ops::Deref,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -10,11 +9,13 @@ use std::{
 use async_trait::async_trait;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
-use tokio::{fs::OpenOptions, io::AsyncReadExt, runtime::Handle, sync::OnceCell};
 use tokio::{
-    io::AsyncWriteExt,
-    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+    fs::OpenOptions,
+    io::AsyncReadExt,
+    sync::{Mutex, OnceCell, mpsc},
+    task::JoinSet,
 };
+use tokio::{io::AsyncWriteExt, sync::RwLock};
 
 use crate::{
     chunk::{ChunkReadingError, ChunkWritingError},
@@ -48,11 +49,12 @@ where
     D: Send + Sized,
 {
     /// Load the chunks data
-    async fn load_chunks(
+    async fn stream_chunks(
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-    ) -> Vec<LoadedData<D, ChunkReadingError>>;
+        channel: mpsc::Sender<LoadedData<D, ChunkReadingError>>,
+    );
 
     /// Persist the chunks data
     async fn save_chunks(
@@ -61,29 +63,33 @@ where
         chunks_data: Vec<(Vector2<i32>, Arc<RwLock<D>>)>,
     ) -> Result<(), ChunkWritingError>;
 
-    fn cache_count(&self) -> usize;
+    async fn clean_up_log(&self);
 
-    async fn wait_for_lock_releases(&self);
+    async fn await_tasks(&self);
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
+
+#[async_trait]
 pub trait ChunkSerializer: Send + Sync + Sized + Default {
     type Data: Send;
 
     fn get_chunk_key(chunk: Vector2<i32>) -> String;
 
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Box<[u8]>;
+
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError>;
 
-    fn add_chunks_data(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;
+    fn add_chunk_data(&mut self, chunk_data: &[Self::Data]) -> Result<(), ChunkWritingError>;
 
-    fn get_chunks_data(
+    async fn stream_chunk_data(
         &self,
-        chunk: &[Vector2<i32>],
-    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>>;
+        chunks: &[Vector2<i32>],
+        channel: mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
+    );
 }
 
 /// A simple implementation of the ChunkSerializer trait
@@ -95,76 +101,44 @@ pub trait ChunkSerializer: Send + Sync + Sized + Default {
 pub struct ChunkFileManager<S: ChunkSerializer> {
     // Dashmap has rw-locks on shards, but we want per-serializer
     file_locks: RwLock<BTreeMap<PathBuf, SerializerCacheEntry<S>>>,
-    _serializer: std::marker::PhantomData<S>,
+    paths_to_check: Mutex<Vec<PathBuf>>,
 }
 //to avoid clippy warnings we extract the type alias
-type SerializerCacheEntry<S> = Arc<OnceCell<Arc<RwLock<S>>>>;
+type SerializerCacheEntry<S> = OnceCell<Arc<RwLock<S>>>;
 
 impl<S: ChunkSerializer> Default for ChunkFileManager<S> {
     fn default() -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
-            _serializer: std::marker::PhantomData,
+            paths_to_check: Mutex::new(Vec::new()),
         }
-    }
-}
-
-pub struct ChunkFileManagerLockGuard<'a, S: ChunkSerializer> {
-    lock: Arc<tokio::sync::RwLock<S>>,
-    parent: &'a ChunkFileManager<S>,
-    key: PathBuf,
-}
-
-impl<'a, S: ChunkSerializer> ChunkFileManagerLockGuard<'a, S> {
-    fn new(
-        key: PathBuf,
-        parent: &'a ChunkFileManager<S>,
-        lock: Arc<tokio::sync::RwLock<S>>,
-    ) -> Self {
-        Self { key, parent, lock }
-    }
-
-    async fn write(&self) -> RwLockWriteGuard<'_, S> {
-        self.lock.write().await
-    }
-
-    async fn read(&self) -> RwLockReadGuard<'_, S> {
-        self.lock.read().await
-    }
-}
-
-impl<S: ChunkSerializer> Drop for ChunkFileManagerLockGuard<'_, S> {
-    fn drop(&mut self) {
-        // If we have only two strong references, it means that the lock is only being used by this
-        // guard and the cache, so we can remove it from the cache to avoid memory leaks.
-        if !Arc::strong_count(&self.lock) <= 2 {
-            return;
-        }
-
-        tokio::task::block_in_place(|| {
-            Handle::current().block_on(async {
-                let mut file_locks = self.parent.file_locks.write().await;
-                if Arc::strong_count(&self.lock) <= 2 {
-                    if let Some((path, _)) = file_locks.remove_entry(&self.key) {
-                        trace!("Removed lock for file: {:?}", path);
-                    }
-                }
-            });
-        });
     }
 }
 
 impl<S: ChunkSerializer> ChunkFileManager<S> {
-    pub async fn read_file(
-        &self,
-        path: &Path,
-    ) -> Result<ChunkFileManagerLockGuard<'_, S>, ChunkReadingError> {
+    async fn clean_cache(&self) {
+        log::trace!("Cleaning cache");
+        let mut locks = self.file_locks.write().await;
+        let mut paths = self.paths_to_check.lock().await;
+        for path in paths.iter() {
+            if let Some(lock) = locks.get(path) {
+                let lock = lock.get().expect("Serializer should be populated");
+                // If we have only two strong references, it means that the lock is only being used by the cache, so we can remove it from the cache to avoid memory leaks.
+                if Arc::strong_count(lock) <= 1 {
+                    locks.remove(path);
+                    trace!("Removed lock for file: {:?}", path);
+                }
+            }
+        }
+        paths.clear();
+        log::trace!("Cleaned cache");
+    }
+
+    pub async fn read_file(&self, path: &Path) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
         // We get the entry from the DashMap and try to insert a new lock if it doesn't exist
         // using dead-lock safe methods like `or_try_insert_with`
 
-        async fn read_from_disk<S: ChunkSerializer>(
-            path: &Path,
-        ) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
+        async fn read_from_disk<S: ChunkSerializer>(path: &Path) -> Result<S, ChunkReadingError> {
             let file = OpenOptions::new()
                 .read(true)
                 .write(false)
@@ -184,40 +158,56 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                         .await
                         .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
-                    tokio::task::block_in_place(|| S::from_bytes(&file_bytes))?
+                    // This should be performant enough that we don't need to block
+                    S::from_bytes(&file_bytes)?
                 }
                 Err(ChunkReadingError::ChunkNotExist) => S::default(),
                 Err(err) => return Err(err),
             };
 
-            Ok(Arc::new(RwLock::new(value)))
+            Ok(value)
         }
 
-        let un_init_lock = if let Some(serializer) = self.file_locks.read().await.get(path) {
-            trace!("Using cached chunk serializer: {:?}", path);
-            serializer.clone()
-        } else {
-            self.file_locks
-                .write()
-                .await
-                .entry(path.to_path_buf())
-                .or_insert_with(Arc::default)
-                .clone()
+        // We use a once lock here to quickly make an insertion into the map without holding the
+        // lock for too long starving other threads
+
+        let map_read_guard = self.file_locks.read().await;
+        let lock = match map_read_guard.get(path) {
+            Some(once_cell) => once_cell
+                .get_or_try_init(|| async {
+                    let serializer = read_from_disk(path).await?;
+                    Ok(Arc::new(RwLock::new(serializer)))
+                })
+                .await?
+                .clone(),
+            None => {
+                drop(map_read_guard);
+                let mut map_write_guard = self.file_locks.write().await;
+                if !map_write_guard.contains_key(path) {
+                    map_write_guard.insert(path.to_path_buf(), OnceCell::new());
+                }
+                let map_read_guard = map_write_guard.downgrade();
+                let once_cell = map_read_guard
+                    .get(path)
+                    .expect("We just inserted this within a lock");
+
+                // Had to duplicate this because of lifetime stuff, is there a way to consolidate?
+                once_cell
+                    .get_or_try_init(|| async {
+                        let serializer = read_from_disk(path).await?;
+                        Ok(Arc::new(RwLock::new(serializer)))
+                    })
+                    .await?
+                    .clone()
+            }
         };
 
-        let lock = un_init_lock
-            .get_or_try_init(|| read_from_disk(path))
-            .await?
-            .clone();
-
-        Ok(ChunkFileManagerLockGuard::new(
-            path.to_path_buf(),
-            self,
-            lock,
-        ))
+        let mut paths_to_check = self.paths_to_check.lock().await;
+        paths_to_check.push(path.to_path_buf());
+        Ok(lock)
     }
 
-    pub async fn write_file(&self, path: &Path, serializer: &S) -> Result<(), ChunkWritingError> {
+    pub async fn write_file(path: &Path, serializer: &S) -> Result<(), ChunkWritingError> {
         trace!("Writing file to Disk: {:?}", path);
 
         // We use tmp files to avoid corruption of the data if the process is abruptly interrupted.
@@ -232,7 +222,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        file.write_all(serializer.to_bytes().as_slice())
+        file.write_all(&serializer.to_bytes())
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
@@ -246,6 +236,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
+        trace!("Wrote file to Disk: {:?}", path);
         Ok(())
     }
 }
@@ -253,14 +244,15 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
 #[async_trait]
 impl<D, S> ChunkIO<D> for ChunkFileManager<S>
 where
-    D: 'static + Send + Sized + Sync,
-    S: ChunkSerializer<Data = D>,
+    D: 'static + Send + Sized + Sync + Clone,
+    S: 'static + ChunkSerializer<Data = D>,
 {
-    async fn load_chunks(
+    async fn stream_chunks(
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-    ) -> Vec<LoadedData<D, ChunkReadingError>> {
+        channel: mpsc::Sender<LoadedData<D, ChunkReadingError>>,
+    ) {
         let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
 
         for &at in chunk_coords {
@@ -272,34 +264,35 @@ where
                 .or_insert(vec![at]);
         }
 
-        let chunks_tasks = regions_chunks
-            .into_iter()
-            .map(async |(file_name, chunks)| {
-                let path = folder.region_folder.join(file_name);
+        let mut stream_tasks = JoinSet::new();
+        for (file_name, chunks) in regions_chunks {
+            let path = folder.region_folder.join(file_name);
+            let chunk_serializer = match self.read_file(&path).await {
+                Ok(chunk_serializer) => chunk_serializer,
+                Err(ChunkReadingError::ChunkNotExist) => {
+                    unreachable!("Default Serializer must be created")
+                }
+                Err(err) => {
+                    channel
+                        .send(LoadedData::<D, ChunkReadingError>::Error((chunks[0], err)))
+                        .await
+                        .expect("Failed to send error from stream_chunks!");
+                    return;
+                }
+            };
 
-                let chunk_serializer = match self.read_file(&path).await {
-                    Ok(chunk_serializer) => chunk_serializer,
-                    Err(ChunkReadingError::ChunkNotExist) => {
-                        unreachable!("Default Serializer must be created")
-                    }
-                    Err(err) => return vec![LoadedData::Error((chunks[0], err))],
-                };
-
+            let channel = channel.clone();
+            stream_tasks.spawn(async move {
+                log::trace!("Starting stream chunks for {:?}", path);
                 // We need to block the read to avoid other threads to write/modify the data
-                let chunk_guard = &chunk_serializer.read().await;
-                let fetched_chunks =
-                    tokio::task::block_in_place(|| chunk_guard.get_chunks_data(chunks.as_slice()));
-
-                fetched_chunks
-            })
-            .collect::<Vec<_>>();
-
-        let mut chunks_by_region = Vec::with_capacity(chunk_coords.len());
-        for task in chunks_tasks {
-            chunks_by_region.extend(task.await);
+                let chunk_guard = chunk_serializer.read().await;
+                chunk_guard.stream_chunk_data(&chunks, channel).await;
+                log::trace!("Completed stream chunks for {:?}", path);
+            });
         }
 
-        chunks_by_region
+        let _ = stream_tasks.join_all().await;
+        self.clean_cache().await;
     }
 
     async fn save_chunks(
@@ -318,65 +311,72 @@ where
                 .or_insert(vec![chunk.clone()]);
         }
 
-        let tasks = regions_chunks
-            .into_iter()
-            .map(async |(file_name, chunks)| {
-                let path = folder.region_folder.join(file_name);
+        let mut write_tasks: JoinSet<Result<(), ChunkWritingError>> = JoinSet::new();
 
-                let chunk_tasks = chunks
-                    .iter()
-                    .map(async |chunk| chunk.read().await)
-                    .collect::<Vec<_>>();
+        for (file_name, chunk_locks) in regions_chunks.into_iter() {
+            let path = folder.region_folder.join(file_name);
+            log::trace!("Saving file {}", path.display());
 
-                //TODO: Do we need to read the chunk from file to write it every time? Cant we just write to
-                //offsets in the file? Especially for the anvil format.
-                let chunk_serializer = match self.read_file(&path).await {
-                    Ok(file) => Ok(file),
-                    Err(ChunkReadingError::ChunkNotExist) => {
-                        unreachable!("Must be managed by the cache")
-                    }
-                    Err(ChunkReadingError::IoError(err)) => {
-                        error!("Error reading the data before write: {}", err);
-                        Err(ChunkWritingError::IoError(err))
-                    }
-                    Err(err) => {
-                        error!("Error reading the data before write: {:?}", err);
-                        Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
-                    }
-                }?;
-
-                // We need to block the read to avoid other threads to write/modify/read the data
-                let mut chunk_guard = chunk_serializer.write().await;
-
-                let mut chunks = Vec::with_capacity(chunks.len());
-                for chunk in chunk_tasks {
-                    chunks.push(chunk.await);
+            let chunk_serializer = match self.read_file(&path).await {
+                Ok(file) => Ok(file),
+                Err(ChunkReadingError::ChunkNotExist) => {
+                    unreachable!("Must be managed by the cache")
                 }
-                let chunks = chunks.iter().map(|c| c.deref()).collect::<Vec<_>>();
+                Err(ChunkReadingError::IoError(err)) => {
+                    error!("Error reading the data before write: {}", err);
+                    Err(ChunkWritingError::IoError(err))
+                }
+                Err(err) => {
+                    error!("Error reading the data before write: {:?}", err);
+                    Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
+                }
+            }?;
 
-                tokio::task::block_in_place(|| chunk_guard.add_chunks_data(chunks.as_slice()))?;
+            let chunks = {
+                let mut chunks = Vec::with_capacity(chunk_locks.len());
+                for chunk in chunk_locks {
+                    let chunk = match Arc::try_unwrap(chunk) {
+                        Ok(lock) => lock.into_inner(),
+                        Err(arc) => {
+                            // This is the less common case by far
+                            let chunk = arc.read().await;
+                            chunk.clone()
+                        }
+                    };
+                    chunks.push(chunk);
+                }
+                chunks
+            };
+
+            write_tasks.spawn(async move {
+                log::trace!("Starting save chunks for {:?}", path);
+                let mut chunk_guard = chunk_serializer.write().await;
+                chunk_guard.add_chunk_data(&chunks)?;
 
                 // With the modification done, we can drop the write lock but keep the read lock
                 // to avoid other threads to write/modify the data, but allow other threads to read it
                 let chunk_guard = &chunk_guard.downgrade();
-                self.write_file(&path, chunk_guard).await?;
+                Self::write_file(&path, chunk_guard).await?;
 
+                log::trace!("Completed save chunks for {:?}", path);
                 Ok(())
-            })
-            .collect::<Vec<_>>();
-
-        for task in tasks {
-            task.await?;
+            });
         }
 
+        // TODO: How do we want to handle errors? Currently this stops all of the rest of the
+        // files to save
+        let _ = write_tasks.join_all().await;
+
+        self.clean_cache().await;
         Ok(())
     }
 
-    fn cache_count(&self) -> usize {
-        tokio::task::block_in_place(|| self.file_locks.blocking_read().len())
+    async fn clean_up_log(&self) {
+        let locks = self.file_locks.read().await;
+        log::debug!("{} File locks remain in cache", locks.len());
     }
 
-    async fn wait_for_lock_releases(&self) {
+    async fn await_tasks(&self) {
         let locks: Vec<_> = self
             .file_locks
             .read()
@@ -387,7 +387,11 @@ where
 
         // Acquire a write lock on all entries to verify they are complete
         for lock in locks {
-            let _lock = lock.get().expect("it cant be uninitialized").write().await;
+            let _lock = lock
+                .get()
+                .expect("We initialize the once cells immediately")
+                .write()
+                .await;
         }
     }
 }
