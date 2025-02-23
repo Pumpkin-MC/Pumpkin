@@ -9,8 +9,11 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::sync::{RwLock, mpsc};
 
 use crate::{
-    chunk::{ChunkData, ChunkReadingError, anvil::AnvilChunkFile, linear::LinearFile},
-    chunks_io::{ChunkFileManager, ChunkIO, LoadedData},
+    chunk::{
+        ChunkData, ChunkReadingError,
+        format::{anvil::AnvilChunkFile, linear::LinearFile},
+        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
+    },
     generation::{Seed, WorldGenerator, get_world_gen},
     lock::{LevelLocker, anvil::AnvilLevelLocker},
     world_info::{
