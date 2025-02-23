@@ -87,7 +87,7 @@ impl Client {
                     }
                     ResourcePackResponseResult::DownloadFail => {
                         log::warn!(
-                            "Client {} failed to downloaded the resource pack. Is it avaliable on the internet?",
+                            "Client {} failed to downloaded the resource pack. Is it available on the internet?",
                             self.id
                         );
                     }
