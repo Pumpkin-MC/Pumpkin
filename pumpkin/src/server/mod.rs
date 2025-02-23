@@ -9,7 +9,7 @@ use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use pumpkin_util::math::vec2::Vec2;
 use pumpkin_util::math::vec3::Vec3;
 use pumpkin_util::text::TextComponent;

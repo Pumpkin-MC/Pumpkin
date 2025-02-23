@@ -6,7 +6,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 use async_trait::async_trait;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use pumpkin_util::math::vec3::Vec3;
 use pumpkin_util::text::TextComponent;
 

@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
 use pumpkin_macros::server_packet;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 
 use crate::VarInt;
 

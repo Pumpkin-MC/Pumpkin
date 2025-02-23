@@ -2,7 +2,7 @@ use num_traits::{One, PrimInt, Zero};
 
 pub mod boundingbox;
 pub mod experience;
-pub mod position;
+pub mod pos;
 pub mod vec2;
 pub mod vec3;
 pub mod voxel_shape;

@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::PLAY_USE_ITEM_ON;
 use pumpkin_macros::server_packet;
-use pumpkin_util::math::{position::BlockPos, vec3::Vec3};
+use pumpkin_util::math::{pos::BlockPos, vec3::Vec3};
 use serde::Deserialize;
 
 use crate::VarInt;

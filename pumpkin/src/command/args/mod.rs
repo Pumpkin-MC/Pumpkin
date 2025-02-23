@@ -10,7 +10,7 @@ use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, Suggestion
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
     GameMode,
-    math::{position::BlockPos, vec2::Vec2, vec3::Vec3},
+    math::{pos::BlockPos, vec2::Vec2, vec3::Vec3},
 };
 
 use super::{

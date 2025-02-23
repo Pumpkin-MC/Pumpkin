@@ -54,7 +54,7 @@ use pumpkin_util::{
     math::{
         boundingbox::{BoundingBox, EntityDimensions},
         experience,
-        position::BlockPos,
+        pos::BlockPos,
         vec2::Vec2,
         vec3::Vec3,
     },

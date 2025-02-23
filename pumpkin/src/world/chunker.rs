@@ -2,7 +2,7 @@ use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
-use pumpkin_util::math::{get_section_cord, position::BlockPos, vec3::Vec3};
+use pumpkin_util::math::{get_section_cord, pos::BlockPos, vec3::Vec3};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;

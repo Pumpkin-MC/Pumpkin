@@ -1,4 +1,4 @@
-use super::{position::BlockPos, vec3::Vec3};
+use super::{pos::BlockPos, vec3::Vec3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {

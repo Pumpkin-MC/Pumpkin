@@ -42,7 +42,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     GameMode,

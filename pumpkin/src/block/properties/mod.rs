@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use pumpkin_world::{
     block::{
         BlockDirection,
