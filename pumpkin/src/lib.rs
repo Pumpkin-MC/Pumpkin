@@ -80,14 +80,27 @@ pub static LOGGER_IMPL: LazyLock<Option<(Box<dyn Log>, LevelFilter)>> = LazyLock
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if ADVANCED_CONFIG.commands.use_console {
-            let (rl, stdout) = Readline::new("$ ".to_owned()).unwrap();
-            let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-            let _ = _INPUT_HOLDER.set(Mutex::new(Some(rl)));
-            Some((Box::new(logger), level))
-        } else {
+        if !ADVANCED_CONFIG.commands.use_console {
             let logger = simplelog::SimpleLogger::new(level, config.build());
             Some((Box::new(logger), level))
+        } else {
+            // Try to set up console logger, fall back to simple logger if it fails
+            match Readline::new("$ ".to_owned()) {
+                Ok((rl, stdout)) => {
+                    config.set_write_log_enable_colors(true);
+                    let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
+                    let _ = _INPUT_HOLDER.set(Mutex::new(Some(rl)));
+                    Some((Box::new(logger), level))
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to initialize console input ({}), falling back to simple logger",
+                        e
+                    );
+                    let logger = simplelog::SimpleLogger::new(level, config.build());
+                    Some((Box::new(logger), level))
+                }
+            }
         }
     } else {
         None
