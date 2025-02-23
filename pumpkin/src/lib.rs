@@ -9,7 +9,6 @@ use plugin::PluginManager;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
@@ -17,9 +16,10 @@ use std::{
     net::SocketAddr,
     sync::{Arc, LazyLock},
 };
+use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::Notify;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, tcp::OwnedReadHalf},
@@ -117,27 +117,59 @@ pub struct PumpkinServer {
     pub listener: TcpListener,
     pub server_addr: SocketAddr,
     readline_handle: Option<JoinHandle<Readline>>,
-    tasks_to_await: Vec<JoinHandle<()>>,
+    server_tasks: JoinSet<()>,
+    player_tasks: JoinSet<()>,
 }
 
 impl PumpkinServer {
     pub async fn new() -> Self {
         let server = Arc::new(Server::new());
 
-        // Setup the TCP server socket.
         let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.server_address)
             .await
             .expect("Failed to start TcpListener");
-        // In the event the user puts 0 for their port, this will allow us to know what port it is running on
-        let addr = listener
-            .local_addr()
-            .expect("Unable to get the address of server!");
+        let addr = listener.local_addr().expect("Failed to get server address");
 
-        let rcon = ADVANCED_CONFIG.networking.rcon.clone();
+        let mut server_tasks = JoinSet::new();
+        let player_tasks = JoinSet::new();
 
-        let mut ticker = Ticker::new(BASIC_CONFIG.tps);
+        server_tasks.spawn({
+            let server = server.clone();
+            async move {
+                let mut ticker = Ticker::new(BASIC_CONFIG.tps);
+                ticker.run(&server).await;
+            }
+        });
+
+        if ADVANCED_CONFIG.networking.rcon.enabled {
+            server_tasks.spawn({
+                let server = server.clone();
+                let rcon = ADVANCED_CONFIG.networking.rcon.clone();
+                async move {
+                    RCONServer::new(&rcon, server).await.unwrap();
+                }
+            });
+        }
+
+        if ADVANCED_CONFIG.networking.query.enabled {
+            server_tasks.spawn({
+                let server = server.clone();
+                async move {
+                    log::info!("Starting query handler");
+                    query::start_query_handler(server, addr).await;
+                }
+            });
+        }
+
+        if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
+            server_tasks.spawn(async move {
+                log::info!("Starting LAN broadcast");
+                lan_broadcast::start_lan_broadcast(addr).await;
+            });
+        }
 
         let mut readline = None;
+
         if let Some(rt) = _INPUT_HOLDER.get() {
             let mut rt = rt.lock().await;
             let rt = rt.take().unwrap();
@@ -145,205 +177,184 @@ impl PumpkinServer {
             readline = Some(handle);
         }
 
-        if rcon.enabled {
-            let server = server.clone();
-            tokio::spawn(async move {
-                RCONServer::new(&rcon, server).await.unwrap();
-            });
-        }
-
-        if ADVANCED_CONFIG.networking.query.enabled {
-            log::info!("Query protocol enabled. Starting...");
-            tokio::spawn(query::start_query_handler(server.clone(), addr));
-        }
-
-        if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
-            log::info!("LAN broadcast enabled. Starting...");
-            tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
-        }
-
-        let mut tasks_to_await = Vec::new();
-        // Ticker
-        {
-            let server = server.clone();
-            let handle = tokio::spawn(async move {
-                ticker.run(&server).await;
-            });
-            tasks_to_await.push(handle);
-        };
-
         Self {
-            server: server.clone(),
+            server,
             listener,
             server_addr: addr,
             readline_handle: readline,
-            tasks_to_await,
+            server_tasks,
+            player_tasks,
         }
     }
 
     pub async fn init_plugins(&self) {
-        let mut loader_lock = PLUGIN_MANAGER.lock().await;
-        loader_lock.set_server(self.server.clone());
-        if let Err(err) = loader_lock.load_plugins().await {
-            log::error!("{}", err.to_string());
-        };
+        let mut loader = PLUGIN_MANAGER.lock().await;
+        loader.set_server(self.server.clone());
+        if let Err(e) = loader.load_plugins().await {
+            log::error!("Plugin loading error: {}", e);
+        }
     }
 
-    pub async fn start(self) {
-        let mut master_client_id: usize = 0;
-        let tasks = Arc::new(Mutex::new(HashMap::new()));
+    pub async fn start(mut self) {
+        let mut master_client_id = 0usize;
 
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
-            let await_new_client = || async {
-                let t1 = self.listener.accept();
-                let t2 = STOP_INTERRUPT.notified();
-
-                select! {
-                    client = t1 => Some(client.unwrap()),
-                    () = t2 => None,
-                }
+            let (connection, client_addr) = select! {
+                conn = self.listener.accept() => match conn {
+                    Ok((s, a)) => (s, a),
+                    Err(e) => {
+                        log::error!("Accept error: {}", e);
+                        continue;
+                    }
+                },
+                _ = STOP_INTERRUPT.notified() => break,
             };
 
-            // Asynchronously wait for an inbound socket.
-            let Some((connection, client_addr)) = await_new_client().await else {
-                break;
-            };
-
-            if let Err(e) = connection.set_nodelay(true) {
-                log::warn!("failed to set TCP_NODELAY {e}");
-            }
-
-            let id = master_client_id;
+            self.handle_connection(connection, client_addr, master_client_id)
+                .await;
             master_client_id = master_client_id.wrapping_add(1);
+        }
 
-            let formatted_address = if BASIC_CONFIG.scrub_ips {
-                scrub_address(&format!("{client_addr}"))
-            } else {
-                format!("{client_addr}")
-            };
-            log::info!(
-                "Accepted connection from: {} (id {})",
-                formatted_address,
-                id
-            );
+        self.cleanup().await;
+    }
 
-            let (tx, mut rx) = tokio::sync::mpsc::channel(64);
-            let (mut connection_reader, connection_writer) = connection.into_split();
+    async fn cleanup(mut self) {
+        log::info!("Stopping server...");
 
-            let client = Arc::new(Client::new(tx, client_addr, id));
+        // Stopping input
+        if let Some(rl) = self.readline_handle.take() {
+            let _ = rl.await.unwrap().flush();
+        }
 
-            let client_clone = client.clone();
-            // This task will be cleaned up on its own
-            tokio::spawn(async move {
-                let mut connection_writer = connection_writer;
+        // Kicking players
+        let kick_msg = TextComponent::text("Server stopped");
+        for player in self.server.get_all_players().await {
+            player.kick(kick_msg.clone()).await;
+        }
 
-                // We clone ownership of `tx` into here thru the client so this will never drop
-                // since there is always a tx in memory. We need to explicitly tell the recv to stop
-                while let Some(notif) = rx.recv().await {
-                    match notif {
+        // Awaiting server tasks
+        while let Some(res) = self.server_tasks.join_next().await {
+            if let Err(e) = res {
+                log::error!("Server task failed: {}", e);
+            }
+        }
+
+        // Awaiting player tasks
+        while let Some(res) = self.player_tasks.join_next().await {
+            if let Err(e) = res {
+                log::error!("Player task failed: {}", e);
+            }
+        }
+
+        // Saving
+        self.server.save().await;
+        logger().flush();
+    }
+
+    async fn handle_connection(
+        &mut self,
+        connection: TcpStream,
+        client_addr: SocketAddr,
+        id: usize,
+    ) {
+        if let Err(e) = connection.set_nodelay(true) {
+            log::warn!("Failed to set TCP_NODELAY: {}", e);
+        }
+
+        let (reader, writer) = connection.into_split();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+        let client = Arc::new(Client::new(tx, client_addr, id));
+
+        // Writer task
+        self.player_tasks.spawn({
+            let client = client.clone();
+            async move {
+                let mut writer = writer;
+                let mut rx = rx;
+
+                while let Some(state) = rx.recv().await {
+                    match state {
                         PacketHandlerState::PacketReady => {
-                            let buf = {
-                                let mut enc = client_clone.enc.lock().await;
-                                enc.take()
-                            };
-
-                            if let Err(e) = connection_writer.write_all(&buf).await {
-                                log::warn!("Failed to write packet to client: {e}");
-                                client_clone.close().await;
+                            let buf = client.enc.lock().await.take();
+                            if writer.write_all(&buf).await.is_err() {
                                 break;
                             }
                         }
                         PacketHandlerState::Stop => break,
                     }
                 }
-            });
+                client.close().await;
+            }
+        });
 
+        // Reader task
+        self.player_tasks.spawn({
             let server = self.server.clone();
-            let tasks_clone = tasks.clone();
-            // We need to await these to verify all cleanup code is complete
-            let handle = tokio::spawn(async move {
-                while !client.closed.load(std::sync::atomic::Ordering::Relaxed)
-                    && !client
-                        .make_player
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    let open = poll(&client, &mut connection_reader).await;
-                    if open {
-                        client.process_packets(&server).await;
-                    };
-                }
-                if client
-                    .make_player
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    let (player, world) = server.add_player(client).await;
-                    world
-                        .spawn_player(&BASIC_CONFIG, player.clone(), &server)
-                        .await;
-
-                    // poll Player
-                    while !player
-                        .client
-                        .closed
-                        .load(core::sync::atomic::Ordering::Relaxed)
-                    {
-                        let open = poll(&player.client, &mut connection_reader).await;
-                        if open {
-                            player.process_packets(&server).await;
-                        };
-                    }
-                    log::debug!("Cleaning up player for id {}", id);
-                    player.remove().await;
-                    server.remove_player().await;
-                    tasks_clone.lock().await.remove(&id);
-                }
-            });
-            tasks.lock().await.insert(id, Some(handle));
-        }
-        // Keep it in scope for logging
-        let rl = match self.readline_handle {
-            Some(rl) => Some(rl.await.unwrap()),
-            None => None,
-        };
-
-        log::info!("Stopped accepting incoming connections");
-
-        let kick_message = TextComponent::text("Server stopped");
-        for player in self.server.get_all_players().await {
-            player.kick(kick_message.clone()).await;
-        }
-
-        log::info!("Ending server tasks");
-
-        for handle in self.tasks_to_await.into_iter() {
-            if let Err(err) = handle.await {
-                log::error!("Failed to join server task: {}", err.to_string());
+            async move {
+                process_client_connection(reader, client, server).await;
             }
-        }
-
-        let handles: Vec<Option<JoinHandle<()>>> = tasks
-            .lock()
-            .await
-            .values_mut()
-            .map(|val| val.take())
-            .collect();
-
-        log::info!("Ending player tasks");
-
-        for handle in handles.into_iter().flatten() {
-            if let Err(err) = handle.await {
-                log::error!("Failed to join player task: {}", err.to_string());
-            }
-        }
-
-        self.server.save().await;
-
-        log::info!("Completed save!");
-        logger().flush();
-        if let Some(mut rl) = rl {
-            let _ = rl.flush();
-        }
+        });
     }
+}
+
+async fn process_client_connection(
+    mut reader: OwnedReadHalf,
+    client: Arc<Client>,
+    server: Arc<Server>,
+) {
+    let addr = client.address.lock().await.to_string();
+    let id = client.id;
+
+    let formatted_address = if BASIC_CONFIG.scrub_ips {
+        scrub_address(&addr)
+    } else {
+        addr.clone()
+    };
+
+    log::info!(
+        "Accepted connection from: {} (id {})",
+        formatted_address,
+        id
+    );
+
+    while !client.closed.load(std::sync::atomic::Ordering::Relaxed)
+        && !client
+            .make_player
+            .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        if !poll(&client, &mut reader).await {
+            break;
+        }
+        client.process_packets(&server).await;
+    }
+
+    if client
+        .make_player
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        let (player, world) = server.add_player(client).await;
+        world
+            .spawn_player(&BASIC_CONFIG, player.clone(), &server)
+            .await;
+
+        while !player
+            .client
+            .closed
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            if !poll(&player.client, &mut reader).await {
+                break;
+            }
+            player.process_packets(&server).await;
+        }
+
+        log::debug!("Cleaning up player for id {}", id);
+        player.remove().await;
+        server.remove_player().await;
+    }
+
+    log::debug!("Connection {} (ID {}) closed", addr, id);
 }
 
 fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<Readline> {
