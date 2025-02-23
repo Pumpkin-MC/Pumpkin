@@ -3,6 +3,7 @@ use bytes::*;
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
@@ -15,12 +16,13 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use crate::block::registry::STATE_ID_TO_REGISTRY_ID;
-use crate::chunks_io::{ChunkSerializer, LoadedData};
-
-use super::{
-    ChunkData, ChunkNbt, ChunkReadingError, ChunkSection, ChunkSectionBlockStates,
-    ChunkSerializingError, ChunkWritingError, CompressionError, PaletteEntry,
+use crate::{
+    block::registry::STATE_ID_TO_REGISTRY_ID,
+    chunk::{
+        ChunkData, ChunkNbt, ChunkReadingError, ChunkSection, ChunkSectionBlockStates,
+        ChunkSerializingError, ChunkWritingError, CompressionError, PaletteEntry,
+        io::{ChunkSerializer, LoadedData},
+    },
 };
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
@@ -494,7 +496,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         data_version: WORLD_DATA_VERSION,
         x_pos: chunk_data.position.x,
         z_pos: chunk_data.position.z,
-        status: super::ChunkStatus::Full,
+        status: ChunkStatus::Full,
         heightmaps: chunk_data.heightmap.clone(),
         sections,
     };
@@ -513,12 +515,12 @@ mod tests {
     use temp_dir::TempDir;
     use tokio::sync::{RwLock, mpsc};
 
+    use crate::chunk::format::anvil::AnvilChunkFile;
+    use crate::chunk::io::chunk_file_manager::ChunkFileManager;
+    use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::generation::{Seed, get_world_gen};
-    use crate::{
-        chunk::anvil::AnvilChunkFile,
-        chunks_io::{ChunkFileManager, ChunkIO, LoadedData},
-        level::LevelFolder,
-    };
+    use crate::level::LevelFolder;
+    
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");

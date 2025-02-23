@@ -11,8 +11,8 @@ use crate::{
     coordinates::{ChunkRelativeBlockCoordinates, Height},
 };
 
-pub mod anvil;
-pub mod linear;
+pub mod format;
+pub mod io;
 
 pub const CHUNK_AREA: usize = 16 * 16;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;

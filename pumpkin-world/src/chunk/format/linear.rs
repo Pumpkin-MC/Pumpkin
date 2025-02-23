@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::chunk::anvil::AnvilChunkFile;
-use crate::chunks_io::{ChunkSerializer, LoadedData};
+use crate::chunk::format::anvil::AnvilChunkFile;
+use crate::chunk::io::{ChunkSerializer, LoadedData};
+use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut};
 use log::error;
@@ -14,7 +15,6 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::sync::Notify;
 
 use super::anvil::{CHUNK_COUNT, SUBREGION_BITS, chunk_to_bytes};
-use super::{ChunkData, ChunkReadingError, ChunkWritingError};
 
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
@@ -390,12 +390,11 @@ mod tests {
     use temp_dir::TempDir;
     use tokio::sync::{RwLock, mpsc};
 
+    use crate::chunk::format::linear::LinearFile;
+    use crate::chunk::io::chunk_file_manager::ChunkFileManager;
+    use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::generation::{Seed, get_world_gen};
-    use crate::{
-        chunk::linear::LinearFile,
-        chunks_io::{ChunkFileManager, ChunkIO, LoadedData},
-        level::LevelFolder,
-    };
+    use crate::level::LevelFolder;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
