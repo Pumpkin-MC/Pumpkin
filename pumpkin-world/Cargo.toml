@@ -10,6 +10,9 @@ pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-data = { path = "../pumpkin-data" }
 
+
+async-trait.workspace = true
+
 bytes.workspace = true
 
 
@@ -26,6 +29,8 @@ num-derive = "0.4"
 dashmap = "6.1"
 
 num-traits = "0.2"
+
+parking_lot = "0.12.3"
 
 # Compression
 flate2 = "1.0"
