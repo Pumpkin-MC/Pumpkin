@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
@@ -64,8 +64,8 @@ impl MaybeRelativePosition3D {
         ))
     }
 
-    fn try_to_absolute(self, origin: Option<Vector3<f64>>) -> Option<Vector3<f64>> {
-        Some(Vector3::new(
+    fn try_to_absolute(self, origin: Option<Vec3<f64>>) -> Option<Vec3<f64>> {
+        Some(Vec3::new(
             self.0.into_absolute(origin.map(|o| o.x))?,
             self.1.into_absolute(origin.map(|o| o.y))?,
             self.2.into_absolute(origin.map(|o| o.z))?,
@@ -80,7 +80,7 @@ impl DefaultNameArgConsumer for Position3DArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for Position3DArgumentConsumer {
-    type Data = Vector3<f64>;
+    type Data = Vec3<f64>;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

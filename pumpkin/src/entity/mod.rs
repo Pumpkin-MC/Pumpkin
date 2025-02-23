@@ -22,8 +22,8 @@ use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
     get_section_cord,
     position::BlockPos,
-    vector2::Vector2,
-    vector3::Vector3,
+    vector2::Vec2,
+    vector3::Vec3,
     wrap_degrees,
 };
 use serde::Serialize;
@@ -65,11 +65,11 @@ pub struct Entity {
     /// The world in which the entity exists.
     pub world: Arc<RwLock<Arc<World>>>,
     /// The entity's current position in the world
-    pub pos: AtomicCell<Vector3<f64>>,
+    pub pos: AtomicCell<Vec3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
     pub block_pos: AtomicCell<BlockPos>,
     /// The chunk coordinates of the entity's current position
-    pub chunk_pos: AtomicCell<Vector2<i32>>,
+    pub chunk_pos: AtomicCell<Vec2<i32>>,
     /// Indicates whether the entity is sneaking
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
@@ -77,7 +77,7 @@ pub struct Entity {
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka Knockback
-    pub velocity: AtomicCell<Vector3<f64>>,
+    pub velocity: AtomicCell<Vec3<f64>>,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
     /// The entity's yaw rotation (horizontal rotation) ← →
@@ -106,7 +106,7 @@ impl Entity {
         entity_id: EntityId,
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
-        position: Vector3<f64>,
+        position: Vec3<f64>,
         entity_type: EntityType,
         standing_eye_height: f32,
         bounding_box: AtomicCell<BoundingBox>,
@@ -123,8 +123,8 @@ impl Entity {
             entity_type,
             on_ground: AtomicBool::new(false),
             pos: AtomicCell::new(position),
-            block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
-            chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
+            block_pos: AtomicCell::new(BlockPos(Vec3::new(floor_x, floor_y, floor_z))),
+            chunk_pos: AtomicCell::new(Vec2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
             // TODO: Load this from previous instance
@@ -133,7 +133,7 @@ impl Entity {
             yaw: AtomicCell::new(0.0),
             head_yaw: AtomicCell::new(0.0),
             pitch: AtomicCell::new(0.0),
-            velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            velocity: AtomicCell::new(Vec3::new(0.0, 0.0, 0.0)),
             standing_eye_height,
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
@@ -146,7 +146,7 @@ impl Entity {
     /// Updates the entity's position, block position, and chunk position.
     ///
     /// This function calculates the new position, block position, and chunk position based on the provided coordinates. If any of these values change, the corresponding fields are updated.
-    pub fn set_pos(&self, new_position: Vector3<f64>) {
+    pub fn set_pos(&self, new_position: Vec3<f64>) {
         let pos = self.pos.load();
         if pos != new_position {
             self.pos.store(new_position);
@@ -167,14 +167,14 @@ impl Entity {
                 || floor_y != block_pos_vec.y
                 || floor_z != block_pos_vec.z
             {
-                let new_block_pos = Vector3::new(floor_x, floor_y, floor_z);
+                let new_block_pos = Vec3::new(floor_x, floor_y, floor_z);
                 self.block_pos.store(BlockPos(new_block_pos));
 
                 let chunk_pos = self.chunk_pos.load();
                 if get_section_cord(floor_x) != chunk_pos.x
                     || get_section_cord(floor_z) != chunk_pos.z
                 {
-                    self.chunk_pos.store(Vector2::new(
+                    self.chunk_pos.store(Vec2::new(
                         get_section_cord(new_block_pos.x),
                         get_section_cord(new_block_pos.z),
                     ));
@@ -184,12 +184,12 @@ impl Entity {
     }
 
     /// Returns entity rotation as vector
-    pub fn rotation(&self) -> Vector3<f32> {
+    pub fn rotation(&self) -> Vec3<f32> {
         // Convert degrees to radians if necessary
         let yaw_rad = self.yaw.load().to_radians();
         let pitch_rad = self.pitch.load().to_radians();
 
-        Vector3::new(
+        Vec3::new(
             yaw_rad.cos() * pitch_rad.cos(),
             pitch_rad.sin(),
             yaw_rad.sin() * pitch_rad.cos(),
@@ -198,7 +198,7 @@ impl Entity {
     }
 
     /// Changes this entity's pitch and yaw to look at target
-    pub async fn look_at(&self, target: Vector3<f64>) {
+    pub async fn look_at(&self, target: Vec3<f64>) {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
@@ -228,14 +228,14 @@ impl Entity {
             .await;
     }
 
-    pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
+    pub async fn teleport(&self, position: Vec3<f64>, yaw: f32, pitch: f32) {
         self.world
             .read()
             .await
             .broadcast_packet_all(&CTeleportEntity::new(
                 self.entity_id.into(),
                 position,
-                Vector3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
                 yaw,
                 pitch,
                 // TODO
@@ -294,9 +294,9 @@ impl Entity {
             z = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
         }
 
-        let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
+        let var8 = Vec3::new(x, 0.0, z).normalize() * strength;
         let velocity = self.velocity.load();
-        self.velocity.store(Vector3::new(
+        self.velocity.store(Vec3::new(
             velocity.x / 2.0 - var8.x,
             if self.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
                 (velocity.y / 2.0 + strength).min(0.4)
@@ -425,12 +425,12 @@ impl NBTStorage for Entity {
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        self.pos.store(Vector3::new(x, y, z));
+        self.pos.store(Vec3::new(x, y, z));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
         let y = velocity[1].extract_double().unwrap_or(0.0);
         let z = velocity[2].extract_double().unwrap_or(0.0);
-        self.velocity.store(Vector3::new(x, y, z));
+        self.velocity.store(Vec3::new(x, y, z));
         let rotation = nbt.get_list("Rotation").unwrap();
         let yaw = rotation[0].extract_float().unwrap_or(0.0);
         let pitch = rotation[1].extract_float().unwrap_or(0.0);

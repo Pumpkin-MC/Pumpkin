@@ -1,5 +1,5 @@
 use pumpkin_data::chunk::Biome;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vec2;
 
 use crate::{
     block::state::BlockState,
@@ -38,14 +38,14 @@ impl GeneratorInit for SuperflatTerrainGenerator {
 }
 
 impl TerrainGenerator for SuperflatTerrainGenerator {
-    fn prepare_chunk(&self, _at: &Vector2<i32>) {}
-    fn clean_chunk(&self, _at: &Vector2<i32>) {}
+    fn prepare_chunk(&self, _at: &Vec2<i32>) {}
+    fn clean_chunk(&self, _at: &Vec2<i32>) {}
 
     // TODO allow specifying which blocks should be at which height in the config.
     fn generate_block(
         &self,
-        _chunk_pos: &Vector2<i32>,
-        _at: pumpkin_util::math::vector3::Vector3<i32>,
+        _chunk_pos: &Vec2<i32>,
+        _at: pumpkin_util::math::vector3::Vec3<i32>,
         _biome: Biome,
     ) -> BlockState {
         todo!()

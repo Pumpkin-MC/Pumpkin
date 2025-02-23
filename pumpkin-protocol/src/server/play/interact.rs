@@ -1,7 +1,7 @@
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::PLAY_INTERACT;
 use pumpkin_macros::server_packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 use crate::{
     ServerPacket, VarInt,
@@ -12,7 +12,7 @@ use crate::{
 pub struct SInteract {
     pub entity_id: VarInt,
     pub typ: VarInt,
-    pub target_position: Option<Vector3<f32>>,
+    pub target_position: Option<Vec3<f32>>,
     pub hand: Option<VarInt>,
     pub sneaking: bool,
 }
@@ -24,10 +24,10 @@ impl ServerPacket for SInteract {
         let typ = bytebuf.try_get_var_int()?;
         let action = ActionType::try_from(typ.0)
             .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
-        let target_position: Option<Vector3<f32>> = match action {
+        let target_position: Option<Vec3<f32>> = match action {
             ActionType::Interact => None,
             ActionType::Attack => None,
-            ActionType::InteractAt => Some(Vector3::new(
+            ActionType::InteractAt => Some(Vec3::new(
                 bytebuf.try_get_f32()?,
                 bytebuf.try_get_f32()?,
                 bytebuf.try_get_f32()?,

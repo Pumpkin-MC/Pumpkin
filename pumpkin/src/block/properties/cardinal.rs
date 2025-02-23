@@ -2,7 +2,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_macros::block_property;
 use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{position::BlockPos, vector3::Vec3};
 use pumpkin_world::block::{BlockDirection, registry::Block};
 
 use super::{BlockProperties, BlockProperty, BlockPropertyMetadata, Direction};
@@ -95,7 +95,7 @@ pub async fn evaluate_fence_direction(
             return North::True.value();
         }
         if block.id != 0 {
-            let other_side_block = BlockPos(block_pos.0.add(&Vector3::new(0, 1, 0)));
+            let other_side_block = BlockPos(block_pos.0.add(&Vec3::new(0, 1, 0)));
             let block = world.get_block(&other_side_block).await.unwrap();
             if block.id != 0 {
                 return North::Tall.value();

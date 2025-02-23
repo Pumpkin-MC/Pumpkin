@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_PARTICLES;
 use pumpkin_macros::client_packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -11,8 +11,8 @@ pub struct CParticle<'a> {
     force_spawn: bool,
     /// If true, particle distance increases from 256 to 65536.
     important: bool,
-    position: Vector3<f64>,
-    offset: Vector3<f32>,
+    position: Vec3<f64>,
+    offset: Vec3<f32>,
     max_speed: f32,
     particle_count: i32,
     pariticle_id: VarInt,
@@ -24,8 +24,8 @@ impl<'a> CParticle<'a> {
     pub fn new(
         force_spawn: bool,
         important: bool,
-        position: Vector3<f64>,
-        offset: Vector3<f32>,
+        position: Vec3<f64>,
+        offset: Vec3<f32>,
         max_speed: f32,
         particle_count: i32,
         pariticle_id: VarInt,

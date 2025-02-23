@@ -5,7 +5,7 @@ use super::{
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange, NoisePos},
 };
 use enum_dispatch::enum_dispatch;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vec2;
 
 use crate::generation::{
     biome_coords,
@@ -396,7 +396,7 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let packed_column = chunk_pos::packed(&Vector2::new(pos.x(), pos.z()));
+        let packed_column = chunk_pos::packed(&Vec2::new(pos.x(), pos.z()));
         if packed_column == self.last_sample_column {
             self.last_sample_result
         } else {

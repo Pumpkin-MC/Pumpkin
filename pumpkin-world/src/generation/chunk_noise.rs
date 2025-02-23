@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_macros::block_state;
-use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2};
+use pumpkin_util::math::{floor_div, floor_mod, vector2::Vec2};
 
 use crate::{block::BlockState, generation::section_coords};
 
@@ -52,7 +52,7 @@ impl ChunkNoiseHeightEstimator {
     ) -> i32 {
         let biome_aligned_x = biome_coords::to_block(biome_coords::from_block(block_x));
         let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
-        let packed = chunk_pos::packed(&Vector2::new(biome_aligned_x, biome_aligned_z));
+        let packed = chunk_pos::packed(&Vec2::new(biome_aligned_x, biome_aligned_z));
 
         if let Some(estimate) = self.surface_height_estimate.get(&packed) {
             *estimate
@@ -203,7 +203,7 @@ pub struct ChunkNoiseGenerator<'a> {
     pub state_sampler: BlockStateSampler,
     generation_shape: GenerationShape,
 
-    start_cell_pos: Vector2<i32>,
+    start_cell_pos: Vec2<i32>,
 
     vertical_cell_count: usize,
     minimum_cell_y: i32,
@@ -228,7 +228,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         aquifers: bool,
         ore_veins: bool,
     ) -> Self {
-        let start_cell_pos = Vector2::new(
+        let start_cell_pos = Vec2::new(
             floor_div(
                 start_block_x,
                 generation_shape.horizontal_cell_block_count() as i32,
@@ -239,7 +239,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             ),
         );
 
-        let biome_pos = Vector2::new(
+        let biome_pos = Vec2::new(
             biome_coords::from_block(start_block_x),
             biome_coords::from_block(start_block_z),
         );
@@ -270,7 +270,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             let section_x = section_coords::block_to_section(start_block_x);
             let section_z = section_coords::block_to_section(start_block_z);
             AquiferSampler::Aquifier(WorldAquiferSampler::new(
-                Vector2::new(section_x, section_z),
+                Vec2::new(section_x, section_z),
                 random_config.aquifier_random_deriver.clone(),
                 generation_shape.min_y(),
                 generation_shape.height(),

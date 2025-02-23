@@ -8,7 +8,7 @@ use args::ConsumedArgs;
 use async_trait::async_trait;
 
 use dispatcher::CommandError;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::TextComponent;
 
@@ -82,7 +82,7 @@ impl CommandSender<'_> {
     }
 
     #[must_use]
-    pub fn position(&self) -> Option<Vector3<f64>> {
+    pub fn position(&self) -> Option<Vec3<f64>> {
         match self {
             CommandSender::Console | CommandSender::Rcon(..) => None,
             CommandSender::Player(p) => Some(p.living_entity.entity.pos.load()),

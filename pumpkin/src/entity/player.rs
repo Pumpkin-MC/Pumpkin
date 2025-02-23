@@ -55,8 +55,8 @@ use pumpkin_util::{
         boundingbox::{BoundingBox, EntityDimensions},
         experience,
         position::BlockPos,
-        vector2::Vector2,
-        vector3::Vector3,
+        vector2::Vec2,
+        vector3::Vec3,
     },
     permission::PermissionLvl,
     text::TextComponent,
@@ -123,7 +123,7 @@ pub struct Player {
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
     /// The pending teleport information, including the teleport ID and target location.
-    pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
+    pub awaiting_teleport: Mutex<Option<(VarInt, Vec3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
     /// Did we send a keep alive Packet and wait for the response?
@@ -183,7 +183,7 @@ impl Player {
                 entity_id,
                 player_uuid,
                 world,
-                Vector3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
                 EntityType::PLAYER,
                 EntityType::PLAYER.eye_height,
                 AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
@@ -204,14 +204,14 @@ impl Player {
             carried_item: AtomicCell::new(None),
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
-            mining_pos: Mutex::new(BlockPos(Vector3::new(0, 0, 0))),
+            mining_pos: Mutex::new(BlockPos(Vec3::new(0, 0, 0))),
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn
             // (We left shift by one so we can search around that chunk)
             watched_section: AtomicCell::new(Cylindrical::new(
-                Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+                Vec2::new(i32::MAX >> 1, i32::MAX >> 1),
                 unsafe { NonZeroU8::new_unchecked(1) },
             )),
             wait_for_keep_alive: AtomicBool::new(false),
@@ -401,8 +401,8 @@ impl Player {
 
     pub async fn spawn_particle(
         &self,
-        position: Vector3<f64>,
-        offset: Vector3<f32>,
+        position: Vec3<f64>,
+        offset: Vec3<f32>,
         max_speed: f32,
         particle_count: i32,
         pariticle: Particle,
@@ -425,7 +425,7 @@ impl Player {
         &self,
         sound_id: u16,
         category: SoundCategory,
-        position: &Vector3<f64>,
+        position: &Vec3<f64>,
         volume: f32,
         pitch: f32,
         seed: f64,
@@ -549,7 +549,7 @@ impl Player {
     }
 
     #[expect(clippy::cast_precision_loss)]
-    pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
+    pub async fn progress_motion(&self, delta_pos: Vec3<f64>) {
         // TODO: Swming, Glding...
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
@@ -594,7 +594,7 @@ impl Player {
         self.living_entity.entity.world.read().await.clone()
     }
 
-    pub fn position(&self) -> Vector3<f64> {
+    pub fn position(&self) -> Vec3<f64> {
         self.living_entity.entity.pos.load()
     }
 
@@ -685,7 +685,7 @@ impl Player {
             }
         });
         self.watched_section.store(Cylindrical::new(
-            Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+            Vec2::new(i32::MAX >> 1, i32::MAX >> 1),
             unsafe { NonZeroU8::new_unchecked(1) },
         ));
     }
@@ -694,7 +694,7 @@ impl Player {
     pub async fn teleport_world(
         self: Arc<Self>,
         new_world: Arc<World>,
-        position: Option<Vector3<f64>>,
+        position: Option<Vec3<f64>>,
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
@@ -707,7 +707,7 @@ impl Player {
         self.unload_watched_chunks(&current_world).await;
         let last_pos = self.living_entity.last_pos.load();
         let death_dimension = self.world().await.dimension_type.name();
-        let death_location = BlockPos(Vector3::new(
+        let death_location = BlockPos(Vec3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
             last_pos.z.round() as i32,
@@ -733,11 +733,11 @@ impl Player {
         let position = if let Some(pos) = position {
             pos
         } else {
-            Vector3::new(
+            Vec3::new(
                 f64::from(info.spawn_x),
                 f64::from(
                     new_world
-                        .get_top_block(Vector2::new(
+                        .get_top_block(Vec2::new(
                             f64::from(info.spawn_x) as i32,
                             f64::from(info.spawn_x) as i32,
                         ))
@@ -758,7 +758,7 @@ impl Player {
     /// Yaw and Pitch in degrees
     /// Rarly used, For example when waking up player from bed or first time spawn. Otherwise entity teleport is used
     /// Player should respond with the `SConfirmTeleport` packet
-    pub async fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
+    pub async fn request_teleport(&self, position: Vec3<f64>, yaw: f32, pitch: f32) {
         // this is the ultra special magic code used to create the teleport id
         // This returns the old value
         // This operation wraps around on overflow.
@@ -774,7 +774,7 @@ impl Player {
             .send_packet(&CPlayerPosition::new(
                 teleport_id.into(),
                 position,
-                Vector3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
                 yaw,
                 pitch,
                 // TODO
@@ -796,7 +796,7 @@ impl Player {
         let box_pos = BoundingBox::from_block(pos);
         let entity_pos = self.living_entity.entity.pos.load();
         let standing_eye_height = self.living_entity.entity.standing_eye_height;
-        box_pos.squared_magnitude(Vector3 {
+        box_pos.squared_magnitude(Vec3 {
             x: entity_pos.x,
             y: entity_pos.y + f64::from(standing_eye_height),
             z: entity_pos.z,

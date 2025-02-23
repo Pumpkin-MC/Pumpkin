@@ -1,5 +1,5 @@
 use pumpkin_protocol::client::play::CUpdateEntityPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 use crate::entity::living::LivingEntity;
 
@@ -9,8 +9,8 @@ pub struct Navigator {
 }
 
 pub struct NavigatorGoal {
-    pub current_progress: Vector3<f64>,
-    pub destination: Vector3<f64>,
+    pub current_progress: Vec3<f64>,
+    pub destination: Vec3<f64>,
     pub speed: f64,
 }
 
@@ -33,14 +33,14 @@ impl Navigator {
             }
 
             // A star algorithm
-            let mut best_move = Vector3::new(0.0, 0.0, 0.0);
+            let mut best_move = Vec3::new(0.0, 0.0, 0.0);
             let mut lowest_cost = f64::MAX;
 
             for x in -1..=1 {
                 for z in -1..=1 {
                     let x = f64::from(x);
                     let z = f64::from(z);
-                    let potential_pos = Vector3::new(
+                    let potential_pos = Vec3::new(
                         goal.current_progress.x + x,
                         goal.current_progress.y,
                         goal.current_progress.z + z,
@@ -51,7 +51,7 @@ impl Navigator {
 
                     if cost < lowest_cost {
                         lowest_cost = cost;
-                        best_move = Vector3::new(x, 0.0, z);
+                        best_move = Vec3::new(x, 0.0, z);
                     }
                 }
             }
@@ -76,7 +76,7 @@ impl Navigator {
                 .await
                 .broadcast_packet_all(&CUpdateEntityPos::new(
                     entity.entity.entity_id.into(),
-                    Vector3::new(
+                    Vec3::new(
                         pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
                         pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
                         pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
@@ -92,19 +92,19 @@ impl Navigator {
 }
 
 pub struct Node {
-    pub location: Vector3<f64>,
+    pub location: Vec3<f64>,
 }
 
 impl Node {
     #[must_use]
-    pub fn new(location: Vector3<f64>) -> Self {
+    pub fn new(location: Vec3<f64>) -> Self {
         Self { location }
     }
     /// How expensive is it to go to a location
     ///
     /// Returns a f64, Higher = More Expensive
     #[must_use]
-    pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
+    pub fn get_expense(&self, end: Vec3<f64>) -> f64 {
         self.location.squared_distance_to_vec(end).sqrt()
     }
 }

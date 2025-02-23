@@ -39,8 +39,8 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::vector2::Vector2;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::vector2::Vec2;
+use pumpkin_util::math::{position::BlockPos, vector3::Vec3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
@@ -190,8 +190,8 @@ impl World {
 
     pub async fn spawn_particle(
         &self,
-        position: Vector3<f64>,
-        offset: Vector3<f32>,
+        position: Vec3<f64>,
+        offset: Vec3<f32>,
         max_speed: f32,
         particle_count: i32,
         pariticle: Particle,
@@ -204,7 +204,7 @@ impl World {
         }
     }
 
-    pub async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
+    pub async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vec3<f64>) {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0)
             .await;
     }
@@ -213,7 +213,7 @@ impl World {
         &self,
         sound_id: u16,
         category: SoundCategory,
-        position: &Vector3<f64>,
+        position: &Vec3<f64>,
         volume: f32,
         pitch: f32,
     ) {
@@ -232,7 +232,7 @@ impl World {
         category: SoundCategory,
         position: BlockPos,
     ) {
-        let new_vec = Vector3::new(
+        let new_vec = Vec3::new(
             f64::from(position.0.x) + 0.5,
             f64::from(position.0.y) + 0.5,
             f64::from(position.0.z) + 0.5,
@@ -306,9 +306,9 @@ impl World {
     }
 
     /// Gets the y position of the first non air block from the top down
-    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+    pub async fn get_top_block(&self, position: Vec2<i32>) -> i32 {
         for y in (-64..=319).rev() {
-            let pos = BlockPos(Vector3::new(position.x, y, position.z));
+            let pos = BlockPos(Vec3::new(position.x, y, position.z));
             let block = self.get_block_state(&pos).await;
             if let Ok(block) = block {
                 if block.air {
@@ -370,12 +370,12 @@ impl World {
         client_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
         // teleport
         let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+        let mut position = Vec3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
         let yaw = info.spawn_angle;
         let pitch = 10.0;
 
         let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
+            .get_top_block(Vec2::new(position.x as i32, position.z as i32))
             .await;
         position.y = f64::from(top + 1);
 
@@ -447,7 +447,7 @@ impl World {
                 yaw,
                 yaw,
                 0.into(),
-                Vector3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
             ),
         )
         .await;
@@ -469,7 +469,7 @@ impl World {
                     entity.pitch.load(),
                     entity.head_yaw.load(),
                     0.into(),
-                    Vector3::new(0.0, 0.0, 0.0),
+                    Vec3::new(0.0, 0.0, 0.0),
                 ))
                 .await;
         }
@@ -533,7 +533,7 @@ impl World {
     pub async fn send_world_info(
         &self,
         player: &Arc<Player>,
-        position: Vector3<f64>,
+        position: Vec3<f64>,
         yaw: f32,
         pitch: f32,
     ) {
@@ -564,7 +564,7 @@ impl World {
                 yaw,
                 yaw,
                 0.into(),
-                Vector3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 0.0),
             ),
         )
         .await;
@@ -579,7 +579,7 @@ impl World {
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.last_pos.load();
         let death_dimension = player.world().await.dimension_type.name();
-        let death_location = BlockPos(Vector3::new(
+        let death_location = BlockPos(Vec3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
             last_pos.z.round() as i32,
@@ -613,12 +613,12 @@ impl World {
 
         // teleport
         let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+        let mut position = Vec3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
         let yaw = info.spawn_angle;
         let pitch = 10.0;
 
         let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
+            .get_top_block(Vec2::new(position.x as i32, position.z as i32))
             .await;
         position.y = f64::from(top + 1);
 
@@ -636,8 +636,8 @@ impl World {
     fn spawn_world_chunks(
         &self,
         player: Arc<Player>,
-        chunks: Vec<Vector2<i32>>,
-        center_chunk: Vector2<i32>,
+        chunks: Vec<Vec2<i32>>,
+        center_chunk: Vec2<i32>,
     ) {
         if player
             .client
@@ -823,7 +823,7 @@ impl World {
     ///             the more area will be checked, in every direction.
     pub async fn get_nearby_players(
         &self,
-        pos: Vector3<f64>,
+        pos: Vec3<f64>,
         radius: f64,
     ) -> HashMap<uuid::Uuid, Arc<Player>> {
         let radius_squared = radius.powi(2);
@@ -840,7 +840,7 @@ impl World {
             .collect()
     }
 
-    pub async fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
+    pub async fn get_closest_player(&self, pos: Vec3<f64>, radius: f64) -> Option<Arc<Player>> {
         let players = self.get_nearby_players(pos, radius).await;
         players
             .iter()
@@ -1022,7 +1022,7 @@ impl World {
     /// handle)
     pub fn receive_chunks(
         &self,
-        chunks: Vec<Vector2<i32>>,
+        chunks: Vec<Vec2<i32>>,
     ) -> Receiver<(Arc<RwLock<ChunkData>>, bool)> {
         let (sender, receive) = mpsc::channel(chunks.len());
         // Put this in another thread so we aren't blocking on it
@@ -1034,7 +1034,7 @@ impl World {
         receive
     }
 
-    pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
+    pub async fn receive_chunk(&self, chunk_pos: Vec2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
         let mut receiver = self.receive_chunks(vec![chunk_pos]);
         let chunk = receiver
             .recv()

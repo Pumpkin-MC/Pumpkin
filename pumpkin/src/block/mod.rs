@@ -19,7 +19,7 @@ use properties::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_world::block::registry::{Block, State};
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
@@ -53,7 +53,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 pub async fn drop_loot(server: &Server, world: &Arc<World>, block: &Block, pos: &BlockPos) {
     // TODO: Currently only the item block is dropped, We should drop the loop table
     let height = EntityType::ITEM.dimension[1] / 2.0;
-    let pos = Vector3::new(
+    let pos = Vec3::new(
         f64::from(pos.0.x) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
         f64::from(pos.0.y) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25) - f64::from(height),
         f64::from(pos.0.z) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),

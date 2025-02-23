@@ -1,6 +1,6 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_util::{
-    math::{floor_div, vector2::Vector2, vector3::Vector3},
+    math::{floor_div, vector2::Vec2, vector3::Vec3},
     random::RandomDeriver,
 };
 
@@ -102,25 +102,25 @@ pub struct WorldAquiferSampler {
 }
 
 impl WorldAquiferSampler {
-    const CHUNK_POS_OFFSETS: [Vector2<i8>; 13] = [
-        Vector2::new(0, 0),
-        Vector2::new(-2, -1),
-        Vector2::new(-1, -1),
-        Vector2::new(0, -1),
-        Vector2::new(1, -1),
-        Vector2::new(-3, 0),
-        Vector2::new(-2, 0),
-        Vector2::new(-1, 0),
-        Vector2::new(1, 0),
-        Vector2::new(-2, 1),
-        Vector2::new(-1, 1),
-        Vector2::new(0, 1),
-        Vector2::new(1, 1),
+    const CHUNK_POS_OFFSETS: [Vec2<i8>; 13] = [
+        Vec2::new(0, 0),
+        Vec2::new(-2, -1),
+        Vec2::new(-1, -1),
+        Vec2::new(0, -1),
+        Vec2::new(1, -1),
+        Vec2::new(-3, 0),
+        Vec2::new(-2, 0),
+        Vec2::new(-1, 0),
+        Vec2::new(1, 0),
+        Vec2::new(-2, 1),
+        Vec2::new(-1, 1),
+        Vec2::new(0, 1),
+        Vec2::new(1, 1),
     ];
 
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        chunk_pos: Vector2<i32>,
+        chunk_pos: Vec2<i32>,
         random_deriver: RandomDeriver,
         minimum_y: i8,
         height: u16,
@@ -156,7 +156,7 @@ impl WorldAquiferSampler {
 
                     let index = (offset_y * size_z + offset_z) * size_x + offset_x;
                     packed_positions[index] =
-                        block_pos::packed(&Vector3::new(rand_x, rand_y, rand_z));
+                        block_pos::packed(&Vec3::new(rand_x, rand_y, rand_z));
                 }
             }
         }
@@ -648,7 +648,7 @@ pub trait AquiferSamplerImpl {
 mod test {
     use std::{mem, sync::LazyLock};
 
-    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vec2;
 
     use crate::{
         block::BlockState,
@@ -690,7 +690,7 @@ mod test {
         ChunkNoiseFunctionSampleOptions,
     ) {
         let shape = GenerationShape::SURFACE;
-        let chunk_pos = Vector2::new(7, 4);
+        let chunk_pos = Vec2::new(7, 4);
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, WATER_BLOCK),
             FluidLevel::new(-54, LAVA_BLOCK),

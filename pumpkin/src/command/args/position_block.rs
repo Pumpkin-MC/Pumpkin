@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
@@ -65,8 +65,8 @@ impl MaybeRelativeBlockPos {
         ))
     }
 
-    fn try_to_absolute(self, origin: Option<Vector3<f64>>) -> Option<BlockPos> {
-        Some(BlockPos(Vector3::new(
+    fn try_to_absolute(self, origin: Option<Vec3<f64>>) -> Option<BlockPos> {
+        Some(BlockPos(Vec3::new(
             self.0.into_absolute(origin.map(|o| o.x))?,
             self.1.into_absolute(origin.map(|o| o.y))?,
             self.2.into_absolute(origin.map(|o| o.z))?,

@@ -1,4 +1,4 @@
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::math::{vector2::Vec2, vector3::Vec3};
 
 use crate::{
     block::BlockState,
@@ -45,7 +45,7 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 }
 
 pub struct ProtoChunk<'a> {
-    chunk_pos: Vector2<i32>,
+    chunk_pos: Vec2<i32>,
     sampler: ChunkNoiseGenerator<'a>,
     // These are local positions
     flat_block_map: Vec<BlockState>,
@@ -54,7 +54,7 @@ pub struct ProtoChunk<'a> {
 
 impl<'a> ProtoChunk<'a> {
     pub fn new(
-        chunk_pos: Vector2<i32>,
+        chunk_pos: Vec2<i32>,
         base_router: &'a GlobalProtoNoiseRouter,
         random_config: &'a GlobalRandomConfig,
     ) -> Self {
@@ -89,7 +89,7 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
-    fn local_pos_to_index(&self, local_pos: &Vector3<i32>) -> usize {
+    fn local_pos_to_index(&self, local_pos: &Vec3<i32>) -> usize {
         #[cfg(debug_assertions)]
         {
             assert!(local_pos.x >= 0 && local_pos.x <= 15);
@@ -102,8 +102,8 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
-    pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> BlockState {
-        let local_pos = Vector3::new(
+    pub fn get_block_state(&self, local_pos: &Vec3<i32>) -> BlockState {
+        let local_pos = Vec3::new(
             local_pos.x & 15,
             local_pos.y - self.sampler.min_y() as i32,
             local_pos.z & 15,
@@ -187,7 +187,7 @@ impl<'a> ProtoChunk<'a> {
                                     .unwrap_or(STONE_BLOCK);
                                 //log::debug!("Sampled block state in {:?}", inst.elapsed());
 
-                                let local_pos = Vector3 {
+                                let local_pos = Vec3 {
                                     x: block_x & 15,
                                     y: block_y - min_y as i32,
                                     z: block_z & 15,
@@ -235,7 +235,7 @@ impl<'a> ProtoChunk<'a> {
 mod test {
     use std::sync::LazyLock;
 
-    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vec2;
 
     use crate::{
         generation::{
@@ -283,7 +283,7 @@ mod test {
                 }
             });
 
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(0, 0), &base_router, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         expected_data
@@ -324,7 +324,7 @@ mod test {
                 }
             });
 
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(0, 0), &base_router, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         expected_data
@@ -365,7 +365,7 @@ mod test {
                 }
             });
 
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(0, 0), &base_router, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         expected_data
@@ -406,7 +406,7 @@ mod test {
                 }
             });
 
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(0, 0), &base_router, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         expected_data
@@ -447,7 +447,7 @@ mod test {
                 }
             });
 
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(0, 0), &base_router, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         expected_data
@@ -465,7 +465,7 @@ mod test {
     fn test_no_blend_no_beard() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_0_0.chunk");
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(0, 0), &BASE_NOISE_ROUTER, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         assert_eq!(
@@ -482,7 +482,7 @@ mod test {
     fn test_no_blend_no_beard_aquifer() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_7_4.chunk");
-        let mut chunk = ProtoChunk::new(Vector2::new(7, 4), &BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+        let mut chunk = ProtoChunk::new(Vec2::new(7, 4), &BASE_NOISE_ROUTER, &RANDOM_CONFIG);
         chunk.populate_noise();
 
         assert_eq!(

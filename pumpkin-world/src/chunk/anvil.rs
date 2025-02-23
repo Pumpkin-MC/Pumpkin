@@ -146,7 +146,7 @@ impl ChunkReader for AnvilChunkFormat {
     fn read_chunk(
         &self,
         save_file: &LevelFolder,
-        at: &pumpkin_util::math::vector2::Vector2<i32>,
+        at: &pumpkin_util::math::vector2::Vec2<i32>,
     ) -> Result<super::ChunkData, ChunkReadingError> {
         let region = (at.x >> 5, at.z >> 5);
 
@@ -230,7 +230,7 @@ impl ChunkWriter for AnvilChunkFormat {
         &self,
         chunk_data: &ChunkData,
         level_folder: &LevelFolder,
-        at: &pumpkin_util::math::vector2::Vector2<i32>,
+        at: &pumpkin_util::math::vector2::Vec2<i32>,
     ) -> Result<(), super::ChunkWritingError> {
         let region = (at.x >> 5, at.z >> 5);
 
@@ -499,7 +499,7 @@ impl AnvilChunkFormat {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vec2;
     use std::fs;
     use std::path::PathBuf;
     use temp_dir::TempDir;
@@ -519,7 +519,7 @@ mod tests {
                 root_folder: PathBuf::from(""),
                 region_folder: region_path,
             },
-            &Vector2::new(0, 0),
+            &Vec2::new(0, 0),
         );
         assert!(matches!(result, Err(ChunkReadingError::ChunkNotExist)));
     }
@@ -539,7 +539,7 @@ mod tests {
         let mut chunks = vec![];
         for x in -5..5 {
             for y in -5..5 {
-                let position = Vector2::new(x, y);
+                let position = Vec2::new(x, y);
                 chunks.push((position, generator.generate_chunk(position)));
             }
         }

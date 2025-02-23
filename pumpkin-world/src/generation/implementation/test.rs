@@ -1,4 +1,4 @@
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::math::{vector2::Vec2, vector3::Vec3};
 
 use crate::{
     WORLD_LOWEST_Y, WORLD_MAX_Y,
@@ -29,7 +29,7 @@ impl GeneratorInit for TestGenerator {
 }
 
 impl WorldGenerator for TestGenerator {
-    fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
+    fn generate_chunk(&self, at: Vec2<i32>) -> ChunkData {
         let mut subchunks = Subchunks::Single(0);
         let mut proto_chunk = ProtoChunk::new(at, &self.base_router, &self.random_config);
         proto_chunk.populate_noise();
@@ -45,7 +45,7 @@ impl WorldGenerator for TestGenerator {
                     };
 
                     let block =
-                        proto_chunk.get_block_state(&Vector3::new(x.into(), y.into(), z.into()));
+                        proto_chunk.get_block_state(&Vec3::new(x.into(), y.into(), z.into()));
 
                     //println!("{:?}: {:?}", coordinates, block);
                     subchunks.set_block(coordinates, block.state_id);

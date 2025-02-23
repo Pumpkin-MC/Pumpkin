@@ -46,7 +46,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     GameMode,
-    math::{vector3::Vector3, wrap_degrees},
+    math::{vector3::Vec3, wrap_degrees},
     text::TextComponent,
 };
 use pumpkin_world::block::interactive::sign::Sign;
@@ -148,7 +148,7 @@ impl Player {
             .await;
             return;
         }
-        let position = Vector3::new(
+        let position = Vec3::new(
             Self::clamp_horizontal(position.x),
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
@@ -170,7 +170,7 @@ impl Player {
             .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
 
         let entity_id = entity.entity_id;
-        let Vector3 { x, y, z } = position;
+        let Vec3 { x, y, z } = position;
         let world = &entity.world.read().await;
 
         // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
@@ -191,7 +191,7 @@ impl Player {
                 &[self.gameprofile.id],
                 &CUpdateEntityPos::new(
                     entity_id.into(),
-                    Vector3::new(
+                    Vec3::new(
                         x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
                         y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
                         z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
@@ -210,7 +210,7 @@ impl Player {
                 .await;
         }
         chunker::update_position(self).await;
-        self.progress_motion(Vector3::new(
+        self.progress_motion(Vec3::new(
             position.x - last_pos.x,
             position.y - last_pos.y,
             position.z - last_pos.z,
@@ -238,7 +238,7 @@ impl Player {
             return;
         }
 
-        let position = Vector3::new(
+        let position = Vec3::new(
             Self::clamp_horizontal(position.x),
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
@@ -261,7 +261,7 @@ impl Player {
         entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
         let entity_id = entity.entity_id;
-        let Vector3 { x, y, z } = position;
+        let Vec3 { x, y, z } = position;
 
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
@@ -287,7 +287,7 @@ impl Player {
                 &[self.gameprofile.id],
                 &CUpdateEntityPosRot::new(
                     entity_id.into(),
-                    Vector3::new(
+                    Vec3::new(
                         x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
                         y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
                         z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
@@ -314,7 +314,7 @@ impl Player {
                 .await;
         }
         chunker::update_position(self).await;
-        self.progress_motion(Vector3::new(
+        self.progress_motion(Vec3::new(
             position.x - last_pos.x,
             position.y - last_pos.y,
             position.z - last_pos.z,
@@ -1250,7 +1250,7 @@ impl Player {
     ) {
         let world_pos = BlockPos(location.0 + face.to_offset());
         // align position like Vanilla does
-        let pos = Vector3::new(
+        let pos = Vec3::new(
             f64::from(world_pos.0.x) + 0.5,
             f64::from(world_pos.0.y),
             f64::from(world_pos.0.z) + 0.5,

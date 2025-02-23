@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use tokio::sync::Mutex;
 use zombie::Zombie;
 
@@ -53,7 +53,7 @@ impl EntityBase for MobEntity {
 pub async fn from_type(
     entity_type: EntityType,
     server: &Server,
-    position: Vector3<f64>,
+    position: Vec3<f64>,
     world: &Arc<World>,
 ) -> Arc<dyn EntityBase> {
     let entity = server.add_entity(position, entity_type, world);

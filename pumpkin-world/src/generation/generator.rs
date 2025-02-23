@@ -1,7 +1,7 @@
 use noise::Perlin;
 use pumpkin_data::chunk::Biome;
-use pumpkin_util::math::vector2::Vector2;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector2::Vec2;
+use pumpkin_util::math::vector3::Vec3;
 
 use crate::block::state::BlockState;
 use crate::chunk::{ChunkData, Subchunks};
@@ -13,7 +13,7 @@ pub trait GeneratorInit {
 }
 
 pub trait WorldGenerator: Sync + Send {
-    fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData;
+    fn generate_chunk(&self, at: Vec2<i32>) -> ChunkData;
 }
 
 pub(crate) trait BiomeGenerator: Sync + Send {
@@ -21,15 +21,15 @@ pub(crate) trait BiomeGenerator: Sync + Send {
 }
 
 pub(crate) trait TerrainGenerator: Sync + Send {
-    fn prepare_chunk(&self, at: &Vector2<i32>);
+    fn prepare_chunk(&self, at: &Vec2<i32>);
 
-    fn clean_chunk(&self, at: &Vector2<i32>);
+    fn clean_chunk(&self, at: &Vec2<i32>);
 
     /// Is static
     fn generate_block(
         &self,
-        chunk_pos: &Vector2<i32>,
-        at: Vector3<i32>,
+        chunk_pos: &Vec2<i32>,
+        at: Vec3<i32>,
         biome: Biome,
     ) -> BlockState;
 }
@@ -39,7 +39,7 @@ pub(crate) trait PerlinTerrainGenerator: Sync + Send {
         4.0
     }
 
-    fn prepare_chunk(&self, at: &Vector2<i32>, perlin: &Perlin);
+    fn prepare_chunk(&self, at: &Vec2<i32>, perlin: &Perlin);
 
     /// Depends on the perlin noise height
     fn generate_block(

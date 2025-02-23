@@ -3,7 +3,7 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 pub use state::BlockState;
 
@@ -36,7 +36,7 @@ impl TryFrom<i32> for BlockDirection {
 }
 
 impl BlockDirection {
-    pub fn to_offset(&self) -> Vector3<i32> {
+    pub fn to_offset(&self) -> Vec3<i32> {
         match self {
             BlockDirection::Bottom => (0, -1, 0),
             BlockDirection::Top => (0, 1, 0),

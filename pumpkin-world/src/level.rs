@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 use dashmap::{DashMap, Entry};
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vec2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::{
     runtime::Handle,
@@ -37,8 +37,8 @@ pub struct Level {
     pub level_info: LevelData,
     world_info_writer: Arc<dyn WorldInfoWriter>,
     level_folder: LevelFolder,
-    loaded_chunks: Arc<DashMap<Vector2<i32>, Arc<RwLock<ChunkData>>>>,
-    chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
+    loaded_chunks: Arc<DashMap<Vec2<i32>, Arc<RwLock<ChunkData>>>>,
+    chunk_watchers: Arc<DashMap<Vec2<i32>, usize>>,
     chunk_reader: Arc<dyn ChunkReader>,
     chunk_writer: Arc<dyn ChunkWriter>,
     world_gen: Arc<dyn WorldGenerator>,
@@ -160,13 +160,13 @@ impl Level {
     /// Marks chunks as "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was not watching
     /// before
-    pub fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
+    pub fn mark_chunks_as_newly_watched(&self, chunks: &[Vec2<i32>]) {
         chunks.iter().for_each(|chunk| {
             self.mark_chunk_as_newly_watched(*chunk);
         });
     }
 
-    pub fn mark_chunk_as_newly_watched(&self, chunk: Vector2<i32>) {
+    pub fn mark_chunk_as_newly_watched(&self, chunk: Vec2<i32>) {
         log::trace!("{:?} marked as newly watched", chunk);
         match self.chunk_watchers.entry(chunk) {
             Entry::Occupied(mut occupied) => {
@@ -186,7 +186,7 @@ impl Level {
 
     /// Marks chunks no longer "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was watching before
-    pub fn mark_chunks_as_not_watched(&self, chunks: &[Vector2<i32>]) -> Vec<Vector2<i32>> {
+    pub fn mark_chunks_as_not_watched(&self, chunks: &[Vec2<i32>]) -> Vec<Vec2<i32>> {
         chunks
             .iter()
             .filter(|chunk| self.mark_chunk_as_not_watched(**chunk))
@@ -195,7 +195,7 @@ impl Level {
     }
 
     /// Returns whether the chunk should be removed from memory
-    pub fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
+    pub fn mark_chunk_as_not_watched(&self, chunk: Vec2<i32>) -> bool {
         log::trace!("{:?} marked as no longer watched", chunk);
         match self.chunk_watchers.entry(chunk) {
             Entry::Occupied(mut occupied) => {
@@ -219,25 +219,25 @@ impl Level {
         }
     }
 
-    pub async fn clean_chunks(&self, chunks: &[Vector2<i32>]) {
+    pub async fn clean_chunks(&self, chunks: &[Vec2<i32>]) {
         for chunk_pos in chunks {
             //log::debug!("Unloading {:?}", chunk_pos);
             self.clean_chunk(chunk_pos).await;
         }
     }
 
-    pub async fn clean_chunk(&self, chunk: &Vector2<i32>) {
+    pub async fn clean_chunk(&self, chunk: &Vec2<i32>) {
         log::trace!("{:?} is being cleaned", chunk);
         if let Some(data) = self.loaded_chunks.remove(chunk) {
             self.write_chunk(data).await;
         }
     }
 
-    pub fn is_chunk_watched(&self, chunk: &Vector2<i32>) -> bool {
+    pub fn is_chunk_watched(&self, chunk: &Vec2<i32>) -> bool {
         self.chunk_watchers.get(chunk).is_some()
     }
 
-    pub fn clean_memory(&self, chunks_to_check: &[Vector2<i32>]) {
+    pub fn clean_memory(&self, chunks_to_check: &[Vec2<i32>]) {
         chunks_to_check.iter().for_each(|chunk| {
             if let Some(entry) = self.chunk_watchers.get(chunk) {
                 if entry.value().is_zero() {
@@ -253,7 +253,7 @@ impl Level {
         self.chunk_watchers.shrink_to_fit();
     }
 
-    pub async fn write_chunk(&self, chunk_to_write: (Vector2<i32>, Arc<RwLock<ChunkData>>)) {
+    pub async fn write_chunk(&self, chunk_to_write: (Vec2<i32>, Arc<RwLock<ChunkData>>)) {
         let chunk_writer = self.chunk_writer.clone();
         let level_folder = self.level_folder.clone();
 
@@ -269,7 +269,7 @@ impl Level {
     fn load_chunk_from_save(
         chunk_reader: Arc<dyn ChunkReader>,
         save_file: &LevelFolder,
-        chunk_pos: Vector2<i32>,
+        chunk_pos: Vec2<i32>,
     ) -> Result<Option<Arc<RwLock<ChunkData>>>, ChunkReadingError> {
         match chunk_reader.read_chunk(save_file, &chunk_pos) {
             Ok(data) => Ok(Some(Arc::new(RwLock::new(data)))),
@@ -288,7 +288,7 @@ impl Level {
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
     pub fn fetch_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: &[Vec2<i32>],
         channel: mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>,
         rt: &Handle,
     ) {

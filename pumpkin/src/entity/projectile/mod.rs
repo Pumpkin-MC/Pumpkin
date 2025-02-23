@@ -1,6 +1,6 @@
 use std::f32::{self};
 
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 use super::{Entity, EntityBase, living::LivingEntity};
 
@@ -56,7 +56,7 @@ impl ThrownItemEntity {
         fn next_triangular(mode: f64, deviation: f64) -> f64 {
             mode + deviation * (rand::random::<f64>() - rand::random::<f64>())
         }
-        let velocity = Vector3::new(x, y, z)
+        let velocity = Vec3::new(x, y, z)
             .normalize()
             .add_raw(
                 next_triangular(0.0, 0.017_227_5 * uncertainty),

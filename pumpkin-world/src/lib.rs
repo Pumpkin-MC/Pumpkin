@@ -1,5 +1,5 @@
 use generation::proto_chunk::ProtoChunk;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vec2;
 
 pub mod biome;
 pub mod block;
@@ -53,6 +53,6 @@ pub fn bench_create_and_populate_noise(
     base_router: &GlobalProtoNoiseRouter,
     random_config: &GlobalRandomConfig,
 ) {
-    let mut chunk = ProtoChunk::new(Vector2::new(0, 0), base_router, random_config);
+    let mut chunk = ProtoChunk::new(Vec2::new(0, 0), base_router, random_config);
     chunk.populate_noise();
 }

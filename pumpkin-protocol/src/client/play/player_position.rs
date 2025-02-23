@@ -1,15 +1,15 @@
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
 use pumpkin_macros::client_packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 
 use crate::{ClientPacket, PositionFlag, VarInt, bytebuf::ByteBufMut};
 
 #[client_packet(PLAY_PLAYER_POSITION)]
 pub struct CPlayerPosition<'a> {
     teleport_id: VarInt,
-    position: Vector3<f64>,
-    delta: Vector3<f64>,
+    position: Vec3<f64>,
+    delta: Vec3<f64>,
     yaw: f32,
     pitch: f32,
     releatives: &'a [PositionFlag],
@@ -18,8 +18,8 @@ pub struct CPlayerPosition<'a> {
 impl<'a> CPlayerPosition<'a> {
     pub fn new(
         teleport_id: VarInt,
-        position: Vector3<f64>,
-        delta: Vector3<f64>,
+        position: Vec3<f64>,
+        delta: Vec3<f64>,
         yaw: f32,
         pitch: f32,
         releatives: &'a [PositionFlag],

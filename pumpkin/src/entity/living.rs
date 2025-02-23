@@ -11,7 +11,7 @@ use pumpkin_protocol::{
     },
     codec::slot::Slot,
 };
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
@@ -24,7 +24,7 @@ pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
     /// Previously last known position of the entity
-    pub last_pos: AtomicCell<Vector3<f64>>,
+    pub last_pos: AtomicCell<Vec3<f64>>,
     /// Tracks the remaining time until the entity can regenerate health.
     pub time_until_regen: AtomicI32,
     /// Stores the amount of damage the entity last received.
@@ -39,7 +39,7 @@ impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             entity,
-            last_pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            last_pos: AtomicCell::new(Vec3::new(0.0, 0.0, 0.0)),
             time_until_regen: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
@@ -75,7 +75,7 @@ impl LivingEntity {
             .await;
     }
 
-    pub fn set_pos(&self, position: Vector3<f64>) {
+    pub fn set_pos(&self, position: Vec3<f64>) {
         self.last_pos.store(self.entity.pos.load());
         self.entity.set_pos(position);
     }
@@ -102,7 +102,7 @@ impl LivingEntity {
         &self,
         amount: f32,
         damage_type: DamageType,
-        position: Option<Vector3<f64>>,
+        position: Option<Vec3<f64>>,
         source: Option<&Entity>,
         cause: Option<&Entity>,
     ) -> bool {

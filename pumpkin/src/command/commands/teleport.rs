@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandError;
@@ -35,8 +35,8 @@ const ARG_FACING_ENTITY: &str = "facingEntity";
 const ARG_FACING_LOCATION: &str = "facingLocation";
 
 fn yaw_pitch_facing_position(
-    looking_from: &Vector3<f64>,
-    looking_towards: &Vector3<f64>,
+    looking_from: &Vec3<f64>,
+    looking_towards: &Vec3<f64>,
 ) -> (f32, f32) {
     let direction_vector = (looking_towards.sub(looking_from)).normalize();
 

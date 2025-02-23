@@ -3,7 +3,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_protocol::{client::play::CEntityVelocity, codec::var_int::VarInt};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_world::item::ItemStack;
 
 use crate::{
@@ -80,7 +80,7 @@ pub async fn handle_knockback(attacker: &Entity, world: &World, victim: &Entity,
     world.broadcast_packet_all(packet).await;
 }
 
-pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
+pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vec3<f64>) {
     let yaw = attacker_entity.yaw.load();
     let d = -f64::from((yaw.to_radians()).sin());
     let e = f64::from((yaw.to_radians()).cos());
@@ -90,8 +90,8 @@ pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: 
 
     world
         .spawn_particle(
-            Vector3::new(pos.x + d, body_y, pos.z + e),
-            Vector3::new(0.0, 0.0, 0.0),
+            Vec3::new(pos.x + d, body_y, pos.z + e),
+            Vec3::new(0.0, 0.0, 0.0),
             0.0,
             0,
             Particle::SweepAttack,
@@ -99,7 +99,7 @@ pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: 
         .await;
 }
 
-pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
+pub async fn player_attack_sound(pos: &Vec3<f64>, world: &World, attack_type: AttackType) {
     match attack_type {
         AttackType::Knockback => {
             world

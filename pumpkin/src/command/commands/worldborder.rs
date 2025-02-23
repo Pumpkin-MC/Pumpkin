@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_util::{
-    math::vector2::Vector2,
+    math::vector2::Vec2,
     text::{
         TextComponent,
         color::{Color, NamedColor},
@@ -371,7 +371,7 @@ impl CommandExecutor for CenterExecutor {
             .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
-        let Vector2 { x, z } = Position2DArgumentConsumer.find_arg_default_name(args)?;
+        let Vec2 { x, z } = Position2DArgumentConsumer.find_arg_default_name(args)?;
 
         sender
             .send_message(TextComponent::translate(

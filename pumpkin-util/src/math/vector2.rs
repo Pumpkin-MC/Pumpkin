@@ -2,32 +2,32 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use num_traits::Float;
 
-use super::vector3::Vector3;
+use super::vector3::Vec3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
-pub struct Vector2<T> {
+pub struct Vec2<T> {
     pub x: T,
     pub z: T,
 }
 
-impl<T: Math + Copy> Vector2<T> {
+impl<T: Math + Copy> Vec2<T> {
     pub const fn new(x: T, z: T) -> Self {
-        Vector2 { x, z }
+        Vec2 { x, z }
     }
 
     pub fn length_squared(&self) -> T {
         self.x * self.x + self.z * self.z
     }
 
-    pub fn add(&self, other: &Vector2<T>) -> Self {
-        Vector2 {
+    pub fn add(&self, other: &Vec2<T>) -> Self {
+        Vec2 {
             x: self.x + other.x,
             z: self.z + other.z,
         }
     }
 
-    pub fn sub(&self, other: &Vector2<T>) -> Self {
-        Vector2 {
+    pub fn sub(&self, other: &Vec2<T>) -> Self {
+        Vec2 {
             x: self.x - other.x,
             z: self.z - other.z,
         }
@@ -41,20 +41,20 @@ impl<T: Math + Copy> Vector2<T> {
     }
 }
 
-impl<T: Math + Copy + Float> Vector2<T> {
+impl<T: Math + Copy + Float> Vec2<T> {
     pub fn length(&self) -> T {
         self.length_squared().sqrt()
     }
     pub fn normalize(&self) -> Self {
         let length = self.length();
-        Vector2 {
+        Vec2 {
             x: self.x / length,
             z: self.z / length,
         }
     }
 }
 
-impl<T: Math + Copy> Mul<T> for Vector2<T> {
+impl<T: Math + Copy> Mul<T> for Vec2<T> {
     type Output = Self;
 
     fn mul(self, scalar: T) -> Self {
@@ -65,8 +65,8 @@ impl<T: Math + Copy> Mul<T> for Vector2<T> {
     }
 }
 
-impl<T: Math + Copy> Add for Vector2<T> {
-    type Output = Vector2<T>;
+impl<T: Math + Copy> Add for Vec2<T> {
+    type Output = Vec2<T>;
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
@@ -75,25 +75,25 @@ impl<T: Math + Copy> Add for Vector2<T> {
     }
 }
 
-impl<T: Math + Copy> Neg for Vector2<T> {
+impl<T: Math + Copy> Neg for Vec2<T> {
     type Output = Self;
 
     fn neg(self) -> Self {
-        Vector2 {
+        Vec2 {
             x: -self.x,
             z: -self.z,
         }
     }
 }
 
-impl<T> From<(T, T)> for Vector2<T> {
+impl<T> From<(T, T)> for Vec2<T> {
     fn from((x, z): (T, T)) -> Self {
-        Vector2 { x, z }
+        Vec2 { x, z }
     }
 }
 
-impl<T> From<Vector3<T>> for Vector2<T> {
-    fn from(value: Vector3<T>) -> Self {
+impl<T> From<Vec3<T>> for Vec2<T> {
+    fn from(value: Vec3<T>) -> Self {
         Self {
             x: value.x,
             z: value.z,

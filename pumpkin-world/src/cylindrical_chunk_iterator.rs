@@ -1,15 +1,15 @@
 use std::num::NonZeroU8;
 
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cylindrical {
-    pub center: Vector2<i32>,
+    pub center: Vec2<i32>,
     pub view_distance: NonZeroU8,
 }
 
 impl Cylindrical {
-    pub fn new(center: Vector2<i32>, view_distance: NonZeroU8) -> Self {
+    pub fn new(center: Vec2<i32>, view_distance: NonZeroU8) -> Self {
         Self {
             center,
             view_distance,
@@ -19,8 +19,8 @@ impl Cylindrical {
     pub fn for_each_changed_chunk(
         old_cylindrical: Cylindrical,
         new_cylindrical: Cylindrical,
-        mut newly_included: impl FnMut(Vector2<i32>),
-        mut just_removed: impl FnMut(Vector2<i32>),
+        mut newly_included: impl FnMut(Vec2<i32>),
+        mut just_removed: impl FnMut(Vec2<i32>),
     ) {
         for new_cylindrical_chunk in new_cylindrical.all_chunks_within() {
             if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.z)
@@ -65,12 +65,12 @@ impl Cylindrical {
     }
 
     /// Returns an iterator of all chunks within this cylinder
-    pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
+    pub fn all_chunks_within(&self) -> Vec<Vec2<i32>> {
         // This is a naive implementation: start with square and cut out ones that dont fit
         let mut all_chunks = Vec::new();
         for x in self.left()..=self.right() {
             for z in self.bottom()..=self.top() {
-                all_chunks.push(Vector2::new(x, z));
+                all_chunks.push(Vec2::new(x, z));
             }
         }
 
@@ -87,11 +87,11 @@ mod test {
     use std::num::NonZeroU8;
 
     use super::Cylindrical;
-    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector2::Vec2;
 
     #[test]
     fn test_bounds() {
-        let cylinder = Cylindrical::new(Vector2::new(0, 0), unsafe { NonZeroU8::new_unchecked(1) });
+        let cylinder = Cylindrical::new(Vec2::new(0, 0), unsafe { NonZeroU8::new_unchecked(1) });
         for chunk in cylinder.all_chunks_within() {
             assert!(chunk.x >= cylinder.left() && chunk.x <= cylinder.right());
             assert!(chunk.z >= cylinder.bottom() && chunk.z <= cylinder.top());

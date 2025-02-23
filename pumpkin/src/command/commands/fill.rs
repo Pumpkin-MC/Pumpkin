@@ -7,7 +7,7 @@ use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["fill"];
@@ -69,7 +69,7 @@ impl CommandExecutor for Executor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3 { x, y, z });
+                            let block_position = BlockPos(Vec3 { x, y, z });
                             world
                                 .break_block(server, &block_position, None, false)
                                 .await;
@@ -83,7 +83,7 @@ impl CommandExecutor for Executor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3 { x, y, z });
+                            let block_position = BlockPos(Vec3 { x, y, z });
                             world.set_block_state(&block_position, block_state_id).await;
                             placed_blocks += 1;
                         }
@@ -94,7 +94,7 @@ impl CommandExecutor for Executor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3 { x, y, z });
+                            let block_position = BlockPos(Vec3 { x, y, z });
                             match world.get_block_state(&block_position).await {
                                 Ok(old_state) if old_state.air => {
                                     world.set_block_state(&block_position, block_state_id).await;
@@ -110,7 +110,7 @@ impl CommandExecutor for Executor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
+                            let block_position = BlockPos(Vec3::new(x, y, z));
                             let is_edge = x == start_x
                                 || x == end_x
                                 || y == start_y
@@ -131,7 +131,7 @@ impl CommandExecutor for Executor {
                 for x in start_x..=end_x {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
+                            let block_position = BlockPos(Vec3::new(x, y, z));
                             let is_edge = x == start_x
                                 || x == end_x
                                 || y == start_y

@@ -5,7 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use pumpkin_macros::block_property;
 use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{position::BlockPos, vector3::Vec3};
 use pumpkin_world::block::{BlockDirection, registry::Block};
 
 use super::{BlockProperties, BlockProperty, Direction};
@@ -131,48 +131,48 @@ impl BlockProperty for StairShape {
 fn calculate_positions(player_direction: &Direction, block_pos: &BlockPos) -> (BlockPos, BlockPos) {
     match player_direction {
         Direction::North => (
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x,
                 block_pos.0.y,
                 block_pos.0.z - 1,
             )),
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x,
                 block_pos.0.y,
                 block_pos.0.z + 1,
             )),
         ),
         Direction::South => (
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x,
                 block_pos.0.y,
                 block_pos.0.z + 1,
             )),
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x,
                 block_pos.0.y,
                 block_pos.0.z - 1,
             )),
         ),
         Direction::East => (
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x + 1,
                 block_pos.0.y,
                 block_pos.0.z,
             )),
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x - 1,
                 block_pos.0.y,
                 block_pos.0.z,
             )),
         ),
         Direction::West => (
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x - 1,
                 block_pos.0.y,
                 block_pos.0.z,
             )),
-            BlockPos(Vector3::new(
+            BlockPos(Vec3::new(
                 block_pos.0.x + 1,
                 block_pos.0.y,
                 block_pos.0.z,

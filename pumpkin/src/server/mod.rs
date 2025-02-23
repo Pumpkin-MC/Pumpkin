@@ -10,8 +10,8 @@ use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector2::Vector2;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector2::Vec2;
+use pumpkin_util::math::vector3::Vec3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
@@ -142,9 +142,9 @@ impl Server {
 
     const SPAWN_CHUNK_RADIUS: i32 = 1;
 
-    pub fn spawn_chunks() -> impl Iterator<Item = Vector2<i32>> {
+    pub fn spawn_chunks() -> impl Iterator<Item = Vec2<i32>> {
         (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).flat_map(|x| {
-            (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).map(move |z| Vector2::new(x, z))
+            (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).map(move |z| Vec2::new(x, z))
         })
     }
 
@@ -219,7 +219,7 @@ impl Server {
     /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
     pub fn add_entity(
         &self,
-        position: Vector3<f64>,
+        position: Vec3<f64>,
         entity_type: EntityType,
         world: &Arc<World>,
     ) -> Entity {

@@ -1,9 +1,9 @@
-use super::{position::BlockPos, vector3::Vector3};
+use super::{position::BlockPos, vector3::Vec3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {
-    pub min: Vector3<f64>,
-    pub max: Vector3<f64>,
+    pub min: Vec3<f64>,
+    pub max: Vec3<f64>,
 }
 
 impl BoundingBox {
@@ -14,8 +14,8 @@ impl BoundingBox {
     pub fn new_from_pos(x: f64, y: f64, z: f64, size: &EntityDimensions) -> Self {
         let f = size.width as f64 / 2.;
         Self {
-            min: Vector3::new(x - f, y, z - f),
-            max: Vector3::new(x + f, y + size.height as f64, z + f),
+            min: Vec3::new(x - f, y, z - f),
+            max: Vec3::new(x + f, y + size.height as f64, z + f),
         }
     }
 
@@ -26,22 +26,22 @@ impl BoundingBox {
         }
     }
 
-    pub fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
+    pub fn new(min: Vec3<f64>, max: Vec3<f64>) -> Self {
         Self { min, max }
     }
 
     pub fn new_array(min: [f64; 3], max: [f64; 3]) -> Self {
         Self {
-            min: Vector3::new(min[0], min[1], min[2]),
-            max: Vector3::new(max[0], max[1], max[2]),
+            min: Vec3::new(min[0], min[1], min[2]),
+            max: Vec3::new(max[0], max[1], max[2]),
         }
     }
 
     pub fn from_block(position: &BlockPos) -> Self {
         let position = position.0;
         Self {
-            min: Vector3::new(position.x as f64, position.y as f64, position.z as f64),
-            max: Vector3::new(
+            min: Vec3::new(position.x as f64, position.y as f64, position.z as f64),
+            max: Vec3::new(
                 position.x as f64 + 1.0,
                 position.y as f64 + 1.0,
                 position.z as f64 + 1.0,
@@ -52,8 +52,8 @@ impl BoundingBox {
     pub fn from_block_raw(position: &BlockPos) -> Self {
         let position = position.0;
         Self {
-            min: Vector3::new(position.x as f64, position.y as f64, position.z as f64),
-            max: Vector3::new(position.x as f64, position.y as f64, position.z as f64),
+            min: Vec3::new(position.x as f64, position.y as f64, position.z as f64),
+            max: Vec3::new(position.x as f64, position.y as f64, position.z as f64),
         }
     }
 
@@ -66,7 +66,7 @@ impl BoundingBox {
             && self.max.z > other.min.z
     }
 
-    pub fn squared_magnitude(&self, pos: Vector3<f64>) -> f64 {
+    pub fn squared_magnitude(&self, pos: Vec3<f64>) -> f64 {
         let d = f64::max(f64::max(self.min.x - pos.x, pos.x - self.max.x), 0.0);
         let e = f64::max(f64::max(self.min.y - pos.y, pos.y - self.max.y), 0.0);
         let f = f64::max(f64::max(self.min.z - pos.z, pos.z - self.max.z), 0.0);

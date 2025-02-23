@@ -1,5 +1,5 @@
 use noise::{NoiseFn, Perlin};
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector2::Vec2;
 
 use crate::{
     WORLD_LOWEST_Y,
@@ -33,7 +33,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: PerlinTerrainGenerator + GeneratorIni
 }
 
 impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGenerator<B, T> {
-    fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
+    fn generate_chunk(&self, at: Vec2<i32>) -> ChunkData {
         let mut subchunks = Subchunks::Single(0);
         self.terrain_generator.prepare_chunk(&at, &self.perlin);
         let noise_value = self.perlin.get([at.x as f64 / 16.0, at.z as f64 / 16.0]);
