@@ -342,8 +342,9 @@ impl Client {
 
         let resource_config = &ADVANCED_CONFIG.resource_pack;
         if resource_config.enabled {
+            let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
             let resource_pack = CConfigAddResourcePack::new(
-                Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes()),
+                &uuid,
                 &resource_config.url,
                 &resource_config.sha1,
                 resource_config.force,

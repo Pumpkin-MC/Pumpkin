@@ -9,7 +9,6 @@ use crate::VarInt;
 #[packet(PLAY_ADD_ENTITY)]
 pub struct CSpawnEntity {
     entity_id: VarInt,
-    #[serde(with = "uuid::serde::compact")]
     entity_uuid: uuid::Uuid,
     typ: VarInt,
     position: Vector3<f64>,
