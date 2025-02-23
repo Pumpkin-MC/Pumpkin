@@ -19,11 +19,12 @@ use std::{
 use crate::{
     block::registry::STATE_ID_TO_REGISTRY_ID,
     chunk::{
-        ChunkData, ChunkNbt, ChunkReadingError, ChunkSection, ChunkSectionBlockStates,
-        ChunkSerializingError, ChunkWritingError, CompressionError, PaletteEntry,
+        ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
         io::{ChunkSerializer, LoadedData},
     },
 };
+
+use super::{ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -520,7 +521,7 @@ mod tests {
     use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::generation::{Seed, get_world_gen};
     use crate::level::LevelFolder;
-    
+
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");

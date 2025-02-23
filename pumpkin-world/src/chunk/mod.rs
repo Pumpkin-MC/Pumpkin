@@ -1,15 +1,10 @@
-use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_nbt::{deserializer::from_bytes, nbt_long_array};
-use pumpkin_util::math::{ceil_log2, vector2::Vector2};
+use pumpkin_nbt::nbt_long_array;
+use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with};
+use std::iter::repeat_with;
 use thiserror::Error;
 
-use crate::{
-    WORLD_HEIGHT,
-    block::BlockState,
-    coordinates::{ChunkRelativeBlockCoordinates, Height},
-};
+use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
 
 pub mod format;
 pub mod io;
@@ -101,15 +96,6 @@ pub enum Subchunk {
     Multi(Box<[u16; SUBCHUNK_VOLUME]>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-struct PaletteEntry {
-    // block name
-    name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    properties: Option<HashMap<String, String>>,
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
@@ -117,40 +103,6 @@ pub struct ChunkHeightmaps {
     motion_blocking: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
     world_surface: Box<[i64]>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ChunkSection {
-    #[serde(rename = "Y")]
-    y: i8,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    block_states: Option<ChunkSectionBlockStates>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct ChunkSectionBlockStates {
-    #[serde(
-        serialize_with = "nbt_long_array",
-        skip_serializing_if = "Option::is_none"
-    )]
-    data: Option<Box<[i64]>>,
-    palette: Vec<PaletteEntry>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-struct ChunkNbt {
-    data_version: i32,
-    #[serde(rename = "xPos")]
-    x_pos: i32,
-    // #[serde(rename = "yPos")]
-    //y_pos: i32,
-    #[serde(rename = "zPos")]
-    z_pos: i32,
-    status: ChunkStatus,
-    #[serde(rename = "sections")]
-    sections: Vec<ChunkSection>,
-    heightmaps: ChunkHeightmaps,
 }
 
 /// The Heightmap for a completely empty chunk
@@ -311,116 +263,6 @@ impl ChunkData {
         // figure out how LongArray is formatted
         // figure out how to find out if block is motion blocking
         todo!()
-    }
-}
-
-// I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct ChunkStatusWrapper {
-    status: ChunkStatus,
-}
-
-impl ChunkData {
-    pub fn from_bytes(
-        chunk_data: &[u8],
-        position: Vector2<i32>,
-    ) -> Result<Self, ChunkParsingError> {
-        if from_bytes::<ChunkStatusWrapper>(chunk_data)
-            .map_err(ChunkParsingError::FailedReadStatus)?
-            .status
-            != ChunkStatus::Full
-        {
-            return Err(ChunkParsingError::ChunkNotGenerated);
-        }
-
-        let chunk_data = from_bytes::<ChunkNbt>(chunk_data)
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
-
-        if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
-            log::error!(
-                "Expected chunk at {}:{}, but got {}:{}",
-                position.x,
-                position.z,
-                chunk_data.x_pos,
-                chunk_data.z_pos
-            );
-            // lets still continue
-        }
-
-        // this needs to be boxed, otherwise it will cause a stack-overflow
-        let mut subchunks = Subchunks::Single(0);
-        let mut block_index = 0; // which block we're currently at
-
-        for section in chunk_data.sections.into_iter() {
-            let block_states = match section.block_states {
-                Some(states) => states,
-                None => continue, // TODO @lukas0008 this should instead fill all blocks with the only element of the palette
-            };
-
-            let palette = block_states
-                .palette
-                .iter()
-                .map(|entry| match BlockState::new(&entry.name) {
-                    // Block not found, Often the case when World has an newer or older version then block registry
-                    None => BlockState::AIR,
-                    Some(state) => state,
-                })
-                .collect::<Vec<_>>();
-
-            let block_data = match block_states.data {
-                None => {
-                    // We skipped placing an empty subchunk.
-                    // We need to increase the y coordinate of the next subchunk being placed.
-                    block_index += SUBCHUNK_VOLUME;
-                    continue;
-                }
-                Some(d) => d,
-            };
-
-            // How many bits each block has in one of the palette u64s
-            let block_bit_size = if palette.len() < 16 {
-                4
-            } else {
-                ceil_log2(palette.len() as u32).max(4)
-            };
-            // How many blocks there are in one of the palettes u64s
-            let blocks_in_palette = 64 / block_bit_size;
-
-            let mask = (1 << block_bit_size) - 1;
-            'block_loop: for block in block_data.iter() {
-                for i in 0..blocks_in_palette {
-                    let index = (block >> (i * block_bit_size)) & mask;
-                    let block = &palette[index as usize];
-
-                    // TODO allow indexing blocks directly so we can just use block_index and save some time?
-                    // this is fine because we initialized the heightmap of `blocks`
-                    // from the cached value in the world file
-                    subchunks.set_block_no_heightmap_update(
-                        ChunkRelativeBlockCoordinates {
-                            z: ((block_index % CHUNK_AREA) / 16).into(),
-                            y: Height::from_absolute((block_index / CHUNK_AREA) as u16),
-                            x: (block_index % 16).into(),
-                        },
-                        block.get_id(),
-                    );
-
-                    block_index += 1;
-
-                    // if `SUBCHUNK_VOLUME `is not divisible by `blocks_in_palette` the block_data
-                    // can sometimes spill into other subchunks. We avoid that by aborting early
-                    if (block_index % SUBCHUNK_VOLUME) == 0 {
-                        break 'block_loop;
-                    }
-                }
-            }
-        }
-
-        Ok(ChunkData {
-            subchunks,
-            heightmap: chunk_data.heightmaps,
-            position,
-        })
     }
 }
 
