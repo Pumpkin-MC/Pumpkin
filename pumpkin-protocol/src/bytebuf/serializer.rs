@@ -219,6 +219,9 @@ impl<B: BufMut> ser::Serializer for &mut Serializer<B> {
         self.output.put_var_int(&variant_index.into());
         Ok(())
     }
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 impl<B: BufMut> ser::SerializeSeq for &mut Serializer<B> {
