@@ -12,7 +12,7 @@ use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     fs::OpenOptions,
     io::AsyncReadExt,
-    sync::{Mutex, OnceCell, mpsc},
+    sync::{OnceCell, mpsc},
     task::JoinSet,
 };
 use tokio::{io::AsyncWriteExt, sync::RwLock};
@@ -101,7 +101,6 @@ pub trait ChunkSerializer: Send + Sync + Sized + Default {
 pub struct ChunkFileManager<S: ChunkSerializer> {
     // Dashmap has rw-locks on shards, but we want per-serializer
     file_locks: RwLock<BTreeMap<PathBuf, SerializerCacheEntry<S>>>,
-    paths_to_check: Mutex<Vec<PathBuf>>,
 }
 //to avoid clippy warnings we extract the type alias
 type SerializerCacheEntry<S> = OnceCell<Arc<RwLock<S>>>;
@@ -110,7 +109,6 @@ impl<S: ChunkSerializer> Default for ChunkFileManager<S> {
     fn default() -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
-            paths_to_check: Mutex::new(Vec::new()),
         }
     }
 }
@@ -118,19 +116,38 @@ impl<S: ChunkSerializer> Default for ChunkFileManager<S> {
 impl<S: ChunkSerializer> ChunkFileManager<S> {
     async fn clean_cache(&self) {
         log::trace!("Cleaning cache");
+
+        let paths_to_remove = self
+            .file_locks
+            .read()
+            .await
+            .iter()
+            .filter_map(|(path, lock)| {
+                if let Some(lock) = lock.get() {
+                    if Arc::strong_count(lock) <= 1 {
+                        return Some(path.clone());
+                    }
+                }
+                None
+            })
+            .collect::<Vec<_>>();
+
+        if paths_to_remove.is_empty() {
+            return;
+        }
+
         let mut locks = self.file_locks.write().await;
-        let mut paths = self.paths_to_check.lock().await;
-        for path in paths.iter() {
-            if let Some(lock) = locks.get(path) {
-                let lock = lock.get().expect("Serializer should be populated");
-                // If we have only two strong references, it means that the lock is only being used by the cache, so we can remove it from the cache to avoid memory leaks.
-                if Arc::strong_count(lock) <= 1 {
-                    locks.remove(path);
-                    trace!("Removed lock for file: {:?}", path);
+        for path in paths_to_remove {
+            if let Some(lock) = locks.get(&path) {
+                if let Some(lock) = lock.get() {
+                    // If we have only two strong references, it means that the lock is only being used by the cache, so we can remove it from the cache to avoid memory leaks.
+                    if Arc::strong_count(lock) <= 1 {
+                        locks.remove(&path);
+                        log::trace!("Removed lock for file: {:?}", path);
+                    }
                 }
             }
         }
-        paths.clear();
         log::trace!("Cleaned cache");
     }
 
@@ -171,40 +188,28 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         // We use a once lock here to quickly make an insertion into the map without holding the
         // lock for too long starving other threads
 
-        let map_read_guard = self.file_locks.read().await;
-        let lock = match map_read_guard.get(path) {
-            Some(once_cell) => once_cell
-                .get_or_try_init(|| async {
-                    let serializer = read_from_disk(path).await?;
-                    Ok(Arc::new(RwLock::new(serializer)))
-                })
-                .await?
-                .clone(),
-            None => {
-                drop(map_read_guard);
-                let mut map_write_guard = self.file_locks.write().await;
-                if !map_write_guard.contains_key(path) {
-                    map_write_guard.insert(path.to_path_buf(), OnceCell::new());
-                }
-                let map_read_guard = map_write_guard.downgrade();
-                let once_cell = map_read_guard
-                    .get(path)
-                    .expect("We just inserted this within a lock");
-
-                // Had to duplicate this because of lifetime stuff, is there a way to consolidate?
-                once_cell
-                    .get_or_try_init(|| async {
-                        let serializer = read_from_disk(path).await?;
-                        Ok(Arc::new(RwLock::new(serializer)))
-                    })
-                    .await?
-                    .clone()
-            }
+        let initializer = || async {
+            let serializer = read_from_disk(path).await?;
+            Ok(Arc::new(RwLock::new(serializer)))
         };
 
-        let mut paths_to_check = self.paths_to_check.lock().await;
-        paths_to_check.push(path.to_path_buf());
-        Ok(lock)
+        let serializer = if let Some(once_cell) = self.file_locks.read().await.get(path) {
+            once_cell.get_or_try_init(initializer).await?.clone()
+        } else {
+            let mut map_write_guard = self.file_locks.write().await;
+            if !map_write_guard.contains_key(path) {
+                map_write_guard.insert(path.to_path_buf(), OnceCell::new());
+            }
+            let map_read_guard = map_write_guard.downgrade();
+            let once_cell = map_read_guard
+                .get(path)
+                .expect("We just inserted this within a lock");
+
+            // Had to duplicate this because of lifetime stuff, is there a way to consolidate?
+            once_cell.get_or_try_init(initializer).await?.clone()
+        };
+
+        Ok(serializer)
     }
 
     pub async fn write_file(path: &Path, serializer: &S) -> Result<(), ChunkWritingError> {

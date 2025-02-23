@@ -1031,10 +1031,8 @@ impl World {
         tokio::spawn(async move {
             // Split the chunks into 64 chunks groups, this helps with the initial loading
             // of the world where allows to wait less chunks to be retrived before
-            // starting to send them to the player.
-            for chunk_group in chunks.chunks(64) {
-                level.fetch_chunks(chunk_group, sender.clone()).await;
-            }
+            // starting to send them to the player.z
+            level.fetch_chunks(&chunks, sender.clone()).await;
         });
 
         receive
