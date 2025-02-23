@@ -25,8 +25,8 @@ use pumpkin_protocol::{
     packet_encoder::{PacketEncodeError, PacketEncoder},
     server::{
         config::{
-            SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse, SKnownPacks,
-            SPluginMessage,
+            SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
+            SConfigResourcePack, SKnownPacks, SPluginMessage,
         },
         handshake::SHandShake,
         login::{
@@ -514,6 +514,10 @@ impl Client {
             }
             SConfigCookieResponse::PACKET_ID => {
                 self.handle_config_cookie_response(SConfigCookieResponse::read(bytebuf)?);
+            }
+            SConfigResourcePack::PACKET_ID => {
+                self.handle_resource_pack_response(SConfigResourcePack::read(bytebuf)?)
+                    .await;
             }
             _ => {
                 log::error!(

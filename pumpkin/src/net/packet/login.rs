@@ -340,24 +340,6 @@ impl Client {
         self.connection_state.store(ConnectionState::Config);
         self.send_packet(&server.get_branding()).await;
 
-        let resource_config = &ADVANCED_CONFIG.resource_pack;
-        if resource_config.enabled {
-            let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
-            let resource_pack = CConfigAddResourcePack::new(
-                &uuid,
-                &resource_config.url,
-                &resource_config.sha1,
-                resource_config.force,
-                if resource_config.message.is_empty() {
-                    None
-                } else {
-                    Some(TextComponent::text(&resource_config.message))
-                },
-            );
-
-            self.send_packet(&resource_pack).await;
-        }
-
         if ADVANCED_CONFIG.server_links.enabled {
             self.send_packet(&CConfigServerLinks::new(
                 &VarInt(LINKS.len() as i32),
@@ -374,6 +356,33 @@ impl Client {
         ]))
         .await;
 
+        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        if resource_config.enabled {
+            let uuid = Uuid::new_v3(
+                &uuid::Uuid::NAMESPACE_DNS,
+                resource_config.resource_pack_url.as_bytes(),
+            );
+            let resource_pack = CConfigAddResourcePack::new(
+                &uuid,
+                &resource_config.resource_pack_url,
+                &resource_config.resource_pack_sha1,
+                resource_config.force,
+                if resource_config.prompt_message.is_empty() {
+                    None
+                } else {
+                    Some(TextComponent::text(&resource_config.prompt_message))
+                },
+            );
+
+            self.send_packet(&resource_pack).await;
+        } else {
+            // This will be invoked by our resource pack handler in the case of the above branch
+            self.send_known_packs().await;
+        }
+        log::debug!("login acknowledged");
+    }
+
+    pub async fn send_known_packs(&self) {
         // known data packs
         self.send_packet(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
@@ -381,6 +390,5 @@ impl Client {
             version: "1.21",
         }]))
         .await;
-        log::debug!("login acknowledged");
     }
 }

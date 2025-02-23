@@ -6,12 +6,14 @@ use crate::{
     server::Server,
 };
 use core::str;
+use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_protocol::{
     ConnectionState,
     client::config::{CFinishConfig, CRegistryData},
     codec::var_int::VarInt,
     server::config::{
-        SClientInformationConfig, SConfigCookieResponse, SKnownPacks, SPluginMessage,
+        ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
+        SConfigResourcePack, SKnownPacks, SPluginMessage,
     },
 };
 use pumpkin_util::text::TextComponent;
@@ -65,6 +67,75 @@ impl Client {
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
             }
         }
+    }
+
+    pub async fn handle_resource_pack_response(&self, packet: SConfigResourcePack) {
+        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        if resource_config.enabled {
+            let expected_uuid = uuid::Uuid::new_v3(
+                &uuid::Uuid::NAMESPACE_DNS,
+                resource_config.resource_pack_url.as_bytes(),
+            );
+
+            if packet.uuid == expected_uuid {
+                match packet.response_result() {
+                    ResourcePackResponseResult::DownloadSuccess => {
+                        log::trace!(
+                            "Client {} successfully downloaded the resource pack",
+                            self.id
+                        );
+                    }
+                    ResourcePackResponseResult::DownloadFail => {
+                        log::warn!(
+                            "Client {} failed to downloaded the resource pack. Is it avaliable on the internet?",
+                            self.id
+                        );
+                    }
+                    ResourcePackResponseResult::Downloaded => {
+                        log::trace!("Client {} already has the resource pack", self.id);
+                    }
+                    ResourcePackResponseResult::Accepted => {
+                        log::trace!("Client {} accepted the resource pack", self.id);
+
+                        // Return here to wait for the next response update
+                        return;
+                    }
+                    ResourcePackResponseResult::Declined => {
+                        log::trace!("Client {} declined the resource pack", self.id);
+                    }
+                    ResourcePackResponseResult::InvalidUrl => {
+                        log::warn!(
+                            "Client {} reported that the resource pack url is invalid!",
+                            self.id
+                        );
+                    }
+                    ResourcePackResponseResult::ReloadFailed => {
+                        log::trace!("Client {} failed to reload the resource pack", self.id);
+                    }
+                    ResourcePackResponseResult::Discarded => {
+                        log::trace!("Client {} discarded the resource pack", self.id);
+                    }
+                    ResourcePackResponseResult::Unknown(result) => {
+                        log::warn!(
+                            "Client {} responded with a bad result: {}!",
+                            self.id,
+                            result
+                        );
+                    }
+                }
+            } else {
+                log::warn!(
+                    "Client {} returned a response for a resource pack we did not set!",
+                    self.id
+                );
+            }
+        } else {
+            log::warn!(
+                "Client {} returned a response for a resource pack that was not enabled!",
+                self.id
+            );
+        }
+        self.send_known_packs().await;
     }
 
     pub fn handle_config_cookie_response(&self, packet: SConfigCookieResponse) {
