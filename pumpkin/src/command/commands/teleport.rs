@@ -34,10 +34,7 @@ const ARG_FACING_ENTITY: &str = "facingEntity";
 /// position
 const ARG_FACING_LOCATION: &str = "facingLocation";
 
-fn yaw_pitch_facing_position(
-    looking_from: &Vec3<f64>,
-    looking_towards: &Vec3<f64>,
-) -> (f32, f32) {
+fn yaw_pitch_facing_position(looking_from: &Vec3<f64>, looking_towards: &Vec3<f64>) -> (f32, f32) {
     let direction_vector = (looking_towards.sub(looking_from)).normalize();
 
     let yaw_radians = -direction_vector.x.atan2(direction_vector.z);

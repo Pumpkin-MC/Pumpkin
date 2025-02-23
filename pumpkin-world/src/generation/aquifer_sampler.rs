@@ -155,8 +155,7 @@ impl WorldAquiferSampler {
                     let rand_z = z * 16 + random.next_bounded_i32(10);
 
                     let index = (offset_y * size_z + offset_z) * size_x + offset_x;
-                    packed_positions[index] =
-                        block_pos::packed(&Vec3::new(rand_x, rand_y, rand_z));
+                    packed_positions[index] = block_pos::packed(&Vec3::new(rand_x, rand_y, rand_z));
                 }
             }
         }

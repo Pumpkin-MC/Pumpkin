@@ -26,12 +26,7 @@ pub(crate) trait TerrainGenerator: Sync + Send {
     fn clean_chunk(&self, at: &Vec2<i32>);
 
     /// Is static
-    fn generate_block(
-        &self,
-        chunk_pos: &Vec2<i32>,
-        at: Vec3<i32>,
-        biome: Biome,
-    ) -> BlockState;
+    fn generate_block(&self, chunk_pos: &Vec2<i32>, at: Vec3<i32>, biome: Biome) -> BlockState;
 }
 
 pub(crate) trait PerlinTerrainGenerator: Sync + Send {
