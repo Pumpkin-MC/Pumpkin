@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_DESTRUCTION;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 
 use pumpkin_macros::client_packet;
 use serde::Serialize;

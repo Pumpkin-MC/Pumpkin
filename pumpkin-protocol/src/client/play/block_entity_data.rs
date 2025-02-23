@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_ENTITY_DATA;
 use pumpkin_macros::client_packet;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use serde::Serialize;
 
 use crate::VarInt;

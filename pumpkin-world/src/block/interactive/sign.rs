@@ -1,4 +1,4 @@
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use serde::{Deserialize, Serialize};
 
 // NBT data structure
