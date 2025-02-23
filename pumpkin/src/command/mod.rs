@@ -8,7 +8,7 @@ use args::ConsumedArgs;
 use async_trait::async_trait;
 
 use dispatcher::CommandError;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::TextComponent;
 

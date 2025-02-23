@@ -46,7 +46,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     GameMode,
-    math::{vector3::Vec3, wrap_degrees},
+    math::{vec3::Vec3, wrap_degrees},
     text::TextComponent,
 };
 use pumpkin_world::block::interactive::sign::Sign;

@@ -3,8 +3,8 @@ use std::ops::Deref;
 use crate::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use derive_more::derive::{AsMut, AsRef, Display, Into};
 use num_traits::{PrimInt, Signed, Unsigned};
-use pumpkin_util::math::vector2::Vec2;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec2::Vec2;
+use pumpkin_util::math::vec3::Vec3;
 use serde::{Deserialize, Serialize};
 
 #[derive(

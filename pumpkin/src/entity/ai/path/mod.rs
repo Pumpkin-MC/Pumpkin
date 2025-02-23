@@ -1,5 +1,5 @@
 use pumpkin_protocol::client::play::CUpdateEntityPos;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 
 use crate::entity::living::LivingEntity;
 

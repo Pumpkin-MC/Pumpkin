@@ -316,7 +316,7 @@ impl LinearFile {
 
     fn get_chunk(
         &self,
-        at: &pumpkin_util::math::vector2::Vec2<i32>,
+        at: &pumpkin_util::math::vec2::Vec2<i32>,
     ) -> Result<ChunkData, ChunkReadingError> {
         // We check if the chunk exists
         let chunk_index: usize = LinearChunkFormat::get_chunk_index(at);
@@ -339,7 +339,7 @@ impl LinearFile {
     fn put_chunk(
         &mut self,
         chunk: &ChunkData,
-        at: &pumpkin_util::math::vector2::Vec2<i32>,
+        at: &pumpkin_util::math::vec2::Vec2<i32>,
     ) -> Result<(), ChunkSerializingError> {
         let chunk_index: usize = LinearChunkFormat::get_chunk_index(at);
         let chunk_raw = AnvilChunkFormat :: //We use Anvil format to serialize the chunk
@@ -386,11 +386,11 @@ impl LinearFile {
 }
 
 impl LinearChunkFormat {
-    const fn get_region_coords(at: &pumpkin_util::math::vector2::Vec2<i32>) -> (i32, i32) {
+    const fn get_region_coords(at: &pumpkin_util::math::vec2::Vec2<i32>) -> (i32, i32) {
         (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS) // Divide by 32 for the region coordinates
     }
 
-    const fn get_chunk_index(at: &pumpkin_util::math::vector2::Vec2<i32>) -> usize {
+    const fn get_chunk_index(at: &pumpkin_util::math::vec2::Vec2<i32>) -> usize {
         // we need only the 5 last bits of the x and z coordinates
         let decode_x = at.x - ((at.x >> SUBREGION_BITS) << SUBREGION_BITS);
         let decode_z = at.z - ((at.z >> SUBREGION_BITS) << SUBREGION_BITS);
@@ -404,7 +404,7 @@ impl ChunkReader for LinearChunkFormat {
     fn read_chunk(
         &self,
         save_file: &LevelFolder,
-        at: &pumpkin_util::math::vector2::Vec2<i32>,
+        at: &pumpkin_util::math::vec2::Vec2<i32>,
     ) -> Result<ChunkData, ChunkReadingError> {
         let (region_x, region_z) = LinearChunkFormat::get_region_coords(at);
 
@@ -425,7 +425,7 @@ impl ChunkWriter for LinearChunkFormat {
         &self,
         chunk: &ChunkData,
         level_folder: &LevelFolder,
-        at: &pumpkin_util::math::vector2::Vec2<i32>,
+        at: &pumpkin_util::math::vec2::Vec2<i32>,
     ) -> Result<(), ChunkWritingError> {
         let (region_x, region_z) = LinearChunkFormat::get_region_coords(at);
 
@@ -458,7 +458,7 @@ impl ChunkWriter for LinearChunkFormat {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_util::math::vector2::Vec2;
+    use pumpkin_util::math::vec2::Vec2;
     use std::fs;
     use std::path::PathBuf;
     use temp_dir::TempDir;

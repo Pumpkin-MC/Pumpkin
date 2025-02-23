@@ -5,7 +5,7 @@ use super::{
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange, NoisePos},
 };
 use enum_dispatch::enum_dispatch;
-use pumpkin_util::math::vector2::Vec2;
+use pumpkin_util::math::vec2::Vec2;
 
 use crate::generation::{
     biome_coords,

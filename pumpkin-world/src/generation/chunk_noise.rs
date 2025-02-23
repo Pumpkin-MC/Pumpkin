@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_macros::block_state;
-use pumpkin_util::math::{floor_div, floor_mod, vector2::Vec2};
+use pumpkin_util::math::{floor_div, floor_mod, vec2::Vec2};
 
 use crate::{block::BlockState, generation::section_coords};
 

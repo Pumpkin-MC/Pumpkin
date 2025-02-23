@@ -1,7 +1,7 @@
 use bytes::BufMut;
 use pumpkin_data::{packet::clientbound::PLAY_SOUND, sound::SoundCategory};
 use pumpkin_macros::client_packet;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 
 use crate::{ClientPacket, IDOrSoundEvent, SoundEvent, VarInt, bytebuf::ByteBufMut};
 

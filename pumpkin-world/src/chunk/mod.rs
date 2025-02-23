@@ -4,7 +4,7 @@ use dashmap::{
 };
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::{deserializer::from_bytes, nbt_long_array};
-use pumpkin_util::math::{ceil_log2, vector2::Vec2};
+use pumpkin_util::math::{ceil_log2, vec2::Vec2};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,

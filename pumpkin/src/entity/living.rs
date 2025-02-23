@@ -11,7 +11,7 @@ use pumpkin_protocol::{
     },
     codec::slot::Slot,
 };
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 

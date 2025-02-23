@@ -1,6 +1,6 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_util::{
-    math::{floor_div, vector2::Vec2, vector3::Vec3},
+    math::{floor_div, vec2::Vec2, vec3::Vec3},
     random::RandomDeriver,
 };
 
@@ -648,7 +648,7 @@ pub trait AquiferSamplerImpl {
 mod test {
     use std::{mem, sync::LazyLock};
 
-    use pumpkin_util::math::vector2::Vec2;
+    use pumpkin_util::math::vec2::Vec2;
 
     use crate::{
         block::BlockState,

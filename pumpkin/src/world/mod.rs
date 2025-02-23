@@ -39,8 +39,8 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::vector2::Vec2;
-use pumpkin_util::math::{position::BlockPos, vector3::Vec3};
+use pumpkin_util::math::vec2::Vec2;
+use pumpkin_util::math::{position::BlockPos, vec3::Vec3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;

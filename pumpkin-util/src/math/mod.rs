@@ -3,8 +3,8 @@ use num_traits::{One, PrimInt, Zero};
 pub mod boundingbox;
 pub mod experience;
 pub mod position;
-pub mod vector2;
-pub mod vector3;
+pub mod vec2;
+pub mod vec3;
 pub mod voxel_shape;
 
 pub fn wrap_degrees(degrees: f32) -> f32 {

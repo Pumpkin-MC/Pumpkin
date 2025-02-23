@@ -1,4 +1,4 @@
-use pumpkin_util::math::{vector2::Vec2, vector3::Vec3};
+use pumpkin_util::math::{vec2::Vec2, vec3::Vec3};
 
 use crate::{
     block::BlockState,
@@ -235,7 +235,7 @@ impl<'a> ProtoChunk<'a> {
 mod test {
     use std::sync::LazyLock;
 
-    use pumpkin_util::math::vector2::Vec2;
+    use pumpkin_util::math::vec2::Vec2;
 
     use crate::{
         generation::{

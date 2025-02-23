@@ -19,7 +19,7 @@ use properties::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use pumpkin_world::block::registry::{Block, State};
 use pumpkin_world::item::ItemStack;
 use rand::Rng;

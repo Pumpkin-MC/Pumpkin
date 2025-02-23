@@ -1,6 +1,6 @@
 use std::f32::{self};
 
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 
 use super::{Entity, EntityBase, living::LivingEntity};
 

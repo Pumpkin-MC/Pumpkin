@@ -1,7 +1,7 @@
-use super::vector3::Vec3;
+use super::vec3::Vec3;
 use std::fmt;
 
-use crate::math::vector2::Vec2;
+use crate::math::vec2::Vec2;
 use num_traits::Euclid;
 use serde::{Deserialize, Serialize};
 

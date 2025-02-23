@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 use dashmap::{DashMap, Entry};
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
-use pumpkin_util::math::vector2::Vec2;
+use pumpkin_util::math::vec2::Vec2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::{
     runtime::Handle,

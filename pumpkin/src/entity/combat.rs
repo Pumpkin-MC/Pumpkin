@@ -3,7 +3,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_protocol::{client::play::CEntityVelocity, codec::var_int::VarInt};
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use pumpkin_world::item::ItemStack;
 
 use crate::{

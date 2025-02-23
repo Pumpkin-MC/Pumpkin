@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandError;

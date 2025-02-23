@@ -7,7 +7,7 @@ use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["fill"];

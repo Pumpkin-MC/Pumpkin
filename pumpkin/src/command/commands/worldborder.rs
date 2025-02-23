@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_util::{
-    math::vector2::Vec2,
+    math::vec2::Vec2,
     text::{
         TextComponent,
         color::{Color, NamedColor},

@@ -1,7 +1,7 @@
 use noise::Perlin;
 use pumpkin_data::chunk::Biome;
-use pumpkin_util::math::vector2::Vec2;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec2::Vec2;
+use pumpkin_util::math::vec3::Vec3;
 
 use crate::block::state::BlockState;
 use crate::chunk::{ChunkData, Subchunks};

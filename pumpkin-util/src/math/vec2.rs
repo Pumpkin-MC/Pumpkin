@@ -2,7 +2,7 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use num_traits::Float;
 
-use super::vector3::Vec3;
+use super::vec3::Vec3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vec2<T> {

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;

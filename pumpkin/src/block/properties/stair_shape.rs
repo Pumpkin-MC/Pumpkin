@@ -5,7 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use pumpkin_macros::block_property;
 use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::{position::BlockPos, vector3::Vec3};
+use pumpkin_util::math::{position::BlockPos, vec3::Vec3};
 use pumpkin_world::block::{BlockDirection, registry::Block};
 
 use super::{BlockProperties, BlockProperty, Direction};

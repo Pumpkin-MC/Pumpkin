@@ -1,5 +1,5 @@
 use generation::proto_chunk::ProtoChunk;
-use pumpkin_util::math::vector2::Vec2;
+use pumpkin_util::math::vec2::Vec2;
 
 pub mod biome;
 pub mod block;

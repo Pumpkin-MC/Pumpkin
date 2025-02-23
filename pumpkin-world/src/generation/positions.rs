@@ -1,7 +1,7 @@
 use pumpkin_util::math::{floor_log2, smallest_encompassing_power_of_two};
 
 pub mod block_pos {
-    use pumpkin_util::math::vector3::Vec3;
+    use pumpkin_util::math::vec3::Vec3;
 
     use super::{
         BIT_SHIFT_X, BIT_SHIFT_Z, BITS_X, BITS_Y, BITS_Z, SIZE_BITS_X, SIZE_BITS_Y, SIZE_BITS_Z,
@@ -34,7 +34,7 @@ pub mod block_pos {
 }
 
 pub mod chunk_pos {
-    use pumpkin_util::math::vector2::Vec2;
+    use pumpkin_util::math::vec2::Vec2;
 
     // A chunk outside of normal bounds
     pub const MARKER: u64 = packed(&Vec2::new(1875066, 1875066));
@@ -89,7 +89,7 @@ pub const MIN_HEIGHT_CELL: i32 = MIN_HEIGHT << 4;
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::math::{vector2::Vec2, vector3::Vec3};
+    use pumpkin_util::math::{vec2::Vec2, vec3::Vec3};
 
     use super::{block_pos, chunk_pos};
 

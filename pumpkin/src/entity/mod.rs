@@ -22,8 +22,8 @@ use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
     get_section_cord,
     position::BlockPos,
-    vector2::Vec2,
-    vector3::Vec3,
+    vec2::Vec2,
+    vec3::Vec3,
     wrap_degrees,
 };
 use serde::Serialize;

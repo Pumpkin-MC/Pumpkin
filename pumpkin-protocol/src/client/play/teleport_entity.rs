@@ -1,7 +1,7 @@
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_TELEPORT_ENTITY;
 use pumpkin_macros::client_packet;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 
 use crate::{ClientPacket, PositionFlag, VarInt, bytebuf::ByteBufMut};
 

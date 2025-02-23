@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::PLAY_DAMAGE_EVENT;
 use pumpkin_macros::client_packet;
-use pumpkin_util::math::vector3::Vec3;
+use pumpkin_util::math::vec3::Vec3;
 use serde::Serialize;
 
 use crate::VarInt;

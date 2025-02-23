@@ -1,4 +1,4 @@
-use pumpkin_util::math::{vector2::Vec2, vector3::Vec3};
+use pumpkin_util::math::{vec2::Vec2, vec3::Vec3};
 
 use crate::{
     WORLD_LOWEST_Y, WORLD_MAX_Y,
