@@ -57,6 +57,7 @@ impl CommandExecutor for DefaultGamemodeExecutor {
     }
 }
 
+#[must_use]
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(argument(ARG_GAMEMODE, GamemodeArgumentConsumer).execute(DefaultGamemodeExecutor))
