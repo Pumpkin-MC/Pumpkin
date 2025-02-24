@@ -28,16 +28,28 @@ impl Codec<Self> for VarInt {
         }
     }
 
+    // Adapted from VarInt-Simd encode
+    // https://github.com/as-com/varint-simd/blob/0f468783da8e181929b01b9c6e9f741c1fe09825/src/encode/mod.rs#L71
     fn encode(&self, write: &mut impl BufMut) {
-        let mut val = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
-            val >>= 7;
-            write.put_u8(if val == 0 { b } else { b | 0b10000000 });
-            if val == 0 {
-                break;
-            }
-        }
+        let x = self.0 as u64;
+        let stage1 = (x & 0x000000000000007f)
+            | ((x & 0x0000000000003f80) << 1)
+            | ((x & 0x00000000001fc000) << 2)
+            | ((x & 0x000000000fe00000) << 3)
+            | ((x & 0x00000000f0000000) << 4);
+
+        let leading = stage1.leading_zeros();
+
+        let unused_bytes = (leading - 1) >> 3;
+        let bytes_needed = 8 - unused_bytes;
+
+        // set all but the last MSBs
+        let msbs = 0x8080808080808080;
+        let msbmask = 0xffffffffffffffff >> (((8 - bytes_needed + 1) << 3) - 1);
+
+        let merged = stage1 | (msbs & msbmask);
+        let bytes = merged.to_le_bytes();
+        write.put(&bytes[..bytes_needed as usize]);
     }
 
     fn decode(read: &mut impl Buf) -> Result<Self, DecodeError> {
