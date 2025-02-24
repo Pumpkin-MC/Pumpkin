@@ -3,8 +3,9 @@ use proc_macro::TokenStream;
 use pumpkin_data::item::Item;
 use quote::quote;
 use syn::{
+    Block, Expr, Field, Fields, ItemStruct, Stmt,
     parse::{Nothing, Parser},
-    parse_macro_input, Block, Expr, Field, Fields, ItemStruct, Stmt,
+    parse_macro_input,
 };
 
 extern crate proc_macro;
@@ -153,7 +154,7 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn client_packet(input: TokenStream, item: TokenStream) -> TokenStream {
+pub fn packet(input: TokenStream, item: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
     let name = &ast.ident;
     let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
@@ -161,33 +162,14 @@ pub fn client_packet(input: TokenStream, item: TokenStream) -> TokenStream {
     let input: proc_macro2::TokenStream = input.into();
     let item: proc_macro2::TokenStream = item.into();
 
-    let gen = quote! {
+    let code = quote! {
         #item
         impl #impl_generics crate::bytebuf::packet::Packet for #name #ty_generics {
             const PACKET_ID: i32 = #input;
         }
     };
 
-    gen.into()
-}
-
-#[proc_macro_attribute]
-pub fn server_packet(input: TokenStream, item: TokenStream) -> TokenStream {
-    let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
-    let name = &ast.ident;
-    let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
-
-    let input: proc_macro2::TokenStream = input.into();
-    let item: proc_macro2::TokenStream = item.into();
-
-    let gen = quote! {
-        #item
-        impl #impl_generics crate::bytebuf::packet::Packet for #name #ty_generics {
-            const PACKET_ID: i32 = #input;
-        }
-    };
-
-    gen.into()
+    code.into()
 }
 
 #[proc_macro_attribute]
@@ -205,7 +187,7 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let item: proc_macro2::TokenStream = item.into();
 
-    let gen = quote! {
+    let code = quote! {
         #item
         impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
             const NAMESPACE: &'static str = #namespace;
@@ -213,7 +195,7 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    gen.into()
+    code.into()
 }
 
 #[proc_macro_attribute]
@@ -229,14 +211,14 @@ pub fn pumpkin_item(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let item: proc_macro2::TokenStream = item.into();
 
-    let gen = quote! {
+    let code = quote! {
         #item
         impl #impl_generics crate::item::pumpkin_item::ItemMetadata for #name #ty_generics {
             const ID: u16 = #id;
         }
     };
 
-    gen.into()
+    code.into()
 }
 
 #[proc_macro_attribute]
@@ -351,7 +333,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let gen = quote! {
+    let code = quote! {
         #item
         impl #impl_generics crate::block::properties::BlockPropertyMetadata for #name #ty_generics {
             fn name(&self) -> &'static str {
@@ -372,7 +354,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
         #extra
     };
 
-    gen.into()
+    code.into()
 }
 
 mod block_state;

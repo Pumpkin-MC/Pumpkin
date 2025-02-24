@@ -1,18 +1,18 @@
 use core::str;
 
 use crate::{
-    codec::{
-        bit_set::BitSet, identifier::Identifier, var_int::VarInt, var_long::VarLong, Codec,
-        DecodeError,
-    },
     FixedBitSet,
+    codec::{
+        Codec, DecodeError, bit_set::BitSet, identifier::Identifier, var_int::VarInt,
+        var_long::VarLong,
+    },
 };
 use bytes::{Buf, BufMut};
 
 mod deserializer;
 use thiserror::Error;
 pub mod packet;
-mod serializer;
+pub mod serializer;
 
 #[derive(Debug, Error)]
 pub enum ReadingError {
@@ -279,8 +279,8 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        bytebuf::{deserializer, serializer},
         VarInt,
+        bytebuf::{deserializer, serializer},
     };
 
     #[test]

@@ -8,6 +8,7 @@ mod registry_data;
 mod server_links;
 mod store_cookie;
 mod transfer;
+mod update_tags;
 
 pub use add_resource_pack::*;
 pub use config_disconnect::*;
@@ -19,3 +20,4 @@ pub use registry_data::*;
 pub use server_links::*;
 pub use store_cookie::*;
 pub use transfer::*;
+pub use update_tags::*;

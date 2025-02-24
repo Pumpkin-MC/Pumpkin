@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_util::random::{legacy_rand::LegacyRand, RandomImpl};
+use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
 
 use crate::{
     generation::{

@@ -1,25 +1,25 @@
 use crate::{
     command::{
-        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
     data::{banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST},
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["banlist"];
 const DESCRIPTION: &str = "shows the banlist";
 
 const ARG_LIST_TYPE: &str = "ips|players";
 
-struct BanListExecutor;
+struct ListExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanListExecutor {
+impl CommandExecutor for ListExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -66,7 +66,7 @@ impl CommandExecutor for BanListExecutor {
             _ => {
                 return Err(CommandError::GeneralCommandIssue(
                     "Incorrect argument for command".to_string(),
-                ))
+                ));
             }
         }
 
@@ -74,10 +74,10 @@ impl CommandExecutor for BanListExecutor {
     }
 }
 
-struct BanListAllExecutor;
+struct ListAllExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanListAllExecutor {
+impl CommandExecutor for ListAllExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -110,7 +110,7 @@ impl CommandExecutor for BanListAllExecutor {
 async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender<'_>) {
     if list.is_empty() {
         sender
-            .send_message(TextComponent::translate("commands.banlist.none", [].into()))
+            .send_message(TextComponent::translate("commands.banlist.none", []))
             .await;
         return;
     }
@@ -118,7 +118,7 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
     sender
         .send_message(TextComponent::translate(
             "commands.banlist.list",
-            [TextComponent::text(list.len().to_string())].into(),
+            [TextComponent::text(list.len().to_string())],
         ))
         .await;
 
@@ -130,8 +130,7 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
                     TextComponent::text(name),
                     TextComponent::text(source),
                     TextComponent::text(reason),
-                ]
-                .into(),
+                ],
             ))
             .await;
     }
@@ -139,6 +138,6 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .execute(BanListAllExecutor)
-        .then(argument(ARG_LIST_TYPE, SimpleArgConsumer).execute(BanListExecutor))
+        .execute(ListAllExecutor)
+        .then(argument(ARG_LIST_TYPE, SimpleArgConsumer).execute(ListExecutor))
 }

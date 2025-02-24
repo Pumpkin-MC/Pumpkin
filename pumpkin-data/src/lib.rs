@@ -1,3 +1,5 @@
+pub mod tag;
+
 pub mod item {
     include!(concat!(env!("OUT_DIR"), "/item.rs"));
 }
@@ -30,6 +32,7 @@ pub mod game_event {
 }
 
 pub mod entity {
+    include!(concat!(env!("OUT_DIR"), "/status_effect.rs"));
     include!(concat!(env!("OUT_DIR"), "/spawn_egg.rs"));
     include!(concat!(env!("OUT_DIR"), "/entity_type.rs"));
     include!(concat!(env!("OUT_DIR"), "/entity_pose.rs"));
@@ -46,4 +49,8 @@ pub mod scoreboard {
 
 pub mod damage {
     include!(concat!(env!("OUT_DIR"), "/damage_type.rs"));
+}
+
+pub mod fluid {
+    include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }

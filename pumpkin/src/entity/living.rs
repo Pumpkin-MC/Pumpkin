@@ -1,13 +1,21 @@
-use std::sync::atomic::AtomicI32;
+use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::entity::EffectType;
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CDamageEvent, CEntityStatus, MetaDataType, Metadata};
+use pumpkin_protocol::{
+    client::play::{
+        CDamageEvent, CEntityStatus, CSetEquipment, EquipmentSlot, MetaDataType, Metadata,
+    },
+    codec::slot::Slot,
+};
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
+use tokio::sync::Mutex;
 
-use super::{Entity, EntityId, NBTStorage};
+use super::{Entity, EntityId, NBTStorage, effect::Effect};
 
 /// Represents a living entity within the game world.
 ///
@@ -25,9 +33,10 @@ pub struct LivingEntity {
     pub health: AtomicCell<f32>,
     /// The distance the entity has been falling
     pub fall_distance: AtomicCell<f32>,
+    pub active_effects: Mutex<HashMap<EffectType, Effect>>,
 }
 impl LivingEntity {
-    pub const fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
         Self {
             entity,
             last_pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
@@ -35,6 +44,7 @@ impl LivingEntity {
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
             fall_distance: AtomicCell::new(0.0),
+            active_effects: Mutex::new(HashMap::new()),
         }
     }
 
@@ -47,6 +57,22 @@ impl LivingEntity {
             self.time_until_regen
                 .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         }
+    }
+
+    pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        let equipment: Vec<(EquipmentSlot, Slot)> = equipment
+            .iter()
+            .map(|(slot, stack)| (*slot, Slot::from(stack)))
+            .collect();
+        self.entity
+            .world
+            .read()
+            .await
+            .broadcast_packet_except(
+                &[self.entity.entity_uuid],
+                &CSetEquipment::new(self.entity_id().into(), equipment),
+            )
+            .await;
     }
 
     pub fn set_pos(&self, position: Vector3<f64>) {
@@ -107,6 +133,22 @@ impl LivingEntity {
         }
 
         true
+    }
+
+    pub async fn add_effect(&self, effect: Effect) {
+        let mut effects = self.active_effects.lock().await;
+        effects.insert(effect.r#type, effect);
+        // TODO broadcast metadata
+    }
+
+    pub async fn has_effect(&self, effect: EffectType) -> bool {
+        let effects = self.active_effects.lock().await;
+        effects.contains_key(&effect)
+    }
+
+    pub async fn get_effect(&self, effect: EffectType) -> Option<Effect> {
+        let effects = self.active_effects.lock().await;
+        effects.get(&effect).cloned()
     }
 
     pub async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {

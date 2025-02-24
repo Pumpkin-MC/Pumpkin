@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use pumpkin_data::entity;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use CommandError::InvalidConsumption;
 
@@ -16,10 +16,10 @@ const DESCRIPTION: &str = "Kills all target entities.";
 
 const ARG_TARGET: &str = "target";
 
-struct KillExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for KillExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -52,11 +52,11 @@ impl CommandExecutor for KillExecutor {
                 ));
             }
 
-            TextComponent::translate("commands.kill.success.single", [entity_display].into())
+            TextComponent::translate("commands.kill.success.single", [entity_display])
         } else {
             TextComponent::translate(
                 "commands.kill.success.multiple",
-                [TextComponent::text(target_count.to_string())].into(),
+                [TextComponent::text(target_count.to_string())],
             )
         };
 
@@ -66,10 +66,10 @@ impl CommandExecutor for KillExecutor {
     }
 }
 
-struct KillSelfExecutor;
+struct SelfExecutor;
 
 #[async_trait]
-impl CommandExecutor for KillSelfExecutor {
+impl CommandExecutor for SelfExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -93,8 +93,7 @@ impl CommandExecutor for KillSelfExecutor {
                     ))
                     .click_event(ClickEvent::SuggestCommand(
                         format!("/tell {} ", name.clone()).into(),
-                    ))]
-                .into(),
+                    ))],
             ))
             .await;
 
@@ -105,6 +104,6 @@ impl CommandExecutor for KillSelfExecutor {
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(KillExecutor))
-        .then(require(|sender| sender.is_player()).execute(KillSelfExecutor))
+        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))
+        .then(require(|sender| sender.is_player()).execute(SelfExecutor))
 }

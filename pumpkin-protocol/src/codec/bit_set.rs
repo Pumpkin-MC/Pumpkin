@@ -6,7 +6,7 @@ use serde::{Serialize, Serializer};
 use crate::bytebuf::ByteBuf;
 use crate::bytebuf::ByteBufMut;
 
-use super::{var_int::VarInt, Codec, DecodeError};
+use super::{Codec, DecodeError, var_int::VarInt};
 
 pub struct BitSet(pub VarInt, pub Vec<i64>);
 

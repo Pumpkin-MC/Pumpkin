@@ -1,15 +1,15 @@
 use async_trait::async_trait;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-use crate::command::args::item::ItemArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
+use crate::command::args::resource::item::ItemArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
-use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 
 const NAMES: [&str; 1] = ["give"];
@@ -25,10 +25,10 @@ fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
         .max(i32::MAX)
 }
 
-struct GiveExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for GiveExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -83,8 +83,7 @@ impl CommandExecutor for GiveExecutor {
                         .click_event(ClickEvent::SuggestCommand(
                             format!("/tell {} ", targets[0].gameprofile.name.clone()).into(),
                         )),
-                ]
-                .into(),
+                ],
             )
         } else {
             TextComponent::translate(
@@ -100,8 +99,7 @@ impl CommandExecutor for GiveExecutor {
                             tag: None,
                         }),
                     TextComponent::text(targets.len().to_string()),
-                ]
-                .into(),
+                ],
             )
         };
         sender.send_message(msg).await;
@@ -114,8 +112,8 @@ pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument_default_name(PlayersArgumentConsumer).then(
             argument(ARG_ITEM, ItemArgumentConsumer)
-                .execute(GiveExecutor)
-                .then(argument_default_name(item_count_consumer()).execute(GiveExecutor)),
+                .execute(Executor)
+                .then(argument_default_name(item_count_consumer()).execute(Executor)),
         ),
     )
 }

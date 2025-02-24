@@ -4,13 +4,13 @@ use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{
-        args::{
-            players::PlayersArgumentConsumer, textcomponent::TextComponentArgConsumer, Arg,
-            ConsumedArgs, FindArg,
-        },
-        tree::builder::{argument, literal},
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{
+            Arg, ConsumedArgs, FindArg, players::PlayersArgumentConsumer,
+            textcomponent::TextComponentArgConsumer,
+        },
+        tree::CommandTree,
+        tree::builder::{argument, literal},
     },
     entity::player::TitleMode,
 };
@@ -50,7 +50,7 @@ impl CommandExecutor for ClearOrResetExecutor {
                 };
                 TextComponent::translate(
                     text,
-                    [TextComponent::text(targets[0].gameprofile.name.clone())].into(),
+                    [TextComponent::text(targets[0].gameprofile.name.clone())],
                 )
             } else {
                 let text = if reset {
@@ -58,10 +58,7 @@ impl CommandExecutor for ClearOrResetExecutor {
                 } else {
                     "commands.title.cleared.multiple"
                 };
-                TextComponent::translate(
-                    text,
-                    [TextComponent::text(targets.len().to_string())].into(),
-                )
+                TextComponent::translate(text, [TextComponent::text(targets.len().to_string())])
             })
             .await;
 
@@ -96,12 +93,12 @@ impl CommandExecutor for TitleExecutor {
             .send_message(if targets.len() == 1 {
                 TextComponent::translate(
                     format!("commands.title.show.{mode_name}.single"),
-                    [TextComponent::text(targets[0].gameprofile.name.clone())].into(),
+                    [TextComponent::text(targets[0].gameprofile.name.clone())],
                 )
             } else {
                 TextComponent::translate(
                     format!("commands.title.show.{mode_name}.multiple"),
-                    [TextComponent::text(targets.len().to_string())].into(),
+                    [TextComponent::text(targets.len().to_string())],
                 )
             })
             .await;

@@ -1,1 +1,145 @@
-{"chat":{"id":0,"components":{"chat":{"translation_key":"chat.type.text","parameters":["sender","content"]},"narration":{"translation_key":"chat.type.text.narrate","parameters":["sender","content"]}}},"emote_command":{"id":1,"components":{"chat":{"translation_key":"chat.type.emote","parameters":["sender","content"]},"narration":{"translation_key":"chat.type.emote","parameters":["sender","content"]}}},"msg_command_incoming":{"id":2,"components":{"chat":{"translation_key":"commands.message.display.incoming","parameters":["sender","content"],"style":{"italic":true,"color":"gray"}},"narration":{"translation_key":"chat.type.text.narrate","parameters":["sender","content"]}}},"msg_command_outgoing":{"id":3,"components":{"chat":{"translation_key":"commands.message.display.outgoing","parameters":["target","content"],"style":{"italic":true,"color":"gray"}},"narration":{"translation_key":"chat.type.text.narrate","parameters":["sender","content"]}}},"say_command":{"id":4,"components":{"chat":{"translation_key":"chat.type.announcement","parameters":["sender","content"]},"narration":{"translation_key":"chat.type.text.narrate","parameters":["sender","content"]}}},"team_msg_command_incoming":{"id":5,"components":{"chat":{"translation_key":"chat.type.team.text","parameters":["target","sender","content"]},"narration":{"translation_key":"chat.type.text.narrate","parameters":["sender","content"]}}},"team_msg_command_outgoing":{"id":6,"components":{"chat":{"translation_key":"chat.type.team.sent","parameters":["target","sender","content"]},"narration":{"translation_key":"chat.type.text.narrate","parameters":["sender","content"]}}}}
+{
+  "chat": {
+    "id": 0,
+    "components": {
+      "chat": {
+        "translation_key": "chat.type.text",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  },
+  "emote_command": {
+    "id": 1,
+    "components": {
+      "chat": {
+        "translation_key": "chat.type.emote",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.emote",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  },
+  "msg_command_incoming": {
+    "id": 2,
+    "components": {
+      "chat": {
+        "translation_key": "commands.message.display.incoming",
+        "parameters": [
+          "sender",
+          "content"
+        ],
+        "style": {
+          "italic": true,
+          "color": "gray"
+        }
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  },
+  "msg_command_outgoing": {
+    "id": 3,
+    "components": {
+      "chat": {
+        "translation_key": "commands.message.display.outgoing",
+        "parameters": [
+          "target",
+          "content"
+        ],
+        "style": {
+          "italic": true,
+          "color": "gray"
+        }
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  },
+  "say_command": {
+    "id": 4,
+    "components": {
+      "chat": {
+        "translation_key": "chat.type.announcement",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  },
+  "team_msg_command_incoming": {
+    "id": 5,
+    "components": {
+      "chat": {
+        "translation_key": "chat.type.team.text",
+        "parameters": [
+          "target",
+          "sender",
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  },
+  "team_msg_command_outgoing": {
+    "id": 6,
+    "components": {
+      "chat": {
+        "translation_key": "chat.type.team.sent",
+        "parameters": [
+          "target",
+          "sender",
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
+  }
+}

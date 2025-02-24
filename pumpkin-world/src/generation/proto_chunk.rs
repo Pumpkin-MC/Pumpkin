@@ -8,11 +8,11 @@ use crate::{
 };
 
 use super::{
+    GlobalRandomConfig,
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, STONE_BLOCK, WATER_BLOCK},
     noise_router::proto_noise_router::GlobalProtoNoiseRouter,
     positions::chunk_pos::{start_block_x, start_block_z},
-    GlobalRandomConfig,
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -233,19 +233,19 @@ impl<'a> ProtoChunk<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::{fs, path::Path, sync::LazyLock};
+    use std::sync::LazyLock;
 
     use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
         generation::{
+            GlobalRandomConfig,
             noise_router::{
                 density_function::{NoiseFunctionComponentRange, PassThrough},
                 proto_noise_router::{GlobalProtoNoiseRouter, ProtoNoiseFunctionComponent},
             },
-            GlobalRandomConfig,
         },
-        noise_router::{density_function_ast::WrapperType, NOISE_ROUTER_ASTS},
+        noise_router::{NOISE_ROUTER_ASTS, density_function_ast::WrapperType},
         read_data_from_file,
     };
 

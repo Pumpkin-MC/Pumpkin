@@ -2,7 +2,7 @@ use chunk::ChunkConfig;
 use log::warn;
 use logging::LoggingConfig;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::{
     env, fs,
@@ -184,14 +184,15 @@ impl LoadConfiguration for BasicConfiguration {
     }
 
     fn validate(&self) {
+        let min = unsafe { NonZeroU8::new_unchecked(2) };
+        let max = unsafe { NonZeroU8::new_unchecked(32) };
+
         assert!(
-            self.view_distance
-                .ge(unsafe { &NonZeroU8::new_unchecked(2) }),
+            self.view_distance.ge(&min),
             "View distance must be at least 2"
         );
         assert!(
-            self.view_distance
-                .le(unsafe { &NonZeroU8::new_unchecked(32) }),
+            self.view_distance.le(&max),
             "View distance must be less than 32"
         );
         if self.online_mode {

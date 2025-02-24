@@ -1,13 +1,14 @@
-use bytes::{BufMut, BytesMut};
+use bytes::BufMut;
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
+use serde::Serialize;
 
-use crate::{bytebuf::ByteBufMut, codec::identifier::Identifier, ClientPacket};
+use crate::{ClientPacket, bytebuf::ByteBufMut, codec::identifier::Identifier};
 
-#[client_packet(CONFIG_REGISTRY_DATA)]
+#[packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
-    registry_id: &'a Identifier,
-    entries: &'a [RegistryEntry],
+    pub registry_id: &'a Identifier,
+    pub entries: &'a [RegistryEntry],
 }
 
 impl<'a> CRegistryData<'a> {
@@ -21,7 +22,18 @@ impl<'a> CRegistryData<'a> {
 
 pub struct RegistryEntry {
     pub entry_id: Identifier,
-    pub data: Option<BytesMut>,
+    pub data: Option<Box<[u8]>>,
+}
+
+impl RegistryEntry {
+    pub fn from_nbt(name: &str, nbt: &impl Serialize) -> Self {
+        let mut data_buf = Vec::new();
+        pumpkin_nbt::serializer::to_bytes_unnamed(nbt, &mut data_buf).unwrap();
+        RegistryEntry {
+            entry_id: Identifier::vanilla(name),
+            data: Some(data_buf.into_boxed_slice()),
+        }
+    }
 }
 
 impl ClientPacket for CRegistryData<'_> {

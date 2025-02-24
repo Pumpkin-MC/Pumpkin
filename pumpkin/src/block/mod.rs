@@ -1,5 +1,6 @@
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock};
 use properties::{
+    BlockPropertiesManager,
     age::Age,
     attachment::Attachment,
     axis::Axis,
@@ -14,22 +15,21 @@ use properties::{
     slab_type::SlabType,
     stair_shape::StairShape,
     waterlog::Waterlogged,
-    BlockPropertiesManager,
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::registry::Block;
+use pumpkin_world::block::registry::{Block, State};
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
-use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::server::Server;
 use crate::world::World;
+use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use std::sync::Arc;
 
 mod blocks;
@@ -62,10 +62,26 @@ pub async fn drop_loot(server: &Server, world: &Arc<World>, block: &Block, pos: 
     let entity = server.add_entity(pos, EntityType::ITEM, world);
     let item_entity = Arc::new(ItemEntity::new(
         entity,
-        &ItemStack::new(1, Item::from_id(block.item_id).unwrap()),
+        ItemStack::new(1, Item::from_id(block.item_id).unwrap()),
     ));
     world.spawn_entity(item_entity.clone()).await;
     item_entity.send_meta_packet().await;
+}
+
+pub async fn calc_block_breaking(player: &Player, state: &State, block_name: &str) -> f32 {
+    let hardness = state.hardness;
+    #[expect(clippy::float_cmp)]
+    if hardness == -1.0 {
+        // unbreakable
+        return 0.0;
+    }
+    let i = if player.can_harvest(state, block_name).await {
+        30
+    } else {
+        100
+    };
+
+    player.get_mining_speed(block_name).await / hardness / i as f32
 }
 
 #[must_use]

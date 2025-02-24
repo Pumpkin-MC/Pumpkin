@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
+    NumberFormat,
     client::play::{CDisplayObjective, CUpdateObjectives, CUpdateScore, RenderType},
     codec::var_int::VarInt,
-    NumberFormat,
 };
 use pumpkin_util::text::TextComponent;
 

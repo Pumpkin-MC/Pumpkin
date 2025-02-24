@@ -1,5 +1,5 @@
 use core::f32;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -32,6 +32,7 @@ use tokio::sync::RwLock;
 use crate::world::World;
 
 pub mod ai;
+pub mod effect;
 pub mod hunger;
 pub mod item;
 pub mod living;
@@ -400,24 +401,20 @@ impl NBTStorage for Entity {
         let position = self.pos.load();
         nbt.put(
             "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
+            NbtTag::List(
+                vec![position.x.into(), position.y.into(), position.z.into()].into_boxed_slice(),
+            ),
         );
         let velocity = self.velocity.load();
         nbt.put(
             "Motion",
-            NbtTag::List(vec![
-                velocity.x.into(),
-                velocity.y.into(),
-                velocity.z.into(),
-            ]),
+            NbtTag::List(
+                vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
+            ),
         );
         nbt.put(
             "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
         );
 
         // todo more...

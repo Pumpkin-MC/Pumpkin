@@ -1,18 +1,18 @@
 use async_trait::async_trait;
 
-use crate::command::args::gamemode::GamemodeArgumentConsumer;
 use crate::command::args::GetCloned;
+use crate::command::args::gamemode::GamemodeArgumentConsumer;
 
 use crate::TextComponent;
 
 use crate::command::args::players::PlayersArgumentConsumer;
 
+use crate::command::CommandSender::Player;
 use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
-use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
-use crate::command::CommandSender::Player;
+use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 
@@ -23,10 +23,10 @@ const DESCRIPTION: &str = "Change a player's gamemode.";
 const ARG_GAMEMODE: &str = "gamemode";
 const ARG_TARGET: &str = "target";
 
-struct GamemodeTargetSelf;
+struct TargetSelfExecutor;
 
 #[async_trait]
-impl CommandExecutor for GamemodeTargetSelf {
+impl CommandExecutor for TargetSelfExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -45,7 +45,7 @@ impl CommandExecutor for GamemodeTargetSelf {
                 target
                     .send_system_message(&TextComponent::translate(
                         "commands.gamemode.success.self",
-                        [TextComponent::translate(gamemode_string, [].into())].into(),
+                        [TextComponent::translate(gamemode_string, [])],
                     ))
                     .await;
             }
@@ -56,10 +56,10 @@ impl CommandExecutor for GamemodeTargetSelf {
     }
 }
 
-struct GamemodeTargetPlayer;
+struct TargetPlayerExecutor;
 
 #[async_trait]
-impl CommandExecutor for GamemodeTargetPlayer {
+impl CommandExecutor for TargetPlayerExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -83,7 +83,7 @@ impl CommandExecutor for GamemodeTargetPlayer {
                 target
                     .send_system_message(&TextComponent::translate(
                         "gameMode.changed",
-                        [TextComponent::translate(gamemode_string.clone(), [].into())].into(),
+                        [TextComponent::translate(gamemode_string.clone(), [])],
                     ))
                     .await;
                 if target_count == 1 {
@@ -92,9 +92,8 @@ impl CommandExecutor for GamemodeTargetPlayer {
                             "commands.gamemode.success.other",
                             [
                                 TextComponent::text(target.gameprofile.name.clone()),
-                                TextComponent::translate(gamemode_string, [].into()),
-                            ]
-                            .into(),
+                                TextComponent::translate(gamemode_string, []),
+                            ],
                         ))
                         .await;
                 }
@@ -109,7 +108,7 @@ impl CommandExecutor for GamemodeTargetPlayer {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_GAMEMODE, GamemodeArgumentConsumer)
-            .then(require(|sender| sender.is_player()).execute(GamemodeTargetSelf))
-            .then(argument(ARG_TARGET, PlayersArgumentConsumer).execute(GamemodeTargetPlayer)),
+            .then(require(|sender| sender.is_player()).execute(TargetSelfExecutor))
+            .then(argument(ARG_TARGET, PlayersArgumentConsumer).execute(TargetPlayerExecutor)),
     )
 }

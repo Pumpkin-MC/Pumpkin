@@ -1,13 +1,13 @@
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::LOGIN_KEY;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
-#[server_packet(LOGIN_KEY)]
+#[packet(LOGIN_KEY)]
 pub struct SEncryptionResponse {
     pub shared_secret_length: VarInt,
     pub shared_secret: bytes::Bytes,

@@ -1,13 +1,13 @@
 use crate::VarInt;
 use pumpkin_data::packet::clientbound::CONFIG_TRANSFER;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet(CONFIG_TRANSFER)]
+#[packet(CONFIG_TRANSFER)]
 pub struct CTransfer<'a> {
-    host: &'a str,
-    port: &'a VarInt,
+    pub host: &'a str,
+    pub port: &'a VarInt,
 }
 
 impl<'a> CTransfer<'a> {

@@ -2,15 +2,16 @@ use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
-use crate::{command::dispatcher::CommandError, server::Server};
-
-use super::{
-    super::{
-        args::{ArgumentConsumer, RawArgs},
-        CommandSender,
+use crate::command::{
+    CommandSender,
+    args::{
+        Arg, ArgumentConsumer, ConsumedArgs, DefaultNameArgConsumer, FindArg,
+        GetClientSideArgParser,
     },
-    Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
+    dispatcher::CommandError,
+    tree::RawArgs,
 };
+use crate::server::Server;
 
 pub struct ItemArgumentConsumer;
 
@@ -55,7 +56,7 @@ impl DefaultNameArgConsumer for ItemArgumentConsumer {
 impl<'a> FindArg<'a> for ItemArgumentConsumer {
     type Data = (&'a str, Item);
 
-    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+    fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Item(name)) => Item::from_name(&name.replace("minecraft:", "")).map_or_else(
                 || {

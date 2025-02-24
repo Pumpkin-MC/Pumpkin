@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_OPEN_SIGN_EDITOR;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_OPEN_SIGN_EDITOR)]
+#[packet(PLAY_OPEN_SIGN_EDITOR)]
 pub struct COpenSignEditor {
     location: BlockPos,
     is_front_text: bool,

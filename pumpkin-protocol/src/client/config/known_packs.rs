@@ -1,12 +1,12 @@
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::CONFIG_SELECT_KNOWN_PACKS;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 
-use crate::{bytebuf::ByteBufMut, ClientPacket, KnownPack};
+use crate::{ClientPacket, KnownPack, bytebuf::ByteBufMut};
 
-#[client_packet(CONFIG_SELECT_KNOWN_PACKS)]
+#[packet(CONFIG_SELECT_KNOWN_PACKS)]
 pub struct CKnownPacks<'a> {
-    known_packs: &'a [KnownPack<'a>],
+    pub known_packs: &'a [KnownPack<'a>],
 }
 
 impl<'a> CKnownPacks<'a> {

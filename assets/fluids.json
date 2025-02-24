@@ -1,0 +1,396 @@
+[
+  {
+    "id": 0,
+    "name": "empty",
+    "properties": [],
+    "default_state_index": 0,
+    "states": [
+      {
+        "height": 0.0,
+        "level": 0,
+        "is_empty": true,
+        "blast_resistance": 0.0,
+        "block_state_id": 0,
+        "is_still": false
+      }
+    ]
+  },
+  {
+    "id": 1,
+    "name": "flowing_water",
+    "properties": [
+      {
+        "name": "falling",
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      {
+        "name": "level",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      }
+    ],
+    "default_state_index": 0,
+    "states": [
+      {
+        "height": 0.11111111,
+        "level": 1,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 101,
+        "is_still": false
+      },
+      {
+        "height": 0.22222222,
+        "level": 2,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 100,
+        "is_still": false
+      },
+      {
+        "height": 0.33333334,
+        "level": 3,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 99,
+        "is_still": false
+      },
+      {
+        "height": 0.44444445,
+        "level": 4,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 98,
+        "is_still": false
+      },
+      {
+        "height": 0.5555556,
+        "level": 5,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 97,
+        "is_still": false
+      },
+      {
+        "height": 0.6666667,
+        "level": 6,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 96,
+        "is_still": false
+      },
+      {
+        "height": 0.7777778,
+        "level": 7,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 95,
+        "is_still": false
+      },
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 94,
+        "is_still": false
+      },
+      {
+        "height": 0.11111111,
+        "level": 1,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 93,
+        "is_still": false
+      },
+      {
+        "height": 0.22222222,
+        "level": 2,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 92,
+        "is_still": false
+      },
+      {
+        "height": 0.33333334,
+        "level": 3,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 91,
+        "is_still": false
+      },
+      {
+        "height": 0.44444445,
+        "level": 4,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 90,
+        "is_still": false
+      },
+      {
+        "height": 0.5555556,
+        "level": 5,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 89,
+        "is_still": false
+      },
+      {
+        "height": 0.6666667,
+        "level": 6,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 88,
+        "is_still": false
+      },
+      {
+        "height": 0.7777778,
+        "level": 7,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 87,
+        "is_still": false
+      },
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 86,
+        "is_still": false
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "water",
+    "properties": [
+      {
+        "name": "falling",
+        "values": [
+          "true",
+          "false"
+        ]
+      }
+    ],
+    "default_state_index": 0,
+    "states": [
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 86,
+        "is_still": true
+      },
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 86,
+        "is_still": true
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "flowing_lava",
+    "properties": [
+      {
+        "name": "falling",
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      {
+        "name": "level",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ]
+      }
+    ],
+    "default_state_index": 0,
+    "states": [
+      {
+        "height": 0.11111111,
+        "level": 1,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 117,
+        "is_still": false
+      },
+      {
+        "height": 0.22222222,
+        "level": 2,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 116,
+        "is_still": false
+      },
+      {
+        "height": 0.33333334,
+        "level": 3,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 115,
+        "is_still": false
+      },
+      {
+        "height": 0.44444445,
+        "level": 4,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 114,
+        "is_still": false
+      },
+      {
+        "height": 0.5555556,
+        "level": 5,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 113,
+        "is_still": false
+      },
+      {
+        "height": 0.6666667,
+        "level": 6,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 112,
+        "is_still": false
+      },
+      {
+        "height": 0.7777778,
+        "level": 7,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 111,
+        "is_still": false
+      },
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 110,
+        "is_still": false
+      },
+      {
+        "height": 0.11111111,
+        "level": 1,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 109,
+        "is_still": false
+      },
+      {
+        "height": 0.22222222,
+        "level": 2,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 108,
+        "is_still": false
+      },
+      {
+        "height": 0.33333334,
+        "level": 3,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 107,
+        "is_still": false
+      },
+      {
+        "height": 0.44444445,
+        "level": 4,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 106,
+        "is_still": false
+      },
+      {
+        "height": 0.5555556,
+        "level": 5,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 105,
+        "is_still": false
+      },
+      {
+        "height": 0.6666667,
+        "level": 6,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 104,
+        "is_still": false
+      },
+      {
+        "height": 0.7777778,
+        "level": 7,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 103,
+        "is_still": false
+      },
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 102,
+        "is_still": false
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "name": "lava",
+    "properties": [
+      {
+        "name": "falling",
+        "values": [
+          "true",
+          "false"
+        ]
+      }
+    ],
+    "default_state_index": 0,
+    "states": [
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 102,
+        "is_still": true
+      },
+      {
+        "height": 0.8888889,
+        "level": 8,
+        "is_empty": false,
+        "blast_resistance": 100.0,
+        "block_state_id": 102,
+        "is_still": true
+      }
+    ]
+  }
+]

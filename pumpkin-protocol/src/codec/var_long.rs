@@ -3,8 +3,8 @@ use std::{num::NonZeroUsize, ops::Deref};
 use super::{Codec, DecodeError};
 use bytes::{Buf, BufMut};
 use serde::{
-    de::{self, SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
+    de::{self, SeqAccess, Visitor},
 };
 
 pub type VarLongType = i64;

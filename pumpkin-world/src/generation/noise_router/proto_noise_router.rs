@@ -7,24 +7,24 @@ use enum_dispatch::enum_dispatch;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 
 use crate::{
+    GlobalRandomConfig,
     generation::noise::perlin::DoublePerlinNoiseSampler,
     noise_router::{
         density_function_ast::{DensityFunctionRepr, SplineRepr},
         noise_router_ast::NoiseRouterRepr,
     },
-    GlobalRandomConfig,
 };
 
 use super::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     density_function::{
+        IndexToNoisePos, NoiseFunctionComponentRange, NoisePos, PassThrough,
+        StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
         math::{Binary, Clamp, Constant, Linear, Unary},
         misc::{ClampedYGradient, EndIsland, RangeChoice, WeirdScaled},
         noise::{InterpolatedNoiseSampler, Noise, ShiftA, ShiftB, ShiftedNoise},
         spline::{Spline, SplineFunction, SplinePoint, SplineValue},
-        IndexToNoisePos, NoiseFunctionComponentRange, NoisePos, PassThrough,
-        StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
     },
 };
 

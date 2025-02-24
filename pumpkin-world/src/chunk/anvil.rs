@@ -1,8 +1,8 @@
 use bytes::*;
-use fastnbt::LongArray;
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
@@ -11,9 +11,8 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
 };
 
-use crate::{
-    block::registry::BLOCK_ID_TO_REGISTRY_ID, chunk::ChunkWritingError, level::LevelFolder,
-};
+use crate::block::registry::STATE_ID_TO_REGISTRY_ID;
+use crate::{chunk::ChunkWritingError, level::LevelFolder};
 
 use super::{
     ChunkData, ChunkNbt, ChunkReader, ChunkReadingError, ChunkSection, ChunkSectionBlockStates,
@@ -248,8 +247,7 @@ impl ChunkWriter for AnvilChunkFormat {
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
         // Serialize chunk data
-        let raw_bytes = self
-            .to_bytes(chunk_data)
+        let raw_bytes = Self::to_bytes(chunk_data)
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         // Compress chunk data
@@ -366,7 +364,7 @@ impl ChunkWriter for AnvilChunkFormat {
 }
 
 impl AnvilChunkFormat {
-    pub fn to_bytes(&self, chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
+    pub fn to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
         let mut sections = Vec::new();
 
         for (i, blocks) in chunk_data.subchunks.array_iter().enumerate() {
@@ -377,7 +375,7 @@ impl AnvilChunkFormat {
                 .into_iter()
                 .enumerate()
                 .map(|(i, block)| {
-                    let name = BLOCK_ID_TO_REGISTRY_ID.get(block).unwrap().as_str();
+                    let name = STATE_ID_TO_REGISTRY_ID.get(block).unwrap();
                     (block, (name, i))
                 })
                 .collect();
@@ -425,12 +423,22 @@ impl AnvilChunkFormat {
             sections.push(ChunkSection {
                 y: i as i8 - 4,
                 block_states: Some(ChunkSectionBlockStates {
-                    data: Some(LongArray::new(section_longs)),
+                    data: Some(section_longs.into_boxed_slice()),
                     palette: palette
                         .into_iter()
                         .map(|entry| PaletteEntry {
-                            name: entry.1 .0.to_owned(),
-                            properties: None,
+                            name: entry.1.0.to_string(),
+                            properties: {
+                                /*
+                                let properties = &get_block(entry.1 .0).unwrap().properties;
+                                let mut map = HashMap::new();
+                                for property in properties {
+                                    map.insert(property.name.to_string(), property.values.clone());
+                                }
+                                Some(map)
+                                */
+                                None
+                            },
                         })
                         .collect(),
                 }),
@@ -446,7 +454,9 @@ impl AnvilChunkFormat {
             sections,
         };
 
-        fastnbt::to_bytes(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)
+        let mut result = Vec::new();
+        to_bytes(&nbt, &mut result).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        Ok(result)
     }
 
     /// Returns the next free writable sector
@@ -492,11 +502,12 @@ mod tests {
     use pumpkin_util::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
+    use temp_dir::TempDir;
 
     use crate::chunk::ChunkWriter;
-    use crate::generation::{get_world_gen, Seed};
+    use crate::generation::{Seed, get_world_gen};
     use crate::{
-        chunk::{anvil::AnvilChunkFormat, ChunkReader, ChunkReadingError},
+        chunk::{ChunkReader, ChunkReadingError, anvil::AnvilChunkFormat},
         level::LevelFolder,
     };
 
@@ -516,15 +527,13 @@ mod tests {
     #[test]
     fn test_writing() {
         let generator = get_world_gen(Seed(0));
-        let level_folder = LevelFolder {
-            root_folder: PathBuf::from("./tmp_Anvil"),
-            region_folder: PathBuf::from("./tmp_Anvil/region"),
-        };
-        if fs::exists(&level_folder.root_folder).unwrap() {
-            fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
-        }
 
-        fs::create_dir_all(&level_folder.region_folder).expect("Could not create directory");
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = LevelFolder {
+            root_folder: temp_dir.path().to_path_buf(),
+            region_folder: temp_dir.path().join("region"),
+        };
+        fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
 
         // Generate chunks
         let mut chunks = vec![];
@@ -561,8 +570,49 @@ mod tests {
             }
         }
 
-        fs::remove_dir_all(&level_folder.root_folder).expect("Could not delete directory");
-
         println!("Checked chunks successfully");
     }
+
+    // TODO
+    /*
+    #[test]
+    fn test_load_java_chunk() {
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = LevelFolder {
+            root_folder: temp_dir.path().to_path_buf(),
+            region_folder: temp_dir.path().join("region"),
+        };
+
+        fs::create_dir(&level_folder.region_folder).unwrap();
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join(file!())
+                .parent()
+                .unwrap()
+                .join("../../assets/r.0.0.mca"),
+            level_folder.region_folder.join("r.0.0.mca"),
+        )
+        .unwrap();
+
+        let mut actually_tested = false;
+        for x in 0..(1 << 5) {
+            for z in 0..(1 << 5) {
+                let result = AnvilChunkFormat {}.read_chunk(&level_folder, &Vector2 { x, z });
+
+                match result {
+                    Ok(_) => actually_tested = true,
+                    Err(ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated)) => {}
+                    Err(ChunkReadingError::ChunkNotExist) => {}
+                    Err(e) => panic!("{:?}", e),
+                }
+
+                println!("=========== OK ===========");
+            }
+        }
+
+        assert!(actually_tested);
+    }
+    */
 }

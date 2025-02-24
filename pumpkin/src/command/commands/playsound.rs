@@ -1,17 +1,17 @@
 use async_trait::async_trait;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::text::TextComponent;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
 use crate::command::{
-    args::{
-        bounded_num::BoundedNumArgumentConsumer, players::PlayersArgumentConsumer,
-        position_3d::Position3DArgumentConsumer, sound::SoundArgumentConsumer,
-        sound_category::SoundCategoryArgumentConsumer, Arg, ConsumedArgs, FindArg,
-    },
-    tree::builder::argument,
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
+        sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
+    },
+    tree::CommandTree,
+    tree::builder::argument,
 };
 
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
@@ -57,10 +57,10 @@ fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
         .max(1.0)
 }
 
-struct SoundExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for SoundExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -80,9 +80,9 @@ impl CommandExecutor for SoundExecutor {
 
         // Get target players, defaults to sender if not specified
         let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS) {
-            players.to_vec()
+            players
         } else if let Some(player) = sender.as_player() {
-            vec![player.clone()]
+            &[player.clone()]
         } else {
             return Ok(());
         };
@@ -109,13 +109,13 @@ impl CommandExecutor for SoundExecutor {
         };
 
         // Use same random seed for all targets to ensure sound synchronization
-        let seed = thread_rng().gen::<f64>();
+        let seed = thread_rng().r#gen::<f64>();
 
         // Track how many players actually received the sound
         let mut players_who_heard = 0;
 
         // Play sound for each target player
-        for target in &targets {
+        for target in targets {
             let pos = position.unwrap_or(target.living_entity.entity.pos.load());
 
             // Check if player can hear the sound based on volume and distance
@@ -134,10 +134,7 @@ impl CommandExecutor for SoundExecutor {
         // Send appropriate message based on results
         if players_who_heard == 0 {
             sender
-                .send_message(TextComponent::translate(
-                    "commands.playsound.failed",
-                    [].into(),
-                ))
+                .send_message(TextComponent::translate("commands.playsound.failed", []))
                 .await;
         } else {
             let sound_name = sound.to_name();
@@ -148,8 +145,7 @@ impl CommandExecutor for SoundExecutor {
                         [
                             TextComponent::text(sound_name),
                             TextComponent::text(targets[0].gameprofile.name.clone()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             } else {
@@ -159,8 +155,7 @@ impl CommandExecutor for SoundExecutor {
                         [
                             TextComponent::text(sound_name),
                             TextComponent::text(players_who_heard.to_string()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             }
@@ -188,18 +183,18 @@ pub fn init_command_tree() -> CommandTree {
                                                             ARG_MIN_VOLUME,
                                                             min_volume_consumer(),
                                                         )
-                                                        .execute(SoundExecutor),
+                                                        .execute(Executor),
                                                     )
-                                                    .execute(SoundExecutor),
+                                                    .execute(Executor),
                                             )
-                                            .execute(SoundExecutor),
+                                            .execute(Executor),
                                     )
-                                    .execute(SoundExecutor),
+                                    .execute(Executor),
                             )
-                            .execute(SoundExecutor),
+                            .execute(Executor),
                     )
-                    .execute(SoundExecutor),
+                    .execute(Executor),
             )
-            .execute(SoundExecutor),
+            .execute(Executor),
     )
 }

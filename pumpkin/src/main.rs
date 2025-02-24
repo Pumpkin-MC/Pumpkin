@@ -20,6 +20,7 @@
 #![deny(clippy::print_stderr)]
 // REMOVE SOME WHEN RELEASE
 #![expect(clippy::cargo_common_metadata)]
+#![expect(clippy::cast_precision_loss)]
 #![expect(clippy::multiple_crate_versions)]
 #![expect(clippy::single_call_fn)]
 #![expect(clippy::cast_sign_loss)]
@@ -30,7 +31,7 @@
 #![expect(clippy::module_name_repetitions)]
 #![expect(clippy::struct_excessive_bools)]
 // Not warn event sending macros
-#![allow(unused_labels)]
+#![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
@@ -43,13 +44,13 @@ use std::{
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
-use pumpkin::{init_log, PumpkinServer};
+use pumpkin::{PumpkinServer, SHOULD_STOP, init_log, stop_server};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -83,10 +84,13 @@ async fn main() {
     std::panic::set_hook(Box::new(move |info| {
         default_panic(info);
         // TODO: Gracefully exit?
+        // we need to abide by the panic rules here
         std::process::exit(1);
     }));
 
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",);
+    log::info!(
+        "Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
+    );
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -120,6 +124,7 @@ async fn main() {
     );
 
     pumpkin_server.start().await;
+    log::info!("The server has stopped.");
 }
 
 fn handle_interrupt() {
@@ -129,7 +134,7 @@ fn handle_interrupt() {
             .color_named(NamedColor::Red)
             .to_pretty_console()
     );
-    std::process::exit(0);
+    stop_server();
 }
 
 // Non-UNIX Ctrl-C handling

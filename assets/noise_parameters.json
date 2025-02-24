@@ -1,1 +1,497 @@
-{"aquifer_barrier":{"firstOctave":-3,"amplitudes":[1.0]},"aquifer_fluid_level_floodedness":{"firstOctave":-7,"amplitudes":[1.0]},"aquifer_fluid_level_spread":{"firstOctave":-5,"amplitudes":[1.0]},"aquifer_lava":{"firstOctave":-1,"amplitudes":[1.0]},"badlands_pillar":{"firstOctave":-2,"amplitudes":[1.0,1.0,1.0,1.0]},"badlands_pillar_roof":{"firstOctave":-8,"amplitudes":[1.0]},"badlands_surface":{"firstOctave":-6,"amplitudes":[1.0,1.0,1.0]},"calcite":{"firstOctave":-9,"amplitudes":[1.0,1.0,1.0,1.0]},"cave_cheese":{"firstOctave":-8,"amplitudes":[0.5,1.0,2.0,1.0,2.0,1.0,0.0,2.0,0.0]},"cave_entrance":{"firstOctave":-7,"amplitudes":[0.4,0.5,1.0]},"cave_layer":{"firstOctave":-8,"amplitudes":[1.0]},"clay_bands_offset":{"firstOctave":-8,"amplitudes":[1.0]},"continentalness":{"firstOctave":-9,"amplitudes":[1.0,1.0,2.0,2.0,2.0,1.0,1.0,1.0,1.0]},"continentalness_large":{"firstOctave":-11,"amplitudes":[1.0,1.0,2.0,2.0,2.0,1.0,1.0,1.0,1.0]},"erosion":{"firstOctave":-9,"amplitudes":[1.0,1.0,0.0,1.0,1.0]},"erosion_large":{"firstOctave":-11,"amplitudes":[1.0,1.0,0.0,1.0,1.0]},"gravel":{"firstOctave":-8,"amplitudes":[1.0,1.0,1.0,1.0]},"gravel_layer":{"firstOctave":-8,"amplitudes":[1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.013333333333333334]},"ice":{"firstOctave":-4,"amplitudes":[1.0,1.0,1.0,1.0]},"iceberg_pillar":{"firstOctave":-6,"amplitudes":[1.0,1.0,1.0,1.0]},"iceberg_pillar_roof":{"firstOctave":-3,"amplitudes":[1.0]},"iceberg_surface":{"firstOctave":-6,"amplitudes":[1.0,1.0,1.0]},"jagged":{"firstOctave":-16,"amplitudes":[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0]},"nether_state_selector":{"firstOctave":-4,"amplitudes":[1.0]},"nether_wart":{"firstOctave":-3,"amplitudes":[1.0,0.0,0.0,0.9]},"netherrack":{"firstOctave":-3,"amplitudes":[1.0,0.0,0.0,0.35]},"noodle":{"firstOctave":-8,"amplitudes":[1.0]},"noodle_ridge_a":{"firstOctave":-7,"amplitudes":[1.0]},"noodle_ridge_b":{"firstOctave":-7,"amplitudes":[1.0]},"noodle_thickness":{"firstOctave":-8,"amplitudes":[1.0]},"offset":{"firstOctave":-3,"amplitudes":[1.0,1.0,1.0,0.0]},"ore_gap":{"firstOctave":-5,"amplitudes":[1.0]},"ore_vein_a":{"firstOctave":-7,"amplitudes":[1.0]},"ore_vein_b":{"firstOctave":-7,"amplitudes":[1.0]},"ore_veininess":{"firstOctave":-8,"amplitudes":[1.0]},"packed_ice":{"firstOctave":-7,"amplitudes":[1.0,1.0,1.0,1.0]},"patch":{"firstOctave":-5,"amplitudes":[1.0,0.0,0.0,0.0,0.0,0.013333333333333334]},"pillar":{"firstOctave":-7,"amplitudes":[1.0,1.0]},"pillar_rareness":{"firstOctave":-8,"amplitudes":[1.0]},"pillar_thickness":{"firstOctave":-8,"amplitudes":[1.0]},"powder_snow":{"firstOctave":-6,"amplitudes":[1.0,1.0,1.0,1.0]},"ridge":{"firstOctave":-7,"amplitudes":[1.0,2.0,1.0,0.0,0.0,0.0]},"soul_sand_layer":{"firstOctave":-8,"amplitudes":[1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.013333333333333334]},"spaghetti_2d":{"firstOctave":-7,"amplitudes":[1.0]},"spaghetti_2d_elevation":{"firstOctave":-8,"amplitudes":[1.0]},"spaghetti_2d_modulator":{"firstOctave":-11,"amplitudes":[1.0]},"spaghetti_2d_thickness":{"firstOctave":-11,"amplitudes":[1.0]},"spaghetti_3d_1":{"firstOctave":-7,"amplitudes":[1.0]},"spaghetti_3d_2":{"firstOctave":-7,"amplitudes":[1.0]},"spaghetti_3d_rarity":{"firstOctave":-11,"amplitudes":[1.0]},"spaghetti_3d_thickness":{"firstOctave":-8,"amplitudes":[1.0]},"spaghetti_roughness":{"firstOctave":-5,"amplitudes":[1.0]},"spaghetti_roughness_modulator":{"firstOctave":-8,"amplitudes":[1.0]},"surface":{"firstOctave":-6,"amplitudes":[1.0,1.0,1.0]},"surface_secondary":{"firstOctave":-6,"amplitudes":[1.0,1.0,0.0,1.0]},"surface_swamp":{"firstOctave":-2,"amplitudes":[1.0]},"temperature":{"firstOctave":-10,"amplitudes":[1.5,0.0,1.0,0.0,0.0,0.0]},"temperature_large":{"firstOctave":-12,"amplitudes":[1.5,0.0,1.0,0.0,0.0,0.0]},"vegetation":{"firstOctave":-8,"amplitudes":[1.0,1.0,0.0,0.0,0.0,0.0]},"vegetation_large":{"firstOctave":-10,"amplitudes":[1.0,1.0,0.0,0.0,0.0,0.0]}}
+{
+  "aquifer_barrier": {
+    "firstOctave": -3,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "aquifer_fluid_level_floodedness": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "aquifer_fluid_level_spread": {
+    "firstOctave": -5,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "aquifer_lava": {
+    "firstOctave": -1,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "badlands_pillar": {
+    "firstOctave": -2,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "badlands_pillar_roof": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "badlands_surface": {
+    "firstOctave": -6,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "calcite": {
+    "firstOctave": -9,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "cave_cheese": {
+    "firstOctave": -8,
+    "amplitudes": [
+      0.5,
+      1.0,
+      2.0,
+      1.0,
+      2.0,
+      1.0,
+      0.0,
+      2.0,
+      0.0
+    ]
+  },
+  "cave_entrance": {
+    "firstOctave": -7,
+    "amplitudes": [
+      0.4,
+      0.5,
+      1.0
+    ]
+  },
+  "cave_layer": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "clay_bands_offset": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "continentalness": {
+    "firstOctave": -9,
+    "amplitudes": [
+      1.0,
+      1.0,
+      2.0,
+      2.0,
+      2.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "continentalness_large": {
+    "firstOctave": -11,
+    "amplitudes": [
+      1.0,
+      1.0,
+      2.0,
+      2.0,
+      2.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "erosion": {
+    "firstOctave": -9,
+    "amplitudes": [
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0
+    ]
+  },
+  "erosion_large": {
+    "firstOctave": -11,
+    "amplitudes": [
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0
+    ]
+  },
+  "gravel": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "gravel_layer": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.013333333333333334
+    ]
+  },
+  "ice": {
+    "firstOctave": -4,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "iceberg_pillar": {
+    "firstOctave": -6,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "iceberg_pillar_roof": {
+    "firstOctave": -3,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "iceberg_surface": {
+    "firstOctave": -6,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "jagged": {
+    "firstOctave": -16,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "nether_state_selector": {
+    "firstOctave": -4,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "nether_wart": {
+    "firstOctave": -3,
+    "amplitudes": [
+      1.0,
+      0.0,
+      0.0,
+      0.9
+    ]
+  },
+  "netherrack": {
+    "firstOctave": -3,
+    "amplitudes": [
+      1.0,
+      0.0,
+      0.0,
+      0.35
+    ]
+  },
+  "noodle": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "noodle_ridge_a": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "noodle_ridge_b": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "noodle_thickness": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "offset": {
+    "firstOctave": -3,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      0.0
+    ]
+  },
+  "ore_gap": {
+    "firstOctave": -5,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "ore_vein_a": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "ore_vein_b": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "ore_veininess": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "packed_ice": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "patch": {
+    "firstOctave": -5,
+    "amplitudes": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.013333333333333334
+    ]
+  },
+  "pillar": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0,
+      1.0
+    ]
+  },
+  "pillar_rareness": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "pillar_thickness": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "powder_snow": {
+    "firstOctave": -6,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "ridge": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0,
+      2.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "soul_sand_layer": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.013333333333333334
+    ]
+  },
+  "spaghetti_2d": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_2d_elevation": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_2d_modulator": {
+    "firstOctave": -11,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_2d_thickness": {
+    "firstOctave": -11,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_3d_1": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_3d_2": {
+    "firstOctave": -7,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_3d_rarity": {
+    "firstOctave": -11,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_3d_thickness": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_roughness": {
+    "firstOctave": -5,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "spaghetti_roughness_modulator": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "surface": {
+    "firstOctave": -6,
+    "amplitudes": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "surface_secondary": {
+    "firstOctave": -6,
+    "amplitudes": [
+      1.0,
+      1.0,
+      0.0,
+      1.0
+    ]
+  },
+  "surface_swamp": {
+    "firstOctave": -2,
+    "amplitudes": [
+      1.0
+    ]
+  },
+  "temperature": {
+    "firstOctave": -10,
+    "amplitudes": [
+      1.5,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "temperature_large": {
+    "firstOctave": -12,
+    "amplitudes": [
+      1.5,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "vegetation": {
+    "firstOctave": -8,
+    "amplitudes": [
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "vegetation_large": {
+    "firstOctave": -10,
+    "amplitudes": [
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}

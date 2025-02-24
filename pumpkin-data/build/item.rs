@@ -1,9 +1,9 @@
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
-use serde::Deserialize;
-use std::collections::HashMap;
-use syn::{Ident, LitInt, LitStr};
+use quote::{ToTokens, format_ident, quote};
+use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
+
+include!("../src/tag.rs");
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Item {
@@ -26,6 +26,8 @@ pub struct ItemComponents {
     pub max_damage: Option<u16>,
     #[serde(rename = "minecraft:attribute_modifiers")]
     pub attribute_modifiers: Option<AttributeModifiers>,
+    #[serde(rename = "minecraft:tool")]
+    pub tool: Option<ToolComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -88,6 +90,62 @@ impl ToTokens for ItemComponents {
             None => quote! { None },
         };
 
+        let tool = match &self.tool {
+            Some(tool) => {
+                let rules_code = tool.rules.iter().map(|rule| {
+                    let mut block_array = Vec::new();
+
+                    // TODO: According to the wiki, this can be a string or a list,
+                    // I dont think there'll be any issues with always using a list, but we can
+                    // probably save bandwidth doing single strings
+                    for reg in rule.blocks.get_values() {
+                        let tag_string = reg.serialize();
+                        // The client knows what tags are, just send them the tag instead of all the
+                        // blocks that is a part of the tag.
+                        block_array.extend(quote! { #tag_string });
+                    }
+
+                    let speed = match rule.speed {
+                        Some(speed) => {
+                            quote! { Some(#speed) }
+                        }
+                        None => quote! { None },
+                    };
+                    let correct_for_drops = match rule.correct_for_drops {
+                        Some(correct_for_drops) => {
+                            let correct_for_drops =
+                                LitBool::new(correct_for_drops, Span::call_site());
+                            quote! { Some(#correct_for_drops) }
+                        }
+                        None => quote! { None },
+                    };
+                    quote! {
+                        ToolRule {
+                            blocks: &[#(#block_array),*],
+                            speed: #speed,
+                            correct_for_drops: #correct_for_drops
+                        }
+                    }
+                });
+                let damage_per_block = match tool.damage_per_block {
+                    Some(speed) => {
+                        let speed = LitInt::new(&speed.to_string(), Span::call_site());
+                        quote! { Some(#speed) }
+                    }
+                    None => quote! { None },
+                };
+                let default_mining_speed = match tool.default_mining_speed {
+                    Some(speed) => {
+                        let speed = LitFloat::new(&speed.to_string(), Span::call_site());
+                        quote! { Some(#speed) }
+                    }
+                    None => quote! { None },
+                };
+                quote! { Some(ToolComponent { rules: &[#(#rules_code),*], damage_per_block: #damage_per_block, default_mining_speed: #default_mining_speed  }) }
+            }
+            None => quote! { None },
+        };
+
         tokens.extend(quote! {
             ItemComponents {
                 item_name: #item_name,
@@ -96,9 +154,23 @@ impl ToTokens for ItemComponents {
                 damage: #damage,
                 max_damage: #max_damage,
                 attribute_modifiers: #attribute_modifiers,
+                tool: #tool
             }
         });
     }
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct ToolComponent {
+    rules: Vec<ToolRule>,
+    default_mining_speed: Option<f32>,
+    damage_per_block: Option<u32>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ToolRule {
+    blocks: RegistryEntryList,
+    speed: Option<f32>,
+    correct_for_drops: Option<bool>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -183,6 +255,7 @@ pub(crate) fn build() -> TokenStream {
             pub damage: Option<u16>,
             pub max_damage: Option<u16>,
             pub attribute_modifiers: Option<AttributeModifiers>,
+            pub tool: Option<ToolComponent>
         }
 
         #[derive(Clone, Copy, Debug)]
@@ -210,6 +283,20 @@ pub(crate) fn build() -> TokenStream {
             AddValue,
             AddMultipliedBase,
             AddMultipliedTotal,
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct ToolComponent {
+            pub rules: &'static [ToolRule],
+            pub default_mining_speed: Option<f32>,
+            pub damage_per_block: Option<u32>,
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct ToolRule {
+            pub blocks: &'static [&'static str],
+            pub speed: Option<f32>,
+            pub correct_for_drops: Option<bool>,
         }
 
         impl Item {

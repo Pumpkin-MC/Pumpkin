@@ -5,7 +5,7 @@ pub struct JukeboxSong {
     sound_event: String,
     description: Description,
     length_in_seconds: f32,
-    comparator_output: u32,
+    comparator_output: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

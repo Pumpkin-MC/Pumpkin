@@ -38,7 +38,7 @@ pub trait LoadJSONConfiguration {
 
             if let Err(err) = fs::write(&path, serde_json::to_string_pretty(&content).unwrap()) {
                 log::error!(
-                    "Couldn't write default data config to {path:?}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.", 
+                    "Couldn't write default data config to {path:?}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
                 );
             }
 

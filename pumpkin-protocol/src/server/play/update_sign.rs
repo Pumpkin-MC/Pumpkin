@@ -1,14 +1,14 @@
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::PLAY_SIGN_UPDATE;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
-#[server_packet(PLAY_SIGN_UPDATE)]
+#[packet(PLAY_SIGN_UPDATE)]
 pub struct SUpdateSign {
     pub location: BlockPos,
     pub is_front_text: bool,

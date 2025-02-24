@@ -33,7 +33,7 @@ pub fn total_to_level_and_points(total_points: i32) -> (i32, i32) {
 /// Calculate progress (0.0 to 1.0) from points within a level
 pub fn progress_in_level(points: i32, level: i32) -> f32 {
     let max_points = points_in_level(level);
-    #[allow(clippy::cast_precision_loss)]
+
     let progress = (points as f32) / (max_points as f32);
     progress.clamp(0.0, 1.0)
 }

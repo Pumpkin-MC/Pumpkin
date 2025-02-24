@@ -1,12 +1,12 @@
-use crate::codec::slot::Slot;
 use crate::VarInt;
+use crate::codec::slot::Slot;
 
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_CONTENT;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_CONTAINER_SET_CONTENT)]
+#[packet(PLAY_CONTAINER_SET_CONTENT)]
 pub struct CSetContainerContent<'a> {
     window_id: VarInt,
     state_id: VarInt,

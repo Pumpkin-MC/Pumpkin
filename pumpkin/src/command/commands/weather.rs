@@ -2,17 +2,17 @@ use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    args::{time::TimeArgumentConsumer, ConsumedArgs, FindArg},
-    tree::builder::{argument, literal},
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{ConsumedArgs, FindArg, time::TimeArgumentConsumer},
+    tree::CommandTree,
+    tree::builder::{argument, literal},
 };
 
 const NAMES: [&str; 1] = ["weather"];
 const DESCRIPTION: &str = "Changes the weather.";
 const ARG_DURATION: &str = "duration";
 
-struct WeatherExecutor {
+struct Executor {
     mode: WeatherMode,
 }
 
@@ -23,7 +23,7 @@ enum WeatherMode {
 }
 
 #[async_trait]
-impl CommandExecutor for WeatherExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -43,10 +43,7 @@ impl CommandExecutor for WeatherExecutor {
                     .set_weather_parameters(&world, duration, 0, false, false)
                     .await;
                 sender
-                    .send_message(TextComponent::translate(
-                        "commands.weather.set.clear",
-                        [].into(),
-                    ))
+                    .send_message(TextComponent::translate("commands.weather.set.clear", []))
                     .await;
             }
             WeatherMode::Rain => {
@@ -54,10 +51,7 @@ impl CommandExecutor for WeatherExecutor {
                     .set_weather_parameters(&world, 0, duration, true, false)
                     .await;
                 sender
-                    .send_message(TextComponent::translate(
-                        "commands.weather.set.rain",
-                        [].into(),
-                    ))
+                    .send_message(TextComponent::translate("commands.weather.set.rain", []))
                     .await;
             }
             WeatherMode::Thunder => {
@@ -65,10 +59,7 @@ impl CommandExecutor for WeatherExecutor {
                     .set_weather_parameters(&world, 0, duration, true, true)
                     .await;
                 sender
-                    .send_message(TextComponent::translate(
-                        "commands.weather.set.thunder",
-                        [].into(),
-                    ))
+                    .send_message(TextComponent::translate("commands.weather.set.thunder", []))
                     .await;
             }
         }
@@ -82,33 +73,33 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("clear")
                 .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer).execute(WeatherExecutor {
+                    argument(ARG_DURATION, TimeArgumentConsumer).execute(Executor {
                         mode: WeatherMode::Clear,
                     }),
                 )
-                .execute(WeatherExecutor {
+                .execute(Executor {
                     mode: WeatherMode::Clear,
                 }),
         )
         .then(
             literal("rain")
                 .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer).execute(WeatherExecutor {
+                    argument(ARG_DURATION, TimeArgumentConsumer).execute(Executor {
                         mode: WeatherMode::Rain,
                     }),
                 )
-                .execute(WeatherExecutor {
+                .execute(Executor {
                     mode: WeatherMode::Rain,
                 }),
         )
         .then(
             literal("thunder")
                 .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer).execute(WeatherExecutor {
+                    argument(ARG_DURATION, TimeArgumentConsumer).execute(Executor {
                         mode: WeatherMode::Thunder,
                     }),
                 )
-                .execute(WeatherExecutor {
+                .execute(Executor {
                     mode: WeatherMode::Thunder,
                 }),
         )

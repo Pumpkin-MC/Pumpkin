@@ -99,6 +99,7 @@ impl Click {
     }
 }
 
+#[derive(Debug)]
 pub enum ClickType {
     MouseClick(MouseClick),
     ShiftClick,
@@ -114,6 +115,7 @@ pub enum MouseClick {
     Right,
 }
 
+#[derive(Debug)]
 pub enum KeyClick {
     Slot(u8),
     Offhand,
@@ -124,6 +126,7 @@ pub enum Slot {
     OutsideInventory,
 }
 
+#[derive(Debug)]
 pub enum DropType {
     SingleItem,
     FullStack,
@@ -134,7 +137,7 @@ pub enum MouseDragType {
     Right,
     Middle,
 }
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum MouseDragState {
     Start(MouseDragType),
     AddSlot(usize),

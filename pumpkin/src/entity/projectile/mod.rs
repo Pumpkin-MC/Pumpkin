@@ -2,7 +2,7 @@ use std::f32::{self};
 
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{living::LivingEntity, Entity, EntityBase};
+use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct ThrownItemEntity {
     entity: Entity,
@@ -67,8 +67,8 @@ impl ThrownItemEntity {
         self.entity.velocity.store(velocity);
         let len = velocity.horizontal_length();
         self.entity.set_rotation(
-            velocity.x.atan2(velocity.z).to_degrees() as f32,
-            velocity.y.atan2(len).to_degrees() as f32,
+            velocity.x.atan2(velocity.z) as f32 * 57.295_776,
+            velocity.y.atan2(len) as f32 * 57.295_776,
         );
     }
 }

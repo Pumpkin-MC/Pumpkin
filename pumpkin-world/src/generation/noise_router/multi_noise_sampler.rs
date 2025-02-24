@@ -1,6 +1,6 @@
 use crate::{
-    generation::biome_coords, noise_router::density_function_ast::WrapperType,
-    GlobalProtoNoiseRouter,
+    GlobalProtoNoiseRouter, generation::biome_coords,
+    noise_router::density_function_ast::WrapperType,
 };
 
 use super::{
@@ -187,7 +187,9 @@ impl<'a> MultiNoiseSampler<'a> {
                             ))
                         }
                         _ => {
-                            panic!("These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code");
+                            panic!(
+                                "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code"
+                            );
                         }
                     }
                 }

@@ -1,11 +1,11 @@
-use crate::codec::slot::Slot;
 use crate::VarInt;
+use crate::codec::slot::Slot;
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 use serde::de::SeqAccess;
-use serde::{de, Deserialize};
+use serde::{Deserialize, de};
 
-#[server_packet(PLAY_CONTAINER_CLICK)]
+#[packet(PLAY_CONTAINER_CLICK)]
 pub struct SClickContainer {
     pub window_id: VarInt,
     pub state_id: VarInt,

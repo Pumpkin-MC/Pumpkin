@@ -1,12 +1,12 @@
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 
-use crate::{bytebuf::ByteBufMut, ClientPacket, Property};
+use crate::{ClientPacket, Property, bytebuf::ByteBufMut};
 
 use super::PlayerAction;
 
-#[client_packet(PLAY_PLAYER_INFO_UPDATE)]
+#[packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
     pub actions: i8,
     pub players: &'a [Player<'a>],

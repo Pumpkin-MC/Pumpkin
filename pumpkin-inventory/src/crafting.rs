@@ -1,25 +1,24 @@
-use pumpkin_data::item::Item;
-use pumpkin_registry::{
-    flatten_3x3, get_tag_values, IngredientSlot, IngredientType, RecipeResult, TagCategory, RECIPES,
+use pumpkin_data::{
+    item::Item,
+    tag::{RegistryEntryList, RegistryKey, TagType, get_tag_values},
 };
+use pumpkin_registry::{RECIPES, RecipeResult, flatten_3x3};
 use pumpkin_world::item::ItemStack;
 use rayon::prelude::*;
 
 #[inline(always)]
-fn check_ingredient_type(ingredient_type: &IngredientType, input: ItemStack) -> bool {
+fn check_ingredient_type(ingredient_type: &TagType, input: ItemStack) -> bool {
     match ingredient_type {
-        IngredientType::Tag(tag) => {
-            let items = match get_tag_values(TagCategory::Item, tag) {
+        TagType::Tag(tag) => {
+            let _items = match get_tag_values(RegistryKey::Item, tag) {
                 Some(items) => items,
                 None => return false,
             };
-            items
-                .iter()
-                .any(|tag| check_ingredient_type(&tag.to_ingredient_type(), input))
+            // TODO
+            false
+            // items.iter().any(|tag| check_ingredient_type(&tag, input))
         }
-        IngredientType::Item(item) => {
-            Item::from_name(item).is_some_and(|item| item.id == input.item.id)
-        }
+        TagType::Item(item) => Item::from_name(item).is_some_and(|item| item.id == input.item.id),
     }
 }
 
@@ -65,19 +64,19 @@ pub fn check_if_matches_crafting(input: [[Option<ItemStack>; 3]; 3]) -> Option<I
         })?
 }
 
-fn ingredient_slot_check(recipe_item: &IngredientSlot, input: ItemStack) -> bool {
+fn ingredient_slot_check(recipe_item: &RegistryEntryList, input: ItemStack) -> bool {
     match recipe_item {
-        IngredientSlot::Single(ingredient) => check_ingredient_type(ingredient, input),
-        IngredientSlot::Many(ingredients) => ingredients
+        RegistryEntryList::Single(ingredient) => check_ingredient_type(ingredient, input),
+        RegistryEntryList::Many(ingredients) => ingredients
             .iter()
             .any(|ingredient| check_ingredient_type(ingredient, input)),
     }
 }
 fn shapeless_crafting_match(
     input: [[Option<ItemStack>; 3]; 3],
-    pattern: &[[[Option<IngredientSlot>; 3]; 3]],
+    pattern: &[[[Option<RegistryEntryList>; 3]; 3]],
 ) -> bool {
-    let mut pattern: Vec<IngredientSlot> = pattern
+    let mut pattern: Vec<RegistryEntryList> = pattern
         .iter()
         .flatten()
         .flatten()

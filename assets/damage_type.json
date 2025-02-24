@@ -1,1 +1,408 @@
-{"arrow":{"id":0,"components":{"exhaustion":0.1,"message_id":"arrow","scaling":"when_caused_by_living_non_player"}},"bad_respawn_point":{"id":1,"components":{"exhaustion":0.1,"death_message_type":"intentional_game_design","message_id":"badRespawnPoint","scaling":"always"}},"cactus":{"id":2,"components":{"exhaustion":0.1,"message_id":"cactus","scaling":"when_caused_by_living_non_player"}},"campfire":{"id":3,"components":{"exhaustion":0.1,"effects":"burning","message_id":"inFire","scaling":"when_caused_by_living_non_player"}},"cramming":{"id":4,"components":{"exhaustion":0.0,"message_id":"cramming","scaling":"when_caused_by_living_non_player"}},"dragon_breath":{"id":5,"components":{"exhaustion":0.0,"message_id":"dragonBreath","scaling":"when_caused_by_living_non_player"}},"drown":{"id":6,"components":{"exhaustion":0.0,"effects":"drowning","message_id":"drown","scaling":"when_caused_by_living_non_player"}},"dry_out":{"id":7,"components":{"exhaustion":0.1,"message_id":"dryout","scaling":"when_caused_by_living_non_player"}},"ender_pearl":{"id":8,"components":{"exhaustion":0.0,"death_message_type":"fall_variants","message_id":"fall","scaling":"when_caused_by_living_non_player"}},"explosion":{"id":9,"components":{"exhaustion":0.1,"message_id":"explosion","scaling":"always"}},"fall":{"id":10,"components":{"exhaustion":0.0,"death_message_type":"fall_variants","message_id":"fall","scaling":"when_caused_by_living_non_player"}},"falling_anvil":{"id":11,"components":{"exhaustion":0.1,"message_id":"anvil","scaling":"when_caused_by_living_non_player"}},"falling_block":{"id":12,"components":{"exhaustion":0.1,"message_id":"fallingBlock","scaling":"when_caused_by_living_non_player"}},"falling_stalactite":{"id":13,"components":{"exhaustion":0.1,"message_id":"fallingStalactite","scaling":"when_caused_by_living_non_player"}},"fireball":{"id":14,"components":{"exhaustion":0.1,"effects":"burning","message_id":"fireball","scaling":"when_caused_by_living_non_player"}},"fireworks":{"id":15,"components":{"exhaustion":0.1,"message_id":"fireworks","scaling":"when_caused_by_living_non_player"}},"fly_into_wall":{"id":16,"components":{"exhaustion":0.0,"message_id":"flyIntoWall","scaling":"when_caused_by_living_non_player"}},"freeze":{"id":17,"components":{"exhaustion":0.0,"effects":"freezing","message_id":"freeze","scaling":"when_caused_by_living_non_player"}},"generic":{"id":18,"components":{"exhaustion":0.0,"message_id":"generic","scaling":"when_caused_by_living_non_player"}},"generic_kill":{"id":19,"components":{"exhaustion":0.0,"message_id":"genericKill","scaling":"when_caused_by_living_non_player"}},"hot_floor":{"id":20,"components":{"exhaustion":0.1,"effects":"burning","message_id":"hotFloor","scaling":"when_caused_by_living_non_player"}},"in_fire":{"id":21,"components":{"exhaustion":0.1,"effects":"burning","message_id":"inFire","scaling":"when_caused_by_living_non_player"}},"in_wall":{"id":22,"components":{"exhaustion":0.0,"message_id":"inWall","scaling":"when_caused_by_living_non_player"}},"indirect_magic":{"id":23,"components":{"exhaustion":0.0,"message_id":"indirectMagic","scaling":"when_caused_by_living_non_player"}},"lava":{"id":24,"components":{"exhaustion":0.1,"effects":"burning","message_id":"lava","scaling":"when_caused_by_living_non_player"}},"lightning_bolt":{"id":25,"components":{"exhaustion":0.1,"message_id":"lightningBolt","scaling":"when_caused_by_living_non_player"}},"mace_smash":{"id":26,"components":{"exhaustion":0.1,"message_id":"mace_smash","scaling":"when_caused_by_living_non_player"}},"magic":{"id":27,"components":{"exhaustion":0.0,"message_id":"magic","scaling":"when_caused_by_living_non_player"}},"mob_attack":{"id":28,"components":{"exhaustion":0.1,"message_id":"mob","scaling":"when_caused_by_living_non_player"}},"mob_attack_no_aggro":{"id":29,"components":{"exhaustion":0.1,"message_id":"mob","scaling":"when_caused_by_living_non_player"}},"mob_projectile":{"id":30,"components":{"exhaustion":0.1,"message_id":"mob","scaling":"when_caused_by_living_non_player"}},"on_fire":{"id":31,"components":{"exhaustion":0.0,"effects":"burning","message_id":"onFire","scaling":"when_caused_by_living_non_player"}},"out_of_world":{"id":32,"components":{"exhaustion":0.0,"message_id":"outOfWorld","scaling":"when_caused_by_living_non_player"}},"outside_border":{"id":33,"components":{"exhaustion":0.0,"message_id":"outsideBorder","scaling":"when_caused_by_living_non_player"}},"player_attack":{"id":34,"components":{"exhaustion":0.1,"message_id":"player","scaling":"when_caused_by_living_non_player"}},"player_explosion":{"id":35,"components":{"exhaustion":0.1,"message_id":"explosion.player","scaling":"always"}},"sonic_boom":{"id":36,"components":{"exhaustion":0.0,"message_id":"sonic_boom","scaling":"always"}},"spit":{"id":37,"components":{"exhaustion":0.1,"message_id":"mob","scaling":"when_caused_by_living_non_player"}},"stalagmite":{"id":38,"components":{"exhaustion":0.0,"message_id":"stalagmite","scaling":"when_caused_by_living_non_player"}},"starve":{"id":39,"components":{"exhaustion":0.0,"message_id":"starve","scaling":"when_caused_by_living_non_player"}},"sting":{"id":40,"components":{"exhaustion":0.1,"message_id":"sting","scaling":"when_caused_by_living_non_player"}},"sweet_berry_bush":{"id":41,"components":{"exhaustion":0.1,"effects":"poking","message_id":"sweetBerryBush","scaling":"when_caused_by_living_non_player"}},"thorns":{"id":42,"components":{"exhaustion":0.1,"effects":"thorns","message_id":"thorns","scaling":"when_caused_by_living_non_player"}},"thrown":{"id":43,"components":{"exhaustion":0.1,"message_id":"thrown","scaling":"when_caused_by_living_non_player"}},"trident":{"id":44,"components":{"exhaustion":0.1,"message_id":"trident","scaling":"when_caused_by_living_non_player"}},"unattributed_fireball":{"id":45,"components":{"exhaustion":0.1,"effects":"burning","message_id":"onFire","scaling":"when_caused_by_living_non_player"}},"wind_charge":{"id":46,"components":{"exhaustion":0.1,"message_id":"mob","scaling":"when_caused_by_living_non_player"}},"wither":{"id":47,"components":{"exhaustion":0.0,"message_id":"wither","scaling":"when_caused_by_living_non_player"}},"wither_skull":{"id":48,"components":{"exhaustion":0.1,"message_id":"witherSkull","scaling":"when_caused_by_living_non_player"}}}
+{
+  "arrow": {
+    "id": 0,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "arrow",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "bad_respawn_point": {
+    "id": 1,
+    "components": {
+      "exhaustion": 0.1,
+      "death_message_type": "intentional_game_design",
+      "message_id": "badRespawnPoint",
+      "scaling": "always"
+    }
+  },
+  "cactus": {
+    "id": 2,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "cactus",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "campfire": {
+    "id": 3,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "burning",
+      "message_id": "inFire",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "cramming": {
+    "id": 4,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "cramming",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "dragon_breath": {
+    "id": 5,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "dragonBreath",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "drown": {
+    "id": 6,
+    "components": {
+      "exhaustion": 0.0,
+      "effects": "drowning",
+      "message_id": "drown",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "dry_out": {
+    "id": 7,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "dryout",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "ender_pearl": {
+    "id": 8,
+    "components": {
+      "exhaustion": 0.0,
+      "death_message_type": "fall_variants",
+      "message_id": "fall",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "explosion": {
+    "id": 9,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "explosion",
+      "scaling": "always"
+    }
+  },
+  "fall": {
+    "id": 10,
+    "components": {
+      "exhaustion": 0.0,
+      "death_message_type": "fall_variants",
+      "message_id": "fall",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "falling_anvil": {
+    "id": 11,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "anvil",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "falling_block": {
+    "id": 12,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "fallingBlock",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "falling_stalactite": {
+    "id": 13,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "fallingStalactite",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "fireball": {
+    "id": 14,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "burning",
+      "message_id": "fireball",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "fireworks": {
+    "id": 15,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "fireworks",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "fly_into_wall": {
+    "id": 16,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "flyIntoWall",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "freeze": {
+    "id": 17,
+    "components": {
+      "exhaustion": 0.0,
+      "effects": "freezing",
+      "message_id": "freeze",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "generic": {
+    "id": 18,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "generic",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "generic_kill": {
+    "id": 19,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "genericKill",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "hot_floor": {
+    "id": 20,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "burning",
+      "message_id": "hotFloor",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "in_fire": {
+    "id": 21,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "burning",
+      "message_id": "inFire",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "in_wall": {
+    "id": 22,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "inWall",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "indirect_magic": {
+    "id": 23,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "indirectMagic",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "lava": {
+    "id": 24,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "burning",
+      "message_id": "lava",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "lightning_bolt": {
+    "id": 25,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "lightningBolt",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "mace_smash": {
+    "id": 26,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "mace_smash",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "magic": {
+    "id": 27,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "magic",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "mob_attack": {
+    "id": 28,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "mob",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "mob_attack_no_aggro": {
+    "id": 29,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "mob",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "mob_projectile": {
+    "id": 30,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "mob",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "on_fire": {
+    "id": 31,
+    "components": {
+      "exhaustion": 0.0,
+      "effects": "burning",
+      "message_id": "onFire",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "out_of_world": {
+    "id": 32,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "outOfWorld",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "outside_border": {
+    "id": 33,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "outsideBorder",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "player_attack": {
+    "id": 34,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "player",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "player_explosion": {
+    "id": 35,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "explosion.player",
+      "scaling": "always"
+    }
+  },
+  "sonic_boom": {
+    "id": 36,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "sonic_boom",
+      "scaling": "always"
+    }
+  },
+  "spit": {
+    "id": 37,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "mob",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "stalagmite": {
+    "id": 38,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "stalagmite",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "starve": {
+    "id": 39,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "starve",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "sting": {
+    "id": 40,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "sting",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "sweet_berry_bush": {
+    "id": 41,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "poking",
+      "message_id": "sweetBerryBush",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "thorns": {
+    "id": 42,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "thorns",
+      "message_id": "thorns",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "thrown": {
+    "id": 43,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "thrown",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "trident": {
+    "id": 44,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "trident",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "unattributed_fireball": {
+    "id": 45,
+    "components": {
+      "exhaustion": 0.1,
+      "effects": "burning",
+      "message_id": "onFire",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "wind_charge": {
+    "id": 46,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "mob",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "wither": {
+    "id": 47,
+    "components": {
+      "exhaustion": 0.0,
+      "message_id": "wither",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  },
+  "wither_skull": {
+    "id": 48,
+    "components": {
+      "exhaustion": 0.1,
+      "message_id": "witherSkull",
+      "scaling": "when_caused_by_living_non_player"
+    }
+  }
+}

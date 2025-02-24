@@ -1,18 +1,27 @@
+use crate::bytebuf::ByteBufMut;
+use crate::{
+    ClientPacket, ConnectionState, ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
+};
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
-use crate::{
-    bytebuf::{ByteBuf, ReadingError},
-    ConnectionState, ServerPacket, VarInt,
-};
-
-#[server_packet(HANDSHAKE_INTENTION)]
+#[packet(HANDSHAKE_INTENTION)]
 pub struct SHandShake {
     pub protocol_version: VarInt,
     pub server_address: String, // 255
     pub server_port: u16,
     pub next_state: ConnectionState,
+}
+
+impl ClientPacket for SHandShake {
+    fn write(&self, bytebuf: &mut impl bytes::BufMut) {
+        bytebuf.put_var_int(&self.protocol_version);
+        bytebuf.put_string_len(&self.server_address, 255);
+        bytebuf.put_u16(self.server_port);
+        bytebuf.put_var_int(&VarInt(self.next_state as i32));
+    }
 }
 
 impl ServerPacket for SHandShake {

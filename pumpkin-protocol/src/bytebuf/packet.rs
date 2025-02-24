@@ -1,9 +1,9 @@
 use bytes::{Buf, BufMut};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{codec::var_int::VarIntType, ClientPacket, ServerPacket};
+use crate::{ClientPacket, ServerPacket, codec::var_int::VarIntType};
 
-use super::{deserializer, serializer, ReadingError};
+use super::{ReadingError, deserializer, serializer};
 
 pub trait Packet {
     const PACKET_ID: VarIntType;

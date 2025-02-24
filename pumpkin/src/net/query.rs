@@ -13,7 +13,7 @@ use pumpkin_protocol::query::{
 use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
-use crate::server::{Server, CURRENT_MC_VERSION};
+use crate::server::{CURRENT_MC_VERSION, Server};
 
 pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
     let mut query_addr = bound_addr;
@@ -116,7 +116,7 @@ async fn handle_packet(
                             for world in server.worlds.read().await.iter() {
                                 let mut world_players = world
                                     .players
-                                    .lock()
+                                    .read()
                                     .await
                                     // Although there is no documented limit, we will limit to 4 players
                                     .values()

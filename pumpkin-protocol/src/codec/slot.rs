@@ -3,8 +3,8 @@ use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeSeq;
 use serde::{
-    de::{self, SeqAccess},
     Deserialize, Serialize, Serializer,
+    de::{self, SeqAccess},
 };
 
 #[derive(Debug, Clone)]
@@ -171,9 +171,9 @@ impl From<Option<&ItemStack>> for Slot {
     }
 }
 
-impl From<&Option<ItemStack>> for Slot {
-    fn from(item: &Option<ItemStack>) -> Self {
-        item.map(|stack| Self::from(&stack))
-            .unwrap_or(Slot::empty())
-    }
-}
+// impl From<&Option<ItemStack>> for Slot {
+//     fn from(item: &Option<ItemStack>) -> Self {
+//         item.map(|stack| Self::from(&stack))
+//             .unwrap_or(Slot::empty())
+//     }
+// }

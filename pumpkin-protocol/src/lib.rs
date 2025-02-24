@@ -1,9 +1,9 @@
 use std::num::NonZeroU16;
 
-use bytebuf::{packet::Packet, ReadingError};
+use bytebuf::{ReadingError, packet::Packet};
 use bytes::{Buf, BufMut, Bytes};
 use codec::{identifier::Identifier, var_int::VarInt};
-use pumpkin_util::text::{style::Style, TextComponent};
+use pumpkin_util::text::{TextComponent, style::Style};
 use serde::{Deserialize, Serialize, Serializer};
 
 pub mod bytebuf;
@@ -82,10 +82,12 @@ pub struct RawPacket {
     pub bytebuf: Bytes,
 }
 
+// TODO: Have the input be `impl Write`
 pub trait ClientPacket: Packet {
     fn write(&self, bytebuf: &mut impl BufMut);
 }
 
+// TODO: Have the input be `impl Read`
 pub trait ServerPacket: Packet + Sized {
     fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError>;
 }

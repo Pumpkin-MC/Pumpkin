@@ -2,14 +2,14 @@ use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
 use pumpkin_util::math::experience;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use crate::entity::player::Player;
 
@@ -38,12 +38,12 @@ enum ExpType {
     Levels,
 }
 
-struct ExperienceExecutor {
+struct Executor {
     mode: Mode,
     exp_type: Option<ExpType>,
 }
 
-impl ExperienceExecutor {
+impl Executor {
     async fn handle_query(
         &self,
         sender: &mut CommandSender<'_>,
@@ -59,8 +59,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(target.gameprofile.name.clone()),
                             TextComponent::text(level.to_string()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             }
@@ -72,8 +71,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(target.gameprofile.name.clone()),
                             TextComponent::text(points.to_string()),
-                        ]
-                        .into(),
+                        ],
                     ))
                     .await;
             }
@@ -95,8 +93,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -104,8 +101,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -116,8 +112,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -125,8 +120,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -137,8 +131,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -146,8 +139,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -158,8 +150,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
-                        ]
-                        .into(),
+                        ],
                     )
                 } else {
                     TextComponent::translate(
@@ -167,8 +158,7 @@ impl ExperienceExecutor {
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(target_name.unwrap()),
-                        ]
-                        .into(),
+                        ],
                     )
                 }
             }
@@ -212,7 +202,7 @@ impl ExperienceExecutor {
 }
 
 #[async_trait]
-impl CommandExecutor for ExperienceExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -236,7 +226,7 @@ impl CommandExecutor for ExperienceExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.experience.set.points.invalid",
-                            [].into(),
+                            [],
                         ))
                         .await;
                     return Ok(());
@@ -246,7 +236,7 @@ impl CommandExecutor for ExperienceExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.experience.set.points.invalid",
-                            [].into(),
+                            [],
                         ))
                         .await;
                     return Ok(());
@@ -270,7 +260,7 @@ impl CommandExecutor for ExperienceExecutor {
                         Err(error_msg) => {
                             sender
                                 .send_message(
-                                    TextComponent::translate(error_msg, [].into())
+                                    TextComponent::translate(error_msg, [])
                                         .color(Color::Named(NamedColor::Red)),
                                 )
                                 .await;
@@ -291,15 +281,15 @@ pub fn init_command_tree() -> CommandTree {
             literal("add").then(
                 argument(ARG_TARGETS, PlayersArgumentConsumer).then(
                     argument(ARG_AMOUNT, xp_amount())
-                        .then(literal("levels").execute(ExperienceExecutor {
+                        .then(literal("levels").execute(Executor {
                             mode: Mode::Add,
                             exp_type: Some(ExpType::Levels),
                         }))
-                        .then(literal("points").execute(ExperienceExecutor {
+                        .then(literal("points").execute(Executor {
                             mode: Mode::Add,
                             exp_type: Some(ExpType::Points),
                         }))
-                        .execute(ExperienceExecutor {
+                        .execute(Executor {
                             mode: Mode::Add,
                             exp_type: Some(ExpType::Points),
                         }),
@@ -310,15 +300,15 @@ pub fn init_command_tree() -> CommandTree {
             literal("set").then(
                 argument(ARG_TARGETS, PlayersArgumentConsumer).then(
                     argument(ARG_AMOUNT, xp_amount())
-                        .then(literal("levels").execute(ExperienceExecutor {
+                        .then(literal("levels").execute(Executor {
                             mode: Mode::Set,
                             exp_type: Some(ExpType::Levels),
                         }))
-                        .then(literal("points").execute(ExperienceExecutor {
+                        .then(literal("points").execute(Executor {
                             mode: Mode::Set,
                             exp_type: Some(ExpType::Points),
                         }))
-                        .execute(ExperienceExecutor {
+                        .execute(Executor {
                             mode: Mode::Set,
                             exp_type: Some(ExpType::Points),
                         }),
@@ -328,11 +318,11 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("query").then(
                 argument(ARG_TARGETS, PlayersArgumentConsumer)
-                    .then(literal("levels").execute(ExperienceExecutor {
+                    .then(literal("levels").execute(Executor {
                         mode: Mode::Query,
                         exp_type: Some(ExpType::Levels),
                     }))
-                    .then(literal("points").execute(ExperienceExecutor {
+                    .then(literal("points").execute(Executor {
                         mode: Mode::Query,
                         exp_type: Some(ExpType::Points),
                     })),

@@ -7,7 +7,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 
 use crate::{
-    entity::{player::Player, Entity},
+    entity::{Entity, player::Player},
     world::World,
 };
 
@@ -50,11 +50,7 @@ impl AttackType {
             return Self::Sweeping;
         }
 
-        if is_strong {
-            Self::Strong
-        } else {
-            Self::Weak
-        }
+        if is_strong { Self::Strong } else { Self::Weak }
     }
 }
 
@@ -72,7 +68,7 @@ pub async fn handle_knockback(attacker: &Entity, world: &World, victim: &Entity,
     let victim_velocity = victim.velocity.load();
 
     let packet = &CEntityVelocity::new(
-        &entity_id,
+        entity_id,
         victim_velocity.x,
         victim_velocity.y,
         victim_velocity.z,

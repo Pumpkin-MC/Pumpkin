@@ -1,17 +1,17 @@
 use pumpkin_data::packet::clientbound::PLAY_DISCONNECT;
 use pumpkin_util::text::TextComponent;
 
-use pumpkin_macros::client_packet;
-use serde::Serialize;
+use pumpkin_macros::packet;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
-#[client_packet(PLAY_DISCONNECT)]
-pub struct CPlayDisconnect<'a> {
-    reason: &'a TextComponent,
+#[derive(Serialize, Deserialize)]
+#[packet(PLAY_DISCONNECT)]
+pub struct CPlayDisconnect {
+    pub reason: TextComponent,
 }
 
-impl<'a> CPlayDisconnect<'a> {
-    pub fn new(reason: &'a TextComponent) -> Self {
+impl CPlayDisconnect {
+    pub fn new(reason: TextComponent) -> Self {
         Self { reason }
     }
 }

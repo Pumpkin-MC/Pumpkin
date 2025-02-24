@@ -1,6 +1,7 @@
 use pumpkin_data::packet::serverbound::CONFIG_FINISH_CONFIGURATION;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
+use serde::Serialize;
 
-#[derive(serde::Deserialize)]
-#[server_packet(CONFIG_FINISH_CONFIGURATION)]
-pub struct SAcknowledgeFinishConfig {}
+#[derive(Serialize)]
+#[packet(CONFIG_FINISH_CONFIGURATION)]
+pub struct SAcknowledgeFinishConfig;

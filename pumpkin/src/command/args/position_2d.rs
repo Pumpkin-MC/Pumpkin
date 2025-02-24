@@ -3,9 +3,9 @@ use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, Suggestion
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
-use crate::command::CommandSender;
 use crate::server::Server;
 
 use super::super::args::ArgumentConsumer;

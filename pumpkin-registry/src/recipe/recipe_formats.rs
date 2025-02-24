@@ -1,7 +1,7 @@
+use pumpkin_data::tag::RegistryEntryList;
+
 use super::super::recipe::RecipeType;
-use super::read::{
-    ingredients::IngredientSlot, CraftingType, RecipeKeys, RecipeResult, RecipeTrait,
-};
+use super::read::{CraftingType, RecipeKeys, RecipeResult, RecipeTrait};
 pub struct ShapedCrafting {
     keys: RecipeKeys,
     pattern: [[Option<char>; 3]; 3],
@@ -11,7 +11,7 @@ impl RecipeKeys {
     fn pattern_to_thing(
         &self,
         pattern: [[Option<char>; 3]; 3],
-    ) -> [[Option<IngredientSlot>; 3]; 3] {
+    ) -> [[Option<RegistryEntryList>; 3]; 3] {
         pattern
             .map(|row| row.map(|maybe_char| maybe_char.and_then(|char| self.0.get(&char).cloned())))
     }
@@ -31,7 +31,7 @@ impl RecipeTrait for ShapedCrafting {
         RecipeType::Crafting(CraftingType::Shaped)
     }
 
-    fn pattern(&self) -> Vec<[[Option<IngredientSlot>; 3]; 3]> {
+    fn pattern(&self) -> Vec<[[Option<RegistryEntryList>; 3]; 3]> {
         vec![self.keys.pattern_to_thing(self.pattern)]
     }
 
@@ -41,12 +41,12 @@ impl RecipeTrait for ShapedCrafting {
 }
 
 pub struct ShapelessCrafting {
-    ingredients: Vec<IngredientSlot>,
+    ingredients: Vec<RegistryEntryList>,
     output: RecipeResult,
 }
 
 impl ShapelessCrafting {
-    pub(crate) fn new(ingredients: Vec<IngredientSlot>, output: RecipeResult) -> Self {
+    pub(crate) fn new(ingredients: Vec<RegistryEntryList>, output: RecipeResult) -> Self {
         Self {
             ingredients,
             output,
@@ -62,7 +62,7 @@ impl RecipeTrait for ShapelessCrafting {
     // Iterating over all permutations is cheaper than resolving and iterating over all tags when trying to check if recipe
     // is correct. Otherwise, we would have to backtrack and check for each item in the recipe input, which tags they are inside,
     // and then sort those permutations
-    fn pattern(&self) -> Vec<[[std::option::Option<IngredientSlot>; 3]; 3]> {
+    fn pattern(&self) -> Vec<[[std::option::Option<RegistryEntryList>; 3]; 3]> {
         vec![
             self.ingredients.clone(), //.permutations(self.ingredients.len())
         ]
