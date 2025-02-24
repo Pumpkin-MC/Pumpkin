@@ -36,7 +36,7 @@ where
     D: Send + Sized,
 {
     /// Load the chunks data
-    async fn stream_chunks(
+    async fn fetch_chunks(
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
@@ -59,8 +59,6 @@ where
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
-
-#[async_trait]
 pub trait ChunkSerializer: Send + Sync + Sized + Default {
     type Data: Send;
 
@@ -70,11 +68,10 @@ pub trait ChunkSerializer: Send + Sync + Sized + Default {
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError>;
 
-    fn add_chunk_data(&mut self, chunk_data: &[Self::Data]) -> Result<(), ChunkWritingError>;
+    fn add_chunks_data(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;
 
-    async fn stream_chunk_data(
+    fn get_chunks_data(
         &self,
         chunks: &[Vector2<i32>],
-        channel: mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    );
+    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>>;
 }

@@ -7,13 +7,12 @@ use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tokio::sync::Notify;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use std::{
     collections::HashSet,
     io::{Read, Write},
-    sync::{Arc, atomic::AtomicBool},
+    sync::Arc,
 };
 
 use crate::{
@@ -352,7 +351,7 @@ impl ChunkSerializer for AnvilChunkFile {
         Ok(chunk_file)
     }
 
-    fn add_chunk_data(&mut self, chunks_data: &[Self::Data]) -> Result<(), ChunkWritingError> {
+    fn add_chunks_data(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
         for chunk in chunks_data {
             let index = AnvilChunkFile::get_chunk_index(&chunk.position);
             self.chunks_data[index] = Some(Arc::new(AnvilChunkData::from_chunk(chunk)?));
@@ -361,54 +360,24 @@ impl ChunkSerializer for AnvilChunkFile {
         Ok(())
     }
 
-    async fn stream_chunk_data(
+    fn get_chunks_data(
         &self,
         chunks: &[Vector2<i32>],
-        channel: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    ) {
-        let notify = Arc::new(Notify::new());
-        let mut chunk_data = Vec::with_capacity(chunks.len());
-
-        for chunk in chunks {
-            let index = AnvilChunkFile::get_chunk_index(chunk);
-            if let Some(data) = &self.chunks_data[index] {
-                chunk_data.push((*chunk, data.clone(), channel.clone()))
-            } else {
-                channel
-                    .send(LoadedData::Missing(*chunk))
-                    .await
-                    .expect("Failed to stream missing message from anvil chunk serializer!");
-            }
-        }
-
-        if chunk_data.is_empty() {
-            return;
-        }
-
-        let internal_notify = notify.clone();
-        let finished_before_await_notify = Arc::new(AtomicBool::new(false));
-        let finished_fast = finished_before_await_notify.clone();
-        rayon::spawn(move || {
-            chunk_data
-                .into_par_iter()
-                .for_each(|(at, chunk_data, channel)| {
-                    let result = match chunk_data.to_chunk(at) {
+    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {
+        chunks
+            .par_iter()
+            .map(|chunk| {
+                let index = AnvilChunkFile::get_chunk_index(chunk);
+                if let Some(data) = &self.chunks_data[index] {
+                    match data.to_chunk(*chunk) {
                         Ok(chunk) => LoadedData::Loaded(chunk),
-                        Err(err) => LoadedData::Error((at, err)),
-                    };
-
-                    channel
-                        .blocking_send(result)
-                        .expect("Failed to stream data from anvil chunk serializer!");
-                });
-            finished_fast.store(true, std::sync::atomic::Ordering::Relaxed);
-            internal_notify.notify_waiters();
-        });
-
-        if finished_before_await_notify.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
-        notify.notified().await;
+                        Err(err) => LoadedData::Error((*chunk, err)),
+                    }
+                } else {
+                    LoadedData::Missing(*chunk)
+                }
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -529,7 +498,7 @@ mod tests {
         let (send, mut recv) = mpsc::channel(1);
 
         chunk_saver
-            .stream_chunks(
+            .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
@@ -584,7 +553,7 @@ mod tests {
 
             let (send, mut recv) = mpsc::channel(chunks.len());
             chunk_saver
-                .stream_chunks(
+                .fetch_chunks(
                     &level_folder,
                     &chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
                     send,

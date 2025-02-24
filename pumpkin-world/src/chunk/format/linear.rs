@@ -1,6 +1,5 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::AnvilChunkFile;
@@ -11,8 +10,7 @@ use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_util::math::vector2::Vector2;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tokio::sync::Notify;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use super::anvil::{CHUNK_COUNT, SUBREGION_BITS, chunk_to_bytes};
 
@@ -309,7 +307,7 @@ impl ChunkSerializer for LinearFile {
         })
     }
 
-    fn add_chunk_data(&mut self, chunks_data: &[Self::Data]) -> Result<(), ChunkWritingError> {
+    fn add_chunks_data(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
         for chunk_data in chunks_data {
             let index = LinearFile::get_chunk_index(&chunk_data.position);
             let chunk_raw = chunk_to_bytes(chunk_data)
@@ -329,54 +327,26 @@ impl ChunkSerializer for LinearFile {
         Ok(())
     }
 
-    async fn stream_chunk_data(
+    fn get_chunks_data(
         &self,
         chunks: &[Vector2<i32>],
-        channel: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    ) {
-        let notify = Arc::new(Notify::new());
-        let mut chunk_data = Vec::with_capacity(chunks.len());
-
-        for chunk in chunks {
-            let index = LinearFile::get_chunk_index(chunk);
-            if let Some(data) = &self.chunks_data[index] {
-                chunk_data.push((*chunk, data.clone(), channel.clone()))
-            } else {
-                channel
-                    .send(LoadedData::Missing(*chunk))
-                    .await
-                    .expect("Failed to stream missing message from linear chunk serializer!");
-            }
-        }
-
-        if chunk_data.is_empty() {
-            return;
-        }
-
-        let internal_notify = notify.clone();
-        let finished_before_await_notify = Arc::new(AtomicBool::new(false));
-        let finished_fast = finished_before_await_notify.clone();
-        rayon::spawn(move || {
-            chunk_data
-                .into_par_iter()
-                .for_each(|(at, chunk_bytes, channel)| {
-                    let result = match ChunkData::from_bytes(&chunk_bytes, at) {
+    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {
+        chunks
+            .par_iter()
+            .map(|chunk| {
+                let index = LinearFile::get_chunk_index(chunk);
+                if let Some(data) = &self.chunks_data[index] {
+                    match ChunkData::from_bytes(data, *chunk) {
                         Ok(chunk) => LoadedData::Loaded(chunk),
-                        Err(err) => LoadedData::Error((at, ChunkReadingError::ParsingError(err))),
-                    };
-
-                    channel
-                        .blocking_send(result)
-                        .expect("Failed to stream data from linear chunk serializer!");
-                });
-            finished_fast.store(true, std::sync::atomic::Ordering::Relaxed);
-            internal_notify.notify_waiters();
-        });
-
-        if finished_before_await_notify.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
-        notify.notified().await;
+                        Err(err) => {
+                            LoadedData::Error((*chunk, ChunkReadingError::ParsingError(err)))
+                        }
+                    }
+                } else {
+                    LoadedData::Missing(*chunk)
+                }
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -403,7 +373,7 @@ mod tests {
         let (send, mut recv) = mpsc::channel(1);
 
         chunk_saver
-            .stream_chunks(
+            .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
@@ -458,7 +428,7 @@ mod tests {
 
             let (send, mut recv) = mpsc::channel(chunks.len());
             chunk_saver
-                .stream_chunks(
+                .fetch_chunks(
                     &level_folder,
                     &chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
                     send,

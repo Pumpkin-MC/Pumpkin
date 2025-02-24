@@ -340,7 +340,7 @@ impl Level {
 
         let stream_task = self
             .chunk_saver
-            .stream_chunks(&self.level_folder, chunks_pos, send);
+            .fetch_chunks(&self.level_folder, chunks_pos, send);
 
         let _ = tokio::join!(converter_task, stream_task);
     }
