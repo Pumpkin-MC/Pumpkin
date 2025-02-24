@@ -6,7 +6,6 @@ use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
 use async_trait::async_trait;
-
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::PermissionLvl;

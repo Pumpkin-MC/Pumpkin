@@ -27,7 +27,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
-
+use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
 use crate::block::registry::BlockRegistry;
@@ -80,6 +80,8 @@ pub struct Server {
     pub auth_client: Option<reqwest::Client>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
+    /// The default gamemode when a player joins the server (reset every restart)
+    pub defaultgamemode: Mutex<DefaultGamemode>
 }
 
 impl Server {
@@ -137,6 +139,7 @@ impl Server {
             server_listing: Mutex::new(CachedStatus::new()),
             server_branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
+            defaultgamemode: Mutex::new(DefaultGamemode{gamemode: BASIC_CONFIG.default_gamemode}),
         }
     }
 
@@ -175,7 +178,7 @@ impl Server {
     /// You still have to spawn the Player in the World to make then to let them Join and make them Visible
     pub async fn add_player(&self, client: Arc<Client>) -> (Arc<Player>, Arc<World>) {
         let entity_id = self.new_entity_id();
-        let gamemode = BASIC_CONFIG.default_gamemode;
+        let gamemode = self.defaultgamemode.lock().await.gamemode.clone();
         // Basically the default world
         // TODO: select default from config
         let world = &self.worlds.read().await[0];
