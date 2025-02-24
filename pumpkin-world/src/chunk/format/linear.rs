@@ -1,5 +1,4 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::AnvilChunkFile;
@@ -54,7 +53,7 @@ struct LinearFileHeader {
 }
 pub struct LinearFile {
     chunks_headers: [LinearChunkHeader; CHUNK_COUNT],
-    chunks_data: [Option<Arc<[u8]>>; CHUNK_COUNT],
+    chunks_data: [Option<Box<[u8]>>; CHUNK_COUNT],
 }
 
 impl LinearChunkHeader {
@@ -307,7 +306,7 @@ impl ChunkSerializer for LinearFile {
         })
     }
 
-    fn add_chunks_data(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
+    fn update_chunks(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
         for chunk_data in chunks_data {
             let index = LinearFile::get_chunk_index(&chunk_data.position);
             let chunk_raw = chunk_to_bytes(chunk_data)
@@ -327,7 +326,7 @@ impl ChunkSerializer for LinearFile {
         Ok(())
     }
 
-    fn get_chunks_data(
+    fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
     ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {

@@ -132,7 +132,7 @@ impl Level {
         self.write_chunks(chunks_to_write).await;
 
         // wait for chunks currently saving in other threads
-        self.chunk_saver.await_tasks().await;
+        self.chunk_saver.close().await;
 
         // then lets save the world info
         let result = self

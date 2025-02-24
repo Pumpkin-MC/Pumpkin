@@ -9,12 +9,17 @@ use crate::level::LevelFolder;
 
 pub mod chunk_file_manager;
 
+/// The result of loading a chunk data.
+/// 
+/// It can be the data loaded successfully, the data not found or an error
+/// with the chunk coordinates and the error that occurred.
 pub enum LoadedData<D, Err: error::Error>
 where
     D: Send,
 {
     /// The chunk data was loaded successfully
     Loaded(D),
+
     /// The chunk data was not found
     Missing(Vector2<i32>),
 
@@ -52,26 +57,46 @@ where
 
     async fn clean_up_log(&self);
 
-    async fn await_tasks(&self);
+    /// Ensure that all ongoing operations are finished
+    async fn close(&self);
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
-pub trait ChunkSerializer: Send + Sync + Sized + Default {
-    type Data: Send;
+pub trait ChunkSerializer: Send + Sync + Default {
+    type Data: Send + Sync + Sized;
 
+    /// Get the key for the chunk (like the file name)
     fn get_chunk_key(chunk: Vector2<i32>) -> String;
 
+    /// Serialize the data to bytes.
+    ///
+    /// This function should be used on blocking code
+    /// because could imply heavy operations like
+    /// compressing the data.
     fn to_bytes(&self) -> Box<[u8]>;
 
+    /// Create a new instance from bytes
+    ///
+    /// This function should be used on blocking code
+    /// because could imply heavy operations like
+    /// decompressing the data.
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError>;
 
-    fn add_chunks_data(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;
+    /// Add the chunks data to the serializer
+    ///
+    /// This function should be used on blocking code
+    /// because could imply heavy operations like
+    /// parsing the data.
+    fn update_chunks(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;
 
-    fn get_chunks_data(
-        &self,
-        chunks: &[Vector2<i32>],
-    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>>;
+    /// Get the chunks data from the serializer
+    ///
+    /// This function should be used on blocking code
+    /// because could imply heavy operations like
+    /// parsing the data.
+    fn get_chunks(&self, chunks: &[Vector2<i32>])
+    -> Vec<LoadedData<Self::Data, ChunkReadingError>>;
 }

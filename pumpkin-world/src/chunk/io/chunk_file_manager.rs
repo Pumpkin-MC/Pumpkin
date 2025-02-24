@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
     sync::{OnceCell, RwLock, mpsc},
     task::JoinSet,
@@ -28,13 +27,13 @@ use super::{ChunkIO, ChunkSerializer, LoadedData};
 /// using parallelism and a cache for the files with ongoing IO operations.
 ///
 /// It also avoid IO operations that could produce dataraces thanks to the
-/// DashMap that manages the locks for the files.
+/// custom *DashMap* like implementation.
 pub struct ChunkFileManager<S: ChunkSerializer> {
     // Dashmap has rw-locks on shards, but we want per-serializer
-    file_locks: RwLock<BTreeMap<PathBuf, SerializerCacheEntry<S>>>,
+    file_locks: RwLock<BTreeMap<PathBuf, Arc<SerializerCacheEntry<S>>>>,
 }
 //to avoid clippy warnings we extract the type alias
-type SerializerCacheEntry<S> = Arc<OnceCell<Arc<RwLock<S>>>>;
+type SerializerCacheEntry<S> = OnceCell<Arc<RwLock<S>>>;
 
 impl<S: ChunkSerializer> Default for ChunkFileManager<S> {
     fn default() -> Self {
@@ -89,7 +88,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         async fn read_from_disk<S: ChunkSerializer>(
             path: &Path,
         ) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
-            let file = OpenOptions::new()
+            let file = tokio::fs::OpenOptions::new()
                 .read(true)
                 .write(false)
                 .create(false)
@@ -108,8 +107,9 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                         .await
                         .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
-                    // This should be performant enough that we don't need to block
-                    S::from_bytes(&file_bytes)?
+                    //We need to make this operation blocking to avoid context switching
+                    // and improve compute heavy operations performance (like decompression)
+                    tokio::task::block_in_place(|| S::from_bytes(&file_bytes))?
                 }
                 Err(ChunkReadingError::ChunkNotExist) => S::default(),
                 Err(err) => return Err(err),
@@ -148,7 +148,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         // We use tmp files to avoid corruption of the data if the process is abruptly interrupted.
         let tmp_path = &path.with_extension("tmp");
 
-        let mut file = OpenOptions::new()
+        let mut file = tokio::fs::OpenOptions::new()
             .read(false)
             .write(true)
             .create(true)
@@ -157,7 +157,9 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        file.write_all(&serializer.to_bytes())
+        //We need to make this operation blocking to avoid context switching
+        // and improve compute heavy operations performance (like compression)
+        file.write_all(&tokio::task::block_in_place(|| serializer.to_bytes()))
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
@@ -177,10 +179,10 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
 }
 
 #[async_trait]
-impl<D, S> ChunkIO<D> for ChunkFileManager<S>
+impl<S, D> ChunkIO<D> for ChunkFileManager<S>
 where
-    D: 'static + Send + Sized + Sync + Clone,
-    S: 'static + ChunkSerializer<Data = D>,
+    D: 'static + Send + Sync + Sized,
+    S: ChunkSerializer<Data = D>,
 {
     async fn fetch_chunks(
         &self,
@@ -223,7 +225,10 @@ where
                 let mut stream_tasks = JoinSet::new();
                 // We need to block the read to avoid other threads to write/modify the data
                 let chunk_guard = chunk_serializer.read().await;
-                for chunk in tokio::task::block_in_place(|| chunk_guard.get_chunks_data(&chunks)) {
+
+                //We need to make this operation blocking to avoid context switching
+                // and improve compute heavy operations performance
+                for chunk in tokio::task::block_in_place(|| chunk_guard.get_chunks(&chunks)) {
                     let channel = channel.clone();
                     stream_tasks.spawn(async move {
                         channel
@@ -293,9 +298,10 @@ where
                 }
                 let mut chunk_guard = chunk_serializer.write().await;
 
+                //We need to make this operation blocking to avoid context switching
+                // and improve compute heavy operations performance
                 tokio::task::block_in_place(|| {
-                    chunk_guard
-                        .add_chunks_data(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())
+                    chunk_guard.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())
                 })?;
 
                 // With the modification done, we can drop the write lock but keep the read lock
@@ -321,7 +327,7 @@ where
         log::debug!("{} File locks remain in cache", locks.len());
     }
 
-    async fn await_tasks(&self) {
+    async fn close(&self) {
         let locks: Vec<_> = self
             .file_locks
             .read()

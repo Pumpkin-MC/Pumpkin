@@ -12,7 +12,6 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::HashSet,
     io::{Read, Write},
-    sync::Arc,
 };
 
 use crate::{
@@ -60,12 +59,12 @@ pub enum Compression {
 pub struct AnvilChunkData {
     length: u32,
     compression: Option<Compression>,
-    compressed_data: Vec<u8>,
+    compressed_data: Box<[u8]>,
 }
 
 pub struct AnvilChunkFile {
     timestamp_table: [u32; CHUNK_COUNT],
-    chunks_data: [Option<Arc<AnvilChunkData>>; CHUNK_COUNT],
+    chunks_data: [Option<AnvilChunkData>; CHUNK_COUNT],
 }
 
 impl Compression {
@@ -190,7 +189,7 @@ impl AnvilChunkData {
         Ok(AnvilChunkData {
             length,
             compression,
-            compressed_data: buffer.to_vec(),
+            compressed_data: buffer.to_vec().into_boxed_slice(),
         })
     }
 
@@ -241,7 +240,7 @@ impl AnvilChunkData {
         Ok(AnvilChunkData {
             length: compressed_data.len() as u32 + 1,
             compression: Some(compression),
-            compressed_data,
+            compressed_data: compressed_data.into_boxed_slice(),
         })
     }
 }
@@ -343,24 +342,24 @@ impl ChunkSerializer for AnvilChunkFile {
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
 
-            chunk_file.chunks_data[i] = Some(Arc::new(AnvilChunkData::from_bytes(
+            chunk_file.chunks_data[i] = Some(AnvilChunkData::from_bytes(
                 &chunks[bytes_offset..bytes_offset + bytes_count],
-            )?));
+            )?);
         }
 
         Ok(chunk_file)
     }
 
-    fn add_chunks_data(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
+    fn update_chunks(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
         for chunk in chunks_data {
             let index = AnvilChunkFile::get_chunk_index(&chunk.position);
-            self.chunks_data[index] = Some(Arc::new(AnvilChunkData::from_chunk(chunk)?));
+            self.chunks_data[index] = Some(AnvilChunkData::from_chunk(chunk)?);
         }
 
         Ok(())
     }
 
-    fn get_chunks_data(
+    fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
     ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {
