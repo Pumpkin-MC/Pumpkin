@@ -1,10 +1,10 @@
+use crate::{
+    ClientPacket, PositionFlag, ServerPacket, VarInt, bytebuf::ByteBuf, bytebuf::ByteBufMut,
+};
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vec3::Vec3;
-use crate::{
-    ClientPacket, PositionFlag, ServerPacket, VarInt, bytebuf::ByteBuf, bytebuf::ByteBufMut,
-};
 
 #[packet(PLAY_PLAYER_POSITION)]
 pub struct CPlayerPosition<'a> {
