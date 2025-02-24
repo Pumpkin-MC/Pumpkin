@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use pumpkin_world::block::registry::Block;
 
 #[pumpkin_block("minecraft:jukebox")]

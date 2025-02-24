@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::PLAY_RESPAWN;
 use pumpkin_macros::packet;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use serde::{Deserialize, Serialize};
 
 use crate::{VarInt, codec::identifier::Identifier};

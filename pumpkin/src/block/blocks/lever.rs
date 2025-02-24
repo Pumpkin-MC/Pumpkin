@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::pos::BlockPos;
 use pumpkin_world::block::{BlockDirection, registry::Block};
 
 use crate::{
