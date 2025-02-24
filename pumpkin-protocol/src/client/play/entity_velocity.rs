@@ -12,8 +12,8 @@ pub struct CEntityVelocity<'a> {
     velocity: Vec3<i16>,
 }
 
-impl CEntityVelocity {
-    pub fn new(entity_id: VarInt, velocity_x: f64, velocity_y: f64, velocity_z: f64) -> Self {
+impl<'a> CEntityVelocity<'a> {
+    pub fn new(entity_id: &'a VarInt, velocity_x: f64, velocity_y: f64, velocity_z: f64) -> Self {
         Self {
             entity_id,
             velocity: Vec3::new(

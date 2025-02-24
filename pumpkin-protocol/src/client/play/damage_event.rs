@@ -1,6 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_DAMAGE_EVENT;
 use pumpkin_macros::packet;
-use pumpkin_util::math::pos::BlockPos;
 use pumpkin_util::math::vec3::Vec3;
 use serde::Serialize;
 

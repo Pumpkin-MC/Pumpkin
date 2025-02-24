@@ -9,8 +9,8 @@ use pumpkin_util::math::vec3::Vec3;
 #[packet(PLAY_PLAYER_POSITION)]
 pub struct CPlayerPosition<'a> {
     pub teleport_id: VarInt,
-    pub position: Vector3<f64>,
-    pub delta: Vector3<f64>,
+    pub position: Vec3<f64>,
+    pub delta: Vec3<f64>,
     pub yaw: f32,
     pub pitch: f32,
     pub releatives: &'a [PositionFlag],
@@ -40,8 +40,8 @@ impl ServerPacket for CPlayerPosition<'_> {
     fn read(bytebuf: &mut impl bytes::Buf) -> Result<Self, crate::bytebuf::ReadingError> {
         fn get_vec(
             bytebuf: &mut impl bytes::Buf,
-        ) -> Result<Vector3<f64>, crate::bytebuf::ReadingError> {
-            Ok(Vector3::new(
+        ) -> Result<Vec3<f64>, crate::bytebuf::ReadingError> {
+            Ok(Vec3::new(
                 bytebuf.try_get_f64()?,
                 bytebuf.try_get_f64()?,
                 bytebuf.try_get_f64()?,
