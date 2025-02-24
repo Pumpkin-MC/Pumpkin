@@ -30,8 +30,6 @@ dashmap = "6.1"
 
 num-traits = "0.2"
 
-parking_lot = "0.12.3"
-
 # Compression
 flate2 = "1.0"
 lz4 = "1.28"
