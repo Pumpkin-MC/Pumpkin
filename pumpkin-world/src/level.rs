@@ -121,7 +121,7 @@ impl Level {
     pub async fn save(&self) {
         log::info!("Saving level...");
 
-        // save all stragling chunks
+        // save all chunks currently in memory
         let chunks_to_write = self
             .loaded_chunks
             .iter()
@@ -297,13 +297,14 @@ impl Level {
         let level_folder = self.level_folder.clone();
 
         trace!("Writing chunks to disk {:}", chunks_to_write.len());
-
-        if let Err(error) = chunk_saver
-            .save_chunks(&level_folder, chunks_to_write)
-            .await
-        {
-            log::error!("Failed writing Chunk to disk {}", error.to_string());
-        }
+        tokio::spawn(async move {
+            if let Err(error) = chunk_saver
+                .save_chunks(&level_folder, chunks_to_write)
+                .await
+            {
+                log::error!("Failed writing Chunk to disk {}", error.to_string());
+            }
+        });
     }
 
     async fn load_chunks_from_save(

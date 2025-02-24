@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::Read;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::AnvilChunkFile;
@@ -66,7 +66,7 @@ impl LinearChunkHeader {
         }
     }
 
-    fn to_bytes(self) -> [u8; 8] {
+    fn to_bytes(self) -> Box<[u8]> {
         let mut bytes = Vec::with_capacity(LinearChunkHeader::CHUNK_HEADER_SIZE);
 
         bytes.put_u32(self.size);
@@ -74,9 +74,7 @@ impl LinearChunkHeader {
 
         // This should be a clear code error if the size of the header is not the expected
         // so we can unwrap the conversion safely or panic the entire program if not
-        bytes
-            .try_into()
-            .unwrap_or_else(|_| panic!("ChunkHeader Struct/Size Mismatch"))
+        bytes.into_boxed_slice()
     }
 }
 
@@ -119,7 +117,7 @@ impl LinearFileHeader {
         }
     }
 
-    fn to_bytes(&self) -> [u8; Self::FILE_HEADER_SIZE] {
+    fn to_bytes(&self) -> Box<[u8]> {
         let mut bytes: Vec<u8> = Vec::with_capacity(LinearFileHeader::FILE_HEADER_SIZE);
 
         bytes.put_u8(self.version as u8);
@@ -131,9 +129,7 @@ impl LinearFileHeader {
 
         // This should be a clear code error if the size of the header is not the expected
         // so we can unwrap the conversion safely or panic the entire program if not
-        bytes
-            .try_into()
-            .unwrap_or_else(|_| panic!("Header Struct/Size Mismatch"))
+        bytes.into_boxed_slice()
     }
 }
 
@@ -181,31 +177,27 @@ impl ChunkSerializer for LinearFile {
 
     fn to_bytes(&self) -> Box<[u8]> {
         // Parse the headers to a buffer
-        let headers_buffer: Vec<u8> = self
+        let mut data_buffer: Vec<u8> = self
             .chunks_headers
             .iter()
             .flat_map(|header| header.to_bytes())
             .collect();
 
-        let uncompressed_size = self
-            .chunks_headers
-            .iter()
-            .map(|header| header.size)
-            .sum::<u32>();
-
-        let mut chunks_bytes = Vec::with_capacity(uncompressed_size as usize);
         for chunk in self.chunks_data.iter().flatten() {
-            chunks_bytes.put_slice(chunk);
+            data_buffer.extend_from_slice(chunk);
         }
 
         // Compress the data buffer
-        let compressed_buffer = zstd::encode_all(
-            [headers_buffer.as_slice(), chunks_bytes.as_slice()]
-                .concat()
-                .as_slice(),
-            ADVANCED_CONFIG.chunk.compression.level as i32,
-        )
-        .unwrap();
+        // We use the block_in_place to avoid the async context
+        // and context switching for the compression
+        let compressed_buffer = tokio::task::block_in_place(|| {
+            zstd::encode_all(
+                data_buffer.as_slice(),
+                ADVANCED_CONFIG.chunk.compression.level as i32,
+            )
+            .expect("Failed to compress the data buffer")
+            .into_boxed_slice()
+        });
 
         let file_header = LinearFileHeader {
             chunks_bytes: compressed_buffer.len() as u32,
@@ -227,24 +219,22 @@ impl ChunkSerializer for LinearFile {
         .to_bytes();
 
         [
-            SIGNATURE.as_slice(),
-            file_header.as_slice(),
-            compressed_buffer.as_slice(),
-            SIGNATURE.as_slice(),
+            Box::new(SIGNATURE),
+            file_header,
+            compressed_buffer,
+            Box::new(SIGNATURE),
         ]
         .concat()
-        .into_boxed_slice()
+        .into()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
         Self::check_signature(bytes)?;
 
-        let mut file = Cursor::new(bytes);
+        let mut file = &bytes[8..bytes.len() - 8];
 
         // Skip the signature and read the header
         let mut header_bytes = [0; LinearFileHeader::FILE_HEADER_SIZE];
-        file.seek(SeekFrom::Start(8))
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
         file.read_exact(&mut header_bytes)
             .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
@@ -267,12 +257,15 @@ impl ChunkSerializer for LinearFile {
         }
 
         // Uncompress the data (header + chunks)
-        let mut buffer = zstd::decode_all(compressed_data.as_slice())
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
+        // We use the block_in_place to avoid the async context
+        // and context switching for the decompression
+        let buffer = tokio::task::block_in_place(|| {
+            zstd::decode_all(compressed_data.as_slice())
+                .map_err(|err| ChunkReadingError::IoError(err.kind()))
+        })?;
 
-        let headers_buffer: Vec<u8> = buffer
-            .drain(..LinearChunkHeader::CHUNK_HEADER_SIZE * CHUNK_COUNT)
-            .collect();
+        let (headers_buffer, buffer) =
+            buffer.split_at(LinearChunkHeader::CHUNK_HEADER_SIZE * CHUNK_COUNT);
 
         // Parse the chunk headers
         let chunk_headers: [LinearChunkHeader; CHUNK_COUNT] = headers_buffer
@@ -294,9 +287,12 @@ impl ChunkSerializer for LinearFile {
         }
 
         let mut chunks = [const { None }; CHUNK_COUNT];
+        let mut bytes_offset = 0;
         for (i, header) in chunk_headers.iter().enumerate() {
             if header.size != 0 {
-                chunks[i] = Some(buffer.drain(..header.size as usize).collect());
+                let last_index = bytes_offset;
+                bytes_offset += header.size as usize;
+                chunks[i] = Some(buffer[last_index..bytes_offset].into());
             }
         }
 
@@ -310,7 +306,8 @@ impl ChunkSerializer for LinearFile {
         for chunk_data in chunks_data {
             let index = LinearFile::get_chunk_index(&chunk_data.position);
             let chunk_raw = chunk_to_bytes(chunk_data)
-                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
+                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
+                .into_boxed_slice();
 
             let header = &mut self.chunks_headers[index];
             header.size = chunk_raw.len() as u32;
@@ -320,7 +317,7 @@ impl ChunkSerializer for LinearFile {
                 .as_secs() as u32;
 
             // We update the data buffer
-            self.chunks_data[index] = Some(chunk_raw.into());
+            self.chunks_data[index] = Some(chunk_raw);
         }
 
         Ok(())

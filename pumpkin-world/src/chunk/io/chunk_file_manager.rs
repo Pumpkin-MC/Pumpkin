@@ -124,13 +124,11 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         let once_cell = if let Some(once_cell) = self.file_locks.read().await.get(path) {
             once_cell.clone()
         } else {
-            let mut map_guard = self.file_locks.write().await;
-            if !map_guard.contains_key(path) {
-                map_guard.insert(path.to_path_buf(), Arc::new(OnceCell::new()));
-            }
-            map_guard
-                .get(path)
-                .expect("We just inserted this within a lock")
+            self.file_locks
+                .write()
+                .await
+                .entry(path.to_path_buf())
+                .or_insert(Arc::new(OnceCell::new()))
                 .clone()
         };
 
@@ -226,9 +224,7 @@ where
                 // We need to block the read to avoid other threads to write/modify the data
                 let chunk_guard = chunk_serializer.read().await;
 
-                //We need to make this operation blocking to avoid context switching
-                // and improve compute heavy operations performance
-                for chunk in tokio::task::block_in_place(|| chunk_guard.get_chunks(&chunks)) {
+                for chunk in chunk_guard.get_chunks(&chunks) {
                     let channel = channel.clone();
                     stream_tasks.spawn(async move {
                         channel
@@ -298,11 +294,7 @@ where
                 }
                 let mut chunk_guard = chunk_serializer.write().await;
 
-                //We need to make this operation blocking to avoid context switching
-                // and improve compute heavy operations performance
-                tokio::task::block_in_place(|| {
-                    chunk_guard.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())
-                })?;
+                chunk_guard.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())?;
 
                 // With the modification done, we can drop the write lock but keep the read lock
                 // to avoid other threads to write/modify the data, but allow other threads to read it

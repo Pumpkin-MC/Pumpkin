@@ -10,7 +10,7 @@ use crate::level::LevelFolder;
 pub mod chunk_file_manager;
 
 /// The result of loading a chunk data.
-/// 
+///
 /// It can be the data loaded successfully, the data not found or an error
 /// with the chunk coordinates and the error that occurred.
 pub enum LoadedData<D, Err: error::Error>
@@ -72,31 +72,15 @@ pub trait ChunkSerializer: Send + Sync + Default {
     fn get_chunk_key(chunk: Vector2<i32>) -> String;
 
     /// Serialize the data to bytes.
-    ///
-    /// This function should be used on blocking code
-    /// because could imply heavy operations like
-    /// compressing the data.
     fn to_bytes(&self) -> Box<[u8]>;
 
     /// Create a new instance from bytes
-    ///
-    /// This function should be used on blocking code
-    /// because could imply heavy operations like
-    /// decompressing the data.
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunks data to the serializer
-    ///
-    /// This function should be used on blocking code
-    /// because could imply heavy operations like
-    /// parsing the data.
     fn update_chunks(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;
 
     /// Get the chunks data from the serializer
-    ///
-    /// This function should be used on blocking code
-    /// because could imply heavy operations like
-    /// parsing the data.
     fn get_chunks(&self, chunks: &[Vector2<i32>])
     -> Vec<LoadedData<Self::Data, ChunkReadingError>>;
 }
