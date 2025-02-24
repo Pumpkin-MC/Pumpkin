@@ -320,26 +320,45 @@ impl World {
         319
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn spawn_player(
         &self,
         base_config: &BasicConfiguration,
         player: Arc<Player>,
         server: &Server,
     ) {
+        self.send_login_packet(base_config, &player, server).await;
+        self.send_initial_permissions_and_commands(&player, server)
+            .await;
+
+        let (position, yaw, pitch) = self.calculate_initial_spawn_position().await;
+        player.request_teleport(position, yaw, pitch).await;
+        player.living_entity.last_pos.store(position);
+
+        self.broadcast_player_info_updates(&player).await;
+        self.spawn_player_entities(&player, position, yaw, pitch)
+            .await;
+        self.send_world_data_to_player(&player).await;
+        self.finalize_spawn_process(&player).await;
+    }
+
+    /// Sends initial login packet with server configuration
+    async fn send_login_packet(
+        &self,
+        base_config: &BasicConfiguration,
+        player: &Arc<Player>,
+        server: &Server,
+    ) {
         let dimensions: Vec<Identifier> =
             server.dimensions.iter().map(DimensionType::name).collect();
-
-        // This code follows the vanilla packet order
         let entity_id = player.entity_id();
         let gamemode = player.gamemode.load();
+
         log::debug!(
-            "spawning player {}, entity id {}",
+            "Spawning player {}, entity id {}",
             player.gameprofile.name,
             entity_id
         );
 
-        // login packet for our new player
         player
             .client
             .send_packet(&CLogin::new(
@@ -365,10 +384,16 @@ impl World {
                 false,
             ))
             .await;
-        // permissions, i. e. the commands a player may use
+    }
+
+    /// Sends permissions and command suggestions
+    async fn send_initial_permissions_and_commands(&self, player: &Arc<Player>, server: &Server) {
         player.send_permission_lvl_update().await;
-        client_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
-        // teleport
+        client_suggestions::send_c_commands_packet(player, &server.command_dispatcher).await;
+    }
+
+    /// Calculates initial spawn position using world info and top block
+    async fn calculate_initial_spawn_position(&self) -> (Vector3<f64>, f32, f32) {
         let info = &self.level.level_info;
         let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
         let yaw = info.spawn_angle;
@@ -379,15 +404,15 @@ impl World {
             .await;
         position.y = f64::from(top + 1);
 
-        log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch).await;
+        log::debug!("Calculated spawn position: {:?}", position);
+        (position, yaw, pitch)
+    }
 
-        player.living_entity.last_pos.store(position);
-
+    /// Handles player info updates for new and existing players
+    async fn broadcast_player_info_updates(&self, player: &Arc<Player>) {
         let gameprofile = &player.gameprofile;
-        // first send info update to our new player, So he can see his Skin
-        // also send his info to everyone else
-        log::debug!("Broadcasting player info for {}", player.gameprofile.name);
+
+        // Broadcast new player info to all
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
             0x01 | 0x08,
             &[pumpkin_protocol::client::play::Player {
@@ -402,44 +427,49 @@ impl World {
             }],
         ))
         .await;
-        player.send_client_information().await;
 
-        // here we send all the infos of already joined players
+        // Send existing players info to new player
         let mut entries = Vec::new();
+        let current_players = self.players.read().await;
+        for existing_player in current_players
+            .values()
+            .filter(|p| p.gameprofile.id != player.gameprofile.id)
         {
-            let current_players = self.players.read().await;
-            for (_, playerr) in current_players
-                .iter()
-                .filter(|(c, _)| **c != player.gameprofile.id)
-            {
-                let gameprofile = &playerr.gameprofile;
-                entries.push(pumpkin_protocol::client::play::Player {
-                    uuid: gameprofile.id,
-                    actions: vec![
-                        PlayerAction::AddPlayer {
-                            name: &gameprofile.name,
-                            properties: &gameprofile.properties,
-                        },
-                        PlayerAction::UpdateListed(true),
-                    ],
-                });
-            }
-            log::debug!("Sending player info to {}", player.gameprofile.name);
-            player
-                .client
-                .send_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
-                .await;
-        };
+            let gameprofile = &existing_player.gameprofile;
+            entries.push(pumpkin_protocol::client::play::Player {
+                uuid: gameprofile.id,
+                actions: vec![
+                    PlayerAction::AddPlayer {
+                        name: &gameprofile.name,
+                        properties: &gameprofile.properties,
+                    },
+                    PlayerAction::UpdateListed(true),
+                ],
+            });
+        }
 
+        player
+            .client
+            .send_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
+            .await;
+    }
+
+    /// Handles entity spawning logic for new player
+    async fn spawn_player_entities(
+        &self,
+        player: &Arc<Player>,
+        position: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+    ) {
         let gameprofile = &player.gameprofile;
 
-        log::debug!("Broadcasting player spawn for {}", player.gameprofile.name);
-        // spawn player for every client
+        // Broadcast new player entity to others
         self.broadcast_packet_except(
             &[player.gameprofile.id],
             // TODO: add velo
             &CSpawnEntity::new(
-                entity_id.into(),
+                player.entity_id().into(),
                 gameprofile.id,
                 i32::from(EntityType::PLAYER.id).into(),
                 position,
@@ -451,13 +481,19 @@ impl World {
             ),
         )
         .await;
-        // spawn players for our client
-        let id = player.gameprofile.id;
-        for (_, existing_player) in self.players.read().await.iter().filter(|c| c.0 != &id) {
+
+        // Send existing entities to new player
+        for existing_player in self
+            .players
+            .read()
+            .await
+            .values()
+            .filter(|p| p.gameprofile.id != player.gameprofile.id)
+        {
             let entity = &existing_player.living_entity.entity;
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
-            log::debug!("Sending player entities to {}", player.gameprofile.name);
+
             player
                 .client
                 .send_packet(&CSpawnEntity::new(
@@ -473,24 +509,18 @@ impl World {
                 ))
                 .await;
         }
-        // entity meta data
-        // set skin parts
-        player.send_client_information().await;
+    }
 
-        // Start waiting for level chunks, Sets the "Loading Terrain" screen
-        log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
-        player
-            .client
-            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
-            .await;
-
+    /// Sends world-specific data (border, time, weather)
+    async fn send_world_data_to_player(&self, player: &Arc<Player>) {
+        // Initialize world border
         self.worldborder
             .lock()
             .await
             .init_client(&player.client)
             .await;
 
-        // Sends initial time
+        // Send initial time
         player.send_time(self).await;
 
         // Send initial weather state
@@ -501,7 +531,6 @@ impl World {
                 .send_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
                 .await;
 
-            // Calculate rain and thunder levels directly from public fields
             let rain_level = weather.rain_level.clamp(0.0, 1.0);
             let thunder_level = weather.thunder_level.clamp(0.0, 1.0);
 
@@ -517,16 +546,20 @@ impl World {
                 ))
                 .await;
         }
+    }
 
-        // Spawn in initial chunks
-        chunker::player_join(&player).await;
+    /// Finalizes spawn process with chunks and mobs
+    async fn finalize_spawn_process(&self, player: &Arc<Player>) {
+        // Start waiting for level chunks
+        player
+            .client
+            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+            .await;
 
-        // if let Some(bossbars) = self..lock().await.get_player_bars(&player.gameprofile.id) {
-        //     for bossbar in bossbars {
-        //         player.send_bossbar(bossbar).await;
-        //     }
-        // }
+        // Load initial chunks
+        chunker::player_join(player).await;
 
+        // Send mobs
         player.send_mobs(self).await;
     }
 
@@ -636,7 +669,7 @@ impl World {
     fn spawn_world_chunks(
         &self,
         player: Arc<Player>,
-        chunks: Vec<Vector2<i32>>,
+        mut chunks: Vec<Vector2<i32>>,
         center_chunk: Vector2<i32>,
     ) {
         if player
@@ -651,7 +684,6 @@ impl World {
         let inst = std::time::Instant::now();
 
         // Sort such that the first chunks are closest to the center
-        let mut chunks = chunks;
         chunks.sort_unstable_by_key(|pos| {
             let rel_x = pos.x - center_chunk.x;
             let rel_z = pos.z - center_chunk.z;
