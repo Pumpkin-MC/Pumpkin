@@ -10,6 +10,8 @@ use pumpkin_protocol::{
 };
 use pumpkin_world::item::ItemStack;
 
+use crate::server::Server;
+
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
@@ -40,7 +42,7 @@ impl ItemEntity {
 
 #[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self) {
+    async fn tick(&self, _server: &Server) {
         if self.pickup_delay.load(std::sync::atomic::Ordering::Relaxed) > 0 {
             self.pickup_delay
                 .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);

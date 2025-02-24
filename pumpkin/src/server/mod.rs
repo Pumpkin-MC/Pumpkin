@@ -209,18 +209,23 @@ impl Server {
     }
 
     /// Adds a new living entity to the server. This does not Spawn the entity
+    /// This also adds an optional owner to the entity.
+    ///
+    /// # Arguments
+    ///
+    /// * `position`: The position in the world where the entity will be created.
+    /// * `entity_type`: The type of the entity. This also controls the bounding box size.
+    /// * `owner_id`: An `Option<EntityId>` containing the entity of the owner, if it exists.
+    /// * `world`: A reference to the world which the entity will be added to.
     ///
     /// # Returns
     ///
-    /// A tuple containing:
-    ///
-    /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
-    /// - `Arc<World>`: A reference to the world that the living entity was added to.
-    /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
-    pub fn add_entity(
+    /// An `Entity` containing the newly created entity.
+    pub fn add_entity_with_owner(
         &self,
         position: Vector3<f64>,
         entity_type: EntityType,
+        owner_id: Option<EntityId>,
         world: &Arc<World>,
     ) -> Entity {
         let entity_id = self.new_entity_id();
@@ -231,10 +236,10 @@ impl Server {
             height: entity_type.dimension[1],
         };
 
-        // TODO: standing eye height should be per mob
         let new_uuid = uuid::Uuid::new_v4();
         Entity::new(
             entity_id,
+            owner_id,
             new_uuid,
             world.clone(),
             position,
@@ -249,6 +254,26 @@ impl Server {
             AtomicCell::new(bounding_box_size),
             false,
         )
+    }
+
+    /// Adds a new living entity to the server. This does not Spawn the entity
+    ///
+    /// # Arguments
+    ///
+    /// * `position`: The position in the world where the entity will be created.
+    /// * `entity_type`: The type of the entity. This also controls the bounding box size.
+    /// * `world`: A reference to the world which the entity will be added to.
+    ///
+    /// # Returns
+    ///
+    /// An `Entity` containing the newly created entity.
+    pub fn add_entity(
+        &self,
+        position: Vector3<f64>,
+        entity_type: EntityType,
+        world: &Arc<World>,
+    ) -> Entity {
+        self.add_entity_with_owner(position, entity_type, None, world)
     }
 
     pub async fn try_get_container(
@@ -479,7 +504,7 @@ impl Server {
 
     async fn tick(&self) {
         for world in self.worlds.read().await.iter() {
-            world.tick().await;
+            world.tick(self).await;
         }
     }
 }

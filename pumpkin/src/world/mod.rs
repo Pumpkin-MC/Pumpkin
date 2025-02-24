@@ -27,9 +27,8 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::client::play::{
-    CBlockUpdate, CDisguisedChatMessage, CRespawn, CSetBlockDestroyStage, CWorldEvent,
-};
+use pumpkin_protocol::client::play::CSetBlockDestroyStage;
+use pumpkin_protocol::client::play::{CBlockUpdate, CDisguisedChatMessage, CRespawn, CWorldEvent};
 use pumpkin_protocol::{
     ClientPacket,
     client::play::{
@@ -260,7 +259,7 @@ impl World {
         .await;
     }
 
-    pub async fn tick(&self) {
+    pub async fn tick(&self, server: &Server) {
         // world ticks
         {
             let mut level_time = self.level_time.lock().await;
@@ -284,9 +283,9 @@ impl World {
 
         // entities tick
         for entity in entities_to_tick {
-            entity.tick().await;
+            entity.tick(server).await;
             // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
-            let mut collied_player = None;
+            let mut collided_player = None;
             for player in self.players.read().await.values() {
                 if player
                     .living_entity
@@ -295,11 +294,11 @@ impl World {
                     .load()
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
-                    collied_player = Some(player.clone());
+                    collided_player = Some(player.clone());
                     break;
                 }
             }
-            if let Some(player) = collied_player {
+            if let Some(player) = collided_player {
                 entity.on_player_collision(player).await;
             }
         }
