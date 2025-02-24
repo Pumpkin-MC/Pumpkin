@@ -62,7 +62,7 @@ impl CommandExecutor for TargetSelfExecutor {
             log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
             player
                 .client
-                .send_packet(&CTransfer::new(hostname, &VarInt(port)))
+                .send_packet(&CTransfer::new(hostname, VarInt(port)))
                 .await;
             Ok(())
         } else {
@@ -105,7 +105,7 @@ impl CommandExecutor for TargetPlayerExecutor {
 
         for p in players {
             p.client
-                .send_packet(&CTransfer::new(hostname, &VarInt(port)))
+                .send_packet(&CTransfer::new(hostname, VarInt(port)))
                 .await;
             log::info!(
                 "[{sender}: Transferring {} to {hostname}:{port}]",

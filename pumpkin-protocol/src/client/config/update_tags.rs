@@ -4,7 +4,7 @@ use pumpkin_data::{
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, TAGS},
 };
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use pumpkin_world::block::registry;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     codec::{identifier::Identifier, var_int::VarInt},
 };
 
-#[client_packet(CONFIG_UPDATE_TAGS)]
+#[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
     tags: &'a [pumpkin_data::tag::RegistryKey],
 }

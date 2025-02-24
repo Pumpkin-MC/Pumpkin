@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_CLOSE;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_CONTAINER_CLOSE)]
+#[packet(PLAY_CONTAINER_CLOSE)]
 pub struct CCloseContainer {
     window_id: VarInt,
 }

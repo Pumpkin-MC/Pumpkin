@@ -3,9 +3,9 @@ use crate::client::play::bossevent_action::BosseventAction;
 use crate::{ClientPacket, VarInt};
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_BOSS_EVENT;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 
-#[client_packet(PLAY_BOSS_EVENT)]
+#[packet(PLAY_BOSS_EVENT)]
 pub struct CBossEvent<'a> {
     pub uuid: &'a uuid::Uuid,
     pub action: BosseventAction,

@@ -154,26 +154,7 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn client_packet(input: TokenStream, item: TokenStream) -> TokenStream {
-    let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
-    let name = &ast.ident;
-    let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
-
-    let input: proc_macro2::TokenStream = input.into();
-    let item: proc_macro2::TokenStream = item.into();
-
-    let code = quote! {
-        #item
-        impl #impl_generics crate::bytebuf::packet::Packet for #name #ty_generics {
-            const PACKET_ID: i32 = #input;
-        }
-    };
-
-    code.into()
-}
-
-#[proc_macro_attribute]
-pub fn server_packet(input: TokenStream, item: TokenStream) -> TokenStream {
+pub fn packet(input: TokenStream, item: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
     let name = &ast.ident;
     let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();

@@ -1,9 +1,9 @@
 use pumpkin_data::packet::serverbound::PLAY_KEEP_ALIVE;
-use pumpkin_macros::server_packet;
-use serde::Deserialize;
+use pumpkin_macros::packet;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
-#[server_packet(PLAY_KEEP_ALIVE)]
+#[derive(Deserialize, Serialize)]
+#[packet(PLAY_KEEP_ALIVE)]
 pub struct SKeepAlive {
     pub keep_alive_id: i64,
 }

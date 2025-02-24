@@ -2,13 +2,13 @@ use crate::{ClientPacket, VarInt, bytebuf::ByteBufMut, codec::bit_set::BitSet};
 
 use bytes::{BufMut, BytesMut};
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use pumpkin_world::{
     DIRECT_PALETTE_BITS,
     chunk::{ChunkData, SUBCHUNKS_COUNT},
 };
 
-#[client_packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
+#[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CChunkData<'_> {

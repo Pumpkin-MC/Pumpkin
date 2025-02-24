@@ -384,7 +384,7 @@ impl Player {
         if config.hurt_animation {
             let entity_id = VarInt(victim_entity.entity_id);
             world
-                .broadcast_packet_all(&CHurtAnimation::new(&entity_id, attacker_entity.yaw.load()))
+                .broadcast_packet_all(&CHurtAnimation::new(entity_id, attacker_entity.yaw.load()))
                 .await;
         }
 
@@ -819,7 +819,7 @@ impl Player {
 
         let _ = self
             .client
-            .try_send_packet(&CPlayDisconnect::new(&reason))
+            .try_send_packet(&CPlayDisconnect::new(reason.clone()))
             .await;
 
         log::info!(

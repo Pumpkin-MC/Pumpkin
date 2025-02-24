@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_UPDATE_MOB_EFFECT;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::codec::var_int::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_UPDATE_MOB_EFFECT)]
+#[packet(PLAY_UPDATE_MOB_EFFECT)]
 pub struct CUpdateMobEffect {
     entity_id: VarInt,
     effect_id: VarInt,

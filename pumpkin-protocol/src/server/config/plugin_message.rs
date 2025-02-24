@@ -1,6 +1,6 @@
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::CONFIG_CUSTOM_PAYLOAD;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
 use crate::{
     ServerPacket,
@@ -9,7 +9,7 @@ use crate::{
 };
 const MAX_PAYLOAD_SIZE: usize = 1048576;
 
-#[server_packet(CONFIG_CUSTOM_PAYLOAD)]
+#[packet(CONFIG_CUSTOM_PAYLOAD)]
 pub struct SPluginMessage {
     pub channel: Identifier,
     pub data: bytes::Bytes,

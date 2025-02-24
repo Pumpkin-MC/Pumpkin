@@ -18,7 +18,7 @@ impl Client {
             let protocol = version;
             match protocol.cmp(&NonZeroI32::from(CURRENT_MC_PROTOCOL).get()) {
                 std::cmp::Ordering::Less => {
-                    self.kick(&TextComponent::translate(
+                    self.kick(TextComponent::translate(
                         "multiplayer.disconnect.outdated_client",
                         [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                     ))
@@ -26,7 +26,7 @@ impl Client {
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
-                    self.kick(&TextComponent::translate(
+                    self.kick(TextComponent::translate(
                         "multiplayer.disconnect.incompatible",
                         [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                     ))

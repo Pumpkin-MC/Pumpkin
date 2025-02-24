@@ -5,9 +5,9 @@ use crate::{
 };
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
-#[server_packet(PLAY_COOKIE_RESPONSE)]
+#[packet(PLAY_COOKIE_RESPONSE)]
 /// Response to a Cookie Request (play) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 kiB in size.
 pub struct SCookieResponse {

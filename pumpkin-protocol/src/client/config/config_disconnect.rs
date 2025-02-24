@@ -1,11 +1,11 @@
-use pumpkin_macros::client_packet;
-
 use pumpkin_data::packet::clientbound::CONFIG_DISCONNECT;
+use pumpkin_macros::packet;
+use serde::Deserialize;
 
-#[derive(serde::Serialize)]
-#[client_packet(CONFIG_DISCONNECT)]
+#[derive(serde::Serialize, Deserialize)]
+#[packet(CONFIG_DISCONNECT)]
 pub struct CConfigDisconnect<'a> {
-    reason: &'a str,
+    pub reason: &'a str,
 }
 
 impl<'a> CConfigDisconnect<'a> {

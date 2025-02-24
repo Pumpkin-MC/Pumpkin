@@ -222,12 +222,12 @@ mod tests {
     use cfb8::cipher::AsyncStreamCipher;
     use libdeflater::{DecompressionError, Decompressor};
     use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
-    use pumpkin_macros::client_packet;
+    use pumpkin_macros::packet;
     use serde::Serialize;
 
     /// Define a custom packet for testing maximum packet size
     #[derive(Serialize)]
-    #[client_packet(STATUS_STATUS_RESPONSE)]
+    #[packet(STATUS_STATUS_RESPONSE)]
     pub struct MaxSizePacket {
         data: Vec<u8>,
     }
