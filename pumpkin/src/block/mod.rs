@@ -1,4 +1,4 @@
-use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock};
+use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use properties::{
     BlockPropertiesManager,
     age::Age,
@@ -14,6 +14,7 @@ use properties::{
     signal_fire::SignalFire,
     slab_type::SlabType,
     stair_shape::StairShape,
+    unstable::Unstable,
     waterlog::Waterlogged,
 };
 use pumpkin_data::entity::EntityType;
@@ -45,6 +46,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CraftingTableBlock);
     manager.register(FurnaceBlock);
     manager.register(ChestBlock);
+    manager.register(TNTBlock);
     manager.register(LeverBlock);
 
     Arc::new(manager)
@@ -101,6 +103,7 @@ pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
     manager.register(North::False);
     manager.register(Open::False());
     manager.register(Powered::False());
+    manager.register(Unstable::False());
     manager.register(SignalFire::False());
     manager.register(SlabType::Bottom);
     manager.register(South::False);

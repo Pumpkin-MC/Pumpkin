@@ -24,6 +24,7 @@ pub(crate) mod powered;
 pub(crate) mod signal_fire;
 pub(crate) mod slab_type;
 pub(crate) mod stair_shape;
+pub(crate) mod unstable;
 pub(crate) mod waterlog;
 
 use crate::world::World;
@@ -220,6 +221,9 @@ impl BlockPropertiesManager {
     }
 
     pub async fn on_interact(&self, block: &Block, block_state: &State, item: &ItemStack) -> u16 {
+        if block_state.id == 0 {
+            return block_state.id;
+        }
         if let Some(properties) = self.properties_registry.get(&block.id) {
             if let Some(states) = properties
                 .property_mappings

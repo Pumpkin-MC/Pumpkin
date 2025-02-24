@@ -1,14 +1,14 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicI8, AtomicU8, AtomicU32},
-};
-
+use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::slot::Slot,
 };
 use pumpkin_world::item::ItemStack;
+use std::sync::{
+    Arc,
+    atomic::{AtomicI8, AtomicU8, AtomicU32},
+};
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
@@ -40,7 +40,7 @@ impl ItemEntity {
 
 #[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self) {
+    async fn tick(&self, _: &Server) {
         if self.pickup_delay.load(std::sync::atomic::Ordering::Relaxed) > 0 {
             self.pickup_delay
                 .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);

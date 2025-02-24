@@ -247,6 +247,12 @@ pub(crate) fn build() -> TokenStream {
             pub components: ItemComponents,
         }
 
+        impl PartialEq for Item {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+
         #[derive(Clone, Copy, Debug)]
         pub struct ItemComponents {
             pub item_name: Option<&'static str>,

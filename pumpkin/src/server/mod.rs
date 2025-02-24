@@ -479,7 +479,7 @@ impl Server {
 
     async fn tick(&self) {
         for world in self.worlds.read().await.iter() {
-            world.tick().await;
+            world.tick(self).await;
         }
     }
 }
