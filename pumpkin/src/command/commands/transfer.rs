@@ -29,10 +29,10 @@ fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
         .max(65535)
 }
 
-struct TransferTargetSelf;
+struct TargetSelfExecutor;
 
 #[async_trait]
-impl CommandExecutor for TransferTargetSelf {
+impl CommandExecutor for TargetSelfExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -62,7 +62,7 @@ impl CommandExecutor for TransferTargetSelf {
             log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
             player
                 .client
-                .send_packet(&CTransfer::new(hostname, &VarInt(port)))
+                .send_packet(&CTransfer::new(hostname, VarInt(port)))
                 .await;
             Ok(())
         } else {
@@ -71,10 +71,10 @@ impl CommandExecutor for TransferTargetSelf {
     }
 }
 
-struct TransferTargetPlayer;
+struct TargetPlayerExecutor;
 
 #[async_trait]
-impl CommandExecutor for TransferTargetPlayer {
+impl CommandExecutor for TargetPlayerExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -105,7 +105,7 @@ impl CommandExecutor for TransferTargetPlayer {
 
         for p in players {
             p.client
-                .send_packet(&CTransfer::new(hostname, &VarInt(port)))
+                .send_packet(&CTransfer::new(hostname, VarInt(port)))
                 .await;
             log::info!(
                 "[{sender}: Transferring {} to {hostname}:{port}]",
@@ -121,13 +121,13 @@ impl CommandExecutor for TransferTargetPlayer {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_HOSTNAME, SimpleArgConsumer)
-            .then(require(|sender| sender.is_player()).execute(TransferTargetSelf))
+            .then(require(|sender| sender.is_player()).execute(TargetSelfExecutor))
             .then(
                 argument_default_name(port_consumer())
-                    .then(require(|sender| sender.is_player()).execute(TransferTargetSelf))
+                    .then(require(|sender| sender.is_player()).execute(TargetSelfExecutor))
                     .then(
                         argument(ARG_PLAYERS, PlayersArgumentConsumer)
-                            .execute(TransferTargetPlayer),
+                            .execute(TargetPlayerExecutor),
                     ),
             ),
     )

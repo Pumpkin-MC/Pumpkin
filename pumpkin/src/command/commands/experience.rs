@@ -38,12 +38,12 @@ enum ExpType {
     Levels,
 }
 
-struct ExperienceExecutor {
+struct Executor {
     mode: Mode,
     exp_type: Option<ExpType>,
 }
 
-impl ExperienceExecutor {
+impl Executor {
     async fn handle_query(
         &self,
         sender: &mut CommandSender<'_>,
@@ -202,7 +202,7 @@ impl ExperienceExecutor {
 }
 
 #[async_trait]
-impl CommandExecutor for ExperienceExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -281,15 +281,15 @@ pub fn init_command_tree() -> CommandTree {
             literal("add").then(
                 argument(ARG_TARGETS, PlayersArgumentConsumer).then(
                     argument(ARG_AMOUNT, xp_amount())
-                        .then(literal("levels").execute(ExperienceExecutor {
+                        .then(literal("levels").execute(Executor {
                             mode: Mode::Add,
                             exp_type: Some(ExpType::Levels),
                         }))
-                        .then(literal("points").execute(ExperienceExecutor {
+                        .then(literal("points").execute(Executor {
                             mode: Mode::Add,
                             exp_type: Some(ExpType::Points),
                         }))
-                        .execute(ExperienceExecutor {
+                        .execute(Executor {
                             mode: Mode::Add,
                             exp_type: Some(ExpType::Points),
                         }),
@@ -300,15 +300,15 @@ pub fn init_command_tree() -> CommandTree {
             literal("set").then(
                 argument(ARG_TARGETS, PlayersArgumentConsumer).then(
                     argument(ARG_AMOUNT, xp_amount())
-                        .then(literal("levels").execute(ExperienceExecutor {
+                        .then(literal("levels").execute(Executor {
                             mode: Mode::Set,
                             exp_type: Some(ExpType::Levels),
                         }))
-                        .then(literal("points").execute(ExperienceExecutor {
+                        .then(literal("points").execute(Executor {
                             mode: Mode::Set,
                             exp_type: Some(ExpType::Points),
                         }))
-                        .execute(ExperienceExecutor {
+                        .execute(Executor {
                             mode: Mode::Set,
                             exp_type: Some(ExpType::Points),
                         }),
@@ -318,11 +318,11 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("query").then(
                 argument(ARG_TARGETS, PlayersArgumentConsumer)
-                    .then(literal("levels").execute(ExperienceExecutor {
+                    .then(literal("levels").execute(Executor {
                         mode: Mode::Query,
                         exp_type: Some(ExpType::Levels),
                     }))
-                    .then(literal("points").execute(ExperienceExecutor {
+                    .then(literal("points").execute(Executor {
                         mode: Mode::Query,
                         exp_type: Some(ExpType::Points),
                     })),

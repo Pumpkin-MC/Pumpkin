@@ -27,10 +27,10 @@ enum Mode {
     Replace,
 }
 
-struct SetblockExecutor(Mode);
+struct Executor(Mode);
 
 #[async_trait]
-impl CommandExecutor for SetblockExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -90,10 +90,10 @@ pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_BLOCK_POS, BlockPosArgumentConsumer).then(
             argument(ARG_BLOCK, BlockArgumentConsumer)
-                .then(literal("replace").execute(SetblockExecutor(Mode::Replace)))
-                .then(literal("destroy").execute(SetblockExecutor(Mode::Destroy)))
-                .then(literal("keep").execute(SetblockExecutor(Mode::Keep)))
-                .execute(SetblockExecutor(Mode::Replace)),
+                .then(literal("replace").execute(Executor(Mode::Replace)))
+                .then(literal("destroy").execute(Executor(Mode::Destroy)))
+                .then(literal("keep").execute(Executor(Mode::Keep)))
+                .execute(Executor(Mode::Replace)),
         ),
     )
 }

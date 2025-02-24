@@ -16,10 +16,10 @@ const DESCRIPTION: &str = "unbans a player";
 
 const ARG_TARGET: &str = "player";
 
-struct PardonExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for PardonExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -60,5 +60,5 @@ impl CommandExecutor for PardonExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, SimpleArgConsumer).execute(PardonExecutor))
+        .then(argument(ARG_TARGET, SimpleArgConsumer).execute(Executor))
 }

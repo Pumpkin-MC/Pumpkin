@@ -349,7 +349,7 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
-    use crate::command::{default_dispatcher, tree::CommandTree};
+    use crate::command::{commands::default_dispatcher, tree::CommandTree};
     use pumpkin_util::permission::PermissionLvl;
     #[test]
     fn test_dynamic_command() {

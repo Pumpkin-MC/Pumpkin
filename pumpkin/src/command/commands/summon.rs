@@ -21,10 +21,10 @@ const ARG_ENTITY: &str = "entity";
 
 const ARG_POS: &str = "pos";
 
-struct SummonExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for SummonExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -54,8 +54,8 @@ impl CommandExecutor for SummonExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_ENTITY, SummonableEntitiesArgumentConsumer)
-            .execute(SummonExecutor)
-            .then(argument(ARG_POS, Position3DArgumentConsumer).execute(SummonExecutor)),
+            .execute(Executor)
+            .then(argument(ARG_POS, Position3DArgumentConsumer).execute(Executor)),
         // TODO: Add NBT
     )
 }

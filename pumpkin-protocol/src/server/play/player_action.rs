@@ -1,11 +1,11 @@
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::VarInt;
 
 #[derive(serde::Deserialize)]
-#[server_packet(PLAY_PLAYER_ACTION)]
+#[packet(PLAY_PLAYER_ACTION)]
 pub struct SPlayerAction {
     pub status: VarInt,
     pub location: BlockPos,

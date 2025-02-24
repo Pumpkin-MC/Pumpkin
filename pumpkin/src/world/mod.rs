@@ -98,8 +98,8 @@ impl PumpkinError for GetBlockError {
 /// **Key Responsibilities:**
 ///
 /// - Manages the `Level` instance for handling chunk-related operations.
-/// - Stores and tracks active `Player` entities within the world.
-/// - Provides a central hub for interacting with the world's entities and environment.
+/// - Active players and entities.
+/// - World-related systems like the scoreboard, world border, weather, and time.
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
@@ -118,7 +118,6 @@ pub struct World {
     pub dimension_type: DimensionType,
     /// The world's weather, including rain and thunder levels
     pub weather: Mutex<Weather>,
-    // TODO: entities
 }
 
 impl World {

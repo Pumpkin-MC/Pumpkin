@@ -16,10 +16,10 @@ const DESCRIPTION: &str = "shows the banlist";
 
 const ARG_LIST_TYPE: &str = "ips|players";
 
-struct BanListExecutor;
+struct ListExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanListExecutor {
+impl CommandExecutor for ListExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -74,10 +74,10 @@ impl CommandExecutor for BanListExecutor {
     }
 }
 
-struct BanListAllExecutor;
+struct ListAllExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanListAllExecutor {
+impl CommandExecutor for ListAllExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -138,6 +138,6 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .execute(BanListAllExecutor)
-        .then(argument(ARG_LIST_TYPE, SimpleArgConsumer).execute(BanListExecutor))
+        .execute(ListAllExecutor)
+        .then(argument(ARG_LIST_TYPE, SimpleArgConsumer).execute(ListExecutor))
 }

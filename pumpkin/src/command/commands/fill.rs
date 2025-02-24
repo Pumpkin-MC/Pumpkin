@@ -33,11 +33,11 @@ enum Mode {
     Replace,
 }
 
-struct SetblockExecutor(Mode);
+struct Executor(Mode);
 
 #[expect(clippy::too_many_lines)]
 #[async_trait]
-impl CommandExecutor for SetblockExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -164,12 +164,12 @@ pub fn init_command_tree() -> CommandTree {
         argument(ARG_FROM, BlockPosArgumentConsumer).then(
             argument(ARG_TO, BlockPosArgumentConsumer).then(
                 argument(ARG_BLOCK, BlockArgumentConsumer)
-                    .then(literal("destroy").execute(SetblockExecutor(Mode::Destroy)))
-                    .then(literal("hollow").execute(SetblockExecutor(Mode::Hollow)))
-                    .then(literal("keep").execute(SetblockExecutor(Mode::Keep)))
-                    .then(literal("outline").execute(SetblockExecutor(Mode::Outline)))
-                    .then(literal("replace").execute(SetblockExecutor(Mode::Replace)))
-                    .execute(SetblockExecutor(Mode::Replace)),
+                    .then(literal("destroy").execute(Executor(Mode::Destroy)))
+                    .then(literal("hollow").execute(Executor(Mode::Hollow)))
+                    .then(literal("keep").execute(Executor(Mode::Keep)))
+                    .then(literal("outline").execute(Executor(Mode::Outline)))
+                    .then(literal("replace").execute(Executor(Mode::Replace)))
+                    .execute(Executor(Mode::Replace)),
             ),
         ),
     )

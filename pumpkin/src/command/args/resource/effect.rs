@@ -1,21 +1,24 @@
 use async_trait::async_trait;
-use pumpkin_data::particle::Particle;
+use pumpkin_data::entity::EffectType;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use crate::command::{
     CommandSender,
-    args::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser},
+    args::{
+        Arg, ArgumentConsumer, ConsumedArgs, DefaultNameArgConsumer, FindArg,
+        GetClientSideArgParser,
+    },
     dispatcher::CommandError,
     tree::RawArgs,
 };
 use crate::server::Server;
 
-pub struct ParticleArgumentConsumer;
+pub struct EffectTypeArgumentConsumer;
 
-impl GetClientSideArgParser for ParticleArgumentConsumer {
+impl GetClientSideArgParser for EffectTypeArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "particle_type",
+            identifier: "mob_effect",
         }
     }
 
@@ -25,7 +28,7 @@ impl GetClientSideArgParser for ParticleArgumentConsumer {
 }
 
 #[async_trait]
-impl ArgumentConsumer for ParticleArgumentConsumer {
+impl ArgumentConsumer for EffectTypeArgumentConsumer {
     async fn consume<'a>(
         &'a self,
         _sender: &CommandSender<'a>,
@@ -35,9 +38,9 @@ impl ArgumentConsumer for ParticleArgumentConsumer {
         let name = args.pop()?;
 
         // Create a static damage type first
-        let particle = Particle::from_name(&name.replace("minecraft:", ""))?;
+        let damage_type = EffectType::from_name(&name.replace("minecraft:", ""))?;
         // Find matching static damage type from values array
-        Some(Arg::Particle(particle))
+        Some(Arg::Effect(damage_type))
     }
 
     async fn suggest<'a>(
@@ -50,18 +53,18 @@ impl ArgumentConsumer for ParticleArgumentConsumer {
     }
 }
 
-impl DefaultNameArgConsumer for ParticleArgumentConsumer {
+impl DefaultNameArgConsumer for EffectTypeArgumentConsumer {
     fn default_name(&self) -> &'static str {
-        "particle_type"
+        "mob_effect"
     }
 }
 
-impl<'a> FindArg<'a> for ParticleArgumentConsumer {
-    type Data = &'a Particle;
+impl<'a> FindArg<'a> for EffectTypeArgumentConsumer {
+    type Data = &'a EffectType;
 
-    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+    fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Particle(data)) => Ok(data),
+            Some(Arg::Effect(data)) => Ok(data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

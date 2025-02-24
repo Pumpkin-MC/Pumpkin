@@ -57,10 +57,10 @@ fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
         .max(1.0)
 }
 
-struct SoundExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for SoundExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -183,18 +183,18 @@ pub fn init_command_tree() -> CommandTree {
                                                             ARG_MIN_VOLUME,
                                                             min_volume_consumer(),
                                                         )
-                                                        .execute(SoundExecutor),
+                                                        .execute(Executor),
                                                     )
-                                                    .execute(SoundExecutor),
+                                                    .execute(Executor),
                                             )
-                                            .execute(SoundExecutor),
+                                            .execute(Executor),
                                     )
-                                    .execute(SoundExecutor),
+                                    .execute(Executor),
                             )
-                            .execute(SoundExecutor),
+                            .execute(Executor),
                     )
-                    .execute(SoundExecutor),
+                    .execute(Executor),
             )
-            .execute(SoundExecutor),
+            .execute(Executor),
     )
 }

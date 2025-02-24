@@ -35,7 +35,7 @@ parking_lot = "0.12.3"
 # Compression
 flate2 = "1.0"
 lz4 = "1.28"
-zstd = "0.13.2"
+zstd = "0.13.3"
 
 
 file-guard = "0.2"

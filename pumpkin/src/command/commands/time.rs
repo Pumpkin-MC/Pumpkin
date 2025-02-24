@@ -44,10 +44,10 @@ enum QueryMode {
     Day,
 }
 
-struct TimeQueryExecutor(QueryMode);
+struct QueryExecutor(QueryMode);
 
 #[async_trait]
-impl CommandExecutor for TimeQueryExecutor {
+impl CommandExecutor for QueryExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -91,10 +91,10 @@ impl CommandExecutor for TimeQueryExecutor {
     }
 }
 
-struct TimeChangeExecutor(Mode);
+struct ChangeExecutor(Mode);
 
 #[async_trait]
-impl CommandExecutor for TimeChangeExecutor {
+impl CommandExecutor for ChangeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -153,33 +153,27 @@ impl CommandExecutor for TimeChangeExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
-            literal("add").then(
-                argument(ARG_TIME, TimeArgumentConsumer).execute(TimeChangeExecutor(Mode::Add)),
-            ),
+            literal("add")
+                .then(argument(ARG_TIME, TimeArgumentConsumer).execute(ChangeExecutor(Mode::Add))),
         )
         .then(
             literal("query")
-                .then(literal("daytime").execute(TimeQueryExecutor(QueryMode::DayTime)))
-                .then(literal("gametime").execute(TimeQueryExecutor(QueryMode::GameTime)))
-                .then(literal("day").execute(TimeQueryExecutor(QueryMode::Day))),
+                .then(literal("daytime").execute(QueryExecutor(QueryMode::DayTime)))
+                .then(literal("gametime").execute(QueryExecutor(QueryMode::GameTime)))
+                .then(literal("day").execute(QueryExecutor(QueryMode::Day))),
         )
         .then(
             literal("set")
-                .then(literal("day").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Day)))))
-                .then(
-                    literal("noon").execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Noon)))),
-                )
-                .then(
-                    literal("night")
-                        .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Night)))),
-                )
+                .then(literal("day").execute(ChangeExecutor(Mode::Set(Some(PresetTime::Day)))))
+                .then(literal("noon").execute(ChangeExecutor(Mode::Set(Some(PresetTime::Noon)))))
+                .then(literal("night").execute(ChangeExecutor(Mode::Set(Some(PresetTime::Night)))))
                 .then(
                     literal("midnight")
-                        .execute(TimeChangeExecutor(Mode::Set(Some(PresetTime::Midnight)))),
+                        .execute(ChangeExecutor(Mode::Set(Some(PresetTime::Midnight)))),
                 )
                 .then(
                     argument(ARG_TIME, TimeArgumentConsumer)
-                        .execute(TimeChangeExecutor(Mode::Set(None))),
+                        .execute(ChangeExecutor(Mode::Set(None))),
                 ),
         )
 }

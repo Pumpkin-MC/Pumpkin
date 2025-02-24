@@ -928,10 +928,10 @@ impl Player {
                     self.update_sequence(player_action.sequence.0);
                 }
                 Status::DropItem => {
-                    self.drop_item(server, false).await;
+                    self.drop_held_item(server, false).await;
                 }
                 Status::DropItemStack => {
-                    self.drop_item(server, true).await;
+                    self.drop_held_item(server, true).await;
                 }
                 Status::ShootArrowOrFinishEating | Status::SwapItem => {
                     log::debug!("todo");
@@ -1149,20 +1149,23 @@ impl Player {
 
     pub async fn handle_set_creative_slot(
         &self,
+        server: &Server,
         packet: SSetCreativeSlot,
     ) -> Result<(), InventoryError> {
         if self.gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
         let valid_slot = packet.slot >= 0 && packet.slot <= 45;
+        let item_stack = packet.clicked_item.to_item();
         if valid_slot {
-            self.inventory().lock().await.set_slot(
-                packet.slot as usize,
-                packet.clicked_item.to_item(),
-                true,
-            )?;
+            self.inventory()
+                .lock()
+                .await
+                .set_slot(packet.slot as usize, item_stack, true)?;
+        } else {
+            // Item drop
+            self.drop_item(server, item_stack.unwrap()).await;
         };
-        // TODO: The Item was dropped per drag and drop,
         Ok(())
     }
 

@@ -32,6 +32,7 @@ use tokio::sync::RwLock;
 use crate::world::World;
 
 pub mod ai;
+pub mod effect;
 pub mod hunger;
 pub mod item;
 pub mod living;

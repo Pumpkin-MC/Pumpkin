@@ -15,10 +15,10 @@ const NAMES: [&str; 1] = ["deop"];
 const DESCRIPTION: &str = "Revokes operator status from a player.";
 const ARG_TARGETS: &str = "targets";
 
-struct DeopExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for DeopExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -61,5 +61,5 @@ impl CommandExecutor for DeopExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(DeopExecutor))
+        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(Executor))
 }

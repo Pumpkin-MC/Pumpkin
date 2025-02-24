@@ -93,7 +93,7 @@ impl Client {
         // TODO: If client is an operator or otherwise suitable elevated permissions, allow client to bypass this requirement.
         let max_players = BASIC_CONFIG.max_players;
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
-            self.kick(&TextComponent::translate(
+            self.kick(TextComponent::translate(
                 "multiplayer.disconnect.server_full",
                 [],
             ))
@@ -102,7 +102,7 @@ impl Client {
         }
 
         if !is_valid_player_name(&login_start.name) {
-            self.kick(&TextComponent::text("Invalid characters in username"))
+            self.kick(TextComponent::text("Invalid characters in username"))
                 .await;
             return;
         }
@@ -126,7 +126,7 @@ impl Client {
                         self.finish_login(&profile).await;
                         *gameprofile = Some(profile);
                     }
-                    Err(error) => self.kick(&TextComponent::text(error.to_string())).await,
+                    Err(error) => self.kick(TextComponent::text(error.to_string())).await,
                 }
             }
         } else {
@@ -169,14 +169,14 @@ impl Client {
         let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
 
         if let Err(error) = self.set_encryption(Some(&shared_secret)).await {
-            self.kick(&TextComponent::text(error.to_string())).await;
+            self.kick(TextComponent::text(error.to_string())).await;
             return;
         }
 
         let mut gameprofile = self.gameprofile.lock().await;
 
         let Some(profile) = gameprofile.as_mut() else {
-            self.kick(&TextComponent::text("No Game profile")).await;
+            self.kick(TextComponent::text("No Game profile")).await;
             return;
         };
 
@@ -188,7 +188,7 @@ impl Client {
             {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
-                    self.kick(&match error {
+                    self.kick(match error {
                         AuthError::FailedResponse => {
                             TextComponent::translate("multiplayer.disconnect.authservers_down", [])
                         }
@@ -213,7 +213,7 @@ impl Client {
                 &online_player.client.address.lock().await,
                 &online_player.gameprofile.name
             );
-            self.kick(&TextComponent::translate(
+            self.kick(TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
                 [],
             ))
@@ -231,7 +231,7 @@ impl Client {
                 &online_player.client.address.lock().await,
                 &online_player.gameprofile.name
             );
-            self.kick(&TextComponent::translate(
+            self.kick(TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
                 [],
             ))
@@ -330,7 +330,7 @@ impl Client {
                     *self.gameprofile.lock().await = Some(profile);
                     *address = new_address;
                 }
-                Err(error) => self.kick(&TextComponent::text(error.to_string())).await,
+                Err(error) => self.kick(TextComponent::text(error.to_string())).await,
             }
         }
     }
@@ -339,23 +339,6 @@ impl Client {
         log::debug!("Handling login acknowledged");
         self.connection_state.store(ConnectionState::Config);
         self.send_packet(&server.get_branding()).await;
-
-        let resource_config = &ADVANCED_CONFIG.resource_pack;
-        if resource_config.enabled {
-            let resource_pack = CConfigAddResourcePack::new(
-                Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes()),
-                &resource_config.url,
-                &resource_config.sha1,
-                resource_config.force,
-                if resource_config.message.is_empty() {
-                    None
-                } else {
-                    Some(TextComponent::text(&resource_config.message))
-                },
-            );
-
-            self.send_packet(&resource_pack).await;
-        }
 
         if ADVANCED_CONFIG.server_links.enabled {
             self.send_packet(&CConfigServerLinks::new(
@@ -373,6 +356,33 @@ impl Client {
         ]))
         .await;
 
+        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        if resource_config.enabled {
+            let uuid = Uuid::new_v3(
+                &uuid::Uuid::NAMESPACE_DNS,
+                resource_config.resource_pack_url.as_bytes(),
+            );
+            let resource_pack = CConfigAddResourcePack::new(
+                &uuid,
+                &resource_config.resource_pack_url,
+                &resource_config.resource_pack_sha1,
+                resource_config.force,
+                if resource_config.prompt_message.is_empty() {
+                    None
+                } else {
+                    Some(TextComponent::text(&resource_config.prompt_message))
+                },
+            );
+
+            self.send_packet(&resource_pack).await;
+        } else {
+            // This will be invoked by our resource pack handler in the case of the above branch
+            self.send_known_packs().await;
+        }
+        log::debug!("login acknowledged");
+    }
+
+    pub async fn send_known_packs(&self) {
         // known data packs
         self.send_packet(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
@@ -380,6 +390,5 @@ impl Client {
             version: "1.21",
         }]))
         .await;
-        log::debug!("login acknowledged");
     }
 }

@@ -1,13 +1,13 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_BLOCK_EVENT)]
+#[packet(PLAY_BLOCK_EVENT)]
 pub struct CBlockAction<'a> {
     location: &'a BlockPos,
     action_id: u8,

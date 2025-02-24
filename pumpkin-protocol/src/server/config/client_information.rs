@@ -1,10 +1,11 @@
 use pumpkin_data::packet::serverbound::CONFIG_CLIENT_INFORMATION;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
+use serde::Serialize;
 
 use crate::VarInt;
 
-#[derive(serde::Deserialize)]
-#[server_packet(CONFIG_CLIENT_INFORMATION)]
+#[derive(serde::Deserialize, Serialize)]
+#[packet(CONFIG_CLIENT_INFORMATION)]
 pub struct SClientInformationConfig {
     pub locale: String, // 16
     pub view_distance: i8,

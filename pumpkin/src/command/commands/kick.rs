@@ -18,10 +18,10 @@ const ARG_TARGETS: &str = "targets";
 
 const ARG_REASON: &str = "reason";
 
-struct KickExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for KickExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -52,7 +52,7 @@ impl CommandExecutor for KickExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGETS, PlayersArgumentConsumer)
-            .execute(KickExecutor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(KickExecutor)),
+            .execute(Executor)
+            .then(argument(ARG_REASON, MsgArgConsumer).execute(Executor)),
     )
 }

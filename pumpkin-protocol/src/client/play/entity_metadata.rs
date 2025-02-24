@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_DATA;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_SET_ENTITY_DATA)]
+#[packet(PLAY_SET_ENTITY_DATA)]
 pub struct CSetEntityMetadata<T> {
     entity_id: VarInt,
     metadata: Metadata<T>,

@@ -3,7 +3,7 @@
 
 use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use log::{Level, LevelFilter, Log, logger};
+use log::{Level, LevelFilter, Log};
 use net::PacketHandlerState;
 use plugin::PluginManager;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
@@ -11,7 +11,6 @@ use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::{
     net::SocketAddr,
@@ -42,10 +41,63 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
 
-// Yucky, is there a way to do this better? revisit our static LOGGER_IMPL?
-static _INPUT_HOLDER: OnceLock<Mutex<Option<Readline>>> = OnceLock::new();
+/// A wrapper for our logger to hold the terminal input while no input is expected in order to
+/// properly flush logs to output while they happen instead of batched
+pub struct ReadlineLogWrapper {
+    internal: Box<dyn Log>,
+    readline: std::sync::Mutex<Option<Readline>>,
+}
 
-pub static LOGGER_IMPL: LazyLock<Option<(Box<dyn Log>, LevelFilter)>> = LazyLock::new(|| {
+impl ReadlineLogWrapper {
+    fn new(log: impl Log + 'static, rl: Option<Readline>) -> Self {
+        Self {
+            internal: Box::new(log),
+            readline: std::sync::Mutex::new(rl),
+        }
+    }
+
+    fn take_readline(&self) -> Option<Readline> {
+        if let Ok(mut result) = self.readline.lock() {
+            result.take()
+        } else {
+            None
+        }
+    }
+
+    fn return_readline(&self, rl: Readline) {
+        if let Ok(mut result) = self.readline.lock() {
+            println!("Returned rl");
+            let _ = result.insert(rl);
+        }
+    }
+}
+
+// writing to stdout is expensive anyway, so I dont think having a mutex here is a big deal.
+impl Log for ReadlineLogWrapper {
+    fn log(&self, record: &log::Record) {
+        self.internal.log(record);
+        if let Ok(mut lock) = self.readline.lock() {
+            if let Some(rl) = lock.as_mut() {
+                let _ = rl.flush();
+            }
+        }
+    }
+
+    fn flush(&self) {
+        self.internal.flush();
+        if let Ok(mut lock) = self.readline.lock() {
+            if let Some(rl) = lock.as_mut() {
+                let _ = rl.flush();
+            }
+        }
+    }
+
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        self.internal.enabled(metadata)
+    }
+}
+
+pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
     if ADVANCED_CONFIG.logging.enabled {
         let mut config = simplelog::ConfigBuilder::new();
 
@@ -62,7 +114,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(Box<dyn Log>, LevelFilter)>> = LazyLock
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
-        } else if ADVANCED_CONFIG.commands.use_console {
+        } else {
             // We are technically logging to a file like object
             config.set_write_log_enable_colors(true);
         }
@@ -81,13 +133,23 @@ pub static LOGGER_IMPL: LazyLock<Option<(Box<dyn Log>, LevelFilter)>> = LazyLock
             .unwrap_or(LevelFilter::Info);
 
         if ADVANCED_CONFIG.commands.use_console {
-            let (rl, stdout) = Readline::new("$ ".to_owned()).unwrap();
-            let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-            let _ = _INPUT_HOLDER.set(Mutex::new(Some(rl)));
-            Some((Box::new(logger), level))
+            match Readline::new("$ ".to_owned()) {
+                Ok((rl, stdout)) => {
+                    let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
+                    Some((ReadlineLogWrapper::new(logger, Some(rl)), level))
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to initialize console input ({}), falling back to simple logger",
+                        e
+                    );
+                    let logger = simplelog::SimpleLogger::new(level, config.build());
+                    Some((ReadlineLogWrapper::new(logger, None), level))
+                }
+            }
         } else {
             let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((Box::new(logger), level))
+            Some((ReadlineLogWrapper::new(logger, None), level))
         }
     } else {
         None
@@ -116,7 +178,6 @@ pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub listener: TcpListener,
     pub server_addr: SocketAddr,
-    readline_handle: Option<JoinHandle<Readline>>,
     tasks_to_await: Vec<JoinHandle<()>>,
 }
 
@@ -137,12 +198,12 @@ impl PumpkinServer {
 
         let mut ticker = Ticker::new(BASIC_CONFIG.tps);
 
-        let mut readline = None;
-        if let Some(rt) = _INPUT_HOLDER.get() {
-            let mut rt = rt.lock().await;
-            let rt = rt.take().unwrap();
-            let handle = setup_console(rt, server.clone());
-            readline = Some(handle);
+        let mut tasks_to_await = Vec::new();
+        if let Some((wrapper, _)) = &*LOGGER_IMPL {
+            if let Some(rl) = wrapper.take_readline() {
+                let handle = setup_console(rl, server.clone());
+                tasks_to_await.push(handle);
+            }
         }
 
         if rcon.enabled {
@@ -162,7 +223,6 @@ impl PumpkinServer {
             tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
         }
 
-        let mut tasks_to_await = Vec::new();
         // Ticker
         {
             let server = server.clone();
@@ -176,7 +236,6 @@ impl PumpkinServer {
             server: server.clone(),
             listener,
             server_addr: addr,
-            readline_handle: readline,
             tasks_to_await,
         }
     }
@@ -300,11 +359,6 @@ impl PumpkinServer {
             });
             tasks.lock().await.insert(id, Some(handle));
         }
-        // Keep it in scope for logging
-        let rl = match self.readline_handle {
-            Some(rl) => Some(rl.await.unwrap()),
-            None => None,
-        };
 
         log::info!("Stopped accepting incoming connections");
 
@@ -339,14 +393,17 @@ impl PumpkinServer {
         self.server.save().await;
 
         log::info!("Completed save!");
-        logger().flush();
-        if let Some(mut rl) = rl {
-            let _ = rl.flush();
+
+        // Explicitly drop the line reader to return the terminal to the original state
+        if let Some((wrapper, _)) = &*LOGGER_IMPL {
+            if let Some(rl) = wrapper.take_readline() {
+                let _ = rl;
+            }
         }
     }
 }
 
-fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<Readline> {
+fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
     // This needs to be async or it will hog a thread
     tokio::spawn(async move {
         let mut rl = rl;
@@ -381,9 +438,11 @@ fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<Readline> {
                 }
             }
         }
+        if let Some((wrapper, _)) = &*LOGGER_IMPL {
+            wrapper.return_readline(rl);
+        }
+
         log::debug!("Stopped console commands task");
-        let _ = rl.flush();
-        rl
     })
 }
 

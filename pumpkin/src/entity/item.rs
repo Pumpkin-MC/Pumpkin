@@ -1,6 +1,6 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicI8, AtomicU8},
+    atomic::{AtomicI8, AtomicU8, AtomicU32},
 };
 
 use async_trait::async_trait;
@@ -16,6 +16,7 @@ pub struct ItemEntity {
     entity: Entity,
     item: ItemStack,
     count: AtomicU8,
+    item_age: AtomicU32,
     pickup_delay: AtomicI8,
 }
 
@@ -25,6 +26,7 @@ impl ItemEntity {
             entity,
             item: stack,
             count: AtomicU8::new(stack.item_count),
+            item_age: AtomicU32::new(0),
             pickup_delay: AtomicI8::new(10), // Vanilla
         }
     }
@@ -42,6 +44,13 @@ impl EntityBase for ItemEntity {
         if self.pickup_delay.load(std::sync::atomic::Ordering::Relaxed) > 0 {
             self.pickup_delay
                 .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        let age = self
+            .item_age
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if age >= 6000 {
+            self.entity.remove().await;
         }
     }
     async fn on_player_collision(&self, player: Arc<Player>) {

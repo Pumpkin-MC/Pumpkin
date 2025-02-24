@@ -31,15 +31,13 @@ use tokio::sync::{Mutex, RwLock};
 use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
 use crate::block::registry::BlockRegistry;
+use crate::command::commands::default_dispatcher;
 use crate::entity::{Entity, EntityId};
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
-    command::{default_dispatcher, dispatcher::CommandDispatcher},
-    entity::player::Player,
-    net::Client,
-    world::World,
+    command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
 };
 
 mod connection_cache;

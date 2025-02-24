@@ -17,13 +17,13 @@ const NAMES: [&str; 2] = ["pumpkin", "version"];
 
 const DESCRIPTION: &str = "Display information about Pumpkin.";
 
-struct PumpkinExecutor;
+struct Executor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
 #[async_trait]
-impl CommandExecutor for PumpkinExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -98,5 +98,5 @@ impl CommandExecutor for PumpkinExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(PumpkinExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

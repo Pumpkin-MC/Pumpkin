@@ -3,6 +3,7 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EffectType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -27,17 +28,15 @@ pub mod bossbar_style;
 pub mod bounded_num;
 pub mod command;
 mod coordinate;
-pub mod damage_type;
 pub mod entities;
 pub mod entity;
 pub mod gamemode;
-pub mod item;
 pub mod message;
-pub mod particle;
 pub mod players;
 pub mod position_2d;
 pub mod position_3d;
 pub mod position_block;
+pub mod resource;
 pub mod resource_location;
 pub mod rotation;
 pub mod simple;
@@ -105,6 +104,7 @@ pub enum Arg<'a> {
     Simple(&'a str),
     SoundCategory(SoundCategory),
     DamageType(DamageType),
+    Effect(EffectType),
 }
 
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]

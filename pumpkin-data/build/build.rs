@@ -21,6 +21,7 @@ mod screen;
 mod sound;
 mod sound_category;
 mod spawn_egg;
+mod status_effect;
 mod world_event;
 
 pub fn main() {
@@ -42,6 +43,7 @@ pub fn main() {
     write_generated_file(spawn_egg::build(), "spawn_egg.rs");
     write_generated_file(item::build(), "item.rs");
     write_generated_file(fluid::build(), "fluid.rs");
+    write_generated_file(status_effect::build(), "status_effect.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

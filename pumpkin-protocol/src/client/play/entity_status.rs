@@ -1,9 +1,9 @@
 use pumpkin_data::packet::clientbound::PLAY_ENTITY_EVENT;
-use pumpkin_macros::client_packet;
-use serde::Serialize;
+use pumpkin_macros::packet;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
-#[client_packet(PLAY_ENTITY_EVENT)]
+#[derive(Serialize, Deserialize)]
+#[packet(PLAY_ENTITY_EVENT)]
 pub struct CEntityStatus {
     entity_id: i32,
     entity_status: i8,

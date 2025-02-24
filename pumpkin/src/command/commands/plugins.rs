@@ -12,10 +12,10 @@ const NAMES: [&str; 1] = ["plugins"];
 
 const DESCRIPTION: &str = "List all available plugins.";
 
-struct ListExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for ListExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -63,5 +63,5 @@ impl CommandExecutor for ListExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(ListExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

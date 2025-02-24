@@ -1,13 +1,13 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_CHANGED_ACK;
-use pumpkin_macros::client_packet;
-use serde::Serialize;
+use pumpkin_macros::packet;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
-#[client_packet(PLAY_BLOCK_CHANGED_ACK)]
+#[derive(Serialize, Deserialize)]
+#[packet(PLAY_BLOCK_CHANGED_ACK)]
 pub struct CAcknowledgeBlockChange {
-    sequence_id: VarInt,
+    pub sequence_id: VarInt,
 }
 
 impl CAcknowledgeBlockChange {

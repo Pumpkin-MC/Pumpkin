@@ -1,12 +1,12 @@
 use pumpkin_data::packet::clientbound::PLAY_ADD_ENTITY;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_ADD_ENTITY)]
+#[packet(PLAY_ADD_ENTITY)]
 pub struct CSpawnEntity {
     entity_id: VarInt,
     #[serde(with = "uuid::serde::compact")]

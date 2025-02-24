@@ -16,10 +16,10 @@ const NAMES: [&str; 1] = ["op"];
 const DESCRIPTION: &str = "Grants operator status to a player.";
 const ARG_TARGETS: &str = "targets";
 
-struct OpExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for OpExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -81,5 +81,5 @@ impl CommandExecutor for OpExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(OpExecutor))
+        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(Executor))
 }

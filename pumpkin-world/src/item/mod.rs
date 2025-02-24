@@ -1,4 +1,5 @@
 use pumpkin_data::item::Item;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 
 mod categories;
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -28,26 +29,71 @@ impl ItemStack {
         Self { item_count, item }
     }
 
+    /// Determines the mining speed for a block based on tool rules.
+    /// Direct matches return immediately, tagged blocks are checked separately.
+    /// If no match is found, returns the tool's default mining speed or `1.0`.
     pub fn get_speed(&self, block: &str) -> f32 {
-        if let Some(tool) = self.item.components.tool {
-            for rule in tool.rules {
-                if rule.speed.is_none() || !rule.blocks.contains(&block) {
-                    continue;
+        // No tool? Use default speed
+        let Some(tool) = &self.item.components.tool else {
+            return 1.0;
+        };
+
+        for rule in tool.rules {
+            // Skip if speed is not set
+            let Some(speed) = rule.speed else {
+                continue;
+            };
+
+            for entry in rule.blocks {
+                if entry.eq(&block) {
+                    return speed;
                 }
-                return rule.speed.unwrap();
+
+                if entry.starts_with('#') {
+                    // Check if block is in the tag group
+                    if let Some(blocks) =
+                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
+                    {
+                        if blocks.iter().flatten().any(|s| s == block) {
+                            return speed;
+                        }
+                    }
+                }
             }
-            return tool.default_mining_speed.unwrap_or(1.0);
         }
-        1.0
+        // Return default mining speed if no match is found
+        tool.default_mining_speed.unwrap_or(1.0)
     }
 
+    /// Determines if a tool is valid for block drops based on tool rules.
+    /// Direct matches return immediately, while tagged blocks are checked separately.
     pub fn is_correct_for_drops(&self, block: &str) -> bool {
-        if let Some(tool) = self.item.components.tool {
-            for rule in tool.rules {
-                if rule.correct_for_drops.is_none() || !rule.blocks.contains(&block) {
-                    continue;
+        // Return false if no tool component exists
+        let Some(tool) = &self.item.components.tool else {
+            return false;
+        };
+
+        for rule in tool.rules {
+            // Skip rules without a drop condition
+            let Some(correct_for_drops) = rule.correct_for_drops else {
+                continue;
+            };
+
+            for entry in rule.blocks {
+                if entry.eq(&block) {
+                    return correct_for_drops;
                 }
-                return rule.correct_for_drops.unwrap();
+
+                if entry.starts_with('#') {
+                    // Check if block exists within the tag group
+                    if let Some(blocks) =
+                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
+                    {
+                        if blocks.iter().flatten().any(|s| s == block) {
+                            return correct_for_drops;
+                        }
+                    }
+                }
             }
         }
         false

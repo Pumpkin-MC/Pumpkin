@@ -15,10 +15,10 @@ const NAMES: [&str; 1] = ["list"];
 
 const DESCRIPTION: &str = "Print the list of online players.";
 
-struct ListExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for ListExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -54,5 +54,5 @@ fn get_player_names(players: Vec<Arc<Player>>) -> String {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(ListExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

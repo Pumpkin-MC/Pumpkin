@@ -11,10 +11,10 @@ const NAMES: [&str; 1] = ["seed"];
 
 const DESCRIPTION: &str = "Displays the world seed.";
 
-struct PumpkinExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for PumpkinExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -54,5 +54,5 @@ impl CommandExecutor for PumpkinExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(PumpkinExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

@@ -19,10 +19,10 @@ const DESCRIPTION: &str = "Sends a private message to one or more players.";
 
 const ARG_MESSAGE: &str = "message";
 
-struct MsgExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for MsgExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -81,6 +81,6 @@ impl CommandExecutor for MsgExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument_default_name(PlayersArgumentConsumer)
-            .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(MsgExecutor)),
+            .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor)),
     )
 }
