@@ -188,7 +188,7 @@ impl ChunkSerializer for LinearFile {
             data_buffer.extend_from_slice(chunk);
         }
 
-        // TODO: find ways to improve performance (maybe zstd lib has memory leaks)
+        // TODO: maybe zstd lib has memory leaks
         let compressed_buffer = zstd::bulk::compress(
             data_buffer.as_slice(),
             ADVANCED_CONFIG.chunk.compression.level as i32,

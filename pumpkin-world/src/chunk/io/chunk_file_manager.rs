@@ -107,8 +107,6 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                         .await
                         .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
-                    //We need to make this operation blocking to avoid context switching
-                    // and improve compute heavy operations performance (like decompression)
                     S::from_bytes(&file_bytes)?
                 }
                 Err(ChunkReadingError::ChunkNotExist) => S::default(),
@@ -155,8 +153,6 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        //We need to make this operation blocking to avoid context switching
-        // and improve compute heavy operations performance (like compression)
         file.write_all(&serializer.to_bytes())
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
