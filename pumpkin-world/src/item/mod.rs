@@ -2,6 +2,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 
 mod categories;
+
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 /// Item Rarity
@@ -54,7 +55,7 @@ impl ItemStack {
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
                     {
-                        if blocks.iter().flatten().any(|s| s == block) {
+                        if blocks.iter().any(|s| s == block) {
                             return speed;
                         }
                     }
@@ -89,7 +90,7 @@ impl ItemStack {
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
                     {
-                        if blocks.iter().flatten().any(|s| s == block) {
+                        if blocks.iter().any(|s| s == block) {
                             return correct_for_drops;
                         }
                     }

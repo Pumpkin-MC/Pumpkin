@@ -17,6 +17,23 @@ use std::slice::IterMut;
 
 */
 
+pub const SLOT_CRAFT_OUTPUT: usize = 0;
+pub const SLOT_CRAFT_INPUT_START: usize = 1;
+pub const SLOT_CRAFT_INPUT_END: usize = 4;
+pub const SLOT_HELM: usize = 5;
+pub const SLOT_CHEST: usize = 6;
+pub const SLOT_LEG: usize = 7;
+pub const SLOT_BOOT: usize = 8;
+pub const SLOT_INV_START: usize = 9;
+pub const SLOT_INV_END: usize = 35;
+pub const SLOT_HOTBAR_START: usize = 36;
+pub const SLOT_HOTBAR_END: usize = 44;
+pub const SLOT_OFFHAND: usize = 45;
+
+pub const SLOT_HOTBAR_INDEX: usize = SLOT_HOTBAR_END - SLOT_HOTBAR_START;
+pub const SLOT_MAX: usize = SLOT_OFFHAND;
+pub const SLOT_INDEX_OUTSIDE: i16 = -999;
+
 pub struct PlayerInventory {
     // Main Inventory + Hotbar
     crafting: [Option<ItemStack>; 4],
@@ -25,7 +42,7 @@ pub struct PlayerInventory {
     armor: [Option<ItemStack>; 4],
     offhand: Option<ItemStack>,
     // current selected slot in hotbar
-    pub selected: u32,
+    pub selected: usize,
     pub state_id: u32,
     // Notchian server wraps this value at 100, we can just keep it as a u8 that automatically wraps
     pub total_opened_containers: i32,
@@ -68,7 +85,7 @@ impl PlayerInventory {
         item_allowed_override: bool,
     ) -> Result<(), InventoryError> {
         if item_allowed_override {
-            if !(0..=45).contains(&slot) {
+            if !(0..=SLOT_MAX).contains(&slot) {
                 Err(InventoryError::InvalidSlot)?
             }
             *self.all_slots()[slot] = item;
@@ -87,44 +104,45 @@ impl PlayerInventory {
         &self,
         slot: usize,
     ) -> Result<Box<dyn Fn(&ItemStack) -> bool>, InventoryError> {
-        if !(0..=45).contains(&slot) {
+        if !(0..=SLOT_MAX).contains(&slot) {
             return Err(InventoryError::InvalidSlot);
         }
 
         Ok(Box::new(match slot {
-            0..=4 | 9..=45 => |_| true,
-            5 => |item: &ItemStack| item.is_helmet(),
-            6 => |item: &ItemStack| item.is_chestplate(),
-            7 => |item: &ItemStack| item.is_leggings(),
-            8 => |item: &ItemStack| item.is_boots(),
+            SLOT_CRAFT_OUTPUT..=SLOT_CRAFT_INPUT_END | SLOT_INV_START..=SLOT_OFFHAND => |_| true,
+            SLOT_HELM => |item: &ItemStack| item.is_helmet(),
+            SLOT_CHEST => |item: &ItemStack| item.is_chestplate(),
+            SLOT_LEG => |item: &ItemStack| item.is_leggings(),
+            SLOT_BOOT => |item: &ItemStack| item.is_boots(),
             _ => unreachable!(),
         }))
     }
     pub fn get_slot(&mut self, slot: usize) -> Result<&mut Option<ItemStack>, InventoryError> {
         match slot {
-            0 => {
+            SLOT_CRAFT_OUTPUT => {
                 // TODO: Add crafting check here
                 Ok(&mut self.crafting_output)
             }
-            1..=4 => Ok(&mut self.crafting[slot - 1]),
-            5..=8 => Ok(&mut self.armor[slot - 5]),
-            9..=44 => Ok(&mut self.items[slot - 9]),
-            45 => Ok(&mut self.offhand),
+            SLOT_CRAFT_INPUT_START..=SLOT_CRAFT_INPUT_END => {
+                Ok(&mut self.crafting[slot - SLOT_CRAFT_INPUT_START])
+            }
+            SLOT_HELM..=SLOT_BOOT => Ok(&mut self.armor[slot - SLOT_HELM]),
+            SLOT_INV_START..=SLOT_HOTBAR_END => Ok(&mut self.items[slot - SLOT_INV_START]),
+            SLOT_OFFHAND => Ok(&mut self.offhand),
             _ => Err(InventoryError::InvalidSlot),
         }
     }
-    pub fn set_selected(&mut self, slot: u32) {
-        assert!((0..9).contains(&slot));
+    pub fn set_selected(&mut self, slot: usize) {
+        debug_assert!((0..=SLOT_HOTBAR_INDEX).contains(&slot));
         self.selected = slot;
     }
 
-    pub fn get_selected(&self) -> u32 {
-        self.selected + 36
+    pub fn get_selected(&self) -> usize {
+        self.selected + SLOT_HOTBAR_START
     }
 
-    pub fn held_item(&self) -> Option<&ItemStack> {
-        debug_assert!((0..9).contains(&self.selected));
-        self.items[self.selected as usize + 36 - 9].as_ref()
+    pub fn increment_state_id(&mut self) {
+        self.state_id = self.state_id % 100 + 1;
     }
 
     pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
@@ -132,9 +150,16 @@ impl PlayerInventory {
             .map_or_else(|| 1.0, |e| e.get_speed(block_name))
     }
 
+    //NOTE: We actually want &mut Option instead of Option<&mut>
     pub fn held_item_mut(&mut self) -> &mut Option<ItemStack> {
-        debug_assert!((0..9).contains(&self.selected));
-        &mut self.items[self.selected as usize + 36 - 9]
+        debug_assert!((0..=SLOT_HOTBAR_INDEX).contains(&self.selected));
+        &mut self.items[self.get_selected() - SLOT_INV_START]
+    }
+
+    #[inline]
+    pub fn held_item(&self) -> Option<&ItemStack> {
+        debug_assert!((0..=SLOT_HOTBAR_INDEX).contains(&self.selected));
+        self.items[self.get_selected() - SLOT_INV_START].as_ref()
     }
 
     pub fn decrease_current_stack(&mut self, amount: u8) -> bool {
@@ -161,14 +186,14 @@ impl PlayerInventory {
         None
     }
 
-    pub fn get_empty_hotbar_slot(&self) -> u32 {
-        if self.items[self.selected as usize + 36 - 9].is_none() {
+    pub fn get_empty_hotbar_slot(&self) -> usize {
+        if self.held_item().is_none() {
             return self.selected;
         }
 
-        for slot in 0..9 {
-            if self.items[slot + 36 - 9].is_none() {
-                return slot as u32;
+        for slot in SLOT_HOTBAR_START..=SLOT_HOTBAR_END {
+            if self.items[slot - SLOT_INV_START].is_none() {
+                return slot - SLOT_HOTBAR_START;
             }
         }
 
@@ -182,35 +207,48 @@ impl PlayerInventory {
             .max_stack_size;
 
         // Check selected slot
-        if let Some(item) = &self.items[self.selected as usize + 36 - 9] {
+        if let Some(item) = &self.items[self.get_selected() - SLOT_INV_START] {
             if item.item.id == item_id && item.item_count < max_stack {
                 // + 9 - 9 is 0
-                return Some(self.selected as usize + 36);
+                return Some(self.get_selected());
             }
         }
 
         // Check hotbar slots (27-35) first
-        if let Some(index) = self.items[27..36].iter().position(|slot| {
-            slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
-        }) {
-            return Some(index + 27 + 9);
+        if let Some(index) = self.items
+            [SLOT_HOTBAR_START - SLOT_INV_START..=SLOT_HOTBAR_END - SLOT_INV_START]
+            .iter()
+            .position(|slot| {
+                slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
+            })
+        {
+            return Some(index + SLOT_INV_START);
         }
 
         // Then check main inventory slots (0-26)
-        if let Some(index) = self.items[0..27].iter().position(|slot| {
-            slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
-        }) {
-            return Some(index + 9);
+        if let Some(index) = self.items[0..=SLOT_INV_END - SLOT_INV_START]
+            .iter()
+            .position(|slot| {
+                slot.is_some_and(|item| item.item.id == item_id && item.item_count < max_stack)
+            })
+        {
+            return Some(index + SLOT_INV_START);
         }
 
         None
     }
 
     pub fn get_slot_with_item(&self, item_id: u16) -> Option<usize> {
-        for slot in 9..=44 {
-            match &self.items[slot - 9] {
+        for slot in SLOT_INV_START..=SLOT_HOTBAR_END {
+            match &self.items[slot - SLOT_INV_START] {
                 Some(item) if item.item.id == item_id => return Some(slot),
                 _ => continue,
+            }
+        }
+
+        if let Some(stack) = self.offhand {
+            if stack.item.id == item_id {
+                return Some(SLOT_OFFHAND);
             }
         }
 
@@ -219,13 +257,20 @@ impl PlayerInventory {
 
     pub fn get_empty_slot(&self) -> Option<usize> {
         // Check hotbar slots (27-35) first
-        if let Some(index) = self.items[27..36].iter().position(|slot| slot.is_none()) {
-            return Some(index + 27 + 9);
+        if let Some(index) = self.items
+            [SLOT_HOTBAR_START - SLOT_INV_START..=SLOT_HOTBAR_END - SLOT_INV_START]
+            .iter()
+            .position(|slot| slot.is_none())
+        {
+            return Some(index + SLOT_HOTBAR_START);
         }
 
         // Then check main inventory slots (0-26)
-        if let Some(index) = self.items[0..27].iter().position(|slot| slot.is_none()) {
-            return Some(index + 9);
+        if let Some(index) = self.items[0..=SLOT_INV_END - SLOT_INV_START]
+            .iter()
+            .position(|slot| slot.is_none())
+        {
+            return Some(index + SLOT_INV_START);
         }
 
         None
@@ -235,7 +280,7 @@ impl PlayerInventory {
         self.items
             .iter()
             .position(|slot| slot.is_none())
-            .map(|index| index + 9)
+            .map(|index| index + SLOT_INV_START)
     }
 
     pub fn slots(&self) -> Vec<Option<&ItemStack>> {
@@ -263,7 +308,7 @@ impl PlayerInventory {
     pub fn slots_with_hotbar_first(
         &mut self,
     ) -> Chain<IterMut<Option<ItemStack>>, IterMut<Option<ItemStack>>> {
-        let (items, hotbar) = self.items.split_at_mut(27);
+        let (items, hotbar) = self.items.split_at_mut(SLOT_HOTBAR_START - SLOT_INV_START);
         hotbar.iter_mut().chain(items)
     }
 }
@@ -332,10 +377,10 @@ impl Container for PlayerInventory {
     }
 
     fn crafting_output_slot(&self) -> Option<usize> {
-        Some(0)
+        Some(SLOT_CRAFT_OUTPUT)
     }
 
     fn slot_in_crafting_input_slots(&self, slot: &usize) -> bool {
-        (1..=4).contains(slot)
+        (SLOT_CRAFT_INPUT_START..=SLOT_CRAFT_INPUT_END).contains(slot)
     }
 }

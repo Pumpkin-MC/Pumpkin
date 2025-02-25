@@ -1176,7 +1176,8 @@ impl NBTStorage for Player {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
-        self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
+        self.inventory.lock().await.selected =
+            nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
         self.abilities.lock().await.read_nbt(nbt).await;
 
         // Load from total XP

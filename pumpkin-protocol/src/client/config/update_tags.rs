@@ -34,18 +34,14 @@ impl ClientPacket for CUpdateTags<'_> {
             for (key, values) in values.iter() {
                 // This is technically a Identifier but same thing
                 p.put_string_len(key, u16::MAX as usize);
-                p.put_list(values, |p, v| {
-                    if let Some(string_id) = v {
-                        let id = match registry_key {
-                            RegistryKey::Block => registry::get_block(string_id).unwrap().id as i32,
-                            RegistryKey::Fluid => {
-                                Fluid::ident_to_fluid_id(string_id).unwrap() as i32
-                            }
-                            _ => unimplemented!(),
-                        };
+                p.put_list(values, |p, string_id| {
+                    let id = match registry_key {
+                        RegistryKey::Block => registry::get_block(string_id).unwrap().id as i32,
+                        RegistryKey::Fluid => Fluid::ident_to_fluid_id(string_id).unwrap() as i32,
+                        _ => unimplemented!(),
+                    };
 
-                        p.put_var_int(&VarInt::from(id));
-                    }
+                    p.put_var_int(&VarInt::from(id));
                 });
             }
         });

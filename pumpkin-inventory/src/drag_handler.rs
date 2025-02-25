@@ -1,5 +1,5 @@
 use crate::container_click::MouseDragType;
-use crate::{Container, InventoryError};
+use crate::{Container, DEFAULT_MAX_STACK_SIZE, InventoryError};
 use pumpkin_world::item::ItemStack;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -97,7 +97,7 @@ impl DragHandler {
                         carried_item.item_count -= 1;
                         if let Some(stack) = &mut slots[slot] {
                             // TODO: Check for stack max here
-                            if stack.item_count + 1 < 64 {
+                            if stack.item_count + 1 < DEFAULT_MAX_STACK_SIZE {
                                 stack.item_count += 1;
                             } else {
                                 carried_item.item_count += 1;

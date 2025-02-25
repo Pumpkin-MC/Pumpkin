@@ -120,6 +120,12 @@ pub struct CraftingTable {
     output: Option<ItemStack>,
 }
 
+impl CraftingTable {
+    const SLOT_OUTPUT: usize = 0;
+    const SLOT_INPUT_START: usize = 1;
+    const SLOT_INPUT_END: usize = 9;
+}
+
 impl Container for CraftingTable {
     fn window_type(&self) -> &'static WindowType {
         &WindowType::Crafting
@@ -163,11 +169,11 @@ impl Container for CraftingTable {
     }
 
     fn crafting_output_slot(&self) -> Option<usize> {
-        Some(0)
+        Some(Self::SLOT_OUTPUT)
     }
 
     fn slot_in_crafting_input_slots(&self, slot: &usize) -> bool {
-        (1..10).contains(slot)
+        (Self::SLOT_INPUT_START..=Self::SLOT_INPUT_END).contains(slot)
     }
     fn recipe_used(&mut self) {
         self.input.iter_mut().flatten().for_each(|slot| {

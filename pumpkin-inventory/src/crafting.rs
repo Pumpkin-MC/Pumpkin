@@ -18,7 +18,9 @@ fn check_ingredient_type(ingredient_type: &TagType, input: ItemStack) -> bool {
             false
             // items.iter().any(|tag| check_ingredient_type(&tag, input))
         }
-        TagType::Item(item) => Item::from_name(item).is_some_and(|item| item.id == input.item.id),
+        TagType::Item(item) => {
+            Item::from_registry_key(item).is_some_and(|item| item.id == input.item.id)
+        }
     }
 }
 
@@ -53,11 +55,11 @@ pub fn check_if_matches_crafting(input: [[Option<ItemStack>; 3]; 3]) -> Option<I
         })
         .map(|recipe| match recipe.result() {
             RecipeResult::Single { id, .. } => Some(ItemStack {
-                item: Item::from_name(id).unwrap(),
+                item: Item::from_registry_key(id).unwrap(),
                 item_count: 1,
             }),
             RecipeResult::Many { id, count, .. } => Some(ItemStack {
-                item: Item::from_name(id).unwrap(),
+                item: Item::from_registry_key(id).unwrap(),
                 item_count: *count,
             }),
             RecipeResult::Special => None,

@@ -16,6 +16,8 @@ pub use open_container::*;
 
 pub struct ContainerStruct<const SLOTS: usize>([Option<ItemStack>; SLOTS]);
 
+pub const DEFAULT_MAX_STACK_SIZE: u8 = 64;
+
 // Container needs Sync + Send to be able to be in async Server
 pub trait Container: Sync + Send {
     fn window_type(&self) -> &'static WindowType;
@@ -194,15 +196,15 @@ pub fn combine_stacks(
     };
 
     // TODO: Check for item stack max size here
-    if slot.item_count + carried_change <= 64 {
+    if slot.item_count + carried_change <= DEFAULT_MAX_STACK_SIZE {
         slot.item_count += carried_change;
         carried_item.item_count -= carried_change;
         if carried_item.item_count == 0 {
             *carried_slot = None;
         }
     } else {
-        let left_over = slot.item_count + carried_change - 64;
-        slot.item_count = 64;
+        let left_over = slot.item_count + carried_change - DEFAULT_MAX_STACK_SIZE;
+        slot.item_count = DEFAULT_MAX_STACK_SIZE;
         carried_item.item_count = left_over;
     }
 }

@@ -39,14 +39,25 @@ impl RegistryKey {
     }
 }
 
+#[allow(dead_code)]
+pub trait Tagable {
+    fn tag_key() -> RegistryKey;
+    fn registry_key(&self) -> &str;
+
+    /// Returns none if tag does not exist
+    fn is_tagged_with(&self, tag: &str) -> Option<bool> {
+        let tag = tag.strip_prefix("#").unwrap_or(tag);
+        let items = get_tag_values(Self::tag_key(), tag)?;
+        Some(items.iter().any(|elem| elem == self.registry_key()))
+    }
+}
+
 const TAG_JSON: &str = include_str!("../../assets/tags.json");
 
-#[expect(clippy::type_complexity)]
-pub static TAGS: LazyLock<HashMap<RegistryKey, HashMap<String, Vec<Option<String>>>>> =
+pub static TAGS: LazyLock<HashMap<RegistryKey, HashMap<String, Vec<String>>>> =
     LazyLock::new(|| serde_json::from_str(TAG_JSON).expect("Valid tag collections"));
 
-#[allow(dead_code)]
-pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&Vec<Option<String>>> {
+pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&Vec<String>> {
     TAGS.get(&tag_category)
         .expect("Should deserialize all tag categories")
         .get(tag)
