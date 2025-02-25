@@ -72,10 +72,8 @@ impl Client {
     pub async fn handle_resource_pack_response(&self, packet: SConfigResourcePack) {
         let resource_config = &ADVANCED_CONFIG.resource_pack;
         if resource_config.enabled {
-            let expected_uuid = uuid::Uuid::new_v3(
-                &uuid::Uuid::NAMESPACE_DNS,
-                resource_config.resource_pack_url.as_bytes(),
-            );
+            let expected_uuid =
+                uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
 
             if packet.uuid == expected_uuid {
                 match packet.response_result() {
