@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf, sync::Arc};
 
 use dashmap::{DashMap, Entry};
+use futures::future::join_all;
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
@@ -224,36 +225,28 @@ impl Level {
     }
 
     pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
-        let mut chunks_tasks = tokio::task::JoinSet::new();
-
-        for &at in chunks {
-            let loaded_chunks = self.loaded_chunks.clone();
-            let chunk_watchers = self.chunk_watchers.clone();
-
-            chunks_tasks.spawn(async move {
-                let removed_chunk = loaded_chunks.remove_if(&at, |at, _| {
-                    if let Some(value) = &chunk_watchers.get(at) {
-                        return value.is_zero();
-                    }
-                    true
-                });
-
-                if let Some((at, chunk)) = removed_chunk {
-                    log::trace!("{:?} is being cleaned", at);
-                    return Some((at, chunk));
+        let chunk_tasks = chunks.iter().map(async |&at| {
+            let removed_chunk = self.loaded_chunks.remove_if(&at, |at, _| {
+                if let Some(value) = &self.chunk_watchers.get(at) {
+                    return value.is_zero();
                 }
-
-                if let Some(chunk_guard) = &loaded_chunks.get(&at) {
-                    log::trace!("{:?} is not being cleaned but saved", at);
-                    return Some((at, chunk_guard.value().clone()));
-                }
-
-                None
+                true
             });
-        }
 
-        let chunks_to_write = chunks_tasks
-            .join_all()
+            if let Some((at, chunk)) = removed_chunk {
+                log::trace!("{:?} is being cleaned", at);
+                return Some((at, chunk));
+            }
+
+            if let Some(chunk_guard) = &self.loaded_chunks.get(&at) {
+                log::trace!("{:?} is not being cleaned but saved", at);
+                return Some((at, chunk_guard.value().clone()));
+            }
+
+            None
+        });
+
+        let chunks_to_write = join_all(chunk_tasks)
             .await
             .into_iter()
             .flatten()

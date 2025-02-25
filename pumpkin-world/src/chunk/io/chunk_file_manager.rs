@@ -7,12 +7,12 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::future::join_all;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::{OnceCell, RwLock, mpsc},
-    task::JoinSet,
 };
 
 use crate::{
@@ -109,7 +109,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
 
                     //We need to make this operation blocking to avoid context switching
                     // and improve compute heavy operations performance (like decompression)
-                    tokio::task::block_in_place(|| S::from_bytes(&file_bytes))?
+                    S::from_bytes(&file_bytes)?
                 }
                 Err(ChunkReadingError::ChunkNotExist) => S::default(),
                 Err(err) => return Err(err),
@@ -157,7 +157,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
 
         //We need to make this operation blocking to avoid context switching
         // and improve compute heavy operations performance (like compression)
-        file.write_all(&tokio::task::block_in_place(|| serializer.to_bytes()))
+        file.write_all(&serializer.to_bytes())
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
@@ -201,45 +201,40 @@ where
 
         // we use a Sync Closure with an Async Block to execute the tasks in parallel
         // with out waiting the future. Also it improve we File Cache utilizations.
-        let tasks = regions_chunks
-            .into_iter()
-            .map(async |(file_name, chunks)| {
-                let path = folder.region_folder.join(file_name);
-                let chunk_serializer = match self.read_file(&path).await {
-                    Ok(chunk_serializer) => chunk_serializer,
-                    Err(ChunkReadingError::ChunkNotExist) => {
-                        unreachable!("Default Serializer must be created")
-                    }
-                    Err(err) => {
-                        channel
-                            .send(LoadedData::<D, ChunkReadingError>::Error((chunks[0], err)))
-                            .await
-                            .expect("Failed to send error from stream_chunks!");
-
-                        return;
-                    }
-                };
-
-                let mut stream_tasks = JoinSet::new();
-                // We need to block the read to avoid other threads to write/modify the data
-                let chunk_guard = chunk_serializer.read().await;
-
-                for chunk in chunk_guard.get_chunks(&chunks) {
-                    let channel = channel.clone();
-                    stream_tasks.spawn(async move {
-                        channel
-                            .send(chunk)
-                            .await
-                            .expect("Failed to send chunk from stream_chunks!");
-                    });
+        let tasks = regions_chunks.into_iter().map(async |(file_name, chunks)| {
+            let path = folder.region_folder.join(file_name);
+            let chunk_serializer = match self.read_file(&path).await {
+                Ok(chunk_serializer) => chunk_serializer,
+                Err(ChunkReadingError::ChunkNotExist) => {
+                    unreachable!("Default Serializer must be created")
                 }
-                let _ = stream_tasks.join_all().await;
-            })
-            .collect::<Vec<_>>();
+                Err(err) => {
+                    channel
+                        .send(LoadedData::<D, ChunkReadingError>::Error((chunks[0], err)))
+                        .await
+                        .expect("Failed to send error from stream_chunks!");
 
-        for task in tasks {
-            task.await;
-        }
+                    return;
+                }
+            };
+
+            // We need to block the read to avoid other threads to write/modify the data
+            let chunk_guard = chunk_serializer.read().await;
+
+            let streaming_tasks = chunk_guard
+                .get_chunks(&chunks)
+                .into_iter()
+                .map(async |chunk| {
+                    channel
+                        .send(chunk)
+                        .await
+                        .expect("Failed to send chunk from stream_chunks!");
+                });
+
+            join_all(streaming_tasks).await;
+        });
+
+        join_all(tasks).await;
 
         self.clean_cache().await;
     }
@@ -283,15 +278,8 @@ where
                     }
                 }?;
 
-                let chunk_tasks = chunk_locks
-                    .iter()
-                    .map(async |c| c.read().await)
-                    .collect::<Vec<_>>();
+                let chunks = join_all(chunk_locks.iter().map(async |c| c.read().await)).await;
 
-                let mut chunks = Vec::with_capacity(chunk_tasks.len());
-                for chunk in chunk_tasks {
-                    chunks.push(chunk.await);
-                }
                 let mut chunk_guard = chunk_serializer.write().await;
 
                 chunk_guard.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())?;
@@ -299,18 +287,19 @@ where
                 // With the modification done, we can drop the write lock but keep the read lock
                 // to avoid other threads to write/modify the data, but allow other threads to read it
                 let chunk_guard = chunk_guard.downgrade();
-                Self::write_file(&path, &chunk_guard).await?;
+                let serializer = chunk_guard.deref();
+                Self::write_file(&path, serializer).await?;
 
                 Ok(())
-            })
-            .collect::<Vec<_>>();
+            });
 
+        //TODO: we need to handle the errors and return the result
         // files to save
-        for task in tasks {
-            task.await?;
-        }
+        let _: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
 
+        //we need to clean the cache before return the result
         self.clean_cache().await;
+
         Ok(())
     }
 

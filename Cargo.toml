@@ -49,6 +49,7 @@ thiserror = "2.0"
 bytes = "1.10"
 
 # Concurrency/Parallelism and Synchronization
+futures = "0.3"
 rayon = "1.10"
 crossbeam = "0.8"
 

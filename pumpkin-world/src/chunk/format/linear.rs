@@ -10,6 +10,7 @@ use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use zstd::zstd_safe::WriteBuf;
 
 use super::anvil::{CHUNK_COUNT, SUBREGION_BITS, chunk_to_bytes};
 
@@ -187,17 +188,13 @@ impl ChunkSerializer for LinearFile {
             data_buffer.extend_from_slice(chunk);
         }
 
-        // Compress the data buffer
-        // We use the block_in_place to avoid the async context
-        // and context switching for the compression
-        let compressed_buffer = tokio::task::block_in_place(|| {
-            zstd::encode_all(
-                data_buffer.as_slice(),
-                ADVANCED_CONFIG.chunk.compression.level as i32,
-            )
-            .expect("Failed to compress the data buffer")
-            .into_boxed_slice()
-        });
+        // TODO: find ways to improve performance (maybe zstd lib has memory leaks)
+        let compressed_buffer = zstd::bulk::compress(
+            data_buffer.as_slice(),
+            ADVANCED_CONFIG.chunk.compression.level as i32,
+        )
+        .expect("Failed to compress the data buffer")
+        .into_boxed_slice();
 
         let file_header = LinearFileHeader {
             chunks_bytes: compressed_buffer.len() as u32,
@@ -219,13 +216,13 @@ impl ChunkSerializer for LinearFile {
         .to_bytes();
 
         [
-            Box::new(SIGNATURE),
-            file_header,
-            compressed_buffer,
-            Box::new(SIGNATURE),
+            SIGNATURE.as_slice(),
+            file_header.as_slice(),
+            compressed_buffer.as_slice(),
+            SIGNATURE.as_slice(),
         ]
         .concat()
-        .into()
+        .into_boxed_slice()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
@@ -256,13 +253,9 @@ impl ChunkSerializer for LinearFile {
             return Err(ChunkReadingError::InvalidHeader);
         }
 
-        // Uncompress the data (header + chunks)
-        // We use the block_in_place to avoid the async context
-        // and context switching for the decompression
-        let buffer = tokio::task::block_in_place(|| {
-            zstd::decode_all(compressed_data.as_slice())
-                .map_err(|err| ChunkReadingError::IoError(err.kind()))
-        })?;
+        // TODO: Review the buffer size limit or find ways to improve performance (maybe zstd lib has memory leaks)
+        let buffer = zstd::bulk::decompress(compressed_data.as_slice(), 200 * 1024 * 1024) // 200MB limit for the decompression buffer size
+            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
         let (headers_buffer, buffer) =
             buffer.split_at(LinearChunkHeader::CHUNK_HEADER_SIZE * CHUNK_COUNT);
