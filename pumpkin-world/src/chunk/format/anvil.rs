@@ -351,40 +351,32 @@ impl ChunkSerializer for AnvilChunkFile {
     }
 
     fn update_chunks(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
-        // We block here to avoid context switching
-        // because Anvil Format compress the chunks sequentially
-        tokio::task::block_in_place(|| {
-            for chunk in chunks_data {
-                let index = AnvilChunkFile::get_chunk_index(&chunk.position);
-                self.chunks_data[index] = Some(AnvilChunkData::from_chunk(chunk)?);
-            }
+        for chunk in chunks_data {
+            let index = AnvilChunkFile::get_chunk_index(&chunk.position);
+            self.chunks_data[index] = Some(AnvilChunkData::from_chunk(chunk)?);
+        }
 
-            Ok(())
-        })
+        Ok(())
     }
 
     fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
     ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {
-        // We block here to avoid context switching
-        // because Anvil Format decompress the chunks sequentially
-        tokio::task::block_in_place(|| {
-            chunks
-                .par_iter()
-                .map(|chunk| {
-                    let index = AnvilChunkFile::get_chunk_index(chunk);
-                    if let Some(data) = &self.chunks_data[index] {
-                        match data.to_chunk(*chunk) {
-                            Ok(chunk) => LoadedData::Loaded(chunk),
-                            Err(err) => LoadedData::Error((*chunk, err)),
-                        }
-                    } else {
-                        LoadedData::Missing(*chunk)
+        chunks
+            .par_iter()
+            .map(|chunk| {
+                let index = AnvilChunkFile::get_chunk_index(chunk);
+                if let Some(data) = &self.chunks_data[index] {
+                    match data.to_chunk(*chunk) {
+                        Ok(chunk) => LoadedData::Loaded(chunk),
+                        Err(err) => LoadedData::Error((*chunk, err)),
                     }
-                })
-                .collect::<Vec<_>>()
-        })
+                } else {
+                    LoadedData::Missing(*chunk)
+                }
+            })
+            .collect::<Vec<_>>()
     }
 }
 
