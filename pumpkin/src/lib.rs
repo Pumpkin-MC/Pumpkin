@@ -335,7 +335,7 @@ impl PumpkinServer {
                     .make_player
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
-                    let (player, world) = server.add_player(client).await;
+                    let (player, world) = server.add_player(client.clone()).await;
                     world
                         .spawn_player(&BASIC_CONFIG, player.clone(), &server)
                         .await;
@@ -354,8 +354,12 @@ impl PumpkinServer {
                     log::debug!("Cleaning up player for id {}", id);
                     player.remove().await;
                     server.remove_player().await;
-                    tasks_clone.lock().await.remove(&id);
                 }
+
+                // Also handle case of client connects but does not become a player (like a server
+                // ping)
+                client.close().await;
+                tasks_clone.lock().await.remove(&id);
             });
             tasks.lock().await.insert(id, Some(handle));
         }
