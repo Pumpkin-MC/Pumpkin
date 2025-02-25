@@ -136,7 +136,7 @@ impl Client {
         self.send_known_packs().await;
     }
 
-    pub fn handle_config_cookie_response(&self, packet: SConfigCookieResponse) {
+    pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
             "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",

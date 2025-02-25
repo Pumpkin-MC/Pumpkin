@@ -46,6 +46,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Entity Spawning
   - [x] Item drops
   - [x] Bossbar
+  - [x] TNT
   - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
   - [x] Chunk Saving (Vanilla, Linear)
@@ -57,7 +58,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [ ] Liquid Physics
   - [ ] Biomes
   - [ ] Vegetation
-  - [ ] Player Data Saving
 - Player
   - [x] Skins
   - [x] Client brand
@@ -73,6 +73,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - Entities
   - [x] Non-Living (Minecart, Eggs...)
   - [x] Entity Effects
+  - [ ] Entity Saving
   - [x] Players
   - [x] Mobs
   - [x] Animals

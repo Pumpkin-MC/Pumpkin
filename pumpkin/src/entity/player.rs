@@ -1335,7 +1335,7 @@ impl Player {
                     .await;
             }
             SPCookieResponse::PACKET_ID => {
-                self.handle_cookie_response(SPCookieResponse::read(bytebuf)?);
+                self.handle_cookie_response(&SPCookieResponse::read(bytebuf)?);
             }
             SCloseContainer::PACKET_ID => {
                 self.handle_close_container(server, SCloseContainer::read(bytebuf)?)
