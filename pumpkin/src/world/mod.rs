@@ -592,7 +592,7 @@ impl World {
             Particle::ExplosionEmitter
         };
         let sound = pumpkin_protocol::IDOrSoundEvent {
-            id: VarInt(Sound::EntityGenericExplode as i32),
+            id: VarInt(Sound::EntityGenericExplode as i32 + 1),
             sound_event: None,
         };
         for (_, player) in self.players.read().await.iter() {

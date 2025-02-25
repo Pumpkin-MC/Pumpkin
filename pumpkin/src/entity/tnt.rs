@@ -5,6 +5,7 @@ use pumpkin_protocol::{
     client::play::{MetaDataType, Metadata},
     codec::var_int::VarInt,
 };
+use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::AtomicU32;
 
 use super::{Entity, EntityBase, living::LivingEntity};
@@ -24,6 +25,11 @@ impl TNTEntity {
         }
     }
     pub async fn send_meta_packet(&self) {
+        // TODO: yes this is the wrong function, but we need to send this after spawning the entity
+        let pos: f64 = rand::random::<f64>() * 6.2831854820251465;
+        self.entity
+            .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02))
+            .await;
         // We can merge multiple data into one meta packet
         self.entity
             .send_meta_data(Metadata::new(

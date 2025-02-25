@@ -12,8 +12,8 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     client::play::{
-        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot,
-        MetaDataType, Metadata,
+        CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
+        CUpdateEntityRot, MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
 };
@@ -142,6 +142,15 @@ impl Entity {
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
         }
+    }
+
+    pub async fn set_velocity(&self, velocity: Vector3<f64>) {
+        self.velocity.store(velocity);
+        self.world
+            .read()
+            .await
+            .broadcast_packet_all(&CEntityVelocity::new(self.entity_id.into(), velocity))
+            .await;
     }
 
     /// Updates the entity's position, block position, and chunk position.

@@ -30,7 +30,7 @@ impl PumpkinBlock for TNTBlock {
         }
         let world = player.world().await;
         world.break_block(server, &location, None, false).await;
-        let entity = server.add_entity(location.0.to_f64(), EntityType::TNT, &world);
+        let entity = server.add_entity(location.to_f64(), EntityType::TNT, &world);
         let tnt = Arc::new(TNTEntity::new(entity, 4.0, 80));
         world.spawn_entity(tnt.clone()).await;
         tnt.send_meta_packet().await;
