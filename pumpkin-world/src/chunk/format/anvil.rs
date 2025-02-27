@@ -333,8 +333,8 @@ impl ChunkSerializer for AnvilChunkFile {
             let sector_count = (location & 0xFF) as usize;
             let sector_offset = (location >> 8) as usize;
 
-            // If the sector offset and count is 0, the chunk is not present
-            if sector_offset == 0 && sector_count == 0 {
+            // If the sector offset or count is 0, the chunk is not present (we should not parse empty chunks)
+            if sector_offset == 0 || sector_count == 0 {
                 continue;
             }
 
