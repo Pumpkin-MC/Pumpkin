@@ -6,23 +6,21 @@ use crate::VarInt;
 
 #[derive(Serialize)]
 #[packet(PLAY_SET_ENTITY_DATA)]
-pub struct CSetEntityMetadata<T> {
+pub struct CSetEntityMetadata {
     entity_id: VarInt,
-    metadata: Metadata<T>,
-    end: u8,
+    metadata: Vec<u8>,
 }
 
-impl<T> CSetEntityMetadata<T> {
-    pub fn new(entity_id: VarInt, metadata: Metadata<T>) -> Self {
+impl CSetEntityMetadata {
+    pub fn new(entity_id: VarInt, metadata: Vec<u8>) -> Self {
         Self {
             entity_id,
             metadata,
-            end: 255,
         }
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Metadata<T> {
     index: u8,
     typ: VarInt,

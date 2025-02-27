@@ -1,10 +1,14 @@
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
+use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::client::play::CHurtAnimation;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::{
     client::play::{
         CDamageEvent, CEntityStatus, CSetEquipment, EquipmentSlot, MetaDataType, Metadata,
@@ -15,6 +19,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
+use super::EntityBase;
 use super::{Entity, EntityId, NBTStorage, effect::Effect};
 
 /// Represents a living entity within the game world.
@@ -45,17 +50,6 @@ impl LivingEntity {
             health: AtomicCell::new(20.0),
             fall_distance: AtomicCell::new(0.0),
             active_effects: Mutex::new(HashMap::new()),
-        }
-    }
-
-    pub fn tick(&self) {
-        if self
-            .time_until_regen
-            .load(std::sync::atomic::Ordering::Relaxed)
-            > 0
-        {
-            self.time_until_regen
-                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -90,7 +84,7 @@ impl LivingEntity {
         self.health.store(health);
         // tell everyone entities health changed
         self.entity
-            .send_meta_data(Metadata::new(9, MetaDataType::Float, health))
+            .send_meta_data(&[Metadata::new(9, MetaDataType::Float, health)])
             .await;
     }
 
@@ -149,11 +143,6 @@ impl LivingEntity {
     pub async fn get_effect(&self, effect: EffectType) -> Option<Effect> {
         let effects = self.active_effects.lock().await;
         effects.get(&effect).cloned()
-    }
-
-    pub async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        self.damage_with_context(amount, damage_type, None, None, None)
-            .await
     }
 
     /// Returns if the entity was damaged or not
@@ -236,8 +225,54 @@ impl LivingEntity {
             .await
             .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 3))
             .await;
+        // TODO: wait
+        self.entity.remove().await;
     }
 }
+
+#[async_trait]
+impl EntityBase for LivingEntity {
+    async fn tick(&self, _server: &Server) {
+        if self
+            .time_until_regen
+            .load(std::sync::atomic::Ordering::Relaxed)
+            > 0
+        {
+            self.time_until_regen
+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+        let world = self.entity.world.read().await;
+        if !self.check_damage(amount) {
+            return false;
+        }
+        let config = &ADVANCED_CONFIG.pvp;
+
+        if !self
+            .damage_with_context(amount, damage_type, None, None, None)
+            .await
+        {
+            return false;
+        }
+
+        if config.hurt_animation {
+            let entity_id = VarInt(self.entity.entity_id);
+            world
+                .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
+                .await;
+        }
+        true
+    }
+    fn get_entity(&self) -> &Entity {
+        &self.entity
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        Some(self)
+    }
+}
+
 #[async_trait]
 impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {

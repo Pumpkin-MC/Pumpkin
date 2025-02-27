@@ -13,13 +13,13 @@ pub struct CEntityVelocity {
 }
 
 impl CEntityVelocity {
-    pub fn new(entity_id: VarInt, velocity_x: f64, velocity_y: f64, velocity_z: f64) -> Self {
+    pub fn new(entity_id: VarInt, velocity: Vector3<f64>) -> Self {
         Self {
             entity_id,
             velocity: Vector3::new(
-                (velocity_x.clamp(-3.9, 3.9) * 8000.0) as i16,
-                (velocity_y.clamp(-3.9, 3.9) * 8000.0) as i16,
-                (velocity_z.clamp(-3.9, 3.9) * 8000.0) as i16,
+                (velocity.x.clamp(-3.9, 3.9) * 8000.0) as i16,
+                (velocity.y.clamp(-3.9, 3.9) * 8000.0) as i16,
+                (velocity.z.clamp(-3.9, 3.9) * 8000.0) as i16,
             ),
         }
     }

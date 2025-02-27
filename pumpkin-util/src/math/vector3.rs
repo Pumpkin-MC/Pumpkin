@@ -295,3 +295,16 @@ impl serde::Serialize for Vector3<i16> {
         serializer.serialize_bytes(&buf)
     }
 }
+
+impl serde::Serialize for Vector3<i32> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut buf = Vec::new();
+        buf.put_i32(self.x);
+        buf.put_i32(self.y);
+        buf.put_i32(self.z);
+        serializer.serialize_bytes(&buf)
+    }
+}

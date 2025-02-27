@@ -24,7 +24,8 @@ pub struct MobEntity {
 
 #[async_trait]
 impl EntityBase for MobEntity {
-    async fn tick(&self) {
+    async fn tick(&self, server: &Server) {
+        self.living_entity.tick(server).await;
         let mut goals = self.goals.lock().await;
         for (goal, running) in goals.iter_mut() {
             if *running {

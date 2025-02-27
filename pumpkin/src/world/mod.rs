@@ -4,6 +4,7 @@ use std::{
 };
 
 pub mod chunker;
+pub mod explosion;
 pub mod time;
 
 use crate::{
@@ -19,6 +20,7 @@ use crate::{
     server::Server,
 };
 use border::Worldborder;
+use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     entity::EntityType,
@@ -27,9 +29,6 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::client::play::{
-    CBlockUpdate, CDisguisedChatMessage, CRespawn, CSetBlockDestroyStage, CWorldEvent,
-};
 use pumpkin_protocol::{
     ClientPacket,
     client::play::{
@@ -38,6 +37,13 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
+use pumpkin_protocol::{
+    client::play::{
+        CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
+        CWorldEvent,
+    },
+    codec::var_int::VarInt,
+};
 use pumpkin_registry::DimensionType;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -98,8 +104,8 @@ impl PumpkinError for GetBlockError {
 /// **Key Responsibilities:**
 ///
 /// - Manages the `Level` instance for handling chunk-related operations.
-/// - Active players and entities.
-/// - World-related systems like the scoreboard, world border, weather, and time.
+/// - Stores and tracks active `Player` entities within the world.
+/// - Provides a central hub for interacting with the world's entities and environment.
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
@@ -118,6 +124,7 @@ pub struct World {
     pub dimension_type: DimensionType,
     /// The world's weather, including rain and thunder levels
     pub weather: Mutex<Weather>,
+    // TODO: entities
 }
 
 impl World {
@@ -257,7 +264,7 @@ impl World {
         .await;
     }
 
-    pub async fn tick(&self) {
+    pub async fn tick(&self, server: &Server) {
         // world ticks
         {
             let mut level_time = self.level_time.lock().await;
@@ -274,14 +281,14 @@ impl World {
 
         // player ticks
         for player in self.players.read().await.values() {
-            player.tick().await;
+            player.tick(server).await;
         }
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
         // entities tick
         for entity in entities_to_tick {
-            entity.tick().await;
+            entity.tick(server).await;
             // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
             let mut collied_player = None;
             for player in self.players.read().await.values() {
@@ -571,6 +578,34 @@ impl World {
         // update commands
 
         player.set_health(20.0).await;
+    }
+
+    pub async fn explode(self: &Arc<Self>, server: &Server, position: Vector3<f64>, power: f32) {
+        let explosion = Explosion::new(power, position);
+        explosion.explode(server, self).await;
+        let particle = if power < 2.0 {
+            Particle::Explosion
+        } else {
+            Particle::ExplosionEmitter
+        };
+        let sound = pumpkin_protocol::IDOrSoundEvent {
+            id: VarInt(Sound::EntityGenericExplode as i32 + 1),
+            sound_event: None,
+        };
+        for (_, player) in self.players.read().await.iter() {
+            if player.position().squared_distance_to_vec(position) > 4096.0 {
+                continue;
+            }
+            player
+                .client
+                .send_packet(&CExplosion::new(
+                    position,
+                    None,
+                    VarInt(particle as i32),
+                    sound.clone(),
+                ))
+                .await;
+        }
     }
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {

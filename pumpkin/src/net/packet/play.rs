@@ -1231,7 +1231,7 @@ impl Player {
         self.client.send_packet(&response).await;
     }
 
-    pub fn handle_cookie_response(&self, packet: SPCookieResponse) {
+    pub fn handle_cookie_response(&self, packet: &SPCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
             "Received cookie_response[play]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",

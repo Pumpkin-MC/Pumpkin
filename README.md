@@ -25,7 +25,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 > [!IMPORTANT]
 > Pumpkin is currently under heavy development.
 
-## Features (WIP)
+## Features
 
 - [x] Configuration (toml)
 - [x] Server Status/Ping
@@ -41,23 +41,23 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - World
   - [x] World Joining
   - [x] Player Tab-list
+  - [x] Scoreboard
   - [x] World Loading
+  - [x] World Time
+  - [x] World Borders
+  - [x] World Saving (W.I.P)
   - [x] Lighting
   - [x] Entity Spawning
-  - [x] Item drops
+  - [x] Item drops (W.I.P)
   - [x] Bossbar
+  - [x] TNT
   - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
   - [x] Chunk Saving (Vanilla, Linear)
-  - [x] World Time
-  - [x] Scoreboard
-  - [x] World Borders
-  - [x] World Saving
   - [ ] Redstone
   - [ ] Liquid Physics
   - [ ] Biomes
   - [ ] Vegetation
-  - [ ] Player Data Saving
 - Player
   - [x] Skins
   - [x] Client brand
@@ -70,18 +70,20 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Hunger
   - [ ] Off Hand
   - [ ] Advancements 
+  - [ ] Eating
 - Entities
-  - [x] Non-Living (Minecart, Eggs...)
+  - [x] Non-Living (Minecart, Eggs...) (W.I.P)
   - [x] Entity Effects
   - [x] Players
-  - [x] Mobs
-  - [x] Animals
-  - [x] Entity AI
+  - [x] Mobs (W.I.P)
+  - [x] Animals (W.I.P)
+  - [x] Entity AI (W.I.P)
+  - [ ] Entity Saving
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
 - Server
-  - [x] Plugins
+  - [x] Plugins (W.I.P)
   - [x] Query
   - [x] RCON
   - [x] Inventories

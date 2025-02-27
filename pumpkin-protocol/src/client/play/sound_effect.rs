@@ -1,10 +1,11 @@
-use bytes::BufMut;
 use pumpkin_data::{packet::clientbound::PLAY_SOUND, sound::SoundCategory};
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
+use serde::Serialize;
 
-use crate::{ClientPacket, IDOrSoundEvent, SoundEvent, VarInt, bytebuf::ByteBufMut};
+use crate::{IDOrSoundEvent, SoundEvent, VarInt};
 
+#[derive(Serialize)]
 #[packet(PLAY_SOUND)]
 pub struct CSoundEffect {
     sound_event: IDOrSoundEvent,
@@ -40,27 +41,5 @@ impl CSoundEffect {
             pitch,
             seed,
         }
-    }
-}
-
-impl ClientPacket for CSoundEffect {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_var_int(&self.sound_event.id);
-        if self.sound_event.id.0 == 0 {
-            if let Some(test) = &self.sound_event.sound_event {
-                bytebuf.put_identifier(&test.sound_name);
-
-                bytebuf.put_option(&test.range, |p, v| {
-                    p.put_f32(*v);
-                });
-            }
-        }
-        bytebuf.put_var_int(&self.sound_category);
-        bytebuf.put_i32(self.position.x);
-        bytebuf.put_i32(self.position.y);
-        bytebuf.put_i32(self.position.z);
-        bytebuf.put_f32(self.volume);
-        bytebuf.put_f32(self.pitch);
-        bytebuf.put_f64(self.seed);
     }
 }

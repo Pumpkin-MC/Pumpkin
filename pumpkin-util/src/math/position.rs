@@ -34,6 +34,22 @@ impl BlockPos {
             z: (encoded_position << 26 >> 38) as i32,
         })
     }
+
+    pub fn floored(x: f64, y: f64, z: f64) -> Self {
+        Self(Vector3::new(
+            x.floor() as i32,
+            y.floor() as i32,
+            z.floor() as i32,
+        ))
+    }
+
+    pub fn to_f64(&self) -> Vector3<f64> {
+        Vector3::new(
+            self.0.x as f64 + 0.5,
+            self.0.y as f64,
+            self.0.z as f64 + 0.5,
+        )
+    }
 }
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

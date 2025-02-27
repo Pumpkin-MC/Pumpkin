@@ -306,7 +306,7 @@ impl Client {
         Err(AuthError::MissingAuthClient)
     }
 
-    pub fn handle_login_cookie_response(&self, packet: SLoginCookieResponse) {
+    pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
             "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
