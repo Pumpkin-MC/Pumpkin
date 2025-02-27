@@ -216,16 +216,18 @@ impl AnvilChunkData {
         // -1 for the padding/align of the *compression* byte
         let bytes = &self.compressed_data[..self.length as usize - 1];
 
-        if let Some(compression) = self.compression {
-            let decompressed_data = compression
+        let chunk = if let Some(compression) = self.compression {
+            let decompress_bytes = compression
                 .decompress_data(bytes)
-                .expect("Failed to decompress chunk data");
+                .map_err(ChunkReadingError::Compression)?;
 
-            ChunkData::from_bytes(&decompressed_data, pos)
+            ChunkData::from_bytes(&decompress_bytes, pos)
         } else {
             ChunkData::from_bytes(bytes, pos)
         }
-        .map_err(ChunkReadingError::ParsingError)
+        .map_err(ChunkReadingError::ParsingError)?;
+
+        Ok(chunk)
     }
 
     fn from_chunk(chunk: &ChunkData) -> Result<Self, ChunkWritingError> {
