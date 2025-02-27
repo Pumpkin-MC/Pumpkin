@@ -27,7 +27,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 ## Features
 
-- [x] Configuration (toml) (W.I.P)
+- [x] Configuration (toml)
 - [x] Server Status/Ping
 - Networking
   - [x] Encryption
