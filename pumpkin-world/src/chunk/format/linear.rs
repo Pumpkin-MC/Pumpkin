@@ -4,7 +4,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::chunk::format::anvil::AnvilChunkFile;
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
-use async_trait::async_trait;
 use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
@@ -167,7 +166,6 @@ impl Default for LinearFile {
     }
 }
 
-#[async_trait]
 impl ChunkSerializer for LinearFile {
     type Data = ChunkData;
 

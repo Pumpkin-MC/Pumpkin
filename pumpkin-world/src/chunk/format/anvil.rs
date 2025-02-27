@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use bytes::*;
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
@@ -268,7 +267,6 @@ impl Default for AnvilChunkFile {
     }
 }
 
-#[async_trait]
 impl ChunkSerializer for AnvilChunkFile {
     type Data = ChunkData;
 
