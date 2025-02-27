@@ -73,11 +73,11 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - Entities
   - [x] Non-Living (Minecart, Eggs...)
   - [x] Entity Effects
-  - [ ] Entity Saving
   - [x] Players
   - [x] Mobs
   - [x] Animals
   - [x] Entity AI
+  - [ ] Entity Saving
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
