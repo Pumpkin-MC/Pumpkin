@@ -12,6 +12,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::HashSet,
     io::{Read, Write},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
@@ -351,9 +352,15 @@ impl ChunkSerializer for AnvilChunkFile {
     }
 
     fn update_chunks(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
+        let epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
+
         for chunk in chunks_data {
             let index = AnvilChunkFile::get_chunk_index(&chunk.position);
             self.chunks_data[index] = Some(AnvilChunkData::from_chunk(chunk)?);
+            self.timestamp_table[index] = epoch;
         }
 
         Ok(())
