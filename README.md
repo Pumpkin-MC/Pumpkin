@@ -41,7 +41,11 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - World
   - [x] World Joining
   - [x] Player Tab-list
+  - [x] Scoreboard
   - [x] World Loading
+  - [x] World Time
+  - [x] World Borders
+  - [x] World Saving
   - [x] Lighting
   - [x] Entity Spawning
   - [x] Item drops
@@ -50,10 +54,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
   - [x] Chunk Saving (Vanilla, Linear)
-  - [x] World Time
-  - [x] Scoreboard
-  - [x] World Borders
-  - [x] World Saving
   - [ ] Redstone
   - [ ] Liquid Physics
   - [ ] Biomes
