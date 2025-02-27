@@ -25,9 +25,9 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 > [!IMPORTANT]
 > Pumpkin is currently under heavy development.
 
-## Features (WIP)
+## Features
 
-- [x] Configuration (toml)
+- [x] Configuration (toml) (W.I.P)
 - [x] Server Status/Ping
 - Networking
   - [x] Encryption
@@ -45,10 +45,10 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Loading
   - [x] World Time
   - [x] World Borders
-  - [x] World Saving
+  - [x] World Saving (W.I.P)
   - [x] Lighting
   - [x] Entity Spawning
-  - [x] Item drops
+  - [x] Item drops (W.I.P)
   - [x] Bossbar
   - [x] TNT
   - [x] Chunk Loading (Vanilla, Linear)
@@ -70,19 +70,20 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Hunger
   - [ ] Off Hand
   - [ ] Advancements 
+  - [ ] Eating
 - Entities
-  - [x] Non-Living (Minecart, Eggs...)
+  - [x] Non-Living (Minecart, Eggs...) (W.I.P)
   - [x] Entity Effects
   - [x] Players
-  - [x] Mobs
-  - [x] Animals
-  - [x] Entity AI
+  - [x] Mobs (W.I.P)
+  - [x] Animals (W.I.P)
+  - [x] Entity AI (W.I.P)
   - [ ] Entity Saving
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
 - Server
-  - [x] Plugins
+  - [x] Plugins (W.I.P)
   - [x] Query
   - [x] RCON
   - [x] Inventories
