@@ -1,4 +1,4 @@
-use pumpkin_core::PermissionLvl;
+use pumpkin_util::PermissionLvl;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]

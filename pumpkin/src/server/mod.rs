@@ -1,45 +1,45 @@
-use crate::block::block_manager::BlockManager;
-use crate::block::default_block_manager;
-use crate::net::EncryptionError;
-use crate::world::custom_bossbar::CustomBossbars;
-use crate::{
-    command::{default_dispatcher, dispatcher::CommandDispatcher},
-    entity::player::Player,
-    net::Client,
-    world::World,
-};
 use connection_cache::{CachedBranding, CachedStatus};
 use crossbeam::atomic::AtomicCell;
 use key_store::KeyStore;
-use pumpkin_config::BASIC_CONFIG;
-use pumpkin_core::math::boundingbox::{BoundingBox, BoundingBoxSize};
-use pumpkin_core::math::vector2::Vector2;
-use pumpkin_core::math::vector3::Vector3;
-use pumpkin_core::GameMode;
-use pumpkin_entity::entity_type::EntityType;
-use pumpkin_entity::EntityId;
+use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_data::entity::EntityType;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, ContainerHolder};
 use pumpkin_protocol::client::login::CEncryptionRequest;
-use pumpkin_protocol::{client::config::CPluginMessage, ClientPacket};
+use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
+use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
-use pumpkin_world::entity::entity_registry::get_entity_by_id;
 use rand::prelude::SliceRandom;
+use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
 use std::{
     sync::{
-        atomic::{AtomicI32, Ordering},
         Arc,
+        atomic::{AtomicI32, Ordering},
     },
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
-use crate::entity::living::LivingEntity;
-use crate::entity::mob::MobEntity;
-use crate::entity::Entity;
+use crate::block::default_block_properties_manager;
+use crate::block::properties::BlockPropertiesManager;
+use crate::block::registry::BlockRegistry;
+use crate::command::commands::default_dispatcher;
+use crate::entity::{Entity, EntityId};
+use crate::item::registry::ItemRegistry;
+use crate::net::EncryptionError;
+use crate::world::custom_bossbar::CustomBossbars;
+use crate::{
+    command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
+};
+
 mod connection_cache;
 mod key_store;
 pub mod ticker;
@@ -56,10 +56,14 @@ pub struct Server {
     server_branding: CachedBranding,
     /// Saves and Dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
-    /// Saves and calls blocks blocks
-    pub block_manager: Arc<BlockManager>,
+    /// Block Behaviour
+    pub block_registry: Arc<BlockRegistry>,
+    /// Item Behaviour
+    pub item_registry: Arc<ItemRegistry>,
+    /// Creates and stores block property registry and managed behaviours.
+    pub block_properties_manager: Arc<BlockPropertiesManager>,
     /// Manages multiple worlds within the server.
-    pub worlds: Vec<Arc<World>>,
+    pub worlds: RwLock<Vec<Arc<World>>>,
     // All the dimensions that exists on the server,
     pub dimensions: Vec<DimensionType>,
     /// Caches game registries for efficient access.
@@ -83,7 +87,12 @@ impl Server {
     pub fn new() -> Self {
         let auth_client = BASIC_CONFIG.online_mode.then(|| {
             reqwest::Client::builder()
-                .timeout(Duration::from_millis(5000))
+                .connect_timeout(Duration::from_millis(u64::from(
+                    ADVANCED_CONFIG.networking.authentication.connect_timeout,
+                )))
+                .read_timeout(Duration::from_millis(u64::from(
+                    ADVANCED_CONFIG.networking.authentication.read_timeout,
+                )))
                 .build()
                 .expect("Failed to to make reqwest client")
         });
@@ -100,10 +109,8 @@ impl Server {
         );
 
         // Spawn chunks are never unloaded
-        for x in -1..=1 {
-            for z in -1..=1 {
-                world.level.mark_chunk_as_newly_watched(Vector2::new(x, z));
-            }
+        for chunk in Self::spawn_chunks() {
+            world.level.mark_chunk_as_newly_watched(chunk);
         }
 
         Self {
@@ -113,7 +120,7 @@ impl Server {
             // 0 is invalid
             entity_id: 2.into(),
             container_id: 0.into(),
-            worlds: vec![Arc::new(world)],
+            worlds: RwLock::new(vec![Arc::new(world)]),
             dimensions: vec![
                 DimensionType::Overworld,
                 DimensionType::OverworldCaves,
@@ -121,13 +128,23 @@ impl Server {
                 DimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_manager: default_block_manager(),
+            block_registry: super::block::default_registry(),
+            item_registry: super::item::default_registry(),
+            block_properties_manager: default_block_properties_manager(),
             auth_client,
             key_store: KeyStore::new(),
             server_listing: Mutex::new(CachedStatus::new()),
             server_branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
         }
+    }
+
+    const SPAWN_CHUNK_RADIUS: i32 = 1;
+
+    pub fn spawn_chunks() -> impl Iterator<Item = Vector2<i32>> {
+        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).flat_map(|x| {
+            (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).map(move |z| Vector2::new(x, z))
+        })
     }
 
     /// Adds a new player to the server.
@@ -157,13 +174,10 @@ impl Server {
     /// You still have to spawn the Player in the World to make then to let them Join and make them Visible
     pub async fn add_player(&self, client: Arc<Client>) -> (Arc<Player>, Arc<World>) {
         let entity_id = self.new_entity_id();
-        let gamemode = match BASIC_CONFIG.default_gamemode {
-            GameMode::Undefined => GameMode::Survival,
-            game_mode => game_mode,
-        };
+        let gamemode = BASIC_CONFIG.default_gamemode;
         // Basically the default world
         // TODO: select default from config
-        let world = &self.worlds[0];
+        let world = &self.worlds.read().await[0];
 
         let player = Arc::new(Player::new(client, world.clone(), entity_id, gamemode).await);
         world
@@ -186,26 +200,13 @@ impl Server {
     }
 
     pub async fn save(&self) {
-        for world in &self.worlds {
+        for world in self.worlds.read().await.iter() {
             world.save().await;
         }
+
+        log::info!("Completed world save");
     }
 
-    pub async fn add_mob_entity(
-        &self,
-        entity_type: EntityType,
-        position: Vector3<f64>,
-        world: &Arc<World>,
-    ) -> (Arc<MobEntity>, Uuid) {
-        let (living_entity, uuid) = self.add_living_entity(position, entity_type, world);
-
-        let mob = Arc::new(MobEntity {
-            living_entity,
-            goals: Mutex::new(vec![]),
-        });
-        world.add_mob_entity(uuid, mob.clone()).await;
-        (mob, uuid)
-    }
     /// Adds a new living entity to the server. This does not Spawn the entity
     ///
     /// # Returns
@@ -215,40 +216,38 @@ impl Server {
     /// - `Arc<LivingEntity>`: A reference to the newly created living entity.
     /// - `Arc<World>`: A reference to the world that the living entity was added to.
     /// - `Uuid`: The uuid of the newly created living entity to be used to send to the client.
-    fn add_living_entity(
+    pub fn add_entity(
         &self,
         position: Vector3<f64>,
         entity_type: EntityType,
         world: &Arc<World>,
-    ) -> (Arc<LivingEntity>, Uuid) {
+    ) -> Entity {
         let entity_id = self.new_entity_id();
 
         // TODO: this should be resolved to a integer using a macro when calling this function
-        let bounding_box_size = get_entity_by_id(entity_type.clone() as u16).map_or(
-            BoundingBoxSize {
-                width: 0.6,
-                height: 1.8,
-            },
-            |entity| BoundingBoxSize {
-                width: f64::from(entity.dimension[0]),
-                height: f64::from(entity.dimension[1]),
-            },
-        );
+        let bounding_box_size = EntityDimensions {
+            width: entity_type.dimension[0],
+            height: entity_type.dimension[1],
+        };
 
         // TODO: standing eye height should be per mob
         let new_uuid = uuid::Uuid::new_v4();
-        let mob = Arc::new(LivingEntity::new(Entity::new(
+        Entity::new(
             entity_id,
             new_uuid,
             world.clone(),
             position,
             entity_type,
-            1.62,
-            AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
+            entity_type.eye_height,
+            AtomicCell::new(BoundingBox::new_from_pos(
+                position.x,
+                position.y,
+                position.z,
+                &bounding_box_size,
+            )),
             AtomicCell::new(bounding_box_size),
-        )));
-
-        (mob, new_uuid)
+            false,
+        )
     }
 
     pub async fn try_get_container(
@@ -264,6 +263,51 @@ impl Server {
             .cloned()
     }
 
+    /// Returns the first id with a matching location and block type. If this is used with unique
+    /// blocks, the output will return a random result.
+    pub async fn get_container_id(&self, location: BlockPos, block: Block) -> Option<u32> {
+        let open_containers = self.open_containers.read().await;
+        // TODO: do better than brute force
+        for (id, container) in &open_containers.containers_by_id {
+            if container.is_location(location) {
+                if let Some(container_block) = container.get_block() {
+                    if container_block.id == block.id {
+                        log::debug!("Found container id: {}", id);
+                        return Some(*id as u32);
+                    }
+                }
+            }
+        }
+
+        drop(open_containers);
+
+        None
+    }
+
+    pub async fn get_all_container_ids(
+        &self,
+        location: BlockPos,
+        block: Block,
+    ) -> Option<Vec<u32>> {
+        let open_containers = self.open_containers.read().await;
+        let mut matching_container_ids: Vec<u32> = vec![];
+        // TODO: do better than brute force
+        for (id, container) in &open_containers.containers_by_id {
+            if container.is_location(location) {
+                if let Some(container_block) = container.get_block() {
+                    if container_block.id == block.id {
+                        log::debug!("Found matching container id: {}", id);
+                        matching_container_ids.push(*id as u32);
+                    }
+                }
+            }
+        }
+
+        drop(open_containers);
+
+        Some(matching_container_ids)
+    }
+
     /// Broadcasts a packet to all players in all worlds.
     ///
     /// This function sends the specified packet to every connected player in every world managed by the server.
@@ -275,8 +319,22 @@ impl Server {
     where
         P: ClientPacket,
     {
-        for world in &self.worlds {
+        for world in self.worlds.read().await.iter() {
             world.broadcast_packet_all(packet).await;
+        }
+    }
+
+    pub async fn broadcast_message(
+        &self,
+        message: &TextComponent,
+        sender_name: &TextComponent,
+        chat_type: u32,
+        target_name: Option<&TextComponent>,
+    ) {
+        for world in self.worlds.read().await.iter() {
+            world
+                .broadcast_message(message, sender_name, chat_type, target_name)
+                .await;
         }
     }
 
@@ -293,7 +351,7 @@ impl Server {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not found.
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
-        for world in &self.worlds {
+        for world in self.worlds.read().await.iter() {
             if let Some(player) = world.get_player_by_name(name).await {
                 return Some(player);
             }
@@ -301,12 +359,26 @@ impl Server {
         None
     }
 
+    pub async fn get_players_by_ip(&self, ip: IpAddr) -> Vec<Arc<Player>> {
+        let mut players = Vec::<Arc<Player>>::new();
+
+        for world in self.worlds.read().await.iter() {
+            for (_, player) in world.players.read().await.iter() {
+                if player.client.address.lock().await.ip() == ip {
+                    players.push(player.clone());
+                }
+            }
+        }
+
+        players
+    }
+
     /// Returns all players from all worlds.
     pub async fn get_all_players(&self) -> Vec<Arc<Player>> {
         let mut players = Vec::<Arc<Player>>::new();
 
-        for world in &self.worlds {
-            for (_, player) in world.current_players.lock().await.iter() {
+        for world in self.worlds.read().await.iter() {
+            for (_, player) in world.players.read().await.iter() {
                 players.push(player.clone());
             }
         }
@@ -334,7 +406,7 @@ impl Server {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not found.
     pub async fn get_player_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<Player>> {
-        for world in &self.worlds {
+        for world in self.worlds.read().await.iter() {
             if let Some(player) = world.get_player_by_uuid(id).await {
                 return Some(player);
             }
@@ -351,8 +423,8 @@ impl Server {
     /// The total number of players connected to the server.
     pub async fn get_player_count(&self) -> usize {
         let mut count = 0;
-        for world in &self.worlds {
-            count += world.current_players.lock().await.len();
+        for world in self.worlds.read().await.iter() {
+            count += world.players.read().await.len();
         }
         count
     }
@@ -360,8 +432,8 @@ impl Server {
     /// Similar to [`Server::get_player_count`] >= n, but may be more efficient since it stops it's iteration through all worlds as soon as n players were found.
     pub async fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
-        for world in &self.worlds {
-            count += world.current_players.lock().await.len();
+        for world in self.worlds.read().await.iter() {
+            count += world.players.read().await.len();
             if count >= n {
                 return true;
             }
@@ -406,8 +478,8 @@ impl Server {
     }
 
     async fn tick(&self) {
-        for world in &self.worlds {
-            world.tick().await;
+        for world in self.worlds.read().await.iter() {
+            world.tick(self).await;
         }
     }
 }

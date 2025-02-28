@@ -1,21 +1,21 @@
-use pumpkin_core::permission::PermissionLvl;
-use pumpkin_core::text::TextComponent;
 use pumpkin_protocol::client::play::CommandSuggestion;
+use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::text::TextComponent;
 
 use super::args::ConsumedArgs;
 
+use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError::{
     GeneralCommandIssue, InvalidConsumption, InvalidRequirement, OtherPumpkin, PermissionDenied,
 };
 use crate::command::tree::{Command, CommandTree, NodeType, RawArgs};
-use crate::command::CommandSender;
 use crate::error::PumpkinError;
 use crate::server::Server;
-use pumpkin_core::text::color::{Color, NamedColor};
+use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
-pub(crate) enum CommandError {
+pub enum CommandError {
     /// This error means that there was an error while parsing a previously consumed argument.
     /// That only happens when consumption is wrongly implemented, as it should ensure parsing may
     /// never fail.
@@ -35,11 +35,15 @@ impl CommandError {
     pub fn into_string_or_pumpkin_error(self, cmd: &str) -> Result<String, Box<dyn PumpkinError>> {
         match self {
             InvalidConsumption(s) => {
-                log::error!("Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed");
+                log::error!(
+                    "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
+                );
                 Ok("Internal Error (See logs for details)".into())
             }
             InvalidRequirement => {
-                log::error!("Error while parsing command \"{cmd}\": a requirement that was expected was not met.");
+                log::error!(
+                    "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
+                );
                 Ok("Internal Error (See logs for details)".into())
             }
             PermissionDenied => {
@@ -72,7 +76,7 @@ impl CommandDispatcher {
                     sender
                         .send_message(
                             TextComponent::text(err)
-                                .color_named(pumpkin_core::text::color::NamedColor::Red),
+                                .color_named(pumpkin_util::text::color::NamedColor::Red),
                         )
                         .await;
                 }
@@ -114,11 +118,15 @@ impl CommandDispatcher {
                 .await
             {
                 Err(InvalidConsumption(s)) => {
-                    log::error!("Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed");
+                    log::error!(
+                        "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
+                    );
                     return Vec::new();
                 }
                 Err(InvalidRequirement) => {
-                    log::error!("Error while parsing command \"{cmd}\": a requirement that was expected was not met.");
+                    log::error!(
+                        "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
+                    );
                     return Vec::new();
                 }
                 Err(PermissionDenied) => {
@@ -159,6 +167,10 @@ impl CommandDispatcher {
             .ok_or(GeneralCommandIssue("Empty Command".to_string()))?;
         let raw_args: Vec<&str> = parts.rev().collect();
 
+        if !self.commands.contains_key(key) {
+            return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
+        }
+
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
                 "Permission for Command not found".to_string(),
@@ -192,7 +204,9 @@ impl CommandDispatcher {
             Command::Tree(tree) => Ok(tree),
             Command::Alias(target) => {
                 let Some(Command::Tree(tree)) = self.commands.get(target) else {
-                    log::error!("Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree");
+                    log::error!(
+                        "Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree"
+                    );
                     return Err(GeneralCommandIssue(
                         "Internal Error (See logs for details)".into(),
                     ));
@@ -312,12 +326,31 @@ impl CommandDispatcher {
         self.commands
             .insert(primary_name.to_string(), Command::Tree(tree));
     }
+
+    /// Remove a command from the dispatcher by its primary name.
+    pub(crate) fn unregister(&mut self, name: &str) {
+        let mut to_remove = Vec::new();
+        for (key, value) in &self.commands {
+            if key == name {
+                to_remove.push(key.clone());
+            } else if let Command::Alias(target) = value {
+                if target == name {
+                    to_remove.push(key.clone());
+                }
+            }
+        }
+
+        for key in to_remove {
+            self.commands.remove(&key);
+            self.permissions.remove(&key);
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::command::{default_dispatcher, tree::CommandTree};
-    use pumpkin_core::permission::PermissionLvl;
+    use crate::command::{commands::default_dispatcher, tree::CommandTree};
+    use pumpkin_util::permission::PermissionLvl;
     #[test]
     fn test_dynamic_command() {
         let mut dispatcher = default_dispatcher();

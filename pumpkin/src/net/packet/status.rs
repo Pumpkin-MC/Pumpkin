@@ -13,6 +13,6 @@ impl Client {
         log::debug!("Handling ping request");
         self.send_packet(&CPingResponse::new(ping_request.payload))
             .await;
-        self.close();
+        self.close().await;
     }
 }

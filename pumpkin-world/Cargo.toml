@@ -5,9 +5,13 @@ edition.workspace = true
 
 [dependencies]
 pumpkin-nbt = { path = "../pumpkin-nbt" }
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-macros = { path = "../pumpkin-macros" }
+pumpkin-data = { path = "../pumpkin-data" }
+
+bytes.workspace = true
+
 
 tokio.workspace = true
 rayon.workspace = true
@@ -17,30 +21,32 @@ serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 
-dashmap = "6.1.0"
+num-derive = "0.4"
+
+dashmap = "6.1"
 
 num-traits = "0.2"
 
-# Compression   
-flate2 = "1.0"
-lz4 = "1.28.0"
+# Compression
+flate2 = "1.1"
+lz4 = "1.28"
+zstd = "0.13.3"
 
-file-guard = "0.2.0"
 
-enum_dispatch = "0.3.13"
+file-guard = "0.2"
+indexmap = "2.7"
 
-fastnbt = { git = "https://github.com/owengage/fastnbt.git" }
+enum_dispatch = "0.3"
 
-noise = "0.9.0"
+noise = "0.9"
 
-rand = "0.8.5"
+# Had to use custom, because google's is broken, I made a PR.
+serde_json5 = { git = "https://github.com/kralverde/serde_json5.git" }
 
+derive-getters = "0.5.0"
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }
-
-[[bench]]
-name = "chunk_noise"
-harness = false
+criterion = { version = "0.5", features = ["html_reports"] }
+temp-dir = "0.1.14"
 
 [[bench]]
 name = "chunk_noise_populate"

@@ -1,48 +1,54 @@
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 
-use arg_bounded_num::{NotInBounds, Number};
 use async_trait::async_trait;
-use pumpkin_core::text::TextComponent;
-use pumpkin_core::{
-    math::{position::WorldPosition, vector2::Vector2, vector3::Vector3},
+use bounded_num::{NotInBounds, Number};
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EffectType;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::SoundCategory;
+use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::{
     GameMode,
-};
-use pumpkin_protocol::client::play::{
-    CommandSuggestion, ProtoCmdArgParser, ProtoCmdArgSuggestionType,
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
 };
 
 use super::{
+    CommandSender,
     dispatcher::CommandError,
     tree::{CommandTree, RawArgs},
-    CommandSender,
 };
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
-pub(crate) mod arg_block;
-pub(crate) mod arg_bool;
-pub(crate) mod arg_bossbar_color;
-pub(crate) mod arg_bossbar_style;
-pub(crate) mod arg_bounded_num;
-pub(crate) mod arg_command;
-pub(crate) mod arg_entities;
-pub(crate) mod arg_entity;
-pub(crate) mod arg_gamemode;
-pub(crate) mod arg_item;
-pub(crate) mod arg_message;
-pub(crate) mod arg_players;
-pub(crate) mod arg_position_2d;
-pub(crate) mod arg_position_3d;
-pub(crate) mod arg_position_block;
-pub(crate) mod arg_resource_location;
-pub(crate) mod arg_rotation;
-pub(crate) mod arg_simple;
-pub(crate) mod arg_textcomponent;
+pub mod block;
+pub mod bool;
+pub mod bossbar_color;
+pub mod bossbar_style;
+pub mod bounded_num;
+pub mod command;
 mod coordinate;
+pub mod entities;
+pub mod entity;
+pub mod gamemode;
+pub mod message;
+pub mod players;
+pub mod position_2d;
+pub mod position_3d;
+pub mod position_block;
+pub mod resource;
+pub mod resource_location;
+pub mod rotation;
+pub mod simple;
+pub mod sound;
+pub mod sound_category;
+pub mod summonable_entities;
+pub mod textcomponent;
+pub mod time;
 
-/// see [`crate::commands::tree_builder::argument`]
+/// see [`crate::commands::tree::builder::argument`]
 #[async_trait]
-pub(crate) trait ArgumentConsumer: Sync + GetClientSideArgParser {
+pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
     async fn consume<'a>(
         &'a self,
         sender: &CommandSender<'a>,
@@ -61,23 +67,23 @@ pub(crate) trait ArgumentConsumer: Sync + GetClientSideArgParser {
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError>;
 }
 
-pub(crate) trait GetClientSideArgParser {
+pub trait GetClientSideArgParser {
     /// Return the parser the client should use while typing a command in chat.
-    fn get_client_side_parser(&self) -> ProtoCmdArgParser;
+    fn get_client_side_parser(&self) -> ArgumentType;
     /// Usually this should return None. This can be used to force suggestions to be processed on serverside.
-    fn get_client_side_suggestion_type_override(&self) -> Option<ProtoCmdArgSuggestionType>;
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders>;
 }
 
-pub(crate) trait DefaultNameArgConsumer: ArgumentConsumer {
-    fn default_name(&self) -> String;
+pub trait DefaultNameArgConsumer: ArgumentConsumer {
+    fn default_name(&self) -> &str;
 }
 
 #[derive(Clone)]
-pub(crate) enum Arg<'a> {
+pub enum Arg<'a> {
     Entities(Vec<Arc<Player>>),
     Entity(Arc<Player>),
     Players(Vec<Arc<Player>>),
-    BlockPos(WorldPosition),
+    BlockPos(BlockPos),
     Pos3D(Vector3<f64>),
     Pos2D(Vector2<f64>),
     Rotation(f32, f32),
@@ -88,16 +94,21 @@ pub(crate) enum Arg<'a> {
     Block(&'a str),
     BossbarColor(BossbarColor),
     BossbarStyle(BossbarDivisions),
+    Particle(Particle),
     Msg(String),
     TextComponent(TextComponent),
+    Time(i32),
     Num(Result<Number, NotInBounds>),
     Bool(bool),
     #[allow(unused)]
     Simple(&'a str),
+    SoundCategory(SoundCategory),
+    DamageType(DamageType),
+    Effect(EffectType),
 }
 
-/// see [`crate::commands::tree_builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree_builder::NonLeafNodeBuilder::execute`]
-pub(crate) type ConsumedArgs<'a> = HashMap<&'a str, Arg<'a>>;
+/// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]
+pub type ConsumedArgs<'a> = HashMap<&'a str, Arg<'a>>;
 
 pub(crate) trait GetCloned<K, V: Clone> {
     fn get_cloned(&self, key: &K) -> Option<V>;
@@ -109,7 +120,7 @@ impl<K: Eq + Hash, V: Clone> GetCloned<K, V> for HashMap<K, V> {
     }
 }
 
-pub(crate) trait FindArg<'a> {
+pub trait FindArg<'a> {
     type Data;
 
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError>;
@@ -121,7 +132,7 @@ pub(crate) trait FindArgDefaultName<'a, T> {
 
 impl<'a, T, C: FindArg<'a, Data = T> + DefaultNameArgConsumer> FindArgDefaultName<'a, T> for C {
     fn find_arg_default_name(&self, args: &'a ConsumedArgs) -> Result<T, CommandError> {
-        C::find_arg(args, &self.default_name())
+        C::find_arg(args, self.default_name())
     }
 }
 

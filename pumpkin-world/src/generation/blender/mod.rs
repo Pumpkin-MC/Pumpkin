@@ -1,6 +1,6 @@
 use enum_dispatch::enum_dispatch;
 
-use super::noise::density::NoisePos;
+use super::noise_router::density_function::NoisePos;
 
 pub struct BlendResult {
     alpha: f64,
@@ -26,7 +26,7 @@ impl Blender {
 pub trait BlenderImpl {
     fn calculate(&self, block_x: i32, block_z: i32) -> BlendResult;
 
-    fn apply_blend_density(&self, pos: &NoisePos, density: f64) -> f64;
+    fn apply_blend_density(&self, pos: &impl NoisePos, density: f64) -> f64;
 
     fn get_biome_supplier(&self) {
         todo!()
@@ -40,7 +40,7 @@ impl BlenderImpl for NoBlendBlender {
         BlendResult::new(1f64, 1f64)
     }
 
-    fn apply_blend_density(&self, _pos: &NoisePos, density: f64) -> f64 {
+    fn apply_blend_density(&self, _pos: &impl NoisePos, density: f64) -> f64 {
         density
     }
 }

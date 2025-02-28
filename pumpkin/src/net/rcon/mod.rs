@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
-use pumpkin_config::{RCONConfig, ADVANCED_CONFIG};
+use pumpkin_config::{ADVANCED_CONFIG, RCONConfig};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -89,12 +89,12 @@ impl RCONClient {
                 if packet.get_body() == password {
                     self.send(ClientboundPacket::AuthResponse, packet.get_id(), "")
                         .await?;
-                    if config.logging.log_logged_successfully {
+                    if config.logging.logged_successfully {
                         log::info!("RCON ({}): Client logged in successfully", self.address);
                     }
                     self.logged_in = true;
                 } else {
-                    if config.logging.log_wrong_password {
+                    if config.logging.wrong_password {
                         log::info!("RCON ({}): Client has tried wrong password", self.address);
                     }
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
@@ -103,18 +103,25 @@ impl RCONClient {
             }
             ServerboundPacket::ExecCommand => {
                 if self.logged_in {
-                    let output = tokio::sync::Mutex::new(Vec::new());
-                    let dispatcher = server.command_dispatcher.read().await;
-                    dispatcher
-                        .handle_command(
-                            &mut crate::command::CommandSender::Rcon(&output),
-                            server,
-                            packet.get_body(),
-                        )
-                        .await;
+                    let output = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+
+                    let server_clone = server.clone();
+                    let output_clone = output.clone();
+                    let packet_body = packet.get_body().to_owned();
+                    tokio::spawn(async move {
+                        let dispatcher = server_clone.command_dispatcher.read().await;
+                        dispatcher
+                            .handle_command(
+                                &mut crate::command::CommandSender::Rcon(&output_clone),
+                                &server_clone,
+                                &packet_body,
+                            )
+                            .await;
+                    });
+
                     let output = output.lock().await;
                     for line in output.iter() {
-                        if config.logging.log_commands {
+                        if config.logging.commands {
                             log::info!("RCON ({}): {}", self.address, line);
                         }
                         self.send(ClientboundPacket::Output, packet.get_id(), line)

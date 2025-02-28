@@ -1,13 +1,13 @@
-use pumpkin_core::math::vector2::Vector2;
+use pumpkin_data::chunk::Biome;
+use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
-    biome::Biome,
-    block::block_state::BlockState,
+    block::state::BlockState,
     coordinates::XZBlockCoordinates,
     generation::{
+        Seed,
         generator::{BiomeGenerator, GeneratorInit, TerrainGenerator},
         generic_generator::GenericGenerator,
-        Seed,
     },
 };
 
@@ -45,7 +45,7 @@ impl TerrainGenerator for SuperflatTerrainGenerator {
     fn generate_block(
         &self,
         _chunk_pos: &Vector2<i32>,
-        _at: pumpkin_core::math::vector3::Vector3<i32>,
+        _at: pumpkin_util::math::vector3::Vector3<i32>,
         _biome: Biome,
     ) -> BlockState {
         todo!()

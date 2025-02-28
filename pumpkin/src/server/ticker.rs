@@ -2,6 +2,8 @@ use std::time::{Duration, Instant};
 
 use tokio::time::sleep;
 
+use crate::SHOULD_STOP;
+
 use super::Server;
 
 pub struct Ticker {
@@ -20,7 +22,7 @@ impl Ticker {
 
     /// IMPORTANT: Run this in a new thread/tokio task
     pub async fn run(&mut self, server: &Server) {
-        loop {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
             let now = Instant::now();
             let elapsed = now - self.last_tick;
 
@@ -33,5 +35,6 @@ impl Ticker {
                 sleep(sleep_time).await;
             }
         }
+        log::debug!("Ticker stopped");
     }
 }

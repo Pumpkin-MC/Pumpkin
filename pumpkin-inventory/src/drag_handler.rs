@@ -91,7 +91,7 @@ impl DragHandler {
                 single_item.item_count = 1;
 
                 let changing_slots =
-                    drag.possibly_changing_slots(&slots_cloned, carried_item.item_id);
+                    drag.possibly_changing_slots(&slots_cloned, carried_item.item.id);
                 changing_slots.for_each(|slot| {
                     if carried_item.item_count != 0 {
                         carried_item.item_count -= 1;
@@ -117,7 +117,7 @@ impl DragHandler {
                 // In that specific case, follow MouseDragType::Right behaviours instead!
 
                 let changing_slots =
-                    drag.possibly_changing_slots(&slots_cloned, carried_item.item_id);
+                    drag.possibly_changing_slots(&slots_cloned, carried_item.item.id);
                 let amount_of_slots = changing_slots.clone().count();
                 let (amount_per_slot, remainder) = if amount_of_slots == 0 {
                     // TODO: please work lol
@@ -160,7 +160,7 @@ impl Drag {
 
             match slot {
                 Some(item_slot) => {
-                    if item_slot.item_id == carried_item_id {
+                    if item_slot.item.id == carried_item_id {
                         Some(*slot_index)
                     } else {
                         None

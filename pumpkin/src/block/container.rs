@@ -1,14 +1,14 @@
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
 use pumpkin_inventory::Container;
-use pumpkin_world::block::block_registry::Block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::registry::Block;
 
 #[async_trait]
 pub trait ContainerBlock<C: Container> {
     const UNIQUE: bool;
-    async fn open(&self, block: &Block, player: &Player, location: WorldPosition, server: &Server)
+    async fn open(&self, block: &Block, player: &Player, location: BlockPos, server: &Server)
     where
         C: Default + 'static,
     {
@@ -33,7 +33,7 @@ pub trait ContainerBlock<C: Container> {
                 container
             } else {
                 open_containers
-                    .new_by_location::<C>(location, Some(block.clone()))
+                    .new_by_location::<C>(player.gameprofile.id, location, Some(block.clone()))
                     .unwrap()
             };
 
@@ -45,23 +45,26 @@ pub trait ContainerBlock<C: Container> {
         }
     }
 
-    async fn close(&self, location: WorldPosition, server: &Server, player: &Player)
+    async fn close(&self, location: BlockPos, server: &Server, player: &Player)
     where
         C: Default + 'static,
     {
         if Self::UNIQUE {
+            log::info!("REMOVED CONTAINER");
             self.destroy(location, server, player).await;
         } else {
+            log::info!("STARTED");
             let mut containers = server.open_containers.write().await;
             if let Some(container) = containers.get_mut_by_location(&location) {
                 container.remove_player(player.gameprofile.id);
             }
+            log::info!("DONE");
         }
     }
 
     /// The standard destroy with container removes the player forcibly from the container,
     /// drops items to the floor, and back to the player's inventory if the item stack is in movement.
-    async fn destroy(&self, location: WorldPosition, server: &Server, player: &Player) {
+    async fn destroy(&self, location: BlockPos, server: &Server, player: &Player) {
         let mut open_containers = server.open_containers.write().await;
 
         let mut inventory = player.inventory().lock().await;

@@ -1,9 +1,16 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use pumpkin_world::bench_create_and_populate_noise;
+use criterion::{Criterion, criterion_group, criterion_main};
+use pumpkin_world::{
+    GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS, bench_create_and_populate_noise,
+};
 
 fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("overworld convert + noise", |b| {
-        b.iter(bench_create_and_populate_noise)
+    let seed = 0;
+    let random_config = GlobalRandomConfig::new(seed);
+    let base_router =
+        GlobalProtoNoiseRouter::generate(NOISE_ROUTER_ASTS.overworld(), &random_config);
+
+    c.bench_function("overworld noise", |b| {
+        b.iter(|| bench_create_and_populate_noise(&base_router, &random_config));
     });
 }
 

@@ -1,43 +1,92 @@
+use crate::server::Server;
+use async_trait::async_trait;
+use bytes::{BufMut, BytesMut};
 use core::f32;
-use std::sync::{atomic::AtomicBool, Arc};
-
 use crossbeam::atomic::AtomicCell;
-use pumpkin_core::math::{
-    boundingbox::{BoundingBox, BoundingBoxSize},
+use living::LivingEntity;
+use player::Player;
+use pumpkin_data::{
+    damage::DamageType,
+    entity::{EntityPose, EntityType},
+    sound::{Sound, SoundCategory},
+};
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_protocol::{
+    bytebuf::serializer::Serializer,
+    client::play::{
+        CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
+        CUpdateEntityRot, MetaDataType, Metadata,
+    },
+    codec::var_int::VarInt,
+};
+use pumpkin_util::math::{
+    boundingbox::{BoundingBox, EntityDimensions},
     get_section_cord,
-    position::WorldPosition,
+    position::BlockPos,
     vector2::Vector2,
     vector3::Vector3,
     wrap_degrees,
 };
-use pumpkin_entity::{entity_type::EntityType, pose::EntityPose, EntityId};
-use pumpkin_protocol::{
-    client::play::{CHeadRot, CSetEntityMetadata, CTeleportEntity, CUpdateEntityRot, Metadata},
-    codec::var_int::VarInt,
-};
+use serde::Serialize;
+use std::sync::{Arc, atomic::AtomicBool};
+use tokio::sync::RwLock;
 
 use crate::world::World;
 
 pub mod ai;
-pub mod mob;
-
+pub mod effect;
+pub mod hunger;
+pub mod item;
 pub mod living;
+pub mod mob;
 pub mod player;
+pub mod projectile;
+pub mod tnt;
+
+mod combat;
+
+pub type EntityId = i32;
+
+#[async_trait]
+pub trait EntityBase: Send + Sync {
+    /// Gets Called every tick
+    async fn tick(&self, server: &Server) {
+        if let Some(living) = self.get_living_entity() {
+            living.tick(server).await;
+        } else {
+            self.get_entity().tick(server).await;
+        }
+    }
+
+    /// Returns if damage was successful or not
+    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+        if let Some(living) = self.get_living_entity() {
+            living.damage(amount, damage_type).await
+        } else {
+            self.get_entity().damage(amount, damage_type).await
+        }
+    }
+
+    /// Called when a player collides with a entity
+    async fn on_player_collision(&self, _player: Arc<Player>) {}
+    fn get_entity(&self) -> &Entity;
+    fn get_living_entity(&self) -> Option<&LivingEntity>;
+}
 
 /// Represents a not living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: EntityId,
-    /// A persistant, unique identifier for the entity
+    /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
     /// The type of entity (e.g., player, zombie, item)
     pub entity_type: EntityType,
     /// The world in which the entity exists.
-    pub world: Arc<World>,
+    pub world: Arc<RwLock<Arc<World>>>,
     /// The entity's current position in the world
     pub pos: AtomicCell<Vector3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
-    pub block_pos: AtomicCell<WorldPosition>,
+    pub block_pos: AtomicCell<BlockPos>,
     /// The chunk coordinates of the entity's current position
     pub chunk_pos: AtomicCell<Vector2<i32>>,
     /// Indicates whether the entity is sneaking
@@ -63,11 +112,15 @@ pub struct Entity {
     /// The bounding box of an entity (hitbox)
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
-    pub bounding_box_size: AtomicCell<BoundingBoxSize>,
+    pub bounding_box_size: AtomicCell<EntityDimensions>,
+    /// Whether this entity is invulnerable to all damage
+    pub invulnerable: AtomicBool,
+    /// List of damage types this entity is immune to
+    pub damage_immunities: Vec<DamageType>,
 }
 
 impl Entity {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         entity_id: EntityId,
         entity_uuid: uuid::Uuid,
@@ -76,7 +129,8 @@ impl Entity {
         entity_type: EntityType,
         standing_eye_height: f32,
         bounding_box: AtomicCell<BoundingBox>,
-        bounding_box_size: AtomicCell<BoundingBoxSize>,
+        bounding_box_size: AtomicCell<EntityDimensions>,
+        invulnerable: bool,
     ) -> Self {
         let floor_x = position.x.floor() as i32;
         let floor_y = position.y.floor() as i32;
@@ -88,10 +142,10 @@ impl Entity {
             entity_type,
             on_ground: AtomicBool::new(false),
             pos: AtomicCell::new(position),
-            block_pos: AtomicCell::new(WorldPosition(Vector3::new(floor_x, floor_y, floor_z))),
+            block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
             chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
-            world,
+            world: Arc::new(RwLock::new(world)),
             // TODO: Load this from previous instance
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -103,7 +157,18 @@ impl Entity {
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             bounding_box_size,
+            invulnerable: AtomicBool::new(invulnerable),
+            damage_immunities: Vec::new(),
         }
+    }
+
+    pub async fn set_velocity(&self, velocity: Vector3<f64>) {
+        self.velocity.store(velocity);
+        self.world
+            .read()
+            .await
+            .broadcast_packet_all(&CEntityVelocity::new(self.entity_id.into(), velocity))
+            .await;
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -131,7 +196,7 @@ impl Entity {
                 || floor_z != block_pos_vec.z
             {
                 let new_block_pos = Vector3::new(floor_x, floor_y, floor_z);
-                self.block_pos.store(WorldPosition(new_block_pos));
+                self.block_pos.store(BlockPos(new_block_pos));
 
                 let chunk_pos = self.chunk_pos.load();
                 if get_section_cord(floor_x) != chunk_pos.x
@@ -146,6 +211,20 @@ impl Entity {
         }
     }
 
+    /// Returns entity rotation as vector
+    pub fn rotation(&self) -> Vector3<f32> {
+        // Convert degrees to radians if necessary
+        let yaw_rad = self.yaw.load().to_radians();
+        let pitch_rad = self.pitch.load().to_radians();
+
+        Vector3::new(
+            yaw_rad.cos() * pitch_rad.cos(),
+            pitch_rad.sin(),
+            yaw_rad.sin() * pitch_rad.cos(),
+        )
+        .normalize()
+    }
+
     /// Changes this entity's pitch and yaw to look at target
     pub async fn look_at(&self, target: Vector3<f64>) {
         let position = self.pos.load();
@@ -157,9 +236,12 @@ impl Entity {
         self.yaw.store(yaw);
 
         // send packet
+        // TODO: do caching, only send packet when needed
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CUpdateEntityRot::new(
                 self.entity_id.into(),
                 yaw as u8,
@@ -168,12 +250,16 @@ impl Entity {
             ))
             .await;
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), yaw as u8))
             .await;
     }
 
     pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
         self.world
+            .read()
+            .await
             .broadcast_packet_all(&CTeleportEntity::new(
                 self.entity_id.into(),
                 position,
@@ -193,12 +279,35 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
-        self.pitch.store(pitch);
+        self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
     }
 
     /// Removes the Entity from their current World
     pub async fn remove(&self) {
-        self.world.remove_entity(self).await;
+        self.world.read().await.remove_entity(self).await;
+    }
+
+    pub fn create_spawn_packet(&self) -> CSpawnEntity {
+        let entity_loc = self.pos.load();
+        let entity_vel = self.velocity.load();
+        CSpawnEntity::new(
+            VarInt(self.entity_id),
+            self.entity_uuid,
+            VarInt(i32::from(self.entity_type.id)),
+            entity_loc,
+            self.pitch.load(),
+            self.yaw.load(),
+            self.head_yaw.load(), // todo: head_yaw and yaw are swapped, find out why
+            0.into(),
+            entity_vel,
+        )
+    }
+    pub fn width(&self) -> f32 {
+        self.bounding_box_size.load().width
+    }
+
+    pub fn height(&self) -> f32 {
+        self.bounding_box_size.load().height
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -264,19 +373,119 @@ impl Entity {
         } else {
             b &= !(1 << index);
         }
-        let packet = CSetEntityMetadata::new(self.entity_id.into(), Metadata::new(0, 0.into(), b));
-        self.world.broadcast_packet_all(&packet).await;
+        self.send_meta_data(&[Metadata::new(0, MetaDataType::Byte, b)])
+            .await;
+    }
+
+    /// Plays sound at this entity's position with the entity's sound category
+    pub async fn play_sound(&self, sound: Sound) {
+        self.world
+            .read()
+            .await
+            .play_sound(sound, SoundCategory::Neutral, &self.pos.load())
+            .await;
+    }
+
+    pub async fn send_meta_data<T>(&self, meta: &[Metadata<T>])
+    where
+        T: Serialize,
+    {
+        let mut buf = Vec::new();
+        for meta in meta {
+            let serializer_buf = BytesMut::new();
+            let mut serializer = Serializer::new(serializer_buf);
+            meta.serialize(&mut serializer).unwrap();
+            buf.put(serializer.output);
+        }
+        buf.put_u8(255);
+        self.world
+            .read()
+            .await
+            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf))
+            .await;
     }
 
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        let packet = CSetEntityMetadata::<VarInt>::new(
-            self.entity_id.into(),
-            Metadata::new(6, 21.into(), pose.into()),
-        );
-        self.world.broadcast_packet_all(&packet).await;
+        self.send_meta_data(&[Metadata::new(6, MetaDataType::EntityPose, VarInt(pose))])
+            .await;
     }
+
+    pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
+        self.invulnerable.load(std::sync::atomic::Ordering::Relaxed)
+            || self.damage_immunities.contains(damage_type)
+    }
+}
+
+#[async_trait]
+impl EntityBase for Entity {
+    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+        false
+    }
+
+    async fn tick(&self, _: &Server) {}
+
+    fn get_entity(&self) -> &Entity {
+        self
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+}
+
+#[async_trait]
+impl NBTStorage for Entity {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        let position = self.pos.load();
+        nbt.put(
+            "Pos",
+            NbtTag::List(
+                vec![position.x.into(), position.y.into(), position.z.into()].into_boxed_slice(),
+            ),
+        );
+        let velocity = self.velocity.load();
+        nbt.put(
+            "Motion",
+            NbtTag::List(
+                vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
+            ),
+        );
+        nbt.put(
+            "Rotation",
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
+        );
+
+        // todo more...
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        let position = nbt.get_list("Pos").unwrap();
+        let x = position[0].extract_double().unwrap_or(0.0);
+        let y = position[1].extract_double().unwrap_or(0.0);
+        let z = position[2].extract_double().unwrap_or(0.0);
+        self.pos.store(Vector3::new(x, y, z));
+        let velocity = nbt.get_list("Motion").unwrap();
+        let x = velocity[0].extract_double().unwrap_or(0.0);
+        let y = velocity[1].extract_double().unwrap_or(0.0);
+        let z = velocity[2].extract_double().unwrap_or(0.0);
+        self.velocity.store(Vector3::new(x, y, z));
+        let rotation = nbt.get_list("Rotation").unwrap();
+        let yaw = rotation[0].extract_float().unwrap_or(0.0);
+        let pitch = rotation[1].extract_float().unwrap_or(0.0);
+        self.yaw.store(yaw);
+        self.pitch.store(pitch);
+
+        // todo more...
+    }
+}
+
+#[async_trait]
+pub trait NBTStorage: Send + Sync {
+    async fn write_nbt(&self, nbt: &mut NbtCompound);
+
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -287,7 +496,6 @@ impl Entity {
 /// **Purpose:**
 ///
 /// This enum provides a more type-safe and readable way to represent entity flags compared to using raw integer values.
-#[repr(u8)]
 pub enum Flag {
     /// Indicates if the entity is on fire.
     OnFire = 0,

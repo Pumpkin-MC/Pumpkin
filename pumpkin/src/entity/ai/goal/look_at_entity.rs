@@ -33,6 +33,8 @@ impl Goal for LookAtEntityGoal {
             .living_entity
             .entity
             .world
+            .read()
+            .await
             .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
             .await;
         target.is_some()

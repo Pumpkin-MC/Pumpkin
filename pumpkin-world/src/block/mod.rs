@@ -1,11 +1,14 @@
-pub mod block_registry;
-pub mod block_state;
+pub mod interactive;
+pub mod registry;
+pub mod state;
 
-use pumpkin_core::math::vector3::Vector3;
+use num_derive::FromPrimitive;
+use pumpkin_util::math::vector3::Vector3;
 
-pub use block_state::BlockState;
+pub use state::BlockState;
 
-pub enum BlockFace {
+#[derive(FromPrimitive, PartialEq, Clone, Copy)]
+pub enum BlockDirection {
     Bottom = 0,
     Top,
     North,
@@ -16,7 +19,7 @@ pub enum BlockFace {
 
 pub struct InvalidBlockFace;
 
-impl TryFrom<i32> for BlockFace {
+impl TryFrom<i32> for BlockDirection {
     type Error = InvalidBlockFace;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
@@ -32,16 +35,26 @@ impl TryFrom<i32> for BlockFace {
     }
 }
 
-impl BlockFace {
+impl BlockDirection {
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
-            BlockFace::Bottom => (0, -1, 0),
-            BlockFace::Top => (0, 1, 0),
-            BlockFace::North => (0, 0, -1),
-            BlockFace::South => (0, 0, 1),
-            BlockFace::West => (-1, 0, 0),
-            BlockFace::East => (1, 0, 0),
+            BlockDirection::Bottom => (0, -1, 0),
+            BlockDirection::Top => (0, 1, 0),
+            BlockDirection::North => (0, 0, -1),
+            BlockDirection::South => (0, 0, 1),
+            BlockDirection::West => (-1, 0, 0),
+            BlockDirection::East => (1, 0, 0),
         }
         .into()
+    }
+    pub fn opposite(&self) -> BlockDirection {
+        match self {
+            BlockDirection::Bottom => BlockDirection::Top,
+            BlockDirection::Top => BlockDirection::Bottom,
+            BlockDirection::North => BlockDirection::South,
+            BlockDirection::South => BlockDirection::North,
+            BlockDirection::West => BlockDirection::East,
+            BlockDirection::East => BlockDirection::West,
+        }
     }
 }

@@ -5,11 +5,11 @@ edition.workspace = true
 
 [dependencies]
 pumpkin-protocol = { path = "../pumpkin-protocol" }
+pumpkin-data = { path = "../pumpkin-data" }
 
 pumpkin-world = { path = "../pumpkin-world" }
 pumpkin-registry = {path = "../pumpkin-registry"}
-pumpkin-macros = { path = "../pumpkin-macros" }
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin-util = { path = "../pumpkin-util" }
 
 log.workspace = true
 rayon.workspace = true

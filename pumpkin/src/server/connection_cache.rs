@@ -6,12 +6,12 @@ use std::{
     path::Path,
 };
 
-use base64::{engine::general_purpose, Engine as _};
-use pumpkin_config::{BasicConfiguration, BASIC_CONFIG};
+use base64::{Engine as _, engine::general_purpose};
+use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
 use pumpkin_protocol::{
+    CURRENT_MC_PROTOCOL, Players, StatusResponse, Version,
     client::{config::CPluginMessage, status::CStatusResponse},
-    codec::{var_int::VarInt, Codec},
-    Players, StatusResponse, Version, CURRENT_MC_PROTOCOL,
+    codec::{Codec, var_int::VarInt},
 };
 
 use super::CURRENT_MC_VERSION;
@@ -48,7 +48,7 @@ pub struct CachedStatus {
 
 pub struct CachedBranding {
     /// Cached Server brand buffer so we don't have to rebuild them every time a player joins
-    cached_server_brand: Vec<u8>,
+    cached_server_brand: Box<[u8]>,
 }
 
 impl CachedBranding {
@@ -61,12 +61,13 @@ impl CachedBranding {
     pub fn get_branding(&self) -> CPluginMessage {
         CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
     }
-    fn build_brand() -> Vec<u8> {
-        let brand = "Pumpkin";
+    const BRAND: &str = "Pumpkin";
+    const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
+    fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
-        VarInt(brand.len() as i32).encode(&mut buf);
-        buf.extend_from_slice(brand.as_bytes());
-        buf
+        VarInt(Self::BRAND.len() as i32).encode(&mut buf);
+        buf.extend_from_slice(Self::BRAND_BYTES);
+        buf.into_boxed_slice()
     }
 }
 

@@ -1,10 +1,17 @@
-use crate::block::block_manager::BlockActionResult;
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_data::item::Item;
+use pumpkin_inventory::OpenContainer;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::registry::Block;
+use std::sync::Arc;
+
+use super::properties::Direction;
 
 pub trait BlockMetadata {
     const NAMESPACE: &'static str;
@@ -16,42 +23,87 @@ pub trait BlockMetadata {
 
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
-    async fn on_use<'a>(
+    async fn normal_use(
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
     ) {
     }
-    async fn on_use_with_item<'a>(
+    fn should_drop_items_on_explosion(&self) -> bool {
+        true
+    }
+    async fn explode(
+        &self,
+        _block: &Block,
+        _world: &Arc<World>,
+        _location: BlockPos,
+        _server: &Server,
+    ) {
+    }
+    async fn use_with_item(
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _item: &Item,
         _server: &Server,
     ) -> BlockActionResult {
         BlockActionResult::Continue
     }
 
-    async fn on_placed<'a>(
+    #[allow(clippy::too_many_arguments)]
+    async fn on_place(
+        &self,
+        server: &Server,
+        world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
+        use_item_on: &SUseItemOn,
+        player_direction: &Direction,
+        other: bool,
+    ) -> u16 {
+        server
+            .block_properties_manager
+            .on_place_state(
+                world,
+                block,
+                face,
+                block_pos,
+                use_item_on,
+                player_direction,
+                other,
+            )
+            .await
+    }
+
+    async fn placed(
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
     ) {
     }
 
-    async fn on_broken<'a>(
+    async fn broken(
         &self,
         _block: &Block,
         _player: &Player,
-        _location: WorldPosition,
+        _location: BlockPos,
         _server: &Server,
     ) {
     }
 
-    async fn on_close<'a>(&self, _player: &Player, _location: WorldPosition, _server: &Server) {}
+    async fn close(
+        &self,
+        _block: &Block,
+        _player: &Player,
+        _location: BlockPos,
+        _server: &Server,
+        _container: &mut OpenContainer,
+    ) {
+    }
 }

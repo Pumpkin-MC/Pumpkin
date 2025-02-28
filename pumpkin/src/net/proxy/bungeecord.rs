@@ -4,7 +4,7 @@ use pumpkin_protocol::Property;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::net::{offline_uuid, GameProfile};
+use crate::net::{GameProfile, offline_uuid};
 
 #[derive(Error, Debug)]
 pub enum BungeeCordError {

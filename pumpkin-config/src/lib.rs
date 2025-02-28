@@ -1,7 +1,8 @@
+use chunk::ChunkConfig;
 use log::warn;
 use logging::LoggingConfig;
-use pumpkin_core::{Difficulty, GameMode, PermissionLvl};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::{
     env, fs,
@@ -26,6 +27,7 @@ pub use server_links::ServerLinksConfig;
 
 mod commands;
 
+pub mod chunk;
 pub mod op;
 mod pvp;
 mod server_links;
@@ -50,6 +52,7 @@ pub static BASIC_CONFIG: LazyLock<BasicConfiguration> = LazyLock::new(BasicConfi
 pub struct AdvancedConfiguration {
     pub logging: LoggingConfig,
     pub resource_pack: ResourcePackConfig,
+    pub chunk: ChunkConfig,
     pub networking: NetworkingConfig,
     pub commands: CommandsConfig,
     pub pvp: PVPConfig,
@@ -83,6 +86,7 @@ pub struct BasicConfiguration {
     pub encryption: bool,
     /// The server's description displayed on the status screen.
     pub motd: String,
+    /// The server's ticks per second.
     pub tps: f32,
     /// The default game mode for players.
     pub default_gamemode: GameMode,
@@ -137,7 +141,7 @@ trait LoadConfiguration {
 
             toml::from_str(&file_content).unwrap_or_else(|err| {
                 panic!(
-                    "Couldn't parse config at {:?}. Reason: {}. This is is proberbly caused by an Config update, Just delete the old Config and start Pumpkin again",
+                    "Couldn't parse config at {:?}. Reason: {}. This is is probably caused by an Config update, Just delete the old Config and start Pumpkin again",
                     &path,
                     err.message()
                 )
@@ -147,7 +151,7 @@ trait LoadConfiguration {
 
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 warn!(
-                    "Couldn't write default config to {:?}. Reason: {}. This is is proberbly caused by an Config update, Just delete the old Config and start Pumpkin again",
+                    "Couldn't write default config to {:?}. Reason: {}. This is is probably caused by an Config update, Just delete the old Config and start Pumpkin again",
                     &path, err
                 );
             }
@@ -180,14 +184,15 @@ impl LoadConfiguration for BasicConfiguration {
     }
 
     fn validate(&self) {
+        let min = unsafe { NonZeroU8::new_unchecked(2) };
+        let max = unsafe { NonZeroU8::new_unchecked(32) };
+
         assert!(
-            self.view_distance
-                .ge(unsafe { &NonZeroU8::new_unchecked(2) }),
+            self.view_distance.ge(&min),
             "View distance must be at least 2"
         );
         assert!(
-            self.view_distance
-                .le(unsafe { &NonZeroU8::new_unchecked(32) }),
+            self.view_distance.le(&max),
             "View distance must be less than 32"
         );
         if self.online_mode {

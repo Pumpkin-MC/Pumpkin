@@ -3,8 +3,8 @@ use std::ops::Deref;
 use crate::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use derive_more::derive::{AsMut, AsRef, Display, Into};
 use num_traits::{PrimInt, Signed, Unsigned};
-use pumpkin_core::math::vector2::Vector2;
-use pumpkin_core::math::vector3::Vector3;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -14,13 +14,13 @@ use serde::{Deserialize, Serialize};
 pub struct Height(pub i16);
 
 impl Height {
-    pub fn from_absolute(height: u16) -> Self {
-        (height as i16 - WORLD_LOWEST_Y.abs()).into()
+    pub const fn from_absolute(height: u16) -> Self {
+        Self(height as i16 - WORLD_LOWEST_Y.abs())
     }
 
     /// Absolute height ranges from `0..WORLD_HEIGHT`
     /// instead of `WORLD_LOWEST_Y..WORLD_MAX_Y`
-    pub fn get_absolute(self) -> u16 {
+    pub const fn get_absolute(self) -> u16 {
         (self.0 + WORLD_LOWEST_Y.abs()) as u16
     }
 }

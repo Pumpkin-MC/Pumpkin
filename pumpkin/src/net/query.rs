@@ -13,7 +13,7 @@ use pumpkin_protocol::query::{
 use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
-use crate::server::{Server, CURRENT_MC_VERSION};
+use crate::server::{CURRENT_MC_VERSION, Server};
 
 pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
     let mut query_addr = bound_addr;
@@ -113,10 +113,10 @@ async fn handle_packet(
                         if packet.is_full_request {
                             // Get 4 players
                             let mut players: Vec<CString> = Vec::new();
-                            for world in &server.worlds {
+                            for world in server.worlds.read().await.iter() {
                                 let mut world_players = world
-                                    .current_players
-                                    .lock()
+                                    .players
+                                    .read()
                                     .await
                                     // Although there is no documented limit, we will limit to 4 players
                                     .values()
@@ -133,11 +133,19 @@ async fn handle_packet(
                                 }
                             }
 
+                            let plugin_manager = crate::PLUGIN_MANAGER.lock().await;
+                            let plugins = plugin_manager
+                                .list_plugins()
+                                .iter()
+                                .map(|(meta, _)| meta.name.to_string())
+                                .reduce(|acc, name| format!("{acc}, {name}"))
+                                .unwrap_or_default();
+
                             let response = CFullStatus {
                                 session_id: packet.session_id,
                                 hostname: CString::new(BASIC_CONFIG.motd.as_str())?,
                                 version: CString::new(CURRENT_MC_VERSION)?,
-                                plugins: CString::new("Pumpkin on 1.21.4")?, // TODO: Fill this with plugins when plugins are working
+                                plugins: CString::new(plugins)?,
                                 map: CString::new("world")?, // TODO: Get actual world name
                                 num_players: server.get_player_count().await,
                                 max_players: BASIC_CONFIG.max_players as usize,

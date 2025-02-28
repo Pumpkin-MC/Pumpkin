@@ -11,11 +11,8 @@ use instrument::Instrument;
 use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pumpkin_protocol::{client::config::RegistryEntry, codec::identifier::Identifier};
-pub use recipe::{
-    flatten_3x3, IngredientSlot, IngredientType, Recipe, RecipeResult, RecipeType, RECIPES,
-};
+pub use recipe::{RECIPES, Recipe, RecipeResult, RecipeType, flatten_3x3};
 use serde::{Deserialize, Serialize};
-pub use tags::{get_tag_values, TagCategory, TagType};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;
 use wolf::WolfVariant;
@@ -30,7 +27,6 @@ mod instrument;
 mod jukebox_song;
 mod paint;
 mod recipe;
-mod tags;
 mod trim_material;
 mod trim_pattern;
 mod wolf;
@@ -63,7 +59,6 @@ pub struct SyncedRegistry {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[repr(u8)]
 pub enum DimensionType {
     Overworld,
     OverworldCaves,
@@ -93,10 +88,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .biome
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let biome = Registry {
             registry_id: Identifier::vanilla("worldgen/biome"),
@@ -106,11 +98,9 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .chat_type
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
+
         let chat_type = Registry {
             registry_id: Identifier::vanilla("chat_type"),
             registry_entries,
@@ -145,13 +135,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .wolf_variant
             .iter()
-            .map(|s| {
-                let variant = s.1.clone();
-                RegistryEntry {
-                    entry_id: Identifier::vanilla(s.0),
-                    data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&variant).unwrap()),
-                }
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let wolf_variant = Registry {
             registry_id: Identifier::vanilla("wolf_variant"),
@@ -161,10 +145,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .painting_variant
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let painting_variant = Registry {
             registry_id: Identifier::vanilla("painting_variant"),
@@ -174,10 +155,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .dimension_type
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let dimension_type = Registry {
             registry_id: Identifier::vanilla("dimension_type"),
@@ -187,10 +165,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .damage_type
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let damage_type = Registry {
             registry_id: Identifier::vanilla("damage_type"),
@@ -200,10 +175,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .banner_pattern
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let banner_pattern = Registry {
             registry_id: Identifier::vanilla("banner_pattern"),
@@ -227,10 +199,7 @@ impl Registry {
         let registry_entries = SYNCED_REGISTRIES
             .jukebox_song
             .iter()
-            .map(|s| RegistryEntry {
-                entry_id: Identifier::vanilla(s.0),
-                data: Some(pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap()),
-            })
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let jukebox_song = Registry {
             registry_id: Identifier::vanilla("jukebox_song"),

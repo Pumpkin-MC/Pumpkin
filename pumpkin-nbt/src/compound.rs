@@ -1,7 +1,8 @@
+use crate::deserializer::ReadAdaptor;
+use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
-use crate::{get_nbt_string, Error, Nbt, END_ID};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::io::{Cursor, Write};
+use crate::{END_ID, Error, Nbt, get_nbt_string};
+use std::io::{ErrorKind, Read, Write};
 use std::vec::IntoIter;
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
@@ -16,53 +17,124 @@ impl NbtCompound {
         }
     }
 
-    pub fn deserialize_content(bytes: &mut impl Buf) -> Result<NbtCompound, Error> {
-        let mut compound = NbtCompound::new();
-
-        while bytes.has_remaining() {
-            let tag_id = bytes.get_u8();
+    pub fn skip_content<R>(reader: &mut ReadAdaptor<R>) -> Result<(), Error>
+    where
+        R: Read,
+    {
+        loop {
+            let tag_id = match reader.get_u8_be() {
+                Ok(id) => id,
+                Err(err) => match err {
+                    Error::Incomplete(err) => match err.kind() {
+                        ErrorKind::UnexpectedEof => {
+                            break;
+                        }
+                        _ => {
+                            return Err(Error::Incomplete(err));
+                        }
+                    },
+                    _ => {
+                        return Err(err);
+                    }
+                },
+            };
             if tag_id == END_ID {
                 break;
             }
 
-            let name = get_nbt_string(bytes).map_err(|_| Error::Cesu8DecodingError)?;
+            let len = reader.get_u16_be()?;
+            reader.skip_bytes(len as u64)?;
 
-            if let Ok(tag) = NbtTag::deserialize_data(bytes, tag_id) {
-                compound.put(name, tag);
-            } else {
+            NbtTag::skip_data(reader, tag_id)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn deserialize_content<R>(reader: &mut ReadAdaptor<R>) -> Result<NbtCompound, Error>
+    where
+        R: Read,
+    {
+        let mut compound = NbtCompound::new();
+
+        loop {
+            let tag_id = match reader.get_u8_be() {
+                Ok(id) => id,
+                Err(err) => match err {
+                    Error::Incomplete(err) => match err.kind() {
+                        ErrorKind::UnexpectedEof => {
+                            break;
+                        }
+                        _ => {
+                            return Err(Error::Incomplete(err));
+                        }
+                    },
+                    _ => {
+                        return Err(err);
+                    }
+                },
+            };
+            if tag_id == END_ID {
                 break;
             }
+
+            let name = get_nbt_string(reader)?;
+            let tag = NbtTag::deserialize_data(reader, tag_id)?;
+            compound.put(&name, tag);
         }
 
         Ok(compound)
     }
 
-    pub fn deserialize_content_from_cursor(
-        cursor: &mut Cursor<&[u8]>,
-    ) -> Result<NbtCompound, Error> {
-        Self::deserialize_content(cursor)
-    }
-
-    pub fn serialize_content(&self) -> Bytes {
-        let mut bytes = BytesMut::new();
+    pub fn serialize_content<W>(&self, w: &mut WriteAdaptor<W>) -> Result<(), Error>
+    where
+        W: Write,
+    {
         for (name, tag) in &self.child_tags {
-            bytes.put_u8(tag.get_type_id());
-            bytes.put(NbtTag::String(name.clone()).serialize_data());
-            bytes.put(tag.serialize_data());
+            w.write_u8_be(tag.get_type_id())?;
+            NbtTag::String(name.clone()).serialize_data(w)?;
+            tag.serialize_data(w)?;
         }
-        bytes.put_u8(END_ID);
-        bytes.freeze()
-    }
-
-    pub fn serialize_content_to_writer<W: Write>(&self, mut writer: W) -> std::io::Result<()> {
-        writer.write_all(&self.serialize_content())?;
+        w.write_u8_be(END_ID)?;
         Ok(())
     }
 
-    pub fn put(&mut self, name: String, value: impl Into<NbtTag>) {
+    pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
+        let name = name.to_string();
         if !self.child_tags.iter().any(|(key, _)| key == &name) {
             self.child_tags.push((name, value.into()));
         }
+    }
+
+    pub fn put_byte(&mut self, name: &str, value: i8) {
+        self.put(name, NbtTag::Byte(value));
+    }
+
+    pub fn put_bool(&mut self, name: &str, value: bool) {
+        self.put(name, NbtTag::Byte(if value { 1 } else { 0 }));
+    }
+
+    pub fn put_short(&mut self, name: &str, value: i16) {
+        self.put(name, NbtTag::Short(value));
+    }
+
+    pub fn put_int(&mut self, name: &str, value: i32) {
+        self.put(name, NbtTag::Int(value));
+    }
+    pub fn put_long(&mut self, name: &str, value: i64) {
+        self.put(name, NbtTag::Long(value));
+    }
+
+    pub fn put_float(&mut self, name: &str, value: f32) {
+        self.put(name, NbtTag::Float(value));
+    }
+
+    pub fn put_double(&mut self, name: &str, value: f64) {
+        self.put(name, NbtTag::Double(value));
+    }
+
+    pub fn put_component(&mut self, name: &str, value: NbtCompound) {
+        self.put(name, NbtTag::Compound(value));
     }
 
     pub fn get_byte(&self, name: &str) -> Option<i8> {
@@ -107,7 +179,7 @@ impl NbtCompound {
         self.get(name).and_then(|tag| tag.extract_string())
     }
 
-    pub fn get_list(&self, name: &str) -> Option<&Vec<NbtTag>> {
+    pub fn get_list(&self, name: &str) -> Option<&[NbtTag]> {
         self.get(name).and_then(|tag| tag.extract_list())
     }
 
@@ -115,11 +187,11 @@ impl NbtCompound {
         self.get(name).and_then(|tag| tag.extract_compound())
     }
 
-    pub fn get_int_array(&self, name: &str) -> Option<&Vec<i32>> {
+    pub fn get_int_array(&self, name: &str) -> Option<&[i32]> {
         self.get(name).and_then(|tag| tag.extract_int_array())
     }
 
-    pub fn get_long_array(&self, name: &str) -> Option<&Vec<i64>> {
+    pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
         self.get(name).and_then(|tag| tag.extract_long_array())
     }
 }
@@ -134,7 +206,7 @@ impl FromIterator<(String, NbtTag)> for NbtCompound {
     fn from_iter<T: IntoIterator<Item = (String, NbtTag)>>(iter: T) -> Self {
         let mut compound = NbtCompound::new();
         for (key, value) in iter {
-            compound.put(key, value);
+            compound.put(&key, value);
         }
         compound
     }

@@ -1,11 +1,11 @@
-use crate::block::block_manager::BlockActionResult;
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_core::math::position::WorldPosition;
+use pumpkin_data::item::Item;
 use pumpkin_inventory::Furnace;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::block::block_registry::Block;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::registry::Block;
 
 use crate::block::container::ContainerBlock;
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server};
@@ -15,21 +15,21 @@ pub struct FurnaceBlock;
 
 #[async_trait]
 impl PumpkinBlock for FurnaceBlock {
-    async fn on_use<'a>(
+    async fn normal_use(
         &self,
         block: &Block,
         player: &Player,
-        _location: WorldPosition,
+        location: BlockPos,
         server: &Server,
     ) {
-        self.open(block, player, _location, server).await;
+        self.open(block, player, location, server).await;
     }
 
-    async fn on_use_with_item<'a>(
+    async fn use_with_item(
         &self,
         block: &Block,
         player: &Player,
-        location: WorldPosition,
+        location: BlockPos,
         _item: &Item,
         server: &Server,
     ) -> BlockActionResult {
@@ -37,13 +37,7 @@ impl PumpkinBlock for FurnaceBlock {
         BlockActionResult::Consume
     }
 
-    async fn on_broken<'a>(
-        &self,
-        _block: &Block,
-        player: &Player,
-        location: WorldPosition,
-        server: &Server,
-    ) {
+    async fn broken(&self, _block: &Block, player: &Player, location: BlockPos, server: &Server) {
         self.destroy(location, server, player).await;
     }
 }

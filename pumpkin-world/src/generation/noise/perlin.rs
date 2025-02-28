@@ -1,10 +1,10 @@
-use std::sync::Arc;
-
 use num_traits::Pow;
-use pumpkin_core::random::RandomGenerator;
+use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+use pumpkin_util::random::RandomGenerator;
 
-use super::{lerp3, GRADIENTS};
+use super::{GRADIENTS, lerp3};
 
+#[derive(Clone)]
 pub struct PerlinNoiseSampler {
     permutation: [u8; 256],
     x_origin: f64,
@@ -133,6 +133,7 @@ impl PerlinNoiseSampler {
     }
 }
 
+#[derive(Clone)]
 pub struct OctavePerlinNoiseSampler {
     octave_samplers: Box<[Option<PerlinNoiseSampler>]>,
     amplitudes: Box<[f64]>,
@@ -293,34 +294,10 @@ impl OctavePerlinNoiseSampler {
     }
 }
 
-pub struct DoublePerlinNoiseParameters {
-    first_octave: i32,
-    amplitudes: &'static [f64],
-    id: &'static str,
-}
-
-impl DoublePerlinNoiseParameters {
-    pub(crate) const fn new(
-        first_octave: i32,
-        amplitudes: &'static [f64],
-        id: &'static str,
-    ) -> Self {
-        Self {
-            first_octave,
-            amplitudes,
-            id,
-        }
-    }
-
-    pub fn id(&self) -> &'static str {
-        self.id
-    }
-}
-
 #[derive(Clone)]
 pub struct DoublePerlinNoiseSampler {
-    first_sampler: Arc<OctavePerlinNoiseSampler>,
-    second_sampler: Arc<OctavePerlinNoiseSampler>,
+    first_sampler: OctavePerlinNoiseSampler,
+    second_sampler: OctavePerlinNoiseSampler,
     amplitude: f64,
     max_value: f64,
 }
@@ -359,8 +336,8 @@ impl DoublePerlinNoiseSampler {
         let max_value = (first_sampler.max_value + second_sampler.max_value) * amplitude;
 
         Self {
-            first_sampler: first_sampler.into(),
-            second_sampler: second_sampler.into(),
+            first_sampler,
+            second_sampler,
             amplitude,
             max_value,
         }
@@ -377,11 +354,11 @@ impl DoublePerlinNoiseSampler {
 
 #[cfg(test)]
 mod double_perlin_noise_sampler_test {
-    use pumpkin_core::random::{
-        legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl,
+    use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+    use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+    use pumpkin_util::random::{
+        RandomGenerator, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
     };
-
-    use crate::generation::noise::perlin::{DoublePerlinNoiseParameters, DoublePerlinNoiseSampler};
 
     #[test]
     fn sample_legacy() {
@@ -582,8 +559,8 @@ mod double_perlin_noise_sampler_test {
 
 #[cfg(test)]
 mod octave_perline_noise_sampler_test {
-    use pumpkin_core::random::{
-        legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, RandomGenerator, RandomImpl,
+    use pumpkin_util::random::{
+        RandomGenerator, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
     };
 
     use super::OctavePerlinNoiseSampler;
@@ -753,11 +730,10 @@ mod octave_perline_noise_sampler_test {
 
 #[cfg(test)]
 mod perlin_noise_sampler_test {
-    use std::{fs, path::Path};
 
-    use pumpkin_core::{
+    use pumpkin_util::{
         assert_eq_delta,
-        random::{xoroshiro128::Xoroshiro, RandomDeriverImpl, RandomGenerator, RandomImpl},
+        random::{RandomDeriverImpl, RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro},
     };
 
     use crate::{generation::noise::perlin::PerlinNoiseSampler, read_data_from_file};
@@ -1292,7 +1268,9 @@ mod perlin_noise_sampler_test {
         assert_eq!(first, -15);
         assert_eq!(
             amplitudes,
-            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            [
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+            ]
         );
     }
 

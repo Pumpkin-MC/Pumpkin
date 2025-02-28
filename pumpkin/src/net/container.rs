@@ -1,21 +1,22 @@
 use crate::entity::player::Player;
 use crate::server::Server;
-use pumpkin_core::text::TextComponent;
-use pumpkin_core::GameMode;
+use pumpkin_data::item::Item;
+use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::Container;
 use pumpkin_inventory::container_click::{
-    Click, ClickType, KeyClick, MouseClick, MouseDragState, MouseDragType,
+    Click, ClickType, DropType, KeyClick, MouseClick, MouseDragState, MouseDragType,
 };
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
-use pumpkin_inventory::{container_click, InventoryError, OptionallyCombinedContainer};
-use pumpkin_inventory::{Container, WindowType};
+use pumpkin_inventory::{InventoryError, OptionallyCombinedContainer, container_click};
 use pumpkin_protocol::client::play::{
     CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
-use pumpkin_world::item::item_registry::Item;
+use pumpkin_util::GameMode;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -157,6 +158,7 @@ impl Player {
 
         let click_slot = click.slot;
         self.match_click_behaviour(
+            server,
             opened_container.as_deref_mut(),
             click,
             drag_handler,
@@ -204,7 +206,7 @@ impl Player {
     pub async fn handle_decrease_item(
         &self,
         _server: &Server,
-        slot_index: usize,
+        slot_index: i16,
         item_stack: Option<&ItemStack>,
         state_id: &mut u32,
     ) -> Result<(), InventoryError> {
@@ -219,6 +221,7 @@ impl Player {
 
     async fn match_click_behaviour(
         &self,
+        server: &Server,
         opened_container: Option<&mut Box<dyn Container>>,
         click: Click,
         drag_handler: &DragHandler,
@@ -228,6 +231,7 @@ impl Player {
         match click.click_type {
             ClickType::MouseClick(mouse_click) => {
                 self.mouse_click(
+                    server,
                     opened_container,
                     mouse_click,
                     click.slot,
@@ -273,8 +277,18 @@ impl Player {
                 self.mouse_drag(drag_handler, opened_container, drag_state)
                     .await
             }
-            ClickType::DropType(_drop_type) => {
-                log::debug!("todo");
+            ClickType::DropType(drop_type) => {
+                let carried_item = self.carried_item.load();
+                if let Some(item) = carried_item {
+                    match drop_type {
+                        DropType::FullStack => self.drop_item(server, item).await,
+                        DropType::SingleItem => {
+                            let mut item = item;
+                            item.item_count = 1;
+                            self.drop_item(server, item).await;
+                        }
+                    };
+                }
                 Ok(())
             }
         }
@@ -282,6 +296,7 @@ impl Player {
 
     async fn mouse_click(
         &self,
+        server: &Server,
         opened_container: Option<&mut Box<dyn Container>>,
         mouse_click: MouseClick,
         slot: container_click::Slot,
@@ -289,9 +304,9 @@ impl Player {
     ) -> Result<(), InventoryError> {
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
+        let mut carried_item = self.carried_item.load();
         match slot {
             container_click::Slot::Normal(slot) => {
-                let mut carried_item = self.carried_item.load();
                 let res = container.handle_item_change(
                     &mut carried_item,
                     slot,
@@ -301,7 +316,19 @@ impl Player {
                 self.carried_item.store(carried_item);
                 res
             }
-            container_click::Slot::OutsideInventory => Ok(()),
+            container_click::Slot::OutsideInventory => {
+                if let Some(item) = carried_item {
+                    match mouse_click {
+                        MouseClick::Left => self.drop_item(server, item).await,
+                        MouseClick::Right => {
+                            let mut item = item;
+                            item.item_count = 1;
+                            self.drop_item(server, item).await;
+                        }
+                    };
+                }
+                Ok(())
+            }
         }
     }
 
@@ -323,7 +350,7 @@ impl Player {
                     let find_condition = |(slot_number, slot): (usize, &mut Option<ItemStack>)| {
                         // TODO: Check for max item count here
                         match slot {
-                            Some(item) => (item.item_id == item_in_pressed_slot.item_id
+                            Some(item) => (item.item.id == item_in_pressed_slot.item.id
                                 && item.item_count != 64)
                                 .then_some(slot_number),
                             None => Some(slot_number),
@@ -411,7 +438,7 @@ impl Player {
         **item = None;
 
         for slot in slots.iter_mut().filter_map(|slot| slot.as_mut()) {
-            if slot.item_id == carried_item.item_id {
+            if slot.item.id == carried_item.item.id {
                 // TODO: Check for max stack size
                 if slot.item_count + carried_item.item_count <= 64 {
                     slot.item_count = 0;
@@ -492,8 +519,10 @@ impl Player {
             .living_entity
             .entity
             .world
-            .current_players
-            .lock()
+            .read()
+            .await
+            .players
+            .read()
             .await
             .iter()
             .filter_map(|(token, player)| {
@@ -508,7 +537,7 @@ impl Player {
         players
     }
 
-    async fn send_container_changes(
+    pub async fn send_container_changes(
         &self,
         server: &Server,
         slot_index: usize,
@@ -523,7 +552,7 @@ impl Player {
             let packet = CSetContainerSlot::new(
                 total_opened_containers as i8,
                 (inventory.state_id) as i32,
-                slot_index,
+                slot_index as i16,
                 &slot,
             );
             player.client.send_packet(&packet).await;
@@ -555,14 +584,14 @@ impl Player {
         }
     }
 
-    async fn pickup_items(&self, item: &Item, mut amount: u32) {
+    async fn pickup_items(&self, item: Item, mut amount: u32) {
         let max_stack = item.components.max_stack_size;
         let mut inventory = self.inventory().lock().await;
         let slots = inventory.slots_with_hotbar_first();
 
         let matching_slots = slots.filter_map(|slot| {
             if let Some(item_slot) = slot.as_mut() {
-                (item_slot.item_id == item.id && item_slot.item_count < max_stack).then(|| {
+                (item_slot.item.id == item.id && item_slot.item_count < max_stack).then(|| {
                     let item_count = item_slot.item_count;
                     (item_slot, item_count)
                 })
@@ -579,12 +608,12 @@ impl Player {
             if let Some(amount_left) = amount.checked_sub(u32::from(amount_to_add)) {
                 amount = amount_left;
                 *slot = ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: item.components.max_stack_size,
                 };
             } else {
                 *slot = ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: max_stack - (amount_to_add - amount as u8),
                 };
                 return;
@@ -601,12 +630,12 @@ impl Player {
             if let Some(remaining_amount) = amount.checked_sub(u32::from(max_stack)) {
                 amount = remaining_amount;
                 *slot = Some(ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: max_stack,
                 });
             } else {
                 *slot = Some(ItemStack {
-                    item_id: item.id,
+                    item,
                     item_count: amount as u8,
                 });
                 return;
@@ -620,7 +649,7 @@ impl Player {
     /// Add items to inventory if there's space, else drop them to the ground.
     ///
     /// This method automatically syncs changes with the client.
-    pub async fn give_items(&self, item: &Item, amount: u32) {
+    pub async fn give_items(&self, item: Item, amount: u32) {
         self.pickup_items(item, amount).await;
         self.set_container_content(None).await;
     }

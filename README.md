@@ -14,7 +14,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 ![image](https://github.com/user-attachments/assets/7e2e865e-b150-4675-a2d5-b52f9900378e)
 
-## What Pumpkin wants to achieve
+## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
 - **Compatibility**: Supports the latest Minecraft server version and adheres to vanilla game mechanics.
@@ -22,15 +22,10 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.
 
-## What Pumpkin will not
-
-- Be compatible with plugins or mods for other servers
-- Function as a framework for building a server from scratch.
-
 > [!IMPORTANT]
 > Pumpkin is currently under heavy development.
 
-## Features (WIP)
+## Features
 
 - [x] Configuration (toml)
 - [x] Server Status/Ping
@@ -46,34 +41,49 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - World
   - [x] World Joining
   - [x] Player Tab-list
+  - [x] Scoreboard
   - [x] World Loading
+  - [x] World Time
+  - [x] World Borders
+  - [x] World Saving (W.I.P)
   - [x] Lighting
   - [x] Entity Spawning
+  - [x] Item drops (W.I.P)
   - [x] Bossbar
-  - [x] Chunk Loading
+  - [x] TNT
+  - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
-  - [ ] Chunk Saving
-  - [x] World Time
-  - [x] Scoreboard
-  - [x] World Borders
-  - [x] World Saving
+  - [x] Chunk Saving (Vanilla, Linear)
+  - [ ] Redstone
+  - [ ] Liquid Physics
+  - [ ] Biomes
+  - [ ] Vegetation
 - Player
-  - [x] Player Skins
-  - [x] Player Client brand
-  - [x] Player Teleport
-  - [x] Player Movement
-  - [x] Player Animation
-  - [x] Player Inventory
-  - [x] Player Combat
+  - [x] Skins
+  - [x] Client brand
+  - [x] Teleport
+  - [x] Movement
+  - [x] Animation
+  - [x] Inventory
+  - [x] Combat
+  - [x] Experience
+  - [x] Hunger
+  - [ ] Off Hand
+  - [ ] Advancements 
+  - [ ] Eating
 - Entities
-  - [ ] Non-Living (Minecart, Eggs...)
+  - [x] Non-Living (Minecart, Eggs...) (W.I.P)
+  - [x] Entity Effects
   - [x] Players
-  - [x] Mobs
-  - [x] Animals
-  - [x] Entity AI
+  - [x] Mobs (W.I.P)
+  - [x] Animals (W.I.P)
+  - [x] Entity AI (W.I.P)
+  - [ ] Entity Saving
   - [ ] Boss
+  - [ ] Villagers
+  - [ ] Mobs Inventory
 - Server
-  - [ ] Plugins
+  - [x] Plugins (W.I.P)
   - [x] Query
   - [x] RCON
   - [x] Inventories
@@ -81,11 +91,12 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Chat
   - [x] Commands
   - [x] Permissions
+  - [x] Translations
 - Proxy
   - [x] Bungeecord
   - [x] Velocity
 
-Check out our [Github Project](https://github.com/users/Snowiiii/projects/12/views/3) to see current progress
+Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress
 
 ## How to run
 

@@ -1,6 +1,6 @@
 use crate::container_click::MouseClick;
 use crate::player::PlayerInventory;
-use pumpkin_macros::screen;
+use pumpkin_data::screen::WindowType;
 use pumpkin_world::item::ItemStack;
 
 pub mod container_click;
@@ -14,45 +14,6 @@ pub mod window_property;
 pub use error::InventoryError;
 pub use open_container::*;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-#[repr(u8)]
-pub enum WindowType {
-    // not used
-    Generic9x1 = screen!("generic_9x1"),
-    // not used
-    Generic9x2 = screen!("generic_9x2"),
-    // General-purpose 3-row inventory. Used by Chest, minecart with chest, ender chest, and barrel
-    Generic9x3 = screen!("generic_9x3"),
-    // not used
-    Generic9x4 = screen!("generic_9x4"),
-    // not used
-    Generic9x5 = screen!("generic_9x5"),
-    // Used by large chests
-    Generic9x6 = screen!("generic_9x6"),
-    // General-purpose 3-by-3 square inventory, used by Dispenser and Dropper
-    Generic3x3 = screen!("generic_3x3"),
-    // General-purpose 3-by-3 square inventory, used by the Crafter
-    Craft3x3 = screen!("crafter_3x3"),
-    Anvil = screen!("anvil"),
-    Beacon = screen!("beacon"),
-    BlastFurnace = screen!("blast_furnace"),
-    BrewingStand = screen!("brewing_stand"),
-    CraftingTable = screen!("crafting"),
-    EnchantmentTable = screen!("enchantment"),
-    Furnace = screen!("furnace"),
-    Grindstone = screen!("grindstone"),
-    // Hopper or minecart with hopper
-    Hopper = screen!("hopper"),
-    Lectern = screen!("lectern"),
-    Loom = screen!("loom"),
-    // Villager, Wandering Trader
-    Merchant = screen!("merchant"),
-    ShulkerBox = screen!("shulker_box"),
-    SmithingTable = screen!("smithing"),
-    Smoker = screen!("smoker"),
-    CartographyTable = screen!("cartography_table"),
-    Stonecutter = screen!("stonecutter"),
-}
 pub struct ContainerStruct<const SLOTS: usize>([Option<ItemStack>; SLOTS]);
 
 // Container needs Sync + Send to be able to be in async Server
@@ -75,7 +36,7 @@ pub trait Container: Sync + Send {
         if taking_crafted {
             match (all_slots[slot].as_mut(), carried_item.as_mut()) {
                 (Some(s1), Some(s2)) => {
-                    if s1.item_id == s2.item_id {
+                    if s1.item.id == s2.item.id {
                         handle_item_change(all_slots[slot], carried_item, mouse_click);
                     }
                 }
@@ -159,7 +120,7 @@ pub trait Container: Sync + Send {
         for (slot, stack) in slots {
             let matches = receiving_slots.iter_mut().filter_map(|slot| {
                 if let Some(receiving_stack) = slot {
-                    if receiving_stack.item_id == stack.item_id {
+                    if receiving_stack.item.id == stack.item.id {
                         Some(receiving_stack)
                     } else {
                         None
@@ -236,7 +197,7 @@ pub fn handle_item_change(
     match (current_slot.as_mut(), carried_slot.as_mut()) {
         // Swap or combine current and carried
         (Some(current), Some(carried)) => {
-            if current.item_id == carried.item_id {
+            if current.item.id == carried.item.id {
                 combine_stacks(carried_slot, current, mouse_click);
             } else if mouse_click == MouseClick::Left {
                 let carried = *carried;

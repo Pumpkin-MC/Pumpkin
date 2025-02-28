@@ -1,24 +1,31 @@
 use std::sync::Arc;
 
-use pumpkin_core::math::vector3::Vector3;
-use pumpkin_entity::entity_type::EntityType;
+use async_trait::async_trait;
+use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 use zombie::Zombie;
 
 use crate::{server::Server, world::World};
 
-use super::{ai::goal::Goal, living::LivingEntity};
+use super::{
+    Entity, EntityBase,
+    ai::{goal::Goal, path::Navigator},
+    living::LivingEntity,
+};
 
 pub mod zombie;
 
 pub struct MobEntity {
-    pub living_entity: Arc<LivingEntity>,
+    pub living_entity: LivingEntity,
     pub goals: Mutex<Vec<(Arc<dyn Goal>, bool)>>,
+    pub navigator: Mutex<Navigator>,
 }
 
-impl MobEntity {
-    pub async fn tick(&self) {
+#[async_trait]
+impl EntityBase for MobEntity {
+    async fn tick(&self, server: &Server) {
+        self.living_entity.tick(server).await;
         let mut goals = self.goals.lock().await;
         for (goal, running) in goals.iter_mut() {
             if *running {
@@ -31,6 +38,16 @@ impl MobEntity {
                 *running = goal.can_start(self).await;
             }
         }
+        let mut navigator = self.navigator.lock().await;
+        navigator.tick(&self.living_entity).await;
+    }
+
+    fn get_entity(&self) -> &Entity {
+        &self.living_entity.entity
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        Some(&self.living_entity)
     }
 }
 
@@ -39,12 +56,19 @@ pub async fn from_type(
     server: &Server,
     position: Vector3<f64>,
     world: &Arc<World>,
-) -> (Arc<MobEntity>, Uuid) {
+) -> Arc<dyn EntityBase> {
+    let entity = server.add_entity(position, entity_type, world);
+    let mob = MobEntity {
+        living_entity: LivingEntity::new(entity),
+        goals: Mutex::new(vec![]),
+        navigator: Mutex::new(Navigator::default()),
+    };
     match entity_type {
-        EntityType::Zombie => Zombie::make(server, position, world).await,
+        EntityType::ZOMBIE => Zombie::make(&mob).await,
         // TODO
-        _ => server.add_mob_entity(entity_type, position, world).await,
+        _ => (),
     }
+    Arc::new(mob)
 }
 
 impl MobEntity {
