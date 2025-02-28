@@ -2,12 +2,12 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
-use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::Furnace;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
 
+use crate::block::container::ContainerBlock;
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server};
 
 #[pumpkin_block("minecraft:furnace")]
@@ -19,46 +19,29 @@ impl PumpkinBlock for FurnaceBlock {
         &self,
         block: &Block,
         player: &Player,
-        _location: BlockPos,
+        location: BlockPos,
         server: &Server,
     ) {
-        self.open_furnace_screen(block, player, _location, server)
-            .await;
+        self.open(block, player, location, server).await;
     }
 
     async fn use_with_item(
         &self,
         block: &Block,
         player: &Player,
-        _location: BlockPos,
+        location: BlockPos,
         _item: &Item,
         server: &Server,
     ) -> BlockActionResult {
-        self.open_furnace_screen(block, player, _location, server)
-            .await;
+        self.open(block, player, location, server).await;
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
-        super::standard_on_broken_with_container(block, player, location, server).await;
+    async fn broken(&self, _block: &Block, player: &Player, location: BlockPos, server: &Server) {
+        self.destroy(location, server, player).await;
     }
 }
 
-impl FurnaceBlock {
-    pub async fn open_furnace_screen(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        server: &Server,
-    ) {
-        super::standard_open_container::<Furnace>(
-            block,
-            player,
-            location,
-            server,
-            WindowType::Furnace,
-        )
-        .await;
-    }
+impl ContainerBlock<Furnace> for FurnaceBlock {
+    const UNIQUE: bool = false;
 }

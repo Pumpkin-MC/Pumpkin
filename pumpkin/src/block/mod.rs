@@ -34,6 +34,7 @@ use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::P
 use std::sync::Arc;
 
 mod blocks;
+mod container;
 pub mod properties;
 pub mod pumpkin_block;
 pub mod registry;

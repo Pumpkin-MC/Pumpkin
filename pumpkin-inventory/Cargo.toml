@@ -16,3 +16,5 @@ rayon.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 
+rand = "0.8.5"
+uuid = { version = "1.11.0", features = ["v4"] }

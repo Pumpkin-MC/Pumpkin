@@ -4,7 +4,7 @@ use key_store::KeyStore;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::entity::EntityType;
 use pumpkin_inventory::drag_handler::DragHandler;
-use pumpkin_inventory::{Container, OpenContainer};
+use pumpkin_inventory::{Container, ContainerHolder};
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
@@ -16,7 +16,6 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
 use std::{
@@ -27,6 +26,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
+use uuid::Uuid;
 
 use crate::block::default_block_properties_manager;
 use crate::block::properties::BlockPropertiesManager;
@@ -69,8 +69,7 @@ pub struct Server {
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
     /// Tracks open containers used for item interactions.
-    // TODO: should have per player open_containers
-    pub open_containers: RwLock<HashMap<u64, OpenContainer>>,
+    pub open_containers: RwLock<ContainerHolder>,
     pub drag_handler: DragHandler,
     /// Assigns unique IDs to entities.
     entity_id: AtomicI32,
@@ -116,7 +115,7 @@ impl Server {
 
         Self {
             cached_registry: Registry::get_synced(),
-            open_containers: RwLock::new(HashMap::new()),
+            open_containers: RwLock::new(ContainerHolder::default()),
             drag_handler: DragHandler::new(),
             // 0 is invalid
             entity_id: 2.into(),
@@ -253,11 +252,12 @@ impl Server {
 
     pub async fn try_get_container(
         &self,
-        player_id: EntityId,
-        container_id: u64,
+        player_id: Uuid,
+        container_id: usize,
     ) -> Option<Arc<Mutex<Box<dyn Container>>>> {
         let open_containers = self.open_containers.read().await;
         open_containers
+            .containers_by_id
             .get(&container_id)?
             .try_open(player_id)
             .cloned()
@@ -268,7 +268,7 @@ impl Server {
     pub async fn get_container_id(&self, location: BlockPos, block: Block) -> Option<u32> {
         let open_containers = self.open_containers.read().await;
         // TODO: do better than brute force
-        for (id, container) in open_containers.iter() {
+        for (id, container) in &open_containers.containers_by_id {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
@@ -292,7 +292,7 @@ impl Server {
         let open_containers = self.open_containers.read().await;
         let mut matching_container_ids: Vec<u32> = vec![];
         // TODO: do better than brute force
-        for (id, container) in open_containers.iter() {
+        for (id, container) in &open_containers.containers_by_id {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {

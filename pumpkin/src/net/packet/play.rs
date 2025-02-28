@@ -1186,7 +1186,7 @@ impl Player {
         let open_container = self.open_container.load();
         if let Some(id) = open_container {
             let mut open_containers = server.open_containers.write().await;
-            if let Some(container) = open_containers.get_mut(&id) {
+            if let Some(container) = open_containers.containers_by_id.get_mut(&id) {
                 // If container contains both a location and a type, run the on_close block_manager handler
                 if let Some(pos) = container.get_location() {
                     if let Some(block) = container.get_block() {
@@ -1197,7 +1197,7 @@ impl Player {
                     }
                 }
                 // Remove the player from the container
-                container.remove_player(self.entity_id());
+                container.remove_player(self.gameprofile.id);
             }
             self.open_container.store(None);
         }

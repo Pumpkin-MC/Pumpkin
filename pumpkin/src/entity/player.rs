@@ -101,7 +101,7 @@ pub struct Player {
     /// The Hunger Manager manages Players hunger level
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
-    pub open_container: AtomicCell<Option<u64>>,
+    pub open_container: AtomicCell<Option<usize>>,
     /// The item currently being held by the player.
     pub carried_item: AtomicCell<Option<ItemStack>>,
     /// send `send_abilities_update` when changed

@@ -1,23 +1,116 @@
 use crate::Container;
 use crate::crafting::check_if_matches_crafting;
+use crate::player::PlayerInventory;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
 use pumpkin_world::item::ItemStack;
+use rand::random;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
+
+#[derive(Default)]
+pub struct ContainerHolder {
+    pub containers_by_id: HashMap<usize, OpenContainer>,
+    pub location_to_container_id: HashMap<BlockPos, usize>,
+}
+
+impl ContainerHolder {
+    pub async fn destroy(
+        &mut self,
+        id: usize,
+        player_inventory: &mut PlayerInventory,
+        carried_item: &mut Option<ItemStack>,
+    ) -> Vec<Uuid> {
+        if let Some(container) = self.containers_by_id.remove(&id) {
+            let unique = container.unique;
+            let players = container.players;
+            let mut container = container.container.lock().await;
+            container.destroy_container(player_inventory, carried_item, unique);
+            players
+        } else {
+            vec![]
+        }
+    }
+
+    pub async fn destroy_by_location(
+        &mut self,
+        location: &BlockPos,
+        player_inventory: &mut PlayerInventory,
+        carried_item: &mut Option<ItemStack>,
+    ) -> Vec<Uuid> {
+        if let Some(id) = self.location_to_container_id.remove(location) {
+            self.destroy(id, player_inventory, carried_item).await
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn get_by_location(&self, location: &BlockPos) -> Option<&OpenContainer> {
+        self.containers_by_id
+            .get(self.location_to_container_id.get(location)?)
+    }
+
+    pub fn get_mut_by_location(&mut self, location: &BlockPos) -> Option<&mut OpenContainer> {
+        self.containers_by_id
+            .get_mut(self.location_to_container_id.get(location)?)
+    }
+
+    pub fn new_by_location<C: Container + Default + 'static>(
+        &mut self,
+        player_id: Uuid,
+        location: BlockPos,
+        block: Option<Block>,
+    ) -> Option<&mut OpenContainer> {
+        if self.location_to_container_id.contains_key(&location) {
+            return None;
+        }
+        let id = self.new_container::<C>(player_id, block, false);
+        self.location_to_container_id.insert(location, id);
+        self.containers_by_id.get_mut(&id)
+    }
+
+    pub fn new_container<C: Container + Default + 'static>(
+        &mut self,
+        player_id: Uuid,
+        block: Option<Block>,
+        unique: bool,
+    ) -> usize {
+        let mut id: usize = random();
+        let mut new_container =
+            OpenContainer::new_empty_container::<C>(player_id, None, block, unique);
+        while let Some(container) = self.containers_by_id.insert(id, new_container) {
+            new_container = container;
+            id = random();
+        }
+        id
+    }
+
+    pub fn new_unique<C: Container + Default + 'static>(
+        &mut self,
+        block: Option<Block>,
+        player_id: Uuid,
+    ) -> usize {
+        let id = self.new_container::<C>(player_id, block, true);
+        let container = self.containers_by_id.get_mut(&id).expect("just created it");
+        container.players.push(player_id);
+        id
+    }
+}
 
 pub struct OpenContainer {
-    // TODO: unique id should be here
-    // TODO: should this be uuid?
-    players: Vec<i32>,
+    pub unique: bool,
+    pub id: usize,
     container: Arc<Mutex<Box<dyn Container>>>,
+    players: Vec<Uuid>,
     location: Option<BlockPos>,
     block: Option<Block>,
 }
 
 impl OpenContainer {
-    pub fn try_open(&self, player_id: i32) -> Option<&Arc<Mutex<Box<dyn Container>>>> {
+    pub fn try_open(&self, player_id: Uuid) -> Option<&Arc<Mutex<Box<dyn Container>>>> {
         if !self.players.contains(&player_id) {
             log::debug!("couldn't open container");
             return None;
@@ -26,13 +119,13 @@ impl OpenContainer {
         Some(container)
     }
 
-    pub fn add_player(&mut self, player_id: i32) {
+    pub fn add_player(&mut self, player_id: Uuid) {
         if !self.players.contains(&player_id) {
             self.players.push(player_id);
         }
     }
 
-    pub fn remove_player(&mut self, player_id: i32) {
+    pub fn remove_player(&mut self, player_id: Uuid) {
         if let Some(index) = self.players.iter().enumerate().find_map(|(index, id)| {
             if *id == player_id { Some(index) } else { None }
         }) {
@@ -41,15 +134,18 @@ impl OpenContainer {
     }
 
     pub fn new_empty_container<C: Container + Default + 'static>(
-        player_id: i32,
+        player_id: Uuid,
         location: Option<BlockPos>,
         block: Option<Block>,
+        unique: bool,
     ) -> Self {
         Self {
+            unique,
             players: vec![player_id],
             container: Arc::new(Mutex::new(Box::new(C::default()))),
             location,
             block,
+            id: 0,
         }
     }
 
@@ -61,15 +157,11 @@ impl OpenContainer {
         }
     }
 
-    pub async fn clear_all_slots(&self) {
-        self.container.lock().await.clear_all_slots();
-    }
-
     pub fn clear_all_players(&mut self) {
         self.players.clear();
     }
 
-    pub fn all_player_ids(&self) -> Vec<i32> {
+    pub fn all_player_ids(&self) -> Vec<Uuid> {
         self.players.clone()
     }
 
@@ -87,6 +179,11 @@ impl OpenContainer {
 
     pub fn get_block(&self) -> Option<Block> {
         self.block.clone()
+    }
+
+    pub async fn window_type(&self) -> &'static WindowType {
+        let container = self.container.lock().await;
+        container.window_type()
     }
 }
 #[derive(Default)]
