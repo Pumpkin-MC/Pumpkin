@@ -11,7 +11,7 @@ use tokio::sync::{RwLock, mpsc};
 
 use crate::{
     chunk::{
-        ChunkData, ChunkReadingError,
+        ChunkData, ChunkParsingError, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
@@ -321,6 +321,9 @@ impl Level {
                 LoadedData::Missing(pos) => non_generated_chunks.push(pos),
                 LoadedData::Error((pos, error)) => match error {
                     ChunkReadingError::ChunkNotExist => non_generated_chunks.push(pos),
+                    ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated) => {
+                        non_generated_chunks.push(pos)
+                    }
                     error => {
                         log::error!(
                             "Failed to load chunk at {:?}: {} (regenerating)",

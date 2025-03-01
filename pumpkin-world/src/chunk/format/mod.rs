@@ -42,10 +42,10 @@ impl ChunkData {
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
-            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+            panic!(
                 "Expected data for chunk {},{} but got it for {},{}!",
                 position.x, position.z, chunk_data.x_pos, chunk_data.z_pos,
-            )));
+            );
         }
 
         // this needs to be boxed, otherwise it will cause a stack-overflow
