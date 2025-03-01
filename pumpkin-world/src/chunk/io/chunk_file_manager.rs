@@ -90,6 +90,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         async fn read_from_disk<S: ChunkSerializer>(
             path: &Path,
         ) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
+            trace!("Opening file from Disk: {:?}", path);
             let file = tokio::fs::OpenOptions::new()
                 .read(true)
                 .write(false)
@@ -115,6 +116,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                 Err(err) => return Err(err),
             };
 
+            trace!("Read file from Disk: {:?}", path);
             Ok(Arc::new(RwLock::new(value)))
         }
 
@@ -141,7 +143,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
     }
 
     pub async fn write_file(path: &Path, serializer: &S) -> Result<(), ChunkWritingError> {
-        trace!("Writing file to Disk: {:?}", path);
+        trace!("Opening file from Disk: {:?}", path);
 
         // We use tmp files to avoid corruption of the data if the process is abruptly interrupted.
         let tmp_path = &path.with_extension("tmp");
@@ -294,21 +296,30 @@ where
     }
 
     async fn close(&self) {
-        let locks: Vec<_> = self
-            .file_locks
-            .read()
-            .await
+        //we need to block any other operation
+        let serializer_cache = self.file_locks.write().await;
+
+        let locks: Vec<_> = serializer_cache
             .iter()
-            .map(|(_, value)| value.clone())
+            .map(|(pos, value)| (pos, value.clone()))
             .collect();
 
         // Acquire a write lock on all entries to verify they are complete
-        for lock in locks {
-            let _lock = lock
-                .get()
-                .expect("We initialize the once cells immediately")
-                .write()
-                .await;
-        }
+        let tasks = locks.iter().map(async |(pos, serializer)| {
+            if let Some(lock) = serializer.get() {
+                Some(lock.write().await)
+            } else {
+                log::warn!(
+                    "Closing FileManager while the File {} is being loaded",
+                    pos.display()
+                );
+                None
+            }
+        });
+
+        // We need to wait to ensure that all the locks are acquired
+        // so there is no **operation** ongoing
+        let _ = join_all(tasks).await;
+        log::debug!("FileManager Closed, no more operations allowed");
     }
 }
