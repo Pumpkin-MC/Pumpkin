@@ -272,7 +272,7 @@ impl Player {
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
-        level.clean_memory(&radial_chunks);
+        level.clean_memory();
 
         log::debug!(
             "Removed player id {} ({}) ({} chunks remain cached)",

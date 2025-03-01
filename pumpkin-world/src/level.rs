@@ -6,7 +6,7 @@ use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
 use pumpkin_util::math::vector2::Vector2;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::sync::{RwLock, mpsc};
 
 use crate::{
@@ -263,22 +263,21 @@ impl Level {
         self.chunk_watchers.get(chunk).is_some()
     }
 
-    pub fn clean_memory(&self, chunks_to_check: &[Vector2<i32>]) {
-        let deleted_chunks = chunks_to_check
-            .par_iter()
-            .filter_map(|chunk| {
-                self.chunk_watchers
-                    .remove_if(chunk, |_, watcher| watcher.is_zero());
-                self.loaded_chunks
-                    .remove_if(chunk, |at, _| self.chunk_watchers.get(at).is_none())
-            })
-            .count();
+    pub fn clean_memory(&self) {
+        self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
+        self.loaded_chunks
+            .retain(|at, _| self.chunk_watchers.get(at).is_some());
 
-        if deleted_chunks > 0 {
-            trace!("Cleaned {} chunks from memory", deleted_chunks);
-
-            self.loaded_chunks.shrink_to_fit();
+        // if the difference is too big, we can shrink the loaded chunks
+        // (1024 chunks is the equivalent to a 32x32 chunks area)
+        if self.chunk_watchers.capacity() - self.chunk_watchers.len() >= 4096 {
             self.chunk_watchers.shrink_to_fit();
+        }
+
+        // if the difference is too big, we can shrink the loaded chunks
+        // (1024 chunks is the equivalent to a 32x32 chunks area)
+        if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
+            self.loaded_chunks.shrink_to_fit();
         }
     }
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
@@ -396,23 +395,31 @@ impl Level {
 
         // Finally generate any chunks that are missing
         if !to_generate.is_empty() {
-            let chunks = to_generate
-                .into_par_iter()
-                .map(|position| {
-                    let chunk = self.world_gen.generate_chunk(position);
-                    self.loaded_chunks
+            let loaded_chunks = self.loaded_chunks.clone();
+            let world_gen = self.world_gen.clone();
+
+            let (gen_channel, mut gen_receiver) = mpsc::channel(to_generate.len());
+            rayon::spawn(move || {
+                to_generate.into_par_iter().for_each(|position| {
+                    let generated_chunk = world_gen.generate_chunk(position);
+                    let chunk = loaded_chunks
                         .entry(position)
-                        .or_insert_with(|| Arc::new(RwLock::new(chunk)))
+                        .or_insert_with(|| Arc::new(RwLock::new(generated_chunk)))
                         .value()
-                        .clone()
+                        .clone();
+
+                    //this relay on a channel with the same size as the chunks to generate
+                    gen_channel
+                        .try_send(chunk)
+                        .expect("Failed to send chunk from generation thread!");
                 })
-                .collect::<Vec<_>>();
+            });
 
             // As we are generating the chunks at the same time
             // we can send them sequentially and avoid
             // the overhead of joining the tasks and let the loop
             // as a CPU bound task
-            for chunk in chunks {
+            while let Some(chunk) = gen_receiver.recv().await {
                 send_chunk(true, chunk).await;
             }
         }
