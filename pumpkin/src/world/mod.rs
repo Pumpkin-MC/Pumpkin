@@ -1057,7 +1057,9 @@ impl World {
         &self,
         chunks: Vec<Vector2<i32>>,
     ) -> Receiver<(Arc<RwLock<ChunkData>>, bool)> {
-        let (sender, receive) = mpsc::channel(chunks.len());
+        // Create a channel with a buffer of size 8 to prevent blocking
+        // and reduce memory footprint.
+        let (sender, receive) = mpsc::channel(16);
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
         tokio::spawn(async move {

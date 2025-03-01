@@ -12,7 +12,7 @@ use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::{OnceCell, RwLock, mpsc},
+    sync::{OnceCell, RwLock},
 };
 
 use crate::{
@@ -70,7 +70,9 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         for path in paths_to_remove {
             if let Some(lock) = locks.get(&path) {
                 if let Some(lock) = lock.get() {
-                    // If we have only two strong references, it means that the lock is only being used by the cache, so we can remove it from the cache to avoid memory leaks.
+                    // If we have 1 strong references, it means that the lock is only
+                    // being used by the cache, so we can remove it from the cache
+                    // to avoid memory leaks.
                     if Arc::strong_count(lock) <= 1 {
                         locks.remove(&path);
                         log::trace!("Removed lock for file: {:?}", path);
@@ -182,8 +184,7 @@ where
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-        channel: mpsc::Sender<LoadedData<D, ChunkReadingError>>,
-    ) {
+    ) -> Vec<LoadedData<D, ChunkReadingError>> {
         let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
 
         for &at in chunk_coords {
@@ -205,34 +206,23 @@ where
                     unreachable!("Default Serializer must be created")
                 }
                 Err(err) => {
-                    channel
-                        .send(LoadedData::<D, ChunkReadingError>::Error((chunks[0], err)))
-                        .await
-                        .expect("Failed to send error from stream_chunks!");
-
-                    return;
+                    return vec![LoadedData::Error((chunks[0], err))];
                 }
             };
 
             // We need to block the read to avoid other threads to write/modify the data
-            let chunk_guard = chunk_serializer.read().await;
-
-            let streaming_tasks = chunk_guard
-                .get_chunks(&chunks)
-                .into_iter()
-                .map(async |chunk| {
-                    channel
-                        .send(chunk)
-                        .await
-                        .expect("Failed to send chunk from stream_chunks!");
-                });
-
-            join_all(streaming_tasks).await;
+            let serializer = chunk_serializer.read().await;
+            serializer.get_chunks(&chunks)
         });
 
-        join_all(tasks).await;
+        let mut result = Vec::with_capacity(chunk_coords.len());
+        for chunks in join_all(tasks).await {
+            result.extend(chunks);
+        }
 
         self.clean_cache().await;
+
+        result
     }
 
     async fn save_chunks(
@@ -276,15 +266,14 @@ where
 
                 let chunks = join_all(chunk_locks.iter().map(async |c| c.read().await)).await;
 
-                let mut chunk_guard = chunk_serializer.write().await;
-
-                chunk_guard.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())?;
+                let mut serializer = chunk_serializer.write().await;
+                serializer.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())?;
 
                 // With the modification done, we can drop the write lock but keep the read lock
                 // to avoid other threads to write/modify the data, but allow other threads to read it
-                let chunk_guard = chunk_guard.downgrade();
-                let serializer = chunk_guard.deref();
-                Self::write_file(&path, serializer).await?;
+                let serializer = serializer.downgrade();
+                let serializer_ref = serializer.deref();
+                Self::write_file(&path, serializer_ref).await?;
 
                 Ok(())
             });

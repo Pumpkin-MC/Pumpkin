@@ -2,7 +2,7 @@ use std::{error, sync::Arc};
 
 use async_trait::async_trait;
 use pumpkin_util::math::vector2::Vector2;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
@@ -45,8 +45,7 @@ where
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-        channel: mpsc::Sender<LoadedData<D, ChunkReadingError>>,
-    );
+    ) -> Vec<LoadedData<D, ChunkReadingError>>;
 
     /// Persist the chunks data
     async fn save_chunks(

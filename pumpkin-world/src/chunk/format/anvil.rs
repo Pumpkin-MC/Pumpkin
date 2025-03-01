@@ -492,7 +492,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use temp_dir::TempDir;
-    use tokio::sync::{RwLock, mpsc};
+    use tokio::sync::RwLock;
 
     use crate::chunk::format::anvil::AnvilChunkFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
@@ -504,23 +504,16 @@ mod tests {
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
-        let (send, mut recv) = mpsc::channel(1);
 
-        chunk_saver
+        let chunks = chunk_saver
             .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
                 },
                 &[Vector2::new(0, 0)],
-                send,
             )
             .await;
-
-        let mut chunks = Vec::new();
-        while let Some(chunk) = recv.recv().await {
-            chunks.push(chunk);
-        }
 
         assert!(chunks.len() == 1 && matches!(chunks[0], LoadedData::Missing(_)));
     }
@@ -560,27 +553,21 @@ mod tests {
                 .await
                 .expect("Failed to write chunk");
 
-            let (send, mut recv) = mpsc::channel(chunks.len());
-            chunk_saver
+            let read_chunks = chunk_saver
                 .fetch_chunks(
                     &level_folder,
                     &chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
-                    send,
                 )
-                .await;
-
-            let mut read_chunks = Vec::new();
-            while let Some(chunk) = recv.recv().await {
-                match chunk {
-                    LoadedData::Loaded(chunk) => {
-                        read_chunks.push(chunk);
-                    }
-                    LoadedData::Missing(_) => {}
+                .await
+                .into_iter()
+                .map(|chunk| match chunk {
+                    LoadedData::Loaded(chunk) => chunk,
+                    LoadedData::Missing(_) => panic!("Missing chunk"),
                     LoadedData::Error((position, error)) => {
                         panic!("Error reading chunk at {:?} | Error: {:?}", position, error)
                     }
-                };
-            }
+                })
+                .collect::<Vec<_>>();
 
             for (at, chunk) in &chunks {
                 let read_chunk = read_chunks
