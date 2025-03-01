@@ -1,3 +1,4 @@
+use crate::data::player_data::PlayerDataError;
 use log::log;
 use pumpkin_inventory::InventoryError;
 use pumpkin_protocol::bytebuf::ReadingError;
@@ -63,5 +64,23 @@ impl PumpkinError for ReadingError {
 
     fn client_kick_reason(&self) -> Option<String> {
         None
+    }
+}
+
+impl PumpkinError for PlayerDataError {
+    fn is_kick(&self) -> bool {
+        false
+    }
+
+    fn severity(&self) -> log::Level {
+        log::Level::Warn
+    }
+
+    fn client_kick_reason(&self) -> Option<String> {
+        match self {
+            Self::Io(err) => Some(format!("Failed to load player data: {err}")),
+            Self::Nbt(err) => Some(format!("Failed to parse player data: {err}")),
+            Self::NotFound(uuid) => Some(format!("Player data not found for UUID: {uuid}")),
+        }
     }
 }
