@@ -80,7 +80,6 @@ impl PumpkinError for PlayerDataError {
         match self {
             Self::Io(err) => Some(format!("Failed to load player data: {err}")),
             Self::Nbt(err) => Some(format!("Failed to parse player data: {err}")),
-            Self::NotFound(uuid) => Some(format!("Player data not found for UUID: {uuid}")),
         }
     }
 }
