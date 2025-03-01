@@ -14,6 +14,7 @@ use thiserror::Error;
 
 pub mod compound;
 pub mod deserializer;
+pub mod nbt_compress;
 pub mod serializer;
 pub mod tag;
 

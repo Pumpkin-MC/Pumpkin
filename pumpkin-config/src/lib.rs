@@ -28,10 +28,12 @@ mod commands;
 
 pub mod chunk;
 pub mod op;
+mod player_data;
 mod pvp;
 mod server_links;
 
 use networking::NetworkingConfig;
+use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
 
 const CONFIG_ROOT_FOLDER: &str = "config/";
@@ -92,6 +94,7 @@ pub struct AdvancedConfiguration {
     pub commands: CommandsConfig,
     pub pvp: PVPConfig,
     pub server_links: ServerLinksConfig,
+    pub player_data: PlayerDataConfig,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -8,8 +8,8 @@ pub struct HungerManager {
     pub level: AtomicCell<u32>,
     /// The food saturation level.
     pub saturation: AtomicCell<f32>,
-    exhaustion: AtomicCell<f32>,
-    tick_timer: AtomicCell<u32>,
+    pub exhaustion: AtomicCell<f32>,
+    pub tick_timer: AtomicCell<u32>,
 }
 
 impl Default for HungerManager {

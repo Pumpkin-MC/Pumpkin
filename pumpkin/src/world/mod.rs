@@ -387,10 +387,12 @@ impl World {
         let yaw = info.spawn_angle;
         let pitch = 10.0;
 
-        let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
-            .await;
-        position.y = f64::from(top + 1);
+        // teleport
+        let position = player.position();
+        let velocity = player.living_entity.entity.velocity.load();
+
+        let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
+        let pitch = player.living_entity.entity.pitch.load();
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
@@ -451,7 +453,6 @@ impl World {
         // Spawn the player for every client.
         self.broadcast_packet_except(
             &[player.gameprofile.id],
-            // TODO: add velo
             &CSpawnEntity::new(
                 entity_id.into(),
                 gameprofile.id,
@@ -461,7 +462,7 @@ impl World {
                 yaw,
                 yaw,
                 0.into(),
-                Vector3::new(0.0, 0.0, 0.0),
+                velocity,
             ),
         )
         .await;
@@ -483,7 +484,7 @@ impl World {
                     entity.pitch.load(),
                     entity.head_yaw.load(),
                     0.into(),
-                    Vector3::new(0.0, 0.0, 0.0),
+                    entity.velocity.load(),
                 ))
                 .await;
         }
