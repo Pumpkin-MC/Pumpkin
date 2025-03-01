@@ -266,6 +266,19 @@ impl PlayerInventory {
         let (items, hotbar) = self.items.split_at_mut(27);
         hotbar.iter_mut().chain(items)
     }
+
+    pub fn add_item(&mut self, item: ItemStack) -> bool {
+        if let Some(slot) = self.collect_item_slot(item.item.id) {
+            let slot_item = self.items[slot];
+            if let Some(mut slot_item) = slot_item {
+                slot_item.item_count += item.item_count;
+            } else {
+                self.items[slot] = Some(item);
+            }
+            return true;
+        }
+        false
+    }
 }
 
 impl Container for PlayerInventory {

@@ -55,3 +55,7 @@ pub mod damage {
 pub mod fluid {
     include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }
+
+pub fn parse_registry_name(name: &str) -> String {
+    name.replace("minecraft:", "")
+}

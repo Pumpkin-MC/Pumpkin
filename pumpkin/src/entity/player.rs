@@ -8,13 +8,32 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::living::LivingEntity;
+use super::{
+    Entity, EntityBase, EntityId, NBTStorage,
+    combat::{self, AttackType, player_attack_sound},
+    effect::Effect,
+    hunger::HungerManager,
+    item::ItemEntity,
+};
+use crate::{
+    block,
+    command::{client_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    net::{Client, PlayerConfig},
+    server::Server,
+    world::World,
+};
+use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_data::item::{Consumable, ConsumeEffect, Effects};
 use pumpkin_data::{
     damage::DamageType,
     entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
+    parse_registry_name,
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
@@ -26,8 +45,9 @@ use pumpkin_protocol::{
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CCombatDeath, CDisguisedChatMessage, CGameEvent,
         CKeepAlive, CParticle, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate,
-        CPlayerPosition, CRespawn, CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage,
-        CTitleText, CUnloadChunk, CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CPlayerPosition, CRemoveMobEffect, CRespawn, CSetExperience, CSetHealth, CSubtitle,
+        CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, GameEvent, MetaDataType,
+        PlayerAction,
     },
     server::play::{
         SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
@@ -63,24 +83,29 @@ use pumpkin_util::{
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use super::{
-    Entity, EntityBase, EntityId, NBTStorage,
-    combat::{self, AttackType, player_attack_sound},
-    effect::Effect,
-    hunger::HungerManager,
-    item::ItemEntity,
-};
-use crate::{
-    block,
-    command::{client_suggestions, dispatcher::CommandDispatcher},
-    data::op_data::OPERATOR_CONFIG,
-    net::{Client, PlayerConfig},
-    server::Server,
-    world::World,
-};
-use crate::{error::PumpkinError, net::GameProfile};
+pub enum PlayerUseItemState {
+    None,
+    Eating {
+        start_time: Instant,
+        eat_duration: Duration,
+        item_id: u16,
+    },
+    Drinking {
+        start_time: Instant,
+        drink_duration: Duration,
+        item_id: u16,
+    },
+    Drawing {
+        start_time: Instant,
+        draw_duration: Duration,
+    },
+}
 
-use super::living::LivingEntity;
+impl Default for PlayerUseItemState {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 /// Represents a Minecraft player entity.
 ///
@@ -148,6 +173,7 @@ pub struct Player {
     /// The player's total experience points
     pub experience_points: AtomicI32,
     pub experience_pick_up_delay: Mutex<u32>,
+    pub use_item_state: Mutex<PlayerUseItemState>,
 }
 
 impl Player {
@@ -238,6 +264,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            use_item_state: Mutex::new(PlayerUseItemState::default()),
         }
     }
 
@@ -490,6 +517,7 @@ impl Player {
 
         self.living_entity.tick(server).await;
         self.hunger_manager.tick(self).await;
+        self.tick_eating(server).await;
 
         // timeout/keep alive handling
         self.tick_client_load_timeout();
@@ -1113,6 +1141,29 @@ impl Player {
         self.living_entity.add_effect(effect).await;
     }
 
+    pub async fn remove_effect(&self, effect: EffectType) {
+        self.client
+            .send_packet(&CRemoveMobEffect::new(
+                self.entity_id().into(),
+                VarInt(effect as i32),
+            ))
+            .await;
+        self.living_entity.remove_effect(effect).await;
+    }
+
+    pub async fn clear_effects(&self) {
+        let vec = self.living_entity.get_effects().await;
+        for effect in vec {
+            self.client
+                .send_packet(&CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    VarInt(effect.r#type as i32),
+                ))
+                .await;
+        }
+        self.living_entity.clear_effects().await;
+    }
+
     /// Add experience levels to the player
     pub async fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
@@ -1150,6 +1201,270 @@ impl Player {
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
         let progress = experience::progress_in_level(new_points, new_level);
         self.set_experience(new_level, progress, new_points).await;
+    }
+
+    pub async fn set_eating(&self, item_id: u16, duration: Duration) {
+        let mut state = self.use_item_state.lock().await;
+        *state = PlayerUseItemState::Eating {
+            start_time: Instant::now(),
+            eat_duration: duration,
+            item_id,
+        };
+
+        // Update metadata to show eating animation
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                8,
+                MetaDataType::Byte,
+                1i8, // 1 for active hand
+            )])
+            .await;
+    }
+
+    pub async fn stop_eating(&self) {
+        let mut state = self.use_item_state.lock().await;
+        *state = PlayerUseItemState::None;
+
+        // Update metadata to stop showing eating animation
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                8,
+                MetaDataType::Byte,
+                0i8, // 0 for no active hand
+            )])
+            .await;
+    }
+
+    pub async fn tick_eating(&self, server: &Server) {
+        // 1. Check if currently eating and if timer has completed
+        let (should_consume, item_id) = {
+            let state = self.use_item_state.lock().await;
+            match *state {
+                PlayerUseItemState::Eating {
+                    start_time,
+                    eat_duration,
+                    item_id,
+                } => {
+                    if start_time.elapsed() >= eat_duration {
+                        (true, Some(item_id))
+                    } else {
+                        // Still eating - play particles and sounds periodically
+                        let elapsed = start_time.elapsed();
+                        if elapsed.as_millis() % 200 < 20 {
+                            // Every ~200ms
+                            // Release lock before async calls
+                            drop(state);
+
+                            // Play eating sound
+                            self.world()
+                                .await
+                                .play_sound(
+                                    Sound::EntityGenericEat,
+                                    SoundCategory::Players,
+                                    &self.living_entity.entity.pos.load(),
+                                )
+                                .await;
+
+                            // Spawn particles
+                            // TODO: investigate this make the client disconnect
+                            /*let position = self.position();
+                            self.spawn_particle(
+                                position,
+                                Vector3::new(0.1, 0.1, 0.1),
+                                0.05,
+                                5,
+                                Particle::Item
+                            ).await;*/
+                        }
+                        (false, None)
+                    }
+                }
+                _ => (false, None),
+            }
+        };
+
+        // 2. Process completed eating
+        if let Some(item_id) = item_id.filter(|_| should_consume) {
+            // Get the item data from registry
+            if let Ok(item) = server.item_registry.get_item_from_id(item_id) {
+                // Verify player still has the item
+                let has_item = {
+                    let inventory = self.inventory.lock().await;
+                    inventory
+                        .held_item()
+                        .is_some_and(|stack| stack.item.id == item_id)
+                };
+
+                if has_item {
+                    // Stop eating animation
+                    self.stop_eating().await;
+
+                    // Play finishing sound
+                    self.world()
+                        .await
+                        .play_sound(
+                            Sound::EntityPlayerBurp,
+                            SoundCategory::Players,
+                            &self.living_entity.entity.pos.load(),
+                        )
+                        .await;
+
+                    // Apply food effects
+                    if let Some(food) = item.components.food {
+                        // Add food and saturation
+                        self.hunger_manager
+                            .level
+                            .store((self.hunger_manager.level.load() + food.nutrition).min(20));
+                        self.hunger_manager.saturation.store(
+                            (self.hunger_manager.saturation.load() + food.saturation)
+                                .min(self.hunger_manager.level.load() as f32),
+                        );
+
+                        // Apply effects if present
+                        if let Some(consumable) = item.components.consumable {
+                            if let Some(effects) = consumable.on_consume_effects {
+                                self.apply_food_effects(&consumable, effects).await;
+                            }
+                        }
+
+                        // Update client with new hunger values
+                        self.send_health().await;
+                    }
+
+                    let mut inventory = self.inventory.lock().await;
+                    // Handle container items (like bowls from stew)
+                    if let Some(remainder) = item.components.use_remainder {
+                        if let Ok(remainder_item) =
+                            server.item_registry.get_item_from_name(remainder.id)
+                        {
+                            inventory.add_item(ItemStack::new(remainder.count, remainder_item));
+                        }
+                    }
+
+                    // Decrease item stack
+                    inventory.decrease_current_stack(1);
+                }
+            }
+        }
+
+        // 3. Check for eating interruptions
+        let should_interrupt = {
+            let state = self.use_item_state.lock().await;
+            let inventory = self.inventory.lock().await;
+            if let PlayerUseItemState::Eating { item_id, .. } = *state {
+                // Check conditions that would interrupt eating
+                let health_too_low = self.living_entity.health.load() <= 0.0;
+
+                // Check if item changed
+                let current_held_item = inventory.held_item();
+                let item_changed = current_held_item.is_none_or(|stack| stack.item.id != item_id);
+
+                health_too_low || item_changed
+            } else {
+                false
+            }
+        };
+
+        // Handle interruption if needed
+        if should_interrupt {
+            self.stop_eating().await;
+        }
+    }
+
+    async fn apply_food_effects(&self, consumable: &Consumable, effects: &[ConsumeEffect]) {
+        for consume_effect in effects {
+            let roll = rand::random::<f32>();
+
+            if roll <= consume_effect.probability {
+                // TODO: convert this magic string to an enum
+                match consume_effect.r#type {
+                    "minecraft:apply_effects" => {
+                        if let Some(Effects::List(effect_list)) = consume_effect.effects {
+                            for effect in *effect_list {
+                                self.apply_single_effect(effect).await;
+                            }
+                        }
+                    }
+                    "minecraft:remove_effects" => {
+                        if let Some(Effects::Single(effect_id)) = &consume_effect.effects {
+                            if let Some(effect_type) =
+                                EffectType::from_name(&parse_registry_name(effect_id))
+                            {
+                                self.remove_effect(effect_type).await;
+                            }
+                        }
+                    }
+                    "minecraft:clear_all_effects" => {
+                        self.clear_effects().await;
+                    }
+                    "minecraft:teleport_randomly" => {
+                        self.random_teleport_close_to_player().await;
+                    }
+                    "minecraft:play_sound" => {
+                        if let Some(sound) =
+                            Sound::from_name(&parse_registry_name(consumable.sound))
+                        {
+                            self.world()
+                                .await
+                                .play_sound(sound, SoundCategory::Players, &self.position())
+                                .await;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    async fn apply_single_effect(&self, effect: &pumpkin_data::item::Effect) {
+        if let Some(effect_type) = EffectType::from_name(&parse_registry_name(effect.id)) {
+            self.add_effect(
+                Effect {
+                    r#type: effect_type,
+                    duration: effect.duration,
+                    amplifier: effect.amplifier as u8,
+                    ambient: effect.ambient,
+                    show_particles: effect.show_particles,
+                    show_icon: effect.show_icon,
+                },
+                false,
+            )
+            .await;
+        }
+    }
+
+    async fn random_teleport_close_to_player(&self) {
+        let offset_x = rand::random::<f64>() * 32.0 - 16.0; // -16.0 to 16.0
+        let offset_y = rand::random::<f64>() * 32.0 - 16.0;
+        let offset_z = rand::random::<f64>() * 32.0 - 16.0;
+
+        let current_pos = self.position();
+
+        // TODO: safe check for teleport location
+        let target_pos = Vector3::new(
+            current_pos.x + offset_x,
+            current_pos.y + offset_y,
+            current_pos.z + offset_z,
+        );
+
+        let world = self.world().await;
+        self.request_teleport(
+            target_pos,
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        )
+        .await;
+
+        // Play teleport sound at new location
+        world
+            .play_sound(
+                Sound::ItemChorusFruitTeleport,
+                SoundCategory::Players,
+                &target_pos,
+            )
+            .await;
     }
 }
 

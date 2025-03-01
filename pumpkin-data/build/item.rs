@@ -1,6 +1,7 @@
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
+use std::fmt;
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
 include!("../src/tag.rs");
@@ -28,6 +29,12 @@ pub struct ItemComponents {
     pub attribute_modifiers: Option<AttributeModifiers>,
     #[serde(rename = "minecraft:tool")]
     pub tool: Option<ToolComponent>,
+    #[serde(rename = "minecraft:food")]
+    pub food: Option<Food>,
+    #[serde(rename = "minecraft:consumable")]
+    pub consumable: Option<Consumable>,
+    #[serde(rename = "minecraft:use_remainder")]
+    pub use_remainder: Option<Remainder>,
 }
 
 impl ToTokens for ItemComponents {
@@ -86,6 +93,117 @@ impl ToTokens for ItemComponents {
                     }
                 });
                 quote! { Some(AttributeModifiers { modifiers: &[#(#modifier_code),*] }) }
+            }
+            None => quote! { None },
+        };
+
+        let food = match &self.food {
+            Some(food) => {
+                let nutrition = food.nutrition;
+                let saturation = food.saturation;
+                let can_always_eat = food
+                    .can_always_eat
+                    .is_some_and(|can_always_eat| can_always_eat);
+                quote! { Some(Food { nutrition: #nutrition, saturation: #saturation, can_always_eat: #can_always_eat }) }
+            }
+            None => quote! { None },
+        };
+
+        let use_remainder = match &self.use_remainder {
+            Some(remainder) => {
+                let id = LitStr::new(&remainder.id, Span::call_site());
+                let count = remainder.count.map_or(1, |count| count);
+                quote! { Some(Remainder { id: #id, count: #count }) }
+            }
+            None => quote! { None },
+        };
+
+        let consumable = match &self.consumable {
+            Some(consumable) => {
+                let consume_seconds = consumable
+                    .consume_seconds
+                    .map_or(1.6, |consume_seconds| consume_seconds);
+                let sound = consumable
+                    .sound
+                    .as_ref()
+                    .map_or("entity.generic.eat", |s| s)
+                    .to_string();
+                let animation = consumable
+                    .animation
+                    .as_ref()
+                    .map_or("eat", |s| s)
+                    .to_string();
+                let has_consume_particles = consumable
+                    .has_consume_particles
+                    .is_some_and(|has_consume_particles| has_consume_particles);
+
+                let on_consume_effects = match &consumable.on_consume_effects {
+                    Some(on_consume_effects) => {
+                        let on_consume_effects = on_consume_effects.iter().map(|consume_effect| {
+                            let r#type = LitStr::new(&consume_effect.r#type, Span::call_site());
+                            let effects = match &consume_effect.effects {
+                                Some(effects) => match &effects {
+                                    Effects::Single(s) => {
+                                        let s = LitStr::new(s, Span::call_site());
+                                        quote! { Some(&Effects::Single(#s)) }
+                                    }
+                                    Effects::List(effects) => {
+                                        let effects = effects.iter().map(|effect| {
+                                            let id = LitStr::new(&effect.id, Span::call_site());
+                                            let amplifier =
+                                                effect.amplifier.map_or(0, |amplifier| amplifier);
+                                            let duration =
+                                                effect.duration.map_or(1, |duration| duration);
+                                            let ambient =
+                                                effect.ambient.is_some_and(|ambient| ambient);
+                                            let show_particles = effect
+                                                .show_particles
+                                                .is_none_or(|show_particles| show_particles);
+                                            let show_icon =
+                                                effect.show_icon.is_none_or(|show_icon| show_icon);
+                                            quote! {
+                                                Effect {
+                                                    id: #id,
+                                                    amplifier: #amplifier,
+                                                    duration: #duration,
+                                                    ambient: #ambient,
+                                                    show_particles: #show_particles,
+                                                    show_icon: #show_icon,
+                                                }
+                                            }
+                                        });
+                                        quote! { Some(&Effects::List(&[#(#effects),*])) }
+                                    }
+                                },
+                                None => quote! { None },
+                            };
+                            let probability = consume_effect
+                                .probability
+                                .map_or(1f32, |probability| probability);
+                            let diameter =
+                                consume_effect.diameter.map_or(16f32, |diameter| diameter);
+                            quote! {
+                                ConsumeEffect {
+                                    r#type: #r#type,
+                                    effects: #effects,
+                                    probability: #probability,
+                                    diameter: #diameter,
+                                }
+                            }
+                        });
+                        quote! { Some(&[#(#on_consume_effects),*]) }
+                    }
+                    None => quote! { None },
+                };
+                quote! {
+                    Some(Consumable {
+                        consume_seconds: #consume_seconds,
+                        sound: #sound,
+                        animation: #animation,
+                        has_consume_particles: #has_consume_particles,
+                        on_consume_effects: #on_consume_effects,
+                    })
+                }
             }
             None => quote! { None },
         };
@@ -154,7 +272,10 @@ impl ToTokens for ItemComponents {
                 damage: #damage,
                 max_damage: #max_damage,
                 attribute_modifiers: #attribute_modifiers,
-                tool: #tool
+                tool: #tool,
+                food: #food,
+                consumable: #consumable,
+                use_remainder: #use_remainder,
             }
         });
     }
@@ -193,6 +314,53 @@ pub struct Modifier {
     pub slot: String,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+pub struct Food {
+    pub nutrition: u32,
+    pub saturation: f32,
+    pub can_always_eat: Option<bool>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Remainder {
+    pub id: String,
+    pub count: Option<u8>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Consumable {
+    pub consume_seconds: Option<f32>,
+    pub animation: Option<String>,
+    pub sound: Option<String>,
+    pub has_consume_particles: Option<bool>,
+    pub on_consume_effects: Option<Vec<ConsumeEffect>>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ConsumeEffect {
+    pub r#type: String,
+    // effects can either be Vec<Effect> or a Single String
+    pub effects: Option<Effects>,
+    pub probability: Option<f32>,
+    pub diameter: Option<f32>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Effects {
+    List(Vec<Effect>),
+    Single(String),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Effect {
+    pub id: String,
+    pub amplifier: Option<i8>,
+    pub duration: Option<i32>,
+    pub ambient: Option<bool>,
+    pub show_particles: Option<bool>,
+    pub show_icon: Option<bool>,
+}
+
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[allow(clippy::enum_variant_names)]
@@ -200,6 +368,40 @@ pub enum Operation {
     AddValue,
     AddMultipliedBase,
     AddMultipliedTotal,
+}
+
+impl<'de> Deserialize<'de> for Effects {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct EffectsVisitor;
+
+        impl<'de> Visitor<'de> for EffectsVisitor {
+            type Value = Effects;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a list of Effect objects or a single String")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(Effects::Single(value.to_string()))
+            }
+
+            fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let vec = Deserialize::deserialize(de::value::SeqAccessDeserializer::new(seq))?;
+                Ok(Effects::List(vec))
+            }
+        }
+
+        deserializer.deserialize_any(EffectsVisitor)
+    }
 }
 
 pub(crate) fn build() -> TokenStream {
@@ -261,7 +463,56 @@ pub(crate) fn build() -> TokenStream {
             pub damage: Option<u16>,
             pub max_damage: Option<u16>,
             pub attribute_modifiers: Option<AttributeModifiers>,
-            pub tool: Option<ToolComponent>
+            pub tool: Option<ToolComponent>,
+            pub food: Option<Food>,
+            pub consumable: Option<Consumable>,
+            pub use_remainder: Option<Remainder>,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct Food {
+            pub nutrition: u32,
+            pub saturation: f32,
+            pub can_always_eat: bool,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct Remainder {
+            pub id: &'static str,
+            pub count: u8,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct Consumable {
+            pub consume_seconds: f32,
+            pub sound: &'static str,
+            pub animation: &'static str,
+            pub has_consume_particles: bool,
+            pub on_consume_effects: Option<&'static [ConsumeEffect]>,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct ConsumeEffect {
+            pub r#type: &'static str,
+            pub effects: Option<&'static Effects>,
+            pub probability: f32,
+            pub diameter: f32,
+        }
+
+        #[derive(Clone, Debug)]
+        pub enum Effects  {
+            List(&'static [Effect]),
+            Single(&'static str),
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct Effect {
+            pub id: &'static str,
+            pub amplifier: i8,
+            pub duration: i32,
+            pub ambient: bool,
+            pub show_particles: bool,
+            pub show_icon: bool,
         }
 
         #[derive(Clone, Copy, Debug)]
