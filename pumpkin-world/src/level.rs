@@ -316,11 +316,16 @@ impl Level {
                     LoadedData::Loaded(chunk) => (chunk.position, Some(chunk)),
                     LoadedData::Missing(pos) => (pos, None),
                     LoadedData::Error((position, error)) => {
-                        log::error!(
-                            "Failed to load chunk at {:?}: {} (regenerating)",
-                            position,
-                            error
-                        );
+                        match error {
+                            ChunkReadingError::ChunkNotExist => {}
+                            error => {
+                                log::error!(
+                                    "Failed to load chunk at {:?}: {} (regenerating)",
+                                    position,
+                                    error
+                                );
+                            }
+                        }
                         (position, None)
                     }
                 };

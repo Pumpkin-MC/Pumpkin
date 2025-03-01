@@ -30,6 +30,8 @@ pub const REGION_SIZE: usize = 32;
 /// The number of bits that identify two chunks in the same region
 pub const SUBREGION_BITS: u8 = pumpkin_util::math::ceil_log2(REGION_SIZE as u32);
 
+pub const SUBREGION_AND: i32 = i32::pow(2, SUBREGION_BITS as u32) - 1;
+
 /// The number of chunks in a region
 pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 
@@ -57,7 +59,7 @@ pub enum Compression {
 
 #[derive(Default)]
 pub struct AnvilChunkData {
-    length: u32,
+    length: usize,
     compression: Option<Compression>,
     compressed_data: Box<[u8]>,
 }
@@ -187,7 +189,7 @@ impl AnvilChunkData {
             .map_err(|_| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
 
         Ok(AnvilChunkData {
-            length,
+            length: length as usize,
             compression,
             compressed_data: buffer.to_vec().into_boxed_slice(),
         })
@@ -201,7 +203,7 @@ impl AnvilChunkData {
 
         let mut bytes = Vec::with_capacity(padded_size);
 
-        bytes.put_u32(self.length);
+        bytes.put_u32(self.length as u32);
         bytes.put_u8(
             self.compression
                 .map_or(Compression::NO_COMPRESSION, |c| c as u8),
@@ -214,7 +216,7 @@ impl AnvilChunkData {
 
     fn to_chunk(&self, pos: Vector2<i32>) -> Result<ChunkData, ChunkReadingError> {
         // -1 for the padding/align of the *compression* byte
-        let bytes = &self.compressed_data[..self.length as usize - 1];
+        let bytes = &self.compressed_data[..self.length];
 
         let chunk = if let Some(compression) = self.compression {
             let decompress_bytes = compression
@@ -240,7 +242,7 @@ impl AnvilChunkData {
             .map_err(ChunkWritingError::Compression)?;
 
         Ok(AnvilChunkData {
-            length: compressed_data.len() as u32 + 1,
+            length: compressed_data.len(),
             compression: Some(compression),
             compressed_data: compressed_data.into_boxed_slice(),
         })
@@ -253,10 +255,11 @@ impl AnvilChunkFile {
         (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS)
     }
 
-    const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
-        let local_x = (pos.x & 31) as usize;
-        let local_z = (pos.z & 31) as usize;
-        (local_z << 5) + local_x
+    pub const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
+        let local_x = pos.x & SUBREGION_AND;
+        let local_z = pos.z & SUBREGION_AND;
+        let index = (local_z << SUBREGION_BITS) + local_x;
+        index as usize
     }
 }
 

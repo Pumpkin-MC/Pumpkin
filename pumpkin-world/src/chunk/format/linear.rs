@@ -11,7 +11,7 @@ use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zstd::zstd_safe::WriteBuf;
 
-use super::anvil::{CHUNK_COUNT, SUBREGION_BITS, chunk_to_bytes};
+use super::anvil::{CHUNK_COUNT, chunk_to_bytes};
 
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
@@ -135,13 +135,9 @@ impl LinearFileHeader {
 
 impl LinearFile {
     const fn get_chunk_index(at: &Vector2<i32>) -> usize {
-        // we need only the 5 last bits of the x and z coordinates
-        let decode_x = at.x - ((at.x >> SUBREGION_BITS) << SUBREGION_BITS);
-        let decode_z = at.z - ((at.z >> SUBREGION_BITS) << SUBREGION_BITS);
-
-        // we calculate the index of the chunk in the region file
-        ((decode_z << SUBREGION_BITS) + decode_x) as usize
+        AnvilChunkFile::get_chunk_index(at)
     }
+
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
         if bytes[0..8] != SIGNATURE {
             error!("Signature at the start of the file is invalid");
