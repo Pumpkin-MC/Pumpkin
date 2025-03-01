@@ -360,6 +360,16 @@ impl PumpkinServer {
                         };
                     }
                     log::debug!("Cleaning up player for id {}", id);
+
+                    // Save player data on disconnect
+                    if let Err(e) = server
+                        .player_data_storage
+                        .handle_player_leave(&player)
+                        .await
+                    {
+                        log::error!("Failed to save player data on disconnect: {}", e);
+                    }
+
                     player.remove().await;
                     server.remove_player().await;
                 }
@@ -373,6 +383,15 @@ impl PumpkinServer {
         }
 
         log::info!("Stopped accepting incoming connections");
+
+        if let Err(e) = self
+            .server
+            .player_data_storage
+            .save_all_players(&self.server)
+            .await
+        {
+            log::error!("Error saving all players during shutdown: {}", e);
+        }
 
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players().await {

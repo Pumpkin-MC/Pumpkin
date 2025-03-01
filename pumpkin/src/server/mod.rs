@@ -3,7 +3,8 @@ use crate::block::properties::BlockPropertiesManager;
 use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
-use crate::entity::EntityId;
+use crate::data::player_data::ServerPlayerData;
+use crate::entity::{Entity, EntityId};
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::world::custom_bossbar::CustomBossbars;
@@ -73,6 +74,8 @@ pub struct Server {
     pub bossbars: Mutex<CustomBossbars>,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
+    /// Manages player data storage
+    pub player_data_storage: ServerPlayerData,
 }
 
 impl Server {
@@ -126,6 +129,12 @@ impl Server {
             defaultgamemode: Mutex::new(DefaultGamemode {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
+            player_data_storage: ServerPlayerData::new(
+                "./world/playerdata",      // TODO: handle world name in config
+                Duration::from_secs(3600), // TODO: handle cache expiration in config
+                Duration::from_secs(300),  // TODO: handle save interval in config
+                Duration::from_secs(600),  // TODO: handle cleanup interval in config
+            ),
         }
     }
 
@@ -172,7 +181,21 @@ impl Server {
         // TODO: select default from config
         let world = &self.worlds.read().await[0];
 
-        let player = Arc::new(Player::new(client, world.clone(), gamemode).await);
+        let mut player = Player::new(client, world.clone(), gamemode).await;
+
+        // Load player data
+        if let Err(e) = self
+            .player_data_storage
+            .handle_player_join(&mut player)
+            .await
+        {
+            // This should never happen now with the updated code that always returns Ok()
+            log::error!("Unexpected error loading player data: {}", e);
+        }
+
+        // Wrap in Arc after data is loaded
+        let player = Arc::new(player);
+
         world
             .add_player(player.gameprofile.id, player.clone())
             .await;
@@ -423,6 +446,10 @@ impl Server {
     async fn tick(&self) {
         for world in self.worlds.read().await.iter() {
             world.tick(self).await;
+        }
+
+        if let Err(e) = self.player_data_storage.tick(self).await {
+            log::error!("Error ticking player data: {}", e);
         }
     }
 }
