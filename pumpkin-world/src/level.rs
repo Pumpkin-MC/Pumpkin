@@ -383,10 +383,11 @@ impl Level {
             let mut recv = recv;
             while let Some((pos, data)) = recv.recv().await {
                 if let Some(data) = data {
-                    let entry = loaded_chunks
+                    let value = loaded_chunks
                         .entry(pos)
-                        .or_insert_with(|| Arc::new(RwLock::new(data)));
-                    let value = entry.clone();
+                        .or_insert_with(|| Arc::new(RwLock::new(data)))
+                        .value()
+                        .clone();
                     send_chunk(false, value).await;
                 } else {
                     let loaded_chunks = loaded_chunks.clone();
@@ -394,10 +395,11 @@ impl Level {
                     let gen_channel = gen_channel.clone();
                     rayon::spawn(move || {
                         let data = world_gen.generate_chunk(pos);
-                        let entry = loaded_chunks
+                        let value = loaded_chunks
                             .entry(pos)
-                            .or_insert_with(|| Arc::new(RwLock::new(data)));
-                        let value = entry.clone();
+                            .or_insert_with(|| Arc::new(RwLock::new(data)))
+                            .value()
+                            .clone();
                         gen_channel
                             .blocking_send((value, true))
                             .expect("Failed to send chunk from generation thread!");
