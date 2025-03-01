@@ -28,5 +28,32 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
+/// This is the code to run the test
+/// with out BulkAPI PR.
+///
+// fn criterion_benchmark(c: &mut Criterion) {
+//     let temp_dir = TempDir::new().unwrap();
+//     let level = Arc::new(Dimension::OverWorld.into_level(temp_dir.path().to_path_buf()));
+//
+//     c.bench_function("overworld chunk fetch", |b| {
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         let cylindrical = Cylindrical::new(Vector2::new(0, 0), NonZeroU8::new(32).unwrap());
+//         let chunks = cylindrical.all_chunks_within();
+//
+//         let rt_handle = rt.handle().clone();
+//         rt.block_on(async {
+//             let (tx, _rx) = tokio::sync::mpsc::channel(chunks.len());
+//             level.fetch_chunks(&chunks, tx, &rt_handle);
+//             level.clean_chunks(&chunks).await;
+//         });
+//
+//         b.to_async(rt).iter(|| {
+//             let (tx, _rx) = tokio::sync::mpsc::channel(chunks.len());
+//
+//             async { level.fetch_chunks(&chunks, tx, &rt_handle) }
+//         });
+//     });
+// }
+
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
