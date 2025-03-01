@@ -104,6 +104,13 @@ impl Server {
             DimensionType::Overworld,
         );
 
+        // Spawn chunks are never unloaded
+        for chunk in Self::spawn_chunks() {
+            world.level.mark_chunk_as_newly_watched(chunk);
+        }
+
+        let world_name = world.level.level_info.level_name.clone();
+
         Self {
             cached_registry: Registry::get_synced(),
             open_containers: RwLock::new(HashMap::new()),
@@ -128,10 +135,8 @@ impl Server {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
             player_data_storage: ServerPlayerData::new(
-                "./world/playerdata",      // TODO: handle world name in config
-                Duration::from_secs(3600), // TODO: handle cache expiration in config
-                Duration::from_secs(300),  // TODO: handle save interval in config
-                Duration::from_secs(600),  // TODO: handle cleanup interval in config
+                format!("./{world_name}/playerdata"),
+                Duration::from_secs(ADVANCED_CONFIG.player_data.save_player_cron_interval),
             ),
         }
     }
@@ -187,7 +192,6 @@ impl Server {
             .handle_player_join(&mut player)
             .await
         {
-            // This should never happen now with the updated code that always returns Ok()
             log::error!("Unexpected error loading player data: {}", e);
         }
 

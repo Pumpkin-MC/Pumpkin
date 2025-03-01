@@ -1,16 +1,13 @@
-use std::{
-    collections::HashMap,
-    fs::{File, create_dir_all},
-    io,
-    io::{Read, Write},
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
+use crossbeam::atomic::AtomicCell;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_nbt::compound::NbtCompound;
-use tokio::sync::Mutex;
+use std::sync::Arc;
+use std::{
+    fs::{File, create_dir_all},
+    io,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 use uuid::Uuid;
 
 use crate::{
@@ -25,16 +22,8 @@ use crate::{
 pub struct PlayerDataStorage {
     /// Path to the directory where player data is stored
     data_path: PathBuf,
-    /// In-memory cache of recently disconnected players' data
-    cache: Mutex<HashMap<Uuid, (NbtCompound, Instant)>>,
-    /// How long to keep player data in cache after disconnection
-    cache_expiration: Duration,
-    /// Maximum number of entries in the cache
-    max_cache_entries: usize,
     /// Whether player data saving is enabled
     save_enabled: bool,
-    /// Whether to cache player data
-    cache_enabled: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -43,13 +32,11 @@ pub enum PlayerDataError {
     Io(#[from] io::Error),
     #[error("NBT error: {0}")]
     Nbt(String),
-    #[error("Player data not found for UUID: {0}")]
-    NotFound(Uuid),
 }
 
 impl PlayerDataStorage {
     /// Creates a new `PlayerDataStorage` with the specified data path and cache expiration time.
-    pub fn new(data_path: impl Into<PathBuf>, cache_expiration: Duration) -> Self {
+    pub fn new(data_path: impl Into<PathBuf>) -> Self {
         let path = data_path.into();
         if !path.exists() {
             if let Err(e) = create_dir_all(&path) {
@@ -65,11 +52,7 @@ impl PlayerDataStorage {
 
         Self {
             data_path: path,
-            cache: Mutex::new(HashMap::new()),
-            cache_expiration,
-            max_cache_entries: config.max_cache_entries as usize,
             save_enabled: config.save_player_data,
-            cache_enabled: config.cache_player_data,
         }
     }
 
@@ -96,35 +79,24 @@ impl PlayerDataStorage {
             return Ok(NbtCompound::new());
         }
 
-        // Check cache first if caching is enabled
-        if self.cache_enabled {
-            let cache = self.cache.lock().await;
-            if let Some((data, _)) = cache.get(uuid) {
-                log::debug!(
-                    "Loaded player data for {} from cache with data {:?}",
-                    uuid,
-                    data
-                );
-                return Ok(data.clone());
-            }
-        }
-
         // If not in cache, load from disk
         let path = self.get_player_data_path(uuid);
         if !path.exists() {
             log::debug!("No player data file found for {}", uuid);
-            return Err(PlayerDataError::NotFound(*uuid));
+            return Ok(NbtCompound::new());
         }
 
         // Offload file I/O to a separate tokio task
         let uuid_copy = *uuid;
         let nbt = tokio::task::spawn_blocking(move || -> Result<NbtCompound, PlayerDataError> {
-            let mut file = File::open(&path).map_err(PlayerDataError::Io)?;
-            let mut data = Vec::new();
-            file.read_to_end(&mut data).map_err(PlayerDataError::Io)?;
-
-            pumpkin_nbt::nbt_compress::read_gzip_compound_tag(&data)
-                .map_err(|e| PlayerDataError::Nbt(e.to_string()))
+            match File::open(&path) {
+                Ok(file) => {
+                    // Read directly from the file with GZip decompression
+                    pumpkin_nbt::nbt_compress::read_gzip_compound_tag(file)
+                        .map_err(|e| PlayerDataError::Nbt(e.to_string()))
+                }
+                Err(e) => Err(PlayerDataError::Io(e)),
+            }
         })
         .await
         .unwrap_or_else(|e| {
@@ -165,15 +137,11 @@ impl PlayerDataStorage {
 
         let path = self.get_player_data_path(uuid);
 
-        // Update cache if caching is enabled
-        if self.cache_enabled {
-            let mut cache = self.cache.lock().await;
-            cache.insert(*uuid, (data.clone(), Instant::now()));
-        };
-
         // Run disk I/O in a separate tokio task
         let uuid_copy = *uuid;
-        tokio::spawn(async move {
+        let data_clone = data;
+
+        match tokio::spawn(async move {
             // Ensure parent directory exists
             if let Some(parent) = path.parent() {
                 if let Err(e) = create_dir_all(parent) {
@@ -182,100 +150,41 @@ impl PlayerDataStorage {
                         uuid_copy,
                         e
                     );
-                    return;
+                    return Err(PlayerDataError::Io(e));
                 }
             }
 
-            // Compress the NBT data
-            let compressed = match pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data) {
-                Ok(compressed) => compressed,
-                Err(e) => {
-                    log::error!("Failed to compress player data for {}: {}", uuid_copy, e);
-                    return;
-                }
-            };
-
-            // Save to disk
+            // Create the file and write directly with GZip compression
             match File::create(&path) {
-                Ok(mut file) => {
-                    if let Err(e) = file.write_all(&compressed) {
-                        log::error!("Failed to write player data for {}: {}", uuid_copy, e);
+                Ok(file) => {
+                    if let Err(e) =
+                        pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data_clone, file)
+                    {
+                        log::error!(
+                            "Failed to write compressed player data for {}: {}",
+                            uuid_copy,
+                            e
+                        );
+                        Err(PlayerDataError::Nbt(e.to_string()))
                     } else {
                         log::debug!("Saved player data for {} to disk", uuid_copy);
+                        Ok(())
                     }
                 }
                 Err(e) => {
                     log::error!("Failed to create player data file for {}: {}", uuid_copy, e);
+                    Err(PlayerDataError::Io(e))
                 }
             }
-        });
-        Ok(())
-    }
-
-    /// Caches player data on disconnect to avoid loading from disk on rejoin.
-    ///
-    /// This function is used when a player disconnects, to temporarily cache their
-    /// data in memory with an expiration timestamp.
-    ///
-    /// # Arguments
-    ///
-    /// * `uuid` - The UUID of the player who disconnected.
-    /// * `data` - The NBT compound data to cache.
-    pub async fn cache_on_disconnect(&self, uuid: &Uuid, data: NbtCompound) {
-        // Skip if caching is disabled
-        if !self.cache_enabled {
-            return;
-        }
-
-        // Clone the data to avoid holding locks during complex operations
-        let data_clone = data.clone();
-
-        // Use a scope to limit the lock duration
+        })
+        .await
         {
-            let mut cache = self.cache.lock().await;
-
-            // Check if we need to remove an entry to stay under max_cache_entries
-            if cache.len() >= self.max_cache_entries && !cache.contains_key(uuid) {
-                // Find the oldest entry
-                if let Some(oldest_uuid) = cache
-                    .iter()
-                    .min_by_key(|(_, (_, timestamp))| *timestamp)
-                    .map(|(uuid, _)| *uuid)
-                {
-                    cache.remove(&oldest_uuid);
-                }
+            Ok(result) => result,
+            Err(e) => {
+                log::error!("Task panicked while saving player data for {}: {}", uuid, e);
+                Err(PlayerDataError::Nbt(format!("Task join error: {e}")))
             }
-
-            // Insert the new entry
-            cache.insert(*uuid, (data_clone, Instant::now()));
-        };
-
-        log::debug!("Cached player data for {} on disconnect", uuid);
-    }
-
-    /// Removes expired player data from the cache.
-    ///
-    /// This function should be called periodically to clean up cached player data
-    /// that has exceeded its expiration time.
-    pub async fn clean_expired_cache(&self) {
-        if !self.cache_enabled {
-            return;
         }
-
-        let mut cache = self.cache.lock().await;
-        let now = Instant::now();
-        let expired: Vec<Uuid> = cache
-            .iter()
-            .filter(|(_, (_, timestamp))| now.duration_since(*timestamp) > self.cache_expiration)
-            .map(|(uuid, _)| *uuid)
-            .collect();
-
-        for uuid in expired {
-            cache.remove(&uuid);
-        }
-
-        // Release lock before waiting for tasks
-        drop(cache);
     }
 
     /// Loads player data and applies it to a player.
@@ -298,11 +207,6 @@ impl PlayerDataStorage {
         match self.load_player_data(uuid).await {
             Ok(mut data) => {
                 player.read_nbt(&mut data).await;
-                Ok(())
-            }
-            Err(PlayerDataError::NotFound(_)) => {
-                // For new players, just continue with default data
-                log::debug!("Creating new player data for {}", uuid);
                 Ok(())
             }
             Err(e) => {
@@ -348,25 +252,16 @@ impl PlayerDataStorage {
 pub struct ServerPlayerData {
     storage: Arc<PlayerDataStorage>,
     save_interval: Duration,
-    last_cleanup: Mutex<Instant>,
-    cleanup_interval: Duration,
-    last_save: Mutex<Instant>,
+    last_save: AtomicCell<Instant>,
 }
 
 impl ServerPlayerData {
     /// Creates a new `ServerPlayerData` with specified configuration.
-    pub fn new(
-        data_path: impl Into<PathBuf>,
-        cache_expiration: Duration,
-        save_interval: Duration,
-        cleanup_interval: Duration,
-    ) -> Self {
+    pub fn new(data_path: impl Into<PathBuf>, save_interval: Duration) -> Self {
         Self {
-            storage: Arc::new(PlayerDataStorage::new(data_path, cache_expiration)),
+            storage: Arc::new(PlayerDataStorage::new(data_path)),
             save_interval,
-            last_cleanup: Mutex::new(Instant::now()),
-            cleanup_interval,
-            last_save: Mutex::new(Instant::now()),
+            last_save: AtomicCell::new(Instant::now()),
         }
     }
 
@@ -400,12 +295,7 @@ impl ServerPlayerData {
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
 
-        // First cache it if caching is enabled
-        self.storage
-            .cache_on_disconnect(&player.gameprofile.id, nbt.clone())
-            .await;
-
-        // Then save to disk
+        // Save to disk
         self.storage
             .save_player_data(&player.gameprofile.id, nbt)
             .await?;
@@ -420,28 +310,12 @@ impl ServerPlayerData {
     pub async fn tick(&self, server: &Server) -> Result<(), PlayerDataError> {
         let now = Instant::now();
 
-        // Check if cleanup is needed
-        {
-            let mut last_cleanup = self.last_cleanup.lock().await;
-            if now.duration_since(*last_cleanup) >= self.cleanup_interval {
-                self.storage.clean_expired_cache().await;
-                *last_cleanup = now;
-            }
-        }
-
         // Only save players periodically based on save_interval
-        let should_save = {
-            let mut last_save = self.last_save.lock().await;
-            let should_save = now.duration_since(*last_save) >= self.save_interval;
-
-            if should_save {
-                *last_save = now;
-            }
-
-            should_save
-        };
+        let last_save = self.last_save.load();
+        let should_save = now.duration_since(last_save) >= self.save_interval;
 
         if should_save && self.storage.save_enabled {
+            self.last_save.store(now);
             // Save all online players periodically across all worlds
             for world in server.worlds.read().await.iter() {
                 let players = world.players.read().await;

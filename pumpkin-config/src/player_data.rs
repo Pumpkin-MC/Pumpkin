@@ -5,18 +5,15 @@ use serde::{Deserialize, Serialize};
 pub struct PlayerDataConfig {
     /// Is Player Data saving enabled?
     pub save_player_data: bool,
-    /// Is Player Data should be cached?
-    pub cache_player_data: bool,
-    /// Maximum amount of players to cache.
-    pub max_cache_entries: u16,
+    /// Time interval in seconds to save player data
+    pub save_player_cron_interval: u64,
 }
 
 impl Default for PlayerDataConfig {
     fn default() -> Self {
         Self {
             save_player_data: true,
-            cache_player_data: true,
-            max_cache_entries: 256,
+            save_player_cron_interval: 300,
         }
     }
 }

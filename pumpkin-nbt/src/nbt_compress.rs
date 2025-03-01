@@ -1,30 +1,24 @@
+use crate::deserializer::ReadAdaptor;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::io::{Read, Write};
 
-/// Reads a GZipped NBT compound tag.
-///
-/// This function takes a byte slice containing a GZipped NBT compound tag and returns the deserialized compound.
+/// Reads a GZipped NBT compound tag from any reader.
 ///
 /// # Arguments
 ///
-/// * `compressed_data` - A byte slice containing the GZipped NBT data
+/// * `input` - Any type implementing the Read trait containing GZipped NBT data
 ///
 /// # Returns
 ///
 /// A Result containing either the parsed NbtCompound or an Error
-pub fn read_gzip_compound_tag(compressed_data: &[u8]) -> Result<NbtCompound, Error> {
-    // Create a GZip decoder
-    let mut decoder = GzDecoder::new(compressed_data);
+pub fn read_gzip_compound_tag(input: impl Read) -> Result<NbtCompound, Error> {
+    // Create a GZip decoder and directly chain it to the NBT reader
+    let decoder = GzDecoder::new(input);
+    let mut reader = ReadAdaptor::new(decoder);
 
-    // Decompress the data
-    let mut decompressed_data = Vec::new();
-    decoder
-        .read_to_end(&mut decompressed_data)
-        .map_err(Error::Incomplete)?;
-
-    // Read the NBT data
-    let nbt = Nbt::read(&mut deserializer::ReadAdaptor::new(&decompressed_data[..]))?;
+    // Read the NBT data directly from the decoder stream
+    let nbt = Nbt::read(&mut reader)?;
     Ok(nbt.root_tag)
 }
 
@@ -35,84 +29,82 @@ pub fn read_gzip_compound_tag(compressed_data: &[u8]) -> Result<NbtCompound, Err
 /// # Arguments
 ///
 /// * `compound` - The NbtCompound to serialize and compress
+/// * `output` - Any type implementing the Write trait where the compressed data will be written
 ///
 /// # Returns
 ///
 /// A Result containing either the compressed data as a byte vector or an Error
-pub fn write_gzip_compound_tag(compound: &NbtCompound) -> Result<Vec<u8>, Error> {
-    // First serialize the NBT data
+pub fn write_gzip_compound_tag(compound: &NbtCompound, output: impl Write) -> Result<(), Error> {
+    // Create a GZip encoder that writes to the output
+    let mut encoder = GzEncoder::new(output, Compression::default());
+
+    // Create an NBT wrapper and write directly to the encoder
     let nbt = Nbt::new(String::new(), compound.clone());
-    let serialized = nbt.write();
+    nbt.write_to_writer(&mut encoder)
+        .map_err(Error::Incomplete)?;
 
-    // Then compress it with GZip
-    let mut compressed_data = Vec::new();
-    {
-        let mut encoder = GzEncoder::new(&mut compressed_data, Compression::default());
-        encoder.write_all(&serialized).map_err(Error::Incomplete)?;
-        encoder.finish().map_err(Error::Incomplete)?;
-    }
+    // Finish the encoder to ensure all data is written
+    encoder.finish().map_err(Error::Incomplete)?;
 
-    Ok(compressed_data)
+    Ok(())
 }
 
-/// Reads a GZipped NBT structure.
-///
-/// This function takes a byte slice containing a GZipped NBT structure and deserializes it into a user-provided type.
+/// Convenience function that returns compressed bytes
+pub fn write_gzip_compound_tag_to_bytes(compound: &NbtCompound) -> Result<Vec<u8>, Error> {
+    let mut buffer = Vec::new();
+    write_gzip_compound_tag(compound, &mut buffer)?;
+    Ok(buffer)
+}
+
+/// Reads a GZipped NBT structure into a Rust type.
 ///
 /// # Arguments
 ///
-/// * `compressed_data` - A byte slice containing the GZipped NBT data
+/// * `input` - Any type implementing the Read trait containing GZipped NBT data
 ///
 /// # Returns
 ///
-/// A Result containing either the parsed structure or an Error
-pub fn from_gzip_bytes<'a, T>(compressed_data: &[u8]) -> Result<T, Error>
+/// A Result containing either the deserialized type or an Error
+pub fn from_gzip_bytes<'a, T, R>(input: R) -> Result<T, Error>
 where
     T: serde::Deserialize<'a>,
+    R: Read,
 {
-    // Create a GZip decoder
-    let mut decoder = GzDecoder::new(compressed_data);
-
-    // Decompress the data
-    let mut decompressed_data = Vec::new();
-    decoder
-        .read_to_end(&mut decompressed_data)
-        .map_err(Error::Incomplete)?;
-
-    // Deserialize the NBT data
-    deserializer::from_bytes(&decompressed_data[..])
+    // Create a GZip decoder and directly use it for deserialization
+    let decoder = GzDecoder::new(input);
+    deserializer::from_bytes(decoder)
 }
 
-/// Writes a GZipped NBT structure.
-///
-/// This function takes a serializable structure and writes it as a GZipped byte vector.
+/// Writes a Rust type as GZipped NBT to any writer.
 ///
 /// # Arguments
 ///
 /// * `value` - The value to serialize and compress
+/// * `output` - Any type implementing the Write trait where the compressed data will be written
 ///
 /// # Returns
 ///
-/// A Result containing either the compressed data as a byte vector or an Error
-pub fn to_gzip_bytes<T>(value: &T) -> Result<Vec<u8>, Error>
+/// A Result indicating success or an Error
+pub fn to_gzip_bytes<T, W>(value: &T, output: W) -> Result<(), Error>
+where
+    T: serde::Serialize,
+    W: Write,
+{
+    // Create a GZip encoder that writes to the output
+    let encoder = GzEncoder::new(output, Compression::default());
+
+    // Serialize directly to the encoder
+    serializer::to_bytes(value, encoder)
+}
+
+/// Convenience function that returns compressed bytes
+pub fn to_gzip_bytes_vec<T>(value: &T) -> Result<Vec<u8>, Error>
 where
     T: serde::Serialize,
 {
-    // First serialize the NBT data
-    let mut uncompressed_data = Vec::new();
-    serializer::to_bytes(value, &mut uncompressed_data)?;
-
-    // Then compress it with GZip
-    let mut compressed_data = Vec::new();
-    {
-        let mut encoder = GzEncoder::new(&mut compressed_data, Compression::default());
-        encoder
-            .write_all(&uncompressed_data)
-            .map_err(Error::Incomplete)?;
-        encoder.finish().map_err(Error::Incomplete)?;
-    }
-
-    Ok(compressed_data)
+    let mut buffer = Vec::new();
+    to_gzip_bytes(value, &mut buffer)?;
+    Ok(buffer)
 }
 
 #[cfg(test)]
@@ -120,12 +112,14 @@ mod tests {
     use crate::{
         NbtCompound,
         nbt_compress::{
-            from_gzip_bytes, read_gzip_compound_tag, to_gzip_bytes, write_gzip_compound_tag,
+            from_gzip_bytes, read_gzip_compound_tag, to_gzip_bytes, to_gzip_bytes_vec,
+            write_gzip_compound_tag, write_gzip_compound_tag_to_bytes,
         },
         tag::NbtTag,
     };
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
+    use std::io::Cursor;
 
     #[test]
     fn test_gzip_read_write_compound() {
@@ -145,12 +139,13 @@ mod tests {
         nested.put_int("nested_int", 42);
         compound.put_component("nested_compound", nested);
 
-        // Write to GZip
-        let compressed = write_gzip_compound_tag(&compound).expect("Failed to compress compound");
+        // Write to GZip using streaming
+        let mut buffer = Vec::new();
+        write_gzip_compound_tag(&compound, &mut buffer).expect("Failed to compress compound");
 
-        // Read from GZip
+        // Read from GZip using streaming
         let read_compound =
-            read_gzip_compound_tag(&compressed).expect("Failed to decompress compound");
+            read_gzip_compound_tag(Cursor::new(&buffer)).expect("Failed to decompress compound");
 
         // Verify values
         assert_eq!(read_compound.get_byte("byte_value"), Some(123));
@@ -174,12 +169,29 @@ mod tests {
     }
 
     #[test]
+    fn test_gzip_convenience_methods() {
+        // Create a test compound
+        let mut compound = NbtCompound::new();
+        compound.put_int("test_value", 12345);
+
+        // Test convenience method for writing
+        let buffer =
+            write_gzip_compound_tag_to_bytes(&compound).expect("Failed to compress compound");
+
+        // Test streaming read from the buffer
+        let read_compound =
+            read_gzip_compound_tag(Cursor::new(buffer)).expect("Failed to decompress compound");
+
+        assert_eq!(read_compound.get_int("test_value"), Some(12345));
+    }
+
+    #[test]
     fn test_gzip_empty_compound() {
         let compound = NbtCompound::new();
-        let compressed =
-            write_gzip_compound_tag(&compound).expect("Failed to compress empty compound");
-        let read_compound =
-            read_gzip_compound_tag(&compressed).expect("Failed to decompress empty compound");
+        let mut buffer = Vec::new();
+        write_gzip_compound_tag(&compound, &mut buffer).expect("Failed to compress empty compound");
+        let read_compound = read_gzip_compound_tag(Cursor::new(buffer))
+            .expect("Failed to decompress empty compound");
 
         assert_eq!(read_compound.child_tags.len(), 0);
     }
@@ -193,10 +205,10 @@ mod tests {
             compound.put_int(&format!("value_{}", i), i);
         }
 
-        let compressed =
-            write_gzip_compound_tag(&compound).expect("Failed to compress large compound");
-        let read_compound =
-            read_gzip_compound_tag(&compressed).expect("Failed to decompress large compound");
+        let mut buffer = Vec::new();
+        write_gzip_compound_tag(&compound, &mut buffer).expect("Failed to compress large compound");
+        let read_compound = read_gzip_compound_tag(Cursor::new(buffer))
+            .expect("Failed to decompress large compound");
 
         assert_eq!(read_compound.child_tags.len(), 1000);
 
@@ -236,15 +248,23 @@ mod tests {
             },
         };
 
-        // Serialize to GZip
-        let compressed =
-            to_gzip_bytes(&test_struct).expect("Failed to serialize and compress struct");
+        // Test streaming serialization
+        let mut buffer = Vec::new();
+        to_gzip_bytes(&test_struct, &mut buffer).expect("Failed to serialize and compress struct");
 
-        // Deserialize from GZip
-        let read_struct: TestStruct =
-            from_gzip_bytes(&compressed).expect("Failed to decompress and deserialize struct");
+        // Test streaming deserialization
+        let read_struct: TestStruct = from_gzip_bytes(Cursor::new(&buffer))
+            .expect("Failed to decompress and deserialize struct");
 
         assert_eq!(read_struct, test_struct);
+
+        // Also test the convenience method
+        let buffer2 =
+            to_gzip_bytes_vec(&test_struct).expect("Failed to serialize and compress struct");
+        let read_struct2: TestStruct = from_gzip_bytes(Cursor::new(&buffer2))
+            .expect("Failed to decompress and deserialize struct");
+
+        assert_eq!(read_struct2, test_struct);
     }
 
     #[test]
@@ -257,24 +277,25 @@ mod tests {
         }
 
         let uncompressed = compound.child_tags.len() * 100; // rough estimate
-        let compressed = write_gzip_compound_tag(&compound).expect("Failed to compress compound");
+        let mut buffer = Vec::new();
+        write_gzip_compound_tag(&compound, &mut buffer).expect("Failed to compress compound");
 
         println!("Uncompressed size (est): {} bytes", uncompressed);
-        println!("Compressed size: {} bytes", compressed.len());
+        println!("Compressed size: {} bytes", buffer.len());
         println!(
             "Compression ratio: {:.2}x",
-            uncompressed as f64 / compressed.len() as f64
+            uncompressed as f64 / buffer.len() as f64
         );
 
         // Just ensure we can read it back - actual compression ratio will vary
-        let _ = read_gzip_compound_tag(&compressed).expect("Failed to decompress compound");
+        let _ = read_gzip_compound_tag(Cursor::new(buffer)).expect("Failed to decompress compound");
     }
 
     #[test]
     fn test_gzip_invalid_data() {
         // Try to read from invalid data
         let invalid_data = vec![1, 2, 3, 4, 5]; // Not valid GZip data
-        let result = read_gzip_compound_tag(&invalid_data);
+        let result = read_gzip_compound_tag(Cursor::new(invalid_data));
         assert!(result.is_err());
     }
 
@@ -293,9 +314,10 @@ mod tests {
             string_array: vec!["one".to_string(), "two".to_string(), "three".to_string()],
         };
 
-        let compressed = to_gzip_bytes(&test_struct).expect("Failed to serialize and compress");
+        let mut buffer = Vec::new();
+        to_gzip_bytes(&test_struct, &mut buffer).expect("Failed to serialize and compress");
         let read_struct: ArrayTest =
-            from_gzip_bytes(&compressed).expect("Failed to decompress and deserialize");
+            from_gzip_bytes(Cursor::new(buffer)).expect("Failed to decompress and deserialize");
 
         assert_eq!(read_struct, test_struct);
     }
@@ -321,10 +343,39 @@ mod tests {
             int_map,
         };
 
-        let compressed = to_gzip_bytes(&test_struct).expect("Failed to serialize and compress");
+        let mut buffer = Vec::new();
+        to_gzip_bytes(&test_struct, &mut buffer).expect("Failed to serialize and compress");
         let read_struct: MapTest =
-            from_gzip_bytes(&compressed).expect("Failed to decompress and deserialize");
+            from_gzip_bytes(Cursor::new(buffer)).expect("Failed to decompress and deserialize");
 
         assert_eq!(read_struct, test_struct);
+    }
+
+    #[test]
+    fn test_direct_file_io() {
+        use std::fs::File;
+        use std::path::Path;
+
+        let mut compound = NbtCompound::new();
+        compound.put_int("test_value", 12345);
+
+        // Create a temporary file path
+        let path = Path::new("test_nbt_file.dat");
+
+        // Write to file directly
+        {
+            let file = File::create(path).expect("Failed to create test file");
+            write_gzip_compound_tag(&compound, file).expect("Failed to write NBT to file");
+        }
+
+        // Read from file directly
+        {
+            let file = File::open(path).expect("Failed to open test file");
+            let read_compound = read_gzip_compound_tag(file).expect("Failed to read NBT from file");
+            assert_eq!(read_compound.get_int("test_value"), Some(12345));
+        }
+
+        // Clean up
+        std::fs::remove_file(path).expect("Failed to remove test file");
     }
 }
