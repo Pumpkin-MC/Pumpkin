@@ -1401,13 +1401,7 @@ impl NBTStorage for Player {
         nbt.put_byte("playerGameType", self.gamemode.load() as i8);
 
         // Store food level, saturation, exhaustion, and tick timer
-        nbt.put_int("foodLevel", self.hunger_manager.level.load() as i32);
-        nbt.put_float("foodSaturationLevel", self.hunger_manager.saturation.load());
-        nbt.put_float("foodExhaustionLevel", self.hunger_manager.exhaustion.load());
-        nbt.put_int(
-            "foodTickTimer",
-            self.hunger_manager.tick_timer.load() as i32,
-        );
+        self.hunger_manager.write_nbt(nbt).await;
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
@@ -1422,18 +1416,7 @@ impl NBTStorage for Player {
         );
 
         // Load food level, saturation, exhaustion, and tick timer
-        self.hunger_manager
-            .level
-            .store(nbt.get_int("foodLevel").unwrap_or(20) as u32);
-        self.hunger_manager
-            .saturation
-            .store(nbt.get_float("foodSaturationLevel").unwrap_or(5.0));
-        self.hunger_manager
-            .exhaustion
-            .store(nbt.get_float("foodExhaustionLevel").unwrap_or(0.0));
-        self.hunger_manager
-            .tick_timer
-            .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
+        self.hunger_manager.read_nbt(nbt).await;
 
         // Load from total XP
         let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
