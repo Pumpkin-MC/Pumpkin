@@ -319,18 +319,19 @@ impl Level {
                 LoadedData::Loaded(chunk) => loaded_chunks.push(chunk),
                 LoadedData::Missing(pos) => non_generated_chunks.push(pos),
                 LoadedData::Error((pos, error)) => match error {
-                    ChunkReadingError::ChunkNotExist => non_generated_chunks.push(pos),
-                    ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated) => {
-                        non_generated_chunks.push(pos)
+                    // this is expected, and is not an error
+                    ChunkReadingError::ChunkNotExist
+                    | ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated) => {
+                        non_generated_chunks.push(pos);
                     }
+                    // this is an error, and we should log it
                     error => {
                         log::error!(
                             "Failed to load chunk at {:?}: {} (regenerating)",
                             pos,
                             error
                         );
-
-                        non_generated_chunks.push(pos)
+                        non_generated_chunks.push(pos);
                     }
                 },
             }
