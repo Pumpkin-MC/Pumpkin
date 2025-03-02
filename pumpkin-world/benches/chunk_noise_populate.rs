@@ -20,7 +20,6 @@ fn bench_populate_noise(c: &mut Criterion) {
     });
 }
 
-
 async fn test_reads(level: Arc<Level>, positions: Vec<Vector2<i32>>) {
     let (send, mut recv) = tokio::sync::mpsc::channel(positions.len());
 
@@ -41,8 +40,8 @@ async fn test_writes(level: Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<Ch
 // Depends on config options from `./config`
 fn bench_chunk_io(c: &mut Criterion) {
     // System temp dirs are in-memory, so we cant use temp_dir
-    let temp_dir = TempDir::new().unwrap();
-    let root_dir = temp_dir.path().to_path_buf();
+    let root_dir = global_path!("./bench_root");
+    fs::create_dir(&root_dir).unwrap();
 
     let async_handler = tokio::runtime::Builder::new_current_thread()
         .build()
@@ -71,32 +70,43 @@ fn bench_chunk_io(c: &mut Criterion) {
             positions.push(pos);
         }
     });
-    println!("Testing with {} chunks", chunks.len());
 
     chunks.sort_unstable_by_key(|chunk| chunk.0.x * chunk.0.x + chunk.0.z * chunk.0.z);
     positions.sort_unstable_by_key(|pos| pos.x * pos.x + pos.z * pos.z);
 
-    // These test worst case: no caching done by `Level`
-    for n_chunks in vec![8, 32, 128] {
-        let chunks = &chunks[..n_chunks];
-        let positions = &positions[..n_chunks];
-        c.bench_with_input(
-            BenchmarkId::new("write_chunks", n_chunks),
-            &chunks,
-            |b, chunks| {
-                b.to_async(&async_handler)
-                    .iter(|| test_writes(level.clone(), chunks.to_vec()))
-            },
-        );
+    {
+        // These test worst case: no caching done by `Level`
+        let mut write_group = c.benchmark_group("write_chunks");
+        for n_chunks in vec![16, 64, 256] {
+            let chunks = &chunks[..n_chunks];
+            println!("Testing with {} chunks", chunks.len());
+            write_group.bench_with_input(
+                BenchmarkId::from_parameter(n_chunks),
+                &chunks,
+                |b, chunks| {
+                    b.to_async(&async_handler)
+                        .iter(|| test_writes(level.clone(), chunks.to_vec()))
+                },
+            );
+        }
+    }
 
-        c.bench_with_input(
-            BenchmarkId::new("read_chunks", n_chunks),
-            &positions,
-            |b, positions| {
-                b.to_async(&async_handler)
-                    .iter(|| test_reads(level.clone(), positions.to_vec()))
-            },
-        );
+    {
+        // These test worst case: no caching done by `Level`
+        let mut read_group = c.benchmark_group("read_chunks");
+        for n_chunks in vec![16, 64, 256] {
+            let positions = &positions[..n_chunks];
+            println!("Testing with {} chunks", chunks.len());
+
+            read_group.bench_with_input(
+                BenchmarkId::from_parameter(n_chunks),
+                &positions,
+                |b, positions| {
+                    b.to_async(&async_handler)
+                        .iter(|| test_reads(level.clone(), positions.to_vec()))
+                },
+            );
+        }
     }
 
     fs::remove_dir_all(&root_dir).unwrap();
