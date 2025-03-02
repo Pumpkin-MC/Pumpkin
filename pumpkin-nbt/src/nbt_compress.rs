@@ -119,6 +119,7 @@ mod tests {
     };
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
+    use std::fs::File;
     use std::io::Cursor;
 
     #[test]
@@ -353,29 +354,21 @@ mod tests {
 
     #[test]
     fn test_direct_file_io() {
-        use std::fs::File;
-        use std::path::Path;
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("test_compound.dat");
 
         let mut compound = NbtCompound::new();
-        compound.put_int("test_value", 12345);
+        compound.put_int("test_value", 42);
 
-        // Create a temporary file path
-        let path = Path::new("test_nbt_file.dat");
+        let file = File::create(&file_path).expect("Failed to create temp file");
+        write_gzip_compound_tag(&compound, file).expect("Failed to write compound to file");
 
-        // Write to file directly
-        {
-            let file = File::create(path).expect("Failed to create test file");
-            write_gzip_compound_tag(&compound, file).expect("Failed to write NBT to file");
-        }
+        let file = File::open(&file_path).expect("Failed to open temp file");
+        let read_compound =
+            read_gzip_compound_tag(file).expect("Failed to read compound from file");
 
-        // Read from file directly
-        {
-            let file = File::open(path).expect("Failed to open test file");
-            let read_compound = read_gzip_compound_tag(file).expect("Failed to read NBT from file");
-            assert_eq!(read_compound.get_int("test_value"), Some(12345));
-        }
-
-        // Clean up
-        std::fs::remove_file(path).expect("Failed to remove test file");
+        assert_eq!(read_compound.get_int("test_value"), Some(42));
     }
 }

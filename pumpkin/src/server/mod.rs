@@ -95,12 +95,10 @@ impl Server {
 
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher());
+        let world_path = BASIC_CONFIG.get_world_path();
 
         let world = World::load(
-            Dimension::OverWorld.into_level(
-                // TODO: load form config
-                "./world".parse().unwrap(),
-            ),
+            Dimension::OverWorld.into_level(world_path.clone()),
             DimensionType::Overworld,
         );
 
@@ -109,7 +107,7 @@ impl Server {
             world.level.mark_chunk_as_newly_watched(chunk);
         }
 
-        let world_name = world.level.level_info.level_name.clone();
+        let world_name = world_path.file_name().unwrap().to_str().unwrap();
 
         Self {
             cached_registry: Registry::get_synced(),
@@ -135,7 +133,7 @@ impl Server {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
             player_data_storage: ServerPlayerData::new(
-                format!("./{world_name}/playerdata"),
+                format!("{world_name}/playerdata"),
                 Duration::from_secs(ADVANCED_CONFIG.player_data.save_player_cron_interval),
             ),
         }
