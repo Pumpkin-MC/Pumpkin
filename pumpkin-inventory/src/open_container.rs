@@ -94,7 +94,7 @@ pub struct Chest([Option<ItemStack>; 27]);
 
 impl Chest {
     pub fn new() -> Self {
-        Self([None; 27])
+        Self([const { None }; 27])
     }
 }
 impl Container for Chest {
@@ -105,11 +105,11 @@ impl Container for Chest {
     fn window_name(&self) -> &'static str {
         "Chest"
     }
-    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+    fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
         self.0.iter_mut().collect()
     }
 
-    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+    fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
         self.0.iter().map(|slot| slot.as_ref()).collect()
     }
 }
@@ -120,6 +120,12 @@ pub struct CraftingTable {
     output: Option<ItemStack>,
 }
 
+impl CraftingTable {
+    const SLOT_OUTPUT: usize = 0;
+    const SLOT_INPUT_START: usize = 1;
+    const SLOT_INPUT_END: usize = 9;
+}
+
 impl Container for CraftingTable {
     fn window_type(&self) -> &'static WindowType {
         &WindowType::Crafting
@@ -128,7 +134,7 @@ impl Container for CraftingTable {
     fn window_name(&self) -> &'static str {
         "Crafting Table"
     }
-    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+    fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
         let slots = vec![&mut self.output];
         let slots = slots
             .into_iter()
@@ -137,7 +143,7 @@ impl Container for CraftingTable {
         slots
     }
 
-    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+    fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
         let slots = vec![self.output.as_ref()];
         let slots = slots
             .into_iter()
@@ -146,28 +152,49 @@ impl Container for CraftingTable {
         slots
     }
 
-    fn all_combinable_slots(&self) -> Vec<Option<&ItemStack>> {
+    fn all_combinable_slots(&self) -> Box<[Option<&ItemStack>]> {
         self.input.iter().flatten().map(|s| s.as_ref()).collect()
     }
 
-    fn all_combinable_slots_mut(&mut self) -> Vec<&mut Option<ItemStack>> {
+    fn all_combinable_slots_mut(&mut self) -> Box<[&mut Option<ItemStack>]> {
         self.input.iter_mut().flatten().collect()
     }
 
     fn craft(&mut self) -> bool {
-        let old_output = self.output;
-        self.output = check_if_matches_crafting(self.input);
-        old_output != self.output
+        // TODO: Is there a better way to do this?
+        let check = [
+            [
+                self.input[0][0].as_ref(),
+                self.input[0][1].as_ref(),
+                self.input[0][2].as_ref(),
+            ],
+            [
+                self.input[1][0].as_ref(),
+                self.input[1][1].as_ref(),
+                self.input[1][2].as_ref(),
+            ],
+            [
+                self.input[2][0].as_ref(),
+                self.input[2][1].as_ref(),
+                self.input[2][2].as_ref(),
+            ],
+        ];
+
+        let new_output = check_if_matches_crafting(check);
+        let result = new_output != self.output
             || self.input.iter().flatten().any(|s| s.is_some())
-            || self.output.is_some()
+            || new_output.is_some();
+
+        self.output = new_output;
+        result
     }
 
     fn crafting_output_slot(&self) -> Option<usize> {
-        Some(0)
+        Some(Self::SLOT_OUTPUT)
     }
 
     fn slot_in_crafting_input_slots(&self, slot: &usize) -> bool {
-        (1..10).contains(slot)
+        (Self::SLOT_INPUT_START..=Self::SLOT_INPUT_END).contains(slot)
     }
     fn recipe_used(&mut self) {
         self.input.iter_mut().flatten().for_each(|slot| {
@@ -197,17 +224,11 @@ impl Container for Furnace {
     fn window_name(&self) -> &'static str {
         "Furnace"
     }
-    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
-        let mut slots = vec![&mut self.cook];
-        slots.push(&mut self.fuel);
-        slots.push(&mut self.output);
-        slots
+    fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
+        Box::new([&mut self.cook, &mut self.fuel, &mut self.output])
     }
 
-    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
-        let mut slots = vec![self.cook.as_ref()];
-        slots.push(self.fuel.as_ref());
-        slots.push(self.output.as_ref());
-        slots
+    fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
+        Box::new([self.cook.as_ref(), self.fuel.as_ref(), self.output.as_ref()])
     }
 }

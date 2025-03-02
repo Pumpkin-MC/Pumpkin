@@ -206,7 +206,7 @@ pub fn pumpkin_item(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let input_string = input.to_string();
     let packet_name = input_string.trim_matches('"');
-    let item_id = Item::from_name(packet_name).unwrap();
+    let item_id = Item::from_registry_key(packet_name).unwrap();
     let id = item_id.id;
 
     let item: proc_macro2::TokenStream = item.into();

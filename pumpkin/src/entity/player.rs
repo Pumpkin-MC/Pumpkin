@@ -13,7 +13,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
     damage::DamageType,
-    entity::{EffectType, EntityType},
+    entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -24,8 +24,8 @@ use pumpkin_protocol::{
     RawPacket, ServerPacket,
     bytebuf::packet::Packet,
     client::play::{
-        CAcknowledgeBlockChange, CActionBar, CCombatDeath, CDisguisedChatMessage, CEntityStatus,
-        CGameEvent, CKeepAlive, CParticle, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate,
+        CAcknowledgeBlockChange, CActionBar, CCombatDeath, CDisguisedChatMessage, CGameEvent,
+        CKeepAlive, CParticle, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate,
         CPlayerPosition, CRespawn, CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage,
         CTitleText, CUnloadChunk, CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
     },
@@ -51,10 +51,7 @@ use pumpkin_protocol::{
 use pumpkin_util::{
     GameMode,
     math::{
-        boundingbox::{BoundingBox, EntityDimensions},
-        experience,
-        position::BlockPos,
-        vector2::Vector2,
+        boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2,
         vector3::Vector3,
     },
     permission::PermissionLvl,
@@ -103,7 +100,7 @@ pub struct Player {
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
-    pub carried_item: AtomicCell<Option<ItemStack>>,
+    pub carried_item: Mutex<Option<ItemStack>>,
     /// send `send_abilities_update` when changed
     /// The player's abilities and special powers.
     ///
@@ -147,15 +144,11 @@ pub struct Player {
     pub experience_progress: AtomicCell<f32>,
     /// The player's total experience points
     pub experience_points: AtomicI32,
+    pub experience_pick_up_delay: Mutex<u32>,
 }
 
 impl Player {
-    pub async fn new(
-        client: Arc<Client>,
-        world: Arc<World>,
-        entity_id: EntityId,
-        gamemode: GameMode,
-    ) -> Self {
+    pub async fn new(client: Arc<Client>, world: Arc<World>, gamemode: GameMode) -> Self {
         let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
             || {
                 log::error!("Client {} has no game profile!", client.id);
@@ -172,21 +165,13 @@ impl Player {
 
         let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
-        let bounding_box_size = EntityDimensions {
-            width: EntityType::PLAYER.dimension[0],
-            height: EntityType::PLAYER.dimension[1],
-        };
 
         Self {
             living_entity: LivingEntity::new(Entity::new(
-                entity_id,
                 player_uuid,
                 world,
                 Vector3::new(0.0, 0.0, 0.0),
                 EntityType::PLAYER,
-                EntityType::PLAYER.eye_height,
-                AtomicCell::new(BoundingBox::new_default(&bounding_box_size)),
-                AtomicCell::new(bounding_box_size),
                 matches!(gamemode, GameMode::Creative | GameMode::Spectator),
             )),
             config: Mutex::new(config),
@@ -200,7 +185,8 @@ impl Player {
             tick_counter: AtomicI32::new(0),
             packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
-            carried_item: AtomicCell::new(None),
+            carried_item: Mutex::new(None),
+            experience_pick_up_delay: Mutex::new(0),
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos(Vector3::new(0, 0, 0))),
@@ -451,6 +437,12 @@ impl Player {
                 ))
                 .await;
         }
+        {
+            let mut xp = self.experience_pick_up_delay.lock().await;
+            if *xp > 0 {
+                *xp -= 1;
+            }
+        }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -615,11 +607,16 @@ impl Player {
 
     /// syncs the players permission level with the client
     pub async fn send_permission_lvl_update(&self) {
-        self.client
-            .send_packet(&CEntityStatus::new(
-                self.entity_id(),
-                24 + self.permission_lvl.load() as i8,
-            ))
+        let status = match self.permission_lvl.load() {
+            PermissionLvl::Zero => EntityStatus::SetOpLevel0,
+            PermissionLvl::One => EntityStatus::SetOpLevel1,
+            PermissionLvl::Two => EntityStatus::SetOpLevel2,
+            PermissionLvl::Three => EntityStatus::SetOpLevel3,
+            PermissionLvl::Four => EntityStatus::SetOpLevel4,
+        };
+        self.world()
+            .await
+            .send_entity_status(&self.living_entity.entity, status)
             .await;
     }
 
@@ -1007,22 +1004,23 @@ impl Player {
             .await;
     }
 
-    pub async fn drop_item(&self, server: &Server, stack: ItemStack) {
-        let entity = server.add_entity(
-            self.living_entity.entity.pos.load(),
-            EntityType::ITEM,
-            &self.world().await,
-        );
-        let item_entity = Arc::new(ItemEntity::new(entity, stack));
+    pub async fn drop_item(&self, item_id: u16, count: u32) {
+        let entity = self
+            .world()
+            .await
+            .create_entity(self.living_entity.entity.pos.load(), EntityType::ITEM);
+
+        // TODO: Merge stacks together
+        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count));
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }
 
-    pub async fn drop_held_item(&self, server: &Server, drop_stack: bool) {
+    pub async fn drop_held_item(&self, drop_stack: bool) {
         let mut inv = self.inventory.lock().await;
-        if let Some(item) = inv.held_item_mut() {
-            let drop_amount = if drop_stack { item.item_count } else { 1 };
-            self.drop_item(server, ItemStack::new(drop_amount, item.item))
+        if let Some(item_stack) = inv.held_item_mut() {
+            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+            self.drop_item(item_stack.item.id, u32::from(drop_amount))
                 .await;
             inv.decrease_current_stack(drop_amount);
         }
@@ -1047,8 +1045,8 @@ impl Player {
         self.client
             .send_packet(&CSetExperience::new(
                 progress.clamp(0.0, 1.0),
-                level.into(),
                 points.into(),
+                level.into(),
             ))
             .await;
     }
@@ -1137,7 +1135,7 @@ impl Player {
         let total_exp = experience::points_to_level(current_level) + current_points;
         let new_total_exp = total_exp + added_points;
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
-        let progress = experience::progress_in_level(new_level, new_points);
+        let progress = experience::progress_in_level(new_points, new_level);
         self.set_experience(new_level, progress, new_points).await;
     }
 }
@@ -1160,7 +1158,8 @@ impl NBTStorage for Player {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
-        self.inventory.lock().await.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as u32;
+        self.inventory.lock().await.selected =
+            nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
         self.abilities.lock().await.read_nbt(nbt).await;
 
         // Load from total XP
@@ -1309,7 +1308,7 @@ impl Player {
                     .await;
             }
             SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(server, SSetCreativeSlot::read(bytebuf)?)
+                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
                     .await?;
             }
             SSwingArm::PACKET_ID => {

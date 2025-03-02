@@ -23,7 +23,7 @@ use border::Worldborder;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    entity::EntityType,
+    entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::WorldEvent,
@@ -32,8 +32,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket,
     client::play::{
-        CChunkData, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-        CSpawnEntity, GameEvent, PlayerAction,
+        CChunkData, CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities,
+        CRemovePlayerInfo, CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -144,6 +144,12 @@ impl World {
 
     pub async fn save(&self) {
         self.level.save().await;
+    }
+
+    pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
+        // TODO: only nearby
+        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
+            .await;
     }
 
     /// Broadcasts a packet to all connected players within the world.
@@ -995,15 +1001,16 @@ impl World {
         }
     }
 
-    /// Adds a living entity to the world.
-    ///
-    /// This function takes a living entity's UUID and an `Arc<LivingEntity>` reference.
-    /// It inserts the living entity into the world's `current_living_entities` map using the UUID as the key.
-    ///
-    /// # Arguments
-    ///
-    /// * `uuid`: The unique UUID of the living entity to add.
-    /// * `living_entity`: A `Arc<LivingEntity>` reference to the living entity object.
+    pub fn create_entity(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        entity_type: EntityType,
+    ) -> Entity {
+        let uuid = uuid::Uuid::new_v4();
+        Entity::new(uuid, self.clone(), position, entity_type, false)
+    }
+
+    /// Adds a entity to the world.
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
@@ -1089,7 +1096,6 @@ impl World {
 
     pub async fn break_block(
         self: &Arc<Self>,
-        server: &Server,
         position: &BlockPos,
         cause: Option<Arc<Player>>,
         drop: bool,
@@ -1114,7 +1120,7 @@ impl World {
             );
 
             if drop {
-                block::drop_loot(server, self, block, position).await;
+                block::drop_loot(self, block, position, true).await;
             }
 
             match cause {

@@ -225,6 +225,7 @@ pub(crate) fn build() -> TokenStream {
         constants.extend(quote! {
             pub const #const_ident: Item = Item {
                 id: #id_lit,
+                registry_key: #name,
                 components: #components_tokens
             };
         });
@@ -240,10 +241,12 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use pumpkin_util::text::TextComponent;
+        use crate::tag::{Tagable, RegistryKey};
 
-        #[derive(Clone, Copy, Debug)]
+        #[derive(Clone, Debug)]
         pub struct Item {
             pub id: u16,
+            pub registry_key: &'static str,
             pub components: ItemComponents,
         }
 
@@ -313,7 +316,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a Item from a resource location string"]
-            pub fn from_name(name: &str) -> Option<Self> {
+            pub fn from_registry_key(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
                     _ => None
@@ -326,7 +329,18 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
+        }
 
+        impl Tagable for Item {
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::Item
+            }
+
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.registry_key
+            }
         }
     }
 }

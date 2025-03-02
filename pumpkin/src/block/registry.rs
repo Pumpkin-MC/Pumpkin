@@ -45,16 +45,10 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn explode(
-        &self,
-        block: &Block,
-        world: &Arc<World>,
-        location: BlockPos,
-        server: &Server,
-    ) {
+    pub async fn explode(&self, block: &Block, world: &Arc<World>, location: BlockPos) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.explode(block, world, location, server).await;
+            pumpkin_block.explode(block, world, location).await;
         }
     }
 

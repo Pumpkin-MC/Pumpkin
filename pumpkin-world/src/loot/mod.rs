@@ -1,25 +1,69 @@
+use condition::LootCondition;
+use entry::LootPoolEntryTypes;
 use serde::Deserialize;
+
+use crate::item::ItemStack;
+
+mod condition;
+mod entry;
 
 #[expect(dead_code)]
 #[derive(Deserialize, Clone)]
 pub struct LootTable {
     r#type: LootTableType,
+    random_sequence: Option<String>,
     pools: Option<Vec<LootPool>>,
 }
 
-#[expect(dead_code)]
+impl LootTable {
+    pub fn get_loot(&self) -> Vec<ItemStack> {
+        let mut items = vec![];
+        if let Some(pools) = &self.pools {
+            for pool in pools {
+                items.extend_from_slice(&pool.get_loot());
+            }
+        }
+        items
+    }
+}
+
 #[derive(Deserialize, Clone)]
 pub struct LootPool {
     entries: Vec<LootPoolEntry>,
+    rolls: f32, // TODO
+    bonus_rolls: f32,
 }
 
-#[expect(dead_code)]
+impl LootPool {
+    pub fn get_loot(&self) -> Vec<ItemStack> {
+        let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
+        let mut items = vec![];
+        for _ in 0..i {
+            for entry in &self.entries {
+                if let Some(conditions) = &entry.conditions {
+                    let mut conditions_met = true;
+                    for condition in conditions {
+                        if !condition.test() {
+                            conditions_met = false;
+                            break;
+                        }
+                    }
+                    if !conditions_met {
+                        continue;
+                    }
+                }
+                items.extend_from_slice(&entry.content.get_items());
+            }
+        }
+        items
+    }
+}
+
 #[derive(Deserialize, Clone)]
 pub struct LootPoolEntry {
-    // TODO
-    r#type: Option<String>,
-    // TODO
-    name: Option<String>,
+    #[serde(flatten)]
+    content: LootPoolEntryTypes,
+    conditions: Option<Vec<LootCondition>>,
 }
 
 #[derive(Deserialize, Clone)]

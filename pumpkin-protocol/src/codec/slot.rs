@@ -130,13 +130,38 @@ impl Serialize for Slot {
 }
 
 impl Slot {
-    pub fn to_item(self) -> Option<ItemStack> {
-        let item_id = self.item_id?.0.try_into().unwrap();
-        let item = Item::from_id(item_id)?;
-        Some(ItemStack {
-            item,
-            item_count: self.item_count.0.try_into().unwrap(),
-        })
+    pub fn new(item_id: u16, count: u32) -> Self {
+        Slot {
+            item_count: count.into(),
+            item_id: Some((item_id as i32).into()),
+            // TODO: add these
+            num_components_to_add: None,
+            num_components_to_remove: None,
+            components_to_add: None,
+            components_to_remove: None,
+        }
+    }
+
+    pub fn to_stack(self) -> Result<Option<ItemStack>, &'static str> {
+        let item_id = self.item_id;
+        let Some(item_id) = item_id else {
+            return Ok(None);
+        };
+        let item_id = item_id.0.try_into().map_err(|_| "Item id too large")?;
+        let item = Item::from_id(item_id).ok_or("Item id invalid")?;
+        if self.item_count.0 > item.components.max_stack_size as i32 {
+            Err("Over sized stack")
+        } else {
+            let stack = ItemStack {
+                item,
+                item_count: self
+                    .item_count
+                    .0
+                    .try_into()
+                    .map_err(|_| "Stack count too large")?,
+            };
+            Ok(Some(stack))
+        }
     }
 
     pub const fn empty() -> Self {
@@ -153,15 +178,7 @@ impl Slot {
 
 impl From<&ItemStack> for Slot {
     fn from(item: &ItemStack) -> Self {
-        Slot {
-            item_count: item.item_count.into(),
-            item_id: Some(VarInt(item.item.id as i32)),
-            // TODO: add these
-            num_components_to_add: None,
-            num_components_to_remove: None,
-            components_to_add: None,
-            components_to_remove: None,
-        }
+        Slot::new(item.item.id, item.item_count as u32)
     }
 }
 

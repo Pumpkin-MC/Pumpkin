@@ -280,6 +280,7 @@ impl Level {
             self.loaded_chunks.shrink_to_fit();
         }
     }
+  
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
         if chunks_to_write.is_empty() {
             return;

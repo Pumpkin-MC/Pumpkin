@@ -7,6 +7,7 @@ use pumpkin_inventory::container_click::{
     Click, ClickType, DropType, KeyClick, MouseClick, MouseDragState, MouseDragType,
 };
 use pumpkin_inventory::drag_handler::DragHandler;
+use pumpkin_inventory::player::{SLOT_BOOT, SLOT_CHEST, SLOT_HELM, SLOT_HOTBAR_START, SLOT_LEG};
 use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
 use pumpkin_inventory::{InventoryError, OptionallyCombinedContainer, container_click};
 use pumpkin_protocol::client::play::{
@@ -15,15 +16,16 @@ use pumpkin_protocol::client::play::{
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
-use pumpkin_util::GameMode;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::{GameMode, MutableSplitSlice};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
 impl Player {
     pub async fn open_container(&self, server: &Server, window_type: WindowType) {
         let mut inventory = self.inventory().lock().await;
-        inventory.state_id = 0;
+        //inventory.state_id = 0;
+        inventory.increment_state_id();
         inventory.total_opened_containers += 1;
         let mut container = self.get_open_container(server).await;
         let mut container = match container.as_mut() {
@@ -65,13 +67,12 @@ impl Player {
             .map(Slot::from)
             .collect();
 
-        let carried_item = self
-            .carried_item
-            .load()
+        let carried_item = self.carried_item.lock().await;
+        let carried_item = carried_item
             .as_ref()
             .map_or_else(Slot::empty, std::convert::Into::into);
 
-        inventory.state_id += 1;
+        inventory.increment_state_id();
         let packet = CSetContainerContent::new(
             id.into(),
             (inventory.state_id).into(),
@@ -142,7 +143,7 @@ impl Player {
             let combined =
                 OptionallyCombinedContainer::new(&mut inventory, opened_container.as_deref_mut());
             (
-                combined.crafted_item_slot(),
+                combined.crafted_item_slot().cloned(),
                 combined.crafting_output_slot(),
             )
         };
@@ -157,7 +158,6 @@ impl Player {
 
         let click_slot = click.slot;
         self.match_click_behaviour(
-            server,
             opened_container.as_deref_mut(),
             click,
             drag_handler,
@@ -220,7 +220,6 @@ impl Player {
 
     async fn match_click_behaviour(
         &self,
-        server: &Server,
         opened_container: Option<&mut Box<dyn Container>>,
         click: Click,
         drag_handler: &DragHandler,
@@ -230,7 +229,6 @@ impl Player {
         match click.click_type {
             ClickType::MouseClick(mouse_click) => {
                 self.mouse_click(
-                    server,
                     opened_container,
                     mouse_click,
                     click.slot,
@@ -277,16 +275,31 @@ impl Player {
                     .await
             }
             ClickType::DropType(drop_type) => {
-                let carried_item = self.carried_item.load();
-                if let Some(item) = carried_item {
-                    match drop_type {
-                        DropType::FullStack => self.drop_item(server, item).await,
-                        DropType::SingleItem => {
-                            let mut item = item;
-                            item.item_count = 1;
-                            self.drop_item(server, item).await;
+                if let container_click::Slot::Normal(slot) = click.slot {
+                    let mut inventory = self.inventory().lock().await;
+                    let mut container =
+                        OptionallyCombinedContainer::new(&mut inventory, opened_container);
+                    let slots = container.all_slots();
+
+                    if let Some(item_stack) = slots[slot].as_mut() {
+                        match drop_type {
+                            DropType::FullStack => {
+                                self.drop_item(
+                                    item_stack.item.id,
+                                    u32::from(item_stack.item_count),
+                                )
+                                .await;
+                                *slots[slot] = None;
+                            }
+                            DropType::SingleItem => {
+                                self.drop_item(item_stack.item.id, 1).await;
+                                item_stack.item_count -= 1;
+                                if item_stack.item_count == 0 {
+                                    *slots[slot] = None;
+                                }
+                            }
                         }
-                    };
+                    }
                 }
                 Ok(())
             }
@@ -295,7 +308,6 @@ impl Player {
 
     async fn mouse_click(
         &self,
-        server: &Server,
         opened_container: Option<&mut Box<dyn Container>>,
         mouse_click: MouseClick,
         slot: container_click::Slot,
@@ -303,26 +315,25 @@ impl Player {
     ) -> Result<(), InventoryError> {
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
-        let mut carried_item = self.carried_item.load();
+        let mut carried_item = self.carried_item.lock().await;
         match slot {
             container_click::Slot::Normal(slot) => {
-                let res = container.handle_item_change(
-                    &mut carried_item,
-                    slot,
-                    mouse_click,
-                    taking_crafted,
-                );
-                self.carried_item.store(carried_item);
-                res
+                container.handle_item_change(&mut carried_item, slot, mouse_click, taking_crafted)
             }
             container_click::Slot::OutsideInventory => {
-                if let Some(item) = carried_item {
+                if let Some(item_stack) = carried_item.as_mut() {
                     match mouse_click {
-                        MouseClick::Left => self.drop_item(server, item).await,
+                        MouseClick::Left => {
+                            self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
+                                .await;
+                            *carried_item = None;
+                        }
                         MouseClick::Right => {
-                            let mut item = item;
-                            item.item_count = 1;
-                            self.drop_item(server, item).await;
+                            self.drop_item(item_stack.item.id, 1).await;
+                            item_stack.item_count -= 1;
+                            if item_stack.item_count == 0 {
+                                *carried_item = None;
+                            }
                         }
                     };
                 }
@@ -331,45 +342,123 @@ impl Player {
         }
     }
 
+    /// TODO: Allow equiping/de equiping armor and allow taking items from crafting grid
     async fn shift_mouse_click(
         &self,
         opened_container: Option<&mut Box<dyn Container>>,
         slot: container_click::Slot,
-        taking_crafted: bool,
+        _taking_crafted: bool,
     ) -> Result<(), InventoryError> {
         let mut inventory = self.inventory().lock().await;
+        let has_container = opened_container.is_some();
+        let container_size = opened_container
+            .as_ref()
+            .map_or(0, |c| c.all_slots_ref().len());
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
 
         match slot {
             container_click::Slot::Normal(slot) => {
-                let all_slots = container.all_slots();
-                if let Some(item_in_pressed_slot) = all_slots[slot].to_owned() {
-                    let slots = all_slots.into_iter().enumerate();
-                    // Hotbar
-                    let find_condition = |(slot_number, slot): (usize, &mut Option<ItemStack>)| {
-                        // TODO: Check for max item count here
-                        match slot {
-                            Some(item) => (item.item.id == item_in_pressed_slot.item.id
-                                && item.item_count != 64)
-                                .then_some(slot_number),
-                            None => Some(slot_number),
-                        }
+                let mut all_slots = container.all_slots();
+                let (item_stack, mut split_slice) =
+                    MutableSplitSlice::extract_ith(&mut all_slots, slot);
+                let Some(clicked_item_stack) = item_stack else {
+                    return Ok(());
+                };
+
+                // Define the two inventories and determine which one contains the source slot
+                let (inv1_range, inv2_range) = if has_container {
+                    // When container is open:
+                    // Inv1 = Container slots (0 to container_size-1)
+                    // Inv2 = Player inventory (container_size to end)
+                    ((0..container_size), (container_size..split_slice.len()))
+                } else {
+                    // When no container:
+                    // Inv1 = Hotbar (36-45)
+                    // Inv2 = Main inventory (9-36)
+                    ((36..45), (9..36))
+                };
+
+                // Determine which inventory we're moving from and to
+                let (source_inv, target_inv) = if inv1_range.contains(&slot) {
+                    (&inv1_range, &inv2_range)
+                } else if inv2_range.contains(&slot) {
+                    (&inv2_range, &inv1_range)
+                } else {
+                    // When moving from top slots to inventory
+                    (&(0..9), &(9..45))
+                };
+
+                // If moving to hotbar, reverse the order to fill from right to left
+                let target_slots: Vec<usize> =
+                    if has_container && source_inv.contains(&slot) && source_inv == &inv1_range {
+                        target_inv.clone().rev().collect()
+                    } else {
+                        target_inv.clone().collect()
                     };
 
-                    let slots = if slot > 35 {
-                        slots.skip(9).find_map(find_condition)
-                    } else {
-                        slots.skip(36).rev().find_map(find_condition)
-                    };
-                    if let Some(slot) = slots {
-                        let mut item_slot = container.all_slots()[slot].map(|i| i);
-                        container.handle_item_change(
-                            &mut item_slot,
-                            slot,
-                            MouseClick::Left,
-                            taking_crafted,
-                        )?;
-                        *container.all_slots()[slot] = item_slot;
+                //Handle armor slots
+                if !has_container {
+                    let temp_item_stack = ItemStack::new(1, clicked_item_stack.item.clone());
+                    if slot != SLOT_HELM
+                        && temp_item_stack.is_helmet()
+                        && split_slice[SLOT_HELM].is_none()
+                    {
+                        *split_slice[SLOT_HELM] = Some(temp_item_stack);
+                        **item_stack = None;
+                        return Ok(());
+                    } else if slot != SLOT_CHEST
+                        && temp_item_stack.is_chestplate()
+                        && split_slice[SLOT_CHEST].is_none()
+                    {
+                        *split_slice[SLOT_CHEST] = Some(temp_item_stack);
+                        **item_stack = None;
+                        return Ok(());
+                    } else if slot != SLOT_LEG
+                        && temp_item_stack.is_leggings()
+                        && split_slice[SLOT_LEG].is_none()
+                    {
+                        *split_slice[SLOT_LEG] = Some(temp_item_stack);
+                        **item_stack = None;
+                        return Ok(());
+                    } else if slot != SLOT_BOOT
+                        && temp_item_stack.is_boots()
+                        && split_slice[SLOT_BOOT].is_none()
+                    {
+                        *split_slice[SLOT_BOOT] = Some(temp_item_stack);
+                        **item_stack = None;
+                        return Ok(());
+                    }
+                }
+
+                // First try to stack with existing items
+                let max_stack_size = clicked_item_stack.item.components.max_stack_size;
+                for target_idx in &target_slots {
+                    if let Some(target_item) = split_slice[*target_idx].as_mut() {
+                        if target_item.item.id == clicked_item_stack.item.id
+                            && target_item.item_count < max_stack_size
+                        {
+                            let space_in_stack = max_stack_size - target_item.item_count;
+                            let amount_to_add = clicked_item_stack.item_count.min(space_in_stack);
+                            target_item.item_count += amount_to_add;
+                            clicked_item_stack.item_count -= amount_to_add;
+
+                            if clicked_item_stack.item_count == 0 {
+                                **item_stack = None;
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+
+                // Then try to place in empty slots
+                for target_idx in target_slots {
+                    if split_slice[target_idx].is_none()
+                        || split_slice[target_idx]
+                            .as_ref()
+                            .is_some_and(|item| item.item_count == 0)
+                    {
+                        std::mem::swap(split_slice[target_idx], *item_stack);
+                        return Ok(());
                     }
                 }
             }
@@ -386,11 +475,11 @@ impl Player {
         taking_crafted: bool,
     ) -> Result<(), InventoryError> {
         let changing_slot = match key_click {
-            KeyClick::Slot(slot) => slot,
+            KeyClick::Slot(slot) => slot as usize + SLOT_HOTBAR_START,
             KeyClick::Offhand => 45,
         };
         let mut inventory = self.inventory().lock().await;
-        let mut changing_item_slot = inventory.get_slot(changing_slot as usize)?.to_owned();
+        let mut changing_item_slot = inventory.get_slot(changing_slot)?.clone();
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
 
         container.handle_item_change(
@@ -399,7 +488,7 @@ impl Player {
             MouseClick::Left,
             taking_crafted,
         )?;
-        *inventory.get_slot(changing_slot as usize)? = changing_item_slot;
+        *inventory.get_slot(changing_slot)? = changing_item_slot;
         Ok(())
     }
 
@@ -414,7 +503,8 @@ impl Player {
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
         if let Some(Some(item)) = container.all_slots().get_mut(slot) {
-            self.carried_item.store(Some(item.to_owned()));
+            let mut carried_item = self.carried_item.lock().await;
+            *carried_item = Some(item.clone());
         }
         Ok(())
     }
@@ -422,38 +512,38 @@ impl Player {
     async fn double_click(
         &self,
         opened_container: Option<&mut Box<dyn Container>>,
-        slot: usize,
+        _slot: usize,
     ) -> Result<(), InventoryError> {
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
-        let mut slots = container.all_slots();
-
-        let Some(item) = slots.get_mut(slot) else {
+        let mut carried_item = self.carried_item.lock().await;
+        let Some(carried_item) = carried_item.as_mut() else {
             return Ok(());
         };
-        let Some(mut carried_item) = **item else {
-            return Ok(());
-        };
-        **item = None;
 
-        for slot in slots.iter_mut().filter_map(|slot| slot.as_mut()) {
-            if slot.item.id == carried_item.item.id {
-                // TODO: Check for max stack size
-                if slot.item_count + carried_item.item_count <= 64 {
-                    slot.item_count = 0;
-                    carried_item.item_count = 64;
-                } else {
-                    let to_remove = slot.item_count - (64 - carried_item.item_count);
-                    slot.item_count -= to_remove;
-                    carried_item.item_count += to_remove;
-                }
+        // Iterate directly over container slots to modify them in place'
+        for slot in container.all_slots() {
+            if let Some(itemstack) = slot {
+                if itemstack.item.id == carried_item.item.id {
+                    if itemstack.item_count + carried_item.item_count
+                        <= carried_item.item.components.max_stack_size
+                    {
+                        carried_item.item_count += itemstack.item_count;
+                        *slot = None;
+                    } else {
+                        let overflow = itemstack.item_count
+                            - (carried_item.item.components.max_stack_size
+                                - carried_item.item_count);
+                        carried_item.item_count = carried_item.item.components.max_stack_size;
+                        itemstack.item_count = overflow;
+                    }
 
-                if carried_item.item_count == 64 {
-                    break;
+                    if carried_item.item_count == carried_item.item.components.max_stack_size {
+                        break;
+                    }
                 }
             }
         }
-        self.carried_item.store(Some(carried_item));
         Ok(())
     }
 
@@ -486,12 +576,10 @@ impl Player {
                 let mut inventory = self.inventory().lock().await;
                 let mut container =
                     OptionallyCombinedContainer::new(&mut inventory, opened_container);
-                let mut carried_item = self.carried_item.load();
-                let res = drag_handler
+                let mut carried_item = self.carried_item.lock().await;
+                drag_handler
                     .apply_drag(&mut carried_item, &mut container, &container_id, player_id)
-                    .await;
-                self.carried_item.store(carried_item);
-                res
+                    .await
             }
         }
     }
@@ -545,7 +633,7 @@ impl Player {
             let total_opened_containers = inventory.total_opened_containers;
 
             // Returns previous value
-            inventory.state_id += 1;
+            inventory.increment_state_id();
             let packet = CSetContainerSlot::new(
                 total_opened_containers as i8,
                 (inventory.state_id) as i32,
@@ -581,63 +669,47 @@ impl Player {
         }
     }
 
-    async fn pickup_items(&self, item: Item, mut amount: u32) {
+    // TODO: Use this method when actually picking up items instead of just the command
+    async fn pickup_items(&self, item: Item, amount: u32) {
+        let mut amount_left = amount;
         let max_stack = item.components.max_stack_size;
         let mut inventory = self.inventory().lock().await;
-        let slots = inventory.slots_with_hotbar_first();
 
-        let matching_slots = slots.filter_map(|slot| {
-            if let Some(item_slot) = slot.as_mut() {
-                (item_slot.item.id == item.id && item_slot.item_count < max_stack).then(|| {
-                    let item_count = item_slot.item_count;
-                    (item_slot, item_count)
-                })
-            } else {
-                None
-            }
-        });
+        while let Some(slot) = inventory.get_pickup_item_slot(item.id) {
+            let item_stack = inventory
+                .get_slot(slot)
+                .expect("We just called a method that said this was a valid slot");
 
-        for (slot, item_count) in matching_slots {
-            if amount == 0 {
-                return;
-            }
-            let amount_to_add = max_stack - item_count;
-            if let Some(amount_left) = amount.checked_sub(u32::from(amount_to_add)) {
-                amount = amount_left;
-                *slot = ItemStack {
-                    item,
-                    item_count: item.components.max_stack_size,
-                };
-            } else {
-                *slot = ItemStack {
-                    item,
-                    item_count: max_stack - (amount_to_add - amount as u8),
-                };
-                return;
-            }
-        }
-
-        let empty_slots = inventory
-            .slots_with_hotbar_first()
-            .filter(|slot| slot.is_none());
-        for slot in empty_slots {
-            if amount == 0 {
-                return;
-            }
-            if let Some(remaining_amount) = amount.checked_sub(u32::from(max_stack)) {
-                amount = remaining_amount;
-                *slot = Some(ItemStack {
-                    item,
+            if let Some(item_stack) = item_stack {
+                let amount_to_add = max_stack - item_stack.item_count;
+                if let Some(new_amount_left) = amount_left.checked_sub(u32::from(amount_to_add)) {
+                    item_stack.item_count = max_stack;
+                    amount_left = new_amount_left;
+                } else {
+                    // This is safe because amount left is less than amount_to_add which is a u8
+                    item_stack.item_count = max_stack - (amount_to_add - amount_left as u8);
+                    // Return here because if we have less than the max amount left then the whole
+                    // stack will be moved
+                    return;
+                }
+            } else if let Some(new_amount_left) = amount_left.checked_sub(u32::from(max_stack)) {
+                *item_stack = Some(ItemStack {
+                    item: item.clone(),
                     item_count: max_stack,
                 });
+                amount_left = new_amount_left;
             } else {
-                *slot = Some(ItemStack {
-                    item,
-                    item_count: amount as u8,
+                *item_stack = Some(ItemStack {
+                    item: item.clone(),
+                    // This is safe because amount left is less than max_stack which is a u8
+                    item_count: amount_left as u8,
                 });
+                // Return here because if we have less than the max amount left then the whole
+                // stack will be moved
                 return;
             }
         }
+
         log::warn!(
             "{amount} items were discarded because dropping them to the ground is not implemented"
         );

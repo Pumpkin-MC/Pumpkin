@@ -54,7 +54,7 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            target.give_items(item, item_count as u32).await;
+            target.give_items(item.clone(), item_count as u32).await;
         }
         let msg = if targets.len() == 1 {
             TextComponent::translate(

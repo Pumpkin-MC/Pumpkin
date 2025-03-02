@@ -1,18 +1,17 @@
+use std::sync::atomic::AtomicU8;
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::entity::EffectType;
+use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CHurtAnimation;
+use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::{
-    client::play::{
-        CDamageEvent, CEntityStatus, CSetEquipment, EquipmentSlot, MetaDataType, Metadata,
-    },
+    client::play::{CDamageEvent, CSetEquipment, EquipmentSlot, MetaDataType, Metadata},
     codec::slot::Slot,
 };
 use pumpkin_util::math::vector3::Vector3;
@@ -36,6 +35,7 @@ pub struct LivingEntity {
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
+    pub death_time: AtomicU8,
     /// The distance the entity has been falling
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<EffectType, Effect>>,
@@ -49,6 +49,7 @@ impl LivingEntity {
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
             fall_distance: AtomicCell::new(0.0),
+            death_time: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
         }
     }
@@ -66,6 +67,21 @@ impl LivingEntity {
                 &[self.entity.entity_uuid],
                 &CSetEquipment::new(self.entity_id().into(), equipment),
             )
+            .await;
+    }
+
+    /// Picks up and Item entity or XP Orb
+    pub async fn pickup(&self, item: &Entity, stack_amount: u32) {
+        // TODO: Only nearby
+        self.entity
+            .world
+            .read()
+            .await
+            .broadcast_packet_all(&CTakeItemEntity::new(
+                item.entity_id.into(),
+                self.entity.entity_id.into(),
+                stack_amount.into(),
+            ))
             .await;
     }
 
@@ -211,22 +227,16 @@ impl LivingEntity {
     pub async fn kill(&self) {
         self.set_health(0.0).await;
 
-        // Spawns death smoke particles
+        // Plays the death sound
         self.entity
             .world
             .read()
             .await
-            .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 60))
+            .send_entity_status(
+                &self.entity,
+                EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
+            )
             .await;
-        // Plays the death sound and death animation
-        self.entity
-            .world
-            .read()
-            .await
-            .broadcast_packet_all(&CEntityStatus::new(self.entity.entity_id, 3))
-            .await;
-        // TODO: wait
-        self.entity.remove().await;
     }
 }
 
@@ -240,6 +250,21 @@ impl EntityBase for LivingEntity {
         {
             self.time_until_regen
                 .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        if self.health.load() <= 0.0 {
+            let time = self
+                .death_time
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if time >= 20 {
+                // Spawn Death particles
+                self.entity
+                    .world
+                    .read()
+                    .await
+                    .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
+                    .await;
+                self.entity.remove().await;
+            }
         }
     }
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {

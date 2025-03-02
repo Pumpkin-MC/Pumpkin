@@ -53,11 +53,10 @@ impl EntityBase for MobEntity {
 
 pub async fn from_type(
     entity_type: EntityType,
-    server: &Server,
     position: Vector3<f64>,
     world: &Arc<World>,
 ) -> Arc<dyn EntityBase> {
-    let entity = server.add_entity(position, entity_type, world);
+    let entity = world.create_entity(position, entity_type);
     let mob = MobEntity {
         living_entity: LivingEntity::new(entity),
         goals: Mutex::new(vec![]),

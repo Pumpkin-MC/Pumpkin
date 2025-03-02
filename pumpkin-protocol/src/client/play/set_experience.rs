@@ -8,8 +8,8 @@ use crate::VarInt;
 #[packet(PLAY_SET_EXPERIENCE)]
 pub struct CSetExperience {
     progress: f32,
-    level: VarInt,
     total_experience: VarInt,
+    level: VarInt,
 }
 
 impl CSetExperience {

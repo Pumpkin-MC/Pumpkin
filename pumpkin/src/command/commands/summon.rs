@@ -28,7 +28,7 @@ impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
-        server: &crate::server::Server,
+        _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
@@ -37,7 +37,7 @@ impl CommandExecutor for Executor {
         // TODO: Make this work in console
         if let Some(player) = sender.as_player() {
             let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
-            let mob = mob::from_type(entity, server, pos, &player.world().await).await;
+            let mob = mob::from_type(entity, pos, &player.world().await).await;
             player.world().await.spawn_entity(mob).await;
             sender
                 .send_message(TextComponent::translate(

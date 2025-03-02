@@ -18,10 +18,10 @@ impl ItemRegistry {
         self.items.insert(T::ID, Arc::new(item));
     }
 
-    pub async fn on_use(&self, item: &Item, player: &Player, server: &Server) {
+    pub async fn on_use(&self, item: &Item, player: &Player) {
         let pumpkin_block = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.normal_use(item, player, server).await;
+            pumpkin_block.normal_use(item, player).await;
         }
     }
 

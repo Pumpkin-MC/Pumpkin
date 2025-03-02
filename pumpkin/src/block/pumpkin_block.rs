@@ -34,14 +34,7 @@ pub trait PumpkinBlock: Send + Sync {
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
-    async fn explode(
-        &self,
-        _block: &Block,
-        _world: &Arc<World>,
-        _location: BlockPos,
-        _server: &Server,
-    ) {
-    }
+    async fn explode(&self, _block: &Block, _world: &Arc<World>, _location: BlockPos) {}
     async fn use_with_item(
         &self,
         _block: &Block,

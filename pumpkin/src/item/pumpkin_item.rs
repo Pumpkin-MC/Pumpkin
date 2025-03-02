@@ -11,7 +11,7 @@ pub trait ItemMetadata {
 
 #[async_trait]
 pub trait PumpkinItem: Send + Sync {
-    async fn normal_use(&self, _block: &Item, _player: &Player, _server: &Server) {}
+    async fn normal_use(&self, _block: &Item, _player: &Player) {}
     async fn use_on_block(
         &self,
         _item: &Item,

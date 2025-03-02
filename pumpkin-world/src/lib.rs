@@ -1,4 +1,3 @@
-use generation::proto_chunk::ProtoChunk;
 use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
@@ -46,6 +45,7 @@ macro_rules! read_data_from_file {
 // TODO: is there a way to do in-file benches?
 pub use generation::{
     GlobalRandomConfig, noise_router::proto_noise_router::GlobalProtoNoiseRouter,
+    proto_chunk::ProtoChunk,
 };
 pub use noise_router::NOISE_ROUTER_ASTS;
 

@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::entity::player::Player;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::item::pumpkin_item::PumpkinItem;
-use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -17,7 +16,7 @@ const POWER: f32 = 1.5;
 
 #[async_trait]
 impl PumpkinItem for EggItem {
-    async fn normal_use(&self, _block: &Item, player: &Player, server: &Server) {
+    async fn normal_use(&self, _block: &Item, player: &Player) {
         let position = player.position();
         let world = player.world().await;
         world
@@ -28,7 +27,7 @@ impl PumpkinItem for EggItem {
             )
             .await;
         // TODO: Implement eggs the right way, so there is a chance of spawning chickens
-        let entity = server.add_entity(position, EntityType::EGG, &world);
+        let entity = world.create_entity(position, EntityType::EGG);
         let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();

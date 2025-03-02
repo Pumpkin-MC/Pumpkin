@@ -32,7 +32,7 @@ dashmap = "6.1"
 num-traits = "0.2"
 
 # Compression
-flate2 = "1.0"
+flate2 = "1.1"
 lz4 = "1.28"
 zstd = "0.13.3"
 

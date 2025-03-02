@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use pumpkin_util::math::int_provider::InvProvider;
 use serde::Deserialize;
 
 use crate::loot::LootTable;
@@ -118,6 +119,7 @@ pub struct Block {
     pub id: u16,
     pub item_id: u16,
     pub hardness: f32,
+    pub experience: Option<Experience>,
     pub blast_resistance: f32,
     pub wall_variant_id: Option<u16>,
     pub translation_key: String,
@@ -126,6 +128,10 @@ pub struct Block {
     pub properties: Vec<Property>,
     pub default_state_id: u16,
     pub states: Vec<State>,
+}
+#[derive(Deserialize, Clone)]
+pub struct Experience {
+    pub experience: InvProvider,
 }
 #[derive(Deserialize, Clone, Debug)]
 pub struct Property {

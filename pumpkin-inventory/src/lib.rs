@@ -29,7 +29,7 @@ pub trait Container: Sync + Send {
         mouse_click: MouseClick,
         taking_crafted: bool,
     ) -> Result<(), InventoryError> {
-        let mut all_slots = self.all_slots();
+        let all_slots = self.all_slots();
         if slot > all_slots.len() {
             Err(InventoryError::InvalidSlot)?
         }
@@ -50,9 +50,9 @@ pub trait Container: Sync + Send {
         Ok(())
     }
 
-    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>>;
+    fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]>;
 
-    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>>;
+    fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]>;
 
     fn clear_all_slots(&mut self) {
         let all_slots = self.all_slots();
@@ -61,11 +61,11 @@ pub trait Container: Sync + Send {
         }
     }
 
-    fn all_combinable_slots(&self) -> Vec<Option<&ItemStack>> {
+    fn all_combinable_slots(&self) -> Box<[Option<&ItemStack>]> {
         self.all_slots_ref()
     }
 
-    fn all_combinable_slots_mut(&mut self) -> Vec<&mut Option<ItemStack>> {
+    fn all_combinable_slots_mut(&mut self) -> Box<[&mut Option<ItemStack>]> {
         self.all_slots()
     }
 
@@ -85,10 +85,8 @@ pub trait Container: Sync + Send {
         false
     }
 
-    fn crafted_item_slot(&self) -> Option<ItemStack> {
-        self.all_slots_ref()
-            .get(self.crafting_output_slot()?)?
-            .copied()
+    fn crafted_item_slot(&self) -> Option<&ItemStack> {
+        *self.all_slots_ref().get(self.crafting_output_slot()?)?
     }
 
     fn recipe_used(&mut self) {}
@@ -109,13 +107,13 @@ impl Container for EmptyContainer {
         );
     }
 
-    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+    fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
         unreachable!(
             "you should never be able to get here because this type is always wrapped in an option"
         );
     }
 
-    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+    fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
         unreachable!(
             "you should never be able to get here because this type is always wrapped in an option"
         );
@@ -127,19 +125,22 @@ pub fn handle_item_take(
     item_slot: &mut Option<ItemStack>,
     mouse_click: MouseClick,
 ) {
-    let Some(item) = item_slot else {
+    let Some(item_stack) = item_slot else {
         return;
     };
-    let mut new_item = *item;
+    let mut new_item = item_stack.clone();
 
     match mouse_click {
         MouseClick::Left => {
             *item_slot = None;
         }
         MouseClick::Right => {
-            let half = item.item_count / 2;
-            item.item_count -= half;
+            let half = item_stack.item_count / 2;
             new_item.item_count = half;
+            item_stack.item_count -= half;
+            if item_stack.item_count == 0 {
+                *item_slot = None;
+            }
         }
     }
     *carried_item = Some(new_item);
@@ -155,22 +156,24 @@ pub fn handle_item_change(
             if current.item.id == carried.item.id {
                 combine_stacks(carried_slot, current, mouse_click);
             } else if mouse_click == MouseClick::Left {
-                let carried = *carried;
-                *carried_slot = Some(current.to_owned());
-                *current_slot = Some(carried.to_owned());
+                std::mem::swap(carried_slot, current_slot);
             }
         }
         // Put held stack into empty slot
-        (None, Some(carried)) => match mouse_click {
+        (None, Some(carried_item_stack)) => match mouse_click {
             MouseClick::Left => {
-                *current_slot = Some(carried.to_owned());
-                *carried_slot = None;
+                std::mem::swap(carried_slot, current_slot);
             }
             MouseClick::Right => {
-                carried.item_count -= 1;
-                let mut new = *carried;
-                new.item_count = 1;
-                *current_slot = Some(new);
+                let new_stack = ItemStack {
+                    item: carried_item_stack.item.clone(),
+                    item_count: 1,
+                };
+                *current_slot = Some(new_stack);
+                carried_item_stack.item_count -= 1;
+                if carried_item_stack.item_count == 0 {
+                    *carried_slot = None;
+                }
             }
         },
         // Take stack into carried
@@ -188,21 +191,24 @@ pub fn combine_stacks(
         return;
     };
 
+    debug_assert!(carried_item.item.id == slot.item.id);
+    let max_size = carried_item.item.components.max_stack_size;
+
     let carried_change = match mouse_click {
         MouseClick::Left => carried_item.item_count,
         MouseClick::Right => 1,
     };
 
     // TODO: Check for item stack max size here
-    if slot.item_count + carried_change <= 64 {
+    if slot.item_count + carried_change <= max_size {
         slot.item_count += carried_change;
         carried_item.item_count -= carried_change;
         if carried_item.item_count == 0 {
             *carried_slot = None;
         }
     } else {
-        let left_over = slot.item_count + carried_change - 64;
-        slot.item_count = 64;
+        let left_over = slot.item_count + carried_change - max_size;
+        slot.item_count = max_size;
         carried_item.item_count = left_over;
     }
 }
@@ -243,24 +249,24 @@ impl<'a> Container for OptionallyCombinedContainer<'a, 'a> {
             .unwrap_or(self.inventory.window_name())
     }
 
-    fn all_slots(&mut self) -> Vec<&mut Option<ItemStack>> {
+    fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
         let slots = match &mut self.container {
             Some(container) => {
-                let mut slots = container.all_slots();
+                let mut slots = container.all_slots().into_vec();
                 slots.extend(self.inventory.all_combinable_slots_mut());
-                slots
+                slots.into_boxed_slice()
             }
             None => self.inventory.all_slots(),
         };
         slots
     }
 
-    fn all_slots_ref(&self) -> Vec<Option<&ItemStack>> {
+    fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
         match &self.container {
             Some(container) => {
-                let mut slots = container.all_slots_ref();
+                let mut slots = container.all_slots_ref().into_vec();
                 slots.extend(self.inventory.all_combinable_slots());
-                slots
+                slots.into_boxed_slice()
             }
             None => self.inventory.all_slots_ref(),
         }

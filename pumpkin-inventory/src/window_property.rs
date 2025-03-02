@@ -33,6 +33,7 @@ pub enum EnchantmentTable {
     EnchantmentLevel { slot: u8 },
 }
 
+// TODO: No more magic numbers
 impl WindowPropertyTrait for EnchantmentTable {
     fn to_id(self) -> i16 {
         use EnchantmentTable::*;

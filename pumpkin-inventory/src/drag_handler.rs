@@ -71,10 +71,6 @@ impl DragHandler {
             Err(InventoryError::MultiplePlayersDragging)?
         }
         let mut slots = container.all_slots();
-        let slots_cloned: Vec<Option<ItemStack>> = slots
-            .iter()
-            .map(|stack| stack.map(|item| item.to_owned()))
-            .collect();
         let Some(carried_item) = maybe_carried_item else {
             return Ok(());
         };
@@ -83,27 +79,27 @@ impl DragHandler {
             // Checked in any function that uses this function.
             MouseDragType::Middle => {
                 for slot in &drag.slots {
-                    *slots[*slot] = *maybe_carried_item;
+                    *slots[*slot] = maybe_carried_item.clone();
                 }
             }
             MouseDragType::Right => {
-                let mut single_item = *carried_item;
-                single_item.item_count = 1;
-
                 let changing_slots =
-                    drag.possibly_changing_slots(&slots_cloned, carried_item.item.id);
-                changing_slots.for_each(|slot| {
+                    drag.possibly_changing_slots(slots.as_ref(), carried_item.item.id);
+                changing_slots.into_iter().for_each(|slot| {
                     if carried_item.item_count != 0 {
                         carried_item.item_count -= 1;
                         if let Some(stack) = &mut slots[slot] {
                             // TODO: Check for stack max here
-                            if stack.item_count + 1 < 64 {
+                            if stack.item_count + 1 < stack.item.components.max_stack_size {
                                 stack.item_count += 1;
                             } else {
                                 carried_item.item_count += 1;
                             }
                         } else {
-                            *slots[slot] = Some(single_item)
+                            *slots[slot] = Some(ItemStack {
+                                item: carried_item.item.clone(),
+                                item_count: 1,
+                            })
                         }
                     }
                 });
@@ -116,9 +112,8 @@ impl DragHandler {
                 // TODO: Handle dragging a stack with greater amount than item allows as max unstackable
                 // In that specific case, follow MouseDragType::Right behaviours instead!
 
-                let changing_slots =
-                    drag.possibly_changing_slots(&slots_cloned, carried_item.item.id);
-                let amount_of_slots = changing_slots.clone().count();
+                let changing_slots = drag.possibly_changing_slots(&slots, carried_item.item.id);
+                let amount_of_slots = changing_slots.len();
                 let (amount_per_slot, remainder) = if amount_of_slots == 0 {
                     // TODO: please work lol
                     (1, 0)
@@ -128,9 +123,13 @@ impl DragHandler {
                         carried_item.item_count.rem_euclid(amount_of_slots as u8),
                     )
                 };
-                let mut item_in_each_slot = *carried_item;
-                item_in_each_slot.item_count = amount_per_slot;
-                changing_slots.for_each(|slot| *slots[slot] = Some(item_in_each_slot));
+                changing_slots.into_iter().for_each(|slot| {
+                    if let Some(stack) = slots[slot].as_mut() {
+                        debug_assert!(stack.item.id == carried_item.item.id);
+                        // TODO: Handle max stack size
+                        stack.item_count += amount_per_slot;
+                    }
+                });
 
                 if remainder > 0 {
                     carried_item.item_count = remainder;
@@ -150,24 +149,27 @@ struct Drag {
 }
 
 impl Drag {
-    fn possibly_changing_slots<'a>(
-        &'a self,
-        slots: &'a [Option<ItemStack>],
+    fn possibly_changing_slots(
+        &self,
+        slots: &[&mut Option<ItemStack>],
         carried_item_id: u16,
-    ) -> impl Iterator<Item = usize> + 'a + Clone {
-        self.slots.iter().filter_map(move |slot_index| {
-            let slot = &slots[*slot_index];
+    ) -> Box<[usize]> {
+        self.slots
+            .iter()
+            .filter_map(move |slot_index| {
+                let slot = &slots[*slot_index];
 
-            match slot {
-                Some(item_slot) => {
-                    if item_slot.item.id == carried_item_id {
-                        Some(*slot_index)
-                    } else {
-                        None
+                match slot {
+                    Some(item_slot) => {
+                        if item_slot.item.id == carried_item_id {
+                            Some(*slot_index)
+                        } else {
+                            None
+                        }
                     }
+                    None => Some(*slot_index),
                 }
-                None => Some(*slot_index),
-            }
-        })
+            })
+            .collect()
     }
 }

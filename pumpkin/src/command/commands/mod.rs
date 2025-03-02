@@ -8,6 +8,7 @@ mod banlist;
 mod bossbar;
 mod clear;
 mod damage;
+pub mod defaultgamemode;
 mod deop;
 mod effect;
 mod experience;
@@ -72,6 +73,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(bossbar::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(say::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(gamemode::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(defaultgamemode::init_command_tree(), PermissionLvl::Two);
     // Three
     dispatcher.register(op::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(deop::init_command_tree(), PermissionLvl::Three);
