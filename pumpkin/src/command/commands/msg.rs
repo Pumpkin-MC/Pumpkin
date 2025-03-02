@@ -1,15 +1,15 @@
 use async_trait::async_trait;
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
-use pumpkin_util::text::{click::ClickEvent, hover::HoverEvent, TextComponent};
+use pumpkin_util::text::{TextComponent, click::ClickEvent, hover::HoverEvent};
 
 use crate::command::{
-    args::{
-        message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs,
-        FindArgDefaultName,
-    },
-    tree::builder::{argument, argument_default_name},
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs, FindArgDefaultName, message::MsgArgConsumer,
+        players::PlayersArgumentConsumer,
+    },
+    tree::CommandTree,
+    tree::builder::{argument, argument_default_name},
 };
 use CommandError::InvalidConsumption;
 
@@ -19,10 +19,10 @@ const DESCRIPTION: &str = "Sends a private message to one or more players.";
 
 const ARG_MESSAGE: &str = "message";
 
-struct MsgExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for MsgExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -81,6 +81,6 @@ impl CommandExecutor for MsgExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument_default_name(PlayersArgumentConsumer)
-            .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(MsgExecutor)),
+            .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor)),
     )
 }

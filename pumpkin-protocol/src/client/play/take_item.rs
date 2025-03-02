@@ -1,10 +1,10 @@
 use crate::VarInt;
 use pumpkin_data::packet::clientbound::PLAY_TAKE_ITEM_ENTITY;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_TAKE_ITEM_ENTITY)]
+#[packet(PLAY_TAKE_ITEM_ENTITY)]
 pub struct CTakeItemEntity {
     /// The Entity ID of the Item Entity
     entity_id: VarInt,

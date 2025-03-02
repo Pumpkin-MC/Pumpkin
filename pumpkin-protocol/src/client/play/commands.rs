@@ -1,10 +1,10 @@
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 
-use crate::{bytebuf::ByteBufMut, ClientPacket, VarInt};
+use crate::{ClientPacket, VarInt, bytebuf::ByteBufMut};
 
-#[client_packet(PLAY_COMMANDS)]
+#[packet(PLAY_COMMANDS)]
 pub struct CCommands<'a> {
     pub nodes: Vec<ProtoNode<'a>>,
     pub root_node_index: VarInt,
@@ -114,12 +114,19 @@ impl ProtoNode<'_> {
 
         if flags & Self::FLAG_HAS_SUGGESTION_TYPE != 0 {
             match &self.node_type {
-                ProtoNodeType::Argument { name: _, is_executable: _, parser: _, override_suggestion_type } => {
+                ProtoNodeType::Argument {
+                    name: _,
+                    is_executable: _,
+                    parser: _,
+                    override_suggestion_type,
+                } => {
                     // suggestion type
                     let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not None.");
                     bytebuf.put_string(suggestion_type.identifier());
-                },
-                _ => unimplemented!("ProtoNode::FLAG_HAS_SUGGESTION_TYPE is only implemented for ProtoNodeType::Argument"),
+                }
+                _ => unimplemented!(
+                    "ProtoNode::FLAG_HAS_SUGGESTION_TYPE is only implemented for ProtoNodeType::Argument"
+                ),
             }
         }
     }

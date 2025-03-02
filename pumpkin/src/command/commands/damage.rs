@@ -1,19 +1,21 @@
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::text::{
-    color::{Color, NamedColor},
     TextComponent,
+    color::{Color, NamedColor},
 };
 
 use crate::command::{
-    args::{
-        bounded_num::BoundedNumArgumentConsumer, damage_type::DamageTypeArgumentConsumer,
-        entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer, Arg, ConsumedArgs,
-        FindArg,
-    },
-    tree::builder::{argument, literal},
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer,
+        resource::damage_type::DamageTypeArgumentConsumer,
+    },
+    tree::{
+        CommandTree,
+        builder::{argument, literal},
+    },
 };
 
 const NAMES: [&str; 1] = ["damage"];
@@ -29,8 +31,8 @@ fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new().name(ARG_AMOUNT).min(0.0)
 }
 
-struct DamageLocationExecutor;
-struct DamageEntityExecutor(bool);
+struct LocationExecutor;
+struct EntityExecutor(bool);
 
 async fn send_damage_result(
     sender: &mut CommandSender<'_>,
@@ -60,7 +62,7 @@ async fn send_damage_result(
 }
 
 #[async_trait]
-impl CommandExecutor for DamageLocationExecutor {
+impl CommandExecutor for LocationExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -100,7 +102,7 @@ impl CommandExecutor for DamageLocationExecutor {
 }
 
 #[async_trait]
-impl CommandExecutor for DamageEntityExecutor {
+impl CommandExecutor for EntityExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -155,28 +157,28 @@ pub fn init_command_tree() -> CommandTree {
         argument(ARG_TARGET, EntityArgumentConsumer).then(
             argument(ARG_AMOUNT, amount_consumer())
                 // Basic damage
-                .execute(DamageEntityExecutor(false))
+                .execute(EntityExecutor(false))
                 // With damage type
                 .then(
                     argument(ARG_DAMAGE_TYPE, DamageTypeArgumentConsumer)
-                        .execute(DamageEntityExecutor(false))
+                        .execute(EntityExecutor(false))
                         // At location
                         .then(
                             literal("at").then(
                                 argument(ARG_LOCATION, Position3DArgumentConsumer)
-                                    .execute(DamageLocationExecutor),
+                                    .execute(LocationExecutor),
                             ),
                         )
                         // By entity
                         .then(
                             literal("by").then(
                                 argument(ARG_ENTITY, EntityArgumentConsumer)
-                                    .execute(DamageEntityExecutor(false))
+                                    .execute(EntityExecutor(false))
                                     // From cause
                                     .then(
                                         literal("from").then(
                                             argument(ARG_CAUSE, EntityArgumentConsumer)
-                                                .execute(DamageEntityExecutor(true)),
+                                                .execute(EntityExecutor(true)),
                                         ),
                                     ),
                             ),

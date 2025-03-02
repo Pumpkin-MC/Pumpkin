@@ -9,9 +9,9 @@ use zombie::Zombie;
 use crate::{server::Server, world::World};
 
 use super::{
+    Entity, EntityBase,
     ai::{goal::Goal, path::Navigator},
     living::LivingEntity,
-    Entity, EntityBase,
 };
 
 pub mod zombie;
@@ -24,7 +24,8 @@ pub struct MobEntity {
 
 #[async_trait]
 impl EntityBase for MobEntity {
-    async fn tick(&self) {
+    async fn tick(&self, server: &Server) {
+        self.living_entity.tick(server).await;
         let mut goals = self.goals.lock().await;
         for (goal, running) in goals.iter_mut() {
             if *running {
@@ -62,7 +63,6 @@ pub async fn from_type(
         goals: Mutex::new(vec![]),
         navigator: Mutex::new(Navigator::default()),
     };
-    #[expect(clippy::single_match)]
     match entity_type {
         EntityType::ZOMBIE => Zombie::make(&mob).await,
         // TODO

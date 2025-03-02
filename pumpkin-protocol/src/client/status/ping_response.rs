@@ -1,9 +1,9 @@
 use pumpkin_data::packet::clientbound::STATUS_PONG_RESPONSE;
-use pumpkin_macros::client_packet;
-use serde::Serialize;
+use pumpkin_macros::packet;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
-#[client_packet(STATUS_PONG_RESPONSE)]
+#[derive(Serialize, Deserialize)]
+#[packet(STATUS_PONG_RESPONSE)]
 pub struct CPingResponse {
     payload: i64, // must respond with the same as in `SPingRequest`
 }

@@ -1,20 +1,20 @@
 use crate::command::{
-    args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
 use async_trait::async_trait;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::borrow::Cow;
 
 const NAMES: [&str; 1] = ["seed"];
 
 const DESCRIPTION: &str = "Displays the world seed.";
 
-struct PumpkinExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for PumpkinExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -31,7 +31,7 @@ impl CommandExecutor for PumpkinExecutor {
                 None => {
                     return Err(CommandError::GeneralCommandIssue(
                         "Unable to get Seed".to_string(),
-                    ))
+                    ));
                 }
             },
         };
@@ -54,5 +54,5 @@ impl CommandExecutor for PumpkinExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(PumpkinExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

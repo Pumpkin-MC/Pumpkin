@@ -1,7 +1,7 @@
-use core::f32;
-use std::sync::{atomic::AtomicBool, Arc};
-
+use crate::server::Server;
 use async_trait::async_trait;
+use bytes::{BufMut, BytesMut};
+use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
@@ -12,9 +12,10 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
+    bytebuf::serializer::Serializer,
     client::play::{
-        CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity, CUpdateEntityRot,
-        MetaDataType, Metadata,
+        CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
+        CUpdateEntityRot, MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
 };
@@ -27,17 +28,21 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use serde::Serialize;
+use std::sync::{Arc, atomic::AtomicBool};
 use tokio::sync::RwLock;
 
 use crate::world::World;
 
 pub mod ai;
+pub mod effect;
+pub mod experience_orb;
 pub mod hunger;
 pub mod item;
 pub mod living;
 pub mod mob;
 pub mod player;
 pub mod projectile;
+pub mod tnt;
 
 mod combat;
 
@@ -46,8 +51,24 @@ pub type EntityId = i32;
 #[async_trait]
 pub trait EntityBase: Send + Sync {
     /// Gets Called every tick
-    async fn tick(&self) {}
-    /// Called when a player collides with the entity
+    async fn tick(&self, server: &Server) {
+        if let Some(living) = self.get_living_entity() {
+            living.tick(server).await;
+        } else {
+            self.get_entity().tick(server).await;
+        }
+    }
+
+    /// Returns if damage was successful or not
+    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+        if let Some(living) = self.get_living_entity() {
+            living.damage(amount, damage_type).await
+        } else {
+            self.get_entity().damage(amount, damage_type).await
+        }
+    }
+
+    /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
@@ -140,6 +161,15 @@ impl Entity {
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
         }
+    }
+
+    pub async fn set_velocity(&self, velocity: Vector3<f64>) {
+        self.velocity.store(velocity);
+        self.world
+            .read()
+            .await
+            .broadcast_packet_all(&CEntityVelocity::new(self.entity_id.into(), velocity))
+            .await;
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -344,7 +374,7 @@ impl Entity {
         } else {
             b &= !(1 << index);
         }
-        self.send_meta_data(Metadata::new(0, MetaDataType::Byte, b))
+        self.send_meta_data(&[Metadata::new(0, MetaDataType::Byte, b)])
             .await;
     }
 
@@ -357,21 +387,29 @@ impl Entity {
             .await;
     }
 
-    pub async fn send_meta_data<T>(&self, meta: Metadata<T>)
+    pub async fn send_meta_data<T>(&self, meta: &[Metadata<T>])
     where
         T: Serialize,
     {
+        let mut buf = Vec::new();
+        for meta in meta {
+            let serializer_buf = BytesMut::new();
+            let mut serializer = Serializer::new(serializer_buf);
+            meta.serialize(&mut serializer).unwrap();
+            buf.put(serializer.output);
+        }
+        buf.put_u8(255);
         self.world
             .read()
             .await
-            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), meta))
+            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf))
             .await;
     }
 
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        self.send_meta_data(Metadata::new(6, MetaDataType::EntityPose, VarInt(pose)))
+        self.send_meta_data(&[Metadata::new(6, MetaDataType::EntityPose, VarInt(pose))])
             .await;
     }
 
@@ -383,7 +421,11 @@ impl Entity {
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn tick(&self) {}
+    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+        false
+    }
+
+    async fn tick(&self, _: &Server) {}
 
     fn get_entity(&self) -> &Entity {
         self

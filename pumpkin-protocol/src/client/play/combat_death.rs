@@ -1,12 +1,12 @@
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_COMBAT_KILL;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_PLAYER_COMBAT_KILL)]
+#[packet(PLAY_PLAYER_COMBAT_KILL)]
 pub struct CCombatDeath<'a> {
     player_id: VarInt,
     message: &'a TextComponent,

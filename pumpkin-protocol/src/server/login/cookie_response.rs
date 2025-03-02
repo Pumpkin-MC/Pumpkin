@@ -1,13 +1,13 @@
 use crate::{
+    ServerPacket, VarInt,
     bytebuf::{ByteBuf, ReadingError},
     codec::identifier::Identifier,
-    ServerPacket, VarInt,
 };
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
-#[server_packet(LOGIN_COOKIE_RESPONSE)]
+#[packet(LOGIN_COOKIE_RESPONSE)]
 /// Response to a Cookie Request (login) from the server.
 /// The Notchian server only accepts responses of up to 5 kiB in size.
 pub struct SLoginCookieResponse {

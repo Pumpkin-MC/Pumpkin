@@ -1,11 +1,11 @@
-use aes::cipher::{generic_array::GenericArray, BlockEncryptMut, BlockSizeUser, KeyIvInit};
+use aes::cipher::{BlockEncryptMut, BlockSizeUser, KeyIvInit, generic_array::GenericArray};
 use bytes::{BufMut, BytesMut};
 use thiserror::Error;
 
 use libdeflater::{CompressionLvl, Compressor};
 
 use crate::{
-    codec::Codec, ClientPacket, CompressionLevel, CompressionThreshold, VarInt, MAX_PACKET_SIZE,
+    ClientPacket, CompressionLevel, CompressionThreshold, MAX_PACKET_SIZE, VarInt, codec::Codec,
 };
 
 type Cipher = cfb8::Encryptor<aes::Aes128>;
@@ -218,16 +218,16 @@ mod tests {
     use crate::client::status::CStatusResponse;
     use crate::{bytebuf::packet::Packet, codec::DecodeError};
     use aes::Aes128;
-    use cfb8::cipher::AsyncStreamCipher;
     use cfb8::Decryptor as Cfb8Decryptor;
+    use cfb8::cipher::AsyncStreamCipher;
     use libdeflater::{DecompressionError, Decompressor};
     use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
-    use pumpkin_macros::client_packet;
+    use pumpkin_macros::packet;
     use serde::Serialize;
 
     /// Define a custom packet for testing maximum packet size
     #[derive(Serialize)]
-    #[client_packet(STATUS_STATUS_RESPONSE)]
+    #[packet(STATUS_STATUS_RESPONSE)]
     pub struct MaxSizePacket {
         data: Vec<u8>,
     }

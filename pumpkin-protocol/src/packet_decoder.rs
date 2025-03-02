@@ -1,11 +1,11 @@
-use aes::cipher::{generic_array::GenericArray, BlockDecryptMut, BlockSizeUser, KeyIvInit};
+use aes::cipher::{BlockDecryptMut, BlockSizeUser, KeyIvInit, generic_array::GenericArray};
 use bytes::{Buf, Bytes, BytesMut};
 use libdeflater::{DecompressionError, Decompressor};
 use thiserror::Error;
 
 use crate::{
+    MAX_PACKET_SIZE, RawPacket, VarInt,
     codec::{Codec, DecodeError},
-    RawPacket, VarInt, MAX_PACKET_SIZE,
 };
 
 type Cipher = cfb8::Decryptor<aes::Aes128>;
@@ -193,8 +193,8 @@ mod tests {
     use super::*;
     use aes::Aes128;
     use bytes::BufMut;
-    use cfb8::cipher::AsyncStreamCipher;
     use cfb8::Encryptor as Cfb8Encryptor;
+    use cfb8::cipher::AsyncStreamCipher;
     use libdeflater::{CompressionLvl, Compressor};
 
     /// Helper function to compress data using libdeflater's Zlib compressor

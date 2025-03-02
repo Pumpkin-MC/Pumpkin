@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 
 use crate::command::args::ConsumedArgs;
 use crate::command::tree::CommandTree;
@@ -11,10 +11,10 @@ const NAMES: [&str; 1] = ["stop"];
 
 const DESCRIPTION: &str = "Stop the server.";
 
-struct StopExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for StopExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -32,5 +32,5 @@ impl CommandExecutor for StopExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(StopExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

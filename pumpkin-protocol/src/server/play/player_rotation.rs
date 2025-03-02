@@ -1,8 +1,8 @@
 use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_ROT;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
 #[derive(serde::Deserialize)]
-#[server_packet(PLAY_MOVE_PLAYER_ROT)]
+#[packet(PLAY_MOVE_PLAYER_ROT)]
 pub struct SPlayerRotation {
     pub yaw: f32,
     pub pitch: f32,

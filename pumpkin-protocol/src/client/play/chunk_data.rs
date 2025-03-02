@@ -1,14 +1,14 @@
-use crate::{bytebuf::ByteBufMut, codec::bit_set::BitSet, ClientPacket, VarInt};
+use crate::{ClientPacket, VarInt, bytebuf::ByteBufMut, codec::bit_set::BitSet};
 
 use bytes::{BufMut, BytesMut};
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use pumpkin_world::{
-    chunk::{ChunkData, SUBCHUNKS_COUNT},
     DIRECT_PALETTE_BITS,
+    chunk::{ChunkData, SUBCHUNKS_COUNT},
 };
 
-#[client_packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
+#[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CChunkData<'_> {
@@ -73,7 +73,7 @@ impl ClientPacket for CChunkData<'_> {
                                 .iter()
                                 .position(|b| b == block)
                                 .expect("Its just got added, ofc it should be there");
-                            out_long = out_long << block_size | (index as i64);
+                            out_long = (out_long << block_size) | (index as i64);
                         }
                         data_buf.put_i64(out_long);
                     }

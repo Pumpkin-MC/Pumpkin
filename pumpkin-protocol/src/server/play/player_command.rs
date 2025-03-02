@@ -1,13 +1,13 @@
 use bytes::Buf;
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
 use crate::{
-    bytebuf::{ByteBuf, ReadingError},
     ServerPacket, VarInt,
+    bytebuf::{ByteBuf, ReadingError},
 };
 
-#[server_packet(PLAY_PLAYER_COMMAND)]
+#[packet(PLAY_PLAYER_COMMAND)]
 pub struct SPlayerCommand {
     pub entity_id: VarInt,
     pub action: VarInt,

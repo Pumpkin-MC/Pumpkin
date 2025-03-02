@@ -1,14 +1,14 @@
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
+    WORLD_LOWEST_Y, WORLD_MAX_Y,
     chunk::{ChunkData, Subchunks},
     coordinates::ChunkRelativeBlockCoordinates,
     generation::{
-        generator::GeneratorInit, noise_router::proto_noise_router::GlobalProtoNoiseRouter,
-        proto_chunk::ProtoChunk, GlobalRandomConfig, Seed, WorldGenerator,
+        GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
+        noise_router::proto_noise_router::GlobalProtoNoiseRouter, proto_chunk::ProtoChunk,
     },
     noise_router::NOISE_ROUTER_ASTS,
-    WORLD_LOWEST_Y, WORLD_MAX_Y,
 };
 
 pub struct TestGenerator {

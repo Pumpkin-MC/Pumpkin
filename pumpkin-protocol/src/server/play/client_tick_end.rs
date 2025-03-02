@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::PLAY_CLIENT_TICK_END;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 
-#[derive(serde::Deserialize)]
-#[server_packet(PLAY_CLIENT_TICK_END)]
-pub struct SClientTickEnd {}
+#[packet(PLAY_CLIENT_TICK_END)]
+pub struct SClientTickEnd;

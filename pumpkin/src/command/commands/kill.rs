@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use pumpkin_data::entity;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use CommandError::InvalidConsumption;
 
@@ -16,10 +16,10 @@ const DESCRIPTION: &str = "Kills all target entities.";
 
 const ARG_TARGET: &str = "target";
 
-struct KillExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for KillExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -66,10 +66,10 @@ impl CommandExecutor for KillExecutor {
     }
 }
 
-struct KillSelfExecutor;
+struct SelfExecutor;
 
 #[async_trait]
-impl CommandExecutor for KillSelfExecutor {
+impl CommandExecutor for SelfExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -104,6 +104,6 @@ impl CommandExecutor for KillSelfExecutor {
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(KillExecutor))
-        .then(require(|sender| sender.is_player()).execute(KillSelfExecutor))
+        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))
+        .then(require(|sender| sender.is_player()).execute(SelfExecutor))
 }

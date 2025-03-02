@@ -1,7 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::command::CommandTreeArgumentConsumer;
@@ -25,10 +25,10 @@ fn page_number_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().name("page").min(1)
 }
 
-struct CommandHelpExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for CommandHelpExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -132,7 +132,7 @@ impl CommandExecutor for BaseHelpExecutor {
                 dispatcher
                     .permissions
                     .get(&tree.names[0])
-                    .map_or(true, |perm| sender.has_permission_lvl(*perm))
+                    .is_none_or(|perm| sender.has_permission_lvl(*perm))
             })
             .collect();
 
@@ -222,7 +222,7 @@ impl CommandExecutor for BaseHelpExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_COMMAND, CommandTreeArgumentConsumer).execute(CommandHelpExecutor))
+        .then(argument(ARG_COMMAND, CommandTreeArgumentConsumer).execute(Executor))
         .then(argument_default_name(page_number_consumer()).execute(BaseHelpExecutor))
         .execute(BaseHelpExecutor)
 }

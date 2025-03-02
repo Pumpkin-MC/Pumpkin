@@ -1,24 +1,24 @@
 use crate::{
     command::{
-        args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, players::PlayersArgumentConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["deop"];
 const DESCRIPTION: &str = "Revokes operator status from a player.";
 const ARG_TARGETS: &str = "targets";
 
-struct DeopExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for DeopExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -61,5 +61,5 @@ impl CommandExecutor for DeopExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(DeopExecutor))
+        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(Executor))
 }

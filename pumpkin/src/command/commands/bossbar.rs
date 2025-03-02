@@ -9,16 +9,16 @@ use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
-use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
 use async_trait::async_trait;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];
@@ -52,10 +52,10 @@ enum CommandValueSet {
     Visible,
 }
 
-struct BossbarAddExecuter;
+struct AddExecuter;
 
 #[async_trait]
-impl CommandExecutor for BossbarAddExecuter {
+impl CommandExecutor for AddExecuter {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -101,10 +101,10 @@ impl CommandExecutor for BossbarAddExecuter {
     }
 }
 
-struct BossbarGetExecuter(CommandValueGet);
+struct GetExecuter(CommandValueGet);
 
 #[async_trait]
-impl CommandExecutor for BossbarGetExecuter {
+impl CommandExecutor for GetExecuter {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -179,10 +179,10 @@ impl CommandExecutor for BossbarGetExecuter {
     }
 }
 
-struct BossbarListExecuter;
+struct ListExecuter;
 
 #[async_trait]
-impl CommandExecutor for BossbarListExecuter {
+impl CommandExecutor for ListExecuter {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -238,10 +238,10 @@ impl CommandExecutor for BossbarListExecuter {
     }
 }
 
-struct BossbarRemoveExecuter;
+struct RemoveExecuter;
 
 #[async_trait]
-impl CommandExecutor for BossbarRemoveExecuter {
+impl CommandExecutor for RemoveExecuter {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -289,10 +289,10 @@ impl CommandExecutor for BossbarRemoveExecuter {
     }
 }
 
-struct BossbarSetExecuter(CommandValueSet);
+struct SetExecuter(CommandValueSet);
 
 #[async_trait]
-impl CommandExecutor for BossbarSetExecuter {
+impl CommandExecutor for SetExecuter {
     #[expect(clippy::too_many_lines)]
     async fn execute<'a>(
         &self,
@@ -591,25 +591,24 @@ fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
-            literal("add")
-                .then(argument_default_name(non_autocomplete_consumer()).then(
-                    argument(ARG_NAME, TextComponentArgConsumer).execute(BossbarAddExecuter),
-                )),
+            literal("add").then(
+                argument_default_name(non_autocomplete_consumer())
+                    .then(argument(ARG_NAME, TextComponentArgConsumer).execute(AddExecuter)),
+            ),
         )
         .then(
             literal("get").then(
                 argument_default_name(autocomplete_consumer())
-                    .then(literal("max").execute(BossbarGetExecuter(CommandValueGet::Max)))
-                    .then(literal("players").execute(BossbarGetExecuter(CommandValueGet::Players)))
-                    .then(literal("value").execute(BossbarGetExecuter(CommandValueGet::Value)))
-                    .then(literal("visible").execute(BossbarGetExecuter(CommandValueGet::Visible))),
+                    .then(literal("max").execute(GetExecuter(CommandValueGet::Max)))
+                    .then(literal("players").execute(GetExecuter(CommandValueGet::Players)))
+                    .then(literal("value").execute(GetExecuter(CommandValueGet::Value)))
+                    .then(literal("visible").execute(GetExecuter(CommandValueGet::Visible))),
             ),
         )
-        .then(literal("list").execute(BossbarListExecuter))
+        .then(literal("list").execute(ListExecuter))
         .then(
-            literal("remove").then(
-                argument_default_name(autocomplete_consumer()).execute(BossbarRemoveExecuter),
-            ),
+            literal("remove")
+                .then(argument_default_name(autocomplete_consumer()).execute(RemoveExecuter)),
         )
         .then(
             literal("set").then(
@@ -617,45 +616,45 @@ pub fn init_command_tree() -> CommandTree {
                     .then(
                         literal("color").then(
                             argument_default_name(BossbarColorArgumentConsumer)
-                                .execute(BossbarSetExecuter(CommandValueSet::Color)),
+                                .execute(SetExecuter(CommandValueSet::Color)),
                         ),
                     )
                     .then(
                         literal("max").then(
                             argument_default_name(max_value_consumer())
-                                .execute(BossbarSetExecuter(CommandValueSet::Max)),
+                                .execute(SetExecuter(CommandValueSet::Max)),
                         ),
                     )
                     .then(
                         literal("name").then(
                             argument(ARG_NAME, TextComponentArgConsumer)
-                                .execute(BossbarSetExecuter(CommandValueSet::Name)),
+                                .execute(SetExecuter(CommandValueSet::Name)),
                         ),
                     )
                     .then(
                         literal("players")
                             .then(
                                 argument_default_name(PlayersArgumentConsumer)
-                                    .execute(BossbarSetExecuter(CommandValueSet::Players(true))),
+                                    .execute(SetExecuter(CommandValueSet::Players(true))),
                             )
-                            .execute(BossbarSetExecuter(CommandValueSet::Players(false))),
+                            .execute(SetExecuter(CommandValueSet::Players(false))),
                     )
                     .then(
                         literal("style").then(
                             argument_default_name(BossbarStyleArgumentConsumer)
-                                .execute(BossbarSetExecuter(CommandValueSet::Style)),
+                                .execute(SetExecuter(CommandValueSet::Style)),
                         ),
                     )
                     .then(
                         literal("value").then(
                             argument_default_name(value_consumer())
-                                .execute(BossbarSetExecuter(CommandValueSet::Value)),
+                                .execute(SetExecuter(CommandValueSet::Value)),
                         ),
                     )
                     .then(
                         literal("visible").then(
                             argument(ARG_VISIBLE, BoolArgConsumer)
-                                .execute(BossbarSetExecuter(CommandValueSet::Visible)),
+                                .execute(SetExecuter(CommandValueSet::Visible)),
                         ),
                     ),
             ),

@@ -4,7 +4,7 @@ use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{registry::Block, BlockDirection};
+use pumpkin_world::block::{BlockDirection, registry::Block};
 
 use crate::{
     block::{properties::Direction, pumpkin_block::PumpkinBlock, registry::BlockActionResult},

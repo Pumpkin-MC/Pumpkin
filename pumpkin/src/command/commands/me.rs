@@ -3,10 +3,10 @@ use pumpkin_data::world::EMOTE_COMMAND;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    args::{message::MsgArgConsumer, Arg, ConsumedArgs},
-    tree::builder::argument,
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{Arg, ConsumedArgs, message::MsgArgConsumer},
+    tree::CommandTree,
+    tree::builder::argument,
 };
 use CommandError::InvalidConsumption;
 
@@ -16,10 +16,10 @@ const DESCRIPTION: &str = "Broadcasts a narrative message about yourself.";
 
 const ARG_MESSAGE: &str = "action";
 
-struct MeExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for MeExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -44,5 +44,5 @@ impl CommandExecutor for MeExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(MeExecutor))
+        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor))
 }

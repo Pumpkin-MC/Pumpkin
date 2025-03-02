@@ -1,11 +1,12 @@
-use crate::codec::slot::Slot;
 use crate::VarInt;
+use crate::codec::slot::Slot;
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
-use pumpkin_macros::server_packet;
+use pumpkin_macros::packet;
 use serde::de::SeqAccess;
-use serde::{de, Deserialize};
+use serde::{Deserialize, de};
 
-#[server_packet(PLAY_CONTAINER_CLICK)]
+#[derive(Debug)]
+#[packet(PLAY_CONTAINER_CLICK)]
 pub struct SClickContainer {
     pub window_id: VarInt,
     pub state_id: VarInt,
@@ -86,7 +87,7 @@ impl<'de> Deserialize<'de> for SClickContainer {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub enum SlotActionType {
     /// Performs a normal slot click. This can pickup or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
     Pickup,

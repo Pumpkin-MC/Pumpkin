@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use bytes::BufMut;
 use serde::{
-    ser::{self},
     Serialize,
+    ser::{self},
 };
 use thiserror::Error;
 
@@ -207,7 +207,7 @@ impl<B: BufMut> ser::Serializer for &mut Serializer<B> {
         unimplemented!()
     }
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        Ok(())
     }
     fn serialize_unit_variant(
         self,
@@ -218,6 +218,9 @@ impl<B: BufMut> ser::Serializer for &mut Serializer<B> {
         // For ENUMs, only write enum index as varint
         self.output.put_var_int(&variant_index.into());
         Ok(())
+    }
+    fn is_human_readable(&self) -> bool {
+        false
     }
 }
 

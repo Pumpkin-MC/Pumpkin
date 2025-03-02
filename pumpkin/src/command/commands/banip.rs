@@ -2,19 +2,19 @@ use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
-        args::{message::MsgArgConsumer, simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
     data::{
-        banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST, SaveJSONConfiguration,
+        SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
     },
     server::Server,
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["ban-ip"];
 const DESCRIPTION: &str = "bans a player-ip";
@@ -36,10 +36,10 @@ async fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
     })
 }
 
-struct BanIpNoReasonExecutor;
+struct NoReasonExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanIpNoReasonExecutor {
+impl CommandExecutor for NoReasonExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -55,10 +55,10 @@ impl CommandExecutor for BanIpNoReasonExecutor {
     }
 }
 
-struct BanIpReasonExecutor;
+struct ReasonExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanIpReasonExecutor {
+impl CommandExecutor for ReasonExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -148,7 +148,7 @@ async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reaso
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGET, SimpleArgConsumer)
-            .execute(BanIpNoReasonExecutor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(BanIpReasonExecutor)),
+            .execute(NoReasonExecutor)
+            .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
     )
 }

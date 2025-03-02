@@ -1,7 +1,7 @@
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 
-use super::player::Player;
+use super::{EntityBase, player::Player};
 
 pub struct HungerManager {
     /// The current hunger level.
@@ -50,7 +50,7 @@ impl HungerManager {
         } else if level == 0 {
             self.tick_timer.fetch_add(1);
             if self.tick_timer.load() >= 80 {
-                player.living_entity.damage(1.0, DamageType::STARVE).await;
+                player.damage(1.0, DamageType::STARVE).await;
                 self.tick_timer.store(0);
             }
         } else {

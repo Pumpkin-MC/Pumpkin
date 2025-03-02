@@ -6,8 +6,8 @@ use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::registry::Block;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -42,6 +42,19 @@ impl BlockRegistry {
             pumpkin_block
                 .normal_use(block, player, location, server)
                 .await;
+        }
+    }
+
+    pub async fn explode(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        location: BlockPos,
+        server: &Server,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block.explode(block, world, location, server).await;
         }
     }
 

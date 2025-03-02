@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::command::{
-    args::{
-        bounded_num::BoundedNumArgumentConsumer, particle::ParticleArgumentConsumer,
-        position_3d::Position3DArgumentConsumer, ConsumedArgs, FindArg,
-    },
-    tree::{builder::argument, CommandTree},
     CommandError, CommandExecutor, CommandSender,
+    args::{
+        ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        position_3d::Position3DArgumentConsumer, resource::particle::ParticleArgumentConsumer,
+    },
+    tree::{CommandTree, builder::argument},
 };
 const NAMES: [&str; 1] = ["particle"];
 
@@ -20,10 +20,10 @@ const ARG_DELTA: &str = "delta";
 const ARG_SPEED: &str = "speed";
 const ARG_COUNT: &str = "count";
 
-struct ParticleExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for ParticleExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -64,25 +64,25 @@ impl CommandExecutor for ParticleExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_NAME, ParticleArgumentConsumer)
-            .execute(ParticleExecutor)
+            .execute(Executor)
             .then(
                 argument(ARG_POS, Position3DArgumentConsumer)
-                    .execute(ParticleExecutor)
+                    .execute(Executor)
                     .then(
                         argument(ARG_DELTA, Position3DArgumentConsumer)
-                            .execute(ParticleExecutor)
+                            .execute(Executor)
                             .then(
                                 argument(
                                     ARG_SPEED,
                                     BoundedNumArgumentConsumer::<f32>::new().min(0.0),
                                 )
-                                .execute(ParticleExecutor)
+                                .execute(Executor)
                                 .then(
                                     argument(
                                         ARG_COUNT,
                                         BoundedNumArgumentConsumer::<i32>::new().min(0),
                                     )
-                                    .execute(ParticleExecutor),
+                                    .execute(Executor),
                                 ),
                             ),
                     ),

@@ -1,25 +1,25 @@
 use crate::{
     command::{
-        args::{players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, players::PlayersArgumentConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{op_data::OPERATOR_CONFIG, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
 };
-use async_trait::async_trait;
-use pumpkin_config::{op::Op, BASIC_CONFIG};
-use pumpkin_util::text::TextComponent;
 use CommandError::InvalidConsumption;
+use async_trait::async_trait;
+use pumpkin_config::{BASIC_CONFIG, op::Op};
+use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["op"];
 const DESCRIPTION: &str = "Grants operator status to a player.";
 const ARG_TARGETS: &str = "targets";
 
-struct OpExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for OpExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -81,5 +81,5 @@ impl CommandExecutor for OpExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(OpExecutor))
+        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(Executor))
 }

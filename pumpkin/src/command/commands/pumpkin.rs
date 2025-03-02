@@ -2,28 +2,28 @@ use async_trait::async_trait;
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::{color::NamedColor, TextComponent};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::borrow::Cow;
 
 use crate::{
+    GIT_VERSION,
     command::{
-        args::ConsumedArgs, tree::CommandTree, CommandError, CommandExecutor, CommandSender,
+        CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
     },
     server::CURRENT_MC_VERSION,
-    GIT_VERSION,
 };
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 
 const DESCRIPTION: &str = "Display information about Pumpkin.";
 
-struct PumpkinExecutor;
+struct Executor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
 #[async_trait]
-impl CommandExecutor for PumpkinExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -98,5 +98,5 @@ impl CommandExecutor for PumpkinExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(PumpkinExecutor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
 }

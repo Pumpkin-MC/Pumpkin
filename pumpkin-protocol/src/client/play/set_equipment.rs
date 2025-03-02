@@ -1,15 +1,15 @@
-use crate::bytebuf::{serializer::Serializer, ByteBufMut};
+use crate::bytebuf::{ByteBufMut, serializer::Serializer};
 use bytes::BytesMut;
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::{
-    codec::{slot::Slot, var_int::VarInt},
     ClientPacket,
+    codec::{slot::Slot, var_int::VarInt},
 };
 
-#[client_packet(PLAY_SET_EQUIPMENT)]
+#[packet(PLAY_SET_EQUIPMENT)]
 pub struct CSetEquipment {
     entity_id: VarInt,
     equipment: Vec<(EquipmentSlot, Slot)>,
@@ -40,7 +40,7 @@ impl ClientPacket for CSetEquipment {
             equipment
                 .1
                 .serialize(&mut serializer)
-                .expect("Could not serialize packet");
+                .expect("Could not serialize Equipment Slot");
             bytebuf.put(serializer.output);
         }
     }

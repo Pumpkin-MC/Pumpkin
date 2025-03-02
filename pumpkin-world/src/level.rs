@@ -2,24 +2,24 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use dashmap::{DashMap, Entry};
 use num_traits::Zero;
-use pumpkin_config::{chunk::ChunkFormat, ADVANCED_CONFIG};
+use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
 use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::{
     runtime::Handle,
-    sync::{mpsc, RwLock},
+    sync::{RwLock, mpsc},
 };
 
 use crate::{
     chunk::{
-        anvil::AnvilChunkFormat, linear::LinearChunkFormat, ChunkData, ChunkParsingError,
-        ChunkReader, ChunkReadingError, ChunkWriter,
+        ChunkData, ChunkParsingError, ChunkReader, ChunkReadingError, ChunkWriter,
+        anvil::AnvilChunkFormat, linear::LinearChunkFormat,
     },
-    generation::{get_world_gen, Seed, WorldGenerator},
-    lock::{anvil::AnvilLevelLocker, LevelLocker},
+    generation::{Seed, WorldGenerator, get_world_gen},
+    lock::{LevelLocker, anvil::AnvilLevelLocker},
     world_info::{
-        anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
         LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
+        anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
     },
 };
 
@@ -167,6 +167,7 @@ impl Level {
     }
 
     pub fn mark_chunk_as_newly_watched(&self, chunk: Vector2<i32>) {
+        log::trace!("{:?} marked as newly watched", chunk);
         match self.chunk_watchers.entry(chunk) {
             Entry::Occupied(mut occupied) => {
                 let value = occupied.get_mut();
@@ -195,6 +196,7 @@ impl Level {
 
     /// Returns whether the chunk should be removed from memory
     pub fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
+        log::trace!("{:?} marked as no longer watched", chunk);
         match self.chunk_watchers.entry(chunk) {
             Entry::Occupied(mut occupied) => {
                 let value = occupied.get_mut();
@@ -225,6 +227,7 @@ impl Level {
     }
 
     pub async fn clean_chunk(&self, chunk: &Vector2<i32>) {
+        log::trace!("{:?} is being cleaned", chunk);
         if let Some(data) = self.loaded_chunks.remove(chunk) {
             self.write_chunk(data).await;
         }

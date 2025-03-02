@@ -3,8 +3,8 @@ use std::{num::NonZeroUsize, ops::Deref};
 use super::{Codec, DecodeError};
 use bytes::{Buf, BufMut};
 use serde::{
-    de::{SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
+    de::{SeqAccess, Visitor},
 };
 
 pub type VarIntType = i32;
@@ -12,7 +12,7 @@ pub type VarIntType = i32;
 /**
  * A variable-length integer type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VarInt(pub VarIntType);
 
 impl Codec<Self> for VarInt {

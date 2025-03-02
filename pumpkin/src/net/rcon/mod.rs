@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
-use pumpkin_config::{RCONConfig, ADVANCED_CONFIG};
+use pumpkin_config::{ADVANCED_CONFIG, RCONConfig};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 

@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_inventory::Container;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::builder::{argument, require};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use crate::entity::player::Player;
 use CommandError::InvalidConsumption;
@@ -73,10 +73,10 @@ fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> Text
     }
 }
 
-struct ClearExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for ClearExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -100,10 +100,10 @@ impl CommandExecutor for ClearExecutor {
     }
 }
 
-struct ClearSelfExecutor;
+struct SelfExecutor;
 
 #[async_trait]
-impl CommandExecutor for ClearSelfExecutor {
+impl CommandExecutor for SelfExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -126,6 +126,6 @@ impl CommandExecutor for ClearSelfExecutor {
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(ClearExecutor))
-        .then(require(|sender| sender.is_player()).execute(ClearSelfExecutor))
+        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))
+        .then(require(|sender| sender.is_player()).execute(SelfExecutor))
 }

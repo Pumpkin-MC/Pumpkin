@@ -1,25 +1,25 @@
 use crate::{
     command::{
-        args::{simple::SimpleArgConsumer, Arg, ConsumedArgs},
-        tree::builder::argument,
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+        tree::CommandTree,
+        tree::builder::argument,
     },
-    data::{banned_player_data::BANNED_PLAYER_LIST, SaveJSONConfiguration},
+    data::{SaveJSONConfiguration, banned_player_data::BANNED_PLAYER_LIST},
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["pardon"];
 const DESCRIPTION: &str = "unbans a player";
 
 const ARG_TARGET: &str = "player";
 
-struct PardonExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for PardonExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -60,5 +60,5 @@ impl CommandExecutor for PardonExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, SimpleArgConsumer).execute(PardonExecutor))
+        .then(argument(ARG_TARGET, SimpleArgConsumer).execute(Executor))
 }

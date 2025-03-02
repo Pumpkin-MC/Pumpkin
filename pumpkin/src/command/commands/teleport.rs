@@ -2,15 +2,15 @@ use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
+use crate::command::CommandError;
+use crate::command::args::ConsumedArgs;
+use crate::command::args::FindArg;
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::entity::EntityArgumentConsumer;
 use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
-use crate::command::args::ConsumedArgs;
-use crate::command::args::FindArg;
-use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
-use crate::command::CommandError;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
@@ -49,10 +49,10 @@ fn yaw_pitch_facing_position(
     (yaw_degrees as f32, pitch_degrees as f32)
 }
 
-struct TpEntitiesToEntityExecutor;
+struct EntitiesToEntityExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpEntitiesToEntityExecutor {
+impl CommandExecutor for EntitiesToEntityExecutor {
     async fn execute<'a>(
         &self,
         _sender: &mut CommandSender<'a>,
@@ -74,10 +74,10 @@ impl CommandExecutor for TpEntitiesToEntityExecutor {
     }
 }
 
-struct TpEntitiesToPosFacingPosExecutor;
+struct EntitiesToPosFacingPosExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpEntitiesToPosFacingPosExecutor {
+impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     async fn execute<'a>(
         &self,
         _sender: &mut CommandSender<'a>,
@@ -99,10 +99,10 @@ impl CommandExecutor for TpEntitiesToPosFacingPosExecutor {
     }
 }
 
-struct TpEntitiesToPosFacingEntityExecutor;
+struct EntitiesToPosFacingEntityExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpEntitiesToPosFacingEntityExecutor {
+impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
     async fn execute<'a>(
         &self,
         _sender: &mut CommandSender<'a>,
@@ -126,10 +126,10 @@ impl CommandExecutor for TpEntitiesToPosFacingEntityExecutor {
     }
 }
 
-struct TpEntitiesToPosWithRotationExecutor;
+struct EntitiesToPosWithRotationExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpEntitiesToPosWithRotationExecutor {
+impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     async fn execute<'a>(
         &self,
         _sender: &mut CommandSender<'a>,
@@ -150,10 +150,10 @@ impl CommandExecutor for TpEntitiesToPosWithRotationExecutor {
     }
 }
 
-struct TpEntitiesToPosExecutor;
+struct EntitiesToPosExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpEntitiesToPosExecutor {
+impl CommandExecutor for EntitiesToPosExecutor {
     async fn execute<'a>(
         &self,
         _sender: &mut CommandSender<'a>,
@@ -174,10 +174,10 @@ impl CommandExecutor for TpEntitiesToPosExecutor {
     }
 }
 
-struct TpSelfToEntityExecutor;
+struct SelfToEntityExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpSelfToEntityExecutor {
+impl CommandExecutor for SelfToEntityExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -204,10 +204,10 @@ impl CommandExecutor for TpSelfToEntityExecutor {
     }
 }
 
-struct TpSelfToPosExecutor;
+struct SelfToPosExecutor;
 
 #[async_trait]
-impl CommandExecutor for TpSelfToPosExecutor {
+impl CommandExecutor for SelfToPosExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -234,34 +234,34 @@ impl CommandExecutor for TpSelfToPosExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_LOCATION, Position3DArgumentConsumer).execute(TpSelfToPosExecutor))
-        .then(argument(ARG_DESTINATION, EntityArgumentConsumer).execute(TpSelfToEntityExecutor))
+        .then(argument(ARG_LOCATION, Position3DArgumentConsumer).execute(SelfToPosExecutor))
+        .then(argument(ARG_DESTINATION, EntityArgumentConsumer).execute(SelfToEntityExecutor))
         .then(
             argument(ARG_TARGETS, EntitiesArgumentConsumer)
                 .then(
                     argument(ARG_LOCATION, Position3DArgumentConsumer)
-                        .execute(TpEntitiesToPosExecutor)
+                        .execute(EntitiesToPosExecutor)
                         .then(
                             argument(ARG_ROTATION, RotationArgumentConsumer)
-                                .execute(TpEntitiesToPosWithRotationExecutor),
+                                .execute(EntitiesToPosWithRotationExecutor),
                         )
                         .then(
                             literal("facing")
                                 .then(
                                     literal("entity").then(
                                         argument(ARG_FACING_ENTITY, EntityArgumentConsumer)
-                                            .execute(TpEntitiesToPosFacingEntityExecutor),
+                                            .execute(EntitiesToPosFacingEntityExecutor),
                                     ),
                                 )
                                 .then(
                                     argument(ARG_FACING_LOCATION, Position3DArgumentConsumer)
-                                        .execute(TpEntitiesToPosFacingPosExecutor),
+                                        .execute(EntitiesToPosFacingPosExecutor),
                                 ),
                         ),
                 )
                 .then(
                     argument(ARG_DESTINATION, EntityArgumentConsumer)
-                        .execute(TpEntitiesToEntityExecutor),
+                        .execute(EntitiesToEntityExecutor),
                 ),
         )
 }

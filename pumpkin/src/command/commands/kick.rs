@@ -1,13 +1,13 @@
 use async_trait::async_trait;
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 
+use crate::command::CommandError;
 use crate::command::args::message::MsgArgConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::builder::argument;
 use crate::command::tree::CommandTree;
-use crate::command::CommandError;
+use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender};
 use CommandError::InvalidConsumption;
 
@@ -18,10 +18,10 @@ const ARG_TARGETS: &str = "targets";
 
 const ARG_REASON: &str = "reason";
 
-struct KickExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for KickExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -52,7 +52,7 @@ impl CommandExecutor for KickExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGETS, PlayersArgumentConsumer)
-            .execute(KickExecutor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(KickExecutor)),
+            .execute(Executor)
+            .then(argument(ARG_REASON, MsgArgConsumer).execute(Executor)),
     )
 }

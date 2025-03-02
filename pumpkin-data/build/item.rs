@@ -1,6 +1,6 @@
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
 include!("../src/tag.rs");
@@ -225,6 +225,7 @@ pub(crate) fn build() -> TokenStream {
         constants.extend(quote! {
             pub const #const_ident: Item = Item {
                 id: #id_lit,
+                registry_key: #name,
                 components: #components_tokens
             };
         });
@@ -240,11 +241,19 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use pumpkin_util::text::TextComponent;
+        use crate::tag::{Tagable, RegistryKey};
 
-        #[derive(Clone, Copy, Debug)]
+        #[derive(Clone, Debug)]
         pub struct Item {
             pub id: u16,
+            pub registry_key: &'static str,
             pub components: ItemComponents,
+        }
+
+        impl PartialEq for Item {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
         }
 
         #[derive(Clone, Copy, Debug)]
@@ -307,7 +316,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a Item from a resource location string"]
-            pub fn from_name(name: &str) -> Option<Self> {
+            pub fn from_registry_key(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
                     _ => None
@@ -320,7 +329,18 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
+        }
 
+        impl Tagable for Item {
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::Item
+            }
+
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.registry_key
+            }
         }
     }
 }

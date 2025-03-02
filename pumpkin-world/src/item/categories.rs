@@ -1,69 +1,46 @@
+use pumpkin_data::tag::Tagable;
+
 use crate::item::ItemStack;
 
+const SWORDS_TAG: &str = "#minecraft:swords";
+const HEAD_ARMOR_TAG: &str = "#minecraft:head_armor";
+const CHEST_ARMOR_TAG: &str = "#minecraft:chest_armor";
+const LEG_ARMOR_TAG: &str = "#minecraft:leg_armor";
+const FOOT_ARMOR_TAG: &str = "#minecraft:foot_armor";
+
 impl ItemStack {
+    #[inline]
     pub fn is_sword(&self) -> bool {
-        [
-            818, // Wooden
-            823, // Stone
-            828, // Gold
-            833, // Iron
-            838, // Diamond
-            843, // Netherite
-        ]
-        .contains(&self.item.id)
+        self.item.is_tagged_with(SWORDS_TAG).expect(
+            "This is a default minecraft tag that should have been gotten from the extractor",
+        )
     }
 
+    #[inline]
     pub fn is_helmet(&self) -> bool {
-        [
-            // Leather
-            856, // Netherite
-            876, // Turtle helmet
-            794, // Chainmail
-            860, // Diamond
-            868, // Gold
-            872, // Iron
-            864,
-        ]
-        .contains(&self.item.id)
+        self.item.is_tagged_with(HEAD_ARMOR_TAG).expect(
+            "This is a default minecraft tag that should have been gotten from the extractor",
+        )
     }
 
+    #[inline]
     pub fn is_chestplate(&self) -> bool {
-        [
-            // Leather
-            857, // Netherite
-            877, // Chainmail
-            861, // Diamond
-            869, // Gold
-            873, // Iron
-            865, // Elytra
-            773,
-        ]
-        .contains(&self.item.id)
+        self.item.is_tagged_with(CHEST_ARMOR_TAG).expect(
+            "This is a default minecraft tag that should have been gotten from the extractor",
+        )
     }
 
+    #[inline]
     pub fn is_leggings(&self) -> bool {
-        [
-            // Leather
-            858, // Netherite
-            878, // Chainmail
-            862, // Diamond
-            870, // Gold
-            874, // Iron
-            866,
-        ]
-        .contains(&self.item.id)
+        self.item.is_tagged_with(LEG_ARMOR_TAG).expect(
+            "This is a default minecraft tag that should have been gotten from the extractor",
+        )
     }
 
+    #[inline]
     pub fn is_boots(&self) -> bool {
-        [
-            // Leather
-            859, // Netherite
-            879, // Chainmail
-            863, // Diamond
-            871, // Gold
-            875, // Iron
-            867,
-        ]
-        .contains(&self.item.id)
+        self.item.is_tagged_with(FOOT_ARMOR_TAG).expect(
+            "This is a default minecraft tag that should have been gotten from the extractor",
+        )
     }
 }

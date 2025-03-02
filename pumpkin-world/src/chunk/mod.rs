@@ -1,6 +1,6 @@
 use dashmap::{
-    mapref::one::{Ref, RefMut},
     DashMap,
+    mapref::one::{Ref, RefMut},
 };
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::{deserializer::from_bytes, nbt_long_array};
@@ -15,10 +15,10 @@ use std::{
 use thiserror::Error;
 
 use crate::{
+    WORLD_HEIGHT,
     block::BlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
     level::LevelFolder,
-    WORLD_HEIGHT,
 };
 
 pub mod anvil;

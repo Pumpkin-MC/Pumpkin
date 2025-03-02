@@ -1,8 +1,10 @@
 use std::f32::{self};
 
+use async_trait::async_trait;
+use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{living::LivingEntity, Entity, EntityBase};
+use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct ThrownItemEntity {
     entity: Entity,
@@ -73,9 +75,14 @@ impl ThrownItemEntity {
     }
 }
 
+#[async_trait]
 impl EntityBase for ThrownItemEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
+    }
+
+    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+        false
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {

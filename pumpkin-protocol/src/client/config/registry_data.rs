@@ -1,14 +1,14 @@
 use bytes::BufMut;
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
-use crate::{bytebuf::ByteBufMut, codec::identifier::Identifier, ClientPacket};
+use crate::{ClientPacket, bytebuf::ByteBufMut, codec::identifier::Identifier};
 
-#[client_packet(CONFIG_REGISTRY_DATA)]
+#[packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
-    registry_id: &'a Identifier,
-    entries: &'a [RegistryEntry],
+    pub registry_id: &'a Identifier,
+    pub entries: &'a [RegistryEntry],
 }
 
 impl<'a> CRegistryData<'a> {

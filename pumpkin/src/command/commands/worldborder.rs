@@ -2,20 +2,20 @@ use async_trait::async_trait;
 use pumpkin_util::{
     math::vector2::Vector2,
     text::{
-        color::{Color, NamedColor},
         TextComponent,
+        color::{Color, NamedColor},
     },
 };
 
 use crate::{
     command::{
-        args::{
-            bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
-            ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
-        },
-        tree::builder::{argument_default_name, literal},
-        tree::CommandTree,
         CommandError, CommandExecutor, CommandSender,
+        args::{
+            ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
+            bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
+        },
+        tree::CommandTree,
+        tree::builder::{argument_default_name, literal},
     },
     server::Server,
 };
@@ -48,10 +48,10 @@ fn warning_distance_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("distance")
 }
 
-struct WorldborderGetExecutor;
+struct GetExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderGetExecutor {
+impl CommandExecutor for GetExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -76,10 +76,10 @@ impl CommandExecutor for WorldborderGetExecutor {
     }
 }
 
-struct WorldborderSetExecutor;
+struct SetExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderSetExecutor {
+impl CommandExecutor for SetExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -128,10 +128,10 @@ impl CommandExecutor for WorldborderSetExecutor {
     }
 }
 
-struct WorldborderSetTimeExecutor;
+struct SetTimeExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderSetTimeExecutor {
+impl CommandExecutor for SetTimeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -213,10 +213,10 @@ impl CommandExecutor for WorldborderSetTimeExecutor {
     }
 }
 
-struct WorldborderAddExecutor;
+struct AddExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderAddExecutor {
+impl CommandExecutor for AddExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -267,10 +267,10 @@ impl CommandExecutor for WorldborderAddExecutor {
     }
 }
 
-struct WorldborderAddTimeExecutor;
+struct AddTimeExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderAddTimeExecutor {
+impl CommandExecutor for AddTimeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -354,10 +354,10 @@ impl CommandExecutor for WorldborderAddTimeExecutor {
     }
 }
 
-struct WorldborderCenterExecutor;
+struct CenterExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderCenterExecutor {
+impl CommandExecutor for CenterExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -387,10 +387,10 @@ impl CommandExecutor for WorldborderCenterExecutor {
     }
 }
 
-struct WorldborderDamageAmountExecutor;
+struct DamageAmountExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderDamageAmountExecutor {
+impl CommandExecutor for DamageAmountExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -439,10 +439,10 @@ impl CommandExecutor for WorldborderDamageAmountExecutor {
     }
 }
 
-struct WorldborderDamageBufferExecutor;
+struct DamageBufferExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderDamageBufferExecutor {
+impl CommandExecutor for DamageBufferExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -491,10 +491,10 @@ impl CommandExecutor for WorldborderDamageBufferExecutor {
     }
 }
 
-struct WorldborderWarningDistanceExecutor;
+struct WarningDistanceExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderWarningDistanceExecutor {
+impl CommandExecutor for WarningDistanceExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -542,10 +542,10 @@ impl CommandExecutor for WorldborderWarningDistanceExecutor {
     }
 }
 
-struct WorldborderWarningTimeExecutor;
+struct WarningTimeExecutor;
 
 #[async_trait]
-impl CommandExecutor for WorldborderWarningTimeExecutor {
+impl CommandExecutor for WarningTimeExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -598,38 +598,32 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("add").then(
                 argument_default_name(distance_consumer())
-                    .execute(WorldborderAddExecutor)
-                    .then(
-                        argument_default_name(time_consumer()).execute(WorldborderAddTimeExecutor),
-                    ),
+                    .execute(AddExecutor)
+                    .then(argument_default_name(time_consumer()).execute(AddTimeExecutor)),
             ),
         )
-        .then(literal("center").then(
-            argument_default_name(Position2DArgumentConsumer).execute(WorldborderCenterExecutor),
-        ))
+        .then(
+            literal("center")
+                .then(argument_default_name(Position2DArgumentConsumer).execute(CenterExecutor)),
+        )
         .then(
             literal("damage")
                 .then(
                     literal("amount").then(
                         argument_default_name(damage_per_block_consumer())
-                            .execute(WorldborderDamageAmountExecutor),
+                            .execute(DamageAmountExecutor),
                     ),
                 )
-                .then(
-                    literal("buffer").then(
-                        argument_default_name(damage_buffer_consumer())
-                            .execute(WorldborderDamageBufferExecutor),
-                    ),
-                ),
+                .then(literal("buffer").then(
+                    argument_default_name(damage_buffer_consumer()).execute(DamageBufferExecutor),
+                )),
         )
-        .then(literal("get").execute(WorldborderGetExecutor))
+        .then(literal("get").execute(GetExecutor))
         .then(
             literal("set").then(
                 argument_default_name(distance_consumer())
-                    .execute(WorldborderSetExecutor)
-                    .then(
-                        argument_default_name(time_consumer()).execute(WorldborderSetTimeExecutor),
-                    ),
+                    .execute(SetExecutor)
+                    .then(argument_default_name(time_consumer()).execute(SetTimeExecutor)),
             ),
         )
         .then(
@@ -637,11 +631,12 @@ pub fn init_command_tree() -> CommandTree {
                 .then(
                     literal("distance").then(
                         argument_default_name(warning_distance_consumer())
-                            .execute(WorldborderWarningDistanceExecutor),
+                            .execute(WarningDistanceExecutor),
                     ),
                 )
-                .then(literal("time").then(
-                    argument_default_name(time_consumer()).execute(WorldborderWarningTimeExecutor),
-                )),
+                .then(
+                    literal("time")
+                        .then(argument_default_name(time_consumer()).execute(WarningTimeExecutor)),
+                ),
         )
 }

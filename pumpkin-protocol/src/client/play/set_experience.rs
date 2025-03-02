@@ -1,15 +1,15 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_EXPERIENCE;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_SET_EXPERIENCE)]
+#[packet(PLAY_SET_EXPERIENCE)]
 pub struct CSetExperience {
     progress: f32,
-    level: VarInt,
     total_experience: VarInt,
+    level: VarInt,
 }
 
 impl CSetExperience {

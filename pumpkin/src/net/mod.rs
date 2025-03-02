@@ -3,8 +3,8 @@ use std::{
     net::SocketAddr,
     num::NonZeroU8,
     sync::{
-        atomic::{AtomicBool, AtomicI32},
         Arc,
+        atomic::{AtomicBool, AtomicI32},
     },
 };
 
@@ -17,14 +17,16 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    bytebuf::{packet::Packet, ReadingError},
+    ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
+    ServerPacket,
+    bytebuf::{ReadingError, packet::Packet},
     client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
     packet_decoder::PacketDecoder,
     packet_encoder::{PacketEncodeError, PacketEncoder},
     server::{
         config::{
-            SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse, SKnownPacks,
-            SPluginMessage,
+            SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
+            SConfigResourcePack, SKnownPacks, SPluginMessage,
         },
         handshake::SHandShake,
         login::{
@@ -33,15 +35,13 @@ use pumpkin_protocol::{
         },
         status::{SStatusPingRequest, SStatusRequest},
     },
-    ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
-    ServerPacket,
 };
-use pumpkin_util::{text::TextComponent, ProfileAction};
+use pumpkin_util::{ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 use thiserror::Error;
 use uuid::Uuid;
@@ -252,10 +252,12 @@ impl Client {
             return;
         }
 
-        let mut enc = self.enc.lock().await;
-        if let Err(error) = enc.append_packet(packet) {
-            self.kick(&TextComponent::text(error.to_string())).await;
-            return;
+        {
+            let mut enc = self.enc.lock().await;
+            if let Err(error) = enc.append_packet(packet) {
+                self.kick(TextComponent::text(error.to_string())).await;
+                return;
+            }
         }
 
         let _ = self
@@ -352,7 +354,7 @@ impl Client {
                     i32::from(packet.id),
                     error
                 );
-                self.kick(&TextComponent::text(text)).await;
+                self.kick(TextComponent::text(text)).await;
             };
         }
     }
@@ -475,7 +477,7 @@ impl Client {
                 self.handle_login_acknowledged(server).await;
             }
             SLoginCookieResponse::PACKET_ID => {
-                self.handle_login_cookie_response(SLoginCookieResponse::read(bytebuf)?);
+                self.handle_login_cookie_response(&SLoginCookieResponse::read(bytebuf)?);
             }
             _ => {
                 log::error!(
@@ -511,7 +513,11 @@ impl Client {
                     .await;
             }
             SConfigCookieResponse::PACKET_ID => {
-                self.handle_config_cookie_response(SConfigCookieResponse::read(bytebuf)?);
+                self.handle_config_cookie_response(&SConfigCookieResponse::read(bytebuf)?);
+            }
+            SConfigResourcePack::PACKET_ID => {
+                self.handle_resource_pack_response(SConfigResourcePack::read(bytebuf)?)
+                    .await;
             }
             _ => {
                 log::error!(
@@ -530,9 +536,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `reason`: A string describing the reason for kicking the client.
-    pub async fn kick(&self, reason: &TextComponent) {
-        let text = reason.clone().get_text();
-        log::info!("Kicking Client id {} for {}", self.id, &text);
+    pub async fn kick(&self, reason: TextComponent) {
         let result = match self.connection_state.load() {
             ConnectionState::Login => {
                 // TextComponent implements Serialze and writes in bytes instead of String, thats the reasib we only use content
@@ -541,7 +545,10 @@ impl Client {
                 ))
                 .await
             }
-            ConnectionState::Config => self.try_send_packet(&CConfigDisconnect::new(&text)).await,
+            ConnectionState::Config => {
+                self.try_send_packet(&CConfigDisconnect::new(&reason.get_text()))
+                    .await
+            }
             // This way players get kicked when players using client functions (e.g. poll, send_packet)
             ConnectionState::Play => self.try_send_packet(&CPlayDisconnect::new(reason)).await,
             _ => {

@@ -13,7 +13,7 @@ use pumpkin_protocol::query::{
 use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
-use crate::server::{Server, CURRENT_MC_VERSION};
+use crate::server::{CURRENT_MC_VERSION, Server};
 
 pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
     let mut query_addr = bound_addr;

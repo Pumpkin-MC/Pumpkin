@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[client_packet(PLAY_LEVEL_EVENT)]
+#[packet(PLAY_LEVEL_EVENT)]
 pub struct CWorldEvent<'a> {
     event: i32,
     location: &'a BlockPos,

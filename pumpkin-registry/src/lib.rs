@@ -11,7 +11,7 @@ use instrument::Instrument;
 use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pumpkin_protocol::{client::config::RegistryEntry, codec::identifier::Identifier};
-pub use recipe::{flatten_3x3, Recipe, RecipeResult, RecipeType, RECIPES};
+pub use recipe::{RECIPES, Recipe, RecipeResult, RecipeType, flatten_3x3};
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;

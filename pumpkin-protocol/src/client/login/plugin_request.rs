@@ -1,15 +1,15 @@
 use pumpkin_data::packet::clientbound::LOGIN_CUSTOM_QUERY;
-use pumpkin_macros::client_packet;
+use pumpkin_macros::packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[client_packet(LOGIN_CUSTOM_QUERY)]
+#[packet(LOGIN_CUSTOM_QUERY)]
 pub struct CLoginPluginRequest<'a> {
-    message_id: VarInt,
-    channel: &'a str,
-    data: &'a [u8],
+    pub message_id: VarInt,
+    pub channel: &'a str,
+    pub data: &'a [u8],
 }
 
 impl<'a> CLoginPluginRequest<'a> {

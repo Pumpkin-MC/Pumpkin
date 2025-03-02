@@ -2,24 +2,24 @@ use std::sync::LazyLock;
 
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_protocol::{
+    ConnectionState, KnownPack, Label, Link, LinkType,
     client::{
         config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks, CUpdateTags},
         login::{CLoginSuccess, CSetCompression},
     },
     codec::var_int::VarInt,
     server::login::{SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart},
-    ConnectionState, KnownPack, Label, Link, LinkType,
 };
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
 use crate::{
     net::{
+        Client, GameProfile,
         authentication::{self, AuthError},
         offline_uuid,
         packet::is_valid_player_name,
         proxy::{bungeecord, velocity},
-        Client, GameProfile,
     },
     server::Server,
 };
@@ -93,7 +93,7 @@ impl Client {
         // TODO: If client is an operator or otherwise suitable elevated permissions, allow client to bypass this requirement.
         let max_players = BASIC_CONFIG.max_players;
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
-            self.kick(&TextComponent::translate(
+            self.kick(TextComponent::translate(
                 "multiplayer.disconnect.server_full",
                 [],
             ))
@@ -102,7 +102,7 @@ impl Client {
         }
 
         if !is_valid_player_name(&login_start.name) {
-            self.kick(&TextComponent::text("Invalid characters in username"))
+            self.kick(TextComponent::text("Invalid characters in username"))
                 .await;
             return;
         }
@@ -126,7 +126,7 @@ impl Client {
                         self.finish_login(&profile).await;
                         *gameprofile = Some(profile);
                     }
-                    Err(error) => self.kick(&TextComponent::text(error.to_string())).await,
+                    Err(error) => self.kick(TextComponent::text(error.to_string())).await,
                 }
             }
         } else {
@@ -169,14 +169,14 @@ impl Client {
         let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
 
         if let Err(error) = self.set_encryption(Some(&shared_secret)).await {
-            self.kick(&TextComponent::text(error.to_string())).await;
+            self.kick(TextComponent::text(error.to_string())).await;
             return;
         }
 
         let mut gameprofile = self.gameprofile.lock().await;
 
         let Some(profile) = gameprofile.as_mut() else {
-            self.kick(&TextComponent::text("No Game profile")).await;
+            self.kick(TextComponent::text("No Game profile")).await;
             return;
         };
 
@@ -188,7 +188,7 @@ impl Client {
             {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
-                    self.kick(&match error {
+                    self.kick(match error {
                         AuthError::FailedResponse => {
                             TextComponent::translate("multiplayer.disconnect.authservers_down", [])
                         }
@@ -205,8 +205,15 @@ impl Client {
 
         // Don't allow duplicate UUIDs
         if let Some(online_player) = &server.get_player_by_uuid(profile.id).await {
-            log::debug!("Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
-            self.kick(&TextComponent::translate(
+            log::debug!(
+                "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')",
+                &self.address.lock().await,
+                &profile.name,
+                &profile.id,
+                &online_player.client.address.lock().await,
+                &online_player.gameprofile.name
+            );
+            self.kick(TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
                 [],
             ))
@@ -216,8 +223,15 @@ impl Client {
 
         // Don't allow a duplicate username
         if let Some(online_player) = &server.get_player_by_name(&profile.name).await {
-            log::debug!("A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')", &self.address.lock().await, &profile.name, &profile.id, &online_player.client.address.lock().await, &online_player.gameprofile.name);
-            self.kick(&TextComponent::translate(
+            log::debug!(
+                "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')",
+                &self.address.lock().await,
+                &profile.name,
+                &profile.id,
+                &online_player.client.address.lock().await,
+                &online_player.gameprofile.name
+            );
+            self.kick(TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
                 [],
             ))
@@ -292,14 +306,14 @@ impl Client {
         Err(AuthError::MissingAuthClient)
     }
 
-    pub fn handle_login_cookie_response(&self, packet: SLoginCookieResponse) {
+    pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-        "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
-        packet.key.to_string(),
-        packet.has_payload,
-        packet.payload_length.unwrap_or(VarInt::from(0)).0
-    );
+            "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            packet.key.to_string(),
+            packet.has_payload,
+            packet.payload_length.unwrap_or(VarInt::from(0)).0
+        );
     }
     pub async fn handle_plugin_response(&self, plugin_response: SLoginPluginResponse) {
         log::debug!("Handling plugin");
@@ -316,7 +330,7 @@ impl Client {
                     *self.gameprofile.lock().await = Some(profile);
                     *address = new_address;
                 }
-                Err(error) => self.kick(&TextComponent::text(error.to_string())).await,
+                Err(error) => self.kick(TextComponent::text(error.to_string())).await,
             }
         }
     }
@@ -325,23 +339,6 @@ impl Client {
         log::debug!("Handling login acknowledged");
         self.connection_state.store(ConnectionState::Config);
         self.send_packet(&server.get_branding()).await;
-
-        let resource_config = &ADVANCED_CONFIG.resource_pack;
-        if resource_config.enabled {
-            let resource_pack = CConfigAddResourcePack::new(
-                Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes()),
-                &resource_config.url,
-                &resource_config.sha1,
-                resource_config.force,
-                if resource_config.message.is_empty() {
-                    None
-                } else {
-                    Some(TextComponent::text(&resource_config.message))
-                },
-            );
-
-            self.send_packet(&resource_pack).await;
-        }
 
         if ADVANCED_CONFIG.server_links.enabled {
             self.send_packet(&CConfigServerLinks::new(
@@ -359,6 +356,30 @@ impl Client {
         ]))
         .await;
 
+        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        if resource_config.enabled {
+            let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
+            let resource_pack = CConfigAddResourcePack::new(
+                &uuid,
+                &resource_config.url,
+                &resource_config.sha1,
+                resource_config.force,
+                if resource_config.prompt_message.is_empty() {
+                    None
+                } else {
+                    Some(TextComponent::text(&resource_config.prompt_message))
+                },
+            );
+
+            self.send_packet(&resource_pack).await;
+        } else {
+            // This will be invoked by our resource pack handler in the case of the above branch
+            self.send_known_packs().await;
+        }
+        log::debug!("login acknowledged");
+    }
+
+    pub async fn send_known_packs(&self) {
         // known data packs
         self.send_packet(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
@@ -366,6 +387,5 @@ impl Client {
             version: "1.21",
         }]))
         .await;
-        log::debug!("login acknowledged");
     }
 }

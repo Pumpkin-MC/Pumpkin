@@ -3,10 +3,13 @@ use pumpkin_data::particle::Particle;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use crate::command::{
-    args::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser},
+    CommandSender,
+    args::{
+        Arg, ArgumentConsumer, ConsumedArgs, DefaultNameArgConsumer, FindArg,
+        GetClientSideArgParser,
+    },
     dispatcher::CommandError,
     tree::RawArgs,
-    CommandSender,
 };
 use crate::server::Server;
 
@@ -59,7 +62,7 @@ impl DefaultNameArgConsumer for ParticleArgumentConsumer {
 impl<'a> FindArg<'a> for ParticleArgumentConsumer {
     type Data = &'a Particle;
 
-    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+    fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Particle(data)) => Ok(data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),

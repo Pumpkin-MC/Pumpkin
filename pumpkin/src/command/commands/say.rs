@@ -3,10 +3,10 @@ use pumpkin_data::world::SAY_COMMAND;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    args::{message::MsgArgConsumer, Arg, ConsumedArgs},
-    tree::builder::argument,
-    tree::CommandTree,
     CommandError, CommandExecutor, CommandSender,
+    args::{Arg, ConsumedArgs, message::MsgArgConsumer},
+    tree::CommandTree,
+    tree::builder::argument,
 };
 use CommandError::InvalidConsumption;
 
@@ -16,10 +16,10 @@ const DESCRIPTION: &str = "Broadcast a message to all Players.";
 
 const ARG_MESSAGE: &str = "message";
 
-struct SayExecutor;
+struct Executor;
 
 #[async_trait]
-impl CommandExecutor for SayExecutor {
+impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -44,5 +44,5 @@ impl CommandExecutor for SayExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(SayExecutor))
+        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor))
 }

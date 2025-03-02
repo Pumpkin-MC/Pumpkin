@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -125,7 +125,7 @@ mod test {
         world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
     };
 
-    use super::{AnvilLevelInfo, LevelDat, WorldInfoReader, WorldInfoWriter, LEVEL_DAT_FILE_NAME};
+    use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
 
     #[test]
     fn test_preserve_level_dat_seed() {

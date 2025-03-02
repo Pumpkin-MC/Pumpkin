@@ -1,18 +1,18 @@
 use crate::{
     command::{
-        args::{message::MsgArgConsumer, players::PlayersArgumentConsumer, Arg, ConsumedArgs},
-        tree::{builder::argument, CommandTree},
         CommandError, CommandExecutor, CommandSender,
+        args::{Arg, ConsumedArgs, message::MsgArgConsumer, players::PlayersArgumentConsumer},
+        tree::{CommandTree, builder::argument},
     },
     data::{
-        banlist_serializer::BannedPlayerEntry, banned_player_data::BANNED_PLAYER_LIST,
-        SaveJSONConfiguration,
+        SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry,
+        banned_player_data::BANNED_PLAYER_LIST,
     },
     entity::player::Player,
 };
+use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["ban"];
 const DESCRIPTION: &str = "bans a player";
@@ -20,10 +20,10 @@ const DESCRIPTION: &str = "bans a player";
 const ARG_TARGET: &str = "player";
 const ARG_REASON: &str = "reason";
 
-struct BanNoReasonExecutor;
+struct NoReasonExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanNoReasonExecutor {
+impl CommandExecutor for NoReasonExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -39,10 +39,10 @@ impl CommandExecutor for BanNoReasonExecutor {
     }
 }
 
-struct BanReasonExecutor;
+struct ReasonExecutor;
 
 #[async_trait]
-impl CommandExecutor for BanReasonExecutor {
+impl CommandExecutor for ReasonExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender<'a>,
@@ -107,7 +107,7 @@ async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: Option<
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGET, PlayersArgumentConsumer)
-            .execute(BanNoReasonExecutor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(BanReasonExecutor)),
+            .execute(NoReasonExecutor)
+            .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
     )
 }

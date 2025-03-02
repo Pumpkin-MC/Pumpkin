@@ -1,9 +1,9 @@
 use std::num::NonZeroU16;
 
-use bytebuf::{packet::Packet, ReadingError};
+use bytebuf::{ByteBufMut, ReadingError, packet::Packet};
 use bytes::{Buf, BufMut, Bytes};
 use codec::{identifier::Identifier, var_int::VarInt};
-use pumpkin_util::text::{style::Style, TextComponent};
+use pumpkin_util::text::{TextComponent, style::Style};
 use serde::{Deserialize, Serialize, Serializer};
 
 pub mod bytebuf;
@@ -65,13 +65,33 @@ impl TryFrom<VarInt> for ConnectionState {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Clone)]
 pub struct IDOrSoundEvent {
     pub id: VarInt,
     pub sound_event: Option<SoundEvent>,
 }
 
-#[derive(Serialize)]
+impl Serialize for IDOrSoundEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut buf = Vec::new();
+        buf.put_var_int(&self.id);
+        if self.id.0 == 0 {
+            if let Some(sound_event) = &self.sound_event {
+                buf.put_identifier(&sound_event.sound_name);
+
+                buf.put_option(&sound_event.range, |p, v| {
+                    p.put_f32(*v);
+                });
+            }
+        }
+        serializer.serialize_bytes(&buf)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SoundEvent {
     pub sound_name: Identifier,
     pub range: Option<f32>,
