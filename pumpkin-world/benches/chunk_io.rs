@@ -30,7 +30,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 /// This is the code to run the test
 /// with out BulkAPI PR.
-///
 // fn criterion_benchmark(c: &mut Criterion) {
 //     let temp_dir = TempDir::new().unwrap();
 //     let level = Arc::new(Dimension::OverWorld.into_level(temp_dir.path().to_path_buf()));

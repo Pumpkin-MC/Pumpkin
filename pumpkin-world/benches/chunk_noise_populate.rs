@@ -1,11 +1,12 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{fs, num::NonZeroU8, path::PathBuf, sync::Arc};
 
-use criterion::{Criterion, criterion_group, criterion_main};
-use pumpkin_util::math::vector2::Vector2;
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use pumpkin_util::math::{position, vector2::Vector2};
 use pumpkin_world::{
     GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS, bench_create_and_populate_noise,
-    chunk::ChunkData, global_path, level::Level,
+    chunk::ChunkData, cylindrical_chunk_iterator::Cylindrical, global_path, level::Level,
 };
+use temp_dir::TempDir;
 use tokio::sync::RwLock;
 
 fn bench_populate_noise(c: &mut Criterion) {
@@ -19,50 +20,51 @@ fn bench_populate_noise(c: &mut Criterion) {
     });
 }
 
-const MIN_POS: i32 = -4;
-const MAX_POS: i32 = 4;
 
-async fn test_reads(root_dir: PathBuf, positions: &[Vector2<i32>]) {
-    let level = Level::from_root_folder(root_dir);
+async fn test_reads(level: Arc<Level>, positions: Vec<Vector2<i32>>) {
+    let (send, mut recv) = tokio::sync::mpsc::channel(positions.len());
 
-    let rt = tokio::runtime::Handle::current();
-    let (send, mut recv) = tokio::sync::mpsc::channel(10);
-    level.fetch_chunks(positions, send, &rt);
+    let fetching_level = level.clone();
+    tokio::spawn(async move { fetching_level.fetch_chunks(&positions, send).await });
+
     while let Some(x) = recv.recv().await {
         // Don't compile me away!
         let _ = x;
     }
+    level.clean_memory();
 }
 
-async fn test_writes(root_dir: PathBuf, chunks: &[(Vector2<i32>, Arc<RwLock<ChunkData>>)]) {
-    let level = Level::from_root_folder(root_dir);
-    for (pos, chunk) in chunks {
-        level.write_chunk((*pos, chunk.clone())).await;
-    }
+async fn test_writes(level: Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
+    level.write_chunks(chunks).await;
 }
 
 // Depends on config options from `./config`
 fn bench_chunk_io(c: &mut Criterion) {
     // System temp dirs are in-memory, so we cant use temp_dir
-    let root_dir = global_path!("./bench_root");
-    fs::create_dir(&root_dir).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let root_dir = temp_dir.path().to_path_buf();
 
-    let chunk_positions =
-        (MIN_POS..=MAX_POS).flat_map(|x| (MIN_POS..=MAX_POS).map(move |z| Vector2::new(x, z)));
     let async_handler = tokio::runtime::Builder::new_current_thread()
         .build()
         .unwrap();
+    let level = Arc::new(Level::from_root_folder(root_dir.clone()));
 
     println!("Initializing data...");
     // Initial writes
     let mut chunks = Vec::new();
     let mut positions = Vec::new();
+
     async_handler.block_on(async {
-        let rt = tokio::runtime::Handle::current();
         let (send, mut recv) = tokio::sync::mpsc::channel(10);
         // Our data dir is empty, so we're generating new chunks here
-        let level = Level::from_root_folder(root_dir.clone());
-        level.fetch_chunks(&chunk_positions.collect::<Vec<_>>(), send, &rt);
+        let level = level.clone();
+        tokio::spawn(async move {
+            let cylindrical = Cylindrical::new(Vector2::new(0, 0), NonZeroU8::new(32).unwrap());
+            let chunk_positions = cylindrical.all_chunks_within();
+            level.fetch_chunks(&chunk_positions, send).await;
+            level.clean_chunks(&chunk_positions).await;
+            level.clean_memory();
+        });
         while let Some((chunk, _)) = recv.recv().await {
             let pos = chunk.read().await.position;
             chunks.push((pos, chunk));
@@ -71,16 +73,31 @@ fn bench_chunk_io(c: &mut Criterion) {
     });
     println!("Testing with {} chunks", chunks.len());
 
-    // These test worst case: no caching done by `Level`
-    c.bench_function("write chunks", |b| {
-        b.to_async(&async_handler)
-            .iter(|| test_writes(root_dir.clone(), &chunks))
-    });
+    chunks.sort_unstable_by_key(|chunk| chunk.0.x * chunk.0.x + chunk.0.z * chunk.0.z);
+    positions.sort_unstable_by_key(|pos| pos.x * pos.x + pos.z * pos.z);
 
-    c.bench_function("read chunks", |b| {
-        b.to_async(&async_handler)
-            .iter(|| test_reads(root_dir.clone(), &positions))
-    });
+    // These test worst case: no caching done by `Level`
+    for n_chunks in vec![8, 32, 128] {
+        let chunks = &chunks[..n_chunks];
+        let positions = &positions[..n_chunks];
+        c.bench_with_input(
+            BenchmarkId::new("write_chunks", n_chunks),
+            &chunks,
+            |b, chunks| {
+                b.to_async(&async_handler)
+                    .iter(|| test_writes(level.clone(), chunks.to_vec()))
+            },
+        );
+
+        c.bench_with_input(
+            BenchmarkId::new("read_chunks", n_chunks),
+            &positions,
+            |b, positions| {
+                b.to_async(&async_handler)
+                    .iter(|| test_reads(level.clone(), positions.to_vec()))
+            },
+        );
+    }
 
     fs::remove_dir_all(&root_dir).unwrap();
 }

@@ -55,7 +55,3 @@ temp-dir = "0.1.14"
 [[bench]]
 name = "chunk_noise_populate"
 harness = false
-
-[[bench]]
-name = "chunk_io"
-harness = false
