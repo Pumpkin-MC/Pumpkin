@@ -12,69 +12,71 @@ jobs:
   format:
     name: Check formatting
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - run: cargo fmt --check
+
   clippy:
     name: Run lints
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features
+
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --verbose
+      - run: cargo check --all-targets
+      - run: cargo test
+      - run: cargo install cargo-nextest
+      - run: cargo nextest run
+
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v4
-
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --verbose --release
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Strip binaries (Linux and macOS)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: strip target/${{ matrix.target }}/release/pumpkin*
       - name: Export executable
         uses: actions/upload-artifact@v4
         with:
-          name: pumpkin-${{ matrix.os }}
+          name: pumpkin-${{ matrix.os }}-${{ matrix.target }}
           compression-level: 9
           path: target/${{ matrix.target }}/release/pumpkin*
+
   clippy_release:
     name: Run lints in release mode
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
