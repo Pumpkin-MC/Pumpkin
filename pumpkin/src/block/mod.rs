@@ -20,7 +20,10 @@ use properties::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::registry::{Block, State};
+use pumpkin_world::{
+    block::registry::{Block, State},
+    item::ItemStack,
+};
 use rand::Rng;
 
 use crate::block::registry::BlockRegistry;
@@ -57,7 +60,25 @@ pub async fn drop_loot(
     pos: &BlockPos,
     experience: bool,
 ) {
-    // TODO: Currently only the item block is dropped, We should drop the loop table
+    if let Some(table) = &block.loot_table {
+        let loot = table.get_loot();
+        for item in loot {
+            drop_stack(server, world, pos, item).await;
+        }
+    }
+
+    if experience {
+        if let Some(experience) = &block.experience {
+            let amount = experience.experience.get();
+            // TODO: Silk touch gives no exp
+            if amount > 0 {
+                ExperienceOrbEntity::spawn(world, server, pos.to_f64(), amount as u32).await;
+            }
+        }
+    }
+}
+
+async fn drop_stack(server: &Server, world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     let height = EntityType::ITEM.dimension[1] / 2.0;
     let pos = Vector3::new(
         f64::from(pos.0.x) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
@@ -66,19 +87,13 @@ pub async fn drop_loot(
     );
 
     let entity = server.add_entity(pos, EntityType::ITEM, world);
-    let item_entity = Arc::new(ItemEntity::new(entity, block.item_id, 1));
+    let item_entity = Arc::new(ItemEntity::new(
+        entity,
+        stack.item.id,
+        u32::from(stack.item_count),
+    ));
     world.spawn_entity(item_entity.clone()).await;
     item_entity.send_meta_packet().await;
-
-    if experience {
-        if let Some(experience) = &block.experience {
-            let amount = experience.experience.get();
-            // TODO: Silk touch gives no exp
-            if amount > 0 {
-                ExperienceOrbEntity::spawn(world, server, pos, amount as u32).await;
-            }
-        }
-    }
 }
 
 pub async fn calc_block_breaking(player: &Player, state: &State, block_name: &str) -> f32 {
