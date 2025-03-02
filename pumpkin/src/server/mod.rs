@@ -107,7 +107,7 @@ impl Server {
             world.level.mark_chunk_as_newly_watched(chunk);
         }
 
-        let world_name = world_path.file_name().unwrap().to_str().unwrap();
+        let world_name = world_path.to_str().unwrap();
 
         Self {
             cached_registry: Registry::get_synced(),
