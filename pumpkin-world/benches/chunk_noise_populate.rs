@@ -40,19 +40,19 @@ async fn test_writes(root_dir: PathBuf, chunks: Vec<(Vector2<i32>, Arc<RwLock<Ch
 // Depends on config options from `./config`
 fn bench_chunk_io(c: &mut Criterion) {
     // System temp dirs are in-memory, so we cant use temp_dir
-    let root_dir = global_path!("./bench_root");
-    let _ = fs::remove_dir_all(&root_dir);
-    fs::create_dir(&root_dir).unwrap();
+    let root_dir = global_path!("./bench_root_tmp");
+    let _ = fs::remove_dir_all(&root_dir); // delete if it exists
+    fs::create_dir(&root_dir).unwrap(); // create the directory
 
     let async_handler = tokio::runtime::Builder::new_current_thread()
         .build()
         .unwrap();
 
     println!("Initializing data...");
+
     // Initial writes
     let mut chunks = Vec::new();
     let mut positions = Vec::new();
-
     async_handler.block_on(async {
         let (send, mut recv) = tokio::sync::mpsc::channel(10);
         // Our data dir is empty, so we're generating new chunks here
@@ -70,12 +70,15 @@ fn bench_chunk_io(c: &mut Criterion) {
         }
     });
 
+    // Sort by distance from origin to ensure a fair selection
+    // when using a subset of the total chunks for the benchmarks
     chunks.sort_unstable_by_key(|chunk| chunk.0.x * chunk.0.x + chunk.0.z * chunk.0.z);
     positions.sort_unstable_by_key(|pos| pos.x * pos.x + pos.z * pos.z);
 
     // These test worst case: no caching done by `Level`
+    // testing with 16, 64, 256 chunks
     let mut write_group = c.benchmark_group("write_chunks");
-    for n_chunks in vec![16, 64, 256] {
+    for n_chunks in [16, 64, 256] {
         let chunks = &chunks[..n_chunks];
         println!("Testing with {} chunks", chunks.len());
         write_group.bench_with_input(
@@ -90,8 +93,9 @@ fn bench_chunk_io(c: &mut Criterion) {
     write_group.finish();
 
     // These test worst case: no caching done by `Level`
+    // testing with 16, 64, 256 chunks
     let mut read_group = c.benchmark_group("read_chunks");
-    for n_chunks in vec![16, 64, 256] {
+    for n_chunks in [16, 64, 256] {
         let positions = &positions[..n_chunks];
         println!("Testing with {} chunks", chunks.len());
 
@@ -106,7 +110,7 @@ fn bench_chunk_io(c: &mut Criterion) {
     }
     read_group.finish();
 
-    fs::remove_dir_all(&root_dir).unwrap();
+    fs::remove_dir_all(&root_dir).unwrap(); // cleanup
 }
 
 criterion_group!(benches, bench_populate_noise, bench_chunk_io);
