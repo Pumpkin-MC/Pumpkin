@@ -1,10 +1,10 @@
-use std::{fs, num::NonZeroU8, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_world::{
     GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS, bench_create_and_populate_noise,
-    chunk::ChunkData, cylindrical_chunk_iterator::Cylindrical, global_path, level::Level,
+    chunk::ChunkData, global_path, level::Level,
 };
 use tokio::sync::RwLock;
 
@@ -22,7 +22,7 @@ fn bench_populate_noise(c: &mut Criterion) {
 async fn test_reads(root_dir: PathBuf, positions: Vec<Vector2<i32>>) {
     let level = Arc::new(Level::from_root_folder(root_dir));
 
-    let (send, mut recv) = tokio::sync::mpsc::channel(positions.len());
+    let (send, mut recv) = tokio::sync::mpsc::channel(CHANNEL_SIZE);
     tokio::spawn(async move { level.fetch_chunks(&positions, send).await });
 
     while let Some(x) = recv.recv().await {
@@ -36,6 +36,12 @@ async fn test_writes(root_dir: PathBuf, chunks: Vec<(Vector2<i32>, Arc<RwLock<Ch
 
     level.write_chunks(chunks).await;
 }
+
+const CHANNEL_SIZE: usize = 16;
+
+// -16..16 == 32 chunks, 32*32 == 1024 chunks
+const MIN_CHUNK: i32 = -16;
+const MAX_CHUNK: i32 = 16;
 
 // Depends on config options from `./config`
 fn bench_chunk_io(c: &mut Criterion) {
@@ -54,33 +60,44 @@ fn bench_chunk_io(c: &mut Criterion) {
     let mut chunks = Vec::new();
     let mut positions = Vec::new();
     async_handler.block_on(async {
-        let (send, mut recv) = tokio::sync::mpsc::channel(10);
+        let (send, mut recv) = tokio::sync::mpsc::channel(CHANNEL_SIZE);
+
         // Our data dir is empty, so we're generating new chunks here
-        let level = Arc::new(Level::from_root_folder(root_dir.clone()));
+        let level_to_save = Arc::new(Level::from_root_folder(root_dir.clone()));
+        println!("Level Seed is: {}", level_to_save.seed.0);
+
+        let level_to_fetch = level_to_save.clone();
         tokio::spawn(async move {
-            let cylindrical = Cylindrical::new(Vector2::new(0, 0), NonZeroU8::new(32).unwrap());
-            let chunk_positions = cylindrical.all_chunks_within();
-            level.fetch_chunks(&chunk_positions, send).await;
-            level.clean_chunks(&chunk_positions).await;
+            let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
+                .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
+                .collect::<Vec<_>>();
+            level_to_fetch.fetch_chunks(&chunks_to_generate, send).await;
         });
+
         while let Some((chunk, _)) = recv.recv().await {
             let pos = chunk.read().await.position;
             chunks.push((pos, chunk));
             positions.push(pos);
         }
+        level_to_save.write_chunks(chunks.clone()).await;
     });
 
     // Sort by distance from origin to ensure a fair selection
     // when using a subset of the total chunks for the benchmarks
-    chunks.sort_unstable_by_key(|chunk| chunk.0.x * chunk.0.x + chunk.0.z * chunk.0.z);
-    positions.sort_unstable_by_key(|pos| pos.x * pos.x + pos.z * pos.z);
+    chunks.sort_unstable_by_key(|chunk| (chunk.0.x * chunk.0.x) + (chunk.0.z * chunk.0.z));
+    positions.sort_unstable_by_key(|pos| (pos.x * pos.x) + (pos.z * pos.z));
 
     // These test worst case: no caching done by `Level`
     // testing with 16, 64, 256 chunks
     let mut write_group = c.benchmark_group("write_chunks");
-    for n_chunks in [16, 64, 256] {
+    for n_chunks in [16, 64, 256, 512] {
         let chunks = &chunks[..n_chunks];
-        println!("Testing with {} chunks", n_chunks);
+        assert!(
+            chunks.len() == n_chunks,
+            "Expected {} chunks, got {}",
+            n_chunks,
+            chunks.len()
+        );
         write_group.bench_with_input(
             BenchmarkId::from_parameter(n_chunks),
             &chunks,
@@ -95,9 +112,14 @@ fn bench_chunk_io(c: &mut Criterion) {
     // These test worst case: no caching done by `Level`
     // testing with 16, 64, 256 chunks
     let mut read_group = c.benchmark_group("read_chunks");
-    for n_chunks in [16, 64, 256] {
+    for n_chunks in [16, 64, 256, 512] {
         let positions = &positions[..n_chunks];
-        println!("Testing with {} chunks", n_chunks);
+        assert!(
+            positions.len() == n_chunks,
+            "Expected {} chunks, got {}",
+            n_chunks,
+            positions.len()
+        );
 
         read_group.bench_with_input(
             BenchmarkId::from_parameter(n_chunks),
