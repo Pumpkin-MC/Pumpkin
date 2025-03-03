@@ -80,7 +80,7 @@ fn bench_chunk_io(c: &mut Criterion) {
     let mut write_group = c.benchmark_group("write_chunks");
     for n_chunks in [16, 64, 256] {
         let chunks = &chunks[..n_chunks];
-        println!("Testing with {} chunks", chunks.len());
+        println!("Testing with {} chunks", n_chunks);
         write_group.bench_with_input(
             BenchmarkId::from_parameter(n_chunks),
             &chunks,
@@ -97,7 +97,7 @@ fn bench_chunk_io(c: &mut Criterion) {
     let mut read_group = c.benchmark_group("read_chunks");
     for n_chunks in [16, 64, 256] {
         let positions = &positions[..n_chunks];
-        println!("Testing with {} chunks", chunks.len());
+        println!("Testing with {} chunks", n_chunks);
 
         read_group.bench_with_input(
             BenchmarkId::from_parameter(n_chunks),
