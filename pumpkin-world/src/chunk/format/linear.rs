@@ -1,14 +1,16 @@
-use std::io::Read;
+use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::AnvilChunkFile;
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
+use async_trait::async_trait;
 use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use zstd::zstd_safe::WriteBuf;
 
 use super::anvil::{CHUNK_COUNT, chunk_to_bytes};
@@ -47,7 +49,7 @@ struct LinearFileHeader {
     /// (10..12 Bytes) The number of non-zero-size chunks in the region file.
     chunks_count: u16,
     /// (12..16 Bytes) The total size in bytes of the compressed chunk headers and chunk data.
-    chunks_bytes: u32,
+    chunks_bytes: usize,
     /// (16..24 Bytes) A hash of the region file (unused).
     region_hash: u64,
 }
@@ -112,7 +114,7 @@ impl LinearFileHeader {
             newest_timestamp: buf.get_u64(),
             compression_level: buf.get_u8(),
             chunks_count: buf.get_u16(),
-            chunks_bytes: buf.get_u32(),
+            chunks_bytes: buf.get_u32() as usize,
             region_hash: buf.get_u64(),
         }
     }
@@ -124,7 +126,7 @@ impl LinearFileHeader {
         bytes.put_u64(self.newest_timestamp);
         bytes.put_u8(self.compression_level);
         bytes.put_u16(self.chunks_count);
-        bytes.put_u32(self.chunks_bytes);
+        bytes.put_u32(self.chunks_bytes as u32);
         bytes.put_u64(self.region_hash);
 
         // This should be a clear code error if the size of the header is not the expected
@@ -139,17 +141,12 @@ impl LinearFile {
     }
 
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
-        if bytes[0..8] != SIGNATURE {
-            error!("Signature at the start of the file is invalid");
-            return Err(ChunkReadingError::InvalidHeader);
+        if bytes != SIGNATURE {
+            error!("Linear signature is invalid!");
+            Err(ChunkReadingError::InvalidHeader)
+        } else {
+            Ok(())
         }
-
-        if bytes[bytes.len() - 8..] != SIGNATURE {
-            error!("Signature at the end of the file is invalid");
-            return Err(ChunkReadingError::InvalidHeader);
-        }
-
-        Ok(())
     }
 }
 
@@ -162,6 +159,7 @@ impl Default for LinearFile {
     }
 }
 
+#[async_trait]
 impl ChunkSerializer for LinearFile {
     type Data = ChunkData;
 
@@ -170,7 +168,9 @@ impl ChunkSerializer for LinearFile {
         format!("./r.{}.{}.linear", region_x, region_z)
     }
 
-    fn to_bytes(&self) -> Box<[u8]> {
+    async fn write(&self, w: impl AsyncWrite + Unpin + Send) -> Result<(), std::io::Error> {
+        let mut writer = w;
+
         // Parse the headers to a buffer
         let mut data_buffer: Vec<u8> = self
             .chunks_headers
@@ -191,7 +191,7 @@ impl ChunkSerializer for LinearFile {
         .into_boxed_slice();
 
         let file_header = LinearFileHeader {
-            chunks_bytes: compressed_buffer.len() as u32,
+            chunks_bytes: compressed_buffer.len(),
             compression_level: ADVANCED_CONFIG.chunk.compression.level as u8,
             chunks_count: self
                 .chunks_headers
@@ -209,46 +209,50 @@ impl ChunkSerializer for LinearFile {
         }
         .to_bytes();
 
-        [
-            SIGNATURE.as_slice(),
-            file_header.as_slice(),
-            compressed_buffer.as_slice(),
-            SIGNATURE.as_slice(),
-        ]
-        .concat()
-        .into_boxed_slice()
+        // TODO: Can we stream this?
+        writer.write_all(&SIGNATURE).await?;
+        writer.write_all(file_header.as_slice()).await?;
+        writer.write_all(compressed_buffer.as_slice()).await?;
+        writer.write_all(&SIGNATURE).await?;
+
+        Ok(())
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
-        Self::check_signature(bytes)?;
+    async fn read(r: impl AsyncRead + Unpin + Send) -> Result<Self, ChunkReadingError> {
+        let mut file_reader = r;
 
-        let mut file = &bytes[8..bytes.len() - 8];
-
-        // Skip the signature and read the header
-        let mut header_bytes = [0; LinearFileHeader::FILE_HEADER_SIZE];
-        file.read_exact(&mut header_bytes)
+        let mut raw_file = Vec::new();
+        file_reader
+            .read_to_end(&mut raw_file)
+            .await
             .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
+
+        let Some((signature, raw_file_bytes)) = raw_file.split_at_checked(SIGNATURE.len()) else {
+            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+        };
+
+        Self::check_signature(signature)?;
+
+        let Some((header_bytes, raw_file_bytes)) =
+            raw_file_bytes.split_at_checked(LinearFileHeader::FILE_HEADER_SIZE)
+        else {
+            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+        };
 
         // Parse the header
-        let file_header = LinearFileHeader::from_bytes(&header_bytes);
+        let file_header = LinearFileHeader::from_bytes(header_bytes);
         file_header.check_version()?;
 
-        // Read the compressed data
-        let mut compressed_data = vec![0; file_header.chunks_bytes as usize];
-        file.read_exact(compressed_data.as_mut_slice())
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
+        let Some((raw_file_bytes, signature)) =
+            raw_file_bytes.split_at_checked(file_header.chunks_bytes)
+        else {
+            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+        };
 
-        if compressed_data.len() != file_header.chunks_bytes as usize {
-            error!(
-                "Invalid compressed data size {} != {}",
-                compressed_data.len(),
-                file_header.chunks_bytes
-            );
-            return Err(ChunkReadingError::InvalidHeader);
-        }
+        Self::check_signature(signature)?;
 
         // TODO: Review the buffer size limit or find ways to improve performance (maybe zstd lib has memory leaks)
-        let buffer = zstd::bulk::decompress(compressed_data.as_slice(), 200 * 1024 * 1024) // 200MB limit for the decompression buffer size
+        let buffer = zstd::bulk::decompress(raw_file_bytes, 200 * 1024 * 1024) // 200MB limit for the decompression buffer size
             .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
 
         let (headers_buffer, buffer) =
@@ -319,7 +323,7 @@ impl ChunkSerializer for LinearFile {
             .map(|chunk| {
                 let index = LinearFile::get_chunk_index(chunk);
                 if let Some(data) = &self.chunks_data[index] {
-                    match ChunkData::from_bytes(data, *chunk) {
+                    match ChunkData::from_bytes(data.as_slice(), *chunk) {
                         Ok(chunk) => LoadedData::Loaded(chunk),
                         Err(err) => {
                             LoadedData::Error((*chunk, ChunkReadingError::ParsingError(err)))

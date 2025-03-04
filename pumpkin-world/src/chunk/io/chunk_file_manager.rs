@@ -11,7 +11,7 @@ use futures::future::join_all;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::AsyncWriteExt,
     sync::{OnceCell, RwLock},
 };
 
@@ -104,14 +104,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                 });
 
             let value = match file {
-                Ok(mut file) => {
-                    let mut file_bytes = Vec::new();
-                    file.read_to_end(&mut file_bytes)
-                        .await
-                        .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-
-                    S::from_bytes(&file_bytes)?
-                }
+                Ok(file) => S::read(file).await?,
                 Err(ChunkReadingError::ChunkNotExist) => S::default(),
                 Err(err) => return Err(err),
             };
@@ -157,7 +150,8 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        file.write_all(&serializer.to_bytes())
+        serializer
+            .write(&mut file)
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 

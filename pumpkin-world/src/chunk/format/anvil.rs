@@ -1,5 +1,6 @@
+use async_trait::async_trait;
 use bytes::*;
-use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_data::chunk::ChunkStatus;
@@ -7,12 +8,12 @@ use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-
 use std::{
     collections::HashSet,
-    io::{Read, Write},
+    io::{Cursor, Read, Write},
     time::{SystemTime, UNIX_EPOCH},
 };
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
     block::registry::STATE_ID_TO_REGISTRY_ID,
@@ -48,20 +49,36 @@ pub struct AnvilChunkFormat;
 #[repr(u8)]
 pub enum Compression {
     /// GZip Compression
-    GZip = 1,
+    GZip = Self::GZIP_ID,
     /// ZLib Compression
-    ZLib = 2,
+    ZLib = Self::ZLIB_ID,
     /// LZ4 Compression (since 24w04a)
-    LZ4 = 4,
+    LZ4 = Self::LZ4_ID,
     /// Custom compression algorithm (since 24w05a)
-    Custom = 127,
+    Custom = Self::CUSTOM_ID,
+}
+
+pub enum CompressionRead<R: Read> {
+    GZip(GzDecoder<R>),
+    ZLib(ZlibDecoder<R>),
+    LZ4(lz4::Decoder<R>),
+}
+
+impl<R: Read> Read for CompressionRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::GZip(gzip) => gzip.read(buf),
+            Self::ZLib(zlib) => zlib.read(buf),
+            Self::LZ4(lz4) => lz4.read(buf),
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct AnvilChunkData {
-    length: usize,
     compression: Option<Compression>,
-    compressed_data: Box<[u8]>,
+    // Length is always the length of this + compression byte (1) so we dont need to save a length
+    compressed_data: Bytes,
 }
 
 pub struct AnvilChunkFile {
@@ -70,34 +87,30 @@ pub struct AnvilChunkFile {
 }
 
 impl Compression {
-    const NO_COMPRESSION: u8 = 3;
+    const GZIP_ID: u8 = 1;
+    const ZLIB_ID: u8 = 2;
+    const NO_COMPRESSION_ID: u8 = 3;
+    const LZ4_ID: u8 = 4;
+    const CUSTOM_ID: u8 = 127;
 
-    fn decompress_data(&self, compressed_data: &[u8]) -> Result<Vec<u8>, CompressionError> {
+    fn decompress_data(
+        &self,
+        compressed_data: Bytes,
+    ) -> Result<CompressionRead<Cursor<Bytes>>, CompressionError> {
+        let compressed_data = Cursor::new(compressed_data);
         match self {
             Compression::GZip => {
-                let mut decoder = GzDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::GZipError)?;
-                Ok(chunk_data)
+                let decoder = GzDecoder::new(compressed_data);
+                Ok(CompressionRead::GZip(decoder))
             }
             Compression::ZLib => {
-                let mut decoder = ZlibDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::ZlibError)?;
-                Ok(chunk_data)
+                let decoder = ZlibDecoder::new(compressed_data);
+                Ok(CompressionRead::ZLib(decoder))
             }
             Compression::LZ4 => {
-                let mut decoder =
+                let decoder =
                     lz4::Decoder::new(compressed_data).map_err(CompressionError::LZ4Error)?;
-                let mut decompressed_data = Vec::new();
-                decoder
-                    .read_to_end(&mut decompressed_data)
-                    .map_err(CompressionError::LZ4Error)?;
-                Ok(decompressed_data)
+                Ok(CompressionRead::LZ4(decoder))
             }
             Compression::Custom => todo!(),
         }
@@ -154,12 +167,12 @@ impl Compression {
     #[allow(clippy::result_unit_err)]
     pub fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
         match byte {
-            1 => Ok(Some(Self::GZip)),
-            2 => Ok(Some(Self::ZLib)),
+            Self::GZIP_ID => Ok(Some(Self::GZip)),
+            Self::ZLIB_ID => Ok(Some(Self::ZLib)),
             // Uncompressed (since a version before 1.15.1)
-            3 => Ok(None),
-            4 => Ok(Some(Self::LZ4)),
-            127 => Ok(Some(Self::Custom)),
+            Self::NO_COMPRESSION_ID => Ok(None),
+            Self::LZ4_ID => Ok(Some(Self::LZ4)),
+            Self::CUSTOM_ID => Ok(Some(Self::Custom)),
             // Unknown format
             _ => Err(()),
         }
@@ -179,56 +192,67 @@ impl From<pumpkin_config::chunk::Compression> for Compression {
 }
 
 impl AnvilChunkData {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
-        let mut buffer = bytes;
+    /// Raw size of serialized chunk
+    #[inline]
+    fn raw_write_size(&self) -> usize {
+        // 4 bytes for the *length* and 1 byte for the *compression* method
+        self.compressed_data.remaining() + 4 + 1
+    }
 
-        let length = buffer.get_u32();
+    /// Size of serialized chunk with padding
+    #[inline]
+    fn padded_size(&self) -> usize {
+        let total_size = self.raw_write_size();
+        let sector_count = total_size.div_ceil(SECTOR_BYTES);
+        sector_count * SECTOR_BYTES
+    }
 
-        let compression_method = buffer.get_u8();
+    fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
+        let mut bytes = bytes;
+        // Minus one for the compression byte
+        let length = bytes.get_u32() as usize - 1;
+
+        let compression_method = bytes.get_u8();
         let compression = Compression::from_byte(compression_method)
             .map_err(|_| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
 
         Ok(AnvilChunkData {
-            length: length as usize,
             compression,
-            compressed_data: buffer.to_vec().into_boxed_slice(),
+            // If this has padding, we need to trim it
+            compressed_data: bytes.slice(..length),
         })
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        // 4 bytes for the *length* and 1 byte for the *compression* method
-        let total_size = self.compressed_data.len() + 4 + 1;
-        let sector_count = total_size.div_ceil(SECTOR_BYTES);
-        let padded_size = sector_count * SECTOR_BYTES;
+    async fn write(&self, w: &mut (impl AsyncWrite + Unpin)) -> Result<(), std::io::Error> {
+        let padded_size = self.padded_size();
 
-        let mut bytes = Vec::with_capacity(padded_size);
-
-        bytes.put_u32(self.length as u32);
-        bytes.put_u8(
+        w.write_u32((self.compressed_data.remaining() + 1) as u32)
+            .await?;
+        w.write_u8(
             self.compression
-                .map_or(Compression::NO_COMPRESSION, |c| c as u8),
-        );
-        bytes.extend_from_slice(&self.compressed_data);
+                .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8),
+        )
+        .await?;
+        w.write_all(&self.compressed_data).await?;
 
-        bytes.resize(padded_size, 0);
-        bytes
+        let pad = vec![0u8; padded_size - self.raw_write_size()];
+        w.write_all(&pad).await?;
+        Ok(())
     }
 
     fn to_chunk(&self, pos: Vector2<i32>) -> Result<ChunkData, ChunkReadingError> {
-        // -1 for the padding/align of the *compression* byte
-        let bytes = &self.compressed_data[..self.length];
-
         let chunk = if let Some(compression) = self.compression {
             let decompress_bytes = compression
-                .decompress_data(bytes)
+                .decompress_data(self.compressed_data.clone())
                 .map_err(ChunkReadingError::Compression)?;
 
-            ChunkData::from_bytes(&decompress_bytes, pos)
+            ChunkData::from_bytes(decompress_bytes, pos)
         } else {
-            ChunkData::from_bytes(bytes, pos)
+            ChunkData::from_bytes(Cursor::new(self.compressed_data.clone()), pos)
         }
         .map_err(ChunkReadingError::ParsingError)?;
 
+        println!("Got {:?}", pos);
         Ok(chunk)
     }
 
@@ -237,14 +261,14 @@ impl AnvilChunkData {
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression: Compression = ADVANCED_CONFIG.chunk.compression.algorithm.clone().into();
+        // We need to buffer here anyway so theres no use in making an impl Write for this
         let compressed_data = compression
             .compress_data(&raw_bytes, ADVANCED_CONFIG.chunk.compression.level)
             .map_err(ChunkWritingError::Compression)?;
 
         Ok(AnvilChunkData {
-            length: compressed_data.len(),
             compression: Some(compression),
-            compressed_data: compressed_data.into_boxed_slice(),
+            compressed_data: compressed_data.into(),
         })
     }
 }
@@ -272,6 +296,7 @@ impl Default for AnvilChunkFile {
     }
 }
 
+#[async_trait]
 impl ChunkSerializer for AnvilChunkFile {
     type Data = ChunkData;
 
@@ -280,51 +305,51 @@ impl ChunkSerializer for AnvilChunkFile {
         format!("./r.{}.{}.mca", region_x, region_z)
     }
 
-    fn to_bytes(&self) -> Box<[u8]> {
-        let mut chunk_data: Vec<u8> = Vec::new();
+    async fn write(&self, w: impl AsyncWrite + Unpin + Send) -> Result<(), std::io::Error> {
+        let mut writer = w;
 
         let mut location_bytes = [0; SECTOR_BYTES];
-        let mut timestamp_bytes = [0; SECTOR_BYTES];
-
         let mut location_buf = location_bytes.as_mut_slice();
-        let mut timestamp_buf = timestamp_bytes.as_mut_slice();
 
         // The first two sectors are reserved for the location table
         let mut current_sector: u32 = 2;
         for i in 0..CHUNK_COUNT {
-            let chunk = if let Some(chunk_data) = &self.chunks_data[i] {
-                chunk_data
+            if let Some(chunk) = &self.chunks_data[i] {
+                let chunk_bytes = chunk.padded_size();
+                let sector_count = (chunk_bytes / SECTOR_BYTES) as u32;
+
+                location_buf.put_u32((current_sector << 8) | sector_count);
+                current_sector += sector_count;
             } else {
                 // If the chunk is not present, we write 0 to the location and timestamp tables
                 location_buf.put_u32(0);
-                timestamp_buf.put_u32(0);
                 continue;
             };
-
-            let chunk_bytes = chunk.to_bytes();
-            // The number of sectors the chunk data occupies
-            let sector_count = (chunk_bytes.len() / SECTOR_BYTES) as u32;
-
-            // The location is stored as a 32-bit integer where the first 24 bits are the sector offset and the last 8 bits are the sector count
-            location_buf.put_u32((current_sector << 8) | sector_count);
-            timestamp_buf.put_u32(self.timestamp_table[i]);
-
-            chunk_data.extend_from_slice(&chunk_bytes);
-
-            current_sector += sector_count;
         }
 
-        [
-            location_bytes.as_slice(),
-            timestamp_bytes.as_slice(),
-            chunk_data.as_slice(),
-        ]
-        .concat()
-        .into_boxed_slice()
+        writer.write_all(&location_bytes).await?;
+        for timestamp in self.timestamp_table {
+            writer.write_u32(timestamp).await?;
+        }
+
+        for chunk in self.chunks_data.iter().flatten() {
+            chunk.write(&mut writer).await?;
+        }
+
+        Ok(())
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, ChunkReadingError> {
-        let (headers, chunks) = bytes.split_at(SECTOR_BYTES * 2);
+    async fn read(r: impl AsyncRead + Unpin + Send) -> Result<Self, ChunkReadingError> {
+        let mut file_reader = r;
+
+        let mut raw_file = Vec::new();
+        file_reader
+            .read_to_end(&mut raw_file)
+            .await
+            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
+        let mut raw_file_bytes: Bytes = raw_file.into();
+
+        let headers = raw_file_bytes.split_to(SECTOR_BYTES * 2);
         let (mut location_bytes, mut timestamp_bytes) = headers.split_at(SECTOR_BYTES);
 
         let mut chunk_file = AnvilChunkFile::default();
@@ -341,13 +366,13 @@ impl ChunkSerializer for AnvilChunkFile {
                 continue;
             }
 
-            //we correct the sectors values, -2 for the first two sectors (location and timestamp tables)
-            //and * SECTOR_BYTES for the byte offset at byte level
+            // We always subtract 2 for the first two sectors for the timestamp and location tables
+            // that we walked earlier
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
 
             chunk_file.chunks_data[i] = Some(AnvilChunkData::from_bytes(
-                &chunks[bytes_offset..bytes_offset + bytes_count],
+                raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
             )?);
         }
 
