@@ -25,6 +25,8 @@ use crate::{
     },
 };
 
+pub type SyncChunk = Arc<RwLock<ChunkData>>;
+
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
 /// Key features include:
@@ -39,9 +41,9 @@ pub struct Level {
     pub level_info: LevelData,
     world_info_writer: Arc<dyn WorldInfoWriter>,
     level_folder: LevelFolder,
-    loaded_chunks: Arc<DashMap<Vector2<i32>, Arc<RwLock<ChunkData>>>>,
+    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
-    chunk_saver: Arc<dyn ChunkIO<ChunkData>>,
+    chunk_saver: Arc<dyn ChunkIO<SyncChunk>>,
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
@@ -102,7 +104,7 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
-        let chunk_saver: Arc<dyn ChunkIO<ChunkData>> = match ADVANCED_CONFIG.chunk.format {
+        let chunk_saver: Arc<dyn ChunkIO<SyncChunk>> = match ADVANCED_CONFIG.chunk.format {
             //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile>::default()),
             ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFile>::default()),
@@ -254,7 +256,10 @@ impl Level {
             .flatten()
             .collect::<Vec<_>>();
 
-        self.write_chunks(chunks_to_write).await;
+        let level = self.clone();
+        tokio::spawn(async move {
+            level.write_chunks(chunks_to_write).await;
+        });
     }
 
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
@@ -283,7 +288,7 @@ impl Level {
         }
     }
 
-    pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
+    pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
         if chunks_to_write.is_empty() {
             return;
         }
@@ -305,19 +310,18 @@ impl Level {
     pub async fn fetch_chunks(
         self: &Arc<Self>,
         chunks: &[Vector2<i32>],
-        channel: mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>,
+        channel: mpsc::UnboundedSender<(SyncChunk, bool)>,
     ) {
         if chunks.is_empty() {
             return;
         }
 
         let send_chunk =
-            async move |is_new: bool,
-                        chunk: Arc<RwLock<ChunkData>>,
-                        channel: &mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>| {
+            move |is_new: bool,
+                  chunk: SyncChunk,
+                  channel: &mpsc::UnboundedSender<(SyncChunk, bool)>| {
                 let _ = channel
                     .send((chunk, is_new))
-                    .await
                     .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
             };
 
@@ -326,7 +330,7 @@ impl Level {
         let mut remaining_chunks = Vec::new();
         for chunk in chunks {
             if let Some(chunk) = self.loaded_chunks.get(chunk) {
-                send_chunk(false, chunk.value().clone(), &channel).await;
+                send_chunk(false, chunk.value().clone(), &channel);
             } else {
                 remaining_chunks.push(*chunk);
             }
@@ -336,16 +340,11 @@ impl Level {
             return;
         }
 
-        // Max capacity of the channel for loading chunks to ensure we don't starve chunk generation
-        // (if needed).
-        let load_buffer = 1.max(channel.max_capacity() - rayon::current_num_threads().div_ceil(2));
+        // These just pass data between async tasks, each of which do not block on anything, so
+        // these do not need to hold a lot
         let (load_bridge_send, mut load_bridge_recv) =
-            tokio::sync::mpsc::channel::<LoadedData<ChunkData, ChunkReadingError>>(load_buffer);
-
-        // This is essentially a queue of Vector2<i32>, no need to worry about bounds because the
-        // the rayon thread pool can only work on n threads in parallel
-        let (generate_bridge_send, mut generate_bridge_recv) =
-            tokio::sync::mpsc::unbounded_channel();
+            tokio::sync::mpsc::channel::<LoadedData<SyncChunk, ChunkReadingError>>(16);
+        let (generate_bridge_send, mut generate_bridge_recv) = tokio::sync::mpsc::channel(16);
 
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
@@ -353,15 +352,17 @@ impl Level {
             while let Some(data) = load_bridge_recv.recv().await {
                 match data {
                     LoadedData::Loaded(chunk) => {
+                        let position = chunk.read().await.position;
                         let value = loaded_chunks
-                            .entry(chunk.position)
-                            .or_insert_with(|| Arc::new(RwLock::new(chunk)))
+                            .entry(position)
+                            .or_insert(chunk)
                             .value()
                             .clone();
-                        send_chunk(false, value, &load_channel).await;
+                        send_chunk(false, value, &load_channel);
                     }
                     LoadedData::Missing(pos) => generate_bridge_send
                         .send(pos)
+                        .await
                         .expect("Failed to send position to generation handler"),
                     LoadedData::Error((pos, error)) => {
                         match error {
@@ -382,6 +383,7 @@ impl Level {
 
                         generate_bridge_send
                             .send(pos)
+                            .await
                             .expect("Failed to send position to generation handler");
                     }
                 }
@@ -390,19 +392,11 @@ impl Level {
 
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
-        let generate_channel = channel.clone();
         let handle_generate = async move {
             while let Some(pos) = generate_bridge_recv.recv().await {
                 let loaded_chunks = loaded_chunks.clone();
                 let world_gen = world_gen.clone();
-
-                // Wait until we can send a chunk to avoid blocking the rayon thread pool
-                let permit = generate_channel
-                    .clone()
-                    .reserve_owned()
-                    .await
-                    .expect("Failed to reserve a slot for generating chunks");
-
+                let channel = channel.clone();
                 rayon::spawn(move || {
                     let result = loaded_chunks
                         .entry(pos)
@@ -414,7 +408,7 @@ impl Level {
                         .value()
                         .clone();
 
-                    permit.send((result, true));
+                    send_chunk(true, result, &channel);
                 });
             }
         };

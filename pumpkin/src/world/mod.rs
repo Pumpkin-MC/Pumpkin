@@ -48,7 +48,6 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
 use pumpkin_world::{
     block::registry::{
@@ -56,11 +55,12 @@ use pumpkin_world::{
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
+use pumpkin_world::{chunk::ChunkData, level::SyncChunk};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
-use tokio::sync::{Mutex, mpsc::Receiver};
+use tokio::sync::{Mutex, Semaphore, mpsc::UnboundedReceiver};
 use tokio::sync::{RwLock, mpsc};
 
 pub mod border;
@@ -702,8 +702,13 @@ impl World {
         let mut receiver = self.receive_chunks(chunks);
         let level = self.level.clone();
 
+        // Only allow 128 chunk packets to be sent at a time to avoid overloading the client.
+        // TODO: Bulk chunks?
+        let sem = Semaphore::new(128);
+
         tokio::spawn(async move {
             'main: while let Some((chunk, first_load)) = receiver.recv().await {
+                let permit = sem.acquire().await.expect("Unable to aquire the semaphore");
                 let position = chunk.read().await.position;
 
                 #[cfg(debug_assertions)]
@@ -776,6 +781,8 @@ impl World {
                         }
                     }};
                 }
+
+                let _ = permit;
             }
 
             #[cfg(debug_assertions)]
@@ -1065,10 +1072,8 @@ impl World {
     pub fn receive_chunks(
         &self,
         chunks: Vec<Vector2<i32>>,
-    ) -> Receiver<(Arc<RwLock<ChunkData>>, bool)> {
-        // Create a channel with a buffer of size 8 to prevent blocking
-        // and reduce memory footprint.
-        let (sender, receive) = mpsc::channel(16);
+    ) -> UnboundedReceiver<(SyncChunk, bool)> {
+        let (sender, receive) = mpsc::unbounded_channel();
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
         tokio::spawn(async move {

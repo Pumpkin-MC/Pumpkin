@@ -11,7 +11,7 @@ use futures::future::join_all;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     sync::{OnceCell, RwLock},
 };
 
@@ -153,13 +153,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         // We use tmp files to avoid corruption of the data if the process is abruptly interrupted.
         let tmp_path = &path.with_extension("tmp");
 
-        let mut raw_data = Vec::new();
-        serializer
-            .write(&mut raw_data)
-            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
-        debug_assert!(!raw_data.is_empty());
-
-        let mut file = tokio::fs::OpenOptions::new()
+        let file = tokio::fs::OpenOptions::new()
             .read(false)
             .write(true)
             .create(true)
@@ -167,12 +161,15 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .open(tmp_path)
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
+        let mut buf_writer = BufWriter::new(file);
 
-        file.write_all(&raw_data)
+        serializer
+            .write(&mut buf_writer)
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        file.flush()
+        buf_writer
+            .flush()
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
@@ -238,17 +235,21 @@ where
     async fn save_chunks(
         &self,
         folder: &LevelFolder,
-        chunks_data: Vec<(Vector2<i32>, Arc<RwLock<D>>)>,
+        chunks_data: Vec<(Vector2<i32>, D)>,
     ) -> Result<(), ChunkWritingError> {
-        let mut regions_chunks: BTreeMap<String, Vec<Arc<RwLock<D>>>> = BTreeMap::new();
+        let mut regions_chunks: BTreeMap<String, Vec<D>> = BTreeMap::new();
 
         for (at, chunk) in chunks_data {
             let key = S::get_chunk_key(at);
 
-            regions_chunks
-                .entry(key)
-                .and_modify(|chunks| chunks.push(chunk.clone()))
-                .or_insert(vec![chunk.clone()]);
+            match regions_chunks.entry(key) {
+                std::collections::btree_map::Entry::Occupied(mut occupied) => {
+                    occupied.get_mut().push(chunk);
+                }
+                std::collections::btree_map::Entry::Vacant(vacant) => {
+                    vacant.insert(vec![chunk]);
+                }
+            }
         }
 
         // we use a Sync Closure with an Async Block to execute the tasks in parallel
@@ -274,16 +275,17 @@ where
                     }
                 }?;
 
-                let chunks = join_all(chunk_locks.iter().map(async |c| c.read().await)).await;
+                log::trace!("Saving file {} (obtained lock)", path.display());
 
                 let mut serializer = chunk_serializer.write().await;
-                serializer.update_chunks(&chunks.iter().map(|c| c.deref()).collect::<Vec<_>>())?;
+                serializer.update_chunks(&chunk_locks).await?;
 
                 // With the modification done, we can drop the write lock but keep the read lock
                 // to avoid other threads to write/modify the data, but allow other threads to read it
                 let serializer = serializer.downgrade();
                 let serializer_ref = serializer.deref();
                 Self::write_file(&path, serializer_ref).await?;
+                log::trace!("Saved file {}", path.display());
 
                 Ok(())
             });

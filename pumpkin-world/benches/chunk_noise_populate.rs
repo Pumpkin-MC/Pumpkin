@@ -22,7 +22,7 @@ fn bench_populate_noise(c: &mut Criterion) {
 async fn test_reads(root_dir: PathBuf, positions: Vec<Vector2<i32>>) {
     let level = Arc::new(Level::from_root_folder(root_dir));
 
-    let (send, mut recv) = tokio::sync::mpsc::channel(CHANNEL_SIZE);
+    let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
     tokio::spawn(async move { level.fetch_chunks(&positions, send).await });
 
     while let Some(x) = recv.recv().await {
@@ -36,8 +36,6 @@ async fn test_writes(root_dir: PathBuf, chunks: Vec<(Vector2<i32>, Arc<RwLock<Ch
 
     level.write_chunks(chunks).await;
 }
-
-const CHANNEL_SIZE: usize = 16;
 
 // -16..16 == 32 chunks, 32*32 == 1024 chunks
 const MIN_CHUNK: i32 = -16;
@@ -60,7 +58,7 @@ fn bench_chunk_io(c: &mut Criterion) {
     let mut chunks = Vec::new();
     let mut positions = Vec::new();
     async_handler.block_on(async {
-        let (send, mut recv) = tokio::sync::mpsc::channel(CHANNEL_SIZE);
+        let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
 
         // Our data dir is empty, so we're generating new chunks here
         let level_to_save = Arc::new(Level::from_root_folder(root_dir.clone()));

@@ -10,7 +10,12 @@ use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
     io::{Read, Write},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::{
+    io::{AsyncWrite, AsyncWriteExt},
+    sync::RwLock,
 };
 
 use crate::{
@@ -19,6 +24,7 @@ use crate::{
         ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
         io::{ChunkSerializer, LoadedData},
     },
+    level::SyncChunk,
 };
 
 use super::{ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry};
@@ -230,17 +236,22 @@ impl AnvilChunkData {
         })
     }
 
-    fn write(&self, w: &mut Vec<u8>) -> Result<(), std::io::Error> {
+    async fn write(&self, w: &mut (impl AsyncWrite + Unpin + Send)) -> Result<(), std::io::Error> {
         let padded_size = self.padded_size();
-        w.reserve(padded_size);
 
-        w.put_u32((self.compressed_data.remaining() + 1) as u32);
-        w.put_u8(
+        w.write_u32((self.compressed_data.remaining() + 1) as u32)
+            .await?;
+        w.write_u8(
             self.compression
                 .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8),
-        );
-        w.extend_from_slice(&self.compressed_data);
-        w.extend(std::iter::repeat_n(0, padded_size - self.raw_write_size()));
+        )
+        .await?;
+
+        w.write_all(&self.compressed_data).await?;
+        for _ in 0..(padded_size - self.raw_write_size()) {
+            w.write_u8(0).await?;
+        }
+
         Ok(())
     }
 
@@ -301,39 +312,39 @@ impl Default for AnvilChunkFile {
 
 #[async_trait]
 impl ChunkSerializer for AnvilChunkFile {
-    type Data = ChunkData;
+    type Data = SyncChunk;
 
     fn get_chunk_key(chunk: Vector2<i32>) -> String {
         let (region_x, region_z) = Self::get_region_coords(chunk);
         format!("./r.{}.{}.mca", region_x, region_z)
     }
 
-    fn write(&self, write: &mut Vec<u8>) -> Result<(), std::io::Error> {
+    async fn write(
+        &self,
+        write: &mut (impl AsyncWrite + Unpin + Send),
+    ) -> Result<(), std::io::Error> {
         // The first two sectors are reserved for the location table
         let mut current_sector: u32 = 2;
-        write.reserve(SECTOR_BYTES * 2);
         for i in 0..CHUNK_COUNT {
             if let Some(chunk) = &self.chunks_data[i] {
                 let chunk_bytes = chunk.padded_size();
                 let sector_count = (chunk_bytes / SECTOR_BYTES) as u32;
-
-                write.put_u32((current_sector << 8) | sector_count);
+                write
+                    .write_u32((current_sector << 8) | sector_count)
+                    .await?;
                 current_sector += sector_count;
             } else {
                 // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.put_u32(0);
-                continue;
+                write.write_u32(0).await?;
             };
         }
 
         for timestamp in self.timestamp_table {
-            write.put_u32(timestamp);
+            write.write_u32(timestamp).await?;
         }
 
-        write.reserve((current_sector - 2) as usize * 2);
-
         for chunk in self.chunks_data.iter().flatten() {
-            chunk.write(write)?;
+            chunk.write(write).await?;
         }
 
         Ok(())
@@ -376,15 +387,16 @@ impl ChunkSerializer for AnvilChunkFile {
         Ok(chunk_file)
     }
 
-    fn update_chunks(&mut self, chunks_data: &[&Self::Data]) -> Result<(), ChunkWritingError> {
+    async fn update_chunks(&mut self, chunks_data: &[Self::Data]) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as u32;
 
         for chunk in chunks_data {
+            let chunk = chunk.read().await;
             let index = AnvilChunkFile::get_chunk_index(&chunk.position);
-            self.chunks_data[index] = Some(AnvilChunkData::from_chunk(chunk)?);
+            self.chunks_data[index] = Some(AnvilChunkData::from_chunk(&chunk)?);
             self.timestamp_table[index] = epoch;
         }
 
@@ -394,34 +406,43 @@ impl ChunkSerializer for AnvilChunkFile {
     async fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
+        stream: tokio::sync::mpsc::Sender<LoadedData<SyncChunk, ChunkReadingError>>,
     ) {
+        // Create an unbounded buffer so we don't block the rayon thread pool
+        let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::unbounded_channel();
+
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
         for chunk in chunks.iter().cloned() {
-            // Only spawn a rayon task if theres a slot in the stream available
-            let permit = stream
-                .clone()
-                .reserve_owned()
-                .await
-                .expect("Failed to reserve a spot in the stream for rayon threading");
-
             let index = AnvilChunkFile::get_chunk_index(&chunk);
             let anvil_chunk = self.chunks_data[index].clone();
 
+            let send = bridge_send.clone();
             rayon::spawn(move || {
                 let result = if let Some(data) = anvil_chunk {
                     match data.to_chunk(chunk) {
-                        Ok(chunk) => LoadedData::Loaded(chunk),
+                        Ok(chunk) => LoadedData::Loaded(Arc::new(RwLock::new(chunk))),
                         Err(err) => LoadedData::Error((chunk, err)),
                     }
                 } else {
                     LoadedData::Missing(chunk)
                 };
 
-                // This will never block because we wait for an opening in `stream`
-                permit.send(result);
+                send.send(result)
+                    .expect("Failed to send anvil chunks from rayon thread");
             });
+        }
+        // Drop the original so streams clean-up
+        drop(bridge_send);
+
+        // We don't want to waste work, so recv unbounded from the rayon thread pool, then re-send
+        // to the channel
+
+        while let Some(data) = bridge_recv.recv().await {
+            stream
+                .send(data)
+                .await
+                .expect("Failed to send anvil chunks from bridge");
         }
     }
 }
@@ -579,7 +600,8 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                chunks.push((position, generator.generate_chunk(position)));
+                let chunk = generator.generate_chunk(position);
+                chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
 
@@ -588,11 +610,7 @@ mod tests {
             chunk_saver
                 .save_chunks(
                     &level_folder,
-                    chunks
-                        .clone()
-                        .into_iter()
-                        .map(|(at, chunk)| (at, Arc::new(RwLock::new(chunk))))
-                        .collect::<Vec<_>>(),
+                    chunks.clone().into_iter().collect::<Vec<_>>(),
                 )
                 .await
                 .expect("Failed to write chunk");
@@ -623,11 +641,14 @@ mod tests {
                 .collect::<Vec<_>>();
 
             for (at, chunk) in &chunks {
-                let read_chunk = read_chunks
-                    .iter()
-                    .find(|chunk| chunk.position == *at)
-                    .expect("Missing chunk");
-                assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                for read_chunk in read_chunks.iter() {
+                    let chunk = chunk.read().await;
+                    if chunk.position == *at {
+                        let read_chunk = read_chunk.read().await;
+                        assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                        break;
+                    }
+                }
             }
         }
 
