@@ -109,6 +109,7 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
+    single_chunk_lfu: Mutex<[Vector2<i32>; 16]>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
@@ -132,6 +133,7 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
+            single_chunk_lfu: Mutex::new([Vector2::default(); 16]),
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -1078,20 +1080,57 @@ impl World {
 
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
         let mut receiver = self.receive_chunks(vec![chunk_pos]);
-        let chunk = receiver
-            .recv()
-            .await
-            .expect("Channel closed for unknown reason");
 
-        if !self.level.is_chunk_watched(&chunk_pos) {
-            log::trace!(
-                "Received chunk {:?}, but it is not watched... cleaning",
-                chunk_pos
-            );
-            self.level.clean_chunk(&chunk_pos).await;
+        // If we are only getting one chunk, we are probably doing something that requires multiple
+        // calls to it. "Watch" it temp.
+
+        let mut lfu = self.single_chunk_lfu.lock().await;
+
+        #[allow(clippy::single_match_else)]
+        let pos_to_clean = match lfu
+            .iter()
+            .enumerate()
+            .find(|(_, pos)| **pos == chunk_pos)
+            .map(|(index, _)| index)
+        {
+            Some(index) => {
+                if index > 0 {
+                    lfu[..=index].rotate_right(1);
+                }
+                None
+            }
+            None => {
+                // The position isn't in the cache
+                lfu.rotate_right(1);
+                let to_remove = lfu[0];
+                lfu[0] = chunk_pos;
+                self.level.mark_chunk_as_newly_watched(chunk_pos);
+
+                if to_remove == Vector2::<i32>::default() {
+                    // This is our dummy value and spawn chunks are watched anyway
+                    // TODO: What if we call this on our default?
+                    None
+                } else {
+                    Some(to_remove)
+                }
+            }
+        };
+
+        if let Some(pos) = pos_to_clean {
+            self.level.mark_chunk_as_not_watched(pos);
+            if !self.level.is_chunk_watched(&pos) {
+                log::trace!(
+                    "Chunk {:?} evicted from single chunk cache... cleaning",
+                    chunk_pos
+                );
+                self.level.clean_chunk(&pos).await;
+            }
         }
 
-        chunk
+        receiver
+            .recv()
+            .await
+            .expect("Channel closed for unknown reason")
     }
 
     pub async fn break_block(

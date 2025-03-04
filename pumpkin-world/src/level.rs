@@ -6,8 +6,10 @@ use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
 use pumpkin_util::math::vector2::Vector2;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tokio::sync::{RwLock, mpsc};
+use tokio::{
+    sync::{RwLock, mpsc},
+    task::JoinSet,
+};
 
 use crate::{
     chunk::{
@@ -298,47 +300,6 @@ impl Level {
         }
     }
 
-    async fn load_chunks_from_save(
-        &self,
-        chunks_pos: &[Vector2<i32>],
-    ) -> (Vec<Vector2<i32>>, Vec<ChunkData>) {
-        trace!("Loading chunks from disk {:}", chunks_pos.len());
-
-        //we expect best case scenario to have all pre-generated
-        let mut loaded_chunks = Vec::with_capacity(chunks_pos.len());
-        let mut non_generated_chunks = Vec::new();
-
-        let fetched_chunks = self
-            .chunk_saver
-            .fetch_chunks(&self.level_folder, chunks_pos)
-            .await;
-
-        for data in fetched_chunks {
-            match data {
-                LoadedData::Loaded(chunk) => loaded_chunks.push(chunk),
-                LoadedData::Missing(pos) => non_generated_chunks.push(pos),
-                LoadedData::Error((pos, error)) => match error {
-                    // this is expected, and is not an error
-                    ChunkReadingError::ChunkNotExist
-                    | ChunkReadingError::ParsingError(ChunkParsingError::ChunkNotGenerated) => {
-                        non_generated_chunks.push(pos);
-                    }
-                    // this is an error, and we should log it
-                    error => {
-                        log::error!(
-                            "Failed to load chunk at {:?}: {} (regenerating)",
-                            pos,
-                            error
-                        );
-                        non_generated_chunks.push(pos);
-                    }
-                },
-            }
-        }
-
-        (non_generated_chunks, loaded_chunks)
-    }
-
     /// Reads/Generates many chunks in a world
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
     pub async fn fetch_chunks(
@@ -350,78 +311,126 @@ impl Level {
             return;
         }
 
-        let send_chunk = async move |is_new: bool, chunk: Arc<RwLock<ChunkData>>| {
-            let _ = channel
-                .send((chunk, is_new))
-                .await
-                .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
-        };
+        let send_chunk =
+            async move |is_new: bool,
+                        chunk: Arc<RwLock<ChunkData>>,
+                        channel: &mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>| {
+                log::trace!("Sending on channel at capacity: {}", channel.capacity());
+                let _ = channel
+                    .send((chunk, is_new))
+                    .await
+                    .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
+            };
 
         // First send all chunks that we have cached
         // We expect best case scenario to have all cached
-        let mut tasks = Vec::with_capacity(chunks.len());
         let mut remaining_chunks = Vec::new();
         for chunk in chunks {
             if let Some(chunk) = self.loaded_chunks.get(chunk) {
-                tasks.push(send_chunk(false, chunk.value().clone()));
+                send_chunk(false, chunk.value().clone(), &channel).await;
             } else {
                 remaining_chunks.push(*chunk);
             }
         }
 
-        futures::future::join_all(tasks).await;
-
         if remaining_chunks.is_empty() {
             return;
         }
 
-        // Then attempt to get chunks from disk
-        let (to_generate, to_send) = self.load_chunks_from_save(&remaining_chunks).await;
+        // Max capacity of the channel for loading chunks to ensure we don't starve chunk generation
+        // (if needed).
+        let load_buffer = 1.max(channel.max_capacity() - rayon::current_num_threads().div_ceil(2));
+        let (load_bridge_send, mut load_bridge_recv) =
+            tokio::sync::mpsc::channel::<LoadedData<ChunkData, ChunkReadingError>>(load_buffer);
 
-        // Send all chunks that were loaded from disk
-        if !to_send.is_empty() {
-            let tasks = to_send.into_iter().map(async |data| {
-                let value = self
-                    .loaded_chunks
-                    .entry(data.position)
-                    .or_insert_with(|| Arc::new(RwLock::new(data)))
-                    .value()
-                    .clone();
-                send_chunk(false, value).await;
-            });
+        // This is essentially a queue of Vector2<i32>, no need to worry about bounds because the
+        // the rayon thread pool can only work on n threads in parallel
+        let (generate_bridge_send, mut generate_bridge_recv) =
+            tokio::sync::mpsc::unbounded_channel();
 
-            futures::future::join_all(tasks).await;
-        }
+        // This is a queue of Arc<Chunk data> to avoid blocking the rayon threads from doing useful
+        // work
+        let (generate_queue_send, mut generate_queue_recv) = tokio::sync::mpsc::unbounded_channel();
 
-        // Finally generate any chunks that are missing
-        if !to_generate.is_empty() {
-            let loaded_chunks = self.loaded_chunks.clone();
-            let world_gen = self.world_gen.clone();
-
-            let (gen_channel, mut gen_receiver) = mpsc::channel(to_generate.len());
-            rayon::spawn(move || {
-                to_generate.into_par_iter().for_each(|position| {
-                    let generated_chunk = world_gen.generate_chunk(position);
-                    let chunk = loaded_chunks
-                        .entry(position)
-                        .or_insert_with(|| Arc::new(RwLock::new(generated_chunk)))
-                        .value()
-                        .clone();
-
-                    //this relay on a channel with the same size as the chunks to generate
-                    gen_channel
-                        .try_send(chunk)
-                        .expect("Failed to send chunk from generation thread!");
-                })
-            });
-
-            // As we are generating the chunks at the same time
-            // we can send them sequentially and avoid
-            // the overhead of joining the tasks and let the loop
-            // as a CPU bound task
-            while let Some(chunk) = gen_receiver.recv().await {
-                send_chunk(true, chunk).await;
+        let load_channel = channel.clone();
+        let loaded_chunks = self.loaded_chunks.clone();
+        let handle_load = async move {
+            while let Some(data) = load_bridge_recv.recv().await {
+                match data {
+                    LoadedData::Loaded(chunk) => {
+                        let value = loaded_chunks
+                            .entry(chunk.position)
+                            .or_insert_with(|| Arc::new(RwLock::new(chunk)))
+                            .value()
+                            .clone();
+                        send_chunk(false, value, &load_channel).await;
+                    }
+                    LoadedData::Missing(pos) => generate_bridge_send
+                        .send(pos)
+                        .expect("Failed to send position to generation handler"),
+                    LoadedData::Error((pos, error)) => {
+                        match error {
+                            // this is expected, and is not an error
+                            ChunkReadingError::ChunkNotExist
+                            | ChunkReadingError::ParsingError(
+                                ChunkParsingError::ChunkNotGenerated,
+                            ) => {}
+                            // this is an error, and we should log it
+                            error => {
+                                log::error!(
+                                    "Failed to load chunk at {:?}: {} (regenerating)",
+                                    pos,
+                                    error
+                                );
+                            }
+                        }
+                        generate_bridge_send
+                            .send(pos)
+                            .expect("Failed to send position to generation handler");
+                    }
+                }
             }
-        }
+        };
+
+        let loaded_chunks = self.loaded_chunks.clone();
+        let world_gen = self.world_gen.clone();
+        let handle_generate = async move {
+            while let Some(pos) = generate_bridge_recv.recv().await {
+                rayon::scope(|s| {
+                    s.spawn(|_| {
+                        let result = loaded_chunks
+                            .entry(pos)
+                            .or_insert_with(|| {
+                                // Avoid possible duplicating work by doing this within the dashmap lock
+                                let generated_chunk = world_gen.generate_chunk(pos);
+                                Arc::new(RwLock::new(generated_chunk))
+                            })
+                            .value()
+                            .clone();
+
+                        generate_queue_send
+                            .send(result)
+                            .expect("generate queue send failed");
+                    });
+                });
+            }
+        };
+
+        let generate_channel = channel.clone();
+        let handle_generate_sends = async move {
+            while let Some(chunk) = generate_queue_recv.recv().await {
+                send_chunk(true, chunk, &generate_channel).await;
+            }
+        };
+
+        let mut set = JoinSet::new();
+        set.spawn(handle_load);
+        set.spawn(handle_generate);
+        set.spawn(handle_generate_sends);
+
+        self.chunk_saver
+            .fetch_chunks(&self.level_folder, chunks, load_bridge_send)
+            .await;
+        let _ = set.join_all().await;
     }
 }

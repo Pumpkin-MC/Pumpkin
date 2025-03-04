@@ -44,6 +44,7 @@ impl<S: ChunkSerializer> Default for ChunkFileManager<S> {
 }
 
 impl<S: ChunkSerializer> ChunkFileManager<S> {
+    // Only call this when we expect to drop entries (for now just when writing)
     async fn clean_cache(&self) {
         log::trace!("Cleaning cache");
 
@@ -180,7 +181,8 @@ where
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-    ) -> Vec<LoadedData<D, ChunkReadingError>> {
+        stream: tokio::sync::mpsc::Sender<LoadedData<D, ChunkReadingError>>,
+    ) {
         let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
 
         for &at in chunk_coords {
@@ -202,23 +204,19 @@ where
                     unreachable!("Default Serializer must be created")
                 }
                 Err(err) => {
-                    return vec![LoadedData::Error((chunks[0], err))];
+                    if let Err(err) = stream.send(LoadedData::Error((chunks[0], err))).await {
+                        log::warn!("Failed to send data to the chunk stream: {:?}", err);
+                    };
+                    return;
                 }
             };
 
             // We need to block the read to avoid other threads to write/modify the data
             let serializer = chunk_serializer.read().await;
-            serializer.get_chunks(&chunks)
+            serializer.get_chunks(&chunks, stream.clone()).await;
         });
 
-        let mut result = Vec::with_capacity(chunk_coords.len());
-        for chunks in join_all(tasks).await {
-            result.extend(chunks);
-        }
-
-        self.clean_cache().await;
-
-        result
+        let _ = join_all(tasks).await;
     }
 
     async fn save_chunks(
@@ -278,9 +276,7 @@ where
         // files to save
         let _: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
 
-        //we need to clean the cache before return the result
         self.clean_cache().await;
-
         Ok(())
     }
 

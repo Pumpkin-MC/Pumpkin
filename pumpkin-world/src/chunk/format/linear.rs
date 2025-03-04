@@ -9,7 +9,6 @@ use bytes::{Buf, BufMut};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_util::math::vector2::Vector2;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use zstd::zstd_safe::WriteBuf;
 
@@ -314,26 +313,56 @@ impl ChunkSerializer for LinearFile {
         Ok(())
     }
 
-    fn get_chunks(
+    async fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
-    ) -> Vec<LoadedData<Self::Data, ChunkReadingError>> {
-        chunks
-            .par_iter()
-            .map(|chunk| {
-                let index = LinearFile::get_chunk_index(chunk);
-                if let Some(data) = &self.chunks_data[index] {
-                    match ChunkData::from_bytes(data.as_slice(), *chunk) {
-                        Ok(chunk) => LoadedData::Loaded(chunk),
-                        Err(err) => {
-                            LoadedData::Error((*chunk, ChunkReadingError::ParsingError(err)))
-                        }
-                    }
-                } else {
-                    LoadedData::Missing(*chunk)
+        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
+    ) {
+        // Rayon-tokio bridge
+        let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::channel(1);
+
+        // Don't par iter here so we can prevent backpressure with the await in the async
+        // runtime
+        for chunk in chunks.iter().cloned() {
+            let index = LinearFile::get_chunk_index(&chunk);
+
+            // Await for an opening to prevent blocking a rayon thread
+            let permit = match stream.reserve().await {
+                Ok(permit) => permit,
+                Err(err) => {
+                    log::warn!("Failed to await for chunk stream opening: {:?}", err);
+                    continue;
                 }
-            })
-            .collect::<Vec<_>>()
+            };
+
+            rayon::scope(|s| {
+                s.spawn(|_| {
+                    let result = if let Some(data) = &self.chunks_data[index] {
+                        match ChunkData::from_bytes(data.as_slice(), chunk) {
+                            Ok(chunk) => LoadedData::Loaded(chunk),
+                            Err(err) => {
+                                LoadedData::Error((chunk, ChunkReadingError::ParsingError(err)))
+                            }
+                        }
+                    } else {
+                        LoadedData::Missing(chunk)
+                    };
+
+                    // This will never block because we wait for an opening in `stream`
+                    bridge_send
+                        .blocking_send(result)
+                        .expect("rayon-tokio bridge send failed");
+                });
+            });
+
+            let data = bridge_recv
+                .recv()
+                .await
+                .expect("We just sent something from the rayon thread!");
+
+            // And then pass it on
+            permit.send(data);
+        }
     }
 }
 
@@ -358,15 +387,23 @@ mod tests {
         let region_path = PathBuf::from("not_existing");
         let chunk_saver = ChunkFileManager::<LinearFile>::default();
 
-        let chunks = chunk_saver
+        let mut chunks = Vec::new();
+        let (send, mut recv) = tokio::sync::mpsc::channel(1);
+
+        chunk_saver
             .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
                 },
                 &[Vector2::new(0, 0)],
+                send,
             )
             .await;
+
+        while let Some(data) = recv.recv().await {
+            chunks.push(data);
+        }
 
         assert!(chunks.len() == 1 && matches!(chunks[0], LoadedData::Missing(_)));
     }
@@ -406,12 +443,21 @@ mod tests {
                 .await
                 .expect("Failed to write chunk");
 
-            let read_chunks = chunk_saver
-                .fetch_chunks(
-                    &level_folder,
-                    &chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
-                )
-                .await
+            let mut read_chunks = Vec::new();
+            let (send, mut recv) = tokio::sync::mpsc::channel(1);
+
+            let chunk_pos = chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>();
+            let spawn = chunk_saver.fetch_chunks(&level_folder, &chunk_pos, send);
+
+            let collect = async {
+                while let Some(data) = recv.recv().await {
+                    read_chunks.push(data);
+                }
+            };
+
+            tokio::join!(spawn, collect);
+
+            let read_chunks = read_chunks
                 .into_iter()
                 .map(|chunk| match chunk {
                     LoadedData::Loaded(chunk) => chunk,

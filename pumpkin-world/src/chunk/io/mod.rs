@@ -48,7 +48,8 @@ where
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-    ) -> Vec<LoadedData<D, ChunkReadingError>>;
+        stream: tokio::sync::mpsc::Sender<LoadedData<D, ChunkReadingError>>,
+    );
 
     /// Persist the chunks data
     async fn save_chunks(
@@ -84,6 +85,9 @@ pub trait ChunkSerializer: Send + Sync + Default {
     fn update_chunks(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;
 
     /// Get the chunks data from the serializer
-    fn get_chunks(&self, chunks: &[Vector2<i32>])
-    -> Vec<LoadedData<Self::Data, ChunkReadingError>>;
+    async fn get_chunks(
+        &self,
+        chunks: &[Vector2<i32>],
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
+    );
 }
