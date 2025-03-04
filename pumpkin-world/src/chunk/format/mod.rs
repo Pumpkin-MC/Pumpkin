@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Read};
+use std::collections::HashMap;
 
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_nbt::{from_bytes, nbt_long_array};
@@ -18,18 +18,29 @@ use super::{
 pub mod anvil;
 pub mod linear;
 
+// I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ChunkStatusWrapper {
+    status: ChunkStatus,
+}
+
 impl ChunkData {
     pub fn from_bytes(
-        chunk_data: impl Read,
+        chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data = from_bytes::<ChunkNbt>(chunk_data)
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
-
         // TODO: Implement chunk stages?
-        if chunk_data.status != ChunkStatus::Full {
+        if from_bytes::<ChunkStatusWrapper>(chunk_data)
+            .map_err(ChunkParsingError::FailedReadStatus)?
+            .status
+            != ChunkStatus::Full
+        {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
+
+        let chunk_data = from_bytes::<ChunkNbt>(chunk_data)
+            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(

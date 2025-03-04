@@ -9,10 +9,9 @@ use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
-    io::{Cursor, Read, Write},
+    io::{Read, Write},
     time::{SystemTime, UNIX_EPOCH},
 };
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
     block::registry::STATE_ID_TO_REGISTRY_ID,
@@ -73,7 +72,7 @@ impl<R: Read> Read for CompressionRead<R> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AnvilChunkData {
     compression: Option<Compression>,
     // Length is always the length of this + compression byte (1) so we dont need to save a length
@@ -82,6 +81,7 @@ pub struct AnvilChunkData {
 
 pub struct AnvilChunkFile {
     timestamp_table: [u32; CHUNK_COUNT],
+    // TODO: Only save mutated chunks (chunks that are unchanged do not need to be re-written)
     chunks_data: [Option<AnvilChunkData>; CHUNK_COUNT],
 }
 
@@ -92,24 +92,32 @@ impl Compression {
     const LZ4_ID: u8 = 4;
     const CUSTOM_ID: u8 = 127;
 
-    fn decompress_data(
-        &self,
-        compressed_data: Bytes,
-    ) -> Result<CompressionRead<Cursor<Bytes>>, CompressionError> {
-        let compressed_data = Cursor::new(compressed_data);
+    fn decompress_data(&self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
         match self {
             Compression::GZip => {
-                let decoder = GzDecoder::new(compressed_data);
-                Ok(CompressionRead::GZip(decoder))
+                let mut decoder = GzDecoder::new(compressed_data);
+                let mut chunk_data = Vec::new();
+                decoder
+                    .read_to_end(&mut chunk_data)
+                    .map_err(CompressionError::GZipError)?;
+                Ok(chunk_data.into_boxed_slice())
             }
             Compression::ZLib => {
-                let decoder = ZlibDecoder::new(compressed_data);
-                Ok(CompressionRead::ZLib(decoder))
+                let mut decoder = ZlibDecoder::new(compressed_data);
+                let mut chunk_data = Vec::new();
+                decoder
+                    .read_to_end(&mut chunk_data)
+                    .map_err(CompressionError::ZlibError)?;
+                Ok(chunk_data.into_boxed_slice())
             }
             Compression::LZ4 => {
-                let decoder =
+                let mut decoder =
                     lz4::Decoder::new(compressed_data).map_err(CompressionError::LZ4Error)?;
-                Ok(CompressionRead::LZ4(decoder))
+                let mut decompressed_data = Vec::new();
+                decoder
+                    .read_to_end(&mut decompressed_data)
+                    .map_err(CompressionError::LZ4Error)?;
+                Ok(decompressed_data.into_boxed_slice())
             }
             Compression::Custom => todo!(),
         }
@@ -222,32 +230,29 @@ impl AnvilChunkData {
         })
     }
 
-    async fn write(&self, w: &mut (impl AsyncWrite + Unpin)) -> Result<(), std::io::Error> {
+    fn write(&self, w: &mut Vec<u8>) -> Result<(), std::io::Error> {
         let padded_size = self.padded_size();
+        w.reserve(padded_size);
 
-        w.write_u32((self.compressed_data.remaining() + 1) as u32)
-            .await?;
-        w.write_u8(
+        w.put_u32((self.compressed_data.remaining() + 1) as u32);
+        w.put_u8(
             self.compression
                 .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8),
-        )
-        .await?;
-        w.write_all(&self.compressed_data).await?;
-
-        let pad = vec![0u8; padded_size - self.raw_write_size()];
-        w.write_all(&pad).await?;
+        );
+        w.extend_from_slice(&self.compressed_data);
+        w.extend(std::iter::repeat_n(0, padded_size - self.raw_write_size()));
         Ok(())
     }
 
     fn to_chunk(&self, pos: Vector2<i32>) -> Result<ChunkData, ChunkReadingError> {
         let chunk = if let Some(compression) = self.compression {
             let decompress_bytes = compression
-                .decompress_data(self.compressed_data.clone())
+                .decompress_data(&self.compressed_data)
                 .map_err(ChunkReadingError::Compression)?;
 
-            ChunkData::from_bytes(decompress_bytes, pos)
+            ChunkData::from_bytes(&decompress_bytes, pos)
         } else {
-            ChunkData::from_bytes(Cursor::new(self.compressed_data.clone()), pos)
+            ChunkData::from_bytes(&self.compressed_data, pos)
         }
         .map_err(ChunkReadingError::ParsingError)?;
 
@@ -303,49 +308,39 @@ impl ChunkSerializer for AnvilChunkFile {
         format!("./r.{}.{}.mca", region_x, region_z)
     }
 
-    async fn write(&self, w: impl AsyncWrite + Unpin + Send) -> Result<(), std::io::Error> {
-        let mut writer = w;
-
-        let mut location_bytes = [0; SECTOR_BYTES];
-        let mut location_buf = location_bytes.as_mut_slice();
-
+    fn write(&self, write: &mut Vec<u8>) -> Result<(), std::io::Error> {
         // The first two sectors are reserved for the location table
         let mut current_sector: u32 = 2;
+        write.reserve(SECTOR_BYTES * 2);
         for i in 0..CHUNK_COUNT {
             if let Some(chunk) = &self.chunks_data[i] {
                 let chunk_bytes = chunk.padded_size();
                 let sector_count = (chunk_bytes / SECTOR_BYTES) as u32;
 
-                location_buf.put_u32((current_sector << 8) | sector_count);
+                write.put_u32((current_sector << 8) | sector_count);
                 current_sector += sector_count;
             } else {
                 // If the chunk is not present, we write 0 to the location and timestamp tables
-                location_buf.put_u32(0);
+                write.put_u32(0);
                 continue;
             };
         }
 
-        writer.write_all(&location_bytes).await?;
         for timestamp in self.timestamp_table {
-            writer.write_u32(timestamp).await?;
+            write.put_u32(timestamp);
         }
 
+        write.reserve((current_sector - 2) as usize * 2);
+
         for chunk in self.chunks_data.iter().flatten() {
-            chunk.write(&mut writer).await?;
+            chunk.write(write)?;
         }
 
         Ok(())
     }
 
-    async fn read(r: impl AsyncRead + Unpin + Send) -> Result<Self, ChunkReadingError> {
-        let mut file_reader = r;
-
-        let mut raw_file = Vec::new();
-        file_reader
-            .read_to_end(&mut raw_file)
-            .await
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-        let mut raw_file_bytes: Bytes = raw_file.into();
+    fn read(r: Bytes) -> Result<Self, ChunkReadingError> {
+        let mut raw_file_bytes = r;
 
         if raw_file_bytes.len() < SECTOR_BYTES * 2 {
             return Err(ChunkReadingError::InvalidHeader);
@@ -401,48 +396,32 @@ impl ChunkSerializer for AnvilChunkFile {
         chunks: &[Vector2<i32>],
         stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
     ) {
-        // Rayon-tokio bridge
-        let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::channel(1);
-
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
         for chunk in chunks.iter().cloned() {
-            let index = AnvilChunkFile::get_chunk_index(&chunk);
-
-            // Await for an opening to prevent blocking a rayon thread
-            let permit = match stream.reserve().await {
-                Ok(permit) => permit,
-                Err(err) => {
-                    log::warn!("Failed to await for chunk stream opening: {:?}", err);
-                    continue;
-                }
-            };
-
-            rayon::scope(|s| {
-                s.spawn(|_| {
-                    let result = if let Some(data) = &self.chunks_data[index] {
-                        match data.to_chunk(chunk) {
-                            Ok(chunk) => LoadedData::Loaded(chunk),
-                            Err(err) => LoadedData::Error((chunk, err)),
-                        }
-                    } else {
-                        LoadedData::Missing(chunk)
-                    };
-
-                    // This will never block because we wait for an opening in `stream`
-                    bridge_send
-                        .blocking_send(result)
-                        .expect("rayon-tokio bridge send failed");
-                });
-            });
-
-            let data = bridge_recv
-                .recv()
+            // Only spawn a rayon task if theres a slot in the stream available
+            let permit = stream
+                .clone()
+                .reserve_owned()
                 .await
-                .expect("We just sent something from the rayon thread!");
+                .expect("Failed to reserve a spot in the stream for rayon threading");
 
-            // And then pass it on
-            permit.send(data);
+            let index = AnvilChunkFile::get_chunk_index(&chunk);
+            let anvil_chunk = self.chunks_data[index].clone();
+
+            rayon::spawn(move || {
+                let result = if let Some(data) = anvil_chunk {
+                    match data.to_chunk(chunk) {
+                        Ok(chunk) => LoadedData::Loaded(chunk),
+                        Err(err) => LoadedData::Error((chunk, err)),
+                    }
+                } else {
+                    LoadedData::Missing(chunk)
+                };
+
+                // This will never block because we wait for an opening in `stream`
+                permit.send(result);
+            });
         }
     }
 }

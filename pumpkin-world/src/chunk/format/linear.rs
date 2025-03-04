@@ -5,11 +5,10 @@ use crate::chunk::format::anvil::AnvilChunkFile;
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
-use bytes::{Buf, BufMut};
+use bytes::{Buf, BufMut, Bytes};
 use log::error;
 use pumpkin_config::ADVANCED_CONFIG;
 use pumpkin_util::math::vector2::Vector2;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use zstd::zstd_safe::WriteBuf;
 
 use super::anvil::{CHUNK_COUNT, chunk_to_bytes};
@@ -167,9 +166,7 @@ impl ChunkSerializer for LinearFile {
         format!("./r.{}.{}.linear", region_x, region_z)
     }
 
-    async fn write(&self, w: impl AsyncWrite + Unpin + Send) -> Result<(), std::io::Error> {
-        let mut writer = w;
-
+    fn write(&self, write: &mut Vec<u8>) -> Result<(), std::io::Error> {
         // Parse the headers to a buffer
         let mut data_buffer: Vec<u8> = self
             .chunks_headers
@@ -208,24 +205,15 @@ impl ChunkSerializer for LinearFile {
         }
         .to_bytes();
 
-        // TODO: Can we stream this?
-        writer.write_all(&SIGNATURE).await?;
-        writer.write_all(file_header.as_slice()).await?;
-        writer.write_all(compressed_buffer.as_slice()).await?;
-        writer.write_all(&SIGNATURE).await?;
+        write.extend_from_slice(&SIGNATURE);
+        write.extend_from_slice(&file_header);
+        write.extend_from_slice(&compressed_buffer);
+        write.extend_from_slice(&SIGNATURE);
 
         Ok(())
     }
 
-    async fn read(r: impl AsyncRead + Unpin + Send) -> Result<Self, ChunkReadingError> {
-        let mut file_reader = r;
-
-        let mut raw_file = Vec::new();
-        file_reader
-            .read_to_end(&mut raw_file)
-            .await
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-
+    fn read(raw_file: Bytes) -> Result<Self, ChunkReadingError> {
         let Some((signature, raw_file_bytes)) = raw_file.split_at_checked(SIGNATURE.len()) else {
             return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
         };

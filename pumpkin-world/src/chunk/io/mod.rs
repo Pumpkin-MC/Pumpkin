@@ -1,11 +1,9 @@
 use std::{error, sync::Arc};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync::RwLock,
-};
+use tokio::sync::RwLock;
 
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
@@ -76,10 +74,10 @@ pub trait ChunkSerializer: Send + Sync + Default {
     fn get_chunk_key(chunk: Vector2<i32>) -> String;
 
     /// Serialize the data to bytes.
-    async fn write(&self, w: (impl AsyncWrite + Unpin + Send)) -> Result<(), std::io::Error>;
+    fn write(&self, w: &mut Vec<u8>) -> Result<(), std::io::Error>;
 
     /// Create a new instance from bytes
-    async fn read(r: (impl AsyncRead + Unpin + Send)) -> Result<Self, ChunkReadingError>;
+    fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunks data to the serializer
     fn update_chunks(&mut self, chunk_data: &[&Self::Data]) -> Result<(), ChunkWritingError>;

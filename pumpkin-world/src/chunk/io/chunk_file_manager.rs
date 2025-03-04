@@ -11,7 +11,7 @@ use futures::future::join_all;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     sync::{OnceCell, RwLock},
 };
 
@@ -105,7 +105,18 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                 });
 
             let value = match file {
-                Ok(file) => S::read(file).await?,
+                Ok(mut file) => {
+                    let capacity = match file.metadata().await {
+                        Ok(metadata) => metadata.len() as usize,
+                        Err(_) => 4096, // A sane default
+                    };
+
+                    let mut file_bytes = Vec::with_capacity(capacity);
+                    file.read_to_end(&mut file_bytes)
+                        .await
+                        .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
+                    S::read(file_bytes.into())?
+                }
                 Err(ChunkReadingError::ChunkNotExist) => S::default(),
                 Err(err) => return Err(err),
             };
@@ -142,6 +153,12 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
         // We use tmp files to avoid corruption of the data if the process is abruptly interrupted.
         let tmp_path = &path.with_extension("tmp");
 
+        let mut raw_data = Vec::new();
+        serializer
+            .write(&mut raw_data)
+            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
+        debug_assert!(!raw_data.is_empty());
+
         let mut file = tokio::fs::OpenOptions::new()
             .read(false)
             .write(true)
@@ -151,8 +168,7 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 
-        serializer
-            .write(&mut file)
+        file.write_all(&raw_data)
             .await
             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 

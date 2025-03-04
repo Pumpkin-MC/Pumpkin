@@ -315,7 +315,6 @@ impl Level {
             async move |is_new: bool,
                         chunk: Arc<RwLock<ChunkData>>,
                         channel: &mpsc::Sender<(Arc<RwLock<ChunkData>>, bool)>| {
-                log::trace!("Sending on channel at capacity: {}", channel.capacity());
                 let _ = channel
                     .send((chunk, is_new))
                     .await
@@ -348,10 +347,6 @@ impl Level {
         let (generate_bridge_send, mut generate_bridge_recv) =
             tokio::sync::mpsc::unbounded_channel();
 
-        // This is a queue of Arc<Chunk data> to avoid blocking the rayon threads from doing useful
-        // work
-        let (generate_queue_send, mut generate_queue_recv) = tokio::sync::mpsc::unbounded_channel();
-
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
         let handle_load = async move {
@@ -383,7 +378,8 @@ impl Level {
                                     error
                                 );
                             }
-                        }
+                        };
+
                         generate_bridge_send
                             .send(pos)
                             .expect("Failed to send position to generation handler");
@@ -394,39 +390,38 @@ impl Level {
 
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
+        let generate_channel = channel.clone();
         let handle_generate = async move {
             while let Some(pos) = generate_bridge_recv.recv().await {
-                rayon::scope(|s| {
-                    s.spawn(|_| {
-                        let result = loaded_chunks
-                            .entry(pos)
-                            .or_insert_with(|| {
-                                // Avoid possible duplicating work by doing this within the dashmap lock
-                                let generated_chunk = world_gen.generate_chunk(pos);
-                                Arc::new(RwLock::new(generated_chunk))
-                            })
-                            .value()
-                            .clone();
+                let loaded_chunks = loaded_chunks.clone();
+                let world_gen = world_gen.clone();
 
-                        generate_queue_send
-                            .send(result)
-                            .expect("generate queue send failed");
-                    });
+                // Wait until we can send a chunk to avoid blocking the rayon thread pool
+                let permit = generate_channel
+                    .clone()
+                    .reserve_owned()
+                    .await
+                    .expect("Failed to reserve a slot for generating chunks");
+
+                rayon::spawn(move || {
+                    let result = loaded_chunks
+                        .entry(pos)
+                        .or_insert_with(|| {
+                            // Avoid possible duplicating work by doing this within the dashmap lock
+                            let generated_chunk = world_gen.generate_chunk(pos);
+                            Arc::new(RwLock::new(generated_chunk))
+                        })
+                        .value()
+                        .clone();
+
+                    permit.send((result, true));
                 });
-            }
-        };
-
-        let generate_channel = channel.clone();
-        let handle_generate_sends = async move {
-            while let Some(chunk) = generate_queue_recv.recv().await {
-                send_chunk(true, chunk, &generate_channel).await;
             }
         };
 
         let mut set = JoinSet::new();
         set.spawn(handle_load);
         set.spawn(handle_generate);
-        set.spawn(handle_generate_sends);
 
         self.chunk_saver
             .fetch_chunks(&self.level_folder, chunks, load_bridge_send)
