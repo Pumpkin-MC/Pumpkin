@@ -151,6 +151,23 @@ impl LivingEntity {
         // TODO broadcast metadata
     }
 
+    pub async fn remove_effect(&self, effect: EffectType) {
+        let mut effects = self.active_effects.lock().await;
+        effects.remove(&effect);
+        // TODO broadcast metadata
+    }
+
+    pub async fn clear_effects(&self) {
+        let mut effects = self.active_effects.lock().await;
+        effects.clear();
+        // TODO broadcast metadata
+    }
+
+    pub async fn get_effects(&self) -> Vec<Effect> {
+        let effects = self.active_effects.lock().await;
+        effects.values().cloned().collect()
+    }
+
     pub async fn has_effect(&self, effect: EffectType) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)

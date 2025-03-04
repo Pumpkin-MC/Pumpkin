@@ -1,12 +1,12 @@
+use super::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::item::Item;
+use pumpkin_data::parse_registry_name;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use super::pumpkin_item::{ItemMetadata, PumpkinItem};
 
 #[derive(Default)]
 pub struct ItemRegistry {
@@ -44,5 +44,13 @@ impl ItemRegistry {
     #[must_use]
     pub fn get_pumpkin_item(&self, item_id: u16) -> Option<&Arc<dyn PumpkinItem>> {
         self.items.get(&item_id)
+    }
+
+    pub fn get_item_from_id(&self, id: u16) -> Result<Item, &'static str> {
+        Item::from_id(id).ok_or("Item not found")
+    }
+
+    pub fn get_item_from_name(&self, name: &str) -> Result<Item, &'static str> {
+        Item::from_name(&parse_registry_name(name)).ok_or("Item not found")
     }
 }
