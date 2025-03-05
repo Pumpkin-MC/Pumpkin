@@ -1,8 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use pumpkin_macros::block_entity;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::registry::get_block;
 use pumpkin_world::{
     block::{
         BlockDirection,
@@ -15,12 +17,15 @@ pub(crate) mod age;
 pub(crate) mod attachment;
 pub(crate) mod axis;
 pub(crate) mod cardinal;
+pub(crate) mod chest_type;
 pub(crate) mod face;
 pub(crate) mod facing;
 pub(crate) mod half;
 pub(crate) mod layers;
+pub(crate) mod lit;
 pub(crate) mod open;
 pub(crate) mod powered;
+pub(crate) mod rotation;
 pub(crate) mod signal_fire;
 pub(crate) mod slab_type;
 pub(crate) mod stair_shape;
@@ -29,12 +34,23 @@ pub(crate) mod waterlog;
 
 use crate::world::World;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum Direction {
     North,
     South,
     East,
     West,
+}
+
+impl Direction {
+    #[must_use] pub fn opposite(&self) -> Self {
+        match self {
+            Self::North => Self::South,
+            Self::South => Self::North,
+            Self::West => Self::East,
+            Self::East => Self::West,
+        }
+    }
 }
 
 pub trait BlockPropertyMetadata: Sync + Send {
@@ -185,17 +201,39 @@ impl BlockPropertiesManager {
         player_direction: &Direction,
         other: bool,
     ) -> u16 {
-        if let Some(properties) = self.properties_registry.get(&block.id) {
-            let mut hmap_key: Vec<String> = Vec::with_capacity(block.properties.len());
+        // TODO: This should be abstracted and not here
+        let mut local_block = block;
+        let mut local_face = face;
+        if block.states.iter().any(|state| {
+            state.block_entity_type == Some(block_entity!("sign"))
+                || state.block_entity_type == Some(block_entity!("hanging_sign"))
+        }) {
+            // TODO: This should be whatever version it was
+            if let Some(s) = get_block("minecraft:oak_sign") {
+                local_block = match face {
+                    BlockDirection::Bottom => s,
+                    _ => block,
+                };
+                local_face = match face {
+                    BlockDirection::North => &BlockDirection::South,
+                    BlockDirection::South => &BlockDirection::North,
+                    BlockDirection::East => &BlockDirection::West,
+                    BlockDirection::West => &BlockDirection::East,
+                    _ => face,
+                }
+            }
+        }
 
-            for raw_property in &block.properties {
+        if let Some(properties) = self.properties_registry.get(&local_block.id) {
+            let mut hmap_key: Vec<String> = Vec::with_capacity(local_block.properties.len());
+            for raw_property in &local_block.properties {
                 let property = self.registered_properties.get(&raw_property.name);
                 if let Some(property) = property {
                     let state = property
                         .on_place(
                             world,
-                            block,
-                            face,
+                            local_block,
+                            local_face,
                             block_pos,
                             use_item_on,
                             player_direction,
@@ -207,17 +245,20 @@ impl BlockPropertiesManager {
                 } else {
                     log::warn!("Unknown Block Property: {}", &raw_property.name);
                     // if one property is not found everything will not work
-                    return block.default_state_id;
+                    return local_block.default_state_id;
                 }
             }
             // Base state id plus offset
             let mapping = properties.state_mappings.get(&hmap_key);
             if let Some(mapping) = mapping {
-                return block.states[0].id + mapping;
+                return local_block.states[0].id + mapping;
             }
-            log::error!("Failed to get Block Properties mapping for {}", block.name);
+            log::error!(
+                "Failed to get Block Properties mapping for {}",
+                local_block.name
+            );
         }
-        block.default_state_id
+        local_block.default_state_id
     }
 
     pub async fn on_interact(&self, block: &Block, block_state: &State, item: &ItemStack) -> u16 {

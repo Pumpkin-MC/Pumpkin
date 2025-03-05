@@ -1417,15 +1417,17 @@ impl Player {
         block_position: BlockPos,
         selected_face: &BlockDirection,
     ) {
+        let front_text = match selected_face {
+            BlockDirection::Top => selected_face.to_offset().z == 1,
+            _ => true,
+        };
+
         if block.states.iter().any(|state| {
             state.block_entity_type == Some(block_entity!("sign"))
                 || state.block_entity_type == Some(block_entity!("hanging_sign"))
         }) {
             self.client
-                .send_packet(&COpenSignEditor::new(
-                    block_position,
-                    selected_face.to_offset().z == 1,
-                ))
+                .send_packet(&COpenSignEditor::new(block_position, front_text))
                 .await;
         }
     }

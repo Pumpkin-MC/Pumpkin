@@ -7,7 +7,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 pub use state::BlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug)]
 pub enum BlockDirection {
     Bottom = 0,
     Top,

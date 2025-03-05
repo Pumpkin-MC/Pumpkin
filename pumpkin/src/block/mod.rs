@@ -5,12 +5,15 @@ use properties::{
     attachment::Attachment,
     axis::Axis,
     cardinal::{Down, East, North, South, Up, West},
+    chest_type::ChestType,
     face::Face,
     facing::Facing,
     half::Half,
     layers::Layers,
+    lit::Lit,
     open::Open,
     powered::Powered,
+    rotation::Rotation,
     signal_fire::SignalFire,
     slab_type::SlabType,
     stair_shape::StairShape,
@@ -119,12 +122,15 @@ pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
     manager.register(Facing::North);
     manager.register(Half::Bottom);
     manager.register(Layers::Lay1);
+    manager.register(Lit::True());
     manager.register(North::False);
     manager.register(Open::False());
     manager.register(Powered::False());
+    manager.register(Rotation::Rotation0);
     manager.register(Unstable::False());
     manager.register(SignalFire::False());
     manager.register(SlabType::Bottom);
+    manager.register(ChestType::Single);
     manager.register(South::False);
     manager.register(StairShape::Straight);
     manager.register(Up::False);
