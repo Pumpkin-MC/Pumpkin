@@ -55,3 +55,7 @@ pub mod damage {
 pub mod fluid {
     include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }
+
+pub mod block {
+    include!(concat!(env!("OUT_DIR"), "/block.rs"));
+}

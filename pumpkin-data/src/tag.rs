@@ -70,6 +70,7 @@ pub enum TagType {
 }
 
 impl TagType {
+    #[allow(dead_code)]
     pub fn serialize(&self) -> String {
         match self {
             TagType::Item(name) => name.clone(),
@@ -122,6 +123,7 @@ pub enum RegistryEntryList {
 }
 
 impl RegistryEntryList {
+    #[allow(dead_code)]
     pub fn get_values(&self) -> Vec<TagType> {
         match self {
             RegistryEntryList::Single(s) => vec![s.clone()],

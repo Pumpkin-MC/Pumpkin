@@ -5,6 +5,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 
 mod biome;
+mod block;
 mod chunk_status;
 mod damage_type;
 mod entity_pose;
@@ -46,6 +47,7 @@ pub fn main() {
     write_generated_file(fluid::build(), "fluid.rs");
     write_generated_file(status_effect::build(), "status_effect.rs");
     write_generated_file(entity_status::build(), "entity_status.rs");
+    write_generated_file(block::build(), "block.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
