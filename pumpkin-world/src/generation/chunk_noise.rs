@@ -20,6 +20,7 @@ use super::{
         },
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
+        multi_noise_sampler::{self, MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::GlobalProtoNoiseRouter,
     },
     ore_sampler::OreVeinSampler,
@@ -201,8 +202,8 @@ impl IndexToNoisePos for ChunkIndexMapper {
 
 pub struct ChunkNoiseGenerator<'a> {
     pub state_sampler: BlockStateSampler,
+    pub multi_noise_sampler: MultiNoiseSampler<'a>,
     generation_shape: GenerationShape,
-
     start_cell_pos: Vector2<i32>,
 
     vertical_cell_count: usize,
@@ -298,11 +299,18 @@ impl<'a> ChunkNoiseGenerator<'a> {
         };
 
         let router = ChunkNoiseRouter::generate(noise_router_base, &builder_options);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.z,
+            horizontal_biome_end as usize,
+        );
+        let multi_noise_sampler =
+            MultiNoiseSampler::generate(noise_router_base, &multi_noise_config);
 
         Self {
             state_sampler,
             generation_shape,
-
+            multi_noise_sampler,
             start_cell_pos,
 
             vertical_cell_count,
@@ -474,6 +482,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         self.generation_shape.vertical_cell_block_count()
     }
 
+    /// Aka bottom_y
     pub fn min_y(&self) -> i8 {
         self.generation_shape.min_y()
     }

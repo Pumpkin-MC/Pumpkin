@@ -1,4 +1,4 @@
-use super::{biome_coords::to_block, height_limit::HeightLimitViewImpl};
+use super::{biome_coords::to_block, height_limit::HeightLimitView};
 
 pub struct GenerationShape {
     min_y: i8,
@@ -65,7 +65,7 @@ impl GenerationShape {
         }
     }
 
-    pub fn trim_height(&self, limit: &dyn HeightLimitViewImpl) -> Self {
+    pub fn trim_height(&self, limit: &dyn HeightLimitView) -> Self {
         let new_min = self.min_y.max(limit.bottom_y());
 
         let this_top = if self.min_y >= 0 {

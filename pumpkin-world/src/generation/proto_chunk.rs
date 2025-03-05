@@ -1,6 +1,8 @@
+use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
+    biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
     block::BlockState,
     generation::{
         chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape, positions::chunk_pos,
@@ -10,9 +12,12 @@ use crate::{
 use super::{
     GlobalRandomConfig,
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
+    biome_coords,
     chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, STONE_BLOCK, WATER_BLOCK},
-    noise_router::proto_noise_router::GlobalProtoNoiseRouter,
+    height_limit::HeightLimitView,
+    noise_router::{multi_noise_sampler, proto_noise_router::GlobalProtoNoiseRouter},
     positions::chunk_pos::{start_block_x, start_block_z},
+    section_coords,
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -44,11 +49,38 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
     }
 }
 
+/// Vanilla Chunk Steps
+///
+/// 1. empty: The chunk is not yet loaded or generated.
+///
+/// 2. structures_starts: This step calculates the starting points for structure pieces. For structures that are the starting in this chunk, the position of all pieces are generated and stored.
+///
+/// 3. structures_references: A reference to nearby chunks that have a structures' starting point are stored.
+///
+/// 4. biomes: Biomes are determined and stored. No terrain is generated at this stage.
+///
+/// 5. noise: The base terrain shape and liquid bodies are placed.
+///
+/// 6. surface: The surface of the terrain is replaced with biome-dependent blocks.
+///
+/// 7. carvers: Carvers carve certain parts of the terrain and replace solid blocks with air.
+///
+/// 8. features: Features and structure pieces are placed and heightmaps are generated.
+///
+/// 9. initialize_light: The lighting engine is initialized and light sources are identified.
+///
+/// 10. light: The lighting engine calculates the light level for blocks.
+///
+/// 11. spawn: Mobs are spawned.
+///
+/// 12. full: Generation is done and a chunk can now be loaded. The proto-chunk is now converted to a level chunk and all block updates deferred in the above steps are executed.
+///
 pub struct ProtoChunk<'a> {
     chunk_pos: Vector2<i32>,
-    sampler: ChunkNoiseGenerator<'a>,
+    pub sampler: ChunkNoiseGenerator<'a>,
     // These are local positions
     flat_block_map: Vec<BlockState>,
+    flat_biome_map: Vec<Biome>,
     // may want to use chunk status
 }
 
@@ -68,7 +100,7 @@ impl<'a> ProtoChunk<'a> {
             FluidLevel::new(-54, LAVA_BLOCK),
         ));
 
-        let height = generation_shape.height() as usize;
+        let height = generation_shape.height();
         let sampler = ChunkNoiseGenerator::new(
             base_router,
             random_config,
@@ -84,7 +116,14 @@ impl<'a> ProtoChunk<'a> {
         Self {
             chunk_pos,
             sampler,
-            flat_block_map: vec![BlockState::AIR; CHUNK_DIM as usize * CHUNK_DIM as usize * height],
+            flat_block_map: vec![
+                BlockState::AIR;
+                CHUNK_DIM as usize * CHUNK_DIM as usize * height as usize
+            ],
+            flat_biome_map: vec![
+                Biome::Plains;
+                CHUNK_DIM as usize * CHUNK_DIM as usize * height as usize
+            ],
         }
     }
 
@@ -112,6 +151,51 @@ impl<'a> ProtoChunk<'a> {
             BlockState::AIR
         } else {
             self.flat_block_map[self.local_pos_to_index(&local_pos)]
+        }
+    }
+
+    #[inline]
+    pub fn get_biome(&self, local_pos: &Vector3<i32>) -> Biome {
+        let local_pos = Vector3::new(
+            local_pos.x & 15,
+            local_pos.y - self.sampler.min_y() as i32,
+            local_pos.z & 15,
+        );
+        if local_pos.y < 0 || local_pos.y >= self.sampler.height() as i32 {
+            Biome::Plains
+        } else {
+            self.flat_biome_map[self.local_pos_to_index(&local_pos)]
+        }
+    }
+
+    pub fn populate_biomes(&mut self) {
+        let min_y = self.sampler.min_y();
+        let bottom = section_coords::block_to_section(min_y) as i16;
+        let top = section_coords::block_to_section(self.sampler.height()) as i16;
+
+        let start_x = biome_coords::from_block(self.chunk_pos.x);
+        let start_z = biome_coords::from_block(self.chunk_pos.z);
+
+        for i in bottom..top {
+            let start_y = biome_coords::from_block(i as i32);
+
+            for x in 0..4 {
+                for y in 0..4 {
+                    for z in 0..4 {
+                        let biome = MultiNoiseBiomeSupplier::biome(
+                            Vector3::new(start_x + x, start_y + y, start_z + z),
+                            &mut self.sampler.multi_noise_sampler,
+                        );
+                        let local_pos = Vector3 {
+                            x: x & 15,
+                            y: y - min_y as i32,
+                            z: z & 15,
+                        };
+                        let index = self.local_pos_to_index(&local_pos);
+                        self.flat_biome_map[index] = biome;
+                    }
+                }
+            }
         }
     }
 

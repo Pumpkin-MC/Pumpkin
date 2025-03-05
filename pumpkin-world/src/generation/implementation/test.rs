@@ -32,6 +32,7 @@ impl WorldGenerator for TestGenerator {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
         let mut subchunks = Subchunks::Single(0);
         let mut proto_chunk = ProtoChunk::new(at, &self.base_router, &self.random_config);
+        proto_chunk.populate_biomes();
         proto_chunk.populate_noise();
 
         for x in 0..16u8 {

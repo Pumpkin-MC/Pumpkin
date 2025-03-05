@@ -36,9 +36,8 @@ impl MultiNoiseSamplerBuilderOptions {
 
 pub struct MultiNoiseSampler<'a> {
     temperature: usize,
-    // AKA: Humidity
-    vegetation: usize,
-    continents: usize,
+    humidity: usize,
+    continentalness: usize,
     erosion: usize,
     depth: usize,
     // AKA: Weirdness
@@ -63,13 +62,13 @@ impl<'a> MultiNoiseSampler<'a> {
         ) as f32;
 
         let humidity = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.vegetation],
+            &mut self.component_stack[..=self.humidity],
             &pos,
             &sample_options,
         ) as f32;
 
         let continentalness = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.continents],
+            &mut self.component_stack[..=self.continentalness],
             &pos,
             &sample_options,
         ) as f32;
@@ -206,8 +205,8 @@ impl<'a> MultiNoiseSampler<'a> {
 
         Self {
             temperature: base.temperature,
-            vegetation: base.vegetation,
-            continents: base.continents,
+            humidity: base.vegetation,
+            continentalness: base.continents,
             depth: base.depth,
             erosion: base.erosion,
             ridges: base.ridges,

@@ -3,6 +3,7 @@ use std::{cell::RefCell, sync::LazyLock};
 use enum_dispatch::enum_dispatch;
 use multi_noise::{BiomeEntries, SearchTree, TreeLeafNode};
 use pumpkin_data::chunk::Biome;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     coordinates::BlockCoordinates, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
@@ -27,25 +28,25 @@ thread_local! {
 
 #[enum_dispatch]
 pub trait BiomeSupplier {
-    fn biome(&mut self, at: BlockCoordinates) -> Biome;
+    fn biome(at: Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome;
 }
 
 #[derive(Clone)]
 pub struct DebugBiomeSupplier;
 
 impl BiomeSupplier for DebugBiomeSupplier {
-    fn biome(&mut self, _at: BlockCoordinates) -> Biome {
+    fn biome(_at: Vector3<i32>, _noise: &mut MultiNoiseSampler<'_>) -> Biome {
         Biome::Plains
     }
 }
 
-pub struct MultiNoiseBiomeSupplier<'a> {
-    noise: MultiNoiseSampler<'a>,
-}
+pub struct MultiNoiseBiomeSupplier;
 
-impl BiomeSupplier for MultiNoiseBiomeSupplier<'_> {
-    fn biome(&mut self, at: BlockCoordinates) -> Biome {
-        let point = self.noise.sample(at.x, at.y.0 as i32, at.z);
+// TODO: Add End supplier
+
+impl BiomeSupplier for MultiNoiseBiomeSupplier {
+    fn biome(at: Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome {
+        let point = noise.sample(at.x, at.y, at.z);
         LAST_RESULT_NODE.with_borrow_mut(|last_result| {
             BIOME_ENTRIES
                 .get(&point, last_result)
