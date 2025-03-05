@@ -6,6 +6,9 @@ use crate::block::properties::Direction;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
+use crate::plugin::player::player_chat::PlayerChatEvent;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -23,7 +26,7 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
-use pumpkin_macros::block_entity;
+use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
     CBlockEntityData, CBlockUpdate, COpenSignEditor, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
 };
@@ -155,69 +158,86 @@ impl Player {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
-        let entity = &self.living_entity.entity;
-        let last_pos = entity.pos.load();
-        self.living_entity.set_pos(position);
 
-        let height_difference = position.y - last_pos.y;
-        if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
-            && !packet.ground
-            && height_difference > 0.0
-        {
-            self.jump().await;
-        }
+        send_cancellable! {{
+            PlayerMoveEvent {
+                player: self.clone(),
+                from: self.living_entity.entity.pos.load(),
+                to: position,
+                cancelled: false,
+            };
 
-        entity
-            .on_ground
-            .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
+            'after: {
+                let position = event.to;
+                let entity = &self.living_entity.entity;
+                let last_pos = entity.pos.load();
+                self.living_entity.set_pos(position);
 
-        let entity_id = entity.entity_id;
-        let Vector3 { x, y, z } = position;
-        let world = &entity.world.read().await;
+                let height_difference = position.y - last_pos.y;
+                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                    && !packet.ground
+                    && height_difference > 0.0
+                {
+                    self.jump().await;
+                }
 
-        // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
-        // let velocity = self.velocity;
+                entity
+                    .on_ground
+                    .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
 
-        // // Player is falling down fast, we should account for that
-        // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
+                let entity_id = entity.entity_id;
+                let Vector3 { x, y, z } = position;
+                let world = &entity.world.read().await;
 
-        // teleport when more than 8 blocks (i guess 8 blocks)
-        // TODO: REPLACE * 2.0 by movement packets. see vanilla for details
-        // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
-        //     self.teleport(x, y, z, self.entity.yaw, self.entity.pitch);
-        //     return;
-        // }
-        // send new position to all other players
-        world
-            .broadcast_packet_except(
-                &[self.gameprofile.id],
-                &CUpdateEntityPos::new(
-                    entity_id.into(),
-                    Vector3::new(
-                        x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                        y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                        z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
-                    ),
-                    packet.ground,
-                ),
-            )
-            .await;
-        if !self.abilities.lock().await.flying {
-            self.living_entity
-                .update_fall_distance(
-                    height_difference,
-                    packet.ground,
-                    self.gamemode.load() == GameMode::Creative,
-                )
+                // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
+                // let velocity = self.velocity;
+
+                // // Player is falling down fast, we should account for that
+                // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
+
+                // teleport when more than 8 blocks (i guess 8 blocks)
+                // TODO: REPLACE * 2.0 by movement packets. see vanilla for details
+                // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
+                //     self.teleport(x, y, z, self.entity.yaw, self.entity.pitch);
+                //     return;
+                // }
+                // send new position to all other players
+                world
+                    .broadcast_packet_except(
+                        &[self.gameprofile.id],
+                        &CUpdateEntityPos::new(
+                            entity_id.into(),
+                            Vector3::new(
+                                x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                            ),
+                            packet.ground,
+                        ),
+                    )
+                    .await;
+                if !self.abilities.lock().await.flying {
+                    self.living_entity
+                        .update_fall_distance(
+                            height_difference,
+                            packet.ground,
+                            self.gamemode.load() == GameMode::Creative,
+                        )
+                        .await;
+                }
+                chunker::update_position(self).await;
+                self.progress_motion(Vector3::new(
+                    position.x - last_pos.x,
+                    position.y - last_pos.y,
+                    position.z - last_pos.z,
+                ))
                 .await;
-        }
-        chunker::update_position(self).await;
-        self.progress_motion(Vector3::new(
-            position.x - last_pos.x,
-            position.y - last_pos.y,
-            position.z - last_pos.z,
-        ))
-        .await;
+            }
+
+            'cancelled: {
+                // TODO: Tell the player that their movement was cancelled
+            }
+        }}
     }
 
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
@@ -362,30 +382,44 @@ impl Player {
             .await;
     }
 
-    pub fn handle_chat_command(self: &Arc<Self>, server: &Arc<Server>, command: &SChatCommand) {
+    pub async fn handle_chat_command(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        command: &SChatCommand,
+    ) {
         let player_clone = self.clone();
         let server_clone = server.clone();
-        let command_clone = command.command.clone();
-        // Some commands can take a long time to execute. If they do, they block packet processing for the player
-        // Thats why we will spawn a task instead
-        tokio::spawn(async move {
-            let dispatcher = server_clone.command_dispatcher.read().await;
-            dispatcher
-                .handle_command(
-                    &mut CommandSender::Player(player_clone),
-                    &server_clone,
-                    &command_clone,
-                )
-                .await;
-        });
+        send_cancellable! {{
+            PlayerCommandSendEvent {
+                player: self.clone(),
+                command: command.command.clone(),
+                cancelled: false
+            };
 
-        if ADVANCED_CONFIG.commands.log_console {
-            log::info!(
-                "Player ({}): executed command /{}",
-                self.gameprofile.name,
-                command.command
-            );
-        }
+            'after: {
+                let command_clone = command.command.clone();
+                // Some commands can take a long time to execute. If they do, they block packet processing for the player
+                // Thats why we will spawn a task instead
+                tokio::spawn(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(
+                            &mut CommandSender::Player(player_clone),
+                            &server_clone,
+                            &command_clone,
+                        )
+                        .await;
+                });
+
+                if ADVANCED_CONFIG.commands.log_console {
+                    log::info!(
+                        "Player ({}): executed command /{}",
+                        self.gameprofile.name,
+                        command.command
+                    );
+                }
+            }
+        }}
     }
 
     pub fn handle_player_ground(&self, ground: &SSetPlayerGround) {
@@ -584,7 +618,7 @@ impl Player {
             .await;
     }
 
-    pub async fn handle_chat_message(&self, chat_message: SChatMessage) {
+    pub async fn handle_chat_message(self: Arc<Self>, chat_message: SChatMessage) {
         let message = chat_message.message;
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
@@ -601,26 +635,53 @@ impl Player {
         }
 
         let gameprofile = &self.gameprofile;
-        log::info!("<chat>{}: {}", gameprofile.name, message);
+        send_cancellable! {{
+            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
 
-        let entity = &self.living_entity.entity;
-        let world = &entity.world.read().await;
-        world
-            .broadcast_packet_all(&CPlayerChatMessage::new(
-                gameprofile.id,
-                1.into(),
-                chat_message.signature.as_deref(),
-                &message,
-                chat_message.timestamp,
-                chat_message.salt,
-                &[],
-                Some(TextComponent::text(message.clone())),
-                FilterType::PassThrough,
-                (CHAT + 1).into(),
-                TextComponent::text(gameprofile.name.clone()),
-                None,
-            ))
-            .await;
+            'after: {
+                log::info!("<chat>{}: {}", gameprofile.name, message);
+
+                let entity = &self.living_entity.entity;
+                if event.recipients.is_empty() {
+                let world = &entity.world.read().await;
+                world
+                    .broadcast_packet_all(&CPlayerChatMessage::new(
+                        gameprofile.id,
+                        1.into(),
+                        chat_message.signature.as_deref(),
+                        &event.message,
+                        chat_message.timestamp,
+                        chat_message.salt,
+                        &[],
+                        Some(TextComponent::text(event.message.clone())),
+                        FilterType::PassThrough,
+                        (CHAT + 1).into(),
+                        TextComponent::text(gameprofile.name.clone()),
+                        None,
+                    ))
+                    .await;
+                } else {
+                    for recipient in event.recipients {
+                        recipient.client.send_packet(
+                            &CPlayerChatMessage::new(
+                                gameprofile.id,
+                                1.into(),
+                                chat_message.signature.as_deref(),
+                                &event.message,
+                                chat_message.timestamp,
+                                chat_message.salt,
+                                &[],
+                                Some(TextComponent::text(event.message.clone())),
+                                FilterType::PassThrough,
+                                (CHAT + 1).into(),
+                                TextComponent::text(gameprofile.name.clone()),
+                                None,
+                            ),
+                        ).await;
+                    }
+                }
+            }
+        }}
 
         /* server.broadcast_packet(
             self,
