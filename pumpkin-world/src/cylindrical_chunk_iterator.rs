@@ -53,7 +53,7 @@ impl Cylindrical {
         self.center.z + self.view_distance.get() as i32 + 1
     }
 
-    fn is_within_distance(&self, x: i32, z: i32) -> bool {
+    pub fn is_within_distance(&self, x: i32, z: i32) -> bool {
         let rel_x = ((x - self.center.x).abs() - 1).max(0);
         let rel_z = ((z - self.center.z).abs() - 1).max(0);
 

@@ -1,5 +1,6 @@
 mod chat_command;
 mod chat_message;
+mod chunk_batch;
 mod click_container;
 mod client_command;
 mod client_information;
@@ -30,6 +31,7 @@ mod use_item_on;
 
 pub use chat_command::*;
 pub use chat_message::*;
+pub use chunk_batch::*;
 pub use click_container::*;
 pub use client_command::*;
 pub use client_information::*;

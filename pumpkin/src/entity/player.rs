@@ -2,6 +2,7 @@ use pumpkin_world::{block::registry::State, level::SyncChunk};
 use std::{
     collections::VecDeque,
     num::NonZeroU8,
+    ops::AddAssign,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
@@ -25,17 +26,18 @@ use pumpkin_protocol::{
     RawPacket, ServerPacket,
     bytebuf::packet::Packet,
     client::play::{
-        CAcknowledgeBlockChange, CActionBar, CCombatDeath, CDisguisedChatMessage, CGameEvent,
-        CKeepAlive, CParticle, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate,
-        CPlayerPosition, CRespawn, CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage,
-        CTitleText, CUnloadChunk, CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
+        CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
+        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
+        CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, GameEvent,
+        MetaDataType, PlayerAction,
     },
     server::play::{
-        SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
-        SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock, SPlayerAbilities,
-        SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
-        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign,
-        SUseItem, SUseItemOn,
+        SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
+        SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
+        SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
+        SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
+        SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
     },
 };
 use pumpkin_protocol::{
@@ -80,33 +82,64 @@ use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
 
+enum BatchState {
+    Initial,
+    Waiting,
+    Count(u8),
+}
+
 pub struct ChunkManager {
     chunks_per_tick: usize,
     chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
+    batches_sent_since_ack: BatchState,
 }
 
 impl ChunkManager {
-    pub fn new() -> Self {
+    pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
+
+    #[must_use]
+    pub fn new(chunks_per_tick: usize) -> Self {
         Self {
-            chunks_per_tick: 50,
+            chunks_per_tick,
             chunk_queue: VecDeque::new(),
+            batches_sent_since_ack: BatchState::Initial,
         }
     }
 
-    pub fn update_chunks_per_tick(&mut self, new_chunks_per_tick: usize) {
-        self.chunks_per_tick = new_chunks_per_tick;
+    pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
+        self.batches_sent_since_ack = BatchState::Count(0);
+        self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
         self.chunk_queue.push_back((position, chunk));
     }
 
-    pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let split_len = self.chunk_queue.len().min(self.chunks_per_tick);
-        let mut chunks = Vec::with_capacity(split_len);
-        for (_, chunk) in self.chunk_queue.drain(0..split_len) {
-            chunks.push(chunk);
+    #[must_use]
+    pub fn can_send_chunk(&self) -> bool {
+        match self.batches_sent_since_ack {
+            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
+            BatchState::Initial => true,
+            BatchState::Waiting => false,
         }
+    }
+
+    pub fn next_chunk(&mut self, valid_chunk: impl Fn(Vector2<i32>) -> bool) -> Box<[SyncChunk]> {
+        let mut chunks = Vec::with_capacity(self.chunks_per_tick);
+        while let Some((pos, chunk)) = self.chunk_queue.pop_front() {
+            if valid_chunk(pos) {
+                chunks.push(chunk);
+            }
+        }
+
+        match &mut self.batches_sent_since_ack {
+            BatchState::Count(count) => {
+                count.add_assign(1);
+            }
+            state @ BatchState::Initial => *state = BatchState::Waiting,
+            BatchState::Waiting => unreachable!(),
+        }
+
         chunks.into_boxed_slice()
     }
 
@@ -261,7 +294,8 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
-            chunk_manager: Mutex::new(ChunkManager::new()),
+            // Defaut to sending 128 chunks per tick
+            chunk_manager: Mutex::new(ChunkManager::new(128)),
         }
     }
 
@@ -481,6 +515,29 @@ impl Player {
             let mut xp = self.experience_pick_up_delay.lock().await;
             if *xp > 0 {
                 *xp -= 1;
+            }
+        }
+
+        {
+            let chunk_of_chunks = {
+                let mut chunk_manager = self.chunk_manager.lock().await;
+                chunk_manager.can_send_chunk().then(|| {
+                    chunk_manager.next_chunk(|pos| {
+                        self.watched_section.load().is_within_distance(pos.z, pos.z)
+                    })
+                })
+            };
+
+            if let Some(chunk_of_chunks) = chunk_of_chunks {
+                self.client.send_packet(&CChunkBatchStart {}).await;
+                let chunk_count = chunk_of_chunks.len();
+                for chunk in chunk_of_chunks {
+                    let chunk = chunk.read().await;
+                    self.client.send_packet(&CChunkData(&chunk)).await;
+                }
+                self.client
+                    .send_packet(&CChunkBatchEnd::new(chunk_count))
+                    .await;
             }
         }
 
@@ -1375,6 +1432,9 @@ impl Player {
             SCloseContainer::PACKET_ID => {
                 self.handle_close_container(server, SCloseContainer::read(bytebuf)?)
                     .await;
+            }
+            SChunkBatch::PACKET_ID => {
+                self.handle_chunk_batch(SChunkBatch::read(bytebuf)?).await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id.0);

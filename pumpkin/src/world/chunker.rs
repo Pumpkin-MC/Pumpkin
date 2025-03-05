@@ -72,6 +72,14 @@ pub async fn update_position(player: &Arc<Player>) {
         let level = &entity.world.read().await.level;
         level.mark_chunks_as_newly_watched(&loading_chunks);
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks);
+
+        {
+            // After marking the chunks as watched, remove chunks that we are already in the process
+            // of sending
+            let chunk_manager = player.chunk_manager.lock().await;
+            loading_chunks.retain(|pos| !chunk_manager.is_chunk_pending(pos))
+        };
+
         player.watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {

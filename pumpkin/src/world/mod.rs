@@ -60,10 +60,7 @@ use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
-use tokio::sync::{
-    Mutex, Semaphore,
-    mpsc::{UnboundedReceiver, UnboundedSender},
-};
+use tokio::sync::{Mutex, mpsc::UnboundedReceiver};
 use tokio::sync::{RwLock, mpsc};
 
 pub mod border;
@@ -702,16 +699,17 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        let mut receiver = self.receive_chunks(chunks);
+        // We are loading a completely new work section: prioritize chunks the player is on top
+        // of
+        let new_spawn = chunks[0] == player.watched_section.load().center;
+        let mut receiver = self.receive_chunks(chunks, new_spawn);
         let level = self.level.clone();
 
         // Only allow 128 chunk packets to be sent at a time to avoid overloading the client.
         // TODO: Bulk chunks?
-        let sem = Semaphore::new(128);
 
         tokio::spawn(async move {
             'main: while let Some((chunk, first_load)) = receiver.recv().await {
-                let permit = sem.acquire().await.expect("Unable to aquire the semaphore");
                 let position = chunk.read().await.position;
 
                 #[cfg(debug_assertions)]
@@ -772,7 +770,7 @@ impl World {
                     send_cancellable! {{
                         ChunkSend {
                             world,
-                            chunk,
+                            chunk: chunk.clone(),
                             cancelled: false,
                         };
 
@@ -782,12 +780,10 @@ impl World {
                         }
                     }};
                 }
-
-                let _ = permit;
             }
 
             #[cfg(debug_assertions)]
-            log::debug!("chunks sent after {}ms ", inst.elapsed().as_millis(),);
+            log::debug!("chunks queued after {}ms ", inst.elapsed().as_millis(),);
         });
     }
 
@@ -1074,18 +1070,30 @@ impl World {
     pub fn receive_chunks(
         &self,
         chunks: Vec<Vector2<i32>>,
-        sender: UnboundedSender<(SyncChunk, bool)>,
-    ) {
+        new_spawn: bool,
+    ) -> UnboundedReceiver<(SyncChunk, bool)> {
+        let (sender, receiver) = mpsc::unbounded_channel();
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
         tokio::spawn(async move {
-            level.fetch_chunks(&chunks, sender).await;
+            if new_spawn {
+                if let Some((priority, rest)) = chunks.split_at_checked(9) {
+                    // Ensure client gets 9 closest chunks first
+                    level.fetch_chunks(priority, sender.clone()).await;
+                    level.fetch_chunks(rest, sender).await;
+                } else {
+                    level.fetch_chunks(&chunks, sender).await;
+                }
+            } else {
+                level.fetch_chunks(&chunks, sender).await;
+            }
         });
+
+        receiver
     }
 
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
-        let (sender, mut receiver) = mpsc::unbounded_channel();
-        self.receive_chunks(vec![chunk_pos], sender);
+        let mut receiver = self.receive_chunks(vec![chunk_pos], false);
 
         // If we are only getting one chunk, we are probably doing something that requires multiple
         // calls to it. "Watch" it temp.
