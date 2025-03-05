@@ -1,5 +1,6 @@
-use pumpkin_world::block::registry::State;
+use pumpkin_world::{block::registry::State, level::SyncChunk};
 use std::{
+    collections::VecDeque,
     num::NonZeroU8,
     sync::{
         Arc,
@@ -79,6 +80,43 @@ use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
 
+pub struct ChunkManager {
+    chunks_per_tick: usize,
+    chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
+}
+
+impl ChunkManager {
+    pub fn new() -> Self {
+        Self {
+            chunks_per_tick: 50,
+            chunk_queue: VecDeque::new(),
+        }
+    }
+
+    pub fn update_chunks_per_tick(&mut self, new_chunks_per_tick: usize) {
+        self.chunks_per_tick = new_chunks_per_tick;
+    }
+
+    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
+        self.chunk_queue.push_back((position, chunk));
+    }
+
+    pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
+        let split_len = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunks = Vec::with_capacity(split_len);
+        for (_, chunk) in self.chunk_queue.drain(0..split_len) {
+            chunks.push(chunk);
+        }
+        chunks.into_boxed_slice()
+    }
+
+    pub fn is_chunk_pending(&self, pos: &Vector2<i32>) -> bool {
+        // This is probably comparable to hashmap speed due to the relatively small count of chunks
+        // (guestimated to be ~ 1024)
+        self.chunk_queue.iter().any(|(elem_pos, _)| elem_pos == pos)
+    }
+}
+
 /// Represents a Minecraft player entity.
 ///
 /// A `Player` is a special type of entity that represents a human player connected to the server.
@@ -145,6 +183,7 @@ pub struct Player {
     /// The player's total experience points
     pub experience_points: AtomicI32,
     pub experience_pick_up_delay: Mutex<u32>,
+    pub chunk_manager: Mutex<ChunkManager>,
 }
 
 impl Player {
@@ -222,6 +261,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            chunk_manager: Mutex::new(ChunkManager::new()),
         }
     }
 

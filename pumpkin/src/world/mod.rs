@@ -60,7 +60,10 @@ use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
-use tokio::sync::{Mutex, Semaphore, mpsc::UnboundedReceiver};
+use tokio::sync::{
+    Mutex, Semaphore,
+    mpsc::{UnboundedReceiver, UnboundedSender},
+};
 use tokio::sync::{RwLock, mpsc};
 
 pub mod border;
@@ -774,10 +777,8 @@ impl World {
                         };
 
                         'after: {
-                            player
-                                .client
-                                .send_packet(&CChunkData(&*event.chunk.read().await))
-                                .await;
+                            let mut chunk_manager = player.chunk_manager.lock().await;
+                            chunk_manager.push_chunk(position, chunk);
                         }
                     }};
                 }
@@ -1067,24 +1068,24 @@ impl World {
     }
 
     // Stream the chunks (don't collect them and then do stuff with them)
+    /// Spawns a tokio task to stream chunks.
     /// Important: must be called from an async function (or changed to accept a tokio runtime
     /// handle)
     pub fn receive_chunks(
         &self,
         chunks: Vec<Vector2<i32>>,
-    ) -> UnboundedReceiver<(SyncChunk, bool)> {
-        let (sender, receive) = mpsc::unbounded_channel();
+        sender: UnboundedSender<(SyncChunk, bool)>,
+    ) {
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
         tokio::spawn(async move {
             level.fetch_chunks(&chunks, sender).await;
         });
-
-        receive
     }
 
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
-        let mut receiver = self.receive_chunks(vec![chunk_pos]);
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        self.receive_chunks(vec![chunk_pos], sender);
 
         // If we are only getting one chunk, we are probably doing something that requires multiple
         // calls to it. "Watch" it temp.
