@@ -7,7 +7,7 @@ use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 
 #[pumpkin_block("minecraft:jukebox")]
 pub struct JukeboxBlock;

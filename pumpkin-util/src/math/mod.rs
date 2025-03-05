@@ -2,11 +2,11 @@ use num_traits::{One, PrimInt, Zero};
 
 pub mod boundingbox;
 pub mod experience;
-pub mod int_provider;
 pub mod position;
 pub mod vector2;
 pub mod vector3;
 pub mod voxel_shape;
+pub mod int_provider;
 
 pub fn wrap_degrees(degrees: f32) -> f32 {
     let mut var1 = degrees % 360.0;

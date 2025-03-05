@@ -20,10 +20,8 @@ use properties::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::{
-    block::registry::{Block, State},
-    item::ItemStack,
-};
+use pumpkin_world::item::ItemStack;
+use pumpkin_data::block::{Block, BlockState};
 use rand::Rng;
 
 use crate::block::registry::BlockRegistry;

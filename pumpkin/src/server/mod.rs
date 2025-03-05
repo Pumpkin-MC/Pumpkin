@@ -21,7 +21,7 @@ use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;

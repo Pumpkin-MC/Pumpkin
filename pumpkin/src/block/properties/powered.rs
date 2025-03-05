@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_macros::block_property;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 use pumpkin_world::item::ItemStack;
 
 use super::{BlockProperty, BlockPropertyMetadata};

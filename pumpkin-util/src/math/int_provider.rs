@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum NormalInvProvider {
     #[serde(rename = "minecraft:uniform")]
@@ -8,7 +8,7 @@ pub enum NormalInvProvider {
     // TODO: Add more...
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum InvProvider {
     Object(NormalInvProvider),
@@ -44,10 +44,10 @@ impl InvProvider {
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct UniformIntProvider {
-    min_inclusive: i32,
-    max_inclusive: i32,
+    pub min_inclusive: i32,
+    pub max_inclusive: i32,
 }
 
 impl UniformIntProvider {

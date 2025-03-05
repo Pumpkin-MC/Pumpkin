@@ -8,7 +8,7 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{CraftingTable, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 
 #[pumpkin_block("minecraft:crafting_table")]
 pub struct CraftingTableBlock;

@@ -192,6 +192,76 @@ fn get_enum_name(props: Vec<String>) -> String {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum NormalInvProvider {
+    #[serde(rename = "minecraft:uniform")]
+    Uniform(UniformIntProvider),
+    // TODO: Add more...
+}
+
+impl ToTokens for NormalInvProvider {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            NormalInvProvider::Uniform(uniform) => {
+                tokens.extend(quote! {
+                    NormalInvProvider::Uniform(#uniform)
+                });
+            }
+        }
+    }
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct UniformIntProvider {
+    min_inclusive: i32,
+    max_inclusive: i32,
+}
+
+impl ToTokens for UniformIntProvider {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
+        let max_inclusive = LitInt::new(&self.max_inclusive.to_string(), Span::call_site());
+
+        tokens.extend(quote! {
+            UniformIntProvider { min_inclusive: #min_inclusive, max_inclusive: #max_inclusive }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum InvProvider {
+    Object(NormalInvProvider),
+    Constant(i32),
+}
+impl ToTokens for InvProvider {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            InvProvider::Object(inv_provider) => {
+                tokens.extend(quote! {
+                    InvProvider::Object(#inv_provider)
+                });
+            }
+            InvProvider::Constant(i) => tokens.extend(quote! {
+                InvProvider::Constant(#i)
+            }),
+        }
+    }
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct Experience {
+    pub experience: InvProvider,
+}
+
+impl ToTokens for Experience {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let experience = self.experience.to_token_stream();
+
+        tokens.extend(quote! {
+            Experience { experience: #experience }
+        });
+    }
+}
+#[derive(Deserialize, Clone, Debug)]
 pub struct PropertyStruct {
     pub name: String,
     pub values: Vec<String>,
@@ -334,24 +404,24 @@ impl ToTokens for BlockPropertyStruct {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct CollisionShape {
-    pub min: (f32, f32, f32),
-    pub max: (f32, f32, f32),
+    pub min: [f64; 3],
+    pub max: [f64; 3],
 }
 
 impl ToTokens for CollisionShape {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_x = LitFloat::new(&self.min.0.to_string(), Span::call_site());
-        let min_y = LitFloat::new(&self.min.1.to_string(), Span::call_site());
-        let min_z = LitFloat::new(&self.min.2.to_string(), Span::call_site());
+        let min_x = LitFloat::new(&self.min[0].to_string(), Span::call_site());
+        let min_y = LitFloat::new(&self.min[1].to_string(), Span::call_site());
+        let min_z = LitFloat::new(&self.min[2].to_string(), Span::call_site());
 
-        let max_x = LitFloat::new(&self.max.0.to_string(), Span::call_site());
-        let max_y = LitFloat::new(&self.max.1.to_string(), Span::call_site());
-        let max_z = LitFloat::new(&self.max.2.to_string(), Span::call_site());
+        let max_x = LitFloat::new(&self.max[0].to_string(), Span::call_site());
+        let max_y = LitFloat::new(&self.max[1].to_string(), Span::call_site());
+        let max_z = LitFloat::new(&self.max[2].to_string(), Span::call_site());
 
         tokens.extend(quote! {
             CollisionShape {
-                min: (#min_x as f32, #min_y as f32, #min_z as f32),
-                max: (#max_x as f32, #max_y as f32, #max_z as f32),
+                min: [#min_x as f64, #min_y as f64, #min_z as f64],
+                max: [#max_x as f64, #max_y as f64, #max_z as f64],
             }
         });
     }
@@ -393,7 +463,7 @@ impl ToTokens for BlockState {
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
 
         tokens.extend(quote! {
-            BlockState {
+            PartialBlockState {
                 air: #air,
                 luminance: #luminance,
                 burnable: #burnable,
@@ -462,7 +532,11 @@ pub struct LootPool {
 
 impl ToTokens for LootPool {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let entries_tokens: Vec<_> = self.entries.iter().map(|entry| entry.to_token_stream()).collect();
+        let entries_tokens: Vec<_> = self
+            .entries
+            .iter()
+            .map(|entry| entry.to_token_stream())
+            .collect();
         let rolls = LitFloat::new(&self.rolls.to_string(), Span::call_site());
         let bonus_rolls = LitFloat::new(&self.bonus_rolls.to_string(), Span::call_site());
 
@@ -612,7 +686,9 @@ impl ToTokens for LootCondition {
             LootCondition::AnyOf => quote! { LootCondition::AnyOf },
             LootCondition::AllOf => quote! { LootCondition::AllOf },
             LootCondition::RandomChance => quote! { LootCondition::RandomChance },
-            LootCondition::RandomChanceWithEnchantedBonus => quote! { LootCondition::RandomChanceWithEnchantedBonus },
+            LootCondition::RandomChanceWithEnchantedBonus => {
+                quote! { LootCondition::RandomChanceWithEnchantedBonus }
+            }
             LootCondition::EntityProperties => quote! { LootCondition::EntityProperties },
             LootCondition::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
             LootCondition::EntityScores => quote! { LootCondition::EntityScores },
@@ -620,13 +696,17 @@ impl ToTokens for LootCondition {
             LootCondition::MatchTool => quote! { LootCondition::MatchTool },
             LootCondition::TableBonus => quote! { LootCondition::TableBonus },
             LootCondition::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
-            LootCondition::DamageSourceProperties => quote! { LootCondition::DamageSourceProperties },
+            LootCondition::DamageSourceProperties => {
+                quote! { LootCondition::DamageSourceProperties }
+            }
             LootCondition::LocationCheck => quote! { LootCondition::LocationCheck },
             LootCondition::WeatherCheck => quote! { LootCondition::WeatherCheck },
             LootCondition::Reference => quote! { LootCondition::Reference },
             LootCondition::TimeCheck => quote! { LootCondition::TimeCheck },
             LootCondition::ValueCheck => quote! { LootCondition::ValueCheck },
-            LootCondition::EnchantmentActiveCheck => quote! { LootCondition::EnchantmentActiveCheck },
+            LootCondition::EnchantmentActiveCheck => {
+                quote! { LootCondition::EnchantmentActiveCheck }
+            }
         };
 
         tokens.extend(name);
@@ -701,6 +781,7 @@ pub struct Block {
     pub properties: Vec<BlockProperty>,
     pub default_state_id: u16,
     pub states: Vec<BlockState>,
+    pub experience: Option<Experience>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -717,6 +798,7 @@ pub struct OptimizedBlock {
     pub jump_velocity_multiplier: f32,
     pub default_state_id: u16,
     pub states: Vec<BlockStateRef>,
+    pub experience: Option<Experience>,
 }
 
 impl ToTokens for OptimizedBlock {
@@ -735,6 +817,13 @@ impl ToTokens for OptimizedBlock {
             &self.jump_velocity_multiplier.to_string(),
             Span::call_site(),
         );
+        let experience = match &self.experience {
+            Some(exp) => {
+                let exp_tokens = exp.to_token_stream();
+                quote! { Some(#exp_tokens) }
+            }
+            None => quote! { None },
+        };
         // Generate state tokens
         let states = self.states.iter().map(|state| state.to_token_stream());
         let loot_table = match &self.loot_table {
@@ -748,7 +837,7 @@ impl ToTokens for OptimizedBlock {
         tokens.extend(quote! {
             Block {
                 id: #id,
-                registry_key: #name,
+                name: #name,
                 translation_key: #translation_key,
                 hardness: #hardness as f32,
                 blast_resistance: #blast_resistance as f32,
@@ -759,6 +848,7 @@ impl ToTokens for OptimizedBlock {
                 default_state_id: #default_state_id,
                 states: &[#(#states),*],
                 loot_table: #loot_table,
+                experience: #experience,
             }
         });
     }
@@ -779,6 +869,8 @@ pub(crate) fn build() -> TokenStream {
 
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
+    let mut block_from_state_id = TokenStream::new();
+    let mut block_from_item_id = TokenStream::new();
     let mut constants = TokenStream::new();
 
     let mut unique_states = Vec::new();
@@ -821,6 +913,7 @@ pub(crate) fn build() -> TokenStream {
                 velocity_multiplier: block.velocity_multiplier,
                 jump_velocity_multiplier: block.jump_velocity_multiplier,
                 loot_table: block.loot_table,
+                experience: block.experience,
                 states: block
                     .states
                     .iter()
@@ -896,6 +989,9 @@ pub(crate) fn build() -> TokenStream {
         let const_ident = format_ident!("{}", name.to_shouty_snake_case());
         let block_tokens = block.to_token_stream();
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
+        let state_start = block.states.iter().map(|state| state.id).min().unwrap();
+        let state_end = block.states.iter().map(|state| state.id).max().unwrap();
+        let item_id = block.item_id;
 
         constants.extend(quote! {
             pub const #const_ident: Block = #block_tokens;
@@ -908,14 +1004,44 @@ pub(crate) fn build() -> TokenStream {
         type_from_name.extend(quote! {
             #name => Some(Self::#const_ident),
         });
+
+        block_from_state_id.extend(quote! {
+            #state_start..=#state_end => Some(Self::#const_ident),
+        });
+
+        if item_id != 0 {
+            block_from_item_id.extend(quote! {
+                #item_id => Some(Self::#const_ident),
+            });
+        }
     }
 
     quote! {
         use crate::tag::{Tagable, RegistryKey};
+        use pumpkin_util::math::int_provider::{UniformIntProvider, InvProvider, NormalInvProvider};
+
 
 
         #[derive(Clone, Debug)]
+        pub struct Experience {
+            pub experience: InvProvider,
+        }
+
+        #[derive(Clone, Debug)]
+        pub struct PartialBlockState {
+            pub air: bool,
+            pub luminance: u8,
+            pub burnable: bool,
+            pub tool_required: bool,
+            pub hardness: f32,
+            pub sided_transparency: bool,
+            pub replaceable: bool,
+            pub collision_shapes: &'static [u16],
+        }
+
+        #[derive(Clone, Debug)]
         pub struct BlockState {
+            pub id: u16,
             pub air: bool,
             pub luminance: u8,
             pub burnable: bool,
@@ -1003,7 +1129,7 @@ pub(crate) fn build() -> TokenStream {
             content: LootPoolEntryTypes,
             conditions: Option<&'static [LootCondition]>,
         }
-        
+
         #[allow(dead_code)]
         #[derive(Clone, Debug)]
         pub enum LootTableType {
@@ -1018,7 +1144,7 @@ pub(crate) fn build() -> TokenStream {
         #[derive(Clone, Debug)]
         pub struct Block {
             pub id: u16,
-            pub registry_key: &'static str,
+            pub name: &'static str,
             pub translation_key: &'static str,
             pub hardness: f32,
             pub blast_resistance: f32,
@@ -1029,6 +1155,7 @@ pub(crate) fn build() -> TokenStream {
             pub default_state_id: u16,
             pub states: &'static [BlockStateRef],
             pub loot_table: Option<LootTable>,
+            pub experience: Option<Experience>,
         }
 
         impl PartialEq for Block {
@@ -1045,8 +1172,8 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Copy, Debug)]
         pub struct CollisionShape {
-            pub min: (f32, f32, f32),
-            pub max: (f32, f32, f32),
+            pub min: [f64; 3],
+            pub max: [f64; 3],
         }
 
         #[derive(Clone, Copy, Debug)]
@@ -1086,7 +1213,7 @@ pub(crate) fn build() -> TokenStream {
             #(#shapes),*
         ];
 
-        pub static BLOCK_STATES: &[BlockState] = &[
+        pub static BLOCK_STATES: &[PartialBlockState] = &[
             #(#unique_states),*
         ];
 
@@ -1114,11 +1241,45 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
+
+            #[doc = r" Try to parse a Block from a state id"]
+            pub const fn from_state_id(id: u16) -> Option<Self> {
+                match id {
+                    #block_from_state_id
+                    _ => None
+                }
+            }
+
+            #[doc = r" Try to parse a Block from an item id"]
+            pub const fn from_item_id(id: u16) -> Option<Self> {
+                #[allow(unreachable_patterns)]
+                match id {
+                    #block_from_item_id
+                    _ => None
+                }
+            }
         }
 
         #(#properties)*
 
         #(#block_props)*
+
+        impl BlockStateRef {
+            pub fn get_state(&self) -> BlockState {
+                let partial_state = &BLOCK_STATES[self.state_idx as usize];
+                BlockState {
+                    id: self.id,
+                    air: partial_state.air,
+                    luminance: partial_state.luminance,
+                    burnable: partial_state.burnable,
+                    tool_required: partial_state.tool_required,
+                    hardness: partial_state.hardness,
+                    sided_transparency: partial_state.sided_transparency,
+                    replaceable: partial_state.replaceable,
+                    collision_shapes: partial_state.collision_shapes,
+                }
+            }
+        }
 
         impl Tagable for Block {
             #[inline]
@@ -1128,7 +1289,7 @@ pub(crate) fn build() -> TokenStream {
 
             #[inline]
             fn registry_key(&self) -> &str {
-                self.registry_key
+                self.name
             }
         }
     }

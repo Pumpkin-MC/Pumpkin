@@ -6,7 +6,7 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::Furnace;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server};
 

@@ -1153,7 +1153,7 @@ impl World {
     pub async fn get_block(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_world::block::registry::Block, GetBlockError> {
+    ) -> Result<&pumpkin_data::block::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1173,7 +1173,7 @@ impl World {
         position: &BlockPos,
     ) -> Result<
         (
-            &pumpkin_world::block::registry::Block,
+            &pumpkin_data::block::Block,
             &pumpkin_world::block::registry::State,
         ),
         GetBlockError,

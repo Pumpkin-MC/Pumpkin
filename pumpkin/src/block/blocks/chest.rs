@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_data::block::Block;
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     screen::WindowType,
@@ -8,7 +9,7 @@ use pumpkin_inventory::{Chest, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::{Block, get_block};
+use pumpkin_world::block::registry::get_block;
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -120,7 +121,7 @@ impl ChestBlock {
                 .await;
         }
 
-        if let Some(e) = get_block("minecraft:chest").cloned() {
+        if let Some(e) = get_block("minecraft:chest") {
             server
                 .broadcast_packet_all(&CBlockAction::new(
                     &location,

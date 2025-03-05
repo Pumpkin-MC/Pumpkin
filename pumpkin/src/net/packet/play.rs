@@ -52,7 +52,7 @@ use pumpkin_util::{
     text::TextComponent,
 };
 use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;

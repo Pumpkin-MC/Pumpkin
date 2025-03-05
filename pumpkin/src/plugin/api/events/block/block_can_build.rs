@@ -1,5 +1,5 @@
 use pumpkin_macros::{Event, cancellable};
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 use std::sync::Arc;
 
 use crate::entity::player::Player;

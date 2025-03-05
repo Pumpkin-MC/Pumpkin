@@ -8,7 +8,7 @@ use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 use std::sync::Arc;
 
 use super::properties::Direction;

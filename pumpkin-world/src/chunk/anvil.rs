@@ -11,7 +11,7 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
 };
 
-use crate::block::registry::STATE_ID_TO_REGISTRY_ID;
+use crate::block::registry::get_block_by_state_id;
 use crate::{chunk::ChunkWritingError, level::LevelFolder};
 
 use super::{
@@ -375,7 +375,7 @@ impl AnvilChunkFormat {
                 .into_iter()
                 .enumerate()
                 .map(|(i, block)| {
-                    let name = STATE_ID_TO_REGISTRY_ID.get(block).unwrap();
+                    let name = get_block_by_state_id(*block).unwrap().name;
                     (block, (name, i))
                 })
                 .collect();
