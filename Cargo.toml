@@ -9,7 +9,8 @@ members = [
     "pumpkin-protocol/",
     "pumpkin-registry/",
     "pumpkin-world",
-    "pumpkin/", "pumpkin-data",
+    "pumpkin/",
+    "pumpkin-data",
 ]
 
 [workspace.package]
@@ -40,6 +41,7 @@ tokio = { version = "1.43", features = [
     "sync",
     "io-std",
     "signal",
+    "fs",
 ] }
 
 thiserror = "2.0"
@@ -47,8 +49,8 @@ thiserror = "2.0"
 bytes = "1.10"
 
 # Concurrency/Parallelism and Synchronization
+futures = "0.3"
 rayon = "1.10"
-parking_lot = { version = "0.12", features = ["send_guard"] }
 crossbeam = "0.8"
 
 uuid = { version = "1.15", features = ["serde", "v3", "v4"] }
