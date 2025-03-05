@@ -13,26 +13,26 @@ pub struct BlockProperty {
 
 fn get_enum_name(props: Vec<String>) -> String {
     // Define the mapping of variant sets to new enum names
-    let enum_mappings: Vec<(Vec<&str>, &str)> = vec![
-        (vec!["true", "false"], "Boolean"),
-        (vec!["x", "y", "z"], "Axis"),
-        (vec!["0", "1"], "Level0to1"),
-        (vec!["0", "1", "2", "3", "4"], "Level0to4"),
+    let enum_mappings: &[(&[&str], &str)] = &[
+        (&["true", "false"], "Boolean"),
+        (&["x", "y", "z"], "Axis"),
+        (&["0", "1"], "Level0to1"),
+        (&["0", "1", "2", "3", "4"], "Level0to4"),
         (
-            vec![
+            &[
                 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
                 "15",
             ],
             "Level0to15",
         ),
-        (vec!["0", "1", "2", "3"], "Level0to3"),
-        (vec!["1", "2", "3", "4", "5", "6", "7"], "Level1to7"),
+        (&["0", "1", "2", "3"], "Level0to3"),
+        (&["1", "2", "3", "4", "5", "6", "7"], "Level1to7"),
         (
-            vec!["north", "east", "south", "west", "up", "down"],
+            &["north", "east", "south", "west", "up", "down"],
             "Direction",
         ),
         (
-            vec![
+            &[
                 "harp",
                 "basedrum",
                 "snare",
@@ -60,16 +60,16 @@ fn get_enum_name(props: Vec<String>) -> String {
             "Instrument",
         ),
         (
-            vec![
+            &[
                 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
                 "15", "16", "17", "18", "19", "20", "21", "22", "23", "24",
             ],
             "Level0to24",
         ),
-        (vec!["north", "south", "west", "east"], "CardinalDirection"),
-        (vec!["head", "foot"], "BedPart"),
+        (&["north", "south", "west", "east"], "CardinalDirection"),
+        (&["head", "foot"], "BedPart"),
         (
-            vec![
+            &[
                 "north_south",
                 "east_west",
                 "ascending_east",
@@ -79,11 +79,11 @@ fn get_enum_name(props: Vec<String>) -> String {
             ],
             "RailShape",
         ),
-        (vec!["upper", "lower"], "VerticalHalf"),
-        (vec!["normal", "sticky"], "PistonType"),
-        (vec!["top", "bottom"], "VerticalBlockHalf"),
+        (&["upper", "lower"], "VerticalHalf"),
+        (&["normal", "sticky"], "PistonType"),
+        (&["top", "bottom"], "VerticalBlockHalf"),
         (
-            vec![
+            &[
                 "straight",
                 "inner_left",
                 "inner_right",
@@ -92,12 +92,12 @@ fn get_enum_name(props: Vec<String>) -> String {
             ],
             "StairShape",
         ),
-        (vec!["single", "left", "right"], "ChestType"),
-        (vec!["up", "side", "none"], "RedstoneConnection"),
-        (vec!["0", "1", "2", "3", "4", "5", "6", "7"], "Level0to7"),
-        (vec!["left", "right"], "DoorHinge"),
+        (&["single", "left", "right"], "ChestType"),
+        (&["up", "side", "none"], "RedstoneConnection"),
+        (&["0", "1", "2", "3", "4", "5", "6", "7"], "Level0to7"),
+        (&["left", "right"], "DoorHinge"),
         (
-            vec![
+            &[
                 "north_south",
                 "east_west",
                 "ascending_east",
@@ -111,36 +111,33 @@ fn get_enum_name(props: Vec<String>) -> String {
             ],
             "ExtendedRailShape",
         ),
-        (vec!["floor", "wall", "ceiling"], "AttachmentFace"),
-        (vec!["1", "2", "3", "4", "5", "6", "7", "8"], "Level1to8"),
-        (vec!["x", "z"], "XYAxis"),
-        (vec!["0", "1", "2", "3", "4", "5", "6"], "Level0to6"),
-        (vec!["1", "2", "3", "4"], "Level1to4"),
-        (vec!["top", "bottom", "double"], "SlabType"),
-        (vec!["none", "low", "tall"], "WallHeight"),
-        (vec!["1", "2", "3"], "Level1to3"),
-        (vec!["0", "1", "2"], "Level0to2"),
-        (vec!["compare", "subtract"], "ComparatorMode"),
+        (&["floor", "wall", "ceiling"], "AttachmentFace"),
+        (&["1", "2", "3", "4", "5", "6", "7", "8"], "Level1to8"),
+        (&["x", "z"], "XYAxis"),
+        (&["0", "1", "2", "3", "4", "5", "6"], "Level0to6"),
+        (&["1", "2", "3", "4"], "Level1to4"),
+        (&["top", "bottom", "double"], "SlabType"),
+        (&["none", "low", "tall"], "WallHeight"),
+        (&["1", "2", "3"], "Level1to3"),
+        (&["0", "1", "2"], "Level0to2"),
+        (&["compare", "subtract"], "ComparatorMode"),
+        (&["down", "north", "south", "west", "east"], "DirectionNoUp"),
+        (&["0", "1", "2", "3", "4", "5"], "Level0to5"),
         (
-            vec!["down", "north", "south", "west", "east"],
-            "DirectionNoUp",
-        ),
-        (vec!["0", "1", "2", "3", "4", "5"], "Level0to5"),
-        (
-            vec![
+            &[
                 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
                 "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25",
             ],
             "Level0to25",
         ),
-        (vec!["none", "small", "large"], "LeafSize"),
+        (&["none", "small", "large"], "LeafSize"),
         (
-            vec!["floor", "ceiling", "single_wall", "double_wall"],
+            &["floor", "ceiling", "single_wall", "double_wall"],
             "BellAttachment",
         ),
-        (vec!["save", "load", "corner", "data"], "StructureBlockMode"),
+        (&["save", "load", "corner", "data"], "StructureBlockMode"),
         (
-            vec![
+            &[
                 "down_east",
                 "down_north",
                 "down_south",
@@ -156,19 +153,16 @@ fn get_enum_name(props: Vec<String>) -> String {
             ],
             "Orientation",
         ),
+        (&["0", "1", "2", "3", "4", "5", "6", "7", "8"], "Level0to8"),
+        (&["inactive", "active", "cooldown"], "SculkSensorPhase"),
         (
-            vec!["0", "1", "2", "3", "4", "5", "6", "7", "8"],
-            "Level0to8",
-        ),
-        (vec!["inactive", "active", "cooldown"], "SculkSensorPhase"),
-        (
-            vec!["tip_merge", "tip", "frustum", "middle", "base"],
+            &["tip_merge", "tip", "frustum", "middle", "base"],
             "DripstoneThickness",
         ),
-        (vec!["up", "down"], "VerticalDirection"),
-        (vec!["none", "unstable", "partial", "full"], "TiltState"),
+        (&["up", "down"], "VerticalDirection"),
+        (&["none", "unstable", "partial", "full"], "TiltState"),
         (
-            vec![
+            &[
                 "inactive",
                 "waiting_for_players",
                 "active",
@@ -179,7 +173,7 @@ fn get_enum_name(props: Vec<String>) -> String {
             "TrialSpawnerState",
         ),
         (
-            vec!["inactive", "active", "unlocking", "ejecting"],
+            &["inactive", "active", "unlocking", "ejecting"],
             "VaultState",
         ),
     ];
@@ -428,6 +422,271 @@ impl ToTokens for BlockStateRef {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+pub struct LootTable {
+    r#type: LootTableType,
+    random_sequence: Option<String>,
+    pools: Option<Vec<LootPool>>,
+}
+
+impl ToTokens for LootTable {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let dase = self.r#type.to_token_stream();
+        let random_sequence = match &self.random_sequence {
+            Some(seq) => quote! { Some(#seq) },
+            None => quote! { None },
+        };
+        let pools = match &self.pools {
+            Some(pools) => {
+                let pool_tokens: Vec<_> = pools.iter().map(|pool| pool.to_token_stream()).collect();
+                quote! { Some(&[#(#pool_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+
+        tokens.extend(quote! {
+            LootTable {
+                r#type: #dase,
+                random_sequence: #random_sequence,
+                pools: #pools,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootPool {
+    entries: Vec<LootPoolEntry>,
+    rolls: f32, // TODO
+    bonus_rolls: f32,
+}
+
+impl ToTokens for LootPool {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let entries_tokens: Vec<_> = self.entries.iter().map(|entry| entry.to_token_stream()).collect();
+        let rolls = LitFloat::new(&self.rolls.to_string(), Span::call_site());
+        let bonus_rolls = LitFloat::new(&self.bonus_rolls.to_string(), Span::call_site());
+
+        tokens.extend(quote! {
+            LootPool {
+                entries: &[#(#entries_tokens),*],
+                rolls: #rolls as f32,
+                bonus_rolls: #bonus_rolls as f32,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ItemEntry {
+    name: String,
+}
+
+impl ToTokens for ItemEntry {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = LitStr::new(&self.name, Span::call_site());
+
+        tokens.extend(quote! {
+            ItemEntry {
+                name: #name,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct AlternativeEntry {
+    children: Vec<LootPoolEntry>,
+}
+
+impl ToTokens for AlternativeEntry {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let children = self.children.iter().map(|entry| entry.to_token_stream());
+
+        tokens.extend(quote! {
+            AlternativeEntry {
+                children: &[#(#children),*],
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum LootPoolEntryTypes {
+    #[serde(rename = "minecraft:empty")]
+    Empty,
+    #[serde(rename = "minecraft:item")]
+    Item(ItemEntry),
+    #[serde(rename = "minecraft:loot_table")]
+    LootTable,
+    #[serde(rename = "minecraft:dynamic")]
+    Dynamic,
+    #[serde(rename = "minecraft:tag")]
+    Tag,
+    #[serde(rename = "minecraft:alternatives")]
+    Alternatives(AlternativeEntry),
+    #[serde(rename = "minecraft:sequence")]
+    Sequence,
+    #[serde(rename = "minecraft:group")]
+    Group,
+}
+
+impl ToTokens for LootPoolEntryTypes {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            LootPoolEntryTypes::Empty => {
+                tokens.extend(quote! { LootPoolEntryTypes::Empty });
+            }
+            LootPoolEntryTypes::Item(item) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Item(#item) });
+            }
+            LootPoolEntryTypes::LootTable => {
+                tokens.extend(quote! { LootPoolEntryTypes::LootTable });
+            }
+            LootPoolEntryTypes::Dynamic => {
+                tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
+            }
+            LootPoolEntryTypes::Tag => {
+                tokens.extend(quote! { LootPoolEntryTypes::Tag });
+            }
+            LootPoolEntryTypes::Alternatives(alt) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Alternatives(#alt) });
+            }
+            LootPoolEntryTypes::Sequence => {
+                tokens.extend(quote! { LootPoolEntryTypes::Sequence });
+            }
+            LootPoolEntryTypes::Group => {
+                tokens.extend(quote! { LootPoolEntryTypes::Group });
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "condition")]
+pub enum LootCondition {
+    #[serde(rename = "minecraft:inverted")]
+    Inverted,
+    #[serde(rename = "minecraft:any_of")]
+    AnyOf,
+    #[serde(rename = "minecraft:all_of")]
+    AllOf,
+    #[serde(rename = "minecraft:random_chance")]
+    RandomChance,
+    #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
+    RandomChanceWithEnchantedBonus,
+    #[serde(rename = "minecraft:entity_properties")]
+    EntityProperties,
+    #[serde(rename = "minecraft:killed_by_player")]
+    KilledByPlayer,
+    #[serde(rename = "minecraft:entity_scores")]
+    EntityScores,
+    #[serde(rename = "minecraft:block_state_property")]
+    BlockStateProperty,
+    #[serde(rename = "minecraft:match_tool")]
+    MatchTool,
+    #[serde(rename = "minecraft:table_bonus")]
+    TableBonus,
+    #[serde(rename = "minecraft:survives_explosion")]
+    SurvivesExplosion,
+    #[serde(rename = "minecraft:damage_source_properties")]
+    DamageSourceProperties,
+    #[serde(rename = "minecraft:location_check")]
+    LocationCheck,
+    #[serde(rename = "minecraft:weather_check")]
+    WeatherCheck,
+    #[serde(rename = "minecraft:reference")]
+    Reference,
+    #[serde(rename = "minecraft:time_check")]
+    TimeCheck,
+    #[serde(rename = "minecraft:value_check")]
+    ValueCheck,
+    #[serde(rename = "minecraft:enchantment_active_check")]
+    EnchantmentActiveCheck,
+}
+
+impl ToTokens for LootCondition {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            LootCondition::Inverted => quote! { LootCondition::Inverted },
+            LootCondition::AnyOf => quote! { LootCondition::AnyOf },
+            LootCondition::AllOf => quote! { LootCondition::AllOf },
+            LootCondition::RandomChance => quote! { LootCondition::RandomChance },
+            LootCondition::RandomChanceWithEnchantedBonus => quote! { LootCondition::RandomChanceWithEnchantedBonus },
+            LootCondition::EntityProperties => quote! { LootCondition::EntityProperties },
+            LootCondition::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
+            LootCondition::EntityScores => quote! { LootCondition::EntityScores },
+            LootCondition::BlockStateProperty => quote! { LootCondition::BlockStateProperty },
+            LootCondition::MatchTool => quote! { LootCondition::MatchTool },
+            LootCondition::TableBonus => quote! { LootCondition::TableBonus },
+            LootCondition::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
+            LootCondition::DamageSourceProperties => quote! { LootCondition::DamageSourceProperties },
+            LootCondition::LocationCheck => quote! { LootCondition::LocationCheck },
+            LootCondition::WeatherCheck => quote! { LootCondition::WeatherCheck },
+            LootCondition::Reference => quote! { LootCondition::Reference },
+            LootCondition::TimeCheck => quote! { LootCondition::TimeCheck },
+            LootCondition::ValueCheck => quote! { LootCondition::ValueCheck },
+            LootCondition::EnchantmentActiveCheck => quote! { LootCondition::EnchantmentActiveCheck },
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootPoolEntry {
+    #[serde(flatten)]
+    content: LootPoolEntryTypes,
+    conditions: Option<Vec<LootCondition>>,
+}
+
+impl ToTokens for LootPoolEntry {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let content = &self.content;
+        let conditions_tokens = match &self.conditions {
+            Some(conds) => {
+                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+
+        tokens.extend(quote! {
+            LootPoolEntry {
+                content: #content,
+                conditions: #conditions_tokens,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename = "snake_case")]
+pub enum LootTableType {
+    #[serde(rename = "minecraft:empty")]
+    /// Nothing will be dropped
+    Empty,
+    #[serde(rename = "minecraft:block")]
+    /// A Block will be dropped
+    Block,
+    #[serde(rename = "minecraft:chest")]
+    /// A Item will be dropped
+    Chest,
+}
+
+impl ToTokens for LootTableType {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            LootTableType::Empty => quote! { LootTableType::Empty },
+            LootTableType::Block => quote! { LootTableType::Block },
+            LootTableType::Chest => quote! { LootTableType::Chest },
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct Block {
     pub id: u16,
     pub name: String,
@@ -435,7 +694,10 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
-    // TODO: pub loot_table: Option<LootTable>,
+    pub loot_table: Option<LootTable>,
+    pub slipperiness: f32,
+    pub velocity_multiplier: f32,
+    pub jump_velocity_multiplier: f32,
     pub properties: Vec<BlockProperty>,
     pub default_state_id: u16,
     pub states: Vec<BlockState>,
@@ -449,7 +711,10 @@ pub struct OptimizedBlock {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
-    // TODO: pub loot_table: Option<LootTable>,
+    pub loot_table: Option<LootTable>,
+    pub slipperiness: f32,
+    pub velocity_multiplier: f32,
+    pub jump_velocity_multiplier: f32,
     pub default_state_id: u16,
     pub states: Vec<BlockStateRef>,
 }
@@ -463,9 +728,22 @@ impl ToTokens for OptimizedBlock {
         let blast_resistance = LitFloat::new(&self.blast_resistance.to_string(), Span::call_site());
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
         let default_state_id = LitInt::new(&self.default_state_id.to_string(), Span::call_site());
-
+        let slipperiness = LitFloat::new(&self.slipperiness.to_string(), Span::call_site());
+        let velocity_multiplier =
+            LitFloat::new(&self.velocity_multiplier.to_string(), Span::call_site());
+        let jump_velocity_multiplier = LitFloat::new(
+            &self.jump_velocity_multiplier.to_string(),
+            Span::call_site(),
+        );
         // Generate state tokens
         let states = self.states.iter().map(|state| state.to_token_stream());
+        let loot_table = match &self.loot_table {
+            Some(table) => {
+                let table_tokens = table.to_token_stream();
+                quote! { Some(#table_tokens) }
+            }
+            None => quote! { None },
+        };
 
         tokens.extend(quote! {
             Block {
@@ -474,9 +752,13 @@ impl ToTokens for OptimizedBlock {
                 translation_key: #translation_key,
                 hardness: #hardness as f32,
                 blast_resistance: #blast_resistance as f32,
+                slipperiness: #slipperiness as f32,
+                velocity_multiplier: #velocity_multiplier as f32,
+                jump_velocity_multiplier: #jump_velocity_multiplier as f32,
                 item_id: #item_id,
                 default_state_id: #default_state_id,
                 states: &[#(#states),*],
+                loot_table: #loot_table,
             }
         });
     }
@@ -535,6 +817,10 @@ pub(crate) fn build() -> TokenStream {
                 blast_resistance: block.blast_resistance,
                 item_id: block.item_id,
                 default_state_id: block.default_state_id,
+                slipperiness: block.slipperiness,
+                velocity_multiplier: block.velocity_multiplier,
+                jump_velocity_multiplier: block.jump_velocity_multiplier,
+                loot_table: block.loot_table,
                 states: block
                     .states
                     .iter()
@@ -646,6 +932,89 @@ pub(crate) fn build() -> TokenStream {
             pub state_idx: u16,
         }
 
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct LootTable {
+            r#type: LootTableType,
+            random_sequence: Option<&'static str>,
+            pools: Option<&'static [LootPool]>,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct LootPool {
+            entries: &'static [LootPoolEntry],
+            rolls: f32, // TODO
+            bonus_rolls: f32,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct ItemEntry {
+            name: &'static str,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct AlternativeEntry {
+            children: &'static [LootPoolEntry],
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub enum LootPoolEntryTypes {
+            Empty,
+            Item(ItemEntry),
+            LootTable,
+            Dynamic,
+            Tag,
+            Alternatives(AlternativeEntry),
+            Sequence,
+            Group,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub enum LootCondition {
+            Inverted,
+            AnyOf,
+            AllOf,
+            RandomChance,
+            RandomChanceWithEnchantedBonus,
+            EntityProperties,
+            KilledByPlayer,
+            EntityScores,
+            BlockStateProperty,
+            MatchTool,
+            TableBonus,
+            SurvivesExplosion,
+            DamageSourceProperties,
+            LocationCheck,
+            WeatherCheck,
+            Reference,
+            TimeCheck,
+            ValueCheck,
+            EnchantmentActiveCheck,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct LootPoolEntry {
+            content: LootPoolEntryTypes,
+            conditions: Option<&'static [LootCondition]>,
+        }
+        
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub enum LootTableType {
+            /// Nothing will be dropped
+            Empty,
+            /// A Block will be dropped
+            Block,
+            /// A Item will be dropped
+            Chest,
+        }
+
         #[derive(Clone, Debug)]
         pub struct Block {
             pub id: u16,
@@ -653,9 +1022,13 @@ pub(crate) fn build() -> TokenStream {
             pub translation_key: &'static str,
             pub hardness: f32,
             pub blast_resistance: f32,
+            pub slipperiness: f32,
+            pub velocity_multiplier: f32,
+            pub jump_velocity_multiplier: f32,
             pub item_id: u16,
             pub default_state_id: u16,
             pub states: &'static [BlockStateRef],
+            pub loot_table: Option<LootTable>,
         }
 
         impl PartialEq for Block {
