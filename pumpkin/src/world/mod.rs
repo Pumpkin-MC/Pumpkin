@@ -306,6 +306,8 @@ impl World {
                     .entity
                     .bounding_box
                     .load()
+                    // This is vanilla, but TODO: change this when is in a Vehicle
+                    .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
                     collied_player = Some(player.clone());
@@ -402,7 +404,7 @@ impl World {
         // also send his info to everyone else
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            0x01 | 0x08,
+            0x01 | 0x04 | 0x08,
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: vec![
@@ -411,6 +413,7 @@ impl World {
                         properties: &gameprofile.properties,
                     },
                     PlayerAction::UpdateListed(true),
+                    PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
                 ],
             }],
         ))

@@ -315,14 +315,15 @@ pub(crate) fn build() -> TokenStream {
                 serde_json::from_str(self.components.item_name.unwrap()).expect("Could not parse item name.")
             }
 
-            #[doc = r" Try to parse a Item from a resource location string"]
+            #[doc = "Try to parse a Item from a resource location string"]
             pub fn from_registry_key(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
                     _ => None
                 }
             }
-            #[doc = r" Try to parse a Item from a raw id"]
+
+            #[doc = "Try to parse a Item from a raw id"]
             pub const fn from_id(id: u16) -> Option<Self> {
                 match id {
                     #type_from_raw_id_arms

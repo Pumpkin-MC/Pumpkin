@@ -1009,7 +1009,7 @@ impl Player {
             .create_entity(self.living_entity.entity.pos.load(), EntityType::ITEM);
 
         // TODO: Merge stacks together
-        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count));
+        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }

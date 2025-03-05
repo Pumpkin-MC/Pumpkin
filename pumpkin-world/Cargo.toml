@@ -40,8 +40,7 @@ enum_dispatch = "0.3"
 
 noise = "0.9"
 
-# Had to use custom, because google's is broken, I made a PR.
-serde_json5 = { git = "https://github.com/kralverde/serde_json5.git" }
+serde_json5 = "0.2.0"
 
 derive-getters = "0.5.0"
 [dev-dependencies]

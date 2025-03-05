@@ -19,6 +19,13 @@ impl BoundingBox {
         }
     }
 
+    pub fn expand(&self, x: f64, y: f64, z: f64) -> Self {
+        Self {
+            min: Vector3::new(self.min.x - x, self.min.y - y, self.min.z - z),
+            max: Vector3::new(self.max.x + x, self.max.y + y, self.max.z + z),
+        }
+    }
+
     pub fn offset(&self, other: Self) -> Self {
         Self {
             min: self.min.add(&other.min),

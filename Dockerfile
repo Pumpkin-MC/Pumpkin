@@ -7,6 +7,8 @@ RUN apk add --no-cache musl-dev
 WORKDIR /pumpkin
 COPY . /pumpkin
 
+RUN rustup show active-toolchain || rustup toolchain install
+
 # build release
 RUN --mount=type=cache,sharing=private,target=/pumpkin/target \
     --mount=type=cache,target=/usr/local/cargo/git/db \

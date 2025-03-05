@@ -25,7 +25,7 @@ use pumpkin_inventory::player::{
 };
 use pumpkin_macros::block_entity;
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, COpenSignEditor, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -835,8 +835,21 @@ impl Player {
                     let location = player_action.location;
                     let entity = &self.living_entity.entity;
                     let world = &entity.world.read().await;
-                    let block = world.get_block(&location).await;
+                    let block = world.get_block(&location).await.unwrap();
                     let state = world.get_block_state(&location).await.unwrap();
+
+                    if let Some(held) = self.inventory.lock().await.held_item() {
+                        if !server.item_registry.can_mine(&held.item, &self) {
+                            self.client
+                                .send_packet(&CBlockUpdate::new(
+                                    &location,
+                                    VarInt(i32::from(state.id)),
+                                ))
+                                .await;
+                            self.update_sequence(player_action.sequence.0);
+                            return;
+                        }
+                    }
 
                     // TODO: do validation
                     // TODO: Config
@@ -846,37 +859,33 @@ impl Player {
                         world
                             .break_block(&location, Some(self.clone()), false)
                             .await;
-                        if let Ok(block) = block {
-                            server
-                                .block_registry
-                                .broken(block, &self, location, server)
-                                .await;
-                        }
+                        server
+                            .block_registry
+                            .broken(block, &self, location, server)
+                            .await;
                         return;
                     }
                     self.start_mining_time.store(
                         self.tick_counter.load(std::sync::atomic::Ordering::Relaxed),
                         std::sync::atomic::Ordering::Relaxed,
                     );
-                    if let Ok(block) = block {
-                        if !state.air {
-                            let speed = block::calc_block_breaking(&self, state, &block.name).await;
-                            // Instant break
-                            if speed >= 1.0 {
-                                world.break_block(&location, Some(self.clone()), true).await;
-                                server
-                                    .block_registry
-                                    .broken(block, &self, location, server)
-                                    .await;
-                            } else {
-                                self.mining
-                                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                                *self.mining_pos.lock().await = location;
-                                let progress = (speed * 10.0) as i32;
-                                world.set_block_breaking(entity, location, progress).await;
-                                self.current_block_destroy_stage
-                                    .store(progress, std::sync::atomic::Ordering::Relaxed);
-                            }
+                    if !state.air {
+                        let speed = block::calc_block_breaking(&self, state, &block.name).await;
+                        // Instant break
+                        if speed >= 1.0 {
+                            world.break_block(&location, Some(self.clone()), true).await;
+                            server
+                                .block_registry
+                                .broken(block, &self, location, server)
+                                .await;
+                        } else {
+                            self.mining
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                            *self.mining_pos.lock().await = location;
+                            let progress = (speed * 10.0) as i32;
+                            world.set_block_breaking(entity, location, progress).await;
+                            self.current_block_destroy_stage
+                                .store(progress, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
                     self.update_sequence(player_action.sequence.0);
@@ -1022,14 +1031,13 @@ impl Player {
         let Ok(block) = world.get_block(&location).await else {
             return Err(BlockPlacingError::NoBaseBlock.into());
         };
-
+        let sneaking = self
+            .living_entity
+            .entity
+            .sneaking
+            .load(std::sync::atomic::Ordering::Relaxed);
         let Some(stack) = held_item else {
-            if !self
-                .living_entity
-                .entity
-                .sneaking
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if !sneaking {
                 // Using block with empty hand
                 server
                     .block_registry
@@ -1044,12 +1052,7 @@ impl Player {
             }
             return Ok(());
         };
-        if !self
-            .living_entity
-            .entity
-            .sneaking
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if !sneaking {
             let action_result = server
                 .block_registry
                 .use_with_item(block, self, location, &stack.item, server)

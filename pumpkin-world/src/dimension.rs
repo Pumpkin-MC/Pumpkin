@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 
+use serde::Deserialize;
+
 use crate::level::Level;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Dimension {
     OverWorld,
     Nether,
