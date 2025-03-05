@@ -130,3 +130,9 @@ run/
 *perf.data*
 *flamegraph.svg
 *dhat*
+
+
+# Nix (direnv and result)
+.direnv
+result
+result-*
