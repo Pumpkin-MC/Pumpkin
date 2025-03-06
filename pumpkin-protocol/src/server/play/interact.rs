@@ -11,7 +11,7 @@ use crate::{
 #[packet(PLAY_INTERACT)]
 pub struct SInteract {
     pub entity_id: VarInt,
-    pub typ: VarInt,
+    pub r#type: VarInt,
     pub target_position: Option<Vector3<f32>>,
     pub hand: Option<VarInt>,
     pub sneaking: bool,
@@ -21,8 +21,8 @@ pub struct SInteract {
 impl ServerPacket for SInteract {
     fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
         let entity_id = bytebuf.try_get_var_int()?;
-        let typ = bytebuf.try_get_var_int()?;
-        let action = ActionType::try_from(typ.0)
+        let r#type = bytebuf.try_get_var_int()?;
+        let action = ActionType::try_from(r#type.0)
             .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
         let target_position: Option<Vector3<f32>> = match action {
             ActionType::Interact => None,
@@ -41,7 +41,7 @@ impl ServerPacket for SInteract {
 
         Ok(Self {
             entity_id,
-            typ,
+            r#type,
             target_position,
             hand,
             sneaking: bytebuf.try_get_bool()?,

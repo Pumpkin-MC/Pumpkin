@@ -64,7 +64,9 @@ impl ExperienceOrbEntity {
 
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {
-    async fn tick(&self, _: &Server) {
+    async fn tick(&self, server: &Server) {
+        self.entity.tick(server).await;
+
         let age = self
             .orb_age
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
