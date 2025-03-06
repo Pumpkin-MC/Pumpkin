@@ -109,6 +109,9 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
+    // An LFU cache for storing the most frequently used 16 chunks that are singleton called (not a
+    // part of chunk loading), if a chunk is called in this manner, it is likely to be called again,
+    // so we will watch all chunks while they remain in this cache
     single_chunk_lfu: Mutex<[Vector2<i32>; 16]>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
@@ -1101,12 +1104,7 @@ impl World {
         let mut lfu = self.single_chunk_lfu.lock().await;
 
         #[allow(clippy::single_match_else)]
-        let pos_to_clean = match lfu
-            .iter()
-            .enumerate()
-            .find(|(_, pos)| **pos == chunk_pos)
-            .map(|(index, _)| index)
-        {
+        let pos_to_clean = match lfu.iter().position(|pos| *pos == chunk_pos) {
             Some(index) => {
                 if index > 0 {
                     lfu[..=index].rotate_right(1);
