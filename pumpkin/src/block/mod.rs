@@ -1,5 +1,5 @@
 use blocks::doors::OakDoorBlock;
-use blocks::fences::OakFenceBlock;
+use blocks::fences::register_fence_blocks;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
@@ -29,8 +29,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(TNTBlock);
     manager.register(LeverBlock);
-    manager.register(OakFenceBlock);
     manager.register(OakDoorBlock);
+
+    register_fence_blocks(&mut manager);
 
     Arc::new(manager)
 }

@@ -400,6 +400,10 @@ impl ToTokens for BlockPropertyStruct {
                         None
                     }
                 }
+
+                fn default() -> Self {
+                    Self::from_state_id(Block::from_registry_key(#block_name).unwrap().states[0].id).unwrap()
+                }
             }
         });
     }
@@ -1305,6 +1309,8 @@ pub(crate) fn build() -> TokenStream {
             fn to_state_id(&self) -> u16;
             // Convert a state id back to properties
             fn from_state_id(state_id: u16) -> Option<Self> where Self: Sized;
+            // Get the default properties
+            fn default() -> Self;
         }
 
         pub trait EnumVariants {
