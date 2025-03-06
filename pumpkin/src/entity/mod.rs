@@ -427,6 +427,33 @@ impl Entity {
         self.invulnerable.load(std::sync::atomic::Ordering::Relaxed)
             || self.damage_immunities.contains(damage_type)
     }
+
+    async fn velocity_multiplier(&self, _pos: Vector3<f64>) -> f32 {
+        let world = self.world.read().await;
+        let block = world.get_block(&self.block_pos.load()).await.unwrap();
+        block.velocity_multiplier
+        // if velo_multiplier == 1.0 {
+        //     const VELOCITY_OFFSET: f64 = 0.500001; // Vanilla
+        //     let pos_with_y_offset = BlockPos(Vector3::new(
+        //         pos.x.floor() as i32,
+        //         (pos.y - VELOCITY_OFFSET).floor() as i32,
+        //         pos.z.floor() as i32,
+        //     ));
+        //     let block = world.get_block(&pos_with_y_offset).await.unwrap();
+        //     block.velocity_multiplier
+        // } else {
+        // }
+    }
+
+    async fn tick_move(&self) {
+        let velo = self.velocity.load();
+        let pos = self.pos.load();
+        self.pos
+            .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
+        let multiplier = f64::from(self.velocity_multiplier(pos).await);
+        self.velocity
+            .store(velo.multiply(multiplier, 1.0, multiplier));
+    }
 }
 
 #[async_trait]
@@ -435,7 +462,9 @@ impl EntityBase for Entity {
         false
     }
 
-    async fn tick(&self, _: &Server) {}
+    async fn tick(&self, _: &Server) {
+        self.tick_move().await;
+    }
 
     fn get_entity(&self) -> &Entity {
         self

@@ -6,6 +6,7 @@ use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::slot::Slot,
 };
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
@@ -24,7 +25,14 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
-    pub fn new(entity: Entity, item_id: u16, count: u32) -> Self {
+    pub async fn new(entity: Entity, item_id: u16, count: u32) -> Self {
+        entity
+            .set_velocity(Vector3::new(
+                rand::random::<f64>() * 0.2 - 0.1,
+                0.2,
+                rand::random::<f64>() * 0.2 - 0.1,
+            ))
+            .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
@@ -44,7 +52,8 @@ impl ItemEntity {
 
 #[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self, _server: &Server) {
+    async fn tick(&self, server: &Server) {
+        self.entity.tick(server).await;
         {
             let mut delay = self.pickup_delay.lock().await;
             *delay = delay.saturating_sub(1);

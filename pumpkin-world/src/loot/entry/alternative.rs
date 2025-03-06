@@ -12,14 +12,7 @@ impl AlternativeEntry {
         let mut items = vec![];
         for child in &self.children {
             if let Some(conditions) = &child.conditions {
-                let mut conditions_met = true;
-                for condition in conditions {
-                    if !condition.test() {
-                        conditions_met = false;
-                        break;
-                    }
-                }
-                if !conditions_met {
+                if !conditions.iter().all(|condition| condition.test()) {
                     continue;
                 }
             }

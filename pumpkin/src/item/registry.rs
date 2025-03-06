@@ -10,12 +10,12 @@ use super::pumpkin_item::{ItemMetadata, PumpkinItem};
 
 #[derive(Default)]
 pub struct ItemRegistry {
-    items: HashMap<u16, Arc<dyn PumpkinItem>>,
+    items: HashMap<&'static [u16], Arc<dyn PumpkinItem>>,
 }
 
 impl ItemRegistry {
     pub fn register<T: PumpkinItem + ItemMetadata + 'static>(&mut self, item: T) {
-        self.items.insert(T::ID, Arc::new(item));
+        self.items.insert(T::IDS, Arc::new(item));
     }
 
     pub async fn on_use(&self, item: &Item, player: &Player) {
@@ -41,8 +41,18 @@ impl ItemRegistry {
         }
     }
 
+    pub fn can_mine(&self, item: &Item, player: &Player) -> bool {
+        let pumpkin_block = self.get_pumpkin_item(item.id);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block.can_mine(player);
+        }
+        true
+    }
+
     #[must_use]
     pub fn get_pumpkin_item(&self, item_id: u16) -> Option<&Arc<dyn PumpkinItem>> {
-        self.items.get(&item_id)
+        self.items
+            .iter()
+            .find_map(|(ids, item)| ids.contains(&item_id).then_some(item))
     }
 }

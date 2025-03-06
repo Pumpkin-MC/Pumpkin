@@ -6,7 +6,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::Block;
 
 pub trait ItemMetadata {
-    const ID: u16;
+    const IDS: &'static [u16];
 }
 
 #[async_trait]
@@ -20,5 +20,9 @@ pub trait PumpkinItem: Send + Sync {
         _block: &Block,
         _server: &Server,
     ) {
+    }
+
+    fn can_mine(&self, _player: &Player) -> bool {
+        true
     }
 }

@@ -41,14 +41,7 @@ impl LootPool {
         for _ in 0..i {
             for entry in &self.entries {
                 if let Some(conditions) = &entry.conditions {
-                    let mut conditions_met = true;
-                    for condition in conditions {
-                        if !condition.test() {
-                            conditions_met = false;
-                            break;
-                        }
-                    }
-                    if !conditions_met {
+                    if !conditions.iter().all(|condition| condition.test()) {
                         continue;
                     }
                 }

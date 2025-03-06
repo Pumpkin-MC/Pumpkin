@@ -23,15 +23,15 @@ impl CSetEntityMetadata {
 #[derive(Serialize, Clone)]
 pub struct Metadata<T> {
     index: u8,
-    typ: VarInt,
+    r#type: VarInt,
     value: T,
 }
 
 impl<T> Metadata<T> {
-    pub fn new(index: u8, typ: MetaDataType, value: T) -> Self {
+    pub fn new(index: u8, r#type: MetaDataType, value: T) -> Self {
         Self {
             index,
-            typ: VarInt(typ as i32),
+            r#type: VarInt(r#type as i32),
             value,
         }
     }

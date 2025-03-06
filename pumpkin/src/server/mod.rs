@@ -116,7 +116,7 @@ impl Server {
             ],
             command_dispatcher,
             block_registry: super::block::default_registry(),
-            item_registry: super::item::default_registry(),
+            item_registry: super::item::items::default_registry(),
             block_properties_manager: default_block_properties_manager(),
             auth_client,
             key_store: KeyStore::new(),
@@ -131,6 +131,7 @@ impl Server {
 
     const SPAWN_CHUNK_RADIUS: i32 = 1;
 
+    #[must_use]
     pub fn spawn_chunks() -> Box<[Vector2<i32>]> {
         (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
             .flat_map(|x| {

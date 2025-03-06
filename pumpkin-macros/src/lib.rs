@@ -1,7 +1,7 @@
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro::TokenStream;
-use pumpkin_data::item::Item;
 use quote::quote;
+use syn::{self};
 use syn::{
     Block, Expr, Field, Fields, ItemStruct, Stmt,
     parse::{Nothing, Parser},
@@ -192,29 +192,6 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
         impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
             const NAMESPACE: &'static str = #namespace;
             const ID: &'static str = #id;
-        }
-    };
-
-    code.into()
-}
-
-#[proc_macro_attribute]
-pub fn pumpkin_item(input: TokenStream, item: TokenStream) -> TokenStream {
-    let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
-    let name = &ast.ident;
-    let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
-
-    let input_string = input.to_string();
-    let packet_name = input_string.trim_matches('"');
-    let item_id = Item::from_registry_key(packet_name).unwrap();
-    let id = item_id.id;
-
-    let item: proc_macro2::TokenStream = item.into();
-
-    let code = quote! {
-        #item
-        impl #impl_generics crate::item::pumpkin_item::ItemMetadata for #name #ty_generics {
-            const ID: u16 = #id;
         }
     };
 

@@ -11,7 +11,7 @@ pub struct CSpawnEntity {
     entity_id: VarInt,
     #[serde(with = "uuid::serde::compact")]
     entity_uuid: uuid::Uuid,
-    typ: VarInt,
+    r#type: VarInt,
     position: Vector3<f64>,
     pitch: u8,    // angle
     yaw: u8,      // angle
@@ -25,7 +25,7 @@ impl CSpawnEntity {
     pub fn new(
         entity_id: VarInt,
         entity_uuid: uuid::Uuid,
-        typ: VarInt,
+        r#type: VarInt,
         position: Vector3<f64>,
         pitch: f32,    // angle
         yaw: f32,      // angle
@@ -36,7 +36,7 @@ impl CSpawnEntity {
         Self {
             entity_id,
             entity_uuid,
-            typ,
+            r#type,
             position,
             pitch: (pitch * 256.0 / 360.0).floor() as u8,
             yaw: (yaw * 256.0 / 360.0).floor() as u8,
