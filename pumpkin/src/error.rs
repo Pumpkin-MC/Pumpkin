@@ -1,7 +1,7 @@
-use crate::data::player_data::PlayerDataError;
 use log::log;
 use pumpkin_inventory::InventoryError;
 use pumpkin_protocol::bytebuf::ReadingError;
+use pumpkin_world::data::player_data::PlayerDataError;
 use std::fmt::Display;
 
 pub trait PumpkinError: Send + std::error::Error + Display {

@@ -3,7 +3,7 @@ use crate::block::properties::BlockPropertiesManager;
 use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
-use crate::data::player_data::ServerPlayerData;
+use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::{Entity, EntityId};
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
