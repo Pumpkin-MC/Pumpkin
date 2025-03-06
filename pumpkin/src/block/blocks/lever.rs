@@ -1,11 +1,14 @@
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::{block::CardinalDirection, item::Item};
+use pumpkin_data::block::Block;
+use pumpkin_data::{
+    block::{AttachmentFace, BlockProperties, CardinalDirection, LeverProps},
+    item::Item,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_data::block::Block;
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -20,21 +23,35 @@ pub struct LeverBlock;
 impl PumpkinBlock for LeverBlock {
     async fn on_place(
         &self,
-        server: &Server,
-        world: &World,
+        _server: &Server,
+        _world: &World,
         block: &Block,
         face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
         player_direction: &CardinalDirection,
-        other: bool,
+        _other: bool,
     ) -> u16 {
-        let face = match face {
-            BlockDirection::Down | BlockDirection::Up => *face,
-            _ => face.opposite(),
+        let mut lever_props = LeverProps::from_state_id(block.default_state_id).unwrap();
+
+        match face {
+            BlockDirection::Up => lever_props.face = AttachmentFace::Ceiling,
+            BlockDirection::Down => lever_props.face = AttachmentFace::Floor,
+            _ => lever_props.face = AttachmentFace::Wall,
+        }
+
+        if face == &BlockDirection::Up || face == &BlockDirection::Down {
+            lever_props.facing = player_direction.clone();
+        } else {
+            lever_props.facing = match player_direction {
+                CardinalDirection::North => CardinalDirection::South,
+                CardinalDirection::South => CardinalDirection::North,
+                CardinalDirection::East => CardinalDirection::West,
+                CardinalDirection::West => CardinalDirection::East,
+            }
         };
 
-        block.default_state_id
+        lever_props.to_state_id()
     }
 
     async fn use_with_item(

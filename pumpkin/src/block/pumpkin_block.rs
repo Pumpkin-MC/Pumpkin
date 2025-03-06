@@ -47,14 +47,14 @@ pub trait PumpkinBlock: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     async fn on_place(
         &self,
-        server: &Server,
-        world: &World,
+        _server: &Server,
+        _world: &World,
         block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &CardinalDirection,
-        other: bool,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        _player_direction: &CardinalDirection,
+        _other: bool,
     ) -> u16 {
         block.default_state_id
     }
