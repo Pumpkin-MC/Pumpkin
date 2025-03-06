@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::{block::pumpkin_block::PumpkinBlock, world::World};
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{CraftingTable, OpenContainer};
@@ -41,10 +43,17 @@ impl PumpkinBlock for CraftingTableBlock {
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
+    async fn broken(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
+    ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
-
     async fn close(
         &self,
         _block: &Block,

@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
@@ -60,10 +62,16 @@ impl PumpkinBlock for JukeboxBlock {
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, _block: &Block, player: &Player, location: BlockPos, _server: &Server) {
+    async fn broken(
+        &self,
+        _block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: Arc<World>,
+        _state: BlockState,
+    ) {
         // For now just stop the music at this position
-        let world = &player.living_entity.entity.world.read().await;
-
         world.stop_record(location).await;
     }
 }

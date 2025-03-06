@@ -1097,11 +1097,13 @@ impl World {
         chunk
     }
 
+    /// If server is sent, it will do a block update
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
         cause: Option<Arc<Player>>,
         drop: bool,
+        server: Option<&Server>,
     ) {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
@@ -1132,6 +1134,10 @@ impl World {
                         .await;
                 }
                 None => self.broadcast_packet_all(&particles_packet).await,
+            }
+
+            if let Some(server) = server {
+                self.update_neighbors(server, position, None).await;
             }
         }
     }

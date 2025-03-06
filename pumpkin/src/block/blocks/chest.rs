@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     screen::WindowType,
@@ -55,10 +57,17 @@ impl PumpkinBlock for ChestBlock {
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
+    async fn broken(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
+    ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
-
     async fn close(
         &self,
         _block: &Block,

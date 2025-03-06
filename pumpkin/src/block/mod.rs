@@ -1,3 +1,4 @@
+use blocks::doors::OakDoorBlock;
 use blocks::fences::OakFenceBlock;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use pumpkin_data::block::{Block, BlockState};
@@ -29,6 +30,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TNTBlock);
     manager.register(LeverBlock);
     manager.register(OakFenceBlock);
+    manager.register(OakDoorBlock);
 
     Arc::new(manager)
 }

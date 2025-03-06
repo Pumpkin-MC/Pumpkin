@@ -3,7 +3,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, CardinalDirection};
+use pumpkin_data::block::{Block, BlockState, CardinalDirection};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -61,12 +61,25 @@ pub trait PumpkinBlock: Send + Sync {
         block.default_state_id
     }
 
+    async fn can_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        _block: &Block,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _player_direction: &CardinalDirection,
+    ) -> bool {
+        true
+    }
+
     async fn placed(
         &self,
         _block: &Block,
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
+        _world: &World,
     ) {
     }
 
@@ -76,6 +89,8 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
     ) {
     }
 

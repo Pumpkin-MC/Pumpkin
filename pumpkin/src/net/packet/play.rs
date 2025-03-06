@@ -855,12 +855,20 @@ impl Player {
                     if self.gamemode.load() == GameMode::Creative {
                         // Block break & block break sound
 
+                        let broken_state = world.get_block_state(&location).await.unwrap();
                         world
-                            .break_block(&location, Some(self.clone()), false)
+                            .break_block(&location, Some(self.clone()), false, None)
                             .await;
                         server
                             .block_registry
-                            .broken(world, &block, &self, location, server)
+                            .broken(
+                                Arc::clone(world),
+                                &block,
+                                &self,
+                                location,
+                                server,
+                                broken_state,
+                            )
                             .await;
                         return;
                     }
@@ -872,10 +880,20 @@ impl Player {
                         let speed = block::calc_block_breaking(&self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
-                            world.break_block(&location, Some(self.clone()), true).await;
+                            let broken_state = world.get_block_state(&location).await.unwrap();
+                            world
+                                .break_block(&location, Some(self.clone()), true, None)
+                                .await;
                             server
                                 .block_registry
-                                .broken(world, &block, &self, location, server)
+                                .broken(
+                                    Arc::clone(world),
+                                    &block,
+                                    &self,
+                                    location,
+                                    server,
+                                    broken_state,
+                                )
                                 .await;
                         } else {
                             self.mining
@@ -927,14 +945,24 @@ impl Player {
                     let block = world.get_block(&location).await;
                     let state = world.get_block_state(&location).await;
                     if let Ok(block) = block {
+                        let broken_state = world.get_block_state(&location).await.unwrap();
                         if let Ok(state) = state {
                             let drop = self.gamemode.load() != GameMode::Creative
                                 && self.can_harvest(&state, block.name).await;
-                            world.break_block(&location, Some(self.clone()), drop).await;
+                            world
+                                .break_block(&location, Some(self.clone()), drop, None)
+                                .await;
                         }
                         server
                             .block_registry
-                            .broken(world, &block, &self, location, server)
+                            .broken(
+                                Arc::clone(world),
+                                &block,
+                                &self,
+                                location,
+                                server,
+                                broken_state,
+                            )
                             .await;
                     }
                     self.update_sequence(player_action.sequence.0);
@@ -1367,7 +1395,19 @@ impl Player {
                 }
             }
         }
-        if !intersects {
+        if !intersects
+            && server
+                .block_registry
+                .can_place(
+                    server,
+                    world,
+                    &block,
+                    face,
+                    &final_block_pos,
+                    &self.get_player_direction(),
+                )
+                .await
+        {
             let _replaced_id = world.set_block_state(&final_block_pos, new_state).await;
             server
                 .block_registry

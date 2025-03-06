@@ -2,7 +2,7 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block::{Block, CardinalDirection};
+use pumpkin_data::block::{Block, BlockState, CardinalDirection};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -99,6 +99,24 @@ impl BlockRegistry {
         block.default_state_id
     }
 
+    pub async fn can_place(
+        &self,
+        server: &Server,
+        world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
+        player_direction: &CardinalDirection,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_place(server, world, block, face, block_pos, player_direction)
+                .await;
+        }
+        true
+    }
+
     pub async fn on_placed(
         &self,
         world: &World,
@@ -109,22 +127,27 @@ impl BlockRegistry {
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.placed(block, player, location, server).await;
+            pumpkin_block
+                .placed(block, player, location, server, world)
+                .await;
         }
         world.update_neighbors(server, &location, None).await;
     }
 
     pub async fn broken(
         &self,
-        world: &World,
+        world: Arc<World>,
         block: &Block,
         player: &Player,
         location: BlockPos,
         server: &Server,
+        state: BlockState,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.broken(block, player, location, server).await;
+            pumpkin_block
+                .broken(block, player, location, server, world.clone(), state)
+                .await;
         }
         world.update_neighbors(server, &location, None).await;
     }
