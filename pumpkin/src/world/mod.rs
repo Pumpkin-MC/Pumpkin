@@ -32,8 +32,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket,
     client::play::{
-        CChunkData, CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
+        CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -720,6 +720,7 @@ impl World {
 
                 #[cfg(debug_assertions)]
                 if position == (0, 0).into() {
+                    use pumpkin_protocol::client::play::CChunkData;
                     let binding = chunk.read().await;
                     let packet = CChunkData(&binding);
                     let mut test = bytes::BytesMut::new();
