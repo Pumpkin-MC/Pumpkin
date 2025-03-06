@@ -118,13 +118,13 @@ impl ChunkManager {
 
     #[must_use]
     pub fn can_send_chunk(&self) -> bool {
-        let state_avaliable = match self.batches_sent_since_ack {
+        let state_available = match self.batches_sent_since_ack {
             BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
             BatchState::Initial => true,
             BatchState::Waiting => false,
         };
 
-        state_avaliable && !self.chunk_queue.is_empty()
+        state_available && !self.chunk_queue.is_empty()
     }
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
@@ -299,8 +299,8 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
-            // Defaut to sending 128 chunks per tick
-            chunk_manager: Mutex::new(ChunkManager::new(128)),
+            // Default to sending 16 chunks per tick
+            chunk_manager: Mutex::new(ChunkManager::new(16)),
         }
     }
 

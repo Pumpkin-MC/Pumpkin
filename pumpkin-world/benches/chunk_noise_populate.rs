@@ -134,8 +134,8 @@ fn bench_chunk_io_parallel(c: &mut Criterion) {
         write_group_parallel.bench_with_input(
             BenchmarkId::new("Parallel", n_requests),
             &chunks,
-            |b, paralel_chunks| {
-                let chunks = paralel_chunks.to_vec();
+            |b, parallel_chunks| {
+                let chunks = parallel_chunks.to_vec();
                 b.to_async(&async_handler).iter(async || {
                     let level = Arc::new(Level::from_root_folder(root_dir.clone()));
                     test_writes_parallel(&level, chunks.clone(), n_requests).await
