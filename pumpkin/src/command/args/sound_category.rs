@@ -39,14 +39,15 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
         let category = match s.to_lowercase().as_str() {
             "master" => Some(SoundCategory::Master), // Default category, affects all sounds
             "music" => Some(SoundCategory::Music),   // Background music
+            // i don't use SoundCategory::from_name because its is record and not records :c
             "record" => Some(SoundCategory::Records), // Music discs
             "weather" => Some(SoundCategory::Weather), // Rain, thunder
-            "block" => Some(SoundCategory::Blocks),  // Block sounds
+            "block" => Some(SoundCategory::Blocks),   // Block sounds
             "hostile" => Some(SoundCategory::Hostile), // Hostile mob sounds
             "neutral" => Some(SoundCategory::Neutral), // Neutral mob sounds
             "player" => Some(SoundCategory::Players), // Player sounds
             "ambient" => Some(SoundCategory::Ambient), // Ambient environment
-            "voice" => Some(SoundCategory::Voice),   // Voice/speech
+            "voice" => Some(SoundCategory::Voice),    // Voice/speech
             _ => None,
         };
 

@@ -33,6 +33,7 @@ mod say;
 mod seed;
 mod setblock;
 mod stop;
+mod stopsound;
 mod summon;
 mod teleport;
 mod time;
@@ -73,6 +74,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(bossbar::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(say::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(gamemode::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(stopsound::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(defaultgamemode::init_command_tree(), PermissionLvl::Two);
     // Three
     dispatcher.register(op::init_command_tree(), PermissionLvl::Three);
