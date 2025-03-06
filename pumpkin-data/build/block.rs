@@ -321,7 +321,7 @@ impl ToTokens for PropertyStruct {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockPropertyStruct {
     pub block_name: String,
-    pub entires: Vec<(String, String)>,
+    pub entries: Vec<(String, String)>,
 }
 
 impl ToTokens for BlockPropertyStruct {
@@ -332,10 +332,10 @@ impl ToTokens for BlockPropertyStruct {
         );
         let block_name = self.block_name.clone();
 
-        let mut entires = self.entires.clone();
-        entires.reverse();
+        let mut entries = self.entries.clone();
+        entries.reverse();
 
-        let values = entires.iter().map(|(key, value)| {
+        let values = entries.iter().map(|(key, value)| {
             let key = Ident::new_raw(&key.to_owned(), Span::call_site());
             let value = Ident::new(&value, Span::call_site());
 
@@ -344,12 +344,12 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
-        let field_names: Vec<_> = entires
+        let field_names: Vec<_> = entries
             .iter()
             .map(|(key, _)| Ident::new_raw(key, Span::call_site()))
             .collect();
 
-        let field_types: Vec<_> = entires
+        let field_types: Vec<_> = entries
             .iter()
             .map(|(_, ty)| Ident::new(ty, Span::call_site()))
             .collect();
@@ -413,18 +413,18 @@ pub struct CollisionShape {
 
 impl ToTokens for CollisionShape {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_x = LitFloat::new(&self.min[0].to_string(), Span::call_site());
-        let min_y = LitFloat::new(&self.min[1].to_string(), Span::call_site());
-        let min_z = LitFloat::new(&self.min[2].to_string(), Span::call_site());
+        let min_x = &self.min[0];
+        let min_y = &self.min[1];
+        let min_z = &self.min[2];
 
-        let max_x = LitFloat::new(&self.max[0].to_string(), Span::call_site());
-        let max_y = LitFloat::new(&self.max[1].to_string(), Span::call_site());
-        let max_z = LitFloat::new(&self.max[2].to_string(), Span::call_site());
+        let max_x = &self.max[0];
+        let max_y = &self.max[1];
+        let max_z = &self.max[2];
 
         tokens.extend(quote! {
             CollisionShape {
-                min: [#min_x as f64, #min_y as f64, #min_z as f64],
-                max: [#max_x as f64, #max_y as f64, #max_z as f64],
+                min: [#min_x, #min_y, #min_z],
+                max: [#max_x, #max_y, #max_z],
             }
         });
     }
@@ -458,7 +458,7 @@ impl ToTokens for BlockState {
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let burnable = LitBool::new(self.burnable, Span::call_site());
         let tool_required = LitBool::new(self.tool_required, Span::call_site());
-        let hardness = LitFloat::new(&self.hardness.to_string(), Span::call_site());
+        let hardness = self.hardness;
         let sided_transparency = LitBool::new(self.sided_transparency, Span::call_site());
         let replaceable = LitBool::new(self.replaceable, Span::call_site());
         let opacity = match self.opacity {
@@ -488,7 +488,7 @@ impl ToTokens for BlockState {
                 luminance: #luminance,
                 burnable: #burnable,
                 tool_required: #tool_required,
-                hardness: #hardness as f32,
+                hardness: #hardness,
                 sided_transparency: #sided_transparency,
                 replaceable: #replaceable,
                 collision_shapes: &[#(#collision_shapes),*],
@@ -559,14 +559,14 @@ impl ToTokens for LootPool {
             .iter()
             .map(|entry| entry.to_token_stream())
             .collect();
-        let rolls = LitFloat::new(&self.rolls.to_string(), Span::call_site());
-        let bonus_rolls = LitFloat::new(&self.bonus_rolls.to_string(), Span::call_site());
+        let rolls = &self.rolls;
+        let bonus_rolls = &self.bonus_rolls;
 
         tokens.extend(quote! {
             LootPool {
                 entries: &[#(#entries_tokens),*],
-                rolls: #rolls as f32,
-                bonus_rolls: #bonus_rolls as f32,
+                rolls: #rolls,
+                bonus_rolls: #bonus_rolls,
             }
         });
     }
@@ -828,17 +828,13 @@ impl ToTokens for OptimizedBlock {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let name = LitStr::new(&self.name, Span::call_site());
         let translation_key = LitStr::new(&self.translation_key, Span::call_site());
-        let hardness = LitFloat::new(&self.hardness.to_string(), Span::call_site());
-        let blast_resistance = LitFloat::new(&self.blast_resistance.to_string(), Span::call_site());
+        let hardness = &self.hardness;
+        let blast_resistance = &self.blast_resistance;
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
         let default_state_id = LitInt::new(&self.default_state_id.to_string(), Span::call_site());
-        let slipperiness = LitFloat::new(&self.slipperiness.to_string(), Span::call_site());
-        let velocity_multiplier =
-            LitFloat::new(&self.velocity_multiplier.to_string(), Span::call_site());
-        let jump_velocity_multiplier = LitFloat::new(
-            &self.jump_velocity_multiplier.to_string(),
-            Span::call_site(),
-        );
+        let slipperiness = &self.slipperiness;
+        let velocity_multiplier = &self.velocity_multiplier;
+        let jump_velocity_multiplier = &self.jump_velocity_multiplier;
         let experience = match &self.experience {
             Some(exp) => {
                 let exp_tokens = exp.to_token_stream();
@@ -861,11 +857,11 @@ impl ToTokens for OptimizedBlock {
                 id: #id,
                 name: #name,
                 translation_key: #translation_key,
-                hardness: #hardness as f32,
-                blast_resistance: #blast_resistance as f32,
-                slipperiness: #slipperiness as f32,
-                velocity_multiplier: #velocity_multiplier as f32,
-                jump_velocity_multiplier: #jump_velocity_multiplier as f32,
+                hardness: #hardness,
+                blast_resistance: #blast_resistance,
+                slipperiness: #slipperiness,
+                velocity_multiplier: #velocity_multiplier,
+                jump_velocity_multiplier: #jump_velocity_multiplier,
                 item_id: #item_id,
                 default_state_id: #default_state_id,
                 states: &[#(#states),*],
@@ -972,7 +968,7 @@ pub(crate) fn build() -> TokenStream {
                 .collect();
             block_props.push(BlockPropertyStruct {
                 block_name: block.name.clone(),
-                entires: entries,
+                entries: entries,
             });
         }
 

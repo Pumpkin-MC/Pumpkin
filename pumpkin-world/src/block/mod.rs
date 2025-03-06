@@ -79,9 +79,6 @@ impl BlockDirection {
     }
 
     pub fn vertical() -> [BlockDirection; 2] {
-        [
-            BlockDirection::Down,
-            BlockDirection::Up,
-        ]
+        [BlockDirection::Down, BlockDirection::Up]
     }
 }

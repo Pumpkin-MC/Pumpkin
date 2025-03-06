@@ -11,6 +11,7 @@ use crate::{
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_data::block::Block;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_protocol::client::login::CEncryptionRequest;
@@ -19,7 +20,6 @@ use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
-use pumpkin_data::block::Block;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
 use std::collections::HashMap;

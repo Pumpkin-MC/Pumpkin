@@ -476,7 +476,7 @@ impl Player {
                     *pos,
                     &world,
                     &state,
-                    &block.name,
+                    block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
                 .await;

@@ -41,7 +41,7 @@ impl PumpkinBlock for LeverBlock {
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
-            lever_props.facing = player_direction.clone();
+            lever_props.facing = *player_direction;
         } else {
             lever_props.facing = player_direction.opposite();
         };

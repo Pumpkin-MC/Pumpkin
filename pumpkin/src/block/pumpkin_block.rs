@@ -3,12 +3,12 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
+use pumpkin_data::block::{Block, CardinalDirection};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_data::block::{Block, CardinalDirection};
 use std::sync::Arc;
 
 pub trait BlockMetadata {

@@ -13,6 +13,7 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_data::block::{Block, CardinalDirection};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
@@ -51,7 +52,6 @@ use pumpkin_util::{
     text::TextComponent,
 };
 use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_data::block::{Block, CardinalDirection};
 use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
@@ -869,7 +869,7 @@ impl Player {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     if !state.air {
-                        let speed = block::calc_block_breaking(&self, &state, &block.name).await;
+                        let speed = block::calc_block_breaking(&self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
                             world.break_block(&location, Some(self.clone()), true).await;
@@ -929,7 +929,7 @@ impl Player {
                     if let Ok(block) = block {
                         if let Ok(state) = state {
                             let drop = self.gamemode.load() != GameMode::Creative
-                                && self.can_harvest(&state, &block.name).await;
+                                && self.can_harvest(&state, block.name).await;
                             world.break_block(&location, Some(self.clone()), drop).await;
                         }
                         server

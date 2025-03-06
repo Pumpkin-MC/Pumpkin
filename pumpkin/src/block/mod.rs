@@ -1,10 +1,10 @@
 use blocks::fences::OakFenceBlock;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use pumpkin_data::block::{Block, BlockState};
 use rand::Rng;
 
 use crate::block::registry::BlockRegistry;
@@ -54,6 +54,7 @@ pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experi
     }
 }
 
+#[allow(dead_code)]
 async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     let height = EntityType::ITEM.dimension[1] / 2.0;
     let pos = Vector3::new(
