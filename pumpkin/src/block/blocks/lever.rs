@@ -43,12 +43,7 @@ impl PumpkinBlock for LeverBlock {
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
             lever_props.facing = player_direction.clone();
         } else {
-            lever_props.facing = match player_direction {
-                CardinalDirection::North => CardinalDirection::South,
-                CardinalDirection::South => CardinalDirection::North,
-                CardinalDirection::East => CardinalDirection::West,
-                CardinalDirection::West => CardinalDirection::East,
-            }
+            lever_props.facing = player_direction.opposite();
         };
 
         lever_props.to_state_id()

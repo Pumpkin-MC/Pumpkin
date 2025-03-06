@@ -1321,5 +1321,16 @@ pub(crate) fn build() -> TokenStream {
                 self.name
             }
         }
+
+        impl CardinalDirection {
+            pub fn opposite(&self) -> Self {
+                match self {
+                    CardinalDirection::North => CardinalDirection::South,
+                    CardinalDirection::South => CardinalDirection::North,
+                    CardinalDirection::East => CardinalDirection::West,
+                    CardinalDirection::West => CardinalDirection::East
+                }
+            }
+        }
     }
 }

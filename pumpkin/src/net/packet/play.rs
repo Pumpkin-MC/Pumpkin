@@ -1300,7 +1300,7 @@ impl Player {
 
         let clicked_block_pos = BlockPos(location.0);
         let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;
-        let clicked_block = world.get_block(&clicked_block_pos).await?;
+        let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
         // check block under the world
         if location.0.y + face.to_offset().y < WORLD_LOWEST_Y.into() {
