@@ -20,6 +20,7 @@ bytes.workspace = true
 tokio.workspace = true
 rayon.workspace = true
 derive_more.workspace = true
+uuid.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
