@@ -49,6 +49,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::level::Level;
+use pumpkin_world::level::SyncChunk;
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
     block::registry::{
@@ -56,7 +57,6 @@ use pumpkin_world::{
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
-use pumpkin_world::{chunk::ChunkData, level::SyncChunk};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;

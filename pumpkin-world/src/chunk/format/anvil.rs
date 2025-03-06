@@ -3,7 +3,7 @@ use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
@@ -19,7 +19,6 @@ use tokio::{
 };
 
 use crate::{
-    block::registry::STATE_ID_TO_REGISTRY_ID,
     chunk::{
         ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
         io::{ChunkSerializer, LoadedData},
@@ -458,7 +457,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .into_iter()
             .enumerate()
             .map(|(i, block)| {
-                let name = STATE_ID_TO_REGISTRY_ID.get(block).unwrap();
+                let name = Block::from_state_id(*block).unwrap().name;
                 (block, (name, i))
             })
             .collect();

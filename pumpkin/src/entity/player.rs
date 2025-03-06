@@ -1,4 +1,3 @@
-use pumpkin_world::block::registry::State;
 use std::{
     collections::VecDeque,
     num::NonZeroU8,
@@ -14,6 +13,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
+    block::BlockState,
     damage::DamageType,
     entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
@@ -61,7 +61,7 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
+use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use super::{

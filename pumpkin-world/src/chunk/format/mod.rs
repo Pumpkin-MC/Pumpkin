@@ -7,7 +7,7 @@ use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::BlockState,
+    block::WorldBlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
 };
 
@@ -62,9 +62,9 @@ impl ChunkData {
             let palette = block_states
                 .palette
                 .iter()
-                .map(|entry| match BlockState::new(&entry.name) {
+                .map(|entry| match WorldBlockState::new(&entry.name) {
                     // Block not found, Often the case when World has an newer or older version then block registry
-                    None => BlockState::AIR,
+                    None => WorldBlockState::AIR,
                     Some(state) => state,
                 })
                 .collect::<Vec<_>>();

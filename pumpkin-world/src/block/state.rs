@@ -1,19 +1,19 @@
 use super::registry::{get_block, get_state_by_state_id};
 
 #[derive(Clone, Copy, Debug, Eq)]
-pub struct BlockState {
+pub struct WorldBlockState {
     pub state_id: u16,
     pub block_id: u16,
 }
 
-impl PartialEq for BlockState {
+impl PartialEq for WorldBlockState {
     fn eq(&self, other: &Self) -> bool {
         self.state_id == other.state_id
     }
 }
 
-impl BlockState {
-    pub const AIR: BlockState = BlockState {
+impl WorldBlockState {
+    pub const AIR: WorldBlockState = WorldBlockState {
         state_id: 0,
         block_id: 0,
     };
@@ -44,17 +44,17 @@ impl BlockState {
 
 #[cfg(test)]
 mod tests {
-    use super::BlockState;
+    use super::WorldBlockState;
 
     #[test]
     fn not_existing() {
-        let result = BlockState::new("this_block_does_not_exist");
+        let result = WorldBlockState::new("this_block_does_not_exist");
         assert!(result.is_none());
     }
 
     #[test]
     fn does_exist() {
-        let result = BlockState::new("dirt");
+        let result = WorldBlockState::new("dirt");
         assert!(result.is_some());
     }
 }
