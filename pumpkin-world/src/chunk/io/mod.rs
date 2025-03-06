@@ -56,10 +56,19 @@ where
         chunks_data: Vec<(Vector2<i32>, D)>,
     ) -> Result<(), ChunkWritingError>;
 
+    /// Tells the `ChunkIO` that these chunks are currently loaded in memory
+    async fn watch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]);
+
+    /// Tells the `ChunkIO` that these chunks are no longer loaded in memory
+    async fn unwatch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]);
+
+    /// Tells the `ChunkIO` that no more chunks are loaded in memory
+    async fn clear_watched_chunks(&self);
+
     async fn clean_up_log(&self);
 
     /// Ensure that all ongoing operations are finished
-    async fn close(&self);
+    async fn block_and_await_ongoing_tasks(&self);
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.
@@ -71,7 +80,7 @@ pub trait ChunkSerializer: Send + Sync + Default {
     type Data: Send + Sync + Sized;
 
     /// Get the key for the chunk (like the file name)
-    fn get_chunk_key(chunk: Vector2<i32>) -> String;
+    fn get_chunk_key(chunk: &Vector2<i32>) -> String;
 
     /// Serialize the data to bytes.
     async fn write(&self, w: &mut (impl AsyncWrite + Unpin + Send)) -> Result<(), std::io::Error>;

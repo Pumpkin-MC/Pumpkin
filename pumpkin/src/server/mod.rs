@@ -102,11 +102,6 @@ impl Server {
             DimensionType::Overworld,
         );
 
-        // Spawn chunks are never unloaded
-        for chunk in Self::spawn_chunks() {
-            world.level.mark_chunk_as_newly_watched(chunk);
-        }
-
         Self {
             cached_registry: Registry::get_synced(),
             open_containers: RwLock::new(HashMap::new()),
@@ -136,10 +131,13 @@ impl Server {
 
     const SPAWN_CHUNK_RADIUS: i32 = 1;
 
-    pub fn spawn_chunks() -> impl Iterator<Item = Vector2<i32>> {
-        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).flat_map(|x| {
-            (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS).map(move |z| Vector2::new(x, z))
-        })
+    pub fn spawn_chunks() -> Box<[Vector2<i32>]> {
+        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
+            .flat_map(|x| {
+                (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
+                    .map(move |z| Vector2::new(x, z))
+            })
+            .collect()
     }
 
     /// Adds a new player to the server.

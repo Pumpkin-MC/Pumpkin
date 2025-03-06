@@ -185,6 +185,14 @@ impl PumpkinServer {
     pub async fn new() -> Self {
         let server = Arc::new(Server::new());
 
+        // Spawn chunks are never unloaded
+        for world in server.worlds.read().await.iter() {
+            world
+                .level
+                .mark_chunks_as_newly_watched(&Server::spawn_chunks())
+                .await;
+        }
+
         // Setup the TCP server socket.
         let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.server_address)
             .await

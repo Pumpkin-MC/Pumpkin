@@ -288,7 +288,7 @@ impl AnvilChunkData {
 }
 
 impl AnvilChunkFile {
-    pub const fn get_region_coords(at: Vector2<i32>) -> (i32, i32) {
+    pub const fn get_region_coords(at: &Vector2<i32>) -> (i32, i32) {
         // Divide by 32 for the region coordinates
         (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS)
     }
@@ -314,7 +314,7 @@ impl Default for AnvilChunkFile {
 impl ChunkSerializer for AnvilChunkFile {
     type Data = SyncChunk;
 
-    fn get_chunk_key(chunk: Vector2<i32>) -> String {
+    fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = Self::get_region_coords(chunk);
         format!("./r.{}.{}.mca", region_x, region_z)
     }

@@ -117,20 +117,23 @@ impl ChunkManager {
 
     #[must_use]
     pub fn can_send_chunk(&self) -> bool {
-        match self.batches_sent_since_ack {
+        let state_avaliable = match self.batches_sent_since_ack {
             BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
             BatchState::Initial => true,
             BatchState::Waiting => false,
-        }
+        };
+
+        state_avaliable && !self.chunk_queue.is_empty()
     }
 
-    pub fn next_chunk(&mut self, valid_chunk: impl Fn(Vector2<i32>) -> bool) -> Box<[SyncChunk]> {
-        let mut chunks = Vec::with_capacity(self.chunks_per_tick);
-        while let Some((pos, chunk)) = self.chunk_queue.pop_front() {
-            if valid_chunk(pos) {
-                chunks.push(chunk);
-            }
-        }
+    pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
+        let chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunks = Vec::with_capacity(chunk_size);
+        chunks.extend(
+            self.chunk_queue
+                .drain(0..chunk_size)
+                .map(|(_, chunk)| chunk),
+        );
 
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
@@ -143,6 +146,7 @@ impl ChunkManager {
         chunks.into_boxed_slice()
     }
 
+    #[must_use]
     pub fn is_chunk_pending(&self, pos: &Vector2<i32>) -> bool {
         // This is probably comparable to hashmap speed due to the relatively small count of chunks
         // (guestimated to be ~ 1024)
@@ -327,8 +331,7 @@ impl Player {
         let level = &world.level;
 
         // Decrement value of watched chunks
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks);
-
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
@@ -518,27 +521,25 @@ impl Player {
             }
         }
 
-        {
-            let chunk_of_chunks = {
-                let mut chunk_manager = self.chunk_manager.lock().await;
-                chunk_manager.can_send_chunk().then(|| {
-                    chunk_manager.next_chunk(|pos| {
-                        self.watched_section.load().is_within_distance(pos.z, pos.z)
-                    })
-                })
-            };
+        let chunk_of_chunks = {
+            let mut chunk_manager = self.chunk_manager.lock().await;
+            chunk_manager
+                .can_send_chunk()
+                .then(|| chunk_manager.next_chunk())
+        };
 
-            if let Some(chunk_of_chunks) = chunk_of_chunks {
-                self.client.send_packet(&CChunkBatchStart {}).await;
-                let chunk_count = chunk_of_chunks.len();
-                for chunk in chunk_of_chunks {
-                    let chunk = chunk.read().await;
-                    self.client.send_packet(&CChunkData(&chunk)).await;
-                }
-                self.client
-                    .send_packet(&CChunkBatchEnd::new(chunk_count))
-                    .await;
+        if let Some(chunk_of_chunks) = chunk_of_chunks {
+            let chunk_count = chunk_of_chunks.len();
+            self.client.send_packet(&CChunkBatchStart {}).await;
+            for chunk in chunk_of_chunks {
+                let chunk = chunk.read().await;
+                // TODO: Can we check if we still need the chunk to send? Like if its a fast moving
+                // player or something
+                self.client.send_packet(&CChunkData(&chunk)).await;
             }
+            self.client
+                .send_packet(&CChunkBatchEnd::new(chunk_count))
+                .await;
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
@@ -754,7 +755,7 @@ impl Player {
     async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks);
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         level.clean_chunks(&chunks_to_clean).await;
         let client = self.client.clone();
         tokio::spawn(async move {

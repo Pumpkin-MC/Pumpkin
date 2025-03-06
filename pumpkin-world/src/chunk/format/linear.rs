@@ -164,7 +164,7 @@ impl Default for LinearFile {
 impl ChunkSerializer for LinearFile {
     type Data = SyncChunk;
 
-    fn get_chunk_key(chunk: Vector2<i32>) -> String {
+    fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
         format!("./r.{}.{}.linear", region_x, region_z)
     }

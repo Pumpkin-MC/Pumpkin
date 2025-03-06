@@ -1,7 +1,6 @@
 use std::{fs, path::PathBuf, sync::Arc};
 
 use dashmap::{DashMap, Entry};
-use futures::future::join_all;
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
@@ -126,6 +125,9 @@ impl Level {
     pub async fn save(&self) {
         log::info!("Saving level...");
 
+        // wait for chunks currently saving in other threads
+        self.chunk_saver.block_and_await_ongoing_tasks().await;
+
         // save all chunks currently in memory
         let chunks_to_write = self
             .loaded_chunks
@@ -134,10 +136,9 @@ impl Level {
             .collect::<Vec<_>>();
         self.loaded_chunks.clear();
 
+        // TODO: I think the chunk_saver should be at the server level
+        self.chunk_saver.clear_watched_chunks().await;
         self.write_chunks(chunks_to_write).await;
-
-        // wait for chunks currently saving in other threads
-        self.chunk_saver.close().await;
 
         // then lets save the world info
         let result = self
@@ -169,96 +170,114 @@ impl Level {
     /// Marks chunks as "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was not watching
     /// before
-    pub fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
-        chunks.iter().for_each(|chunk| {
-            self.mark_chunk_as_newly_watched(*chunk);
-        });
-    }
-
-    pub fn mark_chunk_as_newly_watched(&self, chunk: Vector2<i32>) {
-        log::trace!("{:?} marked as newly watched", chunk);
-        match self.chunk_watchers.entry(chunk) {
-            Entry::Occupied(mut occupied) => {
-                let value = occupied.get_mut();
-                if let Some(new_value) = value.checked_add(1) {
-                    *value = new_value;
-                    //log::debug!("Watch value for {:?}: {}", chunk, value);
-                } else {
-                    log::error!("Watching overflow on chunk {:?}", chunk);
+    pub async fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
+        for chunk in chunks {
+            log::trace!("{:?} marked as newly watched", chunk);
+            match self.chunk_watchers.entry(*chunk) {
+                Entry::Occupied(mut occupied) => {
+                    let value = occupied.get_mut();
+                    if let Some(new_value) = value.checked_add(1) {
+                        *value = new_value;
+                        //log::debug!("Watch value for {:?}: {}", chunk, value);
+                    } else {
+                        log::error!("Watching overflow on chunk {:?}", chunk);
+                    }
+                }
+                Entry::Vacant(vacant) => {
+                    vacant.insert(1);
                 }
             }
-            Entry::Vacant(vacant) => {
-                vacant.insert(1);
-            }
         }
+
+        self.chunk_saver
+            .watch_chunks(&self.level_folder, chunks)
+            .await;
+    }
+
+    #[inline]
+    pub async fn mark_chunk_as_newly_watched(&self, chunk: Vector2<i32>) {
+        self.mark_chunks_as_newly_watched(&[chunk]).await;
     }
 
     /// Marks chunks no longer "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was watching before
-    pub fn mark_chunks_as_not_watched(&self, chunks: &[Vector2<i32>]) -> Vec<Vector2<i32>> {
-        chunks
-            .iter()
-            .filter(|chunk| self.mark_chunk_as_not_watched(**chunk))
-            .copied()
-            .collect()
+    pub async fn mark_chunks_as_not_watched(&self, chunks: &[Vector2<i32>]) -> Vec<Vector2<i32>> {
+        let mut chunks_to_clean = Vec::new();
+
+        for chunk in chunks {
+            log::trace!("{:?} marked as no longer watched", chunk);
+            match self.chunk_watchers.entry(*chunk) {
+                Entry::Occupied(mut occupied) => {
+                    let value = occupied.get_mut();
+                    *value = value.saturating_sub(1);
+
+                    if *value == 0 {
+                        occupied.remove_entry();
+                        chunks_to_clean.push(*chunk);
+                    }
+                }
+                Entry::Vacant(_) => {
+                    // This can be:
+                    // - Player disconnecting before all packets have been sent
+                    // - Player moving so fast that the chunk leaves the render distance before it
+                    // is loaded into memory
+                }
+            }
+        }
+
+        self.chunk_saver
+            .unwatch_chunks(&self.level_folder, chunks)
+            .await;
+        chunks_to_clean
     }
 
     /// Returns whether the chunk should be removed from memory
-    pub fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
-        log::trace!("{:?} marked as no longer watched", chunk);
-        match self.chunk_watchers.entry(chunk) {
-            Entry::Occupied(mut occupied) => {
-                let value = occupied.get_mut();
-                *value = value.saturating_sub(1);
-
-                if *value == 0 {
-                    occupied.remove_entry();
-                    true
-                } else {
-                    false
-                }
-            }
-            Entry::Vacant(_) => {
-                // This can be:
-                // - Player disconnecting before all packets have been sent
-                // - Player moving so fast that the chunk leaves the render distance before it
-                // is loaded into memory
-                true
-            }
-        }
+    #[inline]
+    pub async fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
+        !self.mark_chunks_as_not_watched(&[chunk]).await.is_empty()
     }
 
     pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
-        let chunk_tasks = chunks.iter().map(async |&at| {
-            let removed_chunk = self.loaded_chunks.remove_if(&at, |at, _| {
-                if let Some(value) = &self.chunk_watchers.get(at) {
-                    return value.is_zero();
+        // Care needs to be take here because of interweaving case:
+        // 1) Remove chunk from cache
+        // 2) Another player wants same chunk
+        // 3) Load (old) chunk from serializer
+        // 4) Write (new) chunk from serializer
+        // Now outdated chunk data is cached and will be written later
+
+        let chunks_with_no_watchers = chunks
+            .iter()
+            .filter_map(|pos| {
+                // Only chunks that have no entry in the watcher map or have 0 watchers
+                if self
+                    .chunk_watchers
+                    .get(pos)
+                    .is_none_or(|count| count.is_zero())
+                {
+                    self.loaded_chunks
+                        .get(pos)
+                        .map(|chunk| (*pos, chunk.value().clone()))
+                } else {
+                    None
                 }
-                true
-            });
-
-            if let Some((at, chunk)) = removed_chunk {
-                log::trace!("{:?} is being cleaned", at);
-                return Some((at, chunk));
-            }
-
-            if let Some(chunk_guard) = &self.loaded_chunks.get(&at) {
-                log::trace!("{:?} is not being cleaned but saved", at);
-                return Some((at, chunk_guard.value().clone()));
-            }
-
-            None
-        });
-
-        let chunks_to_write = join_all(chunk_tasks)
-            .await
-            .into_iter()
-            .flatten()
+            })
             .collect::<Vec<_>>();
 
         let level = self.clone();
         tokio::spawn(async move {
-            level.write_chunks(chunks_to_write).await;
+            let chunks_to_remove = chunks_with_no_watchers.clone();
+            level.write_chunks(chunks_with_no_watchers).await;
+            // Only after we have written the chunks to the serializer do we remove them from the
+            // cache
+            for (pos, _) in chunks_to_remove {
+                let _ = level.loaded_chunks.remove_if(&pos, |_, _| {
+                    // Recheck that there is no one watching
+                    level
+                        .chunk_watchers
+                        .get(&pos)
+                        .is_none_or(|count| count.is_zero())
+                });
+            }
         });
     }
 
@@ -418,7 +437,7 @@ impl Level {
         set.spawn(handle_generate);
 
         self.chunk_saver
-            .fetch_chunks(&self.level_folder, chunks, load_bridge_send)
+            .fetch_chunks(&self.level_folder, &remaining_chunks, load_bridge_send)
             .await;
         let _ = set.join_all().await;
     }

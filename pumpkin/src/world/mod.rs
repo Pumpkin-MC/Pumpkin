@@ -1118,7 +1118,7 @@ impl World {
                 lfu.rotate_right(1);
                 let to_remove = lfu[0];
                 lfu[0] = chunk_pos;
-                self.level.mark_chunk_as_newly_watched(chunk_pos);
+                self.level.mark_chunk_as_newly_watched(chunk_pos).await;
 
                 if to_remove == Vector2::<i32>::default() {
                     // This is our dummy value and spawn chunks are watched anyway
@@ -1131,7 +1131,7 @@ impl World {
         };
 
         if let Some(pos) = pos_to_clean {
-            self.level.mark_chunk_as_not_watched(pos);
+            self.level.mark_chunk_as_not_watched(pos).await;
             if !self.level.is_chunk_watched(&pos) {
                 log::trace!(
                     "Chunk {:?} evicted from single chunk cache... cleaning",

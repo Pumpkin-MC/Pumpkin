@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     io::ErrorKind,
-    ops::Deref,
+    ops::{AddAssign, Deref, SubAssign},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -9,6 +9,7 @@ use std::{
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{error, trace};
+use num_traits::Zero;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
@@ -30,7 +31,8 @@ use super::{ChunkIO, ChunkSerializer, LoadedData};
 /// custom *DashMap* like implementation.
 pub struct ChunkFileManager<S: ChunkSerializer> {
     // Dashmap has rw-locks on shards, but we want per-serializer
-    file_locks: RwLock<BTreeMap<PathBuf, Arc<SerializerCacheEntry<S>>>>,
+    file_locks: RwLock<BTreeMap<PathBuf, SerializerCacheEntry<S>>>,
+    watchers: RwLock<BTreeMap<PathBuf, usize>>,
 }
 //to avoid clippy warnings we extract the type alias
 type SerializerCacheEntry<S> = OnceCell<Arc<RwLock<S>>>;
@@ -39,49 +41,14 @@ impl<S: ChunkSerializer> Default for ChunkFileManager<S> {
     fn default() -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
+            watchers: RwLock::new(BTreeMap::new()),
         }
     }
 }
 
 impl<S: ChunkSerializer> ChunkFileManager<S> {
-    // Only call this when we expect to drop entries (for now just when writing)
-    async fn clean_cache(&self) {
-        log::trace!("Cleaning cache");
-
-        let paths_to_remove = self
-            .file_locks
-            .read()
-            .await
-            .iter()
-            .filter_map(|(path, lock)| {
-                if let Some(lock) = lock.get() {
-                    if Arc::strong_count(lock) <= 1 {
-                        return Some(path.clone());
-                    }
-                }
-                None
-            })
-            .collect::<Vec<_>>();
-
-        if paths_to_remove.is_empty() {
-            return;
-        }
-
-        let mut locks = self.file_locks.write().await;
-        for path in paths_to_remove {
-            if let Some(lock) = locks.get(&path) {
-                if let Some(lock) = lock.get() {
-                    // If we have 1 strong references, it means that the lock is only
-                    // being used by the cache, so we can remove it from the cache
-                    // to avoid memory leaks.
-                    if Arc::strong_count(lock) <= 1 {
-                        locks.remove(&path);
-                        log::trace!("Removed lock for file: {:?}", path);
-                    }
-                }
-            }
-        }
-        log::trace!("Cleaned cache");
+    fn map_key(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.region_folder.join(file_name)
     }
 
     pub async fn read_file(&self, path: &Path) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
@@ -121,37 +88,39 @@ impl<S: ChunkSerializer> ChunkFileManager<S> {
                 Err(err) => return Err(err),
             };
 
-            trace!("Read file from Disk: {:?}", path);
+            trace!("Successfully read file from Disk: {:?}", path);
             Ok(Arc::new(RwLock::new(value)))
         }
 
         // We use a once lock here to quickly make an insertion into the map without holding the
         // lock for too long starving other threads
-
-        let once_cell = if let Some(once_cell) = self.file_locks.read().await.get(path) {
-            once_cell.clone()
+        let serializer = if let Some(once_cell) = self.file_locks.read().await.get(path) {
+            log::trace!("Loading file lock from cache: {:?}", path);
+            once_cell
+                .get_or_try_init(|| read_from_disk(path))
+                .await?
+                .clone()
         } else {
-            self.file_locks
-                .write()
-                .await
+            log::trace!("Cache miss loading file lock from cache: {:?}", path);
+            let mut file_locks = self.file_locks.write().await;
+            file_locks
                 .entry(path.to_path_buf())
-                .or_insert(Arc::new(OnceCell::new()))
+                .or_insert_with(OnceCell::new);
+            let file_locks = file_locks.downgrade();
+            let once_cell = file_locks.get(path).expect("We just inserted this!");
+            once_cell
+                .get_or_try_init(|| read_from_disk(path))
+                .await?
                 .clone()
         };
-
-        let serializer = once_cell
-            .get_or_try_init(|| read_from_disk(path))
-            .await?
-            .clone();
 
         Ok(serializer)
     }
 
     pub async fn write_file(path: &Path, serializer: &S) -> Result<(), ChunkWritingError> {
-        trace!("Opening file from Disk: {:?}", path);
-
         // We use tmp files to avoid corruption of the data if the process is abruptly interrupted.
         let tmp_path = &path.with_extension("tmp");
+        trace!("Writing tmp file to disk: {:?}", tmp_path);
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -190,6 +159,44 @@ where
     D: 'static + Send + Sync + Sized,
     S: ChunkSerializer<Data = D>,
 {
+    async fn watch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]) {
+        // It is intentional that regions are watched multiple times (once per chunk)
+        let mut watchers = self.watchers.write().await;
+        for chunk in chunks {
+            let key = S::get_chunk_key(chunk);
+            let map_key = Self::map_key(folder, &key);
+            match watchers.entry(map_key) {
+                std::collections::btree_map::Entry::Vacant(vacant) => {
+                    let _ = vacant.insert(1);
+                }
+                std::collections::btree_map::Entry::Occupied(mut occupied) => {
+                    occupied.get_mut().add_assign(1);
+                }
+            }
+        }
+    }
+
+    async fn unwatch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]) {
+        let mut watchers = self.watchers.write().await;
+        for chunk in chunks {
+            let key = S::get_chunk_key(chunk);
+            let map_key = Self::map_key(folder, &key);
+            match watchers.entry(map_key) {
+                std::collections::btree_map::Entry::Vacant(_vacant) => {}
+                std::collections::btree_map::Entry::Occupied(mut occupied) => {
+                    occupied.get_mut().sub_assign(1);
+                    if occupied.get().is_zero() {
+                        occupied.remove_entry();
+                    }
+                }
+            }
+        }
+    }
+
+    async fn clear_watched_chunks(&self) {
+        self.watchers.write().await.clear();
+    }
+
     async fn fetch_chunks(
         &self,
         folder: &LevelFolder,
@@ -198,19 +205,19 @@ where
     ) {
         let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
 
-        for &at in chunk_coords {
+        for at in chunk_coords {
             let key = S::get_chunk_key(at);
 
             regions_chunks
                 .entry(key)
-                .and_modify(|chunks| chunks.push(at))
-                .or_insert(vec![at]);
+                .and_modify(|chunks| chunks.push(*at))
+                .or_insert(vec![*at]);
         }
 
         // we use a Sync Closure with an Async Block to execute the tasks in parallel
         // with out waiting the future. Also it improve we File Cache utilizations.
         let tasks = regions_chunks.into_iter().map(async |(file_name, chunks)| {
-            let path = folder.region_folder.join(file_name);
+            let path = Self::map_key(folder, &file_name);
             let chunk_serializer = match self.read_file(&path).await {
                 Ok(chunk_serializer) => chunk_serializer,
                 Err(ChunkReadingError::ChunkNotExist) => {
@@ -240,7 +247,7 @@ where
         let mut regions_chunks: BTreeMap<String, Vec<D>> = BTreeMap::new();
 
         for (at, chunk) in chunks_data {
-            let key = S::get_chunk_key(at);
+            let key = S::get_chunk_key(&at);
 
             match regions_chunks.entry(key) {
                 std::collections::btree_map::Entry::Occupied(mut occupied) => {
@@ -257,8 +264,8 @@ where
         let tasks = regions_chunks
             .into_iter()
             .map(async |(file_name, chunk_locks)| {
-                let path = folder.region_folder.join(file_name);
-                log::trace!("Saving file {}", path.display());
+                let path = Self::map_key(folder, &file_name);
+                log::trace!("Updating data for file {:?}", path);
 
                 let chunk_serializer = match self.read_file(&path).await {
                     Ok(file) => Ok(file),
@@ -275,17 +282,40 @@ where
                     }
                 }?;
 
-                log::trace!("Saving file {} (obtained lock)", path.display());
-
                 let mut serializer = chunk_serializer.write().await;
                 serializer.update_chunks(&chunk_locks).await?;
+                log::trace!("Updated data for file {:?}", path);
 
-                // With the modification done, we can drop the write lock but keep the read lock
-                // to avoid other threads to write/modify the data, but allow other threads to read it
-                let serializer = serializer.downgrade();
-                let serializer_ref = serializer.deref();
-                Self::write_file(&path, serializer_ref).await?;
-                log::trace!("Saved file {}", path.display());
+                // Only write the file if no chunks are being used
+                if self
+                    .watchers
+                    .read()
+                    .await
+                    .get(&path)
+                    .is_none_or(|count| count.is_zero())
+                {
+                    // With the modification done, we can drop the write lock but keep the read lock
+                    // to avoid other threads to write/modify the data, but allow other threads to read it
+                    let serializer = serializer.downgrade();
+                    let serializer_ref = serializer.deref();
+                    Self::write_file(&path, serializer_ref).await?;
+                    log::trace!("Saved file {:?}", path);
+                    drop(serializer);
+
+                    // If there are still no watchers, drop from the locks
+                    let mut locks = self.file_locks.write().await;
+
+                    if self
+                        .watchers
+                        .read()
+                        .await
+                        .get(&path)
+                        .is_none_or(|count| count.is_zero())
+                    {
+                        locks.remove(&path);
+                        log::trace!("Removed lockfile cache {:?}", path);
+                    }
+                }
 
                 Ok(())
             });
@@ -294,7 +324,6 @@ where
         // files to save
         let _: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
 
-        self.clean_cache().await;
         Ok(())
     }
 
@@ -303,7 +332,7 @@ where
         log::debug!("{} File locks remain in cache", locks.len());
     }
 
-    async fn close(&self) {
+    async fn block_and_await_ongoing_tasks(&self) {
         //we need to block any other operation
         let serializer_cache = self.file_locks.write().await;
 
@@ -328,6 +357,5 @@ where
         // We need to wait to ensure that all the locks are acquired
         // so there is no **operation** ongoing
         let _ = join_all(tasks).await;
-        log::debug!("FileManager Closed, no more operations allowed");
     }
 }
