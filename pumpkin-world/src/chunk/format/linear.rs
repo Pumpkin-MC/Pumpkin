@@ -454,11 +454,11 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
 
-            for (at, chunk) in &chunks {
+            for (_, chunk) in &chunks {
                 let chunk = chunk.read().await;
                 for read_chunk in read_chunks.iter() {
-                    if chunk.position == *at {
-                        let read_chunk = read_chunk.read().await;
+                    let read_chunk = read_chunk.read().await;
+                    if read_chunk.position == chunk.position {
                         assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
                         break;
                     }

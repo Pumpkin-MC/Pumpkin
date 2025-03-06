@@ -608,10 +608,7 @@ mod tests {
         for i in 0..5 {
             println!("Iteration {}", i + 1);
             chunk_saver
-                .save_chunks(
-                    &level_folder,
-                    chunks.clone().into_iter().collect::<Vec<_>>(),
-                )
+                .save_chunks(&level_folder, chunks.clone())
                 .await
                 .expect("Failed to write chunk");
 
@@ -620,7 +617,6 @@ mod tests {
 
             let chunk_pos = chunks.iter().map(|(at, _)| *at).collect::<Vec<_>>();
             let spawn = chunk_saver.fetch_chunks(&level_folder, &chunk_pos, send);
-
             let collect = async {
                 while let Some(data) = recv.recv().await {
                     read_chunks.push(data);
@@ -640,11 +636,11 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
 
-            for (at, chunk) in &chunks {
+            for (_, chunk) in &chunks {
+                let chunk = chunk.read().await;
                 for read_chunk in read_chunks.iter() {
-                    let chunk = chunk.read().await;
-                    if chunk.position == *at {
-                        let read_chunk = read_chunk.read().await;
+                    let read_chunk = read_chunk.read().await;
+                    if read_chunk.position == chunk.position {
                         assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
                         break;
                     }
