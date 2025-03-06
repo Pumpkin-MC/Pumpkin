@@ -32,8 +32,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket,
     client::play::{
-        CChunkData, CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
+        CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -56,15 +56,13 @@ use pumpkin_world::{
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
+use pumpkin_world::{chunk::ChunkData, level::SyncChunk};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
-use tokio::sync::{Mutex, mpsc::Receiver};
-use tokio::{
-    runtime::Handle,
-    sync::{RwLock, mpsc},
-};
+use tokio::sync::{Mutex, mpsc::UnboundedReceiver};
+use tokio::sync::{RwLock, mpsc};
 
 pub mod border;
 pub mod bossbar;
@@ -112,6 +110,10 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
+    // An LFU cache for storing the most frequently used 16 chunks that are singleton called (not a
+    // part of chunk loading), if a chunk is called in this manner, it is likely to be called again,
+    // so we will watch all chunks while they remain in this cache
+    single_chunk_lfu: Mutex<[Vector2<i32>; 16]>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
@@ -135,6 +137,7 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
+            single_chunk_lfu: Mutex::new([Vector2::default(); 16]),
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -676,6 +679,7 @@ impl World {
         self.send_world_info(player, position, yaw, pitch).await;
     }
 
+    // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
     fn spawn_world_chunks(
         &self,
@@ -702,8 +706,14 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        let mut receiver = self.receive_chunks(chunks);
+        // We are loading a completely new work section: prioritize chunks the player is on top
+        // of
+        let new_spawn = chunks[0] == player.watched_section.load().center;
+        let mut receiver = self.receive_chunks(chunks, new_spawn);
         let level = self.level.clone();
+
+        // Only allow 128 chunk packets to be sent at a time to avoid overloading the client.
+        // TODO: Bulk chunks?
 
         tokio::spawn(async move {
             'main: while let Some((chunk, first_load)) = receiver.recv().await {
@@ -711,6 +721,7 @@ impl World {
 
                 #[cfg(debug_assertions)]
                 if position == (0, 0).into() {
+                    use pumpkin_protocol::client::play::CChunkData;
                     let binding = chunk.read().await;
                     let packet = CChunkData(&binding);
                     let mut test = bytes::BytesMut::new();
@@ -767,22 +778,20 @@ impl World {
                     send_cancellable! {{
                         ChunkSend {
                             world,
-                            chunk,
+                            chunk: chunk.clone(),
                             cancelled: false,
                         };
 
                         'after: {
-                            player
-                                .client
-                                .send_packet(&CChunkData(&*event.chunk.read().await))
-                                .await;
+                            let mut chunk_manager = player.chunk_manager.lock().await;
+                            chunk_manager.push_chunk(position, chunk);
                         }
                     }};
                 }
             }
 
             #[cfg(debug_assertions)]
-            log::debug!("chunks sent after {}ms ", inst.elapsed().as_millis(),);
+            log::debug!("chunks queued after {}ms ", inst.elapsed().as_millis(),);
         });
     }
 
@@ -1063,38 +1072,82 @@ impl World {
     }
 
     // Stream the chunks (don't collect them and then do stuff with them)
+    /// Spawns a tokio task to stream chunks.
     /// Important: must be called from an async function (or changed to accept a tokio runtime
     /// handle)
     pub fn receive_chunks(
         &self,
         chunks: Vec<Vector2<i32>>,
-    ) -> Receiver<(Arc<RwLock<ChunkData>>, bool)> {
-        let (sender, receive) = mpsc::channel(chunks.len());
+        new_spawn: bool,
+    ) -> UnboundedReceiver<(SyncChunk, bool)> {
+        let (sender, receiver) = mpsc::unbounded_channel();
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
-        let rt = Handle::current();
-        rayon::spawn(move || {
-            level.fetch_chunks(&chunks, sender, &rt);
+        tokio::spawn(async move {
+            if new_spawn {
+                if let Some((priority, rest)) = chunks.split_at_checked(9) {
+                    // Ensure client gets 9 closest chunks first
+                    level.fetch_chunks(priority, sender.clone()).await;
+                    level.fetch_chunks(rest, sender).await;
+                } else {
+                    level.fetch_chunks(&chunks, sender).await;
+                }
+            } else {
+                level.fetch_chunks(&chunks, sender).await;
+            }
         });
-        receive
+
+        receiver
     }
 
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
-        let mut receiver = self.receive_chunks(vec![chunk_pos]);
-        let chunk = receiver
-            .recv()
-            .await
-            .expect("Channel closed for unknown reason");
+        let mut receiver = self.receive_chunks(vec![chunk_pos], false);
 
-        if !self.level.is_chunk_watched(&chunk_pos) {
-            log::trace!(
-                "Received chunk {:?}, but it is not watched... cleaning",
-                chunk_pos
-            );
-            self.level.clean_chunk(&chunk_pos).await;
+        // If we are only getting one chunk, we are probably doing something that requires multiple
+        // calls to it. "Watch" it temp.
+
+        let mut lfu = self.single_chunk_lfu.lock().await;
+
+        #[allow(clippy::single_match_else)]
+        let pos_to_clean = match lfu.iter().position(|pos| *pos == chunk_pos) {
+            Some(index) => {
+                if index > 0 {
+                    lfu[..=index].rotate_right(1);
+                }
+                None
+            }
+            None => {
+                // The position isn't in the cache
+                lfu.rotate_right(1);
+                let to_remove = lfu[0];
+                lfu[0] = chunk_pos;
+                self.level.mark_chunk_as_newly_watched(chunk_pos).await;
+
+                if to_remove == Vector2::<i32>::default() {
+                    // This is our dummy value and spawn chunks are watched anyway
+                    // TODO: What if we call this on our default?
+                    None
+                } else {
+                    Some(to_remove)
+                }
+            }
+        };
+
+        if let Some(pos) = pos_to_clean {
+            self.level.mark_chunk_as_not_watched(pos).await;
+            if !self.level.is_chunk_watched(&pos) {
+                log::trace!(
+                    "Chunk {:?} evicted from single chunk cache... cleaning",
+                    chunk_pos
+                );
+                self.level.clean_chunk(&pos).await;
+            }
         }
 
-        chunk
+        receiver
+            .recv()
+            .await
+            .expect("Channel closed for unknown reason")
     }
 
     /// If server is sent, it will do a block update

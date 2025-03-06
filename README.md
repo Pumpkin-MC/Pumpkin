@@ -7,12 +7,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Current version)](https://img.shields.io/badge/current_version-1.21.4-blue)
 
+
 </div>
 
 [Pumpkin](https://pumpkinmc.org/) is a Minecraft server built entirely in Rust, offering a fast, efficient,
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
+<div align="center">
+    
+![2025-03-0615-45-42chunkloading](https://github.com/user-attachments/assets/c29096c7-230d-4093-b139-38ac339f38cc)
 
-![image](https://github.com/user-attachments/assets/7e2e865e-b150-4675-a2d5-b52f9900378e)
+</div>
 
 ## Goals
 
@@ -23,7 +27,9 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - **Extensibility**: Provides a foundation for plugin development.
 
 > [!IMPORTANT]
-> Pumpkin is currently under heavy development.
+> Pumpkin is currently under heavy development. Biomes are currently not implemented but the Terrain matches Vanilla
+![image](https://github.com/user-attachments/assets/aa24941f-216c-47b8-830c-ed5d7bb9ebca)
+
 
 ## Features
 

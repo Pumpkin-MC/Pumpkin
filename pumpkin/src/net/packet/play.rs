@@ -29,7 +29,9 @@ use pumpkin_protocol::client::play::{
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::server::play::{SCookieResponse as SPCookieResponse, SUpdateSign};
+use pumpkin_protocol::server::play::{
+    SChunkBatch, SCookieResponse as SPCookieResponse, SUpdateSign,
+};
 use pumpkin_protocol::{
     client::play::{
         Animation, CCommandSuggestions, CEntityAnimation, CHeadRot, CPingResponse,
@@ -1189,6 +1191,16 @@ impl Player {
                 .await;
         };
         Ok(())
+    }
+
+    pub async fn handle_chunk_batch(&self, packet: SChunkBatch) {
+        let mut chunk_manager = self.chunk_manager.lock().await;
+        chunk_manager.handle_acknowledge(packet.chunks_per_tick);
+        log::trace!(
+            "Client {} requested {} chunks per tick",
+            self.client.id,
+            packet.chunks_per_tick
+        );
     }
 
     // TODO:
