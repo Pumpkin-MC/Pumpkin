@@ -102,11 +102,6 @@ impl Server {
             DimensionType::Overworld,
         );
 
-        // Spawn chunks are never unloaded
-        for chunk in Self::spawn_chunks() {
-            world.level.mark_chunk_as_newly_watched(chunk);
-        }
-
         let world_name = world_path.to_str().unwrap();
 
         Self {
