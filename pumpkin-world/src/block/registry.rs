@@ -1,11 +1,6 @@
-use std::collections::HashMap;
-use std::sync::LazyLock;
 
-use pumpkin_util::math::int_provider::InvProvider;
-use serde::Deserialize;
 
 use pumpkin_data::block::Block;
-use pumpkin_data::block::BLOCK_STATES;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::CollisionShape;
 use pumpkin_data::block::BlockStateRef;

@@ -30,7 +30,7 @@ impl PumpkinBlock for LeverBlock {
         other: bool,
     ) -> u16 {
         let face = match face {
-            BlockDirection::Bottom | BlockDirection::Top => *face,
+            BlockDirection::Down | BlockDirection::Up => *face,
             _ => face.opposite(),
         };
 

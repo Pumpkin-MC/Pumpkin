@@ -9,8 +9,8 @@ pub use state::BlockState;
 
 #[derive(FromPrimitive, PartialEq, Clone, Copy)]
 pub enum BlockDirection {
-    Bottom = 0,
-    Top,
+    Down = 0,
+    Up,
     North,
     South,
     West,
@@ -24,8 +24,8 @@ impl TryFrom<i32> for BlockDirection {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::Bottom),
-            1 => Ok(Self::Top),
+            0 => Ok(Self::Down),
+            1 => Ok(Self::Up),
             2 => Ok(Self::North),
             3 => Ok(Self::South),
             4 => Ok(Self::West),
@@ -38,8 +38,8 @@ impl TryFrom<i32> for BlockDirection {
 impl BlockDirection {
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
-            BlockDirection::Bottom => (0, -1, 0),
-            BlockDirection::Top => (0, 1, 0),
+            BlockDirection::Down => (0, -1, 0),
+            BlockDirection::Up => (0, 1, 0),
             BlockDirection::North => (0, 0, -1),
             BlockDirection::South => (0, 0, 1),
             BlockDirection::West => (-1, 0, 0),
@@ -49,12 +49,39 @@ impl BlockDirection {
     }
     pub fn opposite(&self) -> BlockDirection {
         match self {
-            BlockDirection::Bottom => BlockDirection::Top,
-            BlockDirection::Top => BlockDirection::Bottom,
+            BlockDirection::Down => BlockDirection::Up,
+            BlockDirection::Up => BlockDirection::Down,
             BlockDirection::North => BlockDirection::South,
             BlockDirection::South => BlockDirection::North,
             BlockDirection::West => BlockDirection::East,
             BlockDirection::East => BlockDirection::West,
         }
+    }
+
+    pub fn all() -> [BlockDirection; 6] {
+        [
+            BlockDirection::Down,
+            BlockDirection::Up,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ]
+    }
+
+    pub fn horizontal() -> [BlockDirection; 4] {
+        [
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ]
+    }
+
+    pub fn vertical() -> [BlockDirection; 2] {
+        [
+            BlockDirection::Down,
+            BlockDirection::Up,
+        ]
     }
 }

@@ -11,7 +11,7 @@ pub(crate) mod furnace;
 pub(crate) mod jukebox;
 pub(crate) mod lever;
 pub(crate) mod tnt;
-pub(crate) mod oak_fence;
+pub(crate) mod fences;
 
 /// The standard destroy with container removes the player forcibly from the container,
 /// drops items to the floor, and back to the player's inventory if the item stack is in movement.

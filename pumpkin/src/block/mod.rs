@@ -1,4 +1,4 @@
-use blocks::oak_fence::OakFenceBlock;
+use blocks::fences::OakFenceBlock;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
