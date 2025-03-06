@@ -1,7 +1,7 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
+use syn::{Ident, LitBool, LitInt, LitStr};
 
 include!("../src/tag.rs");
 
@@ -337,7 +337,7 @@ impl ToTokens for BlockPropertyStruct {
 
         let values = entries.iter().map(|(key, value)| {
             let key = Ident::new_raw(&key.to_owned(), Span::call_site());
-            let value = Ident::new(&value, Span::call_site());
+            let value = Ident::new(value, Span::call_site());
 
             quote! {
                 #key: #value
@@ -889,6 +889,7 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
 
     let mut unique_states = Vec::new();
@@ -968,7 +969,7 @@ pub(crate) fn build() -> TokenStream {
                 .collect();
             block_props.push(BlockPropertyStruct {
                 block_name: block.name.clone(),
-                entries: entries,
+                entries,
             });
         }
 
@@ -1026,10 +1027,11 @@ pub(crate) fn build() -> TokenStream {
             #state_start..=#state_end => Some(Self::#const_ident),
         });
 
-        if item_id != 0 {
+        if !existing_item_ids.contains(&item_id) {
             block_from_item_id.extend(quote! {
                 #item_id => Some(Self::#const_ident),
             });
+            existing_item_ids.push(item_id);
         }
     }
 
