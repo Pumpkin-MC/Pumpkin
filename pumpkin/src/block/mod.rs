@@ -1,22 +1,5 @@
+use blocks::oak_fence::OakFenceBlock;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
-use properties::{
-    BlockPropertiesManager,
-    age::Age,
-    attachment::Attachment,
-    axis::Axis,
-    cardinal::{Down, East, North, South, Up, West},
-    face::Face,
-    facing::Facing,
-    half::Half,
-    layers::Layers,
-    open::Open,
-    powered::Powered,
-    signal_fire::SignalFire,
-    slab_type::SlabType,
-    stair_shape::StairShape,
-    unstable::Unstable,
-    waterlog::Waterlogged,
-};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -32,7 +15,6 @@ use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::Experi
 use std::sync::Arc;
 
 mod blocks;
-pub mod properties;
 pub mod pumpkin_block;
 pub mod registry;
 
@@ -46,16 +28,19 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(TNTBlock);
     manager.register(LeverBlock);
+    manager.register(OakFenceBlock);
 
     Arc::new(manager)
 }
 
 pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experience: bool) {
     if let Some(table) = &block.loot_table {
+        /*  TODO: Implement loot table
         let loot = table.get_loot();
         for item in loot {
             drop_stack(world, pos, item).await;
         }
+        */
     }
 
     if experience {
@@ -84,7 +69,7 @@ async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     item_entity.send_meta_packet().await;
 }
 
-pub async fn calc_block_breaking(player: &Player, state: &State, block_name: &str) -> f32 {
+pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
@@ -98,35 +83,4 @@ pub async fn calc_block_breaking(player: &Player, state: &State, block_name: &st
     };
 
     player.get_mining_speed(block_name).await / hardness / i as f32
-}
-
-#[must_use]
-pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
-    let mut manager = BlockPropertiesManager::default();
-
-    // This is the default state of the blocks
-    manager.register(Age::Age0);
-    manager.register(Attachment::Floor);
-    manager.register(Axis::Y);
-    manager.register(Down::False);
-    manager.register(East::False);
-    manager.register(Face::Floor);
-    manager.register(Facing::North);
-    manager.register(Half::Bottom);
-    manager.register(Layers::Lay1);
-    manager.register(North::False);
-    manager.register(Open::False());
-    manager.register(Powered::False());
-    manager.register(Unstable::False());
-    manager.register(SignalFire::False());
-    manager.register(SlabType::Bottom);
-    manager.register(South::False);
-    manager.register(StairShape::Straight);
-    manager.register(Up::False);
-    manager.register(Waterlogged::False());
-    manager.register(West::False);
-
-    manager.build_properties_registry();
-
-    Arc::new(manager)
 }

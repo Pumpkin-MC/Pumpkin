@@ -2,7 +2,6 @@ use std::num::NonZeroU8;
 use std::sync::Arc;
 
 use crate::block;
-use crate::block::properties::Direction;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
@@ -52,7 +51,7 @@ use pumpkin_util::{
     text::TextComponent,
 };
 use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, CardinalDirection};
 use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
@@ -861,7 +860,7 @@ impl Player {
                             .await;
                         server
                             .block_registry
-                            .broken(block, &self, location, server)
+                            .broken(&block, &self, location, server)
                             .await;
                         return;
                     }
@@ -870,13 +869,13 @@ impl Player {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     if !state.air {
-                        let speed = block::calc_block_breaking(&self, state, &block.name).await;
+                        let speed = block::calc_block_breaking(&self, &state, &block.name).await;
                         // Instant break
                         if speed >= 1.0 {
                             world.break_block(&location, Some(self.clone()), true).await;
                             server
                                 .block_registry
-                                .broken(block, &self, location, server)
+                                .broken(&block, &self, location, server)
                                 .await;
                         } else {
                             self.mining
@@ -930,12 +929,12 @@ impl Player {
                     if let Ok(block) = block {
                         if let Ok(state) = state {
                             let drop = self.gamemode.load() != GameMode::Creative
-                                && self.can_harvest(state, &block.name).await;
+                                && self.can_harvest(&state, &block.name).await;
                             world.break_block(&location, Some(self.clone()), drop).await;
                         }
                         server
                             .block_registry
-                            .broken(block, &self, location, server)
+                            .broken(&block, &self, location, server)
                             .await;
                     }
                     self.update_sequence(player_action.sequence.0);
@@ -1041,13 +1040,10 @@ impl Player {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(block, self, location, server)
+                    .on_use(&block, self, location, server)
                     .await;
-                let block_state = world.get_block_state(&location).await?;
-                let new_state = server
-                    .block_properties_manager
-                    .on_interact(block, block_state, &ItemStack::new(0, Item::AIR))
-                    .await;
+                //let block_state = world.get_block_state(&location).await?;
+                let new_state = block.default_state_id;
                 world.set_block_state(&location, new_state).await;
             }
             return Ok(());
@@ -1055,13 +1051,10 @@ impl Player {
         if !sneaking {
             let action_result = server
                 .block_registry
-                .use_with_item(block, self, location, &stack.item, server)
+                .use_with_item(&block, self, location, &stack.item, server)
                 .await;
-            let block_state = world.get_block_state(&location).await?;
-            let new_state = server
-                .block_properties_manager
-                .on_interact(block, block_state, &stack)
-                .await;
+            //let block_state = world.get_block_state(&location).await?;
+            let new_state = block.default_state_id;
             world.set_block_state(&location, new_state).await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1281,15 +1274,15 @@ impl Player {
         // TODO: send/configure additional commands/data based on type of entity (horse, slime, etc)
     }
 
-    fn get_player_direction(&self) -> Direction {
+    fn get_player_direction(&self) -> CardinalDirection {
         let adjusted_yaw = (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
 
         match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => Direction::South,
-            45.0..=135.0 => Direction::West,
-            135.0..=225.0 => Direction::North,
-            225.0..=315.0 => Direction::East,
-            _ => Direction::South, // Default case, should not occur
+            0.0..=45.0 | 315.0..=360.0 => CardinalDirection::South,
+            45.0..=135.0 => CardinalDirection::West,
+            135.0..=225.0 => CardinalDirection::North,
+            225.0..=315.0 => CardinalDirection::East,
+            _ => CardinalDirection::South, // Default case, should not occur
         }
     }
 
@@ -1335,33 +1328,15 @@ impl Player {
             _ => {}
         }
 
-        let mut updateable = server
-            .block_properties_manager
-            .can_update(
-                clicked_block,
-                clicked_block_state,
-                face,
-                &use_item_on,
-                false,
-            )
-            .await;
+        // TODO: Implement this
+        let updateable = false;
 
         let (final_block_pos, final_face) = if updateable {
             (clicked_block_pos, face)
         } else {
             let block_pos = BlockPos(location.0 + face.to_offset());
-            let previous_block = world.get_block(&block_pos).await?;
+            //let previous_block = world.get_block(&block_pos).await?;
             let previous_block_state = world.get_block_state(&block_pos).await?;
-            updateable = server
-                .block_properties_manager
-                .can_update(
-                    previous_block,
-                    previous_block_state,
-                    &face.opposite(),
-                    &use_item_on,
-                    true,
-                )
-                .await;
 
             if !previous_block_state.replaceable && !updateable {
                 return Ok(true);
@@ -1421,8 +1396,8 @@ impl Player {
         selected_face: &BlockDirection,
     ) {
         if block.states.iter().any(|state| {
-            state.block_entity_type == Some(block_entity!("sign"))
-                || state.block_entity_type == Some(block_entity!("hanging_sign"))
+            state.get_state().block_entity_type == Some(block_entity!("sign"))
+                || state.get_state().block_entity_type == Some(block_entity!("hanging_sign"))
         }) {
             self.client
                 .send_packet(&COpenSignEditor::new(

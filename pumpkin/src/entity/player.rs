@@ -1,4 +1,4 @@
-use pumpkin_world::block::registry::State;
+use pumpkin_data::block::BlockState;
 use std::{
     num::NonZeroU8,
     sync::{
@@ -461,7 +461,7 @@ impl Player {
                 self.continue_mining(
                     *pos,
                     &world,
-                    state,
+                    &state,
                     &block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
@@ -503,7 +503,7 @@ impl Player {
         &self,
         location: BlockPos,
         world: &World,
-        state: &State,
+        state: &BlockState,
         block_name: &str,
         starting_time: i32,
     ) {
@@ -922,7 +922,7 @@ impl Player {
             .await;
     }
 
-    pub async fn can_harvest(&self, block: &State, block_name: &str) -> bool {
+    pub async fn can_harvest(&self, block: &BlockState, block_name: &str) -> bool {
         !block.tool_required
             || self
                 .inventory

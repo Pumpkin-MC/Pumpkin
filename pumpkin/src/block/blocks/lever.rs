@@ -1,6 +1,6 @@
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::item::Item;
+use pumpkin_data::{block::CardinalDirection, item::Item};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -8,7 +8,7 @@ use pumpkin_world::block::BlockDirection;
 use pumpkin_data::block::Block;
 
 use crate::{
-    block::{properties::Direction, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
+    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     server::Server,
     world::World,
 };
@@ -26,7 +26,7 @@ impl PumpkinBlock for LeverBlock {
         face: &BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
-        player_direction: &Direction,
+        player_direction: &CardinalDirection,
         other: bool,
     ) -> u16 {
         let face = match face {
@@ -34,18 +34,7 @@ impl PumpkinBlock for LeverBlock {
             _ => face.opposite(),
         };
 
-        server
-            .block_properties_manager
-            .on_place_state(
-                world,
-                block,
-                &face,
-                block_pos,
-                use_item_on,
-                player_direction,
-                other,
-            )
-            .await
+        block.default_state_id
     }
 
     async fn use_with_item(

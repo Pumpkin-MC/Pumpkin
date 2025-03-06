@@ -8,10 +8,8 @@ use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, CardinalDirection};
 use std::sync::Arc;
-
-use super::properties::Direction;
 
 pub trait BlockMetadata {
     const NAMESPACE: &'static str;
@@ -55,21 +53,10 @@ pub trait PumpkinBlock: Send + Sync {
         face: &BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
-        player_direction: &Direction,
+        player_direction: &CardinalDirection,
         other: bool,
     ) -> u16 {
-        server
-            .block_properties_manager
-            .on_place_state(
-                world,
-                block,
-                face,
-                block_pos,
-                use_item_on,
-                player_direction,
-                other,
-            )
-            .await
+        block.default_state_id
     }
 
     async fn placed(

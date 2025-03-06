@@ -291,7 +291,7 @@ impl ToTokens for PropertyStruct {
         let values_3 = values.clone();
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy)]
+            #[derive(Clone, Copy, Debug)]
             pub enum #name {
                 #(#values),*
             }
@@ -331,7 +331,11 @@ impl ToTokens for BlockPropertyStruct {
             Span::call_site(),
         );
         let block_name = self.block_name.clone();
-        let values = self.entires.iter().map(|(key, value)| {
+
+        let mut entires = self.entires.clone();
+        entires.reverse();
+
+        let values = entires.iter().map(|(key, value)| {
             let key = Ident::new_raw(&key.to_owned(), Span::call_site());
             let value = Ident::new(&value, Span::call_site());
 
@@ -340,21 +344,20 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
-        let field_names: Vec<_> = self
-            .entires
+        let field_names: Vec<_> = entires
             .iter()
             .map(|(key, _)| Ident::new_raw(key, Span::call_site()))
             .collect();
 
-        let field_types: Vec<_> = self
-            .entires
+        let field_types: Vec<_> = entires
             .iter()
             .map(|(_, ty)| Ident::new(ty, Span::call_site()))
             .collect();
 
         tokens.extend(quote! {
+            #[derive(Clone, Copy, Debug)]
             pub struct #name {
-                #(#values),*
+                #(pub #values),*
             }
 
             impl BlockProperties for #name {
@@ -438,6 +441,8 @@ pub struct BlockState {
     pub sided_transparency: bool,
     pub replaceable: bool,
     pub collision_shapes: Vec<u16>,
+    pub opacity: Option<u32>,
+    pub block_entity_type: Option<u32>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -456,6 +461,21 @@ impl ToTokens for BlockState {
         let hardness = LitFloat::new(&self.hardness.to_string(), Span::call_site());
         let sided_transparency = LitBool::new(self.sided_transparency, Span::call_site());
         let replaceable = LitBool::new(self.replaceable, Span::call_site());
+        let opacity = match self.opacity {
+            Some(opacity) => {
+                let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
+                quote! { Some(#opacity) }
+            }
+            None => quote! { None },
+        };
+        let block_entity_type = match self.block_entity_type {
+            Some(block_entity_type) => {
+                let block_entity_type =
+                    LitInt::new(&block_entity_type.to_string(), Span::call_site());
+                quote! { Some(#block_entity_type) }
+            }
+            None => quote! { None },
+        };
 
         let collision_shapes = self
             .collision_shapes
@@ -472,6 +492,8 @@ impl ToTokens for BlockState {
                 sided_transparency: #sided_transparency,
                 replaceable: #replaceable,
                 collision_shapes: &[#(#collision_shapes),*],
+                opacity: #opacity,
+                block_entity_type: #block_entity_type,
             }
         });
     }
@@ -894,74 +916,73 @@ pub(crate) fn build() -> TokenStream {
         }
     }
 
-    // Create a map of block name to Block for easier access
-    let mut blocks_map: HashMap<String, OptimizedBlock> = HashMap::new();
     let mut block_props: Vec<BlockPropertyStruct> = Vec::new();
     let mut properties: Vec<PropertyStruct> = Vec::new();
-    for block in blocks_assets.blocks.clone() {
-        blocks_map.insert(
-            block.name.clone(),
-            OptimizedBlock {
-                id: block.id,
-                name: block.name.clone(),
-                translation_key: block.translation_key.clone(),
-                hardness: block.hardness,
-                blast_resistance: block.blast_resistance,
-                item_id: block.item_id,
-                default_state_id: block.default_state_id,
-                slipperiness: block.slipperiness,
-                velocity_multiplier: block.velocity_multiplier,
-                jump_velocity_multiplier: block.jump_velocity_multiplier,
-                loot_table: block.loot_table,
-                experience: block.experience,
-                states: block
-                    .states
-                    .iter()
-                    .map(|state| {
-                        // Find the index in unique_states by comparing all fields except id
-                        let state_idx = unique_states
-                            .iter()
-                            .position(|s| {
-                                s.air == state.air
-                                    && s.luminance == state.luminance
-                                    && s.burnable == state.burnable
-                                    && s.tool_required == state.tool_required
-                                    && s.hardness == state.hardness
-                                    && s.sided_transparency == state.sided_transparency
-                                    && s.replaceable == state.replaceable
-                                    && s.collision_shapes == state.collision_shapes
-                            })
-                            .unwrap() as u16;
+    let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
 
-                        BlockStateRef {
-                            id: state.id,
-                            state_idx,
-                        }
-                    })
-                    .collect(),
-            },
-        );
-        let mut props: HashMap<String, Vec<String>> = HashMap::new();
-        for prop in block.properties.clone() {
-            props.insert(prop.name.clone(), prop.values.clone());
-        }
-        if props.len() != 0 {
+    for block in blocks_assets.blocks.clone() {
+        let optimized_block = OptimizedBlock {
+            id: block.id,
+            name: block.name.clone(),
+            translation_key: block.translation_key.clone(),
+            hardness: block.hardness,
+            blast_resistance: block.blast_resistance,
+            item_id: block.item_id,
+            default_state_id: block.default_state_id,
+            slipperiness: block.slipperiness,
+            velocity_multiplier: block.velocity_multiplier,
+            jump_velocity_multiplier: block.jump_velocity_multiplier,
+            loot_table: block.loot_table,
+            experience: block.experience,
+            states: block
+                .states
+                .iter()
+                .map(|state| {
+                    // Find the index in unique_states by comparing all fields except id
+                    let state_idx = unique_states
+                        .iter()
+                        .position(|s| {
+                            s.air == state.air
+                                && s.luminance == state.luminance
+                                && s.burnable == state.burnable
+                                && s.tool_required == state.tool_required
+                                && s.hardness == state.hardness
+                                && s.sided_transparency == state.sided_transparency
+                                && s.replaceable == state.replaceable
+                                && s.collision_shapes == state.collision_shapes
+                        })
+                        .unwrap() as u16;
+
+                    BlockStateRef {
+                        id: state.id,
+                        state_idx,
+                    }
+                })
+                .collect(),
+        };
+
+        optimized_blocks.push((block.name.clone(), optimized_block));
+
+        // Process properties
+        if !block.properties.is_empty() {
+            let entries: Vec<(String, String)> = block
+                .properties
+                .iter()
+                .map(|prop| (prop.name.clone(), get_enum_name(prop.values.clone())))
+                .collect();
             block_props.push(BlockPropertyStruct {
                 block_name: block.name.clone(),
-                entires: props
-                    .into_iter()
-                    .map(|(key, values)| (key, get_enum_name(values)))
-                    .collect(),
+                entires: entries,
             });
         }
-        for prop in block.properties.clone() {
-            if !properties
-                .iter()
-                .any(|p| p.name == get_enum_name(prop.values.clone()))
-            {
+
+        // Add unique property types
+        for prop in block.properties {
+            let enum_name = get_enum_name(prop.values.clone());
+            if !properties.iter().any(|p| p.name == enum_name) {
                 properties.push(PropertyStruct {
-                    name: get_enum_name(prop.values.clone()),
-                    values: prop.values.clone(),
+                    name: enum_name,
+                    values: prop.values,
                 });
             }
         }
@@ -985,7 +1006,7 @@ pub(crate) fn build() -> TokenStream {
         .map(|entity_type| LitStr::new(entity_type, Span::call_site()));
 
     // Generate constants and match arms for each block
-    for (name, block) in blocks_map {
+    for (name, block) in optimized_blocks {
         let const_ident = format_ident!("{}", name.to_shouty_snake_case());
         let block_tokens = block.to_token_stream();
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
@@ -1037,6 +1058,8 @@ pub(crate) fn build() -> TokenStream {
             pub sided_transparency: bool,
             pub replaceable: bool,
             pub collision_shapes: &'static [u16],
+            pub opacity: Option<u32>,
+            pub block_entity_type: Option<u32>,
         }
 
         #[derive(Clone, Debug)]
@@ -1050,6 +1073,8 @@ pub(crate) fn build() -> TokenStream {
             pub sided_transparency: bool,
             pub replaceable: bool,
             pub collision_shapes: &'static [u16],
+            pub opacity: Option<u32>,
+            pub block_entity_type: Option<u32>,
         }
 
         #[derive(Clone, Debug)]
@@ -1186,6 +1211,8 @@ pub(crate) fn build() -> TokenStream {
             pub sided_transparency: bool,
             pub replaceable: bool,
             pub collision_shapes: &'static [u16],
+            pub opacity: Option<u32>,
+            pub block_entity_type: Option<u32>,
         }
 
 
@@ -1277,6 +1304,8 @@ pub(crate) fn build() -> TokenStream {
                     sided_transparency: partial_state.sided_transparency,
                     replaceable: partial_state.replaceable,
                     collision_shapes: partial_state.collision_shapes,
+                    opacity: partial_state.opacity,
+                    block_entity_type: partial_state.block_entity_type,
                 }
             }
         }

@@ -1123,7 +1123,7 @@ impl World {
             );
 
             if drop {
-                block::drop_loot(self, block, position, true).await;
+                block::drop_loot(self, &block, position, true).await;
             }
 
             match cause {
@@ -1153,7 +1153,7 @@ impl World {
     pub async fn get_block(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_data::block::Block, GetBlockError> {
+    ) -> Result<pumpkin_data::block::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1162,7 +1162,7 @@ impl World {
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_world::block::registry::State, GetBlockError> {
+    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1173,8 +1173,8 @@ impl World {
         position: &BlockPos,
     ) -> Result<
         (
-            &pumpkin_data::block::Block,
-            &pumpkin_world::block::registry::State,
+            pumpkin_data::block::Block,
+            pumpkin_data::block::BlockState,
         ),
         GetBlockError,
     > {
