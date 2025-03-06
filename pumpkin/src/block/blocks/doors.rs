@@ -33,15 +33,17 @@ async fn toggle_door(world: &World, block_pos: &BlockPos) {
         let other_pos = block_pos.offset(other_half.to_offset());
 
         let other_state_id = world.get_block_state_id(&other_pos).await.unwrap();
-        let mut other_door_props = OakDoorProps::from_state_id(other_state_id).unwrap();
-        other_door_props.open = door_props.open;
+        let other_door_props = OakDoorProps::from_state_id(other_state_id);
+        if let Some(mut other_door_props) = other_door_props {
+            other_door_props.open = door_props.open;
 
-        world
-            .set_block_state(block_pos, door_props.to_state_id())
-            .await;
-        world
-            .set_block_state(&other_pos, other_door_props.to_state_id())
-            .await;
+            world
+                .set_block_state(block_pos, door_props.to_state_id())
+                .await;
+            world
+                .set_block_state(&other_pos, other_door_props.to_state_id())
+                .await;
+        }
     }
 }
 
