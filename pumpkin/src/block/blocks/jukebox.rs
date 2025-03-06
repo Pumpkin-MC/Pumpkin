@@ -2,6 +2,7 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::item::Item;
@@ -20,6 +21,7 @@ impl PumpkinBlock for JukeboxBlock {
         player: &Player,
         location: BlockPos,
         _server: &Server,
+        _world: &World,
     ) {
         // For now just stop the music at this position
         let world = &player.living_entity.entity.world.read().await;
@@ -34,6 +36,7 @@ impl PumpkinBlock for JukeboxBlock {
         location: BlockPos,
         item: &Item,
         _server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         let world = &player.living_entity.entity.world.read().await;
 

@@ -3,6 +3,7 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
+use pumpkin_data::block::CardinalDirection;
 use pumpkin_util::math::vector3::Vector3;
 
 pub use state::BlockState;
@@ -68,6 +69,16 @@ impl BlockDirection {
             BlockDirection::East,
         ]
     }
+    pub fn update_order() -> [BlockDirection; 6] {
+        [
+            BlockDirection::West,
+            BlockDirection::East,
+            BlockDirection::Down,
+            BlockDirection::Up,
+            BlockDirection::North,
+            BlockDirection::South,
+        ]
+    }
 
     pub fn horizontal() -> [BlockDirection; 4] {
         [
@@ -80,5 +91,15 @@ impl BlockDirection {
 
     pub fn vertical() -> [BlockDirection; 2] {
         [BlockDirection::Down, BlockDirection::Up]
+    }
+
+    pub fn to_cardinal_direction(&self) -> CardinalDirection {
+        match self {
+            BlockDirection::North => CardinalDirection::North,
+            BlockDirection::South => CardinalDirection::South,
+            BlockDirection::West => CardinalDirection::West,
+            BlockDirection::East => CardinalDirection::East,
+            _ => CardinalDirection::North,
+        }
     }
 }

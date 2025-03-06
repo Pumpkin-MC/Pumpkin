@@ -1411,5 +1411,29 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
         }
+
+        impl Boolean {
+            pub fn flip(&self) -> Self {
+                match self {
+                    Boolean::True => Boolean::False,
+                    Boolean::False => Boolean::True,
+                }
+            }
+
+            pub fn to_bool(&self) -> bool {
+                match self {
+                    Boolean::True => true,
+                    Boolean::False => false,
+                }
+            }
+
+            pub fn from_bool(value: bool) -> Self {
+                if value {
+                    Boolean::True
+                } else {
+                    Boolean::False
+                }
+            }
+        }
     }
 }

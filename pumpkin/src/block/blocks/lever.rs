@@ -16,6 +16,17 @@ use crate::{
     world::World,
 };
 
+async fn toggle_lever(world: &World, block_pos: &BlockPos) {
+    let state_id = world.get_block_state_id(block_pos).await;
+    if let Ok(state_id) = state_id {
+        let mut lever_props = LeverProps::from_state_id(state_id).unwrap();
+        lever_props.powered = lever_props.powered.flip();
+        world
+            .set_block_state(block_pos, lever_props.to_state_id())
+            .await;
+    }
+}
+
 #[pumpkin_block("minecraft:lever")]
 pub struct LeverBlock;
 
@@ -43,7 +54,7 @@ impl PumpkinBlock for LeverBlock {
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
             lever_props.facing = *player_direction;
         } else {
-            lever_props.facing = player_direction.opposite();
+            lever_props.facing = face.opposite().to_cardinal_direction();
         };
 
         lever_props.to_state_id()
@@ -53,10 +64,23 @@ impl PumpkinBlock for LeverBlock {
         &self,
         _block: &Block,
         _player: &Player,
-        _location: BlockPos,
+        location: BlockPos,
         _item: &Item,
         _server: &Server,
+        world: &World,
     ) -> BlockActionResult {
+        toggle_lever(world, &location).await;
         BlockActionResult::Consume
+    }
+
+    async fn normal_use(
+        &self,
+        _block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: &World,
+    ) {
+        toggle_lever(world, &location).await;
     }
 }

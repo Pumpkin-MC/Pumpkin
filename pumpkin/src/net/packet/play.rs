@@ -860,7 +860,7 @@ impl Player {
                             .await;
                         server
                             .block_registry
-                            .broken(&block, &self, location, server)
+                            .broken(world, &block, &self, location, server)
                             .await;
                         return;
                     }
@@ -875,7 +875,7 @@ impl Player {
                             world.break_block(&location, Some(self.clone()), true).await;
                             server
                                 .block_registry
-                                .broken(&block, &self, location, server)
+                                .broken(world, &block, &self, location, server)
                                 .await;
                         } else {
                             self.mining
@@ -934,7 +934,7 @@ impl Player {
                         }
                         server
                             .block_registry
-                            .broken(&block, &self, location, server)
+                            .broken(world, &block, &self, location, server)
                             .await;
                     }
                     self.update_sequence(player_action.sequence.0);
@@ -1040,22 +1040,16 @@ impl Player {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(&block, self, location, server)
+                    .on_use(&block, self, location, server, world)
                     .await;
-                //let block_state = world.get_block_state(&location).await?;
-                let new_state = block.default_state_id;
-                world.set_block_state(&location, new_state).await;
             }
             return Ok(());
         };
         if !sneaking {
             let action_result = server
                 .block_registry
-                .use_with_item(&block, self, location, &stack.item, server)
+                .use_with_item(&block, self, location, &stack.item, server, world)
                 .await;
-            //let block_state = world.get_block_state(&location).await?;
-            let new_state = block.default_state_id;
-            world.set_block_state(&location, new_state).await;
             match action_result {
                 BlockActionResult::Continue => {}
                 BlockActionResult::Consume => {
@@ -1377,7 +1371,7 @@ impl Player {
             let _replaced_id = world.set_block_state(&final_block_pos, new_state).await;
             server
                 .block_registry
-                .on_placed(&block, self, final_block_pos, server)
+                .on_placed(world, &block, self, final_block_pos, server)
                 .await;
 
             self.send_sign_packet(block, final_block_pos, face).await;

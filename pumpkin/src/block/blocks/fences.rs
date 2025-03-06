@@ -13,7 +13,8 @@ use crate::server::Server;
 use crate::world::World;
 
 pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> u16 {
-    let mut block_properties = OakFenceProps::from_state_id(block.default_state_id).unwrap();
+    let mut block_properties =
+        OakFenceProps::from_state_id(Block::OAK_FENCE.default_state_id).unwrap();
 
     for direction in BlockDirection::horizontal() {
         let offset = block_pos.offset(direction.to_offset());
@@ -50,5 +51,22 @@ impl PumpkinBlock for OakFenceBlock {
         _other: bool,
     ) -> u16 {
         OakFenceProps::from_index(fence_state(world, block, block_pos).await).to_state_id()
+    }
+
+    async fn on_neighbor_update(
+        &self,
+        _server: &Server,
+        world: &World,
+        block: &Block,
+        block_pos: &BlockPos,
+        _source_face: &BlockDirection,
+        _source_block_pos: &BlockPos,
+    ) {
+        world
+            .set_block_state(
+                block_pos,
+                OakFenceProps::from_index(fence_state(world, block, block_pos).await).to_state_id(),
+            )
+            .await;
     }
 }

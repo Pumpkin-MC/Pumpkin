@@ -30,6 +30,7 @@ impl PumpkinBlock for TNTBlock {
         location: BlockPos,
         item: &Item,
         _server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         if *item != Item::FLINT_AND_STEEL || *item == Item::FIRE_CHARGE {
             return BlockActionResult::Continue;

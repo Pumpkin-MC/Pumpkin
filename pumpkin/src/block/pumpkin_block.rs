@@ -27,6 +27,7 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
+        _world: &World,
     ) {
     }
     fn should_drop_items_on_explosion(&self) -> bool {
@@ -40,6 +41,7 @@ pub trait PumpkinBlock: Send + Sync {
         _location: BlockPos,
         _item: &Item,
         _server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         BlockActionResult::Continue
     }
@@ -84,6 +86,17 @@ pub trait PumpkinBlock: Send + Sync {
         _location: BlockPos,
         _server: &Server,
         _container: &mut OpenContainer,
+    ) {
+    }
+
+    async fn on_neighbor_update(
+        &self,
+        _server: &Server,
+        _world: &World,
+        _block: &Block,
+        _block_pos: &BlockPos,
+        _source_face: &BlockDirection,
+        _source_block_pos: &BlockPos,
     ) {
     }
 }

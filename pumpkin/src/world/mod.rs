@@ -48,8 +48,8 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::level::Level;
+use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
     block::registry::{
         get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
@@ -1174,5 +1174,37 @@ impl World {
     ) -> Result<(pumpkin_data::block::Block, pumpkin_data::block::BlockState), GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    /// Updates neighboring blocks of a block
+    pub async fn update_neighbors(
+        &self,
+        server: &Server,
+        block_pos: &BlockPos,
+        except: Option<&BlockDirection>,
+    ) {
+        for direction in BlockDirection::update_order() {
+            if Some(&direction) == except {
+                continue;
+            }
+            let neighbor_pos = block_pos.offset(direction.to_offset());
+            let neighbor_block = self.get_block(&neighbor_pos).await;
+            if let Ok(neighbor_block) = neighbor_block {
+                if let Some(neighbor_pumpkin_block) =
+                    server.block_registry.get_pumpkin_block(&neighbor_block)
+                {
+                    neighbor_pumpkin_block
+                        .on_neighbor_update(
+                            server,
+                            self,
+                            &neighbor_block,
+                            &neighbor_pos,
+                            &direction,
+                            block_pos,
+                        )
+                        .await;
+                }
+            }
+        }
     }
 }
