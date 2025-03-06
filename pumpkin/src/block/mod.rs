@@ -34,13 +34,11 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experience: bool) {
-    if let Some(_table) = &block.loot_table {
-        /*  TODO: Implement loot table
+    if let Some(table) = &block.loot_table {
         let loot = table.get_loot();
-        for item in loot {
-            drop_stack(world, pos, item).await;
+        for (item, count) in loot {
+            drop_stack(world, pos, ItemStack::new(count as u8, item)).await;
         }
-        */
     }
 
     if experience {

@@ -1036,7 +1036,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::tag::{Tagable, RegistryKey};
+        use crate::{tag::{Tagable, RegistryKey}, item::Item};
         use pumpkin_util::math::int_provider::{UniformIntProvider, InvProvider, NormalInvProvider};
 
 
@@ -1089,6 +1089,19 @@ pub(crate) fn build() -> TokenStream {
             pools: Option<&'static [LootPool]>,
         }
 
+        impl LootTable {
+            pub fn get_loot(&self) -> Vec<(Item, u16)> {
+                let mut items = vec![];
+                if let Some(pools) = &self.pools {
+                    for i in 0..pools.len() {
+                        let pool = &pools[i];
+                        items.extend_from_slice(&pool.get_loot());
+                    }
+                }
+                items
+            }
+        }
+
         #[allow(dead_code)]
         #[derive(Clone, Debug)]
         pub struct LootPool {
@@ -1097,10 +1110,36 @@ pub(crate) fn build() -> TokenStream {
             bonus_rolls: f32,
         }
 
+        impl LootPool {
+            pub fn get_loot(&self) -> Vec<(Item, u16)> {
+                let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
+                let mut items = vec![];
+                for _ in 0..i {
+                    for entry_idx in 0..self.entries.len() {
+                        let entry = &self.entries[entry_idx];
+                        if let Some(conditions) = &entry.conditions {
+                            if !conditions.iter().all(|condition| condition.test()) {
+                                continue;
+                            }
+                        }
+                        items.extend_from_slice(&entry.content.get_items());
+                    }
+                }
+                items
+            }
+        }
+
         #[allow(dead_code)]
         #[derive(Clone, Debug)]
         pub struct ItemEntry {
             name: &'static str,
+        }
+
+        impl ItemEntry {
+            pub fn get_items(&self) -> Vec<(Item, u16)> {
+                let item = Item::from_registry_key(&self.name.replace("minecraft:", "")).unwrap();
+                vec![(item, 1)]
+            }
         }
 
         #[allow(dead_code)]
@@ -1108,6 +1147,22 @@ pub(crate) fn build() -> TokenStream {
         pub struct AlternativeEntry {
             children: &'static [LootPoolEntry],
         }
+        impl AlternativeEntry {
+            pub fn get_items(&self) -> Vec<(Item, u16)> {
+                let mut items = vec![];
+                for i in 0..self.children.len() {
+                    let child = &self.children[i];
+                    if let Some(conditions) = &child.conditions {
+                        if !conditions.iter().all(|condition| condition.test()) {
+                            continue;
+                        }
+                    }
+                    items.extend_from_slice(&child.content.get_items());
+                }
+                items
+            }
+        }
+
 
         #[allow(dead_code)]
         #[derive(Clone, Debug)]
@@ -1120,6 +1175,21 @@ pub(crate) fn build() -> TokenStream {
             Alternatives(AlternativeEntry),
             Sequence,
             Group,
+        }
+
+        impl LootPoolEntryTypes {
+            pub fn get_items(&self) -> Vec<(Item, u16)> {
+                match self {
+                    LootPoolEntryTypes::Empty => todo!(),
+                    LootPoolEntryTypes::Item(item_entry) => item_entry.get_items(),
+                    LootPoolEntryTypes::LootTable => todo!(),
+                    LootPoolEntryTypes::Dynamic => todo!(),
+                    LootPoolEntryTypes::Tag => todo!(),
+                    LootPoolEntryTypes::Alternatives(alternative) => alternative.get_items(),
+                    LootPoolEntryTypes::Sequence => todo!(),
+                    LootPoolEntryTypes::Group => todo!(),
+                }
+            }
         }
 
         #[allow(dead_code)]
@@ -1144,6 +1214,17 @@ pub(crate) fn build() -> TokenStream {
             TimeCheck,
             ValueCheck,
             EnchantmentActiveCheck,
+        }
+
+        #[expect(clippy::match_like_matches_macro)]
+        impl LootCondition {
+            // TODO: This is trash, Make this right
+            pub fn test(&self) -> bool {
+                match self {
+                    LootCondition::SurvivesExplosion => true,
+                    _ => false,
+                }
+            }
         }
 
         #[allow(dead_code)]
