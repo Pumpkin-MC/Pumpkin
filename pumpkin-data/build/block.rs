@@ -402,7 +402,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn default() -> Self {
-                    Self::from_state_id(Block::from_registry_key(#block_name).unwrap().states[0].id).unwrap()
+                    Self::from_state_id(Block::from_registry_key(#block_name).unwrap().default_state_id).unwrap()
                 }
             }
         });
@@ -893,6 +893,8 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut properties_from_block_id_and_index = TokenStream::new();
+    let mut properties_from_block_id_and_state_idx = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
 
@@ -975,14 +977,29 @@ pub(crate) fn build() -> TokenStream {
                 block_name: block.name.clone(),
                 entries,
             });
+
+            let block_id = &block.id;
+            let block_props = Ident::new(
+                &(block.name.clone() + "_props").to_upper_camel_case(),
+                Span::call_site(),
+            );
+
+            properties_from_block_id_and_index.extend(quote! {
+                #block_id => Some(Box::new(#block_props::from_index(index))),
+            });
+
+            properties_from_block_id_and_state_idx.extend(quote! {
+                #block_id => Some(Box::new(#block_props::from_state_id(state_id).unwrap_or(#block_props::default()))),
+            });
         }
 
         // Add unique property types
         for prop in block.properties {
             let enum_name = get_enum_name(prop.values.clone());
+
             if !properties.iter().any(|p| p.name == enum_name) {
                 properties.push(PropertyStruct {
-                    name: enum_name,
+                    name: enum_name.clone(),
                     values: prop.values,
                 });
             }
@@ -1303,14 +1320,14 @@ pub(crate) fn build() -> TokenStream {
             // Convert properties to an index (0 to N-1)
             fn to_index(&self) -> u16;
             // Convert an index back to properties
-            fn from_index(index: u16) -> Self;
+            fn from_index(index: u16) -> Self where Self: Sized;
 
             // Convert properties to a state id
             fn to_state_id(&self) -> u16;
             // Convert a state id back to properties
             fn from_state_id(state_id: u16) -> Option<Self> where Self: Sized;
             // Get the default properties
-            fn default() -> Self;
+            fn default() -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -1367,6 +1384,22 @@ pub(crate) fn build() -> TokenStream {
                 #[allow(unreachable_patterns)]
                 match id {
                     #block_from_item_id
+                    _ => None
+                }
+            }
+
+            #[doc = r" Get the properties for this block from an index"]
+            pub fn properties_from_index(&self, index: u16) -> Option<Box<dyn BlockProperties>> {
+                match self.id {
+                    #properties_from_block_id_and_index
+                    _ => None
+                }
+            }
+
+            #[doc = r" Get the properties for this block from a state id"]
+            pub fn properties_from_state_id(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
+                match self.id {
+                    #properties_from_block_id_and_state_idx
                     _ => None
                 }
             }
