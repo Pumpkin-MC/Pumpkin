@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::CardinalDirection;
-use pumpkin_data::block::OakFenceProps;
+use pumpkin_data::block::FenceBlockProps;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::Tagable;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -28,7 +28,7 @@ fn connects_to(from: &Block, to: &Block) -> bool {
 
 /// This returns an index and not a state id making it so all fences can use the same state calculation function
 pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> u16 {
-    let mut block_properties = OakFenceProps::default();
+    let mut block_properties = FenceBlockProps::default(block);
 
     for direction in BlockDirection::horizontal() {
         let offset = block_pos.offset(direction.to_offset());
@@ -45,7 +45,7 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
         }
     }
 
-    block_properties.to_index()
+    block_properties.to_state_id(block)
 }
 
 // Macro to easily define new fence block variants
@@ -70,8 +70,7 @@ macro_rules! define_fence_block {
                 _player_direction: &CardinalDirection,
                 _other: bool,
             ) -> u16 {
-                let index = fence_state(world, block, block_pos).await;
-                $block.properties_from_index(index).unwrap().to_state_id()
+                fence_state(world, block, block_pos).await
             }
 
             async fn on_neighbor_update(
@@ -83,9 +82,9 @@ macro_rules! define_fence_block {
                 _source_face: &BlockDirection,
                 _source_block_pos: &BlockPos,
             ) {
-                let index = fence_state(world, block, block_pos).await;
-                let state_id = $block.properties_from_index(index).unwrap().to_state_id();
-                world.set_block_state(block_pos, state_id).await;
+                world
+                    .set_block_state(block_pos, fence_state(world, block, block_pos).await)
+                    .await;
             }
         }
     };

@@ -1,5 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_util::block_grouper::group_by_common_full_words;
 use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, LitBool, LitInt, LitStr};
 
@@ -320,17 +321,16 @@ impl ToTokens for PropertyStruct {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockPropertyStruct {
-    pub block_name: String,
+    pub generic_name: String,
     pub entries: Vec<(String, String)>,
 }
 
 impl ToTokens for BlockPropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(
-            &(self.block_name.clone() + "_props").to_upper_camel_case(),
+            &(self.generic_name.clone() + "_block_props").to_upper_camel_case(),
             Span::call_site(),
         );
-        let block_name = self.block_name.clone();
 
         let mut entries = self.entries.clone();
         entries.reverse();
@@ -387,12 +387,11 @@ impl ToTokens for BlockPropertyStruct {
                     }
                 }
 
-                fn to_state_id(&self) -> u16 {
-                    Block::from_registry_key(#block_name).unwrap().states[0].id + self.to_index()
+                fn to_state_id(&self, block: &Block) -> u16 {
+                    block.states[0].id + self.to_index()
                 }
 
-                fn from_state_id(state_id: u16) -> Option<Self> {
-                    let block = Block::from_registry_key(#block_name).unwrap();
+                fn from_state_id(state_id: u16, block: &Block) -> Option<Self> {
                     if state_id >= block.states[0].id && state_id <= block.states.last().unwrap().id {
                         let index = state_id - block.states[0].id;
                         Some(Self::from_index(index))
@@ -401,8 +400,8 @@ impl ToTokens for BlockPropertyStruct {
                     }
                 }
 
-                fn default() -> Self {
-                    Self::from_state_id(Block::from_registry_key(#block_name).unwrap().default_state_id).unwrap()
+                fn default(block: &Block) -> Self {
+                    Self::from_state_id(block.default_state_id, block).unwrap()
                 }
             }
         });
@@ -893,8 +892,6 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
-    let mut properties_from_block_id_and_index = TokenStream::new();
-    let mut properties_from_block_id_and_state_idx = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
 
@@ -922,6 +919,8 @@ pub(crate) fn build() -> TokenStream {
     let mut block_props: Vec<BlockPropertyStruct> = Vec::new();
     let mut properties: Vec<PropertyStruct> = Vec::new();
     let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
+    #[expect(clippy::type_complexity)]
+    let mut shared_props: Vec<(Vec<(String, String)>, Vec<String>)> = Vec::new();
 
     for block in blocks_assets.blocks.clone() {
         let optimized_block = OptimizedBlock {
@@ -973,24 +972,16 @@ pub(crate) fn build() -> TokenStream {
                 .iter()
                 .map(|prop| (prop.name.clone(), get_enum_name(prop.values.clone())))
                 .collect();
-            block_props.push(BlockPropertyStruct {
-                block_name: block.name.clone(),
-                entries,
-            });
-
-            let block_id = &block.id;
-            let block_props = Ident::new(
-                &(block.name.clone() + "_props").to_upper_camel_case(),
-                Span::call_site(),
-            );
-
-            properties_from_block_id_and_index.extend(quote! {
-                #block_id => Some(Box::new(#block_props::from_index(index))),
-            });
-
-            properties_from_block_id_and_state_idx.extend(quote! {
-                #block_id => Some(Box::new(#block_props::from_state_id(state_id).unwrap_or(#block_props::default()))),
-            });
+            if shared_props.iter().any(|(props, _)| props == &entries) {
+                shared_props
+                    .iter_mut()
+                    .find(|(props, _)| props == &entries)
+                    .unwrap()
+                    .1
+                    .push(block.name.clone());
+            } else {
+                shared_props.push((entries, vec![block.name.clone()]));
+            }
         }
 
         // Add unique property types
@@ -1004,6 +995,25 @@ pub(crate) fn build() -> TokenStream {
                 });
             }
         }
+    }
+
+    let props_grouped_by_props = shared_props
+        .iter()
+        .map(|(_, blocks)| blocks.clone())
+        .collect::<Vec<_>>();
+
+    let grouped_prop_names = group_by_common_full_words(props_grouped_by_props);
+
+    for (name, group_blocks) in grouped_prop_names {
+        block_props.push(BlockPropertyStruct {
+            generic_name: name,
+            entries: shared_props
+                .iter()
+                .find(|(_, blocks)| blocks.contains(&group_blocks[0]))
+                .unwrap()
+                .0
+                .clone(),
+        });
     }
 
     // Generate collision shapes array
@@ -1323,11 +1333,11 @@ pub(crate) fn build() -> TokenStream {
             fn from_index(index: u16) -> Self where Self: Sized;
 
             // Convert properties to a state id
-            fn to_state_id(&self) -> u16;
+            fn to_state_id(&self, block: &Block) -> u16;
             // Convert a state id back to properties
-            fn from_state_id(state_id: u16) -> Option<Self> where Self: Sized;
+            fn from_state_id(state_id: u16, block: &Block) -> Option<Self> where Self: Sized;
             // Get the default properties
-            fn default() -> Self where Self: Sized;
+            fn default(block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -1384,22 +1394,6 @@ pub(crate) fn build() -> TokenStream {
                 #[allow(unreachable_patterns)]
                 match id {
                     #block_from_item_id
-                    _ => None
-                }
-            }
-
-            #[doc = r" Get the properties for this block from an index"]
-            pub fn properties_from_index(&self, index: u16) -> Option<Box<dyn BlockProperties>> {
-                match self.id {
-                    #properties_from_block_id_and_index
-                    _ => None
-                }
-            }
-
-            #[doc = r" Get the properties for this block from a state id"]
-            pub fn properties_from_state_id(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
-                match self.id {
-                    #properties_from_block_id_and_state_idx
                     _ => None
                 }
             }

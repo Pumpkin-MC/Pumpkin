@@ -3,8 +3,8 @@ use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::CardinalDirection;
+use pumpkin_data::block::DoorBlockProps;
 use pumpkin_data::block::DoorHinge;
-use pumpkin_data::block::OakDoorProps;
 use pumpkin_data::block::VerticalHalf;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -21,9 +21,9 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use crate::server::Server;
 use crate::world::World;
 
-async fn toggle_door(world: &World, block_pos: &BlockPos, index_id: u16) {
-    let block = world.get_block(block_pos).await.unwrap();
-    let mut door_props = OakDoorProps::from_index(index_id);
+async fn toggle_door(world: &World, block_pos: &BlockPos) {
+    let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let mut door_props = DoorBlockProps::from_state_id(block_state.id, &block).unwrap();
     door_props.open = door_props.open.flip();
 
     let other_half = match door_props.half {
@@ -35,42 +35,17 @@ async fn toggle_door(world: &World, block_pos: &BlockPos, index_id: u16) {
     let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await.unwrap();
 
     // Create a new scope to ensure other_door_props doesn't live across await points
-    let other_new_state_id = {
-        let other_door_props = other_block
-            .properties_from_state_id(other_state_id.id)
-            .unwrap();
 
-        let mut other_door_props = OakDoorProps::from_index(other_door_props.to_index());
-        other_door_props.open = door_props.open;
+    let mut other_door_props =
+        DoorBlockProps::from_state_id(other_state_id.id, &other_block).unwrap();
+    other_door_props.open = door_props.open;
 
-        other_block
-            .properties_from_index(other_door_props.to_index())
-            .unwrap()
-            .to_state_id()
-    };
-
-    let new_state_id = block
-        .properties_from_index(door_props.to_index())
-        .unwrap()
-        .to_state_id();
-
-    world.set_block_state(block_pos, new_state_id).await;
-    world.set_block_state(&other_pos, other_new_state_id).await;
-}
-
-fn place_state_index(player_direction: CardinalDirection) -> u16 {
-    let mut door_props = OakDoorProps::default();
-    door_props.half = VerticalHalf::Lower;
-    door_props.facing = player_direction;
-    door_props.hinge = DoorHinge::Left;
-
-    door_props.to_index()
-}
-
-fn set_half_index(index: u16, half: VerticalHalf) -> u16 {
-    let mut door_props = OakDoorProps::from_index(index);
-    door_props.half = half;
-    door_props.to_index()
+    world
+        .set_block_state(block_pos, door_props.to_state_id(&block))
+        .await;
+    world
+        .set_block_state(&other_pos, other_door_props.to_state_id(&other_block))
+        .await;
 }
 
 fn can_open_door(block: &Block, player: &Player) -> bool {
@@ -103,12 +78,12 @@ macro_rules! define_door_block {
                 player_direction: &CardinalDirection,
                 _other: bool,
             ) -> u16 {
-                let door_index = place_state_index(*player_direction);
+                let mut door_props = DoorBlockProps::default(block);
+                door_props.half = VerticalHalf::Lower;
+                door_props.facing = *player_direction;
+                door_props.hinge = DoorHinge::Left;
 
-                block
-                    .properties_from_index(door_index)
-                    .unwrap()
-                    .to_state_id()
+                door_props.to_state_id(block)
             }
 
             async fn can_place(
@@ -139,18 +114,13 @@ macro_rules! define_door_block {
                 world: &World,
             ) {
                 let state_id = world.get_block_state_id(&location).await.unwrap();
-                let index = block.properties_from_state_id(state_id).unwrap().to_index();
-                let upper_index = set_half_index(index, VerticalHalf::Upper);
-
-                let upper_state_id = block
-                    .properties_from_index(upper_index)
-                    .unwrap()
-                    .to_state_id();
+                let mut door_props = DoorBlockProps::from_state_id(state_id, &block).unwrap();
+                door_props.half = VerticalHalf::Upper;
 
                 world
                     .set_block_state(
                         &location.offset(BlockDirection::Up.to_offset()),
-                        upper_state_id,
+                        door_props.to_state_id(block),
                     )
                     .await;
             }
@@ -164,9 +134,7 @@ macro_rules! define_door_block {
                 world: Arc<World>,
                 state: BlockState,
             ) {
-                let door_index = block.properties_from_state_id(state.id).unwrap().to_index();
-
-                let door_props = OakDoorProps::from_index(door_index);
+                let door_props = DoorBlockProps::from_state_id(state.id, &block).unwrap();
 
                 let other_half = match door_props.half {
                     VerticalHalf::Upper => BlockDirection::Down,
@@ -197,12 +165,8 @@ macro_rules! define_door_block {
                     return BlockActionResult::Continue;
                 }
 
-                let index_id = block
-                    .properties_from_state_id(world.get_block_state_id(&location).await.unwrap())
-                    .unwrap()
-                    .to_index();
+                toggle_door(world, &location).await;
 
-                toggle_door(world, &location, index_id).await;
                 BlockActionResult::Consume
             }
 
@@ -218,11 +182,7 @@ macro_rules! define_door_block {
                     return;
                 }
 
-                let index_id = block
-                    .properties_from_state_id(world.get_block_state_id(&location).await.unwrap())
-                    .unwrap()
-                    .to_index();
-                toggle_door(world, &location, index_id).await;
+                toggle_door(world, &location).await;
             }
         }
     };

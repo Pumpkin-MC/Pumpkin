@@ -2,7 +2,7 @@ use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::{
-    block::{AttachmentFace, BlockProperties, CardinalDirection, LeverProps},
+    block::{AttachmentFace, BlockProperties, CardinalDirection, LeverBlockProps},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
@@ -17,14 +17,13 @@ use crate::{
 };
 
 async fn toggle_lever(world: &World, block_pos: &BlockPos) {
-    let state_id = world.get_block_state_id(block_pos).await;
-    if let Ok(state_id) = state_id {
-        let mut lever_props = LeverProps::from_state_id(state_id).unwrap();
-        lever_props.powered = lever_props.powered.flip();
-        world
-            .set_block_state(block_pos, lever_props.to_state_id())
-            .await;
-    }
+    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
+
+    let mut lever_props = LeverBlockProps::from_state_id(state.id, &block).unwrap();
+    lever_props.powered = lever_props.powered.flip();
+    world
+        .set_block_state(block_pos, lever_props.to_state_id(&block))
+        .await;
 }
 
 #[pumpkin_block("minecraft:lever")]
@@ -43,7 +42,8 @@ impl PumpkinBlock for LeverBlock {
         player_direction: &CardinalDirection,
         _other: bool,
     ) -> u16 {
-        let mut lever_props = LeverProps::from_state_id(block.default_state_id).unwrap();
+        let mut lever_props =
+            LeverBlockProps::from_state_id(block.default_state_id, block).unwrap();
 
         match face {
             BlockDirection::Up => lever_props.face = AttachmentFace::Ceiling,
@@ -57,7 +57,7 @@ impl PumpkinBlock for LeverBlock {
             lever_props.facing = face.opposite().to_cardinal_direction();
         };
 
-        lever_props.to_state_id()
+        lever_props.to_state_id(block)
     }
 
     async fn use_with_item(
