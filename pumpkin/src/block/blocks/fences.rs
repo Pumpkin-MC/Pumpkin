@@ -20,12 +20,16 @@ fn connects_to(from: &Block, to: &Block) -> bool {
         return true;
     }
 
+    if to.is_tagged_with("c:fence_gates").unwrap() {
+        return true;
+    }
+
     // If the block is not a wooden fence, it cannot connect to a wooden fence
     if !from.is_tagged_with("c:fences/wooden").unwrap() {
         return false;
     }
 
-    to.is_tagged_with("c:fences/wooden").unwrap() || to.is_tagged_with("c:fence_gates").unwrap()
+    to.is_tagged_with("c:fences/wooden").unwrap()
 }
 
 /// This returns an index and not a state id making it so all fences can use the same state calculation function
