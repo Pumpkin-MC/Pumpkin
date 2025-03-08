@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::block_grouper::group_by_common_full_words;
@@ -11,20 +13,100 @@ pub struct BlockProperty {
     pub values: Vec<String>,
 }
 
-pub type EnumMappings = Vec<(Vec<String>, String)>;
+type EnumRemap = (&'static [&'static str], &'static str);
 
-fn get_enum_name(props: Vec<String>, fallback: String, enum_mappings: &EnumMappings) -> String {
+const BOOL_REMAP: EnumRemap = (&["true", "false"], "Boolean");
+const AXIS_REMAP: EnumRemap = (&["x", "y", "z"], "Axis");
+const DIRECTION_REMAP: EnumRemap = (
+    &["north", "east", "south", "west", "up", "down"],
+    "Direction",
+);
+const REDSTONE_CONNECTION_REMAP: EnumRemap = (&["up", "side", "none"], "RedstoneConnection");
+const CARDINAL_DIRECTION_REMAP: EnumRemap =
+    (&["north", "east", "south", "west"], "CardinalDirection");
+const STAIR_HALF_REMAP: EnumRemap = (&["bottom", "top"], "StairHalf");
+const RAIL_SHAPE_REMAP: EnumRemap = (
+    &[
+        "north_south",
+        "east_west",
+        "ascending_east",
+        "ascending_west",
+        "ascending_north",
+        "ascending_south",
+    ],
+    "RailShape",
+);
+const CHEST_TYPE_REMAP: EnumRemap = (&["single", "left", "right"], "ChestType");
+const STRUCTURE_BLOCK_MODE_REMAP: EnumRemap =
+    (&["save", "load", "corner", "data"], "StructureBlockMode");
+
+/// This is done cause minecrafts default property system could map the same property key to multiple values depending on the block.
+/// And while were at it adding a Boolean enum and some other remaps to make it easier to add traits and work with them globally.
+/// For example CardinalDirection is also used when determining player direction.
+const PROPERTIES_REMAPS: [EnumRemap; 9] = [
+    BOOL_REMAP,
+    AXIS_REMAP,
+    DIRECTION_REMAP,
+    REDSTONE_CONNECTION_REMAP,
+    CARDINAL_DIRECTION_REMAP,
+    STAIR_HALF_REMAP,
+    RAIL_SHAPE_REMAP,
+    CHEST_TYPE_REMAP,
+    STRUCTURE_BLOCK_MODE_REMAP,
+];
+
+fn get_enum_name(props: Vec<String>, fallback: String) -> String {
     let props_set: Vec<&str> = props.iter().map(|s| s.as_str()).collect();
 
-    for (variants, enum_name) in enum_mappings {
-        if props_set.len() == variants.len()
-            && props_set.iter().all(|p| variants.contains(&p.to_string()))
-        {
+    for (variants, enum_name) in PROPERTIES_REMAPS {
+        if props_set.len() == variants.len() && props_set.iter().all(|p| variants.contains(p)) {
             return enum_name.to_string();
         }
     }
 
     fallback.to_upper_camel_case()
+}
+
+fn check_for_prop_duplicates(blocks: &Vec<Block>) {
+    let mut unique_props: Vec<(String, Vec<String>)> = Vec::new();
+    let mut unique_props_names: Vec<String> = Vec::new();
+
+    for block in blocks {
+        for prop in block.properties.clone() {
+            if !unique_props
+                .iter()
+                .any(|(_, props)| props.iter().all(|p| prop.values.contains(p)))
+            {
+                unique_props.push((prop.name.clone(), prop.values.clone()));
+            }
+        }
+    }
+
+    for (name, values) in unique_props {
+        let enum_name = get_enum_name(values, name);
+        if !PROPERTIES_REMAPS
+            .iter()
+            .any(|(_, prop_name)| enum_name == *prop_name)
+        {
+            unique_props_names.push(enum_name);
+        }
+    }
+
+    // Check for duplicates in unique_props_names
+    let unique_set: HashSet<_> = unique_props_names.iter().collect();
+    if unique_props_names.len() != unique_set.len() {
+        // Find the duplicates
+        let mut seen = HashSet::new();
+        let mut duplicates = Vec::new();
+
+        for name in &unique_props_names {
+            if !seen.insert(name) {
+                duplicates.push(name);
+            }
+        }
+
+        panic!("Duplicate property enum names found: {:?}", duplicates);
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -790,16 +872,11 @@ pub struct BlockAssets {
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
-    println!("cargo:rerun-if-changed=../assets/block_property_mappings.json");
 
     let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
         .expect("Failed to parse blocks.json");
 
-    let enum_mappings: EnumMappings =
-        serde_json::from_str(include_str!("../../assets/block_property_mappings.json"))
-            .expect("Failed to parse block_property_mappings.json");
-
-    println!("{:?}", enum_mappings);
+    check_for_prop_duplicates(&blocks_assets.blocks);
 
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
@@ -888,7 +965,7 @@ pub(crate) fn build() -> TokenStream {
                 .map(|prop| {
                     (
                         prop.name.clone(),
-                        get_enum_name(prop.values.clone(), prop.name.clone(), &enum_mappings),
+                        get_enum_name(prop.values.clone(), prop.name.clone()),
                     )
                 })
                 .collect();
@@ -906,7 +983,7 @@ pub(crate) fn build() -> TokenStream {
 
         // Add unique property types
         for prop in block.properties {
-            let enum_name = get_enum_name(prop.values.clone(), prop.name.clone(), &enum_mappings);
+            let enum_name = get_enum_name(prop.values.clone(), prop.name.clone());
 
             if !properties.iter().any(|p| p.name == enum_name) {
                 properties.push(PropertyStruct {
