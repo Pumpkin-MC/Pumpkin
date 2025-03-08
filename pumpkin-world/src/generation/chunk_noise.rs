@@ -3,7 +3,7 @@ use std::{collections::HashMap, hash::Hash};
 use pumpkin_macros::block_state;
 use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2};
 
-use crate::{block::WorldBlockState, generation::section_coords};
+use crate::{block::ChunkBlockState, generation::section_coords};
 
 use super::{
     GlobalRandomConfig,
@@ -26,9 +26,9 @@ use super::{
     positions::chunk_pos,
 };
 
-pub const STONE_BLOCK: WorldBlockState = block_state!("stone");
-pub const LAVA_BLOCK: WorldBlockState = block_state!("lava");
-pub const WATER_BLOCK: WorldBlockState = block_state!("water");
+pub const STONE_BLOCK: ChunkBlockState = block_state!("stone");
+pub const LAVA_BLOCK: ChunkBlockState = block_state!("lava");
+pub const WATER_BLOCK: ChunkBlockState = block_state!("water");
 
 pub const CHUNK_DIM: u8 = 16;
 
@@ -100,7 +100,7 @@ impl BlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut ChunkNoiseHeightEstimator,
-    ) -> Option<WorldBlockState> {
+    ) -> Option<ChunkBlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
@@ -124,7 +124,7 @@ impl ChainedBlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut ChunkNoiseHeightEstimator,
-    ) -> Option<WorldBlockState> {
+    ) -> Option<ChunkBlockState> {
         self.samplers
             .iter_mut()
             .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))
@@ -441,7 +441,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         cell_x: usize,
         cell_y: usize,
         cell_z: usize,
-    ) -> Option<WorldBlockState> {
+    ) -> Option<ChunkBlockState> {
         //TODO: Fix this when Blender is added
         let pos = UnblendedNoisePos::new(
             start_x + cell_x as i32,

@@ -270,7 +270,6 @@ pub struct PropertyStruct {
 impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(&self.name, Span::call_site());
-
         let mut prefix = "";
 
         if name.to_string().contains("Level") {
@@ -280,20 +279,39 @@ impl ToTokens for PropertyStruct {
         let variant_count = self.values.clone().len() as u16;
         let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
 
-        let values = self.values.iter().map(|value| {
+        let ident_values = self.values.iter().map(|value| {
             Ident::new(
                 &(prefix.to_owned() + value).to_upper_camel_case(),
                 Span::call_site(),
             )
         });
 
-        let values_2 = values.clone();
-        let values_3 = values.clone();
+        let values_2 = ident_values.clone();
+        let values_3 = ident_values.clone();
+
+        let from_values = self.values.iter().map(|value| {
+            let ident = Ident::new(
+                &(prefix.to_owned() + value).to_upper_camel_case(),
+                Span::call_site(),
+            );
+            quote! {
+                #value => Self::#ident
+            }
+        });
+        let to_values = self.values.iter().map(|value| {
+            let ident = Ident::new(
+                &(prefix.to_owned() + value).to_upper_camel_case(),
+                Span::call_site(),
+            );
+            quote! {
+                Self::#ident => #value
+            }
+        });
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
             pub enum #name {
-                #(#values),*
+                #(#ident_values),*
             }
 
             impl EnumVariants for #name {
@@ -313,6 +331,20 @@ impl ToTokens for PropertyStruct {
                         _ => panic!("Invalid index: {}", index),
                     }
                 }
+
+                fn to_value(&self) -> &str {
+                    match self {
+                        #(#to_values),*
+                    }
+                }
+
+                fn from_value(value: &str) -> Self {
+                    match value {
+                        #(#from_values),*,
+                        _ => panic!("Invalid value: {:?}", value),
+                    }
+                }
+
             }
         });
     }
@@ -352,6 +384,23 @@ impl ToTokens for BlockPropertyStruct {
             .iter()
             .map(|(_, ty)| Ident::new(ty, Span::call_site()))
             .collect();
+
+        let to_props_values = entries.iter().map(|(key, _value)| {
+            let key2 = Ident::new_raw(&key.to_owned(), Span::call_site());
+
+            quote! {
+                props.push((#key.to_string(), self.#key2.to_value().to_string()));
+            }
+        });
+
+        let from_props_values = entries.iter().map(|(key, value)| {
+            let key2 = Ident::new_raw(&key.to_owned(), Span::call_site());
+            let value = Ident::new(value, Span::call_site());
+
+            quote! {
+                #key => block_props.#key2 = #value::from_value(&value)
+            }
+        });
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -401,6 +450,28 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn default(block: &Block) -> Self {
                     Self::from_state_id(block.default_state_id, block).unwrap()
+                }
+
+                #[allow(clippy::vec_init_then_push)]
+                fn to_props(&self) -> Vec<(String, String)> {
+                    let mut props = vec![];
+
+                    #(#to_props_values)*
+
+                    props
+                }
+
+                fn from_props(props: Vec<(String, String)>, block: &Block) -> Self {
+                    let mut block_props = Self::default(block);
+
+                    for (key, value) in props {
+                        match key.as_str() {
+                            #(#from_props_values),*,
+                            _ => panic!("Invalid key: {}", key),
+                        }
+                    }
+
+                    block_props
                 }
             }
         });
@@ -891,6 +962,8 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut block_properties_from_state_and_name = TokenStream::new();
+    let mut block_properties_from_props_and_name = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
 
@@ -1005,7 +1078,7 @@ pub(crate) fn build() -> TokenStream {
 
     for (name, group_blocks) in grouped_prop_names {
         block_props.push(BlockPropertyStruct {
-            generic_name: name,
+            generic_name: name.clone(),
             entries: shared_props
                 .iter()
                 .find(|(_, blocks)| blocks.contains(&group_blocks[0]))
@@ -1013,6 +1086,21 @@ pub(crate) fn build() -> TokenStream {
                 .0
                 .clone(),
         });
+
+        for block in group_blocks {
+            let block_name = Ident::new(&block.to_shouty_snake_case(), Span::call_site());
+            let name = Ident::new(
+                &(name.clone() + "_block_props").to_upper_camel_case(),
+                Span::call_site(),
+            );
+            block_properties_from_state_and_name.extend(quote! {
+                #block => Some(Box::new(#name::from_state_id(state_id, &Block::#block_name).unwrap())),
+            });
+
+            block_properties_from_props_and_name.extend(quote! {
+                #block => Some(Box::new(#name::from_props(props, &Block::#block_name))),
+            });
+        }
     }
 
     // Generate collision shapes array
@@ -1325,7 +1413,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
 
-        pub trait BlockProperties {
+        pub trait BlockProperties where Self: 'static {
             // Convert properties to an index (0 to N-1)
             fn to_index(&self) -> u16;
             // Convert an index back to properties
@@ -1337,12 +1425,20 @@ pub(crate) fn build() -> TokenStream {
             fn from_state_id(state_id: u16, block: &Block) -> Option<Self> where Self: Sized;
             // Get the default properties
             fn default(block: &Block) -> Self where Self: Sized;
+
+            // Convert properties to a vec of (name, value)
+            fn to_props(&self) -> Vec<(String, String)>;
+
+            // Convert properties to a block state, add them onto the default state
+            fn from_props(props: Vec<(String, String)>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
             fn variant_count() -> u16;
             fn to_index(&self) -> u16;
             fn from_index(index: u16) -> Self;
+            fn to_value(&self) -> &str;
+            fn from_value(value: &str) -> Self;
         }
 
 
@@ -1393,6 +1489,22 @@ pub(crate) fn build() -> TokenStream {
                 #[allow(unreachable_patterns)]
                 match id {
                     #block_from_item_id
+                    _ => None
+                }
+            }
+
+            #[doc = r" Get the properties of the block"]
+            pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
+                match self.name {
+                    #block_properties_from_state_and_name
+                    _ => None
+                }
+            }
+
+            #[doc = r" Get the properties of the block"]
+            pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn BlockProperties>> {
+                match self.name {
+                    #block_properties_from_props_and_name
                     _ => None
                 }
             }

@@ -6,7 +6,7 @@ use num_derive::FromPrimitive;
 use pumpkin_data::block::{Axis, CardinalDirection};
 use pumpkin_util::math::vector3::Vector3;
 
-pub use state::WorldBlockState;
+pub use state::ChunkBlockState;
 
 #[derive(FromPrimitive, PartialEq, Clone, Copy)]
 pub enum BlockDirection {

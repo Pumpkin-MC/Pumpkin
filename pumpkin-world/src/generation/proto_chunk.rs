@@ -1,7 +1,7 @@
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    block::WorldBlockState,
+    block::ChunkBlockState,
     generation::{
         chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape, positions::chunk_pos,
     },
@@ -48,7 +48,7 @@ pub struct ProtoChunk<'a> {
     chunk_pos: Vector2<i32>,
     sampler: ChunkNoiseGenerator<'a>,
     // These are local positions
-    flat_block_map: Vec<WorldBlockState>,
+    flat_block_map: Vec<ChunkBlockState>,
     // may want to use chunk status
 }
 
@@ -85,7 +85,7 @@ impl<'a> ProtoChunk<'a> {
             chunk_pos,
             sampler,
             flat_block_map: vec![
-                WorldBlockState::AIR;
+                ChunkBlockState::AIR;
                 CHUNK_DIM as usize * CHUNK_DIM as usize * height
             ],
         }
@@ -105,14 +105,14 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
-    pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> WorldBlockState {
+    pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> ChunkBlockState {
         let local_pos = Vector3::new(
             local_pos.x & 15,
             local_pos.y - self.sampler.min_y() as i32,
             local_pos.z & 15,
         );
         if local_pos.y < 0 || local_pos.y >= self.sampler.height() as i32 {
-            WorldBlockState::AIR
+            ChunkBlockState::AIR
         } else {
             self.flat_block_map[self.local_pos_to_index(&local_pos)]
         }

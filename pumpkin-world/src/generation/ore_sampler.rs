@@ -1,7 +1,7 @@
 use pumpkin_util::random::RandomDeriver;
 
 use crate::{
-    block::WorldBlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter,
+    block::ChunkBlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter,
 };
 
 use super::{
@@ -25,7 +25,7 @@ impl OreVeinSampler {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> Option<WorldBlockState> {
+    ) -> Option<ChunkBlockState> {
         let vein_toggle = router.vein_toggle(pos, sample_options);
         let vein_type: &VeinType = if vein_toggle > 0f64 {
             &vein_type::COPPER
@@ -73,9 +73,9 @@ impl OreVeinSampler {
 }
 
 pub struct VeinType {
-    ore: WorldBlockState,
-    raw_ore: WorldBlockState,
-    stone: WorldBlockState,
+    ore: ChunkBlockState,
+    raw_ore: ChunkBlockState,
+    stone: ChunkBlockState,
     min_y: i32,
     max_y: i32,
 }

@@ -13,7 +13,7 @@ pub(crate) fn block_state_impl(item: proc_macro::TokenStream) -> proc_macro::Tok
 
     if std::env::var("CARGO_PKG_NAME").unwrap() == "pumpkin-world" {
         quote! {
-            crate::block::WorldBlockState {
+            crate::block::ChunkBlockState {
                 state_id: #default_state_id,
                 block_id: #block_id,
           }
@@ -21,7 +21,7 @@ pub(crate) fn block_state_impl(item: proc_macro::TokenStream) -> proc_macro::Tok
         .into()
     } else {
         quote! {
-            pumpkin_world::block::WorldBlockState {
+            pumpkin_world::block::ChunkBlockState {
                 state_id: #default_state_id,
                 block_id: #block_id,
             }
