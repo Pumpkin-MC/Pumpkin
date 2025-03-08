@@ -3,6 +3,8 @@ use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::CardinalDirection;
 use pumpkin_data::block::FenceGateBlockProps;
+use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -28,16 +30,26 @@ pub async fn toggle_fence_gate(world: &World, block_pos: &BlockPos) -> u16 {
     fence_gate_props.to_state_id(&block)
 }
 
-macro_rules! define_fence_gate_block {
-    ($block_name:ident, $block:expr) => {
-        pub struct $block_name;
-        impl BlockMetadata for $block_name {
-            const NAMESPACE: &'static str = "minecraft";
-            const ID: &'static str = $block.name;
+pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
+    let tag_values: &'static [&'static str] =
+        get_tag_values(RegistryKey::Block, "c:fence_gates").unwrap();
+
+    for block in tag_values {
+        pub struct FenceGateBlock {
+            id: &'static str,
+        }
+        impl BlockMetadata for FenceGateBlock {
+            fn namespace(&self) -> &'static str {
+                "minecraft"
+            }
+
+            fn id(&self) -> &'static str {
+                self.id
+            }
         }
 
         #[async_trait]
-        impl PumpkinBlock for $block_name {
+        impl PumpkinBlock for FenceGateBlock {
             async fn on_place(
                 &self,
                 _server: &Server,
@@ -78,33 +90,7 @@ macro_rules! define_fence_gate_block {
                 toggle_fence_gate(world, &location).await;
             }
         }
-    };
-}
 
-define_fence_gate_block!(OakFenceGateBlock, Block::OAK_FENCE_GATE);
-define_fence_gate_block!(DarkOakFenceGateBlock, Block::DARK_OAK_FENCE_GATE);
-define_fence_gate_block!(SpruceFenceGateBlock, Block::SPRUCE_FENCE_GATE);
-define_fence_gate_block!(BirchFenceGateBlock, Block::BIRCH_FENCE_GATE);
-define_fence_gate_block!(JungleFenceGateBlock, Block::JUNGLE_FENCE_GATE);
-define_fence_gate_block!(AcaciaFenceGateBlock, Block::ACACIA_FENCE_GATE);
-define_fence_gate_block!(PaleOakFenceGateBlock, Block::PALE_OAK_FENCE_GATE);
-define_fence_gate_block!(CherryFenceGateBlock, Block::CHERRY_FENCE_GATE);
-define_fence_gate_block!(MangroveFenceGateBlock, Block::MANGROVE_FENCE_GATE);
-define_fence_gate_block!(CrimsonFenceGateBlock, Block::CRIMSON_FENCE_GATE);
-define_fence_gate_block!(WarpedFenceGateBlock, Block::WARPED_FENCE_GATE);
-define_fence_gate_block!(BambooFenceGateBlock, Block::BAMBOO_FENCE_GATE);
-
-pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
-    manager.register(OakFenceGateBlock);
-    manager.register(DarkOakFenceGateBlock);
-    manager.register(SpruceFenceGateBlock);
-    manager.register(BirchFenceGateBlock);
-    manager.register(JungleFenceGateBlock);
-    manager.register(AcaciaFenceGateBlock);
-    manager.register(PaleOakFenceGateBlock);
-    manager.register(CherryFenceGateBlock);
-    manager.register(MangroveFenceGateBlock);
-    manager.register(CrimsonFenceGateBlock);
-    manager.register(WarpedFenceGateBlock);
-    manager.register(BambooFenceGateBlock);
+        manager.register(FenceGateBlock { id: block });
+    }
 }

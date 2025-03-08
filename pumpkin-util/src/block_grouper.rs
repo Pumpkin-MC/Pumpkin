@@ -128,7 +128,6 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
 
     // Create a mutable copy of the subgroup so we can remove items as we process them
     let mut remaining_strings: Vec<String> = subgroup.to_vec();
-    println!("remaining_strings: {:?}", remaining_strings);
 
     while !remaining_strings.is_empty() {
         let current = remaining_strings[0].clone();
@@ -142,7 +141,6 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
             if !common_words.is_empty() {
                 if common_word.is_empty() {
                     common_word = common_words[0].clone();
-                    println!("common_word: {:?}", common_word);
                 }
                 if common_word == common_words[0] {
                     current_group.push(remaining_strings[i].clone());

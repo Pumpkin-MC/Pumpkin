@@ -24,6 +24,7 @@ mod sound;
 mod sound_category;
 mod spawn_egg;
 mod status_effect;
+mod tag;
 mod world_event;
 
 pub fn main() {
@@ -48,6 +49,7 @@ pub fn main() {
     write_generated_file(status_effect::build(), "status_effect.rs");
     write_generated_file(entity_status::build(), "entity_status.rs");
     write_generated_file(block::build(), "block.rs");
+    write_generated_file(tag::build(), "tag.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

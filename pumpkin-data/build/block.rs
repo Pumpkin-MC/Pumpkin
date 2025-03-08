@@ -2,9 +2,8 @@ use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::block_grouper::group_by_common_full_words;
 use quote::{ToTokens, format_ident, quote};
+use serde::Deserialize;
 use syn::{Ident, LitBool, LitInt, LitStr};
-
-include!("../src/tag.rs");
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockProperty {

@@ -6,6 +6,8 @@ use pumpkin_data::block::CardinalDirection;
 use pumpkin_data::block::DoorBlockProps;
 use pumpkin_data::block::DoorHinge;
 use pumpkin_data::block::VerticalHalf;
+use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -56,16 +58,26 @@ fn can_open_door(block: &Block, player: &Player) -> bool {
     true
 }
 
-macro_rules! define_door_block {
-    ($block_name:ident, $block:expr) => {
-        pub struct $block_name;
-        impl BlockMetadata for $block_name {
-            const NAMESPACE: &'static str = "minecraft";
-            const ID: &'static str = $block.name;
+#[allow(clippy::too_many_lines)]
+pub fn register_door_blocks(manager: &mut BlockRegistry) {
+    let tag_values = get_tag_values(RegistryKey::Block, "minecraft:doors").unwrap();
+
+    for block in tag_values {
+        pub struct DoorBlock {
+            id: &'static str,
+        }
+        impl BlockMetadata for DoorBlock {
+            fn namespace(&self) -> &'static str {
+                "minecraft"
+            }
+
+            fn id(&self) -> &'static str {
+                self.id
+            }
         }
 
         #[async_trait]
-        impl PumpkinBlock for $block_name {
+        impl PumpkinBlock for DoorBlock {
             async fn on_place(
                 &self,
                 _server: &Server,
@@ -113,7 +125,7 @@ macro_rules! define_door_block {
                 world: &World,
             ) {
                 let state_id = world.get_block_state_id(&location).await.unwrap();
-                let mut door_props = DoorBlockProps::from_state_id(state_id, &block).unwrap();
+                let mut door_props = DoorBlockProps::from_state_id(state_id, block).unwrap();
                 door_props.half = VerticalHalf::Upper;
 
                 world
@@ -133,7 +145,7 @@ macro_rules! define_door_block {
                 world: Arc<World>,
                 state: BlockState,
             ) {
-                let door_props = DoorBlockProps::from_state_id(state.id, &block).unwrap();
+                let door_props = DoorBlockProps::from_state_id(state.id, block).unwrap();
 
                 let other_half = match door_props.half {
                     VerticalHalf::Upper => BlockDirection::Down,
@@ -184,64 +196,7 @@ macro_rules! define_door_block {
                 toggle_door(world, &location).await;
             }
         }
-    };
-}
 
-// https://minecraft.fandom.com/wiki/Door
-
-define_door_block!(OakDoorBlock, Block::OAK_DOOR);
-define_door_block!(SpruceDoorBlock, Block::SPRUCE_DOOR);
-define_door_block!(BirchDoorBlock, Block::BIRCH_DOOR);
-define_door_block!(JungleDoorBlock, Block::JUNGLE_DOOR);
-define_door_block!(AcaciaDoorBlock, Block::ACACIA_DOOR);
-define_door_block!(DarkOakDoorBlock, Block::DARK_OAK_DOOR);
-define_door_block!(MangroveDoorBlock, Block::MANGROVE_DOOR);
-define_door_block!(CherryDoorBlock, Block::CHERRY_DOOR);
-define_door_block!(BambooDoorBlock, Block::BAMBOO_DOOR);
-define_door_block!(CrimsonDoorBlock, Block::CRIMSON_DOOR);
-define_door_block!(WarpedDoorBlock, Block::WARPED_DOOR);
-define_door_block!(PaleOakDoorBlock, Block::PALE_OAK_DOOR);
-define_door_block!(IronDoorBlock, Block::IRON_DOOR);
-define_door_block!(CopperDoorBlock, Block::COPPER_DOOR);
-define_door_block!(ExposedCopperDoorBlock, Block::EXPOSED_COPPER_DOOR);
-define_door_block!(OxidizedCopperDoorBlock, Block::OXIDIZED_COPPER_DOOR);
-define_door_block!(WeatheredCopperDoorBlock, Block::WEATHERED_COPPER_DOOR);
-define_door_block!(WaxedCopperDoorBlock, Block::WAXED_COPPER_DOOR);
-define_door_block!(
-    WaxedExposedCopperDoorBlock,
-    Block::WAXED_EXPOSED_COPPER_DOOR
-);
-define_door_block!(
-    WaxedOxidizedCopperDoorBlock,
-    Block::WAXED_OXIDIZED_COPPER_DOOR
-);
-define_door_block!(
-    WaxedWeatheredCopperDoorBlock,
-    Block::WAXED_WEATHERED_COPPER_DOOR
-);
-
-pub fn register_door_blocks(manager: &mut BlockRegistry) {
-    manager.register(OakDoorBlock);
-    manager.register(SpruceDoorBlock);
-    manager.register(BirchDoorBlock);
-    manager.register(JungleDoorBlock);
-    manager.register(AcaciaDoorBlock);
-    manager.register(DarkOakDoorBlock);
-    manager.register(MangroveDoorBlock);
-    manager.register(CherryDoorBlock);
-    manager.register(BambooDoorBlock);
-    manager.register(CrimsonDoorBlock);
-    manager.register(WarpedDoorBlock);
-    manager.register(PaleOakDoorBlock);
-
-    manager.register(IronDoorBlock);
-
-    manager.register(CopperDoorBlock);
-    manager.register(ExposedCopperDoorBlock);
-    manager.register(OxidizedCopperDoorBlock);
-    manager.register(WeatheredCopperDoorBlock);
-    manager.register(WaxedCopperDoorBlock);
-    manager.register(WaxedExposedCopperDoorBlock);
-    manager.register(WaxedOxidizedCopperDoorBlock);
-    manager.register(WaxedWeatheredCopperDoorBlock);
+        manager.register(DoorBlock { id: block });
+    }
 }

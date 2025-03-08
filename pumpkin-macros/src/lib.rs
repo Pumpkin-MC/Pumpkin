@@ -190,8 +190,12 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
     let code = quote! {
         #item
         impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
-            const NAMESPACE: &'static str = #namespace;
-            const ID: &'static str = #id;
+            fn namespace(&self) -> &'static str {
+                #namespace
+            }
+            fn id(&self) -> &'static str {
+                #id
+            }
         }
     };
 

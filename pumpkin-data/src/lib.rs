@@ -1,4 +1,4 @@
-pub mod tag;
+//pub mod tag;
 
 pub mod item {
     include!(concat!(env!("OUT_DIR"), "/item.rs"));
@@ -58,4 +58,8 @@ pub mod fluid {
 
 pub mod block {
     include!(concat!(env!("OUT_DIR"), "/block.rs"));
+}
+
+pub mod tag {
+    include!(concat!(env!("OUT_DIR"), "/tag.rs"));
 }

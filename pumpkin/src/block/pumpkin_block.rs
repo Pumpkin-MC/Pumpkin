@@ -12,10 +12,10 @@ use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
 pub trait BlockMetadata {
-    const NAMESPACE: &'static str;
-    const ID: &'static str;
+    fn namespace(&self) -> &'static str;
+    fn id(&self) -> &'static str;
     fn name(&self) -> String {
-        format!("{}:{}", Self::NAMESPACE, Self::ID)
+        format!("{}:{}", self.namespace(), self.id())
     }
 }
 
