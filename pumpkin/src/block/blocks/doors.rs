@@ -56,7 +56,6 @@ fn can_open_door(block: &Block, player: &Player) -> bool {
     true
 }
 
-// Macro to easily define new door block variants
 macro_rules! define_door_block {
     ($block_name:ident, $block:expr) => {
         pub struct $block_name;

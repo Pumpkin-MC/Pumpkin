@@ -28,8 +28,7 @@ pub async fn toggle_fence_gate(world: &World, block_pos: &BlockPos) -> u16 {
     fence_gate_props.to_state_id(&block)
 }
 
-// Macro to easily define new fence block variants
-macro_rules! define_fence_block {
+macro_rules! define_fence_gate_block {
     ($block_name:ident, $block:expr) => {
         pub struct $block_name;
         impl BlockMetadata for $block_name {
@@ -82,18 +81,18 @@ macro_rules! define_fence_block {
     };
 }
 
-define_fence_block!(OakFenceGateBlock, Block::OAK_FENCE_GATE);
-define_fence_block!(DarkOakFenceGateBlock, Block::DARK_OAK_FENCE_GATE);
-define_fence_block!(SpruceFenceGateBlock, Block::SPRUCE_FENCE_GATE);
-define_fence_block!(BirchFenceGateBlock, Block::BIRCH_FENCE_GATE);
-define_fence_block!(JungleFenceGateBlock, Block::JUNGLE_FENCE_GATE);
-define_fence_block!(AcaciaFenceGateBlock, Block::ACACIA_FENCE_GATE);
-define_fence_block!(PaleOakFenceGateBlock, Block::PALE_OAK_FENCE_GATE);
-define_fence_block!(CherryFenceGateBlock, Block::CHERRY_FENCE_GATE);
-define_fence_block!(MangroveFenceGateBlock, Block::MANGROVE_FENCE_GATE);
-define_fence_block!(CrimsonFenceGateBlock, Block::CRIMSON_FENCE_GATE);
-define_fence_block!(WarpedFenceGateBlock, Block::WARPED_FENCE_GATE);
-define_fence_block!(BambooFenceGateBlock, Block::BAMBOO_FENCE_GATE);
+define_fence_gate_block!(OakFenceGateBlock, Block::OAK_FENCE_GATE);
+define_fence_gate_block!(DarkOakFenceGateBlock, Block::DARK_OAK_FENCE_GATE);
+define_fence_gate_block!(SpruceFenceGateBlock, Block::SPRUCE_FENCE_GATE);
+define_fence_gate_block!(BirchFenceGateBlock, Block::BIRCH_FENCE_GATE);
+define_fence_gate_block!(JungleFenceGateBlock, Block::JUNGLE_FENCE_GATE);
+define_fence_gate_block!(AcaciaFenceGateBlock, Block::ACACIA_FENCE_GATE);
+define_fence_gate_block!(PaleOakFenceGateBlock, Block::PALE_OAK_FENCE_GATE);
+define_fence_gate_block!(CherryFenceGateBlock, Block::CHERRY_FENCE_GATE);
+define_fence_gate_block!(MangroveFenceGateBlock, Block::MANGROVE_FENCE_GATE);
+define_fence_gate_block!(CrimsonFenceGateBlock, Block::CRIMSON_FENCE_GATE);
+define_fence_gate_block!(WarpedFenceGateBlock, Block::WARPED_FENCE_GATE);
+define_fence_gate_block!(BambooFenceGateBlock, Block::BAMBOO_FENCE_GATE);
 
 pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
     manager.register(OakFenceGateBlock);

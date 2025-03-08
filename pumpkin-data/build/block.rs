@@ -292,7 +292,7 @@ impl ToTokens for PropertyStruct {
         let values_3 = values.clone();
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug)]
+            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
             pub enum #name {
                 #(#values),*
             }
@@ -355,7 +355,7 @@ impl ToTokens for BlockPropertyStruct {
             .collect();
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug)]
+            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
             pub struct #name {
                 #(pub #values),*
             }
@@ -525,7 +525,7 @@ pub struct LootTable {
 
 impl ToTokens for LootTable {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let dase = self.r#type.to_token_stream();
+        let loot_table_type = self.r#type.to_token_stream();
         let random_sequence = match &self.random_sequence {
             Some(seq) => quote! { Some(#seq) },
             None => quote! { None },
@@ -540,7 +540,7 @@ impl ToTokens for LootTable {
 
         tokens.extend(quote! {
             LootTable {
-                r#type: #dase,
+                r#type: #loot_table_type,
                 random_sequence: #random_sequence,
                 pools: #pools,
             }

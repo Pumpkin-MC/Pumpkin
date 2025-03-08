@@ -3,7 +3,7 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::CardinalDirection;
+use pumpkin_data::block::{Axis, CardinalDirection};
 use pumpkin_util::math::vector3::Vector3;
 
 pub use state::WorldBlockState;
@@ -100,6 +100,14 @@ impl BlockDirection {
             BlockDirection::West => CardinalDirection::West,
             BlockDirection::East => CardinalDirection::East,
             _ => CardinalDirection::North,
+        }
+    }
+
+    pub fn to_axis(&self) -> Axis {
+        match self {
+            BlockDirection::North | BlockDirection::South => Axis::Z,
+            BlockDirection::West | BlockDirection::East => Axis::X,
+            BlockDirection::Up | BlockDirection::Down => Axis::Y,
         }
     }
 }

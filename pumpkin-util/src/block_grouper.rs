@@ -27,7 +27,7 @@ pub fn group_by_common_full_words(groups: Vec<Vec<String>>) -> Vec<(String, Vec<
                 let s2 = &group[j];
 
                 // Check if they share a common word
-                if has_common_word(s1, s2) {
+                if !has_common_word(s1, s2).is_empty() {
                     graph.entry(s1.clone()).or_default().push(s2.clone());
                     graph.entry(s2.clone()).or_default().push(s1.clone());
                 }
@@ -93,21 +93,21 @@ pub fn group_by_common_full_words(groups: Vec<Vec<String>>) -> Vec<(String, Vec<
 }
 
 // Helper function to check if two strings share a common word
-fn has_common_word(s1: &str, s2: &str) -> bool {
+fn has_common_word(s1: &str, s2: &str) -> Vec<String> {
     let parts1: Vec<&str> = s1.split('_').collect();
     let parts2: Vec<&str> = s2.split('_').collect();
 
     // Check for common suffix (right side)
     for i in 1..=std::cmp::min(parts1.len(), parts2.len()) {
         if parts1[parts1.len() - i] == parts2[parts2.len() - i] {
-            return true;
+            return vec![parts1[parts1.len() - i].to_string()];
         }
     }
 
     // Check for common prefix (left side)
     for i in 0..std::cmp::min(parts1.len(), parts2.len()) {
         if parts1[i] == parts2[i] {
-            return true;
+            return vec![parts1[i].to_string()];
         }
 
         // Break after first mismatch on prefix
@@ -116,7 +116,7 @@ fn has_common_word(s1: &str, s2: &str) -> bool {
         }
     }
 
-    false
+    vec![]
 }
 
 // Process a subgroup of strings that share common words
@@ -126,10 +126,54 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
         return;
     }
 
+    // Create a mutable copy of the subgroup so we can remove items as we process them
+    let mut remaining_strings: Vec<String> = subgroup.to_vec();
+    println!("remaining_strings: {:?}", remaining_strings);
+
+    while !remaining_strings.is_empty() {
+        let current = remaining_strings[0].clone();
+        let mut current_group = vec![current.clone()];
+        let mut common_word = String::new();
+
+        // Find all strings that share common words with the current string
+        let mut i = 1;
+        while i < remaining_strings.len() {
+            let common_words = has_common_word(&current, &remaining_strings[i]);
+            if !common_words.is_empty() {
+                if common_word.is_empty() {
+                    common_word = common_words[0].clone();
+                    println!("common_word: {:?}", common_word);
+                }
+                if common_word == common_words[0] {
+                    current_group.push(remaining_strings[i].clone());
+                    remaining_strings.remove(i);
+                } else {
+                    i += 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        // Remove the current string
+        remaining_strings.remove(0);
+
+        // Find the best common part for this group
+        find_best_common_part(&current_group, result);
+    }
+}
+
+// Helper function to find the best common part among a group of strings
+fn find_best_common_part(strings: &[String], result: &mut Vec<(String, Vec<String>)>) {
+    if strings.len() == 1 {
+        result.push((strings[0].clone(), strings.to_vec()));
+        return;
+    }
+
     // Find all possible full words (delimited by underscores) in each string
     let mut all_possible_common_words = HashMap::new();
 
-    for string in subgroup {
+    for string in strings {
         let parts: Vec<&str> = string.split('_').collect();
 
         // Get all possible combinations of consecutive parts
@@ -157,7 +201,7 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
 
     for (common_part, matching_strings) in all_possible_common_words {
         // Only consider if it matches all strings in the subgroup
-        if matching_strings.len() == subgroup.len() {
+        if matching_strings.len() == strings.len() {
             // Calculate score based on length and position
             let score = (common_part.len() * 10) as i32;
 
@@ -174,7 +218,7 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
     // For cases where we couldn't find a common full word/phrase
     // Fallback to finding the common suffix (from the right)
     if best_common_part.is_empty() {
-        let words: Vec<Vec<&str>> = subgroup.iter().map(|s| s.split('_').collect()).collect();
+        let words: Vec<Vec<&str>> = strings.iter().map(|s| s.split('_').collect()).collect();
 
         'outer: for i in 1..=words.iter().map(|w| w.len()).min().unwrap_or(0) {
             let suffix = words[0][words[0].len() - i];
@@ -187,7 +231,7 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
 
             // Found a common suffix
             best_common_part = suffix.to_string();
-            best_matches = subgroup.iter().cloned().collect();
+            best_matches = strings.iter().cloned().collect();
             break;
         }
     }
@@ -197,7 +241,7 @@ fn process_subgroup(subgroup: &[String], result: &mut Vec<(String, Vec<String>)>
         result.push((best_common_part, best_matches.into_iter().collect()));
     } else {
         // If still no common parts, handle each string individually
-        for string in subgroup {
+        for string in strings {
             result.push((string.clone(), vec![string.clone()]));
         }
     }

@@ -48,7 +48,6 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
     block_properties.to_state_id(block)
 }
 
-// Macro to easily define new fence block variants
 macro_rules! define_fence_block {
     ($block_name:ident, $block:expr) => {
         pub struct $block_name;
