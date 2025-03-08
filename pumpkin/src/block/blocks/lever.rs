@@ -1,8 +1,8 @@
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, Face};
 use pumpkin_data::{
-    block::{AttachmentFace, BlockProperties, CardinalDirection, LeverBlockProps},
+    block::{BlockProperties, CardinalDirection, LeverBlockProps},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
@@ -46,9 +46,9 @@ impl PumpkinBlock for LeverBlock {
             LeverBlockProps::from_state_id(block.default_state_id, block).unwrap();
 
         match face {
-            BlockDirection::Up => lever_props.face = AttachmentFace::Ceiling,
-            BlockDirection::Down => lever_props.face = AttachmentFace::Floor,
-            _ => lever_props.face = AttachmentFace::Wall,
+            BlockDirection::Up => lever_props.face = Face::Ceiling,
+            BlockDirection::Down => lever_props.face = Face::Floor,
+            _ => lever_props.face = Face::Wall,
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {

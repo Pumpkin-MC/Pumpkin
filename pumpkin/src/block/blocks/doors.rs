@@ -4,8 +4,8 @@ use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::CardinalDirection;
 use pumpkin_data::block::DoorBlockProps;
-use pumpkin_data::block::DoorHinge;
-use pumpkin_data::block::VerticalHalf;
+use pumpkin_data::block::Half;
+use pumpkin_data::block::Hinge;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
@@ -29,8 +29,8 @@ async fn toggle_door(world: &World, block_pos: &BlockPos) {
     door_props.open = door_props.open.flip();
 
     let other_half = match door_props.half {
-        VerticalHalf::Upper => BlockDirection::Down,
-        VerticalHalf::Lower => BlockDirection::Up,
+        Half::Upper => BlockDirection::Down,
+        Half::Lower => BlockDirection::Up,
     };
     let other_pos = block_pos.offset(other_half.to_offset());
 
@@ -90,9 +90,9 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 _other: bool,
             ) -> u16 {
                 let mut door_props = DoorBlockProps::default(block);
-                door_props.half = VerticalHalf::Lower;
+                door_props.half = Half::Lower;
                 door_props.facing = *player_direction;
-                door_props.hinge = DoorHinge::Left;
+                door_props.hinge = Hinge::Left;
 
                 door_props.to_state_id(block)
             }
@@ -126,7 +126,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
             ) {
                 let state_id = world.get_block_state_id(&location).await.unwrap();
                 let mut door_props = DoorBlockProps::from_state_id(state_id, block).unwrap();
-                door_props.half = VerticalHalf::Upper;
+                door_props.half = Half::Upper;
 
                 world
                     .set_block_state(
@@ -148,8 +148,8 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 let door_props = DoorBlockProps::from_state_id(state.id, block).unwrap();
 
                 let other_half = match door_props.half {
-                    VerticalHalf::Upper => BlockDirection::Down,
-                    VerticalHalf::Lower => BlockDirection::Up,
+                    Half::Upper => BlockDirection::Down,
+                    Half::Lower => BlockDirection::Up,
                 };
 
                 let other_pos = location.offset(other_half.to_offset());

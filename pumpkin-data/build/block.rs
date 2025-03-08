@@ -11,184 +11,20 @@ pub struct BlockProperty {
     pub values: Vec<String>,
 }
 
-fn get_enum_name(props: Vec<String>) -> String {
-    // Define the mapping of variant sets to new enum names
-    let enum_mappings: &[(&[&str], &str)] = &[
-        (&["true", "false"], "Boolean"),
-        (&["x", "y", "z"], "Axis"),
-        (&["0", "1"], "Level0to1"),
-        (&["0", "1", "2", "3", "4"], "Level0to4"),
-        (
-            &[
-                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
-                "15",
-            ],
-            "Level0to15",
-        ),
-        (&["0", "1", "2", "3"], "Level0to3"),
-        (&["1", "2", "3", "4", "5", "6", "7"], "Level1to7"),
-        (
-            &["north", "east", "south", "west", "up", "down"],
-            "Direction",
-        ),
-        (
-            &[
-                "harp",
-                "basedrum",
-                "snare",
-                "hat",
-                "bass",
-                "flute",
-                "bell",
-                "guitar",
-                "chime",
-                "xylophone",
-                "iron_xylophone",
-                "cow_bell",
-                "didgeridoo",
-                "bit",
-                "banjo",
-                "pling",
-                "zombie",
-                "skeleton",
-                "creeper",
-                "dragon",
-                "wither_skeleton",
-                "piglin",
-                "custom_head",
-            ],
-            "Instrument",
-        ),
-        (
-            &[
-                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
-                "15", "16", "17", "18", "19", "20", "21", "22", "23", "24",
-            ],
-            "Level0to24",
-        ),
-        (&["north", "south", "west", "east"], "CardinalDirection"),
-        (&["head", "foot"], "BedPart"),
-        (
-            &[
-                "north_south",
-                "east_west",
-                "ascending_east",
-                "ascending_west",
-                "ascending_north",
-                "ascending_south",
-            ],
-            "RailShape",
-        ),
-        (&["upper", "lower"], "VerticalHalf"),
-        (&["normal", "sticky"], "PistonType"),
-        (&["top", "bottom"], "VerticalBlockHalf"),
-        (
-            &[
-                "straight",
-                "inner_left",
-                "inner_right",
-                "outer_left",
-                "outer_right",
-            ],
-            "StairShape",
-        ),
-        (&["single", "left", "right"], "ChestType"),
-        (&["up", "side", "none"], "RedstoneConnection"),
-        (&["0", "1", "2", "3", "4", "5", "6", "7"], "Level0to7"),
-        (&["left", "right"], "DoorHinge"),
-        (
-            &[
-                "north_south",
-                "east_west",
-                "ascending_east",
-                "ascending_west",
-                "ascending_north",
-                "ascending_south",
-                "south_east",
-                "south_west",
-                "north_west",
-                "north_east",
-            ],
-            "ExtendedRailShape",
-        ),
-        (&["floor", "wall", "ceiling"], "AttachmentFace"),
-        (&["1", "2", "3", "4", "5", "6", "7", "8"], "Level1to8"),
-        (&["x", "z"], "XYAxis"),
-        (&["0", "1", "2", "3", "4", "5", "6"], "Level0to6"),
-        (&["1", "2", "3", "4"], "Level1to4"),
-        (&["top", "bottom", "double"], "SlabType"),
-        (&["none", "low", "tall"], "WallHeight"),
-        (&["1", "2", "3"], "Level1to3"),
-        (&["0", "1", "2"], "Level0to2"),
-        (&["compare", "subtract"], "ComparatorMode"),
-        (&["down", "north", "south", "west", "east"], "DirectionNoUp"),
-        (&["0", "1", "2", "3", "4", "5"], "Level0to5"),
-        (
-            &[
-                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
-                "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25",
-            ],
-            "Level0to25",
-        ),
-        (&["none", "small", "large"], "LeafSize"),
-        (
-            &["floor", "ceiling", "single_wall", "double_wall"],
-            "BellAttachment",
-        ),
-        (&["save", "load", "corner", "data"], "StructureBlockMode"),
-        (
-            &[
-                "down_east",
-                "down_north",
-                "down_south",
-                "down_west",
-                "up_east",
-                "up_north",
-                "up_south",
-                "up_west",
-                "west_up",
-                "east_up",
-                "north_up",
-                "south_up",
-            ],
-            "Orientation",
-        ),
-        (&["0", "1", "2", "3", "4", "5", "6", "7", "8"], "Level0to8"),
-        (&["inactive", "active", "cooldown"], "SculkSensorPhase"),
-        (
-            &["tip_merge", "tip", "frustum", "middle", "base"],
-            "DripstoneThickness",
-        ),
-        (&["up", "down"], "VerticalDirection"),
-        (&["none", "unstable", "partial", "full"], "TiltState"),
-        (
-            &[
-                "inactive",
-                "waiting_for_players",
-                "active",
-                "waiting_for_reward_ejection",
-                "ejecting_reward",
-                "cooldown",
-            ],
-            "TrialSpawnerState",
-        ),
-        (
-            &["inactive", "active", "unlocking", "ejecting"],
-            "VaultState",
-        ),
-    ];
+pub type EnumMappings = Vec<(Vec<String>, String)>;
 
-    // Convert props to a Vec<&str> for comparison
+fn get_enum_name(props: Vec<String>, fallback: String, enum_mappings: &EnumMappings) -> String {
     let props_set: Vec<&str> = props.iter().map(|s| s.as_str()).collect();
 
-    // Find the matching enum by checking if the props match the variant set
     for (variants, enum_name) in enum_mappings {
-        if props_set.len() == variants.len() && props_set.iter().all(|p| variants.contains(p)) {
+        if props_set.len() == variants.len()
+            && props_set.iter().all(|p| variants.contains(&p.to_string()))
+        {
             return enum_name.to_string();
         }
     }
 
-    panic!("UnknownEnum {:?}", props);
+    fallback.to_upper_camel_case()
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -272,7 +108,7 @@ impl ToTokens for PropertyStruct {
         let name = Ident::new(&self.name, Span::call_site());
         let mut prefix = "";
 
-        if name.to_string().contains("Level") {
+        if self.values.iter().any(|value| value == "1") {
             prefix = "L";
         }
 
@@ -954,9 +790,16 @@ pub struct BlockAssets {
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
+    println!("cargo:rerun-if-changed=../assets/block_property_mappings.json");
 
     let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
         .expect("Failed to parse blocks.json");
+
+    let enum_mappings: EnumMappings =
+        serde_json::from_str(include_str!("../../assets/block_property_mappings.json"))
+            .expect("Failed to parse block_property_mappings.json");
+
+    println!("{:?}", enum_mappings);
 
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
@@ -1042,7 +885,12 @@ pub(crate) fn build() -> TokenStream {
             let entries: Vec<(String, String)> = block
                 .properties
                 .iter()
-                .map(|prop| (prop.name.clone(), get_enum_name(prop.values.clone())))
+                .map(|prop| {
+                    (
+                        prop.name.clone(),
+                        get_enum_name(prop.values.clone(), prop.name.clone(), &enum_mappings),
+                    )
+                })
                 .collect();
             if shared_props.iter().any(|(props, _)| props == &entries) {
                 shared_props
@@ -1058,7 +906,7 @@ pub(crate) fn build() -> TokenStream {
 
         // Add unique property types
         for prop in block.properties {
-            let enum_name = get_enum_name(prop.values.clone());
+            let enum_name = get_enum_name(prop.values.clone(), prop.name.clone(), &enum_mappings);
 
             if !properties.iter().any(|p| p.name == enum_name) {
                 properties.push(PropertyStruct {
