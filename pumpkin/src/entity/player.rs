@@ -1,4 +1,3 @@
-use pumpkin_world::{block::registry::State, level::SyncChunk};
 use std::{
     collections::VecDeque,
     num::NonZeroU8,
@@ -14,6 +13,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
+    block::BlockState,
     damage::DamageType,
     entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
@@ -61,7 +61,7 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
+use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use super::{
@@ -574,8 +574,8 @@ impl Player {
                 self.continue_mining(
                     *pos,
                     &world,
-                    state,
-                    &block.name,
+                    &state,
+                    block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
                 .await;
@@ -616,7 +616,7 @@ impl Player {
         &self,
         location: BlockPos,
         world: &World,
-        state: &State,
+        state: &BlockState,
         block_name: &str,
         starting_time: i32,
     ) {
@@ -1035,7 +1035,7 @@ impl Player {
             .await;
     }
 
-    pub async fn can_harvest(&self, block: &State, block_name: &str) -> bool {
+    pub async fn can_harvest(&self, block: &BlockState, block_name: &str) -> bool {
         !block.tool_required
             || self
                 .inventory

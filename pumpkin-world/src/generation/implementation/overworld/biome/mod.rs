@@ -2,11 +2,11 @@ use std::ops::Add;
 
 use pumpkin_macros::block_state;
 
-use crate::{block::BlockState, coordinates::ChunkRelativeBlockCoordinates};
+use crate::{block::ChunkBlockState, coordinates::ChunkRelativeBlockCoordinates};
 
 pub fn generate_tree(
     chunk_relative_coordinates: ChunkRelativeBlockCoordinates,
-) -> Vec<(ChunkRelativeBlockCoordinates, BlockState)> {
+) -> Vec<(ChunkRelativeBlockCoordinates, ChunkBlockState)> {
     let x = chunk_relative_coordinates.x;
     let z = chunk_relative_coordinates.z;
 

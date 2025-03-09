@@ -2,16 +2,14 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::registry::Block;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use super::properties::Direction;
 
 pub enum BlockActionResult {
     /// Allow other actions to be executed
@@ -36,11 +34,12 @@ impl BlockRegistry {
         player: &Player,
         location: BlockPos,
         server: &Server,
+        world: &World,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .normal_use(block, player, location, server)
+                .normal_use(block, player, location, server, world)
                 .await;
         }
     }
@@ -59,11 +58,12 @@ impl BlockRegistry {
         location: BlockPos,
         item: &Item,
         server: &Server,
+        world: &World,
     ) -> BlockActionResult {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .use_with_item(block, player, location, item, server)
+                .use_with_item(block, player, location, item, server, world)
                 .await;
         }
         BlockActionResult::Continue
@@ -78,7 +78,7 @@ impl BlockRegistry {
         face: &BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
-        player_direction: &Direction,
+        player_direction: &HorizontalFacing,
         other: bool,
     ) -> u16 {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -96,22 +96,30 @@ impl BlockRegistry {
                 )
                 .await;
         }
-        server
-            .block_properties_manager
-            .on_place_state(
-                world,
-                block,
-                face,
-                block_pos,
-                use_item_on,
-                player_direction,
-                other,
-            )
-            .await
+        block.default_state_id
+    }
+
+    pub async fn can_place(
+        &self,
+        server: &Server,
+        world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
+        player_direction: &HorizontalFacing,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_place(server, world, block, face, block_pos, player_direction)
+                .await;
+        }
+        true
     }
 
     pub async fn on_placed(
         &self,
+        world: &World,
         block: &Block,
         player: &Player,
         location: BlockPos,
@@ -119,21 +127,29 @@ impl BlockRegistry {
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.placed(block, player, location, server).await;
+            pumpkin_block
+                .placed(block, player, location, server, world)
+                .await;
         }
+        world.update_neighbors(server, &location, None).await;
     }
 
     pub async fn broken(
         &self,
+        world: Arc<World>,
         block: &Block,
         player: &Player,
         location: BlockPos,
         server: &Server,
+        state: BlockState,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.broken(block, player, location, server).await;
+            pumpkin_block
+                .broken(block, player, location, server, world.clone(), state)
+                .await;
         }
+        world.update_neighbors(server, &location, None).await;
     }
 
     pub async fn close(

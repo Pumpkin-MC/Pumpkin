@@ -3,7 +3,7 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::block::state::BlockState;
+use crate::block::state::ChunkBlockState;
 use crate::chunk::{ChunkData, Subchunks};
 use crate::coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates, XZBlockCoordinates};
 use crate::generation::Seed;
@@ -31,7 +31,7 @@ pub(crate) trait TerrainGenerator: Sync + Send {
         chunk_pos: &Vector2<i32>,
         at: Vector3<i32>,
         biome: Biome,
-    ) -> BlockState;
+    ) -> ChunkBlockState;
 }
 
 pub(crate) trait PerlinTerrainGenerator: Sync + Send {

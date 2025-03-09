@@ -49,7 +49,7 @@ impl CommandExecutor for Executor {
 
         let success = match mode {
             Mode::Destroy => {
-                world.clone().break_block(&pos, None, false).await;
+                world.clone().break_block(&pos, None, false, None).await;
                 world.set_block_state(&pos, block_state_id).await;
                 true
             }

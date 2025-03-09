@@ -7,7 +7,7 @@ use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::BlockState,
+    block::ChunkBlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
 };
 
@@ -62,11 +62,7 @@ impl ChunkData {
             let palette = block_states
                 .palette
                 .iter()
-                .map(|entry| match BlockState::new(&entry.name) {
-                    // Block not found, Often the case when World has an newer or older version then block registry
-                    None => BlockState::AIR,
-                    Some(state) => state,
-                })
+                .map(ChunkBlockState::from_palette)
                 .collect::<Vec<_>>();
 
             let block_data = match block_states.data {
@@ -127,11 +123,11 @@ impl ChunkData {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
-struct PaletteEntry {
+pub struct PaletteEntry {
     // block name
-    name: String,
+    pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    properties: Option<HashMap<String, String>>,
+    pub properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

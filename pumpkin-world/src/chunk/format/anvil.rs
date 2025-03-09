@@ -3,12 +3,12 @@ use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{Read, Write},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -19,7 +19,6 @@ use tokio::{
 };
 
 use crate::{
-    block::registry::STATE_ID_TO_REGISTRY_ID,
     chunk::{
         ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
         io::{ChunkSerializer, LoadedData},
@@ -458,7 +457,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .into_iter()
             .enumerate()
             .map(|(i, block)| {
-                let name = STATE_ID_TO_REGISTRY_ID.get(block).unwrap();
+                let name = Block::from_state_id(*block).unwrap().name;
                 (block, (name, i))
             })
             .collect();
@@ -512,15 +511,17 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                     .map(|entry| PaletteEntry {
                         name: entry.1.0.to_string(),
                         properties: {
-                            /*
-                            let properties = &get_block(entry.1 .0).unwrap().properties;
-                            let mut map = HashMap::new();
-                            for property in properties {
-                                map.insert(property.name.to_string(), property.values.clone());
+                            let block = Block::from_state_id(*entry.0).unwrap();
+                            if let Some(properties) = block.properties(*entry.0) {
+                                let props = properties.to_props();
+                                let mut props_map = HashMap::new();
+                                for prop in props {
+                                    props_map.insert(prop.0.clone(), prop.1.clone());
+                                }
+                                Some(props_map)
+                            } else {
+                                None
                             }
-                            Some(map)
-                            */
-                            None
                         },
                     })
                     .collect(),

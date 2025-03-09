@@ -1,4 +1,4 @@
-use pumpkin_data::tag::RegistryEntryList;
+use pumpkin_util::registry::RegistryEntryList;
 
 use super::super::recipe::RecipeType;
 use super::read::{CraftingType, RecipeKeys, RecipeResult, RecipeTrait};

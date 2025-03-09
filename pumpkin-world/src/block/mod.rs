@@ -3,14 +3,15 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
+use pumpkin_data::block::{Axis, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
-pub use state::BlockState;
+pub use state::ChunkBlockState;
 
 #[derive(FromPrimitive, PartialEq, Clone, Copy)]
 pub enum BlockDirection {
-    Bottom = 0,
-    Top,
+    Down = 0,
+    Up,
     North,
     South,
     West,
@@ -24,8 +25,8 @@ impl TryFrom<i32> for BlockDirection {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::Bottom),
-            1 => Ok(Self::Top),
+            0 => Ok(Self::Down),
+            1 => Ok(Self::Up),
             2 => Ok(Self::North),
             3 => Ok(Self::South),
             4 => Ok(Self::West),
@@ -38,8 +39,8 @@ impl TryFrom<i32> for BlockDirection {
 impl BlockDirection {
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
-            BlockDirection::Bottom => (0, -1, 0),
-            BlockDirection::Top => (0, 1, 0),
+            BlockDirection::Down => (0, -1, 0),
+            BlockDirection::Up => (0, 1, 0),
             BlockDirection::North => (0, 0, -1),
             BlockDirection::South => (0, 0, 1),
             BlockDirection::West => (-1, 0, 0),
@@ -49,12 +50,83 @@ impl BlockDirection {
     }
     pub fn opposite(&self) -> BlockDirection {
         match self {
-            BlockDirection::Bottom => BlockDirection::Top,
-            BlockDirection::Top => BlockDirection::Bottom,
+            BlockDirection::Down => BlockDirection::Up,
+            BlockDirection::Up => BlockDirection::Down,
             BlockDirection::North => BlockDirection::South,
             BlockDirection::South => BlockDirection::North,
             BlockDirection::West => BlockDirection::East,
             BlockDirection::East => BlockDirection::West,
+        }
+    }
+
+    pub fn all() -> [BlockDirection; 6] {
+        [
+            BlockDirection::Down,
+            BlockDirection::Up,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ]
+    }
+    pub fn update_order() -> [BlockDirection; 6] {
+        [
+            BlockDirection::West,
+            BlockDirection::East,
+            BlockDirection::Down,
+            BlockDirection::Up,
+            BlockDirection::North,
+            BlockDirection::South,
+        ]
+    }
+
+    pub fn horizontal() -> [BlockDirection; 4] {
+        [
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ]
+    }
+
+    pub fn vertical() -> [BlockDirection; 2] {
+        [BlockDirection::Down, BlockDirection::Up]
+    }
+
+    pub fn to_cardinal_direction(&self) -> HorizontalFacing {
+        match self {
+            BlockDirection::North => HorizontalFacing::North,
+            BlockDirection::South => HorizontalFacing::South,
+            BlockDirection::West => HorizontalFacing::West,
+            BlockDirection::East => HorizontalFacing::East,
+            _ => HorizontalFacing::North,
+        }
+    }
+
+    pub fn from_cardinal_direction(direction: HorizontalFacing) -> BlockDirection {
+        match direction {
+            HorizontalFacing::North => BlockDirection::North,
+            HorizontalFacing::South => BlockDirection::South,
+            HorizontalFacing::West => BlockDirection::West,
+            HorizontalFacing::East => BlockDirection::East,
+        }
+    }
+    pub fn to_axis(&self) -> Axis {
+        match self {
+            BlockDirection::North | BlockDirection::South => Axis::Z,
+            BlockDirection::West | BlockDirection::East => Axis::X,
+            BlockDirection::Up | BlockDirection::Down => Axis::Y,
+        }
+    }
+
+    pub fn rotate_clockwise(&self) -> BlockDirection {
+        match self {
+            BlockDirection::North => BlockDirection::East,
+            BlockDirection::East => BlockDirection::South,
+            BlockDirection::South => BlockDirection::West,
+            BlockDirection::West => BlockDirection::North,
+            BlockDirection::Up => BlockDirection::East,
+            BlockDirection::Down => BlockDirection::West,
         }
     }
 }

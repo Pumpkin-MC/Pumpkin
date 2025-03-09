@@ -2,6 +2,7 @@ pub mod gamemode;
 pub mod math;
 pub mod permission;
 pub mod random;
+pub mod registry;
 pub mod text;
 pub mod translation;
 

@@ -2,7 +2,7 @@ use bytes::BufMut;
 use pumpkin_data::{
     fluid::Fluid,
     packet::clientbound::CONFIG_UPDATE_TAGS,
-    tag::{RegistryKey, TAGS},
+    tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::packet;
 use pumpkin_world::block::registry;
@@ -29,7 +29,7 @@ impl ClientPacket for CUpdateTags<'_> {
         bytebuf.put_list(self.tags, |p, registry_key| {
             p.put_identifier(&Identifier::vanilla(registry_key.identifier_string()));
 
-            let values = TAGS.get(registry_key).unwrap();
+            let values = get_registry_key_tags(registry_key);
             p.put_var_int(&VarInt::from(values.len() as i32));
             for (key, values) in values.iter() {
                 // This is technically a Identifier but same thing

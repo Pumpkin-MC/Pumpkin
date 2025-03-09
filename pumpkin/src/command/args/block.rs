@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_data::block::Block;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
-use pumpkin_world::block::registry::{self, Block};
+use pumpkin_world::block::registry::{self};
 
 use crate::{command::dispatcher::CommandError, server::Server};
 
@@ -55,7 +56,7 @@ impl DefaultNameArgConsumer for BlockArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for BlockArgumentConsumer {
-    type Data = &'a Block;
+    type Data = Block;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

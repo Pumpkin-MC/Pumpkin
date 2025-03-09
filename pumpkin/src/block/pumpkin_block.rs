@@ -3,21 +3,19 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
+use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::registry::Block;
 use std::sync::Arc;
 
-use super::properties::Direction;
-
 pub trait BlockMetadata {
-    const NAMESPACE: &'static str;
-    const ID: &'static str;
+    fn namespace(&self) -> &'static str;
+    fn id(&self) -> &'static str;
     fn name(&self) -> String {
-        format!("{}:{}", Self::NAMESPACE, Self::ID)
+        format!("{}:{}", self.namespace(), self.id())
     }
 }
 
@@ -29,6 +27,7 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
+        _world: &World,
     ) {
     }
     fn should_drop_items_on_explosion(&self) -> bool {
@@ -42,6 +41,7 @@ pub trait PumpkinBlock: Send + Sync {
         _location: BlockPos,
         _item: &Item,
         _server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         BlockActionResult::Continue
     }
@@ -49,27 +49,28 @@ pub trait PumpkinBlock: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     async fn on_place(
         &self,
-        server: &Server,
-        world: &World,
+        _server: &Server,
+        _world: &World,
         block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &Direction,
-        other: bool,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        _player_direction: &HorizontalFacing,
+        _other: bool,
     ) -> u16 {
-        server
-            .block_properties_manager
-            .on_place_state(
-                world,
-                block,
-                face,
-                block_pos,
-                use_item_on,
-                player_direction,
-                other,
-            )
-            .await
+        block.default_state_id
+    }
+
+    async fn can_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        _block: &Block,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _player_direction: &HorizontalFacing,
+    ) -> bool {
+        true
     }
 
     async fn placed(
@@ -78,6 +79,7 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
+        _world: &World,
     ) {
     }
 
@@ -87,6 +89,8 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
     ) {
     }
 
@@ -97,6 +101,17 @@ pub trait PumpkinBlock: Send + Sync {
         _location: BlockPos,
         _server: &Server,
         _container: &mut OpenContainer,
+    ) {
+    }
+
+    async fn on_neighbor_update(
+        &self,
+        _server: &Server,
+        _world: &World,
+        _block: &Block,
+        _block_pos: &BlockPos,
+        _source_face: &BlockDirection,
+        _source_block_pos: &BlockPos,
     ) {
     }
 }

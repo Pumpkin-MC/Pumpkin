@@ -7,12 +7,12 @@ use crate::entity::tnt::TNTEntity;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
+use pumpkin_data::block::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
 use rand::Rng;
 
 #[pumpkin_block("minecraft:tnt")]
@@ -30,6 +30,7 @@ impl PumpkinBlock for TNTBlock {
         location: BlockPos,
         item: &Item,
         _server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         if *item != Item::FLINT_AND_STEEL || *item == Item::FIRE_CHARGE {
             return BlockActionResult::Continue;

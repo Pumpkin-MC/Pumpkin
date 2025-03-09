@@ -49,13 +49,14 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::level::Level;
+use pumpkin_world::level::SyncChunk;
+use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
     block::registry::{
         get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
-use pumpkin_world::{chunk::ChunkData, level::SyncChunk};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
@@ -1149,11 +1150,13 @@ impl World {
             .expect("Channel closed for unknown reason")
     }
 
+    /// If server is sent, it will do a block update
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
         cause: Option<Arc<Player>>,
         drop: bool,
+        server: Option<&Server>,
     ) {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
@@ -1175,7 +1178,7 @@ impl World {
             );
 
             if drop {
-                block::drop_loot(self, block, position, true).await;
+                block::drop_loot(self, &block, position, true).await;
             }
 
             match cause {
@@ -1184,6 +1187,10 @@ impl World {
                         .await;
                 }
                 None => self.broadcast_packet_all(&particles_packet).await,
+            }
+
+            if let Some(server) = server {
+                self.update_neighbors(server, position, None).await;
             }
         }
     }
@@ -1205,7 +1212,7 @@ impl World {
     pub async fn get_block(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_world::block::registry::Block, GetBlockError> {
+    ) -> Result<pumpkin_data::block::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1214,7 +1221,7 @@ impl World {
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<&pumpkin_world::block::registry::State, GetBlockError> {
+    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1223,14 +1230,40 @@ impl World {
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<
-        (
-            &pumpkin_world::block::registry::Block,
-            &pumpkin_world::block::registry::State,
-        ),
-        GetBlockError,
-    > {
+    ) -> Result<(pumpkin_data::block::Block, pumpkin_data::block::BlockState), GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    /// Updates neighboring blocks of a block
+    pub async fn update_neighbors(
+        &self,
+        server: &Server,
+        block_pos: &BlockPos,
+        except: Option<&BlockDirection>,
+    ) {
+        for direction in BlockDirection::update_order() {
+            if Some(&direction) == except {
+                continue;
+            }
+            let neighbor_pos = block_pos.offset(direction.to_offset());
+            let neighbor_block = self.get_block(&neighbor_pos).await;
+            if let Ok(neighbor_block) = neighbor_block {
+                if let Some(neighbor_pumpkin_block) =
+                    server.block_registry.get_pumpkin_block(&neighbor_block)
+                {
+                    neighbor_pumpkin_block
+                        .on_neighbor_update(
+                            server,
+                            self,
+                            &neighbor_block,
+                            &neighbor_pos,
+                            &direction,
+                            block_pos,
+                        )
+                        .await;
+                }
+            }
+        }
     }
 }

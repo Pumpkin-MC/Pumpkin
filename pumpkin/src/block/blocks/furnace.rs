@@ -1,12 +1,14 @@
-use crate::block::registry::BlockActionResult;
+use std::sync::Arc;
+
 use crate::entity::player::Player;
+use crate::{block::registry::BlockActionResult, world::World};
 use async_trait::async_trait;
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::Furnace;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
 
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server};
 
@@ -21,6 +23,7 @@ impl PumpkinBlock for FurnaceBlock {
         player: &Player,
         _location: BlockPos,
         server: &Server,
+        _world: &World,
     ) {
         self.open_furnace_screen(block, player, _location, server)
             .await;
@@ -33,13 +36,22 @@ impl PumpkinBlock for FurnaceBlock {
         _location: BlockPos,
         _item: &Item,
         server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         self.open_furnace_screen(block, player, _location, server)
             .await;
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
+    async fn broken(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
+    ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
 }

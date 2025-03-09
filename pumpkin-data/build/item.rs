@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
+use pumpkin_util::registry::RegistryEntryList;
 use quote::{ToTokens, format_ident, quote};
+use serde::Deserialize;
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
-
-include!("../src/tag.rs");
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Item {

@@ -2,7 +2,7 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
-    block::state::BlockState,
+    block::state::ChunkBlockState,
     coordinates::XZBlockCoordinates,
     generation::{
         Seed,
@@ -47,7 +47,7 @@ impl TerrainGenerator for SuperflatTerrainGenerator {
         _chunk_pos: &Vector2<i32>,
         _at: pumpkin_util::math::vector3::Vector3<i32>,
         _biome: Biome,
-    ) -> BlockState {
+    ) -> ChunkBlockState {
         todo!()
     }
 
