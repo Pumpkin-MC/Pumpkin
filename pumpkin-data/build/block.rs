@@ -119,39 +119,39 @@ pub struct PropertyStruct {
 impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(&self.name, Span::call_site());
-        let mut prefix = "";
-
-        if self.values.iter().any(|value| value == "1") {
-            prefix = "L";
-        }
 
         let variant_count = self.values.clone().len() as u16;
         let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
 
-        let ident_values = self.values.iter().map(|value| {
-            Ident::new(
-                &(prefix.to_owned() + value).to_upper_camel_case(),
-                Span::call_site(),
-            )
-        });
+        let ident_values = self
+            .values
+            .iter()
+            .map(|value| Ident::new(&(value).to_upper_camel_case(), Span::call_site()));
 
         let values_2 = ident_values.clone();
         let values_3 = ident_values.clone();
 
+        let is_number_values =
+            self.values.iter().all(|v| v.starts_with("L")) && self.values.iter().any(|v| v == "L1");
+
         let from_values = self.values.iter().map(|value| {
-            let ident = Ident::new(
-                &(prefix.to_owned() + value).to_upper_camel_case(),
-                Span::call_site(),
-            );
+            let ident = Ident::new(&(value).to_upper_camel_case(), Span::call_site());
+            let value = if is_number_values {
+                value.strip_prefix("L").unwrap()
+            } else {
+                value
+            };
             quote! {
                 #value => Self::#ident
             }
         });
         let to_values = self.values.iter().map(|value| {
-            let ident = Ident::new(
-                &(prefix.to_owned() + value).to_upper_camel_case(),
-                Span::call_site(),
-            );
+            let ident = Ident::new(&(value).to_upper_camel_case(), Span::call_site());
+            let value = if is_number_values {
+                value.strip_prefix("L").unwrap()
+            } else {
+                value
+            };
             quote! {
                 Self::#ident => #value
             }
@@ -872,73 +872,6 @@ struct Property {
     enum_name: String,
     serialized_name: String,
     values: Vec<String>,
-}
-
-impl ToTokens for Property {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let enum_name = Ident::new(&self.enum_name.to_upper_camel_case(), Span::call_site());
-        let values: Vec<_> = self
-            .values
-            .iter()
-            .map(|v| Ident::new(&v.to_upper_camel_case(), Span::call_site()))
-            .collect();
-        let variant_count = self.values.len() as u16;
-
-        let from_values = self.values.iter().map(|value| {
-            let ident = Ident::new(&value.to_upper_camel_case(), Span::call_site());
-            quote! {
-                #value => Self::#ident
-            }
-        });
-        let to_values = self.values.iter().map(|value| {
-            let ident = Ident::new(&value.to_upper_camel_case(), Span::call_site());
-            quote! {
-                Self::#ident => #value
-            }
-        });
-
-        let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
-
-        tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-            pub enum #enum_name {
-                #(#values),*
-            }
-
-            impl EnumVariants for #enum_name {
-                fn variant_count() -> u16 {
-                    #variant_count
-                }
-
-                fn to_index(&self) -> u16 {
-                    match self {
-                        #(Self::#values => #values_index),*
-                    }
-                }
-
-                fn from_index(index: u16) -> Self {
-                    match index {
-                        #(#values_index => Self::#values,)*
-                        _ => panic!("Invalid index: {}", index),
-                    }
-                }
-
-                fn to_value(&self) -> &str {
-                    match self {
-                        #(#to_values),*
-                    }
-                }
-
-                fn from_value(value: &str) -> Self {
-                    match value {
-                        #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
-                    }
-                }
-
-            }
-        });
-    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
