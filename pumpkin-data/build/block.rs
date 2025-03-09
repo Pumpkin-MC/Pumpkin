@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
@@ -55,58 +55,16 @@ const PROPERTIES_REMAPS: [EnumRemap; 9] = [
     STRUCTURE_BLOCK_MODE_REMAP,
 ];
 
-fn get_enum_name(props: Vec<String>, fallback: String) -> String {
-    let props_set: Vec<&str> = props.iter().map(|s| s.as_str()).collect();
-
+fn remap_enum_name(props: &[&str], fallback: &str) -> String {
+    // If the property fields match one of our re map conditions, rename
     for (variants, enum_name) in PROPERTIES_REMAPS {
-        if props_set.len() == variants.len() && props_set.iter().all(|p| variants.contains(p)) {
+        if props == variants {
             return enum_name.to_string();
         }
     }
 
-    fallback.to_upper_camel_case()
-}
-
-fn check_for_prop_duplicates(blocks: &Vec<Block>) {
-    let mut unique_props: Vec<(String, Vec<String>)> = Vec::new();
-    let mut unique_props_names: Vec<String> = Vec::new();
-
-    for block in blocks {
-        for prop in block.properties.clone() {
-            if !unique_props
-                .iter()
-                .any(|(_, props)| props.iter().all(|p| prop.values.contains(p)))
-            {
-                unique_props.push((prop.name.clone(), prop.values.clone()));
-            }
-        }
-    }
-
-    for (name, values) in unique_props {
-        let enum_name = get_enum_name(values, name);
-        if !PROPERTIES_REMAPS
-            .iter()
-            .any(|(_, prop_name)| enum_name == *prop_name)
-        {
-            unique_props_names.push(enum_name);
-        }
-    }
-
-    // Check for duplicates in unique_props_names
-    let unique_set: HashSet<_> = unique_props_names.iter().collect();
-    if unique_props_names.len() != unique_set.len() {
-        // Find the duplicates
-        let mut seen = HashSet::new();
-        let mut duplicates = Vec::new();
-
-        for name in &unique_props_names {
-            if !seen.insert(name) {
-                duplicates.push(name);
-            }
-        }
-
-        panic!("Duplicate property enum names found: {:?}", duplicates);
-    }
+    // Otherwise just use the given name
+    fallback.to_string()
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -876,8 +834,6 @@ pub(crate) fn build() -> TokenStream {
     let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
         .expect("Failed to parse blocks.json");
 
-    check_for_prop_duplicates(&blocks_assets.blocks);
-
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
@@ -908,12 +864,20 @@ pub(crate) fn build() -> TokenStream {
         }
     }
 
-    let mut block_props: Vec<BlockPropertyStruct> = Vec::new();
-    let mut properties: Vec<PropertyStruct> = Vec::new();
+    // Used to create property enums
+    let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
+    // Property implementation for a block
+    let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
+
+    struct PropertyMapping {
+        block: String,
+        original_name: String,
+    }
+
+    // Mapping of property -> blocks that have the property
+    let mut property_to_block_map: HashMap<String, Vec<PropertyMapping>> = HashMap::new();
     let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
     #[expect(clippy::type_complexity)]
-    let mut shared_props: Vec<(Vec<(String, String)>, Vec<String>)> = Vec::new();
-
     for block in blocks_assets.blocks.clone() {
         let optimized_block = OptimizedBlock {
             id: block.id,
@@ -957,44 +921,37 @@ pub(crate) fn build() -> TokenStream {
 
         optimized_blocks.push((block.name.clone(), optimized_block));
 
-        // Process properties
-        if !block.properties.is_empty() {
-            let entries: Vec<(String, String)> = block
-                .properties
-                .iter()
-                .map(|prop| {
-                    (
-                        prop.name.clone(),
-                        get_enum_name(prop.values.clone(), prop.name.clone()),
-                    )
-                })
-                .collect();
-            if shared_props.iter().any(|(props, _)| props == &entries) {
-                shared_props
-                    .iter_mut()
-                    .find(|(props, _)| props == &entries)
-                    .unwrap()
-                    .1
-                    .push(block.name.clone());
-            } else {
-                shared_props.push((entries, vec![block.name.clone()]));
-            }
-        }
+        for property in block.properties {
+            // Get mapped property enum name
+            let renamed_property = remap_enum_name(
+                &property
+                    .values
+                    .iter()
+                    .map(|value| value.as_str())
+                    .collect::<Vec<_>>(),
+                &property.name,
+            );
 
-        // Add unique property types
-        for prop in block.properties {
-            let enum_name = get_enum_name(prop.values.clone(), prop.name.clone());
-
-            if !properties.iter().any(|p| p.name == enum_name) {
-                properties.push(PropertyStruct {
-                    name: enum_name.clone(),
-                    values: prop.values,
+            // Append this block to the property -> block map
+            property_to_block_map
+                .entry(renamed_property)
+                .or_insert_with(|| Vec::new())
+                .push(PropertyMapping {
+                    block: block.name,
+                    original_name: property.name,
                 });
-            }
+
+            // If this property doesnt have an enum yet, make one
+            let _ = property_enums
+                .entry(renamed_property)
+                .or_insert_with(|| PropertyStruct {
+                    name: renamed_property,
+                    values: property.values,
+                });
         }
     }
 
-    let props_grouped_by_props = shared_props
+    let props_grouped_by_props = property_to_block_map
         .iter()
         .map(|(_, blocks)| blocks.clone())
         .collect::<Vec<_>>();
@@ -1002,9 +959,9 @@ pub(crate) fn build() -> TokenStream {
     let grouped_prop_names = group_by_common_full_words(props_grouped_by_props);
 
     for (name, group_blocks) in grouped_prop_names {
-        block_props.push(BlockPropertyStruct {
+        block_properties.push(BlockPropertyStruct {
             generic_name: name.clone(),
-            entries: shared_props
+            entries: property_to_block_map
                 .iter()
                 .find(|(_, blocks)| blocks.contains(&group_blocks[0]))
                 .unwrap()
@@ -1036,8 +993,8 @@ pub(crate) fn build() -> TokenStream {
 
     let unique_states = unique_states.iter().map(|state| state.to_token_stream());
 
-    let block_props = block_props.iter().map(|prop| prop.to_token_stream());
-    let properties = properties.iter().map(|prop| prop.to_token_stream());
+    let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
+    let properties = property_enums.iter().map(|prop| prop.to_token_stream());
 
     // Generate block entity types array
     let block_entity_types = blocks_assets
