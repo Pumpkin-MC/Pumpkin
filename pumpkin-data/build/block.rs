@@ -839,28 +839,30 @@ pub struct GeneratedProperty {
 
 impl GeneratedProperty {
     fn to_property(&self) -> Property {
-        Property {
-            enum_name: if self.property_type == GeneratedPropertyType::Boolean {
-                "Boolean".to_string()
-            } else {
-                self.enum_name.clone()
-            },
-            serialized_name: self.serialized_name.clone(),
-            values: {
-                match self.property_type.clone() {
-                    GeneratedPropertyType::Boolean => {
-                        vec!["true".to_string(), "false".to_string()]
-                    }
-                    GeneratedPropertyType::Int { min, max } => {
-                        let mut values = Vec::new();
-                        for i in min..=max {
-                            values.push(format!("L{}", i));
-                        }
-                        values
-                    }
-                    GeneratedPropertyType::Enum { values } => values.clone(),
+        let enum_name = match &self.property_type {
+            GeneratedPropertyType::Boolean => "boolean".to_string(),
+            GeneratedPropertyType::Int { min, max } => format!("integer_{}_to_{}", min, max),
+            GeneratedPropertyType::Enum { .. } => self.enum_name.clone(),
+        };
+
+        let values = match &self.property_type {
+            GeneratedPropertyType::Boolean => {
+                vec!["true".to_string(), "false".to_string()]
+            }
+            GeneratedPropertyType::Int { min, max } => {
+                let mut values = Vec::new();
+                for i in *min..=*max {
+                    values.push(format!("L{}", i));
                 }
-            },
+                values
+            }
+            GeneratedPropertyType::Enum { values } => values.clone(),
+        };
+
+        Property {
+            enum_name,
+            serialized_name: self.serialized_name.clone(),
+            values,
         }
     }
 }
@@ -992,8 +994,8 @@ pub(crate) fn build() -> TokenStream {
     let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
     // Property implementation for a block
     let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
-    // Mapping of properties -> blocks that have these properties
-    let mut property_collection_map: HashMap<Vec<String>, PropertyCollectionData> = HashMap::new();
+    // Mapping of a collection of property hashes -> blocks that have these properties
+    let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
     // Validator that we have no enum collisions
     let mut enum_to_values: HashMap<String, Vec<String>> = HashMap::new();
     let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
@@ -1043,11 +1045,14 @@ pub(crate) fn build() -> TokenStream {
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
         for property in block.properties {
-            let property = generated_properties
+            let generated_property = generated_properties
                 .iter()
                 .find(|p| p.hash_key == property)
-                .unwrap()
-                .to_property();
+                .unwrap();
+
+            property_collection.insert(generated_property.hash_key);
+            let property = generated_property.to_property();
+
             // Get mapped property enum name
             let renamed_property = property.enum_name.to_upper_camel_case();
 
@@ -1057,12 +1062,11 @@ pub(crate) fn build() -> TokenStream {
 
             if expected_values != &property.values {
                 panic!(
-                    "Enum overlap! You might need to add an entry in `PROPERTIES_REMAPS` for '{}' ({:?} vs {:?})",
+                    "Enum overlap for '{}' ({:?} vs {:?})",
                     property.serialized_name, &property.values, expected_values
                 );
             };
 
-            property_collection.insert(property.serialized_name.clone());
             property_mapping.push(PropertyVariantMapping {
                 original_name: property.serialized_name.clone(),
                 property_enum: renamed_property.clone(),
