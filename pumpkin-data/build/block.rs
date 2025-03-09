@@ -1,5 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_util::math::int_provider::IntProvider;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -41,64 +42,8 @@ impl PropertyCollectionData {
 }
 
 #[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "type")]
-pub enum NormalInvProvider {
-    #[serde(rename = "minecraft:uniform")]
-    Uniform(UniformIntProvider),
-    // TODO: Add more...
-}
-
-impl ToTokens for NormalInvProvider {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            NormalInvProvider::Uniform(uniform) => {
-                tokens.extend(quote! {
-                    NormalInvProvider::Uniform(#uniform)
-                });
-            }
-        }
-    }
-}
-#[derive(Deserialize, Clone, Debug)]
-pub struct UniformIntProvider {
-    min_inclusive: i32,
-    max_inclusive: i32,
-}
-
-impl ToTokens for UniformIntProvider {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
-        let max_inclusive = LitInt::new(&self.max_inclusive.to_string(), Span::call_site());
-
-        tokens.extend(quote! {
-            UniformIntProvider { min_inclusive: #min_inclusive, max_inclusive: #max_inclusive }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(untagged)]
-pub enum InvProvider {
-    Object(NormalInvProvider),
-    Constant(i32),
-}
-impl ToTokens for InvProvider {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            InvProvider::Object(inv_provider) => {
-                tokens.extend(quote! {
-                    InvProvider::Object(#inv_provider)
-                });
-            }
-            InvProvider::Constant(i) => tokens.extend(quote! {
-                InvProvider::Constant(#i)
-            }),
-        }
-    }
-}
-#[derive(Deserialize, Clone, Debug)]
 pub struct Experience {
-    pub experience: InvProvider,
+    pub experience: IntProvider,
 }
 
 impl ToTokens for Experience {
@@ -1106,13 +1051,13 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use crate::{tag::{Tagable, RegistryKey}, item::Item};
-        use pumpkin_util::math::int_provider::{UniformIntProvider, InvProvider, NormalInvProvider};
+        use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
 
 
 
         #[derive(Clone, Debug)]
         pub struct Experience {
-            pub experience: InvProvider,
+            pub experience: IntProvider,
         }
 
         #[derive(Clone, Debug)]
