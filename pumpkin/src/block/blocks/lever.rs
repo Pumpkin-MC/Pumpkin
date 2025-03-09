@@ -1,8 +1,8 @@
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, Face};
+use pumpkin_data::block::{Block, Face, RedstoneToggleableProperties};
 use pumpkin_data::{
-    block::{BlockProperties, CardinalDirection, LeverBlockProps},
+    block::{BlockProperties, CardinalDirection},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
@@ -19,7 +19,7 @@ use crate::{
 async fn toggle_lever(world: &World, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
-    let mut lever_props = LeverBlockProps::from_state_id(state.id, &block).unwrap();
+    let mut lever_props = RedstoneToggleableProperties::from_state_id(state.id, &block);
     lever_props.powered = lever_props.powered.flip();
     world
         .set_block_state(block_pos, lever_props.to_state_id(&block))
@@ -43,7 +43,7 @@ impl PumpkinBlock for LeverBlock {
         _other: bool,
     ) -> u16 {
         let mut lever_props =
-            LeverBlockProps::from_state_id(block.default_state_id, block).unwrap();
+            RedstoneToggleableProperties::from_state_id(block.default_state_id, block);
 
         match face {
             BlockDirection::Up => lever_props.face = Face::Ceiling,

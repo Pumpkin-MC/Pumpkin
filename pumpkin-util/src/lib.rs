@@ -1,4 +1,3 @@
-pub mod block_grouper;
 pub mod gamemode;
 pub mod math;
 pub mod permission;

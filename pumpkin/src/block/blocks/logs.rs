@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::CardinalDirection;
-use pumpkin_data::block::LogBlockProps;
+use pumpkin_data::block::DirectionedBlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -45,7 +45,7 @@ pub fn register_log_blocks(manager: &mut BlockRegistry) {
                 _player_direction: &CardinalDirection,
                 _other: bool,
             ) -> u16 {
-                let mut log_props = LogBlockProps::default(block);
+                let mut log_props = DirectionedBlockProperties::default(block);
                 log_props.axis = face.to_axis();
 
                 log_props.to_state_id(block)

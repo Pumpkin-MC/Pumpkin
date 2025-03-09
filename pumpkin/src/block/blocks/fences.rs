@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::CardinalDirection;
-use pumpkin_data::block::FenceBlockProps;
+use pumpkin_data::block::FenceLikeProperties;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
@@ -34,7 +34,7 @@ fn connects_to(from: &Block, to: &Block) -> bool {
 
 /// This returns an index and not a state id making it so all fences can use the same state calculation function
 pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> u16 {
-    let mut block_properties = FenceBlockProps::default(block);
+    let mut block_properties = FenceLikeProperties::default(block);
 
     for direction in BlockDirection::horizontal() {
         let offset = block_pos.offset(direction.to_offset());

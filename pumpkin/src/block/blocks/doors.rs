@@ -3,9 +3,9 @@ use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::CardinalDirection;
-use pumpkin_data::block::DoorBlockProps;
-use pumpkin_data::block::Half;
+use pumpkin_data::block::DoorBlockProperties;
 use pumpkin_data::block::Hinge;
+use pumpkin_data::block::VerticalHalf;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
@@ -25,12 +25,12 @@ use crate::world::World;
 
 async fn toggle_door(world: &World, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
-    let mut door_props = DoorBlockProps::from_state_id(block_state.id, &block).unwrap();
+    let mut door_props = DoorBlockProperties::from_state_id(block_state.id, &block);
     door_props.open = door_props.open.flip();
 
     let other_half = match door_props.half {
-        Half::Upper => BlockDirection::Down,
-        Half::Lower => BlockDirection::Up,
+        VerticalHalf::Upper => BlockDirection::Down,
+        VerticalHalf::Lower => BlockDirection::Up,
     };
     let other_pos = block_pos.offset(other_half.to_offset());
 
@@ -38,8 +38,7 @@ async fn toggle_door(world: &World, block_pos: &BlockPos) {
 
     // Create a new scope to ensure other_door_props doesn't live across await points
 
-    let mut other_door_props =
-        DoorBlockProps::from_state_id(other_state_id.id, &other_block).unwrap();
+    let mut other_door_props = DoorBlockProperties::from_state_id(other_state_id.id, &other_block);
     other_door_props.open = door_props.open;
 
     world
@@ -89,8 +88,8 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 player_direction: &CardinalDirection,
                 _other: bool,
             ) -> u16 {
-                let mut door_props = DoorBlockProps::default(block);
-                door_props.half = Half::Lower;
+                let mut door_props = DoorBlockProperties::default(block);
+                door_props.half = VerticalHalf::Lower;
                 door_props.facing = *player_direction;
                 door_props.hinge = Hinge::Left;
 
@@ -125,8 +124,8 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 world: &World,
             ) {
                 let state_id = world.get_block_state_id(&location).await.unwrap();
-                let mut door_props = DoorBlockProps::from_state_id(state_id, block).unwrap();
-                door_props.half = Half::Upper;
+                let mut door_props = DoorBlockProperties::from_state_id(state_id, block);
+                door_props.half = VerticalHalf::Upper;
 
                 world
                     .set_block_state(
@@ -145,11 +144,11 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 world: Arc<World>,
                 state: BlockState,
             ) {
-                let door_props = DoorBlockProps::from_state_id(state.id, block).unwrap();
+                let door_props = DoorBlockProperties::from_state_id(state.id, block);
 
                 let other_half = match door_props.half {
-                    Half::Upper => BlockDirection::Down,
-                    Half::Lower => BlockDirection::Up,
+                    VerticalHalf::Upper => BlockDirection::Down,
+                    VerticalHalf::Lower => BlockDirection::Up,
                 };
 
                 let other_pos = location.offset(other_half.to_offset());

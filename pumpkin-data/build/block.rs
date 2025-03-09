@@ -1,11 +1,235 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    num::ParseIntError,
+};
 
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::block_grouper::group_by_common_full_words;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use syn::{Ident, LitBool, LitInt, LitStr};
+
+fn const_block_name_from_block_name(block: &str) -> String {
+    block.to_shouty_snake_case()
+}
+
+fn property_group_name_from_derived_name(name: &str) -> String {
+    format!("{}_properties", name).to_upper_camel_case()
+}
+
+// These are known property groups that we'd like to change the default name of for ease of
+// programming
+type PropertyGroupRemap = (&'static [&'static str], &'static str);
+const DOOR_REMAP: PropertyGroupRemap = (
+    &[
+        "oak_door",
+        "iron_door",
+        "spruce_door",
+        "birch_door",
+        "jungle_door",
+        "acacia_door",
+        "cherry_door",
+        "dark_oak_door",
+        "pale_oak_door",
+        "mangrove_door",
+        "bamboo_door",
+        "crimson_door",
+        "warped_door",
+        "copper_door",
+        "exposed_copper_door",
+        "oxidized_copper_door",
+        "weathered_copper_door",
+        "waxed_copper_door",
+        "waxed_exposed_copper_door",
+        "waxed_oxidized_copper_door",
+        "waxed_weathered_copper_door",
+    ],
+    "DoorBlock",
+);
+const FENCE_GATE_REMAP: PropertyGroupRemap = (
+    &[
+        "oak_fence_gate",
+        "spruce_fence_gate",
+        "birch_fence_gate",
+        "jungle_fence_gate",
+        "acacia_fence_gate",
+        "cherry_fence_gate",
+        "dark_oak_fence_gate",
+        "pale_oak_fence_gate",
+        "mangrove_fence_gate",
+        "bamboo_fence_gate",
+        "crimson_fence_gate",
+        "warped_fence_gate",
+    ],
+    "FenceGate",
+);
+const FENCE_REMAP: PropertyGroupRemap = (
+    &[
+        "oak_fence",
+        "iron_bars",
+        "glass_pane",
+        "nether_brick_fence",
+        "white_stained_glass_pane",
+        "orange_stained_glass_pane",
+        "magenta_stained_glass_pane",
+        "light_blue_stained_glass_pane",
+        "yellow_stained_glass_pane",
+        "lime_stained_glass_pane",
+        "pink_stained_glass_pane",
+        "gray_stained_glass_pane",
+        "light_gray_stained_glass_pane",
+        "cyan_stained_glass_pane",
+        "purple_stained_glass_pane",
+        "blue_stained_glass_pane",
+        "brown_stained_glass_pane",
+        "green_stained_glass_pane",
+        "red_stained_glass_pane",
+        "black_stained_glass_pane",
+        "spruce_fence",
+        "birch_fence",
+        "jungle_fence",
+        "acacia_fence",
+        "cherry_fence",
+        "dark_oak_fence",
+        "pale_oak_fence",
+        "mangrove_fence",
+        "bamboo_fence",
+        "crimson_fence",
+        "warped_fence",
+    ],
+    "FenceLike",
+);
+const REDSTONE_TOGGLE_REMAP: PropertyGroupRemap = (
+    &[
+        "lever",
+        "stone_button",
+        "oak_button",
+        "spruce_button",
+        "birch_button",
+        "jungle_button",
+        "acacia_button",
+        "cherry_button",
+        "dark_oak_button",
+        "pale_oak_button",
+        "mangrove_button",
+        "bamboo_button",
+        "crimson_button",
+        "warped_button",
+        "polished_blackstone_button",
+    ],
+    "RedstoneToggleable",
+);
+const DIRECTIONAL_BLOCK_REMAP: PropertyGroupRemap = (
+    &[
+        "pale_oak_wood",
+        "oak_log",
+        "spruce_log",
+        "birch_log",
+        "jungle_log",
+        "acacia_log",
+        "cherry_log",
+        "dark_oak_log",
+        "pale_oak_log",
+        "mangrove_log",
+        "muddy_mangrove_roots",
+        "bamboo_block",
+        "stripped_spruce_log",
+        "stripped_birch_log",
+        "stripped_jungle_log",
+        "stripped_acacia_log",
+        "stripped_cherry_log",
+        "stripped_dark_oak_log",
+        "stripped_pale_oak_log",
+        "stripped_oak_log",
+        "stripped_mangrove_log",
+        "stripped_bamboo_block",
+        "oak_wood",
+        "spruce_wood",
+        "birch_wood",
+        "jungle_wood",
+        "acacia_wood",
+        "cherry_wood",
+        "dark_oak_wood",
+        "mangrove_wood",
+        "stripped_oak_wood",
+        "stripped_spruce_wood",
+        "stripped_birch_wood",
+        "stripped_jungle_wood",
+        "stripped_acacia_wood",
+        "stripped_cherry_wood",
+        "stripped_dark_oak_wood",
+        "stripped_pale_oak_wood",
+        "stripped_mangrove_wood",
+        "basalt",
+        "polished_basalt",
+        "nether_portal",
+        "quartz_pillar",
+        "hay_block",
+        "purpur_pillar",
+        "bone_block",
+        "warped_stem",
+        "stripped_warped_stem",
+        "warped_hyphae",
+        "stripped_warped_hyphae",
+        "crimson_stem",
+        "stripped_crimson_stem",
+        "crimson_hyphae",
+        "stripped_crimson_hyphae",
+        "deepslate",
+        "infested_deepslate",
+        "ochre_froglight",
+        "verdant_froglight",
+        "pearlescent_froglight",
+    ],
+    "DirectionedBlock",
+);
+
+const PROPERTY_GROUP_REMAPS: [PropertyGroupRemap; 5] = [
+    DOOR_REMAP,
+    FENCE_GATE_REMAP,
+    FENCE_REMAP,
+    REDSTONE_TOGGLE_REMAP,
+    DIRECTIONAL_BLOCK_REMAP,
+];
+
+struct PropertyVariantMapping {
+    original_name: String,
+    property_enum: String,
+}
+
+struct PropertyCollectionData {
+    variant_mappings: Vec<PropertyVariantMapping>,
+    block_names: Vec<String>,
+}
+
+impl PropertyCollectionData {
+    pub fn add_block_name(&mut self, block_name: String) {
+        self.block_names.push(block_name);
+    }
+
+    pub fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
+        Self {
+            variant_mappings,
+            block_names: Vec::new(),
+        }
+    }
+
+    pub fn derive_name(&self) -> String {
+        for (block_group, name) in PROPERTY_GROUP_REMAPS {
+            if block_group.len() == self.block_names.len()
+                && self
+                    .block_names
+                    .iter()
+                    .map(|name| name.to_lowercase())
+                    .all(|block| block_group.contains(&block.as_str()))
+            {
+                return name.to_string();
+            }
+        }
+
+        format!("{}_like", self.block_names[0])
+    }
+}
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockProperty {
@@ -40,31 +264,78 @@ const CHEST_TYPE_REMAP: EnumRemap = (&["single", "left", "right"], "ChestType");
 const STRUCTURE_BLOCK_MODE_REMAP: EnumRemap =
     (&["save", "load", "corner", "data"], "StructureBlockMode");
 
+const VERTICAL_HALF_REMAP: EnumRemap = (&["upper", "lower"], "VerticalHalf");
+const VERTICAL_BLOCK_HALF_REMAP: EnumRemap = (&["top", "bottom"], "VerticalBlockHalf");
+const STAIR_SHAPE_REMAP: EnumRemap = (
+    &[
+        "straight",
+        "inner_left",
+        "inner_right",
+        "outer_left",
+        "outer_right",
+    ],
+    "StairShape",
+);
+const XZ_AXIS_REMAP: EnumRemap = (&["x", "z"], "XZAxis");
+const PISTON_TYPE_REMAP: EnumRemap = (&["normal", "sticky"], "PistonType");
+const DIRECTION_NO_UP_REMAP: EnumRemap =
+    (&["down", "north", "south", "west", "east"], "DirectionNoUp");
+
 /// This is done cause minecrafts default property system could map the same property key to multiple values depending on the block.
 /// And while were at it adding a Boolean enum and some other remaps to make it easier to add traits and work with them globally.
 /// For example CardinalDirection is also used when determining player direction.
-const PROPERTIES_REMAPS: [EnumRemap; 9] = [
+const PROPERTIES_REMAPS: [EnumRemap; 15] = [
+    CARDINAL_DIRECTION_REMAP,
     BOOL_REMAP,
     AXIS_REMAP,
     DIRECTION_REMAP,
     REDSTONE_CONNECTION_REMAP,
-    CARDINAL_DIRECTION_REMAP,
     STAIR_HALF_REMAP,
     RAIL_SHAPE_REMAP,
     CHEST_TYPE_REMAP,
     STRUCTURE_BLOCK_MODE_REMAP,
+    VERTICAL_HALF_REMAP,
+    VERTICAL_BLOCK_HALF_REMAP,
+    STAIR_SHAPE_REMAP,
+    XZ_AXIS_REMAP,
+    PISTON_TYPE_REMAP,
+    DIRECTION_NO_UP_REMAP,
 ];
 
-fn remap_enum_name(props: &[&str], fallback: &str) -> String {
+fn remap_enum_name(variants_to_check: &[String], fallback: &str) -> String {
     // If the property fields match one of our re map conditions, rename
     for (variants, enum_name) in PROPERTIES_REMAPS {
-        if props == variants {
+        if variants.len() == variants_to_check.len()
+            && variants_to_check
+                .iter()
+                .all(|variant| variants.contains(&variant.as_str()))
+        {
             return enum_name.to_string();
         }
     }
 
-    // Otherwise just use the given name
-    fallback.to_string()
+    let attempt_generic_numeric = || {
+        // Generic enum for numeric values
+        let mut min = u32::MAX;
+        let mut max = u32::MIN;
+        for num in variants_to_check.iter().map(|value| value.parse::<u32>()) {
+            let num = num?;
+            if num < min {
+                min = num;
+            }
+            if num > max {
+                max = num;
+            }
+        }
+
+        let name = format!("level_{}_to_{}", min, max);
+        Result::<String, ParseIntError>::Ok(name)
+    };
+
+    attempt_generic_numeric().unwrap_or_else(|_| {
+        // Otherwise just use the given name
+        fallback.to_string()
+    })
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -226,52 +497,55 @@ impl ToTokens for PropertyStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct BlockPropertyStruct {
-    pub generic_name: String,
-    pub entries: Vec<(String, String)>,
+struct BlockPropertyStruct {
+    data: PropertyCollectionData,
 }
 
 impl ToTokens for BlockPropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = Ident::new(
-            &(self.generic_name.clone() + "_block_props").to_upper_camel_case(),
-            Span::call_site(),
-        );
+        let struct_name = property_group_name_from_derived_name(&self.data.derive_name());
+        let name = Ident::new(&struct_name, Span::call_site());
 
-        let mut entries = self.entries.clone();
-        entries.reverse();
-
-        let values = entries.iter().map(|(key, value)| {
-            let key = Ident::new_raw(&key.to_owned(), Span::call_site());
-            let value = Ident::new(value, Span::call_site());
+        let values = self.data.variant_mappings.iter().map(|entry| {
+            let key = Ident::new_raw(&entry.original_name, Span::call_site());
+            let value = Ident::new(&entry.property_enum, Span::call_site());
 
             quote! {
                 #key: #value
             }
         });
 
-        let field_names: Vec<_> = entries
+        let block_names = &self.data.block_names;
+
+        let field_names: Vec<_> = self
+            .data
+            .variant_mappings
             .iter()
-            .map(|(key, _)| Ident::new_raw(key, Span::call_site()))
+            .rev()
+            .map(|entry| Ident::new_raw(&entry.original_name, Span::call_site()))
             .collect();
 
-        let field_types: Vec<_> = entries
+        let field_types: Vec<_> = self
+            .data
+            .variant_mappings
             .iter()
-            .map(|(_, ty)| Ident::new(ty, Span::call_site()))
+            .rev()
+            .map(|entry| Ident::new(&entry.property_enum, Span::call_site()))
             .collect();
 
-        let to_props_values = entries.iter().map(|(key, _value)| {
-            let key2 = Ident::new_raw(&key.to_owned(), Span::call_site());
+        let to_props_values = self.data.variant_mappings.iter().map(|entry| {
+            let key = &entry.original_name;
+            let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
 
             quote! {
                 props.push((#key.to_string(), self.#key2.to_value().to_string()));
             }
         });
 
-        let from_props_values = entries.iter().map(|(key, value)| {
-            let key2 = Ident::new_raw(&key.to_owned(), Span::call_site());
-            let value = Ident::new(value, Span::call_site());
+        let from_props_values = self.data.variant_mappings.iter().map(|entry| {
+            let key = &entry.original_name;
+            let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
+            let value = Ident::new(&entry.property_enum, Span::call_site());
 
             quote! {
                 #key => block_props.#key2 = #value::from_value(&value)
@@ -285,6 +559,9 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
+                ///NOTE: `to_index` and `from_index` depend on Java's
+                ///`net.minecraft.state.StateManager` logic. If these stop working, look there.
+
                 #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
                     let mut index = 0;
@@ -312,20 +589,32 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn to_state_id(&self, block: &Block) -> u16 {
+                    if ![#(#block_names),*].contains(&block.name) {
+                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                    }
+
                     block.states[0].id + self.to_index()
                 }
 
-                fn from_state_id(state_id: u16, block: &Block) -> Option<Self> {
+                fn from_state_id(state_id: u16, block: &Block) -> Self {
+                    if ![#(#block_names),*].contains(&block.name) {
+                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                    }
+
                     if state_id >= block.states[0].id && state_id <= block.states.last().unwrap().id {
                         let index = state_id - block.states[0].id;
-                        Some(Self::from_index(index))
+                        Self::from_index(index)
                     } else {
-                        None
+                        panic!("State id {} does not exist for {}", state_id, &block.name);
                     }
                 }
 
                 fn default(block: &Block) -> Self {
-                    Self::from_state_id(block.default_state_id, block).unwrap()
+                    if ![#(#block_names),*].contains(&block.name) {
+                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                    }
+
+                    Self::from_state_id(block.default_state_id, block)
                 }
 
                 #[allow(clippy::vec_init_then_push)]
@@ -338,6 +627,10 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_props(props: Vec<(String, String)>, block: &Block) -> Self {
+                    if ![#(#block_names),*].contains(&block.name) {
+                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                    }
+
                     let mut block_props = Self::default(block);
 
                     for (key, value) in props {
@@ -843,6 +1136,7 @@ pub(crate) fn build() -> TokenStream {
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
 
+    // Collect unique block states to create partial block states to save memory
     let mut unique_states = Vec::new();
     for block in blocks_assets.blocks.clone() {
         for state in block.states.clone() {
@@ -868,16 +1162,11 @@ pub(crate) fn build() -> TokenStream {
     let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
     // Property implementation for a block
     let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
-
-    struct PropertyMapping {
-        block: String,
-        original_name: String,
-    }
-
-    // Mapping of property -> blocks that have the property
-    let mut property_to_block_map: HashMap<String, Vec<PropertyMapping>> = HashMap::new();
+    // Mapping of properties -> blocks that have these properties
+    let mut property_collection_map: HashMap<Vec<String>, PropertyCollectionData> = HashMap::new();
+    // Validator that we have no enum collisions
+    let mut enum_to_values: HashMap<String, Vec<String>> = HashMap::new();
     let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
-    #[expect(clippy::type_complexity)]
     for block in blocks_assets.blocks.clone() {
         let optimized_block = OptimizedBlock {
             id: block.id,
@@ -921,68 +1210,76 @@ pub(crate) fn build() -> TokenStream {
 
         optimized_blocks.push((block.name.clone(), optimized_block));
 
+        let mut property_collection = HashSet::new();
+        let mut property_mapping = Vec::new();
         for property in block.properties {
             // Get mapped property enum name
-            let renamed_property = remap_enum_name(
-                &property
-                    .values
-                    .iter()
-                    .map(|value| value.as_str())
-                    .collect::<Vec<_>>(),
-                &property.name,
-            );
+            let renamed_property =
+                remap_enum_name(&property.values, &property.name).to_upper_camel_case();
 
-            // Append this block to the property -> block map
-            property_to_block_map
-                .entry(renamed_property)
-                .or_insert_with(|| Vec::new())
-                .push(PropertyMapping {
-                    block: block.name,
-                    original_name: property.name,
-                });
+            let expected_values = enum_to_values
+                .entry(renamed_property.clone())
+                .or_insert_with(|| property.values.clone());
+
+            if expected_values != &property.values {
+                panic!(
+                    "Enum overlap! You might need to add an entry in `PROPERTIES_REMAPS` for '{}' ({:?} vs {:?})",
+                    property.name, &property.values, expected_values
+                );
+            };
+
+            property_collection.insert(property.name.clone());
+            property_mapping.push(PropertyVariantMapping {
+                original_name: property.name.clone(),
+                property_enum: renamed_property.clone(),
+            });
 
             // If this property doesnt have an enum yet, make one
             let _ = property_enums
-                .entry(renamed_property)
+                .entry(renamed_property.clone())
                 .or_insert_with(|| PropertyStruct {
                     name: renamed_property,
                     values: property.values,
                 });
         }
+
+        // The minecraft java state manager deterministically produces a index given a set of properties. We must use
+        // the original property names here when checking for unique combinations of properties, and
+        // sort them to make a deterministic hash
+
+        if !property_collection.is_empty() {
+            let mut property_collection = Vec::from_iter(property_collection);
+            property_collection.sort();
+            property_collection_map
+                .entry(property_collection)
+                .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
+                .add_block_name(block.name);
+        }
     }
 
-    let props_grouped_by_props = property_to_block_map
-        .iter()
-        .map(|(_, blocks)| blocks.clone())
-        .collect::<Vec<_>>();
-
-    let grouped_prop_names = group_by_common_full_words(props_grouped_by_props);
-
-    for (name, group_blocks) in grouped_prop_names {
-        block_properties.push(BlockPropertyStruct {
-            generic_name: name.clone(),
-            entries: property_to_block_map
-                .iter()
-                .find(|(_, blocks)| blocks.contains(&group_blocks[0]))
-                .unwrap()
-                .0
-                .clone(),
-        });
-
-        for block in group_blocks {
-            let block_name = Ident::new(&block.to_shouty_snake_case(), Span::call_site());
-            let name = Ident::new(
-                &(name.clone() + "_block_props").to_upper_camel_case(),
+    for property_group in property_collection_map.into_values() {
+        for block_name in &property_group.block_names {
+            let const_block_name = Ident::new(
+                &const_block_name_from_block_name(block_name),
                 Span::call_site(),
             );
+            let property_name = Ident::new(
+                &property_group_name_from_derived_name(&property_group.derive_name()),
+                Span::call_site(),
+            );
+
             block_properties_from_state_and_name.extend(quote! {
-                #block => Some(Box::new(#name::from_state_id(state_id, &Block::#block_name).unwrap())),
+                #block_name => Some(Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name))),
             });
 
             block_properties_from_props_and_name.extend(quote! {
-                #block => Some(Box::new(#name::from_props(props, &Block::#block_name))),
+                #block_name => Some(Box::new(#property_name::from_props(props, &Block::#const_block_name))),
             });
         }
+
+        block_properties.push(BlockPropertyStruct {
+            data: property_group,
+        });
     }
 
     // Generate collision shapes array
@@ -994,7 +1291,7 @@ pub(crate) fn build() -> TokenStream {
     let unique_states = unique_states.iter().map(|state| state.to_token_stream());
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
-    let properties = property_enums.iter().map(|prop| prop.to_token_stream());
+    let properties = property_enums.values().map(|prop| prop.to_token_stream());
 
     // Generate block entity types array
     let block_entity_types = blocks_assets
@@ -1004,7 +1301,7 @@ pub(crate) fn build() -> TokenStream {
 
     // Generate constants and match arms for each block
     for (name, block) in optimized_blocks {
-        let const_ident = format_ident!("{}", name.to_shouty_snake_case());
+        let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
         let block_tokens = block.to_token_stream();
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let state_start = block.states.iter().map(|state| state.id).min().unwrap();
@@ -1013,6 +1310,7 @@ pub(crate) fn build() -> TokenStream {
 
         constants.extend(quote! {
             pub const #const_ident: Block = #block_tokens;
+
         });
 
         type_from_raw_id_arms.extend(quote! {
@@ -1304,7 +1602,7 @@ pub(crate) fn build() -> TokenStream {
             // Convert properties to a state id
             fn to_state_id(&self, block: &Block) -> u16;
             // Convert a state id back to properties
-            fn from_state_id(state_id: u16, block: &Block) -> Option<Self> where Self: Sized;
+            fn from_state_id(state_id: u16, block: &Block) -> Self where Self: Sized;
             // Get the default properties
             fn default(block: &Block) -> Self where Self: Sized;
 
