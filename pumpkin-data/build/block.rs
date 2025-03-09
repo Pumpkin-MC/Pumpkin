@@ -20,174 +20,21 @@ fn property_group_name_from_derived_name(name: &str) -> String {
 // These are known property groups that we'd like to change the default name of for ease of
 // programming
 type PropertyGroupRemap = (&'static [&'static str], &'static str);
-const DOOR_REMAP: PropertyGroupRemap = (
-    &[
-        "oak_door",
-        "iron_door",
-        "spruce_door",
-        "birch_door",
-        "jungle_door",
-        "acacia_door",
-        "cherry_door",
-        "dark_oak_door",
-        "pale_oak_door",
-        "mangrove_door",
-        "bamboo_door",
-        "crimson_door",
-        "warped_door",
-        "copper_door",
-        "exposed_copper_door",
-        "oxidized_copper_door",
-        "weathered_copper_door",
-        "waxed_copper_door",
-        "waxed_exposed_copper_door",
-        "waxed_oxidized_copper_door",
-        "waxed_weathered_copper_door",
-    ],
-    "DoorBlock",
-);
-const FENCE_GATE_REMAP: PropertyGroupRemap = (
-    &[
-        "oak_fence_gate",
-        "spruce_fence_gate",
-        "birch_fence_gate",
-        "jungle_fence_gate",
-        "acacia_fence_gate",
-        "cherry_fence_gate",
-        "dark_oak_fence_gate",
-        "pale_oak_fence_gate",
-        "mangrove_fence_gate",
-        "bamboo_fence_gate",
-        "crimson_fence_gate",
-        "warped_fence_gate",
-    ],
-    "FenceGate",
-);
-const FENCE_REMAP: PropertyGroupRemap = (
-    &[
-        "oak_fence",
-        "iron_bars",
-        "glass_pane",
-        "nether_brick_fence",
-        "white_stained_glass_pane",
-        "orange_stained_glass_pane",
-        "magenta_stained_glass_pane",
-        "light_blue_stained_glass_pane",
-        "yellow_stained_glass_pane",
-        "lime_stained_glass_pane",
-        "pink_stained_glass_pane",
-        "gray_stained_glass_pane",
-        "light_gray_stained_glass_pane",
-        "cyan_stained_glass_pane",
-        "purple_stained_glass_pane",
-        "blue_stained_glass_pane",
-        "brown_stained_glass_pane",
-        "green_stained_glass_pane",
-        "red_stained_glass_pane",
-        "black_stained_glass_pane",
-        "spruce_fence",
-        "birch_fence",
-        "jungle_fence",
-        "acacia_fence",
-        "cherry_fence",
-        "dark_oak_fence",
-        "pale_oak_fence",
-        "mangrove_fence",
-        "bamboo_fence",
-        "crimson_fence",
-        "warped_fence",
-    ],
+const DOOR_REMAP: PropertyGroupRemap = (&["facing", "half", "hinge", "open", "powered"], "Door");
+const FENCE_GATE_REMAP: PropertyGroupRemap =
+    (&["facing", "in_wall", "open", "powered"], "FenceGate");
+const FENCE_LIKE_REMAP: PropertyGroupRemap = (
+    &["east", "north", "south", "waterlogged", "west"],
     "FenceLike",
 );
-const REDSTONE_TOGGLE_REMAP: PropertyGroupRemap = (
-    &[
-        "lever",
-        "stone_button",
-        "oak_button",
-        "spruce_button",
-        "birch_button",
-        "jungle_button",
-        "acacia_button",
-        "cherry_button",
-        "dark_oak_button",
-        "pale_oak_button",
-        "mangrove_button",
-        "bamboo_button",
-        "crimson_button",
-        "warped_button",
-        "polished_blackstone_button",
-    ],
-    "RedstoneToggleable",
-);
-const DIRECTIONAL_BLOCK_REMAP: PropertyGroupRemap = (
-    &[
-        "pale_oak_wood",
-        "oak_log",
-        "spruce_log",
-        "birch_log",
-        "jungle_log",
-        "acacia_log",
-        "cherry_log",
-        "dark_oak_log",
-        "pale_oak_log",
-        "mangrove_log",
-        "muddy_mangrove_roots",
-        "bamboo_block",
-        "stripped_spruce_log",
-        "stripped_birch_log",
-        "stripped_jungle_log",
-        "stripped_acacia_log",
-        "stripped_cherry_log",
-        "stripped_dark_oak_log",
-        "stripped_pale_oak_log",
-        "stripped_oak_log",
-        "stripped_mangrove_log",
-        "stripped_bamboo_block",
-        "oak_wood",
-        "spruce_wood",
-        "birch_wood",
-        "jungle_wood",
-        "acacia_wood",
-        "cherry_wood",
-        "dark_oak_wood",
-        "mangrove_wood",
-        "stripped_oak_wood",
-        "stripped_spruce_wood",
-        "stripped_birch_wood",
-        "stripped_jungle_wood",
-        "stripped_acacia_wood",
-        "stripped_cherry_wood",
-        "stripped_dark_oak_wood",
-        "stripped_pale_oak_wood",
-        "stripped_mangrove_wood",
-        "basalt",
-        "polished_basalt",
-        "nether_portal",
-        "quartz_pillar",
-        "hay_block",
-        "purpur_pillar",
-        "bone_block",
-        "warped_stem",
-        "stripped_warped_stem",
-        "warped_hyphae",
-        "stripped_warped_hyphae",
-        "crimson_stem",
-        "stripped_crimson_stem",
-        "crimson_hyphae",
-        "stripped_crimson_hyphae",
-        "deepslate",
-        "infested_deepslate",
-        "ochre_froglight",
-        "verdant_froglight",
-        "pearlescent_froglight",
-    ],
-    "DirectionedBlock",
-);
+const REDSTONE_TOGGLE_REMAP: PropertyGroupRemap =
+    (&["face", "facing", "powered"], "RedstoneToggleable");
+const DIRECTIONAL_BLOCK_REMAP: PropertyGroupRemap = (&["axis"], "DirectionedBlock");
 
 const PROPERTY_GROUP_REMAPS: [PropertyGroupRemap; 5] = [
     DOOR_REMAP,
     FENCE_GATE_REMAP,
-    FENCE_REMAP,
+    FENCE_LIKE_REMAP,
     REDSTONE_TOGGLE_REMAP,
     DIRECTIONAL_BLOCK_REMAP,
 ];
@@ -215,13 +62,13 @@ impl PropertyCollectionData {
     }
 
     pub fn derive_name(&self) -> String {
-        for (block_group, name) in PROPERTY_GROUP_REMAPS {
-            if block_group.len() == self.block_names.len()
+        for (property_group, name) in PROPERTY_GROUP_REMAPS {
+            if property_group.len() == self.variant_mappings.len()
                 && self
-                    .block_names
+                    .variant_mappings
                     .iter()
-                    .map(|name| name.to_lowercase())
-                    .all(|block| block_group.contains(&block.as_str()))
+                    .map(|entry| entry.original_name.to_lowercase())
+                    .all(|block| property_group.contains(&block.as_str()))
             {
                 return name.to_string();
             }
