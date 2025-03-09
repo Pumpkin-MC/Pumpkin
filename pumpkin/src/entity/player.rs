@@ -10,6 +10,22 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::{
+    Entity, EntityBase, EntityId, NBTStorage,
+    combat::{self, AttackType, player_attack_sound},
+    effect::Effect,
+    hunger::HungerManager,
+    item::ItemEntity,
+};
+use crate::{
+    block,
+    command::{client_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    net::{Client, PlayerConfig},
+    server::Server,
+    world::World,
+};
+use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
@@ -63,23 +79,6 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
 use tokio::sync::{Mutex, Notify, RwLock};
-
-use super::{
-    Entity, EntityBase, EntityId, NBTStorage,
-    combat::{self, AttackType, player_attack_sound},
-    effect::Effect,
-    hunger::HungerManager,
-    item::ItemEntity,
-};
-use crate::{
-    block,
-    command::{client_suggestions, dispatcher::CommandDispatcher},
-    data::op_data::OPERATOR_CONFIG,
-    net::{Client, PlayerConfig},
-    server::Server,
-    world::World,
-};
-use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
 
@@ -206,6 +205,11 @@ pub struct Player {
     pub last_keep_alive_time: AtomicCell<Instant>,
     /// Amount of ticks since last attack
     pub last_attacked_ticks: AtomicU32,
+    /// The player's last known experience level.
+    pub last_sent_xp: AtomicI32,
+    pub last_sent_health: AtomicI32,
+    pub last_sent_food: AtomicU32,
+    pub last_food_saturation: AtomicBool,
     /// The players op permission level
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Tell tasks to stop if we are closing
@@ -301,6 +305,10 @@ impl Player {
             experience_points: AtomicI32::new(0),
             // Default to sending 16 chunks per tick
             chunk_manager: Mutex::new(ChunkManager::new(16)),
+            last_sent_xp: AtomicI32::new(-1),
+            last_sent_health: AtomicI32::new(-1),
+            last_sent_food: AtomicU32::new(0),
+            last_food_saturation: AtomicBool::new(true),
         }
     }
 
@@ -587,6 +595,10 @@ impl Player {
 
         self.living_entity.tick(server).await;
         self.hunger_manager.tick(self).await;
+
+        // experience handling
+        self.tick_experience().await;
+        self.tick_health().await;
 
         // timeout/keep alive handling
         self.tick_client_load_timeout();
@@ -958,6 +970,24 @@ impl Player {
             .await;
     }
 
+    pub async fn tick_health(&self) {
+        let health = self.living_entity.health.load() as i32;
+        let food = self.hunger_manager.level.load();
+        let saturation = self.hunger_manager.saturation.load();
+
+        let last_health = self.last_sent_health.load(Ordering::Relaxed);
+        let last_food = self.last_sent_food.load(Ordering::Relaxed);
+        let last_saturation = self.last_food_saturation.load(Ordering::Relaxed);
+
+        if health != last_health || food != last_food || (saturation == 0.0) != last_saturation {
+            self.last_sent_health.store(health, Ordering::Relaxed);
+            self.last_sent_food.store(food, Ordering::Relaxed);
+            self.last_food_saturation
+                .store(saturation == 0.0, Ordering::Relaxed);
+            self.send_health().await;
+        }
+    }
+
     pub async fn set_health(&self, health: f32) {
         self.living_entity.set_health(health).await;
         self.send_health().await;
@@ -1147,23 +1177,34 @@ impl Player {
             .await;
     }
 
+    pub async fn tick_experience(&self) {
+        let level = self.experience_level.load(Ordering::Relaxed);
+        if self.last_sent_xp.load(Ordering::Relaxed) != level {
+            let progress = self.experience_progress.load();
+            let points = self.experience_points.load(Ordering::Relaxed);
+
+            self.last_sent_xp.store(level, Ordering::Relaxed);
+
+            self.client
+                .send_packet(&CSetExperience::new(
+                    progress.clamp(0.0, 1.0),
+                    points.into(),
+                    level.into(),
+                ))
+                .await;
+        }
+    }
+
     /// Sets the player's experience level and updates the client
-    pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
+    pub fn set_experience(&self, level: i32, progress: f32, points: i32) {
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
         self.experience_points.store(points, Ordering::Relaxed);
-
-        self.client
-            .send_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                points.into(),
-                level.into(),
-            ))
-            .await;
+        self.last_sent_xp.store(-1, Ordering::Relaxed);
     }
 
     /// Sets the player's experience level directly
-    pub async fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
+    pub fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
         let progress = self.experience_progress.load();
         let mut points = self.experience_points.load(Ordering::Relaxed);
 
@@ -1180,7 +1221,7 @@ impl Player {
             points = (points as f32 * scale) as i32;
         }
 
-        self.set_experience(new_level, progress, points).await;
+        self.set_experience(new_level, progress, points);
     }
 
     pub async fn add_effect(&self, effect: Effect, keep_fading: bool) {
@@ -1212,14 +1253,14 @@ impl Player {
     }
 
     /// Add experience levels to the player
-    pub async fn add_experience_levels(&self, added_levels: i32) {
+    pub fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let new_level = current_level + added_levels;
-        self.set_experience_level(new_level, true).await;
+        self.set_experience_level(new_level, true);
     }
 
     /// Set the player's experience points directly, Returns true if successful.
-    pub async fn set_experience_points(&self, new_points: i32) -> bool {
+    pub fn set_experience_points(&self, new_points: i32) -> bool {
         let current_points = self.experience_points.load(Ordering::Relaxed);
 
         if new_points == current_points {
@@ -1234,20 +1275,19 @@ impl Player {
         }
 
         let progress = new_points as f32 / max_points as f32;
-        self.set_experience(current_level, progress, new_points)
-            .await;
+        self.set_experience(current_level, progress, new_points);
         true
     }
 
     /// Add experience points to the player
-    pub async fn add_experience_points(&self, added_points: i32) {
+    pub fn add_experience_points(&self, added_points: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
         let new_total_exp = total_exp + added_points;
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
         let progress = experience::progress_in_level(new_points, new_level);
-        self.set_experience(new_level, progress, new_points).await;
+        self.set_experience(new_level, progress, new_points);
     }
 }
 
@@ -1259,12 +1299,17 @@ impl NBTStorage for Player {
             "SelectedItemSlot",
             self.inventory.lock().await.selected as i32,
         );
+
         self.abilities.lock().await.write_nbt(nbt).await;
 
         // Store total XP instead of individual components
         let total_exp = experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
             + self.experience_points.load(Ordering::Relaxed);
         nbt.put_int("XpTotal", total_exp);
+        nbt.put_byte("playerGameType", self.gamemode.load() as i8);
+
+        // Store food level, saturation, exhaustion, and tick timer
+        self.hunger_manager.write_nbt(nbt).await;
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
@@ -1272,6 +1317,14 @@ impl NBTStorage for Player {
         self.inventory.lock().await.selected =
             nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
         self.abilities.lock().await.read_nbt(nbt).await;
+
+        self.gamemode.store(
+            GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
+                .unwrap_or(GameMode::Survival),
+        );
+
+        // Load food level, saturation, exhaustion, and tick timer
+        self.hunger_manager.read_nbt(nbt).await;
 
         // Load from total XP
         let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
