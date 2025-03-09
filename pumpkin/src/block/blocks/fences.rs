@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::CardinalDirection;
+use pumpkin_data::block::FenceGateProperties;
 use pumpkin_data::block::FenceLikeProperties;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
@@ -15,13 +16,18 @@ use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
-fn connects_to(from: &Block, to: &Block) -> bool {
+fn connects_to(from: &Block, to: &Block, to_state_id: u16, direction: BlockDirection) -> bool {
     if from.id == to.id {
         return true;
     }
 
     if to.is_tagged_with("c:fence_gates").unwrap() {
-        return true;
+        let fence_gate_props = FenceGateProperties::from_state_id(to_state_id, to);
+        if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
+            == direction.rotate_clockwise().to_axis()
+        {
+            return true;
+        }
     }
 
     // If the block is not a wooden fence, it cannot connect to a wooden fence
@@ -38,9 +44,10 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
 
     for direction in BlockDirection::horizontal() {
         let offset = block_pos.offset(direction.to_offset());
-        let other_block = world.get_block(&offset).await.unwrap_or(Block::AIR);
+        let (other_block, other_block_state) =
+            world.get_block_and_block_state(&offset).await.unwrap();
 
-        if connects_to(block, &other_block) {
+        if connects_to(block, &other_block, other_block_state.id, direction) {
             match direction {
                 BlockDirection::North => block_properties.north = Boolean::True,
                 BlockDirection::South => block_properties.south = Boolean::True,

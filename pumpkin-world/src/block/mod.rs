@@ -103,11 +103,30 @@ impl BlockDirection {
         }
     }
 
+    pub fn from_cardinal_direction(direction: CardinalDirection) -> BlockDirection {
+        match direction {
+            CardinalDirection::North => BlockDirection::North,
+            CardinalDirection::South => BlockDirection::South,
+            CardinalDirection::West => BlockDirection::West,
+            CardinalDirection::East => BlockDirection::East,
+        }
+    }
     pub fn to_axis(&self) -> Axis {
         match self {
             BlockDirection::North | BlockDirection::South => Axis::Z,
             BlockDirection::West | BlockDirection::East => Axis::X,
             BlockDirection::Up | BlockDirection::Down => Axis::Y,
+        }
+    }
+
+    pub fn rotate_clockwise(&self) -> BlockDirection {
+        match self {
+            BlockDirection::North => BlockDirection::East,
+            BlockDirection::East => BlockDirection::South,
+            BlockDirection::South => BlockDirection::West,
+            BlockDirection::West => BlockDirection::North,
+            BlockDirection::Up => BlockDirection::East,
+            BlockDirection::Down => BlockDirection::West,
         }
     }
 }
