@@ -6,10 +6,14 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::{Chest, OpenContainer};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::registry::{Block, get_block};
 
+use crate::block::properties::Direction;
+use crate::world::World;
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,
@@ -27,6 +31,35 @@ pub struct ChestBlock;
 
 #[async_trait]
 impl PumpkinBlock for ChestBlock {
+    async fn on_place(
+        &self,
+        server: &Server,
+        world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
+        use_item_on: &SUseItemOn,
+        player_direction: &Direction,
+        other: bool,
+    ) -> u16 {
+        let player_direction = player_direction.opposite();
+
+        // TODO: check if next to other chest and combine
+
+        server
+            .block_properties_manager
+            .on_place_state(
+                world,
+                block,
+                face,
+                block_pos,
+                use_item_on,
+                &player_direction,
+                other,
+            )
+            .await
+    }
+
     async fn normal_use(
         &self,
         block: &Block,

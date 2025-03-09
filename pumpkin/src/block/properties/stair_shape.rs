@@ -33,7 +33,7 @@ impl BlockProperty for StairShape {
         _other: bool,
     ) -> String {
         let block_half = evaluate_half(*face, use_item_on);
-        let (front_block_pos, back_block_pos) = calculate_positions(player_direction, block_pos);
+        let (front_block_pos, back_block_pos) = calculate_positions(*player_direction, block_pos);
 
         let front_block_and_state = world.get_block_and_block_state(&front_block_pos).await;
         let back_block_and_state = world.get_block_and_block_state(&back_block_pos).await;
@@ -128,7 +128,7 @@ impl BlockProperty for StairShape {
     }
 }
 
-fn calculate_positions(player_direction: &Direction, block_pos: &BlockPos) -> (BlockPos, BlockPos) {
+fn calculate_positions(player_direction: Direction, block_pos: &BlockPos) -> (BlockPos, BlockPos) {
     match player_direction {
         Direction::North => (
             BlockPos(Vector3::new(
