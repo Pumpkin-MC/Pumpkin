@@ -119,21 +119,14 @@ pub struct PropertyStruct {
 impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(&self.name, Span::call_site());
-        let mut prefix = "";
-
-        if self.values.iter().any(|value| value == "1") {
-            prefix = "L";
-        }
 
         let variant_count = self.values.clone().len() as u16;
         let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
 
-        let ident_values = self.values.iter().map(|value| {
-            Ident::new(
-                &(prefix.to_owned() + value).to_upper_camel_case(),
-                Span::call_site(),
-            )
-        });
+        let ident_values = self
+            .values
+            .iter()
+            .map(|value| Ident::new(&(value).to_upper_camel_case(), Span::call_site()));
 
         let values_2 = ident_values.clone();
         let values_3 = ident_values.clone();
@@ -153,10 +146,7 @@ impl ToTokens for PropertyStruct {
             }
         });
         let to_values = self.values.iter().map(|value| {
-            let ident = Ident::new(
-                &(prefix.to_owned() + value).to_upper_camel_case(),
-                Span::call_site(),
-            );
+            let ident = Ident::new(&(value).to_upper_camel_case(), Span::call_site());
             let value = if is_number_values {
                 value.strip_prefix("L").unwrap()
             } else {
