@@ -1,12 +1,11 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
-use pumpkin_data::chunk::Biome;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::dimension::Dimension;
 pub fn to_long(float: f32) -> i64 {
-    (float * 1000.0) as i64
+    (float * 10000.0) as i64
 }
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NoiseValuePoint {
     pub temperature: i64,
@@ -77,11 +76,6 @@ impl ParameterRange {
             max: self.max.max(other.max),
         }
     }
-}
-
-#[derive(Clone, Deserialize)]
-pub struct BiomeEntries {
-    pub nodes: HashMap<Dimension, HashMap<Biome, NoiseHypercube>>,
 }
 
 #[derive(Clone)]

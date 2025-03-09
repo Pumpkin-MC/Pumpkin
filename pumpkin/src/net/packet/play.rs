@@ -59,7 +59,6 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -1321,6 +1320,9 @@ impl Player {
         let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;
         let clicked_block = world.get_block(&clicked_block_pos).await?;
 
+        // TODO: replace
+        const WORLD_LOWEST_Y: i16 = -64;
+        const WORLD_MAX_Y: i16 = 384 - WORLD_LOWEST_Y.abs();
         // check block under the world
         if location.0.y + face.to_offset().y < WORLD_LOWEST_Y.into() {
             return Err(BlockPlacingError::BlockOutOfWorld.into());

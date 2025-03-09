@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
 #[serde(tag = "type")]
-pub enum NormalInvProvider {
+pub enum NormalIntProvider {
     #[serde(rename = "minecraft:uniform")]
     Uniform(UniformIntProvider),
     // TODO: Add more...
@@ -10,36 +10,36 @@ pub enum NormalInvProvider {
 
 #[derive(Deserialize, Clone)]
 #[serde(untagged)]
-pub enum InvProvider {
-    Object(NormalInvProvider),
+pub enum IntProvider {
+    Object(NormalIntProvider),
     Constant(i32),
 }
 
-impl InvProvider {
+impl IntProvider {
     pub fn get_min(&self) -> i32 {
         match self {
-            InvProvider::Object(inv_provider) => match inv_provider {
-                NormalInvProvider::Uniform(uniform) => uniform.get_min(),
+            IntProvider::Object(inv_provider) => match inv_provider {
+                NormalIntProvider::Uniform(uniform) => uniform.get_min(),
             },
-            InvProvider::Constant(i) => *i,
+            IntProvider::Constant(i) => *i,
         }
     }
 
     pub fn get(&self) -> i32 {
         match self {
-            InvProvider::Object(inv_provider) => match inv_provider {
-                NormalInvProvider::Uniform(uniform) => uniform.get(),
+            IntProvider::Object(inv_provider) => match inv_provider {
+                NormalIntProvider::Uniform(uniform) => uniform.get(),
             },
-            InvProvider::Constant(i) => *i,
+            IntProvider::Constant(i) => *i,
         }
     }
 
     pub fn get_max(&self) -> i32 {
         match self {
-            InvProvider::Object(inv_provider) => match inv_provider {
-                NormalInvProvider::Uniform(uniform) => uniform.get_max(),
+            IntProvider::Object(inv_provider) => match inv_provider {
+                NormalIntProvider::Uniform(uniform) => uniform.get_max(),
             },
-            InvProvider::Constant(i) => *i,
+            IntProvider::Constant(i) => *i,
         }
     }
 }

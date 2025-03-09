@@ -429,9 +429,11 @@ impl Entity {
     }
 
     async fn velocity_multiplier(&self, _pos: Vector3<f64>) -> f32 {
-        let world = self.world.read().await;
-        let block = world.get_block(&self.block_pos.load()).await.unwrap();
-        block.velocity_multiplier
+        // let world = self.world.read().await;
+        // TODO: handle when player is outside world
+        // let block = world.get_block(&self.block_pos.load()).await;
+        // block.velocity_multiplier
+        return 0.0;
         // if velo_multiplier == 1.0 {
         //     const VELOCITY_OFFSET: f64 = 0.500001; // Vanilla
         //     let pos_with_y_offset = BlockPos(Vector3::new(

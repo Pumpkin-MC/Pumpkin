@@ -5,6 +5,7 @@ pub mod state;
 use num_derive::FromPrimitive;
 use pumpkin_util::math::vector3::Vector3;
 
+use serde::Deserialize;
 pub use state::BlockState;
 
 #[derive(FromPrimitive, PartialEq, Clone, Copy)]
@@ -15,6 +16,12 @@ pub enum BlockDirection {
     South,
     West,
     East,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BlockStateCodec {
+    pub name: String,
+    // TODO: properties...
 }
 
 pub struct InvalidBlockFace;

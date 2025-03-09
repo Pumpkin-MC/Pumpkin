@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
-
 pub enum MaybeRelativeCoordinate<const IS_Y: bool> {
     Absolute(f64),
     Relative(f64),
@@ -62,9 +60,10 @@ impl<const IS_Y: bool> MaybeRelativeBlockCoordinate<IS_Y> {
             Self::Relative(offset) => origin?.floor() as i32 + offset,
         };
 
-        if IS_Y && (abs < WORLD_LOWEST_Y.into() || abs >= WORLD_MAX_Y.into()) {
-            return None;
-        }
+        // TODO
+        // if IS_Y && (abs < WORLD_LOWEST_Y.into() || abs >= WORLD_MAX_Y.into()) {
+        //     return None;
+        // }
 
         Some(abs)
     }

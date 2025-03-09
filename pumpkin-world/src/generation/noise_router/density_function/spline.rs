@@ -1,12 +1,9 @@
+use pumpkin_util::math::lerp;
+
 use crate::{
-    generation::{
-        noise::lerp,
-        noise_router::{
-            chunk_density_function::ChunkNoiseFunctionSampleOptions,
-            chunk_noise_router::{
-                ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl,
-            },
-        },
+    generation::noise_router::{
+        chunk_density_function::ChunkNoiseFunctionSampleOptions,
+        chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     },
     noise_router::density_function_ast::SplineData,
 };

@@ -1,22 +1,24 @@
-use std::{cell::RefCell, sync::LazyLock};
+use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
 
 use enum_dispatch::enum_dispatch;
-use multi_noise::{BiomeEntries, SearchTree, TreeLeafNode};
+use multi_noise::{NoiseHypercube, SearchTree, TreeLeafNode};
 use pumpkin_data::chunk::Biome;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    coordinates::BlockCoordinates, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
+    dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
 };
 pub mod multi_noise;
 
 pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
     SearchTree::create(
-        serde_json::from_str::<BiomeEntries>(include_str!("../../../assets/multi_noise.json"))
-            .expect("Could not parse multi_noise.json.")
-            .nodes
-            .into_iter()
-            .flat_map(|(_, biome_map)| biome_map.into_iter())
-            .collect(),
+        serde_json::from_str::<HashMap<Dimension, HashMap<Biome, NoiseHypercube>>>(include_str!(
+            "../../../assets/multi_noise.json"
+        ))
+        .expect("Could not parse multi_noise.json.")
+        .into_iter()
+        .flat_map(|(_, biome_map)| biome_map.into_iter())
+        .collect(),
     )
     .expect("entries cannot be empty")
 });
@@ -27,25 +29,25 @@ thread_local! {
 
 #[enum_dispatch]
 pub trait BiomeSupplier {
-    fn biome(&mut self, at: BlockCoordinates) -> Biome;
+    fn biome(at: Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome;
 }
 
 #[derive(Clone)]
 pub struct DebugBiomeSupplier;
 
 impl BiomeSupplier for DebugBiomeSupplier {
-    fn biome(&mut self, _at: BlockCoordinates) -> Biome {
+    fn biome(_at: Vector3<i32>, _noise: &mut MultiNoiseSampler<'_>) -> Biome {
         Biome::Plains
     }
 }
 
-pub struct MultiNoiseBiomeSupplier<'a> {
-    noise: MultiNoiseSampler<'a>,
-}
+pub struct MultiNoiseBiomeSupplier;
 
-impl BiomeSupplier for MultiNoiseBiomeSupplier<'_> {
-    fn biome(&mut self, at: BlockCoordinates) -> Biome {
-        let point = self.noise.sample(at.x, at.y.0 as i32, at.z);
+// TODO: Add End supplier
+
+impl BiomeSupplier for MultiNoiseBiomeSupplier {
+    fn biome(at: Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome {
+        let point = noise.sample(at.x, at.y, at.z);
         LAST_RESULT_NODE.with_borrow_mut(|last_result| {
             BIOME_ENTRIES
                 .get(&point, last_result)
