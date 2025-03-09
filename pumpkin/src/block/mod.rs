@@ -26,6 +26,8 @@ use pumpkin_world::{
 };
 use rand::Rng;
 
+use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
+use crate::block::properties::lit::Lit;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
@@ -48,6 +50,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(TNTBlock);
     manager.register(LeverBlock);
+    manager.register(TorchBlock);
+    manager.register(RedstoneTorchBlock);
+    manager.register(SoulTorchBlock);
 
     Arc::new(manager)
 }
@@ -127,6 +132,7 @@ pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
     manager.register(Up::False);
     manager.register(Waterlogged::False());
     manager.register(West::False);
+    manager.register(Lit::True());
 
     manager.build_properties_registry();
 

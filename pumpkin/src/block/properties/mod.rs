@@ -19,6 +19,7 @@ pub(crate) mod face;
 pub(crate) mod facing;
 pub(crate) mod half;
 pub(crate) mod layers;
+pub(crate) mod lit;
 pub(crate) mod open;
 pub(crate) mod powered;
 pub(crate) mod signal_fire;
