@@ -973,10 +973,10 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
-        self.send_combat_kill().await;
+        self.handle_killed().await;
     }
 
-    async fn send_combat_kill(&self) {
+    async fn handle_killed(&self) {
         self.set_client_loaded(false);
         self.client
             .send_packet(&CCombatDeath::new(
@@ -1302,7 +1302,7 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                self.send_combat_kill().await;
+                self.handle_killed().await;
             }
         }
         result
