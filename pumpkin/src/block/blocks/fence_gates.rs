@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::CardinalDirection;
-use pumpkin_data::block::FenceGateProperties;
+use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -16,6 +15,8 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::item::Item;
+
+type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
 
 /// This returns an index and not a state id making it so all fences can use the same state calculation function
 pub async fn toggle_fence_gate(world: &World, block_pos: &BlockPos) -> u16 {
@@ -58,7 +59,7 @@ pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
                 _face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                player_direction: &CardinalDirection,
+                player_direction: &HorizontalFacing,
                 _other: bool,
             ) -> u16 {
                 let mut fence_gate_props = FenceGateProperties::default(block);

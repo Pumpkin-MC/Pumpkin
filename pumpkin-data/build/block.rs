@@ -1,12 +1,8 @@
-use std::{
-    collections::{HashMap, HashSet},
-    num::ParseIntError,
-};
-
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
 use syn::{Ident, LitBool, LitInt, LitStr};
 
 fn const_block_name_from_block_name(block: &str) -> String {
@@ -16,28 +12,6 @@ fn const_block_name_from_block_name(block: &str) -> String {
 fn property_group_name_from_derived_name(name: &str) -> String {
     format!("{}_properties", name).to_upper_camel_case()
 }
-
-// These are known property groups that we'd like to change the default name of for ease of
-// programming
-type PropertyGroupRemap = (&'static [&'static str], &'static str);
-const DOOR_REMAP: PropertyGroupRemap = (&["facing", "half", "hinge", "open", "powered"], "Door");
-const FENCE_GATE_REMAP: PropertyGroupRemap =
-    (&["facing", "in_wall", "open", "powered"], "FenceGate");
-const FENCE_LIKE_REMAP: PropertyGroupRemap = (
-    &["east", "north", "south", "waterlogged", "west"],
-    "FenceLike",
-);
-const REDSTONE_TOGGLE_REMAP: PropertyGroupRemap =
-    (&["face", "facing", "powered"], "RedstoneToggleable");
-const DIRECTIONAL_BLOCK_REMAP: PropertyGroupRemap = (&["axis"], "DirectionedBlock");
-
-const PROPERTY_GROUP_REMAPS: [PropertyGroupRemap; 5] = [
-    DOOR_REMAP,
-    FENCE_GATE_REMAP,
-    FENCE_LIKE_REMAP,
-    REDSTONE_TOGGLE_REMAP,
-    DIRECTIONAL_BLOCK_REMAP,
-];
 
 struct PropertyVariantMapping {
     original_name: String,
@@ -62,127 +36,8 @@ impl PropertyCollectionData {
     }
 
     pub fn derive_name(&self) -> String {
-        for (property_group, name) in PROPERTY_GROUP_REMAPS {
-            if property_group.len() == self.variant_mappings.len()
-                && self
-                    .variant_mappings
-                    .iter()
-                    .map(|entry| entry.original_name.to_lowercase())
-                    .all(|block| property_group.contains(&block.as_str()))
-            {
-                return name.to_string();
-            }
-        }
-
         format!("{}_like", self.block_names[0])
     }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct BlockProperty {
-    pub name: String,
-    pub values: Vec<String>,
-}
-
-type EnumRemap = (&'static [&'static str], &'static str);
-
-const BOOL_REMAP: EnumRemap = (&["true", "false"], "Boolean");
-const AXIS_REMAP: EnumRemap = (&["x", "y", "z"], "Axis");
-const DIRECTION_REMAP: EnumRemap = (
-    &["north", "east", "south", "west", "up", "down"],
-    "Direction",
-);
-const REDSTONE_CONNECTION_REMAP: EnumRemap = (&["up", "side", "none"], "RedstoneConnection");
-const CARDINAL_DIRECTION_REMAP: EnumRemap =
-    (&["north", "east", "south", "west"], "CardinalDirection");
-const STAIR_HALF_REMAP: EnumRemap = (&["bottom", "top"], "StairHalf");
-const RAIL_SHAPE_REMAP: EnumRemap = (
-    &[
-        "north_south",
-        "east_west",
-        "ascending_east",
-        "ascending_west",
-        "ascending_north",
-        "ascending_south",
-    ],
-    "RailShape",
-);
-const CHEST_TYPE_REMAP: EnumRemap = (&["single", "left", "right"], "ChestType");
-const STRUCTURE_BLOCK_MODE_REMAP: EnumRemap =
-    (&["save", "load", "corner", "data"], "StructureBlockMode");
-
-const VERTICAL_HALF_REMAP: EnumRemap = (&["upper", "lower"], "VerticalHalf");
-const VERTICAL_BLOCK_HALF_REMAP: EnumRemap = (&["top", "bottom"], "VerticalBlockHalf");
-const STAIR_SHAPE_REMAP: EnumRemap = (
-    &[
-        "straight",
-        "inner_left",
-        "inner_right",
-        "outer_left",
-        "outer_right",
-    ],
-    "StairShape",
-);
-const XZ_AXIS_REMAP: EnumRemap = (&["x", "z"], "XZAxis");
-const PISTON_TYPE_REMAP: EnumRemap = (&["normal", "sticky"], "PistonType");
-const DIRECTION_NO_UP_REMAP: EnumRemap =
-    (&["down", "north", "south", "west", "east"], "DirectionNoUp");
-
-/// This is done cause minecrafts default property system could map the same property key to multiple values depending on the block.
-/// And while were at it adding a Boolean enum and some other remaps to make it easier to add traits and work with them globally.
-/// For example CardinalDirection is also used when determining player direction.
-const PROPERTIES_REMAPS: [EnumRemap; 15] = [
-    CARDINAL_DIRECTION_REMAP,
-    BOOL_REMAP,
-    AXIS_REMAP,
-    DIRECTION_REMAP,
-    REDSTONE_CONNECTION_REMAP,
-    STAIR_HALF_REMAP,
-    RAIL_SHAPE_REMAP,
-    CHEST_TYPE_REMAP,
-    STRUCTURE_BLOCK_MODE_REMAP,
-    VERTICAL_HALF_REMAP,
-    VERTICAL_BLOCK_HALF_REMAP,
-    STAIR_SHAPE_REMAP,
-    XZ_AXIS_REMAP,
-    PISTON_TYPE_REMAP,
-    DIRECTION_NO_UP_REMAP,
-];
-
-fn remap_enum_name(variants_to_check: &[String], fallback: &str) -> String {
-    // If the property fields match one of our re map conditions, rename
-    for (variants, enum_name) in PROPERTIES_REMAPS {
-        if variants.len() == variants_to_check.len()
-            && variants_to_check
-                .iter()
-                .all(|variant| variants.contains(&variant.as_str()))
-        {
-            return enum_name.to_string();
-        }
-    }
-
-    let attempt_generic_numeric = || {
-        // Generic enum for numeric values
-        let mut min = u32::MAX;
-        let mut max = u32::MIN;
-        for num in variants_to_check.iter().map(|value| value.parse::<u32>()) {
-            let num = num?;
-            if num < min {
-                min = num;
-            }
-            if num > max {
-                max = num;
-            }
-        }
-
-        let name = format!("level_{}_to_{}", min, max);
-        Result::<String, ParseIntError>::Ok(name)
-    };
-
-    attempt_generic_numeric().unwrap_or_else(|_| {
-        // Otherwise just use the given name
-        fallback.to_string()
-    })
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -889,7 +744,7 @@ pub struct Block {
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
-    pub properties: Vec<BlockProperty>,
+    pub properties: Vec<i32>,
     pub default_state_id: u16,
     pub states: Vec<BlockState>,
     pub experience: Option<Experience>,
@@ -961,6 +816,129 @@ impl ToTokens for OptimizedBlock {
     }
 }
 
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type")]
+pub enum GeneratedPropertyType {
+    #[serde(rename = "boolean")]
+    Boolean,
+    #[serde(rename = "int")]
+    Int { min: u8, max: u8 },
+    #[serde(rename = "enum")]
+    Enum { values: Vec<String> },
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct GeneratedProperty {
+    hash_key: i32,
+    enum_name: String,
+    serialized_name: String,
+    #[serde(rename = "type")]
+    #[serde(flatten)]
+    property_type: GeneratedPropertyType,
+}
+
+impl GeneratedProperty {
+    fn to_property(&self) -> Property {
+        Property {
+            enum_name: if self.property_type == GeneratedPropertyType::Boolean {
+                "Boolean".to_string()
+            } else {
+                self.enum_name.clone()
+            },
+            serialized_name: self.serialized_name.clone(),
+            values: {
+                match self.property_type.clone() {
+                    GeneratedPropertyType::Boolean => {
+                        vec!["true".to_string(), "false".to_string()]
+                    }
+                    GeneratedPropertyType::Int { min, max } => {
+                        let mut values = Vec::new();
+                        for i in min..=max {
+                            values.push(format!("L{}", i));
+                        }
+                        values
+                    }
+                    GeneratedPropertyType::Enum { values } => values.clone(),
+                }
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Property {
+    enum_name: String,
+    serialized_name: String,
+    values: Vec<String>,
+}
+
+impl ToTokens for Property {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let enum_name = Ident::new(&self.enum_name.to_upper_camel_case(), Span::call_site());
+        let values: Vec<_> = self
+            .values
+            .iter()
+            .map(|v| Ident::new(&v.to_upper_camel_case(), Span::call_site()))
+            .collect();
+        let variant_count = self.values.len() as u16;
+
+        let from_values = self.values.iter().map(|value| {
+            let ident = Ident::new(&value.to_upper_camel_case(), Span::call_site());
+            quote! {
+                #value => Self::#ident
+            }
+        });
+        let to_values = self.values.iter().map(|value| {
+            let ident = Ident::new(&value.to_upper_camel_case(), Span::call_site());
+            quote! {
+                Self::#ident => #value
+            }
+        });
+
+        let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
+
+        tokens.extend(quote! {
+            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            pub enum #enum_name {
+                #(#values),*
+            }
+
+            impl EnumVariants for #enum_name {
+                fn variant_count() -> u16 {
+                    #variant_count
+                }
+
+                fn to_index(&self) -> u16 {
+                    match self {
+                        #(Self::#values => #values_index),*
+                    }
+                }
+
+                fn from_index(index: u16) -> Self {
+                    match index {
+                        #(#values_index => Self::#values,)*
+                        _ => panic!("Invalid index: {}", index),
+                    }
+                }
+
+                fn to_value(&self) -> &str {
+                    match self {
+                        #(#to_values),*
+                    }
+                }
+
+                fn from_value(value: &str) -> Self {
+                    match value {
+                        #(#from_values),*,
+                        _ => panic!("Invalid value: {:?}", value),
+                    }
+                }
+
+            }
+        });
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockAssets {
     pub blocks: Vec<Block>,
@@ -970,9 +948,14 @@ pub struct BlockAssets {
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
+    println!("cargo:rerun-if-changed=../assets/properties.json");
 
     let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
         .expect("Failed to parse blocks.json");
+
+    let generated_properties: Vec<GeneratedProperty> =
+        serde_json::from_str(include_str!("../../assets/properties.json"))
+            .expect("Failed to parse properties.json");
 
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
@@ -1060,9 +1043,13 @@ pub(crate) fn build() -> TokenStream {
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
         for property in block.properties {
+            let property = generated_properties
+                .iter()
+                .find(|p| p.hash_key == property)
+                .unwrap()
+                .to_property();
             // Get mapped property enum name
-            let renamed_property =
-                remap_enum_name(&property.values, &property.name).to_upper_camel_case();
+            let renamed_property = property.enum_name.to_upper_camel_case();
 
             let expected_values = enum_to_values
                 .entry(renamed_property.clone())
@@ -1071,13 +1058,13 @@ pub(crate) fn build() -> TokenStream {
             if expected_values != &property.values {
                 panic!(
                     "Enum overlap! You might need to add an entry in `PROPERTIES_REMAPS` for '{}' ({:?} vs {:?})",
-                    property.name, &property.values, expected_values
+                    property.serialized_name, &property.values, expected_values
                 );
             };
 
-            property_collection.insert(property.name.clone());
+            property_collection.insert(property.serialized_name.clone());
             property_mapping.push(PropertyVariantMapping {
-                original_name: property.name.clone(),
+                original_name: property.serialized_name.clone(),
                 property_enum: renamed_property.clone(),
             });
 
@@ -1572,13 +1559,13 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl CardinalDirection {
+        impl HorizontalFacing {
             pub fn opposite(&self) -> Self {
                 match self {
-                    CardinalDirection::North => CardinalDirection::South,
-                    CardinalDirection::South => CardinalDirection::North,
-                    CardinalDirection::East => CardinalDirection::West,
-                    CardinalDirection::West => CardinalDirection::East
+                    HorizontalFacing::North => HorizontalFacing::South,
+                    HorizontalFacing::South => HorizontalFacing::North,
+                    HorizontalFacing::East => HorizontalFacing::West,
+                    HorizontalFacing::West => HorizontalFacing::East
                 }
             }
         }

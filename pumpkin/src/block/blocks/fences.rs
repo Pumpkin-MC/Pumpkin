@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
-use pumpkin_data::block::CardinalDirection;
-use pumpkin_data::block::FenceGateProperties;
-use pumpkin_data::block::FenceLikeProperties;
+use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
@@ -10,6 +8,9 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+
+type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
+type FenceLikeProperties = pumpkin_data::block::OakFenceLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;
@@ -89,7 +90,7 @@ pub fn register_fence_blocks(manager: &mut BlockRegistry) {
                 _face: &BlockDirection,
                 block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                _player_direction: &CardinalDirection,
+                _player_direction: &HorizontalFacing,
                 _other: bool,
             ) -> u16 {
                 fence_state(world, block, block_pos).await

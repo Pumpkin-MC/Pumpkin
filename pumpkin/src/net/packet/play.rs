@@ -13,7 +13,7 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::ADVANCED_CONFIG;
-use pumpkin_data::block::{Block, CardinalDirection};
+use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
@@ -1308,15 +1308,15 @@ impl Player {
         // TODO: send/configure additional commands/data based on type of entity (horse, slime, etc)
     }
 
-    fn get_player_direction(&self) -> CardinalDirection {
+    fn get_player_direction(&self) -> HorizontalFacing {
         let adjusted_yaw = (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
 
         match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => CardinalDirection::South,
-            45.0..=135.0 => CardinalDirection::West,
-            135.0..=225.0 => CardinalDirection::North,
-            225.0..=315.0 => CardinalDirection::East,
-            _ => CardinalDirection::South, // Default case, should not occur
+            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
+            45.0..=135.0 => HorizontalFacing::West,
+            135.0..=225.0 => HorizontalFacing::North,
+            225.0..=315.0 => HorizontalFacing::East,
+            _ => HorizontalFacing::South, // Default case, should not occur
         }
     }
 

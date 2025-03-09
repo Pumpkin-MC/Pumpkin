@@ -1,8 +1,8 @@
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, Face, RedstoneToggleableProperties};
+use pumpkin_data::block::{Block, BlockFace, LeverLikeProperties};
 use pumpkin_data::{
-    block::{BlockProperties, CardinalDirection},
+    block::{BlockProperties, HorizontalFacing},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
@@ -19,7 +19,7 @@ use crate::{
 async fn toggle_lever(world: &World, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
-    let mut lever_props = RedstoneToggleableProperties::from_state_id(state.id, &block);
+    let mut lever_props = LeverLikeProperties::from_state_id(state.id, &block);
     lever_props.powered = lever_props.powered.flip();
     world
         .set_block_state(block_pos, lever_props.to_state_id(&block))
@@ -39,16 +39,15 @@ impl PumpkinBlock for LeverBlock {
         face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &CardinalDirection,
+        player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        let mut lever_props =
-            RedstoneToggleableProperties::from_state_id(block.default_state_id, block);
+        let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 
         match face {
-            BlockDirection::Up => lever_props.face = Face::Ceiling,
-            BlockDirection::Down => lever_props.face = Face::Floor,
-            _ => lever_props.face = Face::Wall,
+            BlockDirection::Up => lever_props.face = BlockFace::Ceiling,
+            BlockDirection::Down => lever_props.face = BlockFace::Floor,
+            _ => lever_props.face = BlockFace::Wall,
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {

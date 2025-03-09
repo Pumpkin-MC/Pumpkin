@@ -3,7 +3,7 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, CardinalDirection};
+use pumpkin_data::block::{Axis, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 pub use state::ChunkBlockState;
@@ -93,22 +93,22 @@ impl BlockDirection {
         [BlockDirection::Down, BlockDirection::Up]
     }
 
-    pub fn to_cardinal_direction(&self) -> CardinalDirection {
+    pub fn to_cardinal_direction(&self) -> HorizontalFacing {
         match self {
-            BlockDirection::North => CardinalDirection::North,
-            BlockDirection::South => CardinalDirection::South,
-            BlockDirection::West => CardinalDirection::West,
-            BlockDirection::East => CardinalDirection::East,
-            _ => CardinalDirection::North,
+            BlockDirection::North => HorizontalFacing::North,
+            BlockDirection::South => HorizontalFacing::South,
+            BlockDirection::West => HorizontalFacing::West,
+            BlockDirection::East => HorizontalFacing::East,
+            _ => HorizontalFacing::North,
         }
     }
 
-    pub fn from_cardinal_direction(direction: CardinalDirection) -> BlockDirection {
+    pub fn from_cardinal_direction(direction: HorizontalFacing) -> BlockDirection {
         match direction {
-            CardinalDirection::North => BlockDirection::North,
-            CardinalDirection::South => BlockDirection::South,
-            CardinalDirection::West => BlockDirection::West,
-            CardinalDirection::East => BlockDirection::East,
+            HorizontalFacing::North => BlockDirection::North,
+            HorizontalFacing::South => BlockDirection::South,
+            HorizontalFacing::West => BlockDirection::West,
+            HorizontalFacing::East => BlockDirection::East,
         }
     }
     pub fn to_axis(&self) -> Axis {

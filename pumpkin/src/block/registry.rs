@@ -2,7 +2,7 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block::{Block, BlockState, CardinalDirection};
+use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -78,7 +78,7 @@ impl BlockRegistry {
         face: &BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
-        player_direction: &CardinalDirection,
+        player_direction: &HorizontalFacing,
         other: bool,
     ) -> u16 {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -106,7 +106,7 @@ impl BlockRegistry {
         block: &Block,
         face: &BlockDirection,
         block_pos: &BlockPos,
-        player_direction: &CardinalDirection,
+        player_direction: &HorizontalFacing,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
