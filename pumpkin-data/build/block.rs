@@ -568,7 +568,7 @@ pub enum LootConditionStruct {
     #[serde(rename = "minecraft:entity_scores")]
     EntityScores,
     #[serde(rename = "minecraft:block_state_property")]
-    BlockStateProperty,
+    BlockStateProperty { properties: HashMap<String, String> },
     #[serde(rename = "minecraft:match_tool")]
     MatchTool,
     #[serde(rename = "minecraft:table_bonus")]
@@ -604,7 +604,13 @@ impl ToTokens for LootConditionStruct {
             LootConditionStruct::EntityProperties => quote! { LootCondition::EntityProperties },
             LootConditionStruct::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
             LootConditionStruct::EntityScores => quote! { LootCondition::EntityScores },
-            LootConditionStruct::BlockStateProperty => quote! { LootCondition::BlockStateProperty },
+            LootConditionStruct::BlockStateProperty { properties } => {
+                let properties: Vec<_> = properties
+                    .iter()
+                    .map(|(k, v)| quote! { (#k, #v) })
+                    .collect();
+                quote! { LootCondition::BlockStateProperty { properties: &[#(#properties),*] } }
+            }
             LootConditionStruct::MatchTool => quote! { LootCondition::MatchTool },
             LootConditionStruct::TableBonus => quote! { LootCondition::TableBonus },
             LootConditionStruct::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },

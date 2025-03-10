@@ -1178,7 +1178,7 @@ impl World {
             );
 
             if drop {
-                block::drop_loot(self, &block, position, true).await;
+                block::drop_loot(self, &block, position, true, broken_block_state_id).await;
             }
 
             match cause {

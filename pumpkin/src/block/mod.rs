@@ -44,9 +44,22 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     Arc::new(manager)
 }
 
-pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experience: bool) {
+pub async fn drop_loot(
+    world: &Arc<World>,
+    block: &Block,
+    pos: &BlockPos,
+    experience: bool,
+    state_id: u16,
+) {
     if let Some(table) = &block.loot_table {
-        let loot = table.get_loot();
+        let props =
+            Block::properties(block, state_id).map_or_else(Vec::new, |props| props.to_props());
+        let loot = table.get_loot(
+            &props
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str()))
+                .collect::<Vec<_>>(),
+        );
         for stack in loot {
             drop_stack(world, pos, stack).await;
         }
@@ -98,16 +111,16 @@ pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name
 // These traits need to be implemented here so they have accses to pumpkin_data
 
 trait LootTableExt {
-    fn get_loot(&self) -> Vec<ItemStack>;
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
 }
 
 impl LootTableExt for LootTable {
-    fn get_loot(&self) -> Vec<ItemStack> {
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
         let mut items = vec![];
         if let Some(pools) = &self.pools {
             for i in 0..pools.len() {
                 let pool = &pools[i];
-                items.extend_from_slice(&pool.get_loot());
+                items.extend_from_slice(&pool.get_loot(block_props));
             }
         }
         items
@@ -115,22 +128,22 @@ impl LootTableExt for LootTable {
 }
 
 trait LootPoolExt {
-    fn get_loot(&self) -> Vec<ItemStack>;
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
 }
 
 impl LootPoolExt for LootPool {
-    fn get_loot(&self) -> Vec<ItemStack> {
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
         let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
         let mut items = vec![];
         for _ in 0..i {
             for entry_idx in 0..self.entries.len() {
                 let entry = &self.entries[entry_idx];
                 if let Some(conditions) = &entry.conditions {
-                    if !conditions.iter().all(LootConditionExt::test) {
+                    if !conditions.iter().all(|c| c.test(block_props)) {
                         continue;
                     }
                 }
-                items.extend_from_slice(&entry.content.get_items());
+                items.extend_from_slice(&entry.content.get_items(block_props));
             }
         }
         items
@@ -149,38 +162,38 @@ impl ItemEntryExt for ItemEntry {
 }
 
 trait AlternativeEntryExt {
-    fn get_items(&self) -> Vec<ItemStack>;
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
 }
 
 impl AlternativeEntryExt for AlternativeEntry {
-    fn get_items(&self) -> Vec<ItemStack> {
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
         let mut items = vec![];
         for i in 0..self.children.len() {
             let child = &self.children[i];
             if let Some(conditions) = &child.conditions {
-                if !conditions.iter().all(LootConditionExt::test) {
+                if !conditions.iter().all(|c| c.test(block_props)) {
                     continue;
                 }
             }
-            items.extend_from_slice(&child.content.get_items());
+            items.extend_from_slice(&child.content.get_items(block_props));
         }
         items
     }
 }
 
 trait LootPoolEntryTypesExt {
-    fn get_items(&self) -> Vec<ItemStack>;
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
 }
 
 impl LootPoolEntryTypesExt for LootPoolEntryTypes {
-    fn get_items(&self) -> Vec<ItemStack> {
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
         match self {
             Self::Empty => todo!(),
             Self::Item(item_entry) => item_entry.get_items(),
             Self::LootTable => todo!(),
             Self::Dynamic => todo!(),
             Self::Tag => todo!(),
-            Self::Alternatives(alternative) => alternative.get_items(),
+            Self::Alternatives(alternative) => alternative.get_items(block_props),
             Self::Sequence => todo!(),
             Self::Group => todo!(),
         }
@@ -188,15 +201,17 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
 }
 
 trait LootConditionExt {
-    fn test(&self) -> bool;
+    fn test(&self, block_props: &[(&str, &str)]) -> bool;
 }
 
-#[expect(clippy::match_like_matches_macro)]
 impl LootConditionExt for LootCondition {
     // TODO: This is trash, Make this right
-    fn test(&self) -> bool {
+    fn test(&self, block_props: &[(&str, &str)]) -> bool {
         match self {
             Self::SurvivesExplosion => true,
+            Self::BlockStateProperty { properties } => properties
+                .iter()
+                .all(|(key, value)| block_props.iter().any(|(k, v)| k == key && v == value)),
             _ => false,
         }
     }

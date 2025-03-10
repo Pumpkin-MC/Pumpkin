@@ -44,7 +44,9 @@ pub enum LootCondition {
     EntityProperties,
     KilledByPlayer,
     EntityScores,
-    BlockStateProperty,
+    BlockStateProperty {
+        properties: &'static [(&'static str, &'static str)],
+    },
     MatchTool,
     TableBonus,
     SurvivesExplosion,

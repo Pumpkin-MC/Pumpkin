@@ -82,7 +82,7 @@ impl Explosion {
             let block = world.get_block(&pos).await.unwrap();
             let pumpkin_block = server.block_registry.get_pumpkin_block(&block);
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                drop_loot(world, &block, &pos, false).await;
+                drop_loot(world, &block, &pos, false, block_state.id).await;
             }
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block.explode(&block, world, pos).await;
