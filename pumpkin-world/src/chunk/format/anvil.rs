@@ -26,7 +26,7 @@ use crate::{
     level::SyncChunk,
 };
 
-use super::{ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry, SeralizeScheduledTick};
+use super::{ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry, SerializedScheduledTick};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -548,7 +548,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .try_lock()
             .unwrap()
             .iter()
-            .map(|tick| SeralizeScheduledTick {
+            .map(|tick| SerializedScheduledTick {
                 x: tick.x,
                 y: tick.y,
                 z: tick.z,
@@ -565,7 +565,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .try_lock()
             .unwrap()
             .iter()
-            .map(|tick| SeralizeScheduledTick {
+            .map(|tick| SerializedScheduledTick {
                 x: tick.x,
                 y: tick.y,
                 z: tick.z,

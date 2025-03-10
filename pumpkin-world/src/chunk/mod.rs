@@ -2,9 +2,9 @@ use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use std::iter::repeat_with;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
 
@@ -116,7 +116,6 @@ pub struct FluidTick {
     pub priority: TickPriority,
     pub target_block: Block,
 }
-
 
 pub struct ChunkData {
     /// See description in `Subchunks`

@@ -293,7 +293,7 @@ impl World {
         {
             let mut weather = self.weather.lock().await;
             weather.tick_weather(self).await;
-        }
+        };
 
         {
             let blocks_to_tick = self.level.get_blocks_to_tick().await;

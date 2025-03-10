@@ -115,7 +115,7 @@ impl ChunkData {
             }
         }
 
-        if chunk_data.block_ticks.len() > 0 {
+        if !chunk_data.block_ticks.is_empty() {
             println!("block_tick_amount {}", chunk_data.block_ticks.len());
         }
 
@@ -187,7 +187,7 @@ struct ChunkSectionBlockStates {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct SeralizeScheduledTick {
+struct SerializedScheduledTick {
     #[serde(rename = "x")]
     x: i32,
     #[serde(rename = "y")]
@@ -217,7 +217,7 @@ struct ChunkNbt {
     sections: Vec<ChunkSection>,
     heightmaps: ChunkHeightmaps,
     #[serde(rename = "block_ticks")]
-    block_ticks: Vec<SeralizeScheduledTick>,
+    block_ticks: Vec<SerializedScheduledTick>,
     #[serde(rename = "fluid_ticks")]
-    fluid_ticks: Vec<SeralizeScheduledTick>,
+    fluid_ticks: Vec<SerializedScheduledTick>,
 }
