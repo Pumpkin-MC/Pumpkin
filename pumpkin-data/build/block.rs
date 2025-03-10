@@ -318,6 +318,7 @@ pub struct BlockState {
     pub collision_shapes: Vec<u16>,
     pub opacity: Option<u32>,
     pub block_entity_type: Option<u32>,
+    pub is_liquid: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -334,6 +335,7 @@ impl ToTokens for BlockState {
         let burnable = LitBool::new(self.burnable, Span::call_site());
         let tool_required = LitBool::new(self.tool_required, Span::call_site());
         let hardness = self.hardness;
+        let is_liquid = LitBool::new(self.is_liquid, Span::call_site());
         let sided_transparency = LitBool::new(self.sided_transparency, Span::call_site());
         let replaceable = LitBool::new(self.replaceable, Span::call_site());
         let opacity = match self.opacity {
@@ -369,6 +371,7 @@ impl ToTokens for BlockState {
                 collision_shapes: &[#(#collision_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
+                is_liquid: #is_liquid,
             }
         });
     }
@@ -853,6 +856,7 @@ pub(crate) fn build() -> TokenStream {
                     && s.sided_transparency == state.sided_transparency
                     && s.replaceable == state.replaceable
                     && s.collision_shapes == state.collision_shapes
+                    && s.is_liquid == state.is_liquid
             });
 
             if !already_exists {
@@ -1060,6 +1064,7 @@ pub(crate) fn build() -> TokenStream {
             pub collision_shapes: &'static [u16],
             pub opacity: Option<u32>,
             pub block_entity_type: Option<u32>,
+            pub is_liquid: bool,
         }
 
         #[derive(Clone, Debug)]
@@ -1075,6 +1080,7 @@ pub(crate) fn build() -> TokenStream {
             pub collision_shapes: &'static [u16],
             pub opacity: Option<u32>,
             pub block_entity_type: Option<u32>,
+            pub is_liquid: bool,
         }
 
         #[derive(Clone, Debug)]
@@ -1130,6 +1136,7 @@ pub(crate) fn build() -> TokenStream {
             pub collision_shapes: &'static [u16],
             pub opacity: Option<u32>,
             pub block_entity_type: Option<u32>,
+            pub is_liquid: bool,
         }
 
 
@@ -1249,6 +1256,7 @@ pub(crate) fn build() -> TokenStream {
                     collision_shapes: partial_state.collision_shapes,
                     opacity: partial_state.opacity,
                     block_entity_type: partial_state.block_entity_type,
+                    is_liquid: partial_state.is_liquid,
                 }
             }
         }
