@@ -1,3 +1,4 @@
+use blocks::buttons::register_button_blocks;
 use blocks::doors::register_door_blocks;
 use blocks::fence_gates::register_fence_gate_blocks;
 use blocks::fences::register_fence_blocks;
@@ -40,6 +41,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     register_fence_blocks(&mut manager);
     register_fence_gate_blocks(&mut manager);
     register_log_blocks(&mut manager);
+    register_button_blocks(&mut manager);
 
     Arc::new(manager)
 }

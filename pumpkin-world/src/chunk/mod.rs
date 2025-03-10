@@ -1,6 +1,8 @@
+use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use std::iter::repeat_with;
 use thiserror::Error;
 
@@ -54,13 +56,76 @@ pub enum CompressionError {
     ZstdError(std::io::Error),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i8)]
+pub enum TickPriority {
+    ExtremelyHigh = -3,
+    VeryHigh = -2,
+    High = -1,
+    Normal = 0,
+    Low = 1,
+    VeryLow = 2,
+    ExtremelyLow = 3,
+}
+
+impl TickPriority {
+    pub fn values() -> [TickPriority; 7] {
+        [
+            TickPriority::ExtremelyHigh,
+            TickPriority::VeryHigh,
+            TickPriority::High,
+            TickPriority::Normal,
+            TickPriority::Low,
+            TickPriority::VeryLow,
+            TickPriority::ExtremelyLow,
+        ]
+    }
+}
+
+impl From<i8> for TickPriority {
+    fn from(value: i8) -> Self {
+        match value {
+            -3 => TickPriority::ExtremelyHigh,
+            -2 => TickPriority::VeryHigh,
+            -1 => TickPriority::High,
+            0 => TickPriority::Normal,
+            1 => TickPriority::Low,
+            2 => TickPriority::VeryLow,
+            3 => TickPriority::ExtremelyLow,
+            _ => panic!("Invalid tick priority: {}", value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScheduledTick {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub delay: u16,
+    pub priority: TickPriority,
+    pub target_block_id: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct FluidTick {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub delay: u16,
+    pub priority: TickPriority,
+    pub target_block: Block,
+}
+
+
 pub struct ChunkData {
     /// See description in `Subchunks`
     pub subchunks: Subchunks,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
+    pub block_ticks: Mutex<Vec<ScheduledTick>>,
+    pub fluid_ticks: Mutex<Vec<FluidTick>>,
 }
 
 /// # Subchunks
@@ -264,8 +329,24 @@ impl ChunkData {
         // figure out how to find out if block is motion blocking
         todo!()
     }
-}
 
+    pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
+        let mut blocks_to_tick = Vec::new();
+        let mut block_ticks = self.block_ticks.lock().await;
+        for priority in TickPriority::values() {
+            for tick in block_ticks.iter_mut() {
+                if tick.priority == priority {
+                    tick.delay -= 1;
+                    if tick.delay == 0 {
+                        blocks_to_tick.push(tick.clone());
+                    }
+                }
+            }
+        }
+        block_ticks.retain(|tick| tick.delay > 0);
+        blocks_to_tick
+    }
+}
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
     #[error("Failed reading chunk status {0}")]

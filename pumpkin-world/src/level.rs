@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::{
     chunk::{
-        ChunkData, ChunkParsingError, ChunkReadingError,
+        ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
@@ -440,5 +440,17 @@ impl Level {
             .fetch_chunks(&self.level_folder, &remaining_chunks, load_bridge_send)
             .await;
         let _ = set.join_all().await;
+    }
+
+    pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
+        let mut blocks_to_tick = Vec::new();
+        for chunk in self.loaded_chunks.iter() {
+            let chunk_data = chunk.value().read().await;
+            let blocks = chunk_data.get_blocks_to_tick().await;
+            for block in blocks {
+                blocks_to_tick.push(block);
+            }
+        }
+        blocks_to_tick
     }
 }

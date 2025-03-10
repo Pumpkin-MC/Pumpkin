@@ -23,6 +23,7 @@ use border::Worldborder;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
+    block::Block,
     entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -48,7 +49,6 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::level::Level;
 use pumpkin_world::level::SyncChunk;
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
@@ -56,6 +56,10 @@ use pumpkin_world::{
         get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
     },
     coordinates::ChunkRelativeBlockCoordinates,
+};
+use pumpkin_world::{
+    chunk::{ScheduledTick, TickPriority},
+    level::Level,
 };
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
@@ -289,7 +293,27 @@ impl World {
         {
             let mut weather = self.weather.lock().await;
             weather.tick_weather(self).await;
-        };
+        }
+
+        {
+            let blocks_to_tick = self.level.get_blocks_to_tick().await;
+            for scheduled_tick in blocks_to_tick {
+                let block_pos = BlockPos(Vector3::new(
+                    scheduled_tick.x,
+                    scheduled_tick.y,
+                    scheduled_tick.z,
+                ));
+                let block = self.get_block(&block_pos).await.unwrap();
+                if scheduled_tick.target_block_id != block.id {
+                    continue;
+                }
+                if let Some(pumpkin_block) = server.block_registry.get_pumpkin_block(&block) {
+                    pumpkin_block
+                        .on_scheduled_tick(server, self, &block, &block_pos)
+                        .await;
+                }
+            }
+        }
 
         // player ticks
         for player in self.players.read().await.values() {
@@ -1071,6 +1095,33 @@ impl World {
         replaced_block_state_id
     }
 
+    pub async fn schedule_block_tick(
+        &self,
+        block: &Block,
+        block_pos: BlockPos,
+        delay: u16,
+        priority: TickPriority,
+    ) {
+        let (chunk_coordinate, _relative_coordinates) =
+            block_pos.chunk_and_chunk_relative_position();
+
+        let chunk = self.receive_chunk(chunk_coordinate).await.0;
+
+        chunk
+            .write()
+            .await
+            .block_ticks
+            .lock()
+            .await
+            .push(ScheduledTick {
+                x: block_pos.0.x,
+                y: block_pos.0.y,
+                z: block_pos.0.z,
+                delay,
+                priority,
+                target_block_id: block.id,
+            });
+    }
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Spawns a tokio task to stream chunks.
     /// Important: must be called from an async function (or changed to accept a tokio runtime

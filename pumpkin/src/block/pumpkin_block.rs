@@ -114,4 +114,13 @@ pub trait PumpkinBlock: Send + Sync {
         _source_block_pos: &BlockPos,
     ) {
     }
+
+    async fn on_scheduled_tick(
+        &self,
+        _server: &Server,
+        _world: &World,
+        _block: &Block,
+        _block_pos: &BlockPos,
+    ) {
+    }
 }
