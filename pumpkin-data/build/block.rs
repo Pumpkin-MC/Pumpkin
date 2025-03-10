@@ -1,6 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::{loot_table::LootTable, math::int_provider::IntProvider};
+use pumpkin_util::math::int_provider::IntProvider;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -402,6 +402,282 @@ impl ToTokens for BlockStateRef {
     }
 }
 
+/// These are required to be defined twice, cause serde can't deseraliz into static context for obvious reasons
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootTableStruct {
+    r#type: LootTableTypeStruct,
+    random_sequence: Option<String>,
+    pools: Option<Vec<LootPoolStruct>>,
+}
+
+impl ToTokens for LootTableStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let loot_table_type = self.r#type.to_token_stream();
+        let random_sequence = match &self.random_sequence {
+            Some(seq) => quote! { Some(#seq) },
+            None => quote! { None },
+        };
+        let pools = match &self.pools {
+            Some(pools) => {
+                let pool_tokens: Vec<_> = pools.iter().map(|pool| pool.to_token_stream()).collect();
+                quote! { Some(&[#(#pool_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+
+        tokens.extend(quote! {
+            LootTable {
+                r#type: #loot_table_type,
+                random_sequence: #random_sequence,
+                pools: #pools,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootPoolStruct {
+    entries: Vec<LootPoolEntryStruct>,
+    rolls: f32, // TODO
+    bonus_rolls: f32,
+}
+
+impl ToTokens for LootPoolStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let entries_tokens: Vec<_> = self
+            .entries
+            .iter()
+            .map(|entry| entry.to_token_stream())
+            .collect();
+        let rolls = &self.rolls;
+        let bonus_rolls = &self.bonus_rolls;
+
+        tokens.extend(quote! {
+            LootPool {
+                entries: &[#(#entries_tokens),*],
+                rolls: #rolls,
+                bonus_rolls: #bonus_rolls,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ItemEntryStruct {
+    name: String,
+}
+
+impl ToTokens for ItemEntryStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = LitStr::new(&self.name, Span::call_site());
+
+        tokens.extend(quote! {
+            ItemEntry {
+                name: #name,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct AlternativeEntryStruct {
+    children: Vec<LootPoolEntryStruct>,
+}
+
+impl ToTokens for AlternativeEntryStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let children = self.children.iter().map(|entry| entry.to_token_stream());
+
+        tokens.extend(quote! {
+            AlternativeEntry {
+                children: &[#(#children),*],
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum LootPoolEntryTypesStruct {
+    #[serde(rename = "minecraft:empty")]
+    Empty,
+    #[serde(rename = "minecraft:item")]
+    Item(ItemEntryStruct),
+    #[serde(rename = "minecraft:loot_table")]
+    LootTable,
+    #[serde(rename = "minecraft:dynamic")]
+    Dynamic,
+    #[serde(rename = "minecraft:tag")]
+    Tag,
+    #[serde(rename = "minecraft:alternatives")]
+    Alternatives(AlternativeEntryStruct),
+    #[serde(rename = "minecraft:sequence")]
+    Sequence,
+    #[serde(rename = "minecraft:group")]
+    Group,
+}
+
+impl ToTokens for LootPoolEntryTypesStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            LootPoolEntryTypesStruct::Empty => {
+                tokens.extend(quote! { LootPoolEntryTypes::Empty });
+            }
+            LootPoolEntryTypesStruct::Item(item) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Item(#item) });
+            }
+            LootPoolEntryTypesStruct::LootTable => {
+                tokens.extend(quote! { LootPoolEntryTypes::LootTable });
+            }
+            LootPoolEntryTypesStruct::Dynamic => {
+                tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
+            }
+            LootPoolEntryTypesStruct::Tag => {
+                tokens.extend(quote! { LootPoolEntryTypes::Tag });
+            }
+            LootPoolEntryTypesStruct::Alternatives(alt) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Alternatives(#alt) });
+            }
+            LootPoolEntryTypesStruct::Sequence => {
+                tokens.extend(quote! { LootPoolEntryTypes::Sequence });
+            }
+            LootPoolEntryTypesStruct::Group => {
+                tokens.extend(quote! { LootPoolEntryTypes::Group });
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "condition")]
+pub enum LootConditionStruct {
+    #[serde(rename = "minecraft:inverted")]
+    Inverted,
+    #[serde(rename = "minecraft:any_of")]
+    AnyOf,
+    #[serde(rename = "minecraft:all_of")]
+    AllOf,
+    #[serde(rename = "minecraft:random_chance")]
+    RandomChance,
+    #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
+    RandomChanceWithEnchantedBonus,
+    #[serde(rename = "minecraft:entity_properties")]
+    EntityProperties,
+    #[serde(rename = "minecraft:killed_by_player")]
+    KilledByPlayer,
+    #[serde(rename = "minecraft:entity_scores")]
+    EntityScores,
+    #[serde(rename = "minecraft:block_state_property")]
+    BlockStateProperty,
+    #[serde(rename = "minecraft:match_tool")]
+    MatchTool,
+    #[serde(rename = "minecraft:table_bonus")]
+    TableBonus,
+    #[serde(rename = "minecraft:survives_explosion")]
+    SurvivesExplosion,
+    #[serde(rename = "minecraft:damage_source_properties")]
+    DamageSourceProperties,
+    #[serde(rename = "minecraft:location_check")]
+    LocationCheck,
+    #[serde(rename = "minecraft:weather_check")]
+    WeatherCheck,
+    #[serde(rename = "minecraft:reference")]
+    Reference,
+    #[serde(rename = "minecraft:time_check")]
+    TimeCheck,
+    #[serde(rename = "minecraft:value_check")]
+    ValueCheck,
+    #[serde(rename = "minecraft:enchantment_active_check")]
+    EnchantmentActiveCheck,
+}
+
+impl ToTokens for LootConditionStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            LootConditionStruct::Inverted => quote! { LootCondition::Inverted },
+            LootConditionStruct::AnyOf => quote! { LootCondition::AnyOf },
+            LootConditionStruct::AllOf => quote! { LootCondition::AllOf },
+            LootConditionStruct::RandomChance => quote! { LootCondition::RandomChance },
+            LootConditionStruct::RandomChanceWithEnchantedBonus => {
+                quote! { LootCondition::RandomChanceWithEnchantedBonus }
+            }
+            LootConditionStruct::EntityProperties => quote! { LootCondition::EntityProperties },
+            LootConditionStruct::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
+            LootConditionStruct::EntityScores => quote! { LootCondition::EntityScores },
+            LootConditionStruct::BlockStateProperty => quote! { LootCondition::BlockStateProperty },
+            LootConditionStruct::MatchTool => quote! { LootCondition::MatchTool },
+            LootConditionStruct::TableBonus => quote! { LootCondition::TableBonus },
+            LootConditionStruct::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
+            LootConditionStruct::DamageSourceProperties => {
+                quote! { LootCondition::DamageSourceProperties }
+            }
+            LootConditionStruct::LocationCheck => quote! { LootCondition::LocationCheck },
+            LootConditionStruct::WeatherCheck => quote! { LootCondition::WeatherCheck },
+            LootConditionStruct::Reference => quote! { LootCondition::Reference },
+            LootConditionStruct::TimeCheck => quote! { LootCondition::TimeCheck },
+            LootConditionStruct::ValueCheck => quote! { LootCondition::ValueCheck },
+            LootConditionStruct::EnchantmentActiveCheck => {
+                quote! { LootCondition::EnchantmentActiveCheck }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootPoolEntryStruct {
+    #[serde(flatten)]
+    content: LootPoolEntryTypesStruct,
+    conditions: Option<Vec<LootConditionStruct>>,
+}
+
+impl ToTokens for LootPoolEntryStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let content = &self.content;
+        let conditions_tokens = match &self.conditions {
+            Some(conds) => {
+                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+
+        tokens.extend(quote! {
+            LootPoolEntry {
+                content: #content,
+                conditions: #conditions_tokens,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename = "snake_case")]
+pub enum LootTableTypeStruct {
+    #[serde(rename = "minecraft:empty")]
+    /// Nothing will be dropped
+    Empty,
+    #[serde(rename = "minecraft:block")]
+    /// A Block will be dropped
+    Block,
+    #[serde(rename = "minecraft:chest")]
+    /// A Item will be dropped
+    Chest,
+}
+
+impl ToTokens for LootTableTypeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            LootTableTypeStruct::Empty => quote! { LootTableType::Empty },
+            LootTableTypeStruct::Block => quote! { LootTableType::Block },
+            LootTableTypeStruct::Chest => quote! { LootTableType::Chest },
+        };
+
+        tokens.extend(name);
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct Block {
     pub id: u16,
@@ -410,7 +686,7 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
-    pub loot_table: Option<LootTable<'static>>,
+    pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
@@ -428,7 +704,7 @@ pub struct OptimizedBlock {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
-    pub loot_table: Option<LootTable<'static>>,
+    pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
@@ -778,7 +1054,6 @@ pub(crate) fn build() -> TokenStream {
         use crate::tag::{Tagable, RegistryKey};
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
-        use std::borrow::Cow;
 
 
         #[derive(Clone, Debug)]
@@ -834,7 +1109,7 @@ pub(crate) fn build() -> TokenStream {
             pub item_id: u16,
             pub default_state_id: u16,
             pub states: &'static [BlockStateRef],
-            pub loot_table: Option<LootTable<'static>>,
+            pub loot_table: Option<LootTable>,
             pub experience: Option<Experience>,
         }
 

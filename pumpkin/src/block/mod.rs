@@ -6,6 +6,9 @@ use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::T
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_util::loot_table::{
+    AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -44,13 +47,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experience: bool) {
     if let Some(table) = &block.loot_table {
         let loot = table.get_loot();
-        for (item, count) in loot {
-            drop_stack(
-                world,
-                pos,
-                ItemStack::new(count as u8, Item::from_registry_key(item.as_str()).unwrap()),
-            )
-            .await;
+        for stack in loot {
+            drop_stack(world, pos, stack).await;
         }
     }
 
@@ -95,4 +93,111 @@ pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name
     };
 
     player.get_mining_speed(block_name).await / hardness / i as f32
+}
+
+// These traits need to be implemented here so they have accses to pumpkin_data
+
+trait LootTableExt {
+    fn get_loot(&self) -> Vec<ItemStack>;
+}
+
+impl LootTableExt for LootTable {
+    fn get_loot(&self) -> Vec<ItemStack> {
+        let mut items = vec![];
+        if let Some(pools) = &self.pools {
+            for i in 0..pools.len() {
+                let pool = &pools[i];
+                items.extend_from_slice(&pool.get_loot());
+            }
+        }
+        items
+    }
+}
+
+trait LootPoolExt {
+    fn get_loot(&self) -> Vec<ItemStack>;
+}
+
+impl LootPoolExt for LootPool {
+    fn get_loot(&self) -> Vec<ItemStack> {
+        let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
+        let mut items = vec![];
+        for _ in 0..i {
+            for entry_idx in 0..self.entries.len() {
+                let entry = &self.entries[entry_idx];
+                if let Some(conditions) = &entry.conditions {
+                    if !conditions.iter().all(LootConditionExt::test) {
+                        continue;
+                    }
+                }
+                items.extend_from_slice(&entry.content.get_items());
+            }
+        }
+        items
+    }
+}
+
+trait ItemEntryExt {
+    fn get_items(&self) -> Vec<ItemStack>;
+}
+
+impl ItemEntryExt for ItemEntry {
+    fn get_items(&self) -> Vec<ItemStack> {
+        let item = &self.name.replace("minecraft:", "");
+        vec![ItemStack::new(1, Item::from_registry_key(item).unwrap())]
+    }
+}
+
+trait AlternativeEntryExt {
+    fn get_items(&self) -> Vec<ItemStack>;
+}
+
+impl AlternativeEntryExt for AlternativeEntry {
+    fn get_items(&self) -> Vec<ItemStack> {
+        let mut items = vec![];
+        for i in 0..self.children.len() {
+            let child = &self.children[i];
+            if let Some(conditions) = &child.conditions {
+                if !conditions.iter().all(LootConditionExt::test) {
+                    continue;
+                }
+            }
+            items.extend_from_slice(&child.content.get_items());
+        }
+        items
+    }
+}
+
+trait LootPoolEntryTypesExt {
+    fn get_items(&self) -> Vec<ItemStack>;
+}
+
+impl LootPoolEntryTypesExt for LootPoolEntryTypes {
+    fn get_items(&self) -> Vec<ItemStack> {
+        match self {
+            Self::Empty => todo!(),
+            Self::Item(item_entry) => item_entry.get_items(),
+            Self::LootTable => todo!(),
+            Self::Dynamic => todo!(),
+            Self::Tag => todo!(),
+            Self::Alternatives(alternative) => alternative.get_items(),
+            Self::Sequence => todo!(),
+            Self::Group => todo!(),
+        }
+    }
+}
+
+trait LootConditionExt {
+    fn test(&self) -> bool;
+}
+
+#[expect(clippy::match_like_matches_macro)]
+impl LootConditionExt for LootCondition {
+    // TODO: This is trash, Make this right
+    fn test(&self) -> bool {
+        match self {
+            Self::SurvivesExplosion => true,
+            _ => false,
+        }
+    }
 }
