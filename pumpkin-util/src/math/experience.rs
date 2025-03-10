@@ -1,3 +1,24 @@
+use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
+use serde::Deserialize;
+
+use super::int_provider::IntProvider;
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Experience {
+    pub experience: IntProvider,
+}
+
+impl ToTokens for Experience {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let experience = self.experience.to_token_stream();
+
+        tokens.extend(quote! {
+            Experience { experience: #experience }
+        });
+    }
+}
+
 /// Get the number of points in a level
 pub fn points_in_level(level: i32) -> i32 {
     match level {

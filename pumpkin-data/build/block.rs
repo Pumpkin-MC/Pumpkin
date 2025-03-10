@@ -1,6 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::math::int_provider::IntProvider;
+use pumpkin_util::math::experience::Experience;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -41,20 +41,6 @@ impl PropertyCollectionData {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct Experience {
-    pub experience: IntProvider,
-}
-
-impl ToTokens for Experience {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let experience = self.experience.to_token_stream();
-
-        tokens.extend(quote! {
-            Experience { experience: #experience }
-        });
-    }
-}
 #[derive(Deserialize, Clone, Debug)]
 pub struct PropertyStruct {
     pub name: String,
@@ -1060,12 +1046,7 @@ pub(crate) fn build() -> TokenStream {
         use crate::tag::{Tagable, RegistryKey};
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
-
-
-        #[derive(Clone, Debug)]
-        pub struct Experience {
-            pub experience: IntProvider,
-        }
+        use pumpkin_util::math::experience::Experience;
 
         #[derive(Clone, Debug)]
         pub struct PartialBlockState {
