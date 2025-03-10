@@ -18,7 +18,6 @@ use pumpkin_data::item::Item;
 
 type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
 
-/// This returns an index and not a state id making it so all fences can use the same state calculation function
 pub async fn toggle_fence_gate(world: &World, block_pos: &BlockPos) -> u16 {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 

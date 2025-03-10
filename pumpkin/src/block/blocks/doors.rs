@@ -36,9 +36,6 @@ async fn toggle_door(world: &World, block_pos: &BlockPos) {
     let other_pos = block_pos.offset(other_half.to_offset());
 
     let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await.unwrap();
-
-    // Create a new scope to ensure other_door_props doesn't live across await points
-
     let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, &other_block);
     other_door_props.open = door_props.open;
 
