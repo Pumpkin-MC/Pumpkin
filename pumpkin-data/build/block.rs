@@ -1,6 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::math::int_provider::IntProvider;
+use pumpkin_util::{loot_table::LootTable, math::int_provider::IntProvider};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -403,281 +403,6 @@ impl ToTokens for BlockStateRef {
 }
 
 #[derive(Deserialize, Clone, Debug)]
-pub struct LootTable {
-    r#type: LootTableType,
-    random_sequence: Option<String>,
-    pools: Option<Vec<LootPool>>,
-}
-
-impl ToTokens for LootTable {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let loot_table_type = self.r#type.to_token_stream();
-        let random_sequence = match &self.random_sequence {
-            Some(seq) => quote! { Some(#seq) },
-            None => quote! { None },
-        };
-        let pools = match &self.pools {
-            Some(pools) => {
-                let pool_tokens: Vec<_> = pools.iter().map(|pool| pool.to_token_stream()).collect();
-                quote! { Some(&[#(#pool_tokens),*]) }
-            }
-            None => quote! { None },
-        };
-
-        tokens.extend(quote! {
-            LootTable {
-                r#type: #loot_table_type,
-                random_sequence: #random_sequence,
-                pools: #pools,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootPool {
-    entries: Vec<LootPoolEntry>,
-    rolls: f32, // TODO
-    bonus_rolls: f32,
-}
-
-impl ToTokens for LootPool {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let entries_tokens: Vec<_> = self
-            .entries
-            .iter()
-            .map(|entry| entry.to_token_stream())
-            .collect();
-        let rolls = &self.rolls;
-        let bonus_rolls = &self.bonus_rolls;
-
-        tokens.extend(quote! {
-            LootPool {
-                entries: &[#(#entries_tokens),*],
-                rolls: #rolls,
-                bonus_rolls: #bonus_rolls,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct ItemEntry {
-    name: String,
-}
-
-impl ToTokens for ItemEntry {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = LitStr::new(&self.name, Span::call_site());
-
-        tokens.extend(quote! {
-            ItemEntry {
-                name: #name,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct AlternativeEntry {
-    children: Vec<LootPoolEntry>,
-}
-
-impl ToTokens for AlternativeEntry {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let children = self.children.iter().map(|entry| entry.to_token_stream());
-
-        tokens.extend(quote! {
-            AlternativeEntry {
-                children: &[#(#children),*],
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "type")]
-pub enum LootPoolEntryTypes {
-    #[serde(rename = "minecraft:empty")]
-    Empty,
-    #[serde(rename = "minecraft:item")]
-    Item(ItemEntry),
-    #[serde(rename = "minecraft:loot_table")]
-    LootTable,
-    #[serde(rename = "minecraft:dynamic")]
-    Dynamic,
-    #[serde(rename = "minecraft:tag")]
-    Tag,
-    #[serde(rename = "minecraft:alternatives")]
-    Alternatives(AlternativeEntry),
-    #[serde(rename = "minecraft:sequence")]
-    Sequence,
-    #[serde(rename = "minecraft:group")]
-    Group,
-}
-
-impl ToTokens for LootPoolEntryTypes {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            LootPoolEntryTypes::Empty => {
-                tokens.extend(quote! { LootPoolEntryTypes::Empty });
-            }
-            LootPoolEntryTypes::Item(item) => {
-                tokens.extend(quote! { LootPoolEntryTypes::Item(#item) });
-            }
-            LootPoolEntryTypes::LootTable => {
-                tokens.extend(quote! { LootPoolEntryTypes::LootTable });
-            }
-            LootPoolEntryTypes::Dynamic => {
-                tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
-            }
-            LootPoolEntryTypes::Tag => {
-                tokens.extend(quote! { LootPoolEntryTypes::Tag });
-            }
-            LootPoolEntryTypes::Alternatives(alt) => {
-                tokens.extend(quote! { LootPoolEntryTypes::Alternatives(#alt) });
-            }
-            LootPoolEntryTypes::Sequence => {
-                tokens.extend(quote! { LootPoolEntryTypes::Sequence });
-            }
-            LootPoolEntryTypes::Group => {
-                tokens.extend(quote! { LootPoolEntryTypes::Group });
-            }
-        }
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "condition")]
-pub enum LootCondition {
-    #[serde(rename = "minecraft:inverted")]
-    Inverted,
-    #[serde(rename = "minecraft:any_of")]
-    AnyOf,
-    #[serde(rename = "minecraft:all_of")]
-    AllOf,
-    #[serde(rename = "minecraft:random_chance")]
-    RandomChance,
-    #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
-    RandomChanceWithEnchantedBonus,
-    #[serde(rename = "minecraft:entity_properties")]
-    EntityProperties,
-    #[serde(rename = "minecraft:killed_by_player")]
-    KilledByPlayer,
-    #[serde(rename = "minecraft:entity_scores")]
-    EntityScores,
-    #[serde(rename = "minecraft:block_state_property")]
-    BlockStateProperty,
-    #[serde(rename = "minecraft:match_tool")]
-    MatchTool,
-    #[serde(rename = "minecraft:table_bonus")]
-    TableBonus,
-    #[serde(rename = "minecraft:survives_explosion")]
-    SurvivesExplosion,
-    #[serde(rename = "minecraft:damage_source_properties")]
-    DamageSourceProperties,
-    #[serde(rename = "minecraft:location_check")]
-    LocationCheck,
-    #[serde(rename = "minecraft:weather_check")]
-    WeatherCheck,
-    #[serde(rename = "minecraft:reference")]
-    Reference,
-    #[serde(rename = "minecraft:time_check")]
-    TimeCheck,
-    #[serde(rename = "minecraft:value_check")]
-    ValueCheck,
-    #[serde(rename = "minecraft:enchantment_active_check")]
-    EnchantmentActiveCheck,
-}
-
-impl ToTokens for LootCondition {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            LootCondition::Inverted => quote! { LootCondition::Inverted },
-            LootCondition::AnyOf => quote! { LootCondition::AnyOf },
-            LootCondition::AllOf => quote! { LootCondition::AllOf },
-            LootCondition::RandomChance => quote! { LootCondition::RandomChance },
-            LootCondition::RandomChanceWithEnchantedBonus => {
-                quote! { LootCondition::RandomChanceWithEnchantedBonus }
-            }
-            LootCondition::EntityProperties => quote! { LootCondition::EntityProperties },
-            LootCondition::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
-            LootCondition::EntityScores => quote! { LootCondition::EntityScores },
-            LootCondition::BlockStateProperty => quote! { LootCondition::BlockStateProperty },
-            LootCondition::MatchTool => quote! { LootCondition::MatchTool },
-            LootCondition::TableBonus => quote! { LootCondition::TableBonus },
-            LootCondition::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
-            LootCondition::DamageSourceProperties => {
-                quote! { LootCondition::DamageSourceProperties }
-            }
-            LootCondition::LocationCheck => quote! { LootCondition::LocationCheck },
-            LootCondition::WeatherCheck => quote! { LootCondition::WeatherCheck },
-            LootCondition::Reference => quote! { LootCondition::Reference },
-            LootCondition::TimeCheck => quote! { LootCondition::TimeCheck },
-            LootCondition::ValueCheck => quote! { LootCondition::ValueCheck },
-            LootCondition::EnchantmentActiveCheck => {
-                quote! { LootCondition::EnchantmentActiveCheck }
-            }
-        };
-
-        tokens.extend(name);
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootPoolEntry {
-    #[serde(flatten)]
-    content: LootPoolEntryTypes,
-    conditions: Option<Vec<LootCondition>>,
-}
-
-impl ToTokens for LootPoolEntry {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let content = &self.content;
-        let conditions_tokens = match &self.conditions {
-            Some(conds) => {
-                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
-        };
-
-        tokens.extend(quote! {
-            LootPoolEntry {
-                content: #content,
-                conditions: #conditions_tokens,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(rename = "snake_case")]
-pub enum LootTableType {
-    #[serde(rename = "minecraft:empty")]
-    /// Nothing will be dropped
-    Empty,
-    #[serde(rename = "minecraft:block")]
-    /// A Block will be dropped
-    Block,
-    #[serde(rename = "minecraft:chest")]
-    /// A Item will be dropped
-    Chest,
-}
-
-impl ToTokens for LootTableType {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            LootTableType::Empty => quote! { LootTableType::Empty },
-            LootTableType::Block => quote! { LootTableType::Block },
-            LootTableType::Chest => quote! { LootTableType::Chest },
-        };
-
-        tokens.extend(name);
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
 pub struct Block {
     pub id: u16,
     pub name: String,
@@ -685,7 +410,7 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
-    pub loot_table: Option<LootTable>,
+    pub loot_table: Option<LootTable<'static>>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
@@ -703,7 +428,7 @@ pub struct OptimizedBlock {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
-    pub loot_table: Option<LootTable>,
+    pub loot_table: Option<LootTable<'static>>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
@@ -1050,9 +775,10 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::{tag::{Tagable, RegistryKey}, item::Item};
+        use crate::tag::{Tagable, RegistryKey};
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
-
+        use pumpkin_util::loot_table::*;
+        use std::borrow::Cow;
 
 
         #[derive(Clone, Debug)]
@@ -1095,170 +821,6 @@ pub(crate) fn build() -> TokenStream {
             pub state_idx: u16,
         }
 
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub struct LootTable {
-            r#type: LootTableType,
-            random_sequence: Option<&'static str>,
-            pools: Option<&'static [LootPool]>,
-        }
-
-        impl LootTable {
-            pub fn get_loot(&self) -> Vec<(Item, u16)> {
-                let mut items = vec![];
-                if let Some(pools) = &self.pools {
-                    for i in 0..pools.len() {
-                        let pool = &pools[i];
-                        items.extend_from_slice(&pool.get_loot());
-                    }
-                }
-                items
-            }
-        }
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub struct LootPool {
-            entries: &'static [LootPoolEntry],
-            rolls: f32, // TODO
-            bonus_rolls: f32,
-        }
-
-        impl LootPool {
-            pub fn get_loot(&self) -> Vec<(Item, u16)> {
-                let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
-                let mut items = vec![];
-                for _ in 0..i {
-                    for entry_idx in 0..self.entries.len() {
-                        let entry = &self.entries[entry_idx];
-                        if let Some(conditions) = &entry.conditions {
-                            if !conditions.iter().all(|condition| condition.test()) {
-                                continue;
-                            }
-                        }
-                        items.extend_from_slice(&entry.content.get_items());
-                    }
-                }
-                items
-            }
-        }
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub struct ItemEntry {
-            name: &'static str,
-        }
-
-        impl ItemEntry {
-            pub fn get_items(&self) -> Vec<(Item, u16)> {
-                let item = Item::from_registry_key(&self.name.replace("minecraft:", "")).unwrap();
-                vec![(item, 1)]
-            }
-        }
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub struct AlternativeEntry {
-            children: &'static [LootPoolEntry],
-        }
-        impl AlternativeEntry {
-            pub fn get_items(&self) -> Vec<(Item, u16)> {
-                let mut items = vec![];
-                for i in 0..self.children.len() {
-                    let child = &self.children[i];
-                    if let Some(conditions) = &child.conditions {
-                        if !conditions.iter().all(|condition| condition.test()) {
-                            continue;
-                        }
-                    }
-                    items.extend_from_slice(&child.content.get_items());
-                }
-                items
-            }
-        }
-
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub enum LootPoolEntryTypes {
-            Empty,
-            Item(ItemEntry),
-            LootTable,
-            Dynamic,
-            Tag,
-            Alternatives(AlternativeEntry),
-            Sequence,
-            Group,
-        }
-
-        impl LootPoolEntryTypes {
-            pub fn get_items(&self) -> Vec<(Item, u16)> {
-                match self {
-                    LootPoolEntryTypes::Empty => todo!(),
-                    LootPoolEntryTypes::Item(item_entry) => item_entry.get_items(),
-                    LootPoolEntryTypes::LootTable => todo!(),
-                    LootPoolEntryTypes::Dynamic => todo!(),
-                    LootPoolEntryTypes::Tag => todo!(),
-                    LootPoolEntryTypes::Alternatives(alternative) => alternative.get_items(),
-                    LootPoolEntryTypes::Sequence => todo!(),
-                    LootPoolEntryTypes::Group => todo!(),
-                }
-            }
-        }
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub enum LootCondition {
-            Inverted,
-            AnyOf,
-            AllOf,
-            RandomChance,
-            RandomChanceWithEnchantedBonus,
-            EntityProperties,
-            KilledByPlayer,
-            EntityScores,
-            BlockStateProperty,
-            MatchTool,
-            TableBonus,
-            SurvivesExplosion,
-            DamageSourceProperties,
-            LocationCheck,
-            WeatherCheck,
-            Reference,
-            TimeCheck,
-            ValueCheck,
-            EnchantmentActiveCheck,
-        }
-
-        #[expect(clippy::match_like_matches_macro)]
-        impl LootCondition {
-            // TODO: This is trash, Make this right
-            pub fn test(&self) -> bool {
-                match self {
-                    LootCondition::SurvivesExplosion => true,
-                    _ => false,
-                }
-            }
-        }
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub struct LootPoolEntry {
-            content: LootPoolEntryTypes,
-            conditions: Option<&'static [LootCondition]>,
-        }
-
-        #[allow(dead_code)]
-        #[derive(Clone, Debug)]
-        pub enum LootTableType {
-            /// Nothing will be dropped
-            Empty,
-            /// A Block will be dropped
-            Block,
-            /// A Item will be dropped
-            Chest,
-        }
-
         #[derive(Clone, Debug)]
         pub struct Block {
             pub id: u16,
@@ -1272,7 +834,7 @@ pub(crate) fn build() -> TokenStream {
             pub item_id: u16,
             pub default_state_id: u16,
             pub states: &'static [BlockStateRef],
-            pub loot_table: Option<LootTable>,
+            pub loot_table: Option<LootTable<'static>>,
             pub experience: Option<Experience>,
         }
 

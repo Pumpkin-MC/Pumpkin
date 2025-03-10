@@ -5,6 +5,7 @@ use blocks::logs::register_log_blocks;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -44,7 +45,12 @@ pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experi
     if let Some(table) = &block.loot_table {
         let loot = table.get_loot();
         for (item, count) in loot {
-            drop_stack(world, pos, ItemStack::new(count as u8, item)).await;
+            drop_stack(
+                world,
+                pos,
+                ItemStack::new(count as u8, Item::from_registry_key(item.as_str()).unwrap()),
+            )
+            .await;
         }
     }
 

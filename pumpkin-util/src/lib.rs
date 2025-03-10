@@ -1,4 +1,5 @@
 pub mod gamemode;
+pub mod loot_table;
 pub mod math;
 pub mod permission;
 pub mod random;
