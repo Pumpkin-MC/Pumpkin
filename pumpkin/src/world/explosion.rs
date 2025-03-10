@@ -77,7 +77,6 @@ impl Explosion {
             if block_state.air {
                 continue;
             }
-            world.set_block_state(&pos, 0).await;
 
             let block = world.get_block(&pos).await.unwrap();
             let pumpkin_block = server.block_registry.get_pumpkin_block(&block);
@@ -87,6 +86,8 @@ impl Explosion {
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block.explode(&block, world, pos).await;
             }
+
+            world.set_block_state(&pos, 0).await;
         }
     }
 }
