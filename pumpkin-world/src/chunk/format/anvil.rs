@@ -26,7 +26,9 @@ use crate::{
     level::SyncChunk,
 };
 
-use super::{ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry, SerializedScheduledTick};
+use super::{
+    ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry, SerializedScheduledTick,
+};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -529,13 +531,6 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         });
     }
 
-    {
-        let len = chunk_data.block_ticks.try_lock().unwrap().len();
-        if len > 0 {
-            println!("block_tick_amount {}", len);
-        }
-    }
-
     let nbt = ChunkNbt {
         data_version: WORLD_DATA_VERSION,
         x_pos: chunk_data.position.x,
@@ -545,15 +540,15 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         sections,
         block_ticks: chunk_data
             .block_ticks
-            .try_lock()
+            .try_read()
             .unwrap()
             .iter()
             .map(|tick| SerializedScheduledTick {
                 x: tick.x,
                 y: tick.y,
                 z: tick.z,
-                delay: tick.delay,
-                priority: tick.priority as i8,
+                delay: tick.delay as i32,
+                priority: tick.priority as i32,
                 target_block: format!(
                     "minecraft:{}",
                     Block::from_id(tick.target_block_id).unwrap().name
@@ -562,15 +557,15 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .collect(),
         fluid_ticks: chunk_data
             .fluid_ticks
-            .try_lock()
+            .try_read()
             .unwrap()
             .iter()
             .map(|tick| SerializedScheduledTick {
                 x: tick.x,
                 y: tick.y,
                 z: tick.z,
-                delay: tick.delay,
-                priority: tick.priority as i8,
+                delay: tick.delay as i32,
+                priority: tick.priority as i32,
                 target_block: tick.target_block.name.to_string(),
             })
             .collect(),

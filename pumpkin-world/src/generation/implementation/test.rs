@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::{
     WORLD_LOWEST_Y, WORLD_MAX_Y,
@@ -58,8 +60,8 @@ impl WorldGenerator for TestGenerator {
             subchunks,
             heightmap: Default::default(),
             position: at,
-            block_ticks: Mutex::new(vec![]),
-            fluid_ticks: Mutex::new(vec![]),
+            block_ticks: Arc::new(RwLock::new(vec![])),
+            fluid_ticks: Arc::new(RwLock::new(vec![])),
         }
     }
 }

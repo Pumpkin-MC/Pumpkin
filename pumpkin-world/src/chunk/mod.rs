@@ -2,9 +2,9 @@ use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
-use std::iter::repeat_with;
+use std::{iter::repeat_with, sync::Arc};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
 
@@ -57,7 +57,7 @@ pub enum CompressionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(i8)]
+#[repr(i32)]
 pub enum TickPriority {
     ExtremelyHigh = -3,
     VeryHigh = -2,
@@ -82,8 +82,8 @@ impl TickPriority {
     }
 }
 
-impl From<i8> for TickPriority {
-    fn from(value: i8) -> Self {
+impl From<i32> for TickPriority {
+    fn from(value: i32) -> Self {
         match value {
             -3 => TickPriority::ExtremelyHigh,
             -2 => TickPriority::VeryHigh,
@@ -123,8 +123,8 @@ pub struct ChunkData {
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
-    pub block_ticks: Mutex<Vec<ScheduledTick>>,
-    pub fluid_ticks: Mutex<Vec<FluidTick>>,
+    pub block_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
+    pub fluid_ticks: Arc<RwLock<Vec<FluidTick>>>,
 }
 
 /// # Subchunks
@@ -331,7 +331,7 @@ impl ChunkData {
 
     pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
         let mut blocks_to_tick = Vec::new();
-        let mut block_ticks = self.block_ticks.lock().await;
+        let mut block_ticks = self.block_ticks.write().await;
         for priority in TickPriority::values() {
             for tick in block_ticks.iter_mut() {
                 if tick.priority == priority {

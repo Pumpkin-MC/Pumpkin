@@ -99,7 +99,6 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 block: &Block,
                 block_pos: &BlockPos,
             ) {
-                println!("on_scheduled_tick {:?}", block.id);
                 let state = world.get_block_state(block_pos).await.unwrap();
                 let mut props = ButtonLikeProperties::from_state_id(state.id, block);
                 props.powered = Boolean::False;

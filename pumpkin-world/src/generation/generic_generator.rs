@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use noise::{NoiseFn, Perlin};
 use pumpkin_util::math::vector2::Vector2;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::{
     WORLD_LOWEST_Y,
@@ -77,8 +79,8 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             subchunks,
             heightmap: Default::default(),
             position: at,
-            block_ticks: Mutex::new(vec![]),
-            fluid_ticks: Mutex::new(vec![]),
+            block_ticks: Arc::new(RwLock::new(vec![])),
+            fluid_ticks: Arc::new(RwLock::new(vec![])),
         }
     }
 }

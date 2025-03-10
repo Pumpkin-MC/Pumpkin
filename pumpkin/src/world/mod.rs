@@ -1107,20 +1107,16 @@ impl World {
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
 
-        chunk
-            .write()
-            .await
-            .block_ticks
-            .lock()
-            .await
-            .push(ScheduledTick {
-                x: block_pos.0.x,
-                y: block_pos.0.y,
-                z: block_pos.0.z,
-                delay,
-                priority,
-                target_block_id: block.id,
-            });
+        let block_ticks_guard = chunk.read().await;
+        let mut block_ticks = block_ticks_guard.block_ticks.write().await;
+        block_ticks.push(ScheduledTick {
+            x: block_pos.0.x,
+            y: block_pos.0.y,
+            z: block_pos.0.z,
+            delay,
+            priority,
+            target_block_id: block.id,
+        });
     }
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Spawns a tokio task to stream chunks.
