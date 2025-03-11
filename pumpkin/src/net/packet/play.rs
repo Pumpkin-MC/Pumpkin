@@ -53,8 +53,8 @@ use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
 };
-use pumpkin_world::block::interactive::sign::Sign;
 use pumpkin_world::block::registry::get_block_collision_shapes;
+use pumpkin_world::block::sign::Sign;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
