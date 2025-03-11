@@ -7,6 +7,7 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
@@ -58,11 +59,13 @@ pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
                 _face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                player_direction: &HorizontalFacing,
+                player_direction: &f32,
                 _other: bool,
             ) -> u16 {
+                let direction = PreciseDirection::from(*player_direction).to_horizontal_direction();
+
                 let mut fence_gate_props = FenceGateProperties::default(block);
-                fence_gate_props.facing = *player_direction;
+                fence_gate_props.facing = direction;
                 fence_gate_props.to_state_id(block)
             }
 

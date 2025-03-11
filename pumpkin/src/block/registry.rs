@@ -78,7 +78,7 @@ impl BlockRegistry {
         face: &BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player_direction: &f32,
         other: bool,
     ) -> u16 {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -106,7 +106,7 @@ impl BlockRegistry {
         block: &Block,
         face: &BlockDirection,
         block_pos: &BlockPos,
-        player_direction: &HorizontalFacing,
+        player_direction: &f32,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use core::convert::TryFrom;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::BlockState;
@@ -10,6 +11,7 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -83,12 +85,14 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 _face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                player_direction: &HorizontalFacing,
+                player_direction: &f32,
                 _other: bool,
             ) -> u16 {
+                let direction = PreciseDirection::from(*player_direction).to_horizontal_direction();
+
                 let mut door_props = DoorProperties::default(block);
                 door_props.half = DoubleBlockHalf::Lower;
-                door_props.facing = *player_direction;
+                door_props.facing = direction;
                 door_props.hinge = DoorHinge::Left;
 
                 door_props.to_state_id(block)
@@ -101,7 +105,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 _block: &Block,
                 _face: &BlockDirection,
                 block_pos: &BlockPos,
-                _player_direction: &HorizontalFacing,
+                _player_direction: &f32,
             ) -> bool {
                 if world
                     .get_block_state(&block_pos.offset(BlockDirection::Up.to_offset()))

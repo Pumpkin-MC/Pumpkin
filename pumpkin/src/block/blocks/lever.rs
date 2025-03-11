@@ -9,6 +9,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -39,9 +40,11 @@ impl PumpkinBlock for LeverBlock {
         face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player_direction: &f32,
         _other: bool,
     ) -> u16 {
+        let direction = PreciseDirection::from(*player_direction).to_horizontal_direction();
+
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 
         match face {
@@ -51,7 +54,7 @@ impl PumpkinBlock for LeverBlock {
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
-            lever_props.facing = *player_direction;
+            lever_props.facing = direction;
         } else {
             lever_props.facing = face.opposite().to_cardinal_direction();
         };

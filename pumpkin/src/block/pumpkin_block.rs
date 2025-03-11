@@ -55,7 +55,7 @@ pub trait PumpkinBlock: Send + Sync {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player_direction: &f32,
         _other: bool,
     ) -> u16 {
         block.default_state_id
@@ -68,7 +68,7 @@ pub trait PumpkinBlock: Send + Sync {
         _block: &Block,
         _face: &BlockDirection,
         _block_pos: &BlockPos,
-        _player_direction: &HorizontalFacing,
+        _player_direction: &f32,
     ) -> bool {
         true
     }

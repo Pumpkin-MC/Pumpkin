@@ -1,3 +1,4 @@
+pub mod precise_direction;
 pub mod registry;
 pub mod sign;
 pub mod state;

@@ -5,6 +5,7 @@ use pumpkin_data::block::HorizontalFacing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use pumpkin_world::block::registry::get_block;
 
 use crate::block::pumpkin_block::BlockMetadata;
@@ -47,21 +48,14 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
                 face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                player_direction: &HorizontalFacing,
+                player_direction: &f32,
                 _other: bool,
             ) -> u16 {
+                let direction = PreciseDirection::from(*player_direction).opposite();
                 // Is a standing sign or is a standing sign.
                 if *face == BlockDirection::Down {
                     let mut block_properties = SignLikeProperties::default(block);
-                    block_properties.rotation = match player_direction.opposite() {
-                        // Taken from wiki
-                        // TODO: There should be more enums in HorizontalFacing
-                        HorizontalFacing::South => Integer0To15::L0,
-                        HorizontalFacing::West => Integer0To15::L4,
-                        HorizontalFacing::North => Integer0To15::L8,
-                        HorizontalFacing::East => Integer0To15::L12,
-                    };
-
+                    block_properties.rotation = direction.to_integer_0_to_15();
                     block_properties.to_state_id(block)
                 } else {
                     let key = self.name().replace("_sign", "_wall_sign");
@@ -69,9 +63,7 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
                     get_block(&key).map_or(0, |new_block| {
                         let mut block_properties_wall_override =
                             LadderLikeProperties::default(&new_block);
-
-                        block_properties_wall_override.facing = player_direction.opposite();
-
+                        block_properties_wall_override.facing = direction.to_horizontal_direction();
                         block_properties_wall_override.to_state_id(&new_block)
                     })
                 }

@@ -90,7 +90,7 @@ pub fn register_fence_blocks(manager: &mut BlockRegistry) {
                 _face: &BlockDirection,
                 block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                _player_direction: &HorizontalFacing,
+                _player_direction: &f32,
                 _other: bool,
             ) -> u16 {
                 fence_state(world, block, block_pos).await

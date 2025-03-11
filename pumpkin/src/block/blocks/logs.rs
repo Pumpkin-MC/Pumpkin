@@ -43,7 +43,7 @@ pub fn register_log_blocks(manager: &mut BlockRegistry) {
                 face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                _player_direction: &HorizontalFacing,
+                _player_direction: &f32,
                 _other: bool,
             ) -> u16 {
                 let mut log_props = LogProperties::default(block);

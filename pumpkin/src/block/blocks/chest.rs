@@ -14,6 +14,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use pumpkin_world::block::registry::get_block;
 
 type ChestLikeProperties = pumpkin_data::block::ChestLikeProperties;
@@ -46,12 +47,14 @@ impl PumpkinBlock for ChestBlock {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player_direction: &f32,
         _other: bool,
     ) -> u16 {
+        let direction = PreciseDirection::from(*player_direction).to_horizontal_direction();
+
         let mut block_properties = ChestLikeProperties::default(block);
 
-        block_properties.facing = player_direction.opposite();
+        block_properties.facing = direction.opposite();
 
         // TODO: check if next to other chest and combine
 
