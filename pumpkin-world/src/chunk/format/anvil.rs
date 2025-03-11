@@ -538,37 +538,45 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         status: ChunkStatus::Full,
         heightmaps: chunk_data.heightmap.clone(),
         sections,
-        block_ticks: chunk_data
-            .block_ticks
-            .try_read()
-            .unwrap()
-            .iter()
-            .map(|tick| SerializedScheduledTick {
-                x: tick.x,
-                y: tick.y,
-                z: tick.z,
-                delay: tick.delay as i32,
-                priority: tick.priority as i32,
-                target_block: format!(
-                    "minecraft:{}",
-                    Block::from_id(tick.target_block_id).unwrap().name
-                ),
-            })
-            .collect(),
-        fluid_ticks: chunk_data
-            .fluid_ticks
-            .try_read()
-            .unwrap()
-            .iter()
-            .map(|tick| SerializedScheduledTick {
-                x: tick.x,
-                y: tick.y,
-                z: tick.z,
-                delay: tick.delay as i32,
-                priority: tick.priority as i32,
-                target_block: tick.target_block.name.to_string(),
-            })
-            .collect(),
+        block_ticks: {
+            if let Ok(block_ticks) = chunk_data.block_ticks.try_read() {
+                block_ticks
+                    .iter()
+                    .map(|tick| SerializedScheduledTick {
+                        x: tick.x,
+                        y: tick.y,
+                        z: tick.z,
+                        delay: tick.delay as i32,
+                        priority: tick.priority as i32,
+                        target_block: format!(
+                            "minecraft:{}",
+                            Block::from_id(tick.target_block_id).unwrap().name
+                        ),
+                    })
+                    .collect()
+            } else {
+                log::error!("Failed to read block ticks");
+                vec![]
+            }
+        },
+        fluid_ticks: {
+            if let Ok(fluid_ticks) = chunk_data.fluid_ticks.try_read() {
+                fluid_ticks
+                    .iter()
+                    .map(|tick| SerializedScheduledTick {
+                        x: tick.x,
+                        y: tick.y,
+                        z: tick.z,
+                        delay: tick.delay as i32,
+                        priority: tick.priority as i32,
+                        target_block: tick.target_block.name.to_string(),
+                    })
+                    .collect()
+            } else {
+                log::error!("Failed to read fluid ticks");
+                vec![]
+            }
+        },
     };
 
     let mut result = Vec::new();
