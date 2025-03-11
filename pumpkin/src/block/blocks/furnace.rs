@@ -4,7 +4,6 @@ use crate::entity::player::Player;
 use crate::{block::registry::BlockActionResult, world::World};
 use async_trait::async_trait;
 use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;

@@ -26,8 +26,6 @@ use crate::{
     server::Server,
 };
 
-use pumpkin_data::block::HorizontalFacing;
-
 #[derive(PartialEq)]
 pub enum ChestState {
     IsOpened,

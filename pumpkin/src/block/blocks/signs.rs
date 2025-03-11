@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -13,7 +12,6 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block::Integer0To15;
 
 use pumpkin_data::tag::get_tag_values;
 

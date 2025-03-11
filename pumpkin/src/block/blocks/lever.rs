@@ -1,10 +1,7 @@
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockFace, LeverLikeProperties};
-use pumpkin_data::{
-    block::{BlockProperties, HorizontalFacing},
-    item::Item,
-};
+use pumpkin_data::{block::BlockProperties, item::Item};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;

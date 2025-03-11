@@ -49,7 +49,6 @@ impl From<f32> for PreciseDirection {
 
 impl PreciseDirection {
     pub fn to_horizontal_direction(&self) -> HorizontalFacing {
-
         // This is what this is from
         // 0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
         // 45.0..=135.0 => HorizontalFacing::West,
