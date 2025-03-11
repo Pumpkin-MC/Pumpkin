@@ -1,32 +1,17 @@
+use blocks::doors::register_door_blocks;
+use blocks::fence_gates::register_fence_gate_blocks;
+use blocks::fences::register_fence_blocks;
+use blocks::logs::register_log_blocks;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
-use properties::{
-    BlockPropertiesManager,
-    age::Age,
-    attachment::Attachment,
-    axis::Axis,
-    cardinal::{Down, East, North, South, Up, West},
-    chest_type::ChestType,
-    face::Face,
-    facing::Facing,
-    half::Half,
-    layers::Layers,
-    lit::Lit,
-    open::Open,
-    powered::Powered,
-    rotation::Rotation,
-    signal_fire::SignalFire,
-    slab_type::SlabType,
-    stair_shape::StairShape,
-    unstable::Unstable,
-    waterlog::Waterlogged,
-};
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_util::loot_table::{
+    AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::{
-    block::registry::{Block, State},
-    item::ItemStack,
-};
+use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
 use crate::block::registry::BlockRegistry;
@@ -37,7 +22,6 @@ use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::Experi
 use std::sync::Arc;
 
 mod blocks;
-pub mod properties;
 pub mod pumpkin_block;
 pub mod registry;
 
@@ -45,6 +29,7 @@ pub mod registry;
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
+    // Single block
     manager.register(JukeboxBlock);
     manager.register(CraftingTableBlock);
     manager.register(FurnaceBlock);
@@ -52,14 +37,34 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TNTBlock);
     manager.register(LeverBlock);
 
+    // Multiple blocks
+    register_door_blocks(&mut manager);
+    register_fence_blocks(&mut manager);
+    register_fence_gate_blocks(&mut manager);
+    register_log_blocks(&mut manager);
+    // register_sign_blocks(&mut manager);
+
     Arc::new(manager)
 }
 
-pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experience: bool) {
+pub async fn drop_loot(
+    world: &Arc<World>,
+    block: &Block,
+    pos: &BlockPos,
+    experience: bool,
+    state_id: u16,
+) {
     if let Some(table) = &block.loot_table {
-        let loot = table.get_loot();
-        for item in loot {
-            drop_stack(world, pos, item).await;
+        let props =
+            Block::properties(block, state_id).map_or_else(Vec::new, |props| props.to_props());
+        let loot = table.get_loot(
+            &props
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str()))
+                .collect::<Vec<_>>(),
+        );
+        for stack in loot {
+            drop_stack(world, pos, stack).await;
         }
     }
 
@@ -74,6 +79,7 @@ pub async fn drop_loot(world: &Arc<World>, block: &Block, pos: &BlockPos, experi
     }
 }
 
+#[allow(dead_code)]
 async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     let height = EntityType::ITEM.dimension[1] / 2.0;
     let pos = Vector3::new(
@@ -83,16 +89,13 @@ async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     );
 
     let entity = world.create_entity(pos, EntityType::ITEM);
-    let item_entity = Arc::new(ItemEntity::new(
-        entity,
-        stack.item.id,
-        u32::from(stack.item_count),
-    ));
+    let item_entity =
+        Arc::new(ItemEntity::new(entity, stack.item.id, u32::from(stack.item_count)).await);
     world.spawn_entity(item_entity.clone()).await;
     item_entity.send_meta_packet().await;
 }
 
-pub async fn calc_block_breaking(player: &Player, state: &State, block_name: &str) -> f32 {
+pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
@@ -108,36 +111,111 @@ pub async fn calc_block_breaking(player: &Player, state: &State, block_name: &st
     player.get_mining_speed(block_name).await / hardness / i as f32
 }
 
-#[must_use]
-pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
-    let mut manager = BlockPropertiesManager::default();
+// These traits need to be implemented here so they have accses to pumpkin_data
 
-    // This is the default state of the blocks
-    manager.register(Age::Age0);
-    manager.register(Attachment::Floor);
-    manager.register(Axis::Y);
-    manager.register(Down::False);
-    manager.register(East::False);
-    manager.register(Face::Floor);
-    manager.register(Facing::North);
-    manager.register(Half::Bottom);
-    manager.register(Layers::Lay1);
-    manager.register(Lit::True());
-    manager.register(North::False);
-    manager.register(Open::False());
-    manager.register(Powered::False());
-    manager.register(Rotation::Rotation0);
-    manager.register(Unstable::False());
-    manager.register(SignalFire::False());
-    manager.register(SlabType::Bottom);
-    manager.register(ChestType::Single);
-    manager.register(South::False);
-    manager.register(StairShape::Straight);
-    manager.register(Up::False);
-    manager.register(Waterlogged::False());
-    manager.register(West::False);
+trait LootTableExt {
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+}
 
-    manager.build_properties_registry();
+impl LootTableExt for LootTable {
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
+        let mut items = vec![];
+        if let Some(pools) = &self.pools {
+            for i in 0..pools.len() {
+                let pool = &pools[i];
+                items.extend_from_slice(&pool.get_loot(block_props));
+            }
+        }
+        items
+    }
+}
 
-    Arc::new(manager)
+trait LootPoolExt {
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+}
+
+impl LootPoolExt for LootPool {
+    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
+        let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
+        let mut items = vec![];
+        for _ in 0..i {
+            for entry_idx in 0..self.entries.len() {
+                let entry = &self.entries[entry_idx];
+                if let Some(conditions) = &entry.conditions {
+                    if !conditions.iter().all(|c| c.test(block_props)) {
+                        continue;
+                    }
+                }
+                items.extend_from_slice(&entry.content.get_items(block_props));
+            }
+        }
+        items
+    }
+}
+
+trait ItemEntryExt {
+    fn get_items(&self) -> Vec<ItemStack>;
+}
+
+impl ItemEntryExt for ItemEntry {
+    fn get_items(&self) -> Vec<ItemStack> {
+        let item = &self.name.replace("minecraft:", "");
+        vec![ItemStack::new(1, Item::from_registry_key(item).unwrap())]
+    }
+}
+
+trait AlternativeEntryExt {
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+}
+
+impl AlternativeEntryExt for AlternativeEntry {
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
+        let mut items = vec![];
+        for i in 0..self.children.len() {
+            let child = &self.children[i];
+            if let Some(conditions) = &child.conditions {
+                if !conditions.iter().all(|c| c.test(block_props)) {
+                    continue;
+                }
+            }
+            items.extend_from_slice(&child.content.get_items(block_props));
+        }
+        items
+    }
+}
+
+trait LootPoolEntryTypesExt {
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+}
+
+impl LootPoolEntryTypesExt for LootPoolEntryTypes {
+    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
+        match self {
+            Self::Empty => todo!(),
+            Self::Item(item_entry) => item_entry.get_items(),
+            Self::LootTable => todo!(),
+            Self::Dynamic => todo!(),
+            Self::Tag => todo!(),
+            Self::Alternatives(alternative) => alternative.get_items(block_props),
+            Self::Sequence => todo!(),
+            Self::Group => todo!(),
+        }
+    }
+}
+
+trait LootConditionExt {
+    fn test(&self, block_props: &[(&str, &str)]) -> bool;
+}
+
+impl LootConditionExt for LootCondition {
+    // TODO: This is trash, Make this right
+    fn test(&self, block_props: &[(&str, &str)]) -> bool {
+        match self {
+            Self::SurvivesExplosion => true,
+            Self::BlockStateProperty { properties } => properties
+                .iter()
+                .all(|(key, value)| block_props.iter().any(|(k, v)| k == key && v == value)),
+            _ => false,
+        }
+    }
 }

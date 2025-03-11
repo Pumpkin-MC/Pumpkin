@@ -1,4 +1,8 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
+use pumpkin_data::block::BlockProperties;
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     screen::WindowType,
@@ -10,15 +14,18 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::registry::{Block, get_block};
+use pumpkin_world::block::registry::get_block;
 
-use crate::block::properties::Direction;
+type ChestLikeProperties = pumpkin_data::block::ChestLikeProperties;
+
 use crate::world::World;
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,
     server::Server,
 };
+
+use pumpkin_data::block::HorizontalFacing;
 
 #[derive(PartialEq)]
 pub enum ChestState {
@@ -33,31 +40,22 @@ pub struct ChestBlock;
 impl PumpkinBlock for ChestBlock {
     async fn on_place(
         &self,
-        server: &Server,
-        world: &World,
+        _server: &Server,
+        _world: &World,
         block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &Direction,
-        other: bool,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        player_direction: &HorizontalFacing,
+        _other: bool,
     ) -> u16 {
-        let player_direction = player_direction.opposite();
+        let mut block_properties = ChestLikeProperties::default(block);
+
+        block_properties.facing = player_direction.opposite();
 
         // TODO: check if next to other chest and combine
 
-        server
-            .block_properties_manager
-            .on_place_state(
-                world,
-                block,
-                face,
-                block_pos,
-                use_item_on,
-                &player_direction,
-                other,
-            )
-            .await
+        block_properties.to_state_id(block)
     }
 
     async fn normal_use(
@@ -66,6 +64,7 @@ impl PumpkinBlock for ChestBlock {
         player: &Player,
         _location: BlockPos,
         server: &Server,
+        _world: &World,
     ) {
         self.open_chest_block(block, player, _location, server)
             .await;
@@ -78,16 +77,24 @@ impl PumpkinBlock for ChestBlock {
         _location: BlockPos,
         _item: &Item,
         server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         self.open_chest_block(block, player, _location, server)
             .await;
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
+    async fn broken(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
+    ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
-
     async fn close(
         &self,
         _block: &Block,
@@ -153,7 +160,7 @@ impl ChestBlock {
                 .await;
         }
 
-        if let Some(e) = get_block("minecraft:chest").cloned() {
+        if let Some(e) = get_block("minecraft:chest") {
             server
                 .broadcast_packet_all(&CBlockAction::new(
                     &location,

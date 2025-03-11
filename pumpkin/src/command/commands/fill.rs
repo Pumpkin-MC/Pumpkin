@@ -70,7 +70,7 @@ impl CommandExecutor for Executor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3 { x, y, z });
-                            world.break_block(&block_position, None, false).await;
+                            world.break_block(&block_position, None, false, None).await;
                             world.set_block_state(&block_position, block_state_id).await;
                             placed_blocks += 1;
                         }

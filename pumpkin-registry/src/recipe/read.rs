@@ -5,7 +5,7 @@ use crate::recipe::read::SpecialCraftingType::{
 };
 use crate::recipe::read::ingredients::Ingredients;
 use crate::recipe::recipe_formats::{ShapedCrafting, ShapelessCrafting};
-use pumpkin_data::tag::RegistryEntryList;
+use pumpkin_util::registry::RegistryEntryList;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, de};
 use std::collections::HashMap;
@@ -74,7 +74,7 @@ impl FromStr for RecipeType {
     }
 }
 pub mod ingredients {
-    use pumpkin_data::tag::RegistryEntryList;
+    use pumpkin_util::registry::RegistryEntryList;
     use serde::de::{SeqAccess, Visitor};
     use serde::{Deserialize, Deserializer};
     use std::fmt::Formatter;

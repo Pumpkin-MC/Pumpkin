@@ -1,6 +1,7 @@
-use pumpkin_world::block::registry::State;
 use std::{
+    collections::VecDeque,
     num::NonZeroU8,
+    ops::AddAssign,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
@@ -12,6 +13,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
 use pumpkin_data::{
+    block::BlockState,
     damage::DamageType,
     entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
@@ -24,17 +26,19 @@ use pumpkin_protocol::{
     RawPacket, ServerPacket,
     bytebuf::packet::Packet,
     client::play::{
-        CAcknowledgeBlockChange, CActionBar, CCombatDeath, CDisguisedChatMessage, CGameEvent,
-        CKeepAlive, CParticle, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate,
-        CPlayerPosition, CRespawn, CSetExperience, CSetHealth, CSubtitle, CSystemChatMessage,
-        CTitleText, CUnloadChunk, CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
+        CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
+        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
+        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+        GameEvent, MetaDataType, PlayerAction,
     },
+    codec::identifier::Identifier,
     server::play::{
-        SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay, SClientTickEnd,
-        SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock, SPlayerAbilities,
-        SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
-        SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign,
-        SUseItem, SUseItemOn,
+        SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
+        SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
+        SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
+        SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
+        SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
     },
 };
 use pumpkin_protocol::{
@@ -57,7 +61,7 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack};
+use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use super::{
@@ -78,6 +82,78 @@ use crate::{
 use crate::{error::PumpkinError, net::GameProfile};
 
 use super::living::LivingEntity;
+
+enum BatchState {
+    Initial,
+    Waiting,
+    Count(u8),
+}
+
+pub struct ChunkManager {
+    chunks_per_tick: usize,
+    chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
+    batches_sent_since_ack: BatchState,
+}
+
+impl ChunkManager {
+    pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
+
+    #[must_use]
+    pub fn new(chunks_per_tick: usize) -> Self {
+        Self {
+            chunks_per_tick,
+            chunk_queue: VecDeque::new(),
+            batches_sent_since_ack: BatchState::Initial,
+        }
+    }
+
+    pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
+        self.batches_sent_since_ack = BatchState::Count(0);
+        self.chunks_per_tick = chunks_per_tick.ceil() as usize;
+    }
+
+    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
+        self.chunk_queue.push_back((position, chunk));
+    }
+
+    #[must_use]
+    pub fn can_send_chunk(&self) -> bool {
+        let state_available = match self.batches_sent_since_ack {
+            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
+            BatchState::Initial => true,
+            BatchState::Waiting => false,
+        };
+
+        state_available && !self.chunk_queue.is_empty()
+    }
+
+    pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
+        let chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunks = Vec::with_capacity(chunk_size);
+        chunks.extend(
+            self.chunk_queue
+                .drain(0..chunk_size)
+                .map(|(_, chunk)| chunk),
+        );
+
+        match &mut self.batches_sent_since_ack {
+            BatchState::Count(count) => {
+                count.add_assign(1);
+            }
+            state @ BatchState::Initial => *state = BatchState::Waiting,
+            BatchState::Waiting => unreachable!(),
+        }
+
+        chunks.into_boxed_slice()
+    }
+
+    #[must_use]
+    pub fn is_chunk_pending(&self, pos: &Vector2<i32>) -> bool {
+        // This is probably comparable to hashmap speed due to the relatively small count of chunks
+        // (guestimated to be ~ 1024)
+        self.chunk_queue.iter().any(|(elem_pos, _)| elem_pos == pos)
+    }
+}
 
 /// Represents a Minecraft player entity.
 ///
@@ -145,6 +221,7 @@ pub struct Player {
     /// The player's total experience points
     pub experience_points: AtomicI32,
     pub experience_pick_up_delay: Mutex<u32>,
+    pub chunk_manager: Mutex<ChunkManager>,
 }
 
 impl Player {
@@ -222,6 +299,8 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            // Default to sending 16 chunks per tick
+            chunk_manager: Mutex::new(ChunkManager::new(16)),
         }
     }
 
@@ -253,19 +332,20 @@ impl Player {
         let level = &world.level;
 
         // Decrement value of watched chunks
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks);
-
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
-        level.clean_memory(&radial_chunks);
+        level.clean_memory();
 
         log::debug!(
             "Removed player id {} ({}) ({} chunks remain cached)",
             self.gameprofile.name,
             self.client.id,
-            level.loaded_chunk_count()
+            level.loaded_chunk_count(),
         );
+
+        level.clean_up_log().await;
 
         //self.world().level.list_cached();
     }
@@ -416,6 +496,18 @@ impl Player {
             .await;
     }
 
+    /// Stops a sound playing on the client.
+    ///
+    /// # Arguments
+    ///
+    /// * `sound_id`: An optional `Identifier` specifying the sound to stop. If `None`, all sounds in the specified category (if any) will be stopped.
+    /// * `category`: An optional `SoundCategory` specifying the sound category to stop. If `None`, all sounds with the specified identifier (if any) will be stopped.
+    pub async fn stop_sound(&self, sound_id: Option<Identifier>, category: Option<SoundCategory>) {
+        self.client
+            .send_packet(&CStopSound::new(sound_id, category))
+            .await;
+    }
+
     pub async fn await_cancel(&self) {
         self.cancel_tasks.notified().await;
     }
@@ -442,6 +534,27 @@ impl Player {
             }
         }
 
+        let chunk_of_chunks = {
+            let mut chunk_manager = self.chunk_manager.lock().await;
+            chunk_manager
+                .can_send_chunk()
+                .then(|| chunk_manager.next_chunk())
+        };
+
+        if let Some(chunk_of_chunks) = chunk_of_chunks {
+            let chunk_count = chunk_of_chunks.len();
+            self.client.send_packet(&CChunkBatchStart {}).await;
+            for chunk in chunk_of_chunks {
+                let chunk = chunk.read().await;
+                // TODO: Can we check if we still need the chunk to send? Like if its a fast moving
+                // player or something
+                self.client.send_packet(&CChunkData(&chunk)).await;
+            }
+            self.client
+                .send_packet(&CChunkBatchEnd::new(chunk_count))
+                .await;
+        }
+
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
 
         if self.mining.load(Ordering::Relaxed) {
@@ -461,8 +574,8 @@ impl Player {
                 self.continue_mining(
                     *pos,
                     &world,
-                    state,
-                    &block.name,
+                    &state,
+                    block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
                 .await;
@@ -503,7 +616,7 @@ impl Player {
         &self,
         location: BlockPos,
         world: &World,
-        state: &State,
+        state: &BlockState,
         block_name: &str,
         starting_time: i32,
     ) {
@@ -655,7 +768,7 @@ impl Player {
     async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks);
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         level.clean_chunks(&chunks_to_clean).await;
         let client = self.client.clone();
         tokio::spawn(async move {
@@ -922,7 +1035,7 @@ impl Player {
             .await;
     }
 
-    pub async fn can_harvest(&self, block: &State, block_name: &str) -> bool {
+    pub async fn can_harvest(&self, block: &BlockState, block_name: &str) -> bool {
         !block.tool_required
             || self
                 .inventory
@@ -1009,7 +1122,7 @@ impl Player {
             .create_entity(self.living_entity.entity.pos.load(), EntityType::ITEM);
 
         // TODO: Merge stacks together
-        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count));
+        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }
@@ -1333,6 +1446,9 @@ impl Player {
             SCloseContainer::PACKET_ID => {
                 self.handle_close_container(server, SCloseContainer::read(bytebuf)?)
                     .await;
+            }
+            SChunkBatch::PACKET_ID => {
+                self.handle_chunk_batch(SChunkBatch::read(bytebuf)?).await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id.0);

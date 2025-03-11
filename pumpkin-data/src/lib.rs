@@ -1,4 +1,4 @@
-pub mod tag;
+//pub mod tag;
 
 pub mod item {
     include!(concat!(env!("OUT_DIR"), "/item.rs"));
@@ -54,4 +54,12 @@ pub mod damage {
 
 pub mod fluid {
     include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
+}
+
+pub mod block {
+    include!(concat!(env!("OUT_DIR"), "/block.rs"));
+}
+
+pub mod tag {
+    include!(concat!(env!("OUT_DIR"), "/tag.rs"));
 }

@@ -242,7 +242,9 @@ impl LivingEntity {
 
 #[async_trait]
 impl EntityBase for LivingEntity {
-    async fn tick(&self, _server: &Server) {
+    async fn tick(&self, server: &Server) {
+        self.entity.tick(server).await;
+
         if self
             .time_until_regen
             .load(std::sync::atomic::Ordering::Relaxed)

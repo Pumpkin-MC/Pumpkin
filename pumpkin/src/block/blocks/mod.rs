@@ -1,15 +1,19 @@
+use pumpkin_data::block::Block;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::Block;
 
 use crate::{entity::player::Player, server::Server};
 
 pub(crate) mod chest;
 pub(crate) mod crafting_table;
+pub(crate) mod doors;
+pub(crate) mod fence_gates;
+pub(crate) mod fences;
 pub(crate) mod furnace;
 pub(crate) mod jukebox;
 pub(crate) mod lever;
+pub(crate) mod logs;
 pub(crate) mod tnt;
 
 /// The standard destroy with container removes the player forcibly from the container,

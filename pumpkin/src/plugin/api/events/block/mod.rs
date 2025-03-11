@@ -3,7 +3,7 @@ pub mod block_burn;
 pub mod block_can_build;
 pub mod block_place;
 
-use pumpkin_world::block::registry::Block;
+use pumpkin_data::block::Block;
 
 /// A trait representing events related to blocks.
 ///

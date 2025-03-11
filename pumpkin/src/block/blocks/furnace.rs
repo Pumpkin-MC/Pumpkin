@@ -1,7 +1,11 @@
-use crate::block::properties::Direction;
+use std::sync::Arc;
+
 use crate::entity::player::Player;
 use crate::{block::registry::BlockActionResult, world::World};
 use async_trait::async_trait;
+use pumpkin_data::block::BlockProperties;
+use pumpkin_data::block::HorizontalFacing;
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::Furnace;
@@ -9,7 +13,8 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::registry::Block;
+
+type FurnaceLikeProperties = pumpkin_data::block::FurnaceLikeProperties;
 
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server};
 
@@ -20,29 +25,20 @@ pub struct FurnaceBlock;
 impl PumpkinBlock for FurnaceBlock {
     async fn on_place(
         &self,
-        server: &Server,
-        world: &World,
+        _server: &Server,
+        _world: &World,
         block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &Direction,
-        other: bool,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        player_direction: &HorizontalFacing,
+        _other: bool,
     ) -> u16 {
-        let player_direction = player_direction.opposite();
+        let mut block_properties = FurnaceLikeProperties::default(block);
 
-        server
-            .block_properties_manager
-            .on_place_state(
-                world,
-                block,
-                face,
-                block_pos,
-                use_item_on,
-                &player_direction,
-                other,
-            )
-            .await
+        block_properties.facing = player_direction.opposite();
+
+        block_properties.to_state_id(block)
     }
 
     async fn normal_use(
@@ -51,6 +47,7 @@ impl PumpkinBlock for FurnaceBlock {
         player: &Player,
         _location: BlockPos,
         server: &Server,
+        _world: &World,
     ) {
         self.open_furnace_screen(block, player, _location, server)
             .await;
@@ -63,13 +60,22 @@ impl PumpkinBlock for FurnaceBlock {
         _location: BlockPos,
         _item: &Item,
         server: &Server,
+        _world: &World,
     ) -> BlockActionResult {
         self.open_furnace_screen(block, player, _location, server)
             .await;
         BlockActionResult::Consume
     }
 
-    async fn broken(&self, block: &Block, player: &Player, location: BlockPos, server: &Server) {
+    async fn broken(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        server: &Server,
+        _world: Arc<World>,
+        _state: BlockState,
+    ) {
         super::standard_on_broken_with_container(block, player, location, server).await;
     }
 }

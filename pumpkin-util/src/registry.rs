@@ -1,67 +1,6 @@
 use serde::de::{self, Error, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
-use std::collections::HashMap;
 use std::fmt::Formatter;
-use std::sync::LazyLock;
-
-#[derive(Deserialize, Eq, PartialEq, Hash)]
-#[serde(rename_all = "snake_case")]
-// TODO: We should parse this from vanilla ig
-pub enum RegistryKey {
-    Instrument,
-    #[serde(rename = "worldgen/biome")]
-    WorldGenBiome,
-    PointOfInterestType,
-    EntityType,
-    DamageType,
-    BannerPattern,
-    Block,
-    Fluid,
-    Enchantment,
-    CatVariant,
-    PaintingVariant,
-    Item,
-    GameEvent,
-}
-
-impl RegistryKey {
-    // IDK why the linter is saying this isnt used
-    #[allow(dead_code)]
-    pub fn identifier_string(&self) -> &str {
-        match self {
-            Self::Block => "block",
-            Self::Item => "item",
-            Self::Fluid => "fluid",
-            Self::EntityType => "entity_type",
-            Self::GameEvent => "game_event",
-            _ => unimplemented!(),
-        }
-    }
-}
-
-#[allow(dead_code)]
-pub trait Tagable {
-    fn tag_key() -> RegistryKey;
-    fn registry_key(&self) -> &str;
-
-    /// Returns none if tag does not exist
-    fn is_tagged_with(&self, tag: &str) -> Option<bool> {
-        let tag = tag.strip_prefix("#").unwrap_or(tag);
-        let items = get_tag_values(Self::tag_key(), tag)?;
-        Some(items.iter().any(|elem| elem == self.registry_key()))
-    }
-}
-
-const TAG_JSON: &str = include_str!("../../assets/tags.json");
-
-pub static TAGS: LazyLock<HashMap<RegistryKey, HashMap<String, Vec<String>>>> =
-    LazyLock::new(|| serde_json::from_str(TAG_JSON).expect("Valid tag collections"));
-
-pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&Vec<String>> {
-    TAGS.get(&tag_category)
-        .expect("Should deserialize all tag categories")
-        .get(tag)
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum TagType {
@@ -70,6 +9,7 @@ pub enum TagType {
 }
 
 impl TagType {
+    #[allow(dead_code)]
     pub fn serialize(&self) -> String {
         match self {
             TagType::Item(name) => name.clone(),
@@ -104,17 +44,6 @@ impl<'de> Deserialize<'de> for TagType {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::tag::TAGS;
-
-    #[test]
-    // This test assures that all tags that exist are loaded into the tags registry
-    fn load_tags() {
-        assert!(!TAGS.is_empty())
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum RegistryEntryList {
     Single(TagType),
@@ -122,6 +51,7 @@ pub enum RegistryEntryList {
 }
 
 impl RegistryEntryList {
+    #[allow(dead_code)]
     pub fn get_values(&self) -> Vec<TagType> {
         match self {
             RegistryEntryList::Single(s) => vec![s.clone()],

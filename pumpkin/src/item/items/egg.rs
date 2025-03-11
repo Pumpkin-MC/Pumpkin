@@ -2,15 +2,17 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use crate::entity::projectile::ThrownItemEntity;
-use crate::item::pumpkin_item::PumpkinItem;
+use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
-use pumpkin_macros::pumpkin_item;
 
-#[pumpkin_item("egg")]
 pub struct EggItem;
+
+impl ItemMetadata for EggItem {
+    const IDS: &'static [u16] = &[Item::EGG.id];
+}
 
 const POWER: f32 = 1.5;
 

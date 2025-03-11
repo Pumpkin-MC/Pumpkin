@@ -1,19 +1,21 @@
+use crate::chunk::format::PaletteEntry;
+
 use super::registry::{get_block, get_state_by_state_id};
 
 #[derive(Clone, Copy, Debug, Eq)]
-pub struct BlockState {
+pub struct ChunkBlockState {
     pub state_id: u16,
     pub block_id: u16,
 }
 
-impl PartialEq for BlockState {
+impl PartialEq for ChunkBlockState {
     fn eq(&self, other: &Self) -> bool {
         self.state_id == other.state_id
     }
 }
 
-impl BlockState {
-    pub const AIR: BlockState = BlockState {
+impl ChunkBlockState {
+    pub const AIR: ChunkBlockState = ChunkBlockState {
         state_id: 0,
         block_id: 0,
     };
@@ -25,6 +27,30 @@ impl BlockState {
             state_id: block.default_state_id,
             block_id: block.id,
         })
+    }
+
+    pub fn from_palette(palette: &PaletteEntry) -> Self {
+        let block = get_block(palette.name.as_str());
+
+        if let Some(block) = block {
+            let mut state_id = block.default_state_id;
+
+            if let Some(properties) = palette.properties.clone() {
+                let mut properties_vec = Vec::new();
+                for (key, value) in properties {
+                    properties_vec.push((key.clone(), value.clone()));
+                }
+                let block_properties = block.from_properties(properties_vec).unwrap();
+                state_id = block_properties.to_state_id(&block);
+            }
+
+            return Self {
+                state_id,
+                block_id: block.id,
+            };
+        }
+
+        ChunkBlockState::AIR
     }
 
     pub fn get_id(&self) -> u16 {
@@ -44,17 +70,17 @@ impl BlockState {
 
 #[cfg(test)]
 mod tests {
-    use super::BlockState;
+    use super::ChunkBlockState;
 
     #[test]
     fn not_existing() {
-        let result = BlockState::new("this_block_does_not_exist");
+        let result = ChunkBlockState::new("this_block_does_not_exist");
         assert!(result.is_none());
     }
 
     #[test]
     fn does_exist() {
-        let result = BlockState::new("dirt");
+        let result = ChunkBlockState::new("dirt");
         assert!(result.is_some());
     }
 }

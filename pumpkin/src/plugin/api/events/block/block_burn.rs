@@ -1,5 +1,5 @@
+use pumpkin_data::block::Block;
 use pumpkin_macros::{Event, cancellable};
-use pumpkin_world::block::registry::Block;
 
 use super::BlockEvent;
 
