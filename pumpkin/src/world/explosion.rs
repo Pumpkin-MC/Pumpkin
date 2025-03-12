@@ -18,8 +18,8 @@ impl Explosion {
     async fn get_blocks_to_destroy(&self, world: &World) -> Vec<BlockPos> {
         let mut set = Vec::new();
         for x in 0..16 {
-            for z in 0..16 {
-                'block2: for y in 0..16 {
+            for y in 0..16 {
+                'block2: for z in 0..16 {
                     if x != 0 && x != 15 && z != 0 && z != 15 && y != 0 && y != 15 {
                         continue;
                     }
@@ -56,9 +56,9 @@ impl Explosion {
                             set.push(block_pos);
                         }
 
-                        pos_x += x_div * 0.3;
-                        pos_y += y_div * 0.3;
-                        pos_z += z_div * 0.3;
+                        pos_x += x_div * 0.300_000_011_920_928_96f64;
+                        pos_y += y_div * 0.300_000_011_920_928_96f64;
+                        pos_z += z_div * 0.300_000_011_920_928_96f64;
                         h -= 0.225_000_01f32;
                     }
                 }
