@@ -16,6 +16,7 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::BlockFlags;
 use crate::world::World;
 
 async fn click_button(world: &World, block_pos: &BlockPos) {
@@ -25,10 +26,15 @@ async fn click_button(world: &World, block_pos: &BlockPos) {
     if !button_props.powered.to_bool() {
         button_props.powered = Boolean::True;
         world
-            .set_block_state(block_pos, button_props.to_state_id(&block))
+            .set_block_state(
+                block_pos,
+                button_props.to_state_id(&block),
+                BlockFlags::NOTIFY_ALL,
+            )
             .await;
+        // TODO: Different times for stone and wood buttons
         world
-            .schedule_block_tick(&block, *block_pos, 200, TickPriority::Normal)
+            .schedule_block_tick(&block, *block_pos, 20, TickPriority::Normal)
             .await;
     }
 }
@@ -103,7 +109,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 let mut props = ButtonLikeProperties::from_state_id(state.id, block);
                 props.powered = Boolean::False;
                 world
-                    .set_block_state(block_pos, props.to_state_id(block))
+                    .set_block_state(block_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                     .await;
             }
         }

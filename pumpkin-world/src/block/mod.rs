@@ -80,6 +80,17 @@ impl BlockDirection {
         ]
     }
 
+    pub fn abstract_block_update_order() -> [BlockDirection; 6] {
+        [
+            BlockDirection::West,
+            BlockDirection::East,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::Down,
+            BlockDirection::Up,
+        ]
+    }
+
     pub fn horizontal() -> [BlockDirection; 4] {
         [
             BlockDirection::North,

@@ -8,7 +8,8 @@ pub mod explosion;
 pub mod time;
 
 use crate::{
-    PLUGIN_MANAGER, block,
+    PLUGIN_MANAGER,
+    block::{self, registry::BlockRegistry},
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
@@ -19,6 +20,7 @@ use crate::{
     },
     server::Server,
 };
+use bitflags::bitflags;
 use border::Worldborder;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
@@ -75,6 +77,21 @@ pub mod scoreboard;
 pub mod weather;
 
 use weather::Weather;
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct BlockFlags: u32 {
+        const NOTIFY_NEIGHBORS                      = 0b0000_0001;
+        const NOTIFY_LISTENERS                      = 0b0000_0010;
+        const NOTIFY_ALL                            = 0b0000_0011;
+        const FORCE_STATE                           = 0b0000_0100;
+        const SKIP_DROPS                            = 0b0000_1000;
+        const MOVED                                 = 0b0001_0000;
+        const SKIP_REDSTONE_WIRE_STATE_REPLACEMENT  = 0b0010_0000;
+        const SKIP_BLOCK_ENTITY_REPLACED_CALLBACK   = 0b0100_0000;
+        const SKIP_BLOCK_ADDED_CALLBACK             = 0b1000_0000;
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum GetBlockError {
@@ -133,12 +150,18 @@ pub struct World {
     pub dimension_type: DimensionType,
     /// The world's weather, including rain and thunder levels
     pub weather: Mutex<Weather>,
+    /// Block Behaviour
+    pub block_registry: Arc<BlockRegistry>,
     // TODO: entities
 }
 
 impl World {
     #[must_use]
-    pub fn load(level: Level, dimension_type: DimensionType) -> Self {
+    pub fn load(
+        level: Level,
+        dimension_type: DimensionType,
+        block_registry: Arc<BlockRegistry>,
+    ) -> Self {
         Self {
             level: Arc::new(level),
             single_chunk_lfu: Mutex::new([Vector2::default(); 16]),
@@ -149,6 +172,7 @@ impl World {
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
             weather: Mutex::new(Weather::new()),
+            block_registry,
         }
     }
 
@@ -1072,14 +1096,26 @@ impl World {
     }
 
     /// Sets a block
-    pub async fn set_block_state(&self, position: &BlockPos, block_state_id: u16) -> u16 {
+    pub async fn set_block_state(
+        &self,
+        position: &BlockPos,
+        block_state_id: u16,
+        flags: BlockFlags,
+    ) -> u16 {
         let (chunk_coordinate, relative_coordinates) = position.chunk_and_chunk_relative_position();
 
         // Since we divide by 16 remnant can never exceed u8
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
+
+        // TODO: chunkPos.setBlockState(pos, state, flags);
         let replaced_block_state_id = chunk.read().await.subchunks.get_block(relative).unwrap();
+
+        if replaced_block_state_id == block_state_id {
+            return block_state_id;
+        }
+
         chunk
             .write()
             .await
@@ -1091,6 +1127,64 @@ impl World {
             i32::from(block_state_id).into(),
         ))
         .await;
+
+        let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
+        let new_block = Block::from_state_id(block_state_id).unwrap();
+
+        // WorldChunk.java line 310
+        if old_block != new_block
+            && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || flags.contains(BlockFlags::MOVED))
+        {
+            self.block_registry
+                .on_state_replaced(self, &new_block, *position)
+                .await;
+        }
+
+        let block_state = self.get_block_state(position).await.unwrap();
+
+        // Ig they do this cause it could be modified in chunkPos.setBlockState?
+        if block_state.id == block_state_id {
+            if flags.contains(BlockFlags::NOTIFY_LISTENERS) {
+                // Mob AI update
+            }
+
+            if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
+                self.update_neighbors(position, None).await;
+                // TODO: updateComparators
+            }
+
+            if !flags.contains(BlockFlags::FORCE_STATE) {
+                let mut new_flags = flags;
+                new_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
+                new_flags.remove(BlockFlags::NOTIFY_LISTENERS);
+                self.block_registry
+                    .prepare(
+                        self,
+                        position,
+                        &Block::from_state_id(replaced_block_state_id).unwrap(),
+                        replaced_block_state_id,
+                        new_flags,
+                    )
+                    .await;
+                self.block_registry
+                    .update_neighbors(
+                        self,
+                        position,
+                        &Block::from_state_id(block_state_id).unwrap(),
+                        new_flags,
+                    )
+                    .await;
+                self.block_registry
+                    .prepare(
+                        self,
+                        position,
+                        &Block::from_state_id(block_state_id).unwrap(),
+                        block_state_id,
+                        new_flags,
+                    )
+                    .await;
+            }
+        }
 
         replaced_block_state_id
     }
@@ -1202,8 +1296,7 @@ impl World {
         self: &Arc<Self>,
         position: &BlockPos,
         cause: Option<Arc<Player>>,
-        drop: bool,
-        server: Option<&Server>,
+        flags: BlockFlags,
     ) {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
@@ -1215,7 +1308,7 @@ impl World {
             .await;
 
         if !event.cancelled {
-            let broken_block_state_id = self.set_block_state(position, 0).await;
+            let broken_block_state_id = self.set_block_state(position, 0, flags).await;
 
             let particles_packet = CWorldEvent::new(
                 WorldEvent::BlockBroken as i32,
@@ -1224,7 +1317,7 @@ impl World {
                 false,
             );
 
-            if drop {
+            if !flags.contains(BlockFlags::SKIP_DROPS) {
                 block::drop_loot(self, &block, position, true, broken_block_state_id).await;
             }
 
@@ -1236,8 +1329,8 @@ impl World {
                 None => self.broadcast_packet_all(&particles_packet).await,
             }
 
-            if let Some(server) = server {
-                self.update_neighbors(server, position, None).await;
+            if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
+                self.update_neighbors(position, None).await;
             }
         }
     }
@@ -1283,12 +1376,7 @@ impl World {
     }
 
     /// Updates neighboring blocks of a block
-    pub async fn update_neighbors(
-        &self,
-        server: &Server,
-        block_pos: &BlockPos,
-        except: Option<&BlockDirection>,
-    ) {
+    pub async fn update_neighbors(&self, block_pos: &BlockPos, except: Option<&BlockDirection>) {
         for direction in BlockDirection::update_order() {
             if Some(&direction) == except {
                 continue;
@@ -1297,11 +1385,10 @@ impl World {
             let neighbor_block = self.get_block(&neighbor_pos).await;
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
-                    server.block_registry.get_pumpkin_block(&neighbor_block)
+                    self.block_registry.get_pumpkin_block(&neighbor_block)
                 {
                     neighbor_pumpkin_block
                         .on_neighbor_update(
-                            server,
                             self,
                             &neighbor_block,
                             &neighbor_pos,
@@ -1311,6 +1398,41 @@ impl World {
                         .await;
                 }
             }
+        }
+    }
+
+    pub async fn replace_with_state_for_neighbor_update(
+        &self,
+        block_pos: &BlockPos,
+        direction: &BlockDirection,
+        flags: BlockFlags,
+    ) {
+        let (block, block_state) = self.get_block_and_block_state(block_pos).await.unwrap();
+
+        if flags.contains(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT)
+            && block.id == Block::REDSTONE_WIRE.id
+        {
+            return;
+        }
+
+        let neighbor_pos = block_pos.offset(direction.to_offset());
+        let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await.unwrap();
+
+        let new_state_id = self
+            .block_registry
+            .get_state_for_neighbor_update(
+                self,
+                &block,
+                block_state.id,
+                block_pos,
+                direction,
+                &neighbor_pos,
+                neighbor_state_id,
+            )
+            .await;
+
+        if new_state_id != block_state.id {
+            self.set_block_state(block_pos, new_state_id, flags).await;
         }
     }
 }

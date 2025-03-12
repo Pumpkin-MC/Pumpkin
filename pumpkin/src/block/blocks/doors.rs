@@ -16,6 +16,7 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
+use crate::world::BlockFlags;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 
@@ -40,10 +41,18 @@ async fn toggle_door(world: &World, block_pos: &BlockPos) {
     other_door_props.open = door_props.open;
 
     world
-        .set_block_state(block_pos, door_props.to_state_id(&block))
+        .set_block_state(
+            block_pos,
+            door_props.to_state_id(&block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
         .await;
     world
-        .set_block_state(&other_pos, other_door_props.to_state_id(&other_block))
+        .set_block_state(
+            &other_pos,
+            other_door_props.to_state_id(&other_block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
         .await;
 }
 
@@ -129,6 +138,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                     .set_block_state(
                         &location.offset(BlockDirection::Up.to_offset()),
                         door_props.to_state_id(block),
+                        BlockFlags::NOTIFY_ALL,
                     )
                     .await;
             }
@@ -138,7 +148,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 block: &Block,
                 _player: &Player,
                 location: BlockPos,
-                server: &Server,
+                _server: &Server,
                 world: Arc<World>,
                 state: BlockState,
             ) {
@@ -154,7 +164,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 if let Ok(other_block) = world.get_block(&other_pos).await {
                     if other_block.id == block.id {
                         world
-                            .break_block(&other_pos, None, true, Some(server))
+                            .break_block(&other_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
                             .await;
                     }
                 }

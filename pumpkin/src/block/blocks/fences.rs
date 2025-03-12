@@ -96,18 +96,17 @@ pub fn register_fence_blocks(manager: &mut BlockRegistry) {
                 fence_state(world, block, block_pos).await
             }
 
-            async fn on_neighbor_update(
+            async fn get_state_for_neighbor_update(
                 &self,
-                _server: &Server,
                 world: &World,
                 block: &Block,
+                _state: u16,
                 block_pos: &BlockPos,
-                _source_face: &BlockDirection,
-                _source_block_pos: &BlockPos,
-            ) {
-                world
-                    .set_block_state(block_pos, fence_state(world, block, block_pos).await)
-                    .await;
+                _direction: &BlockDirection,
+                _neighbor_pos: &BlockPos,
+                _neighbor_state: u16,
+            ) -> u16 {
+                fence_state(world, block, block_pos).await
             }
         }
 

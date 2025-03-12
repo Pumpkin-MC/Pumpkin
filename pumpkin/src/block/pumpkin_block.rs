@@ -1,7 +1,7 @@
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
@@ -106,13 +106,36 @@ pub trait PumpkinBlock: Send + Sync {
 
     async fn on_neighbor_update(
         &self,
-        _server: &Server,
         _world: &World,
         _block: &Block,
         _block_pos: &BlockPos,
         _source_face: &BlockDirection,
         _source_block_pos: &BlockPos,
     ) {
+    }
+
+    async fn prepare(
+        &self,
+        _world: &World,
+        _block_pos: &BlockPos,
+        _block: &Block,
+        _state_id: u16,
+        _flags: BlockFlags,
+    ) {
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn get_state_for_neighbor_update(
+        &self,
+        _world: &World,
+        _block: &Block,
+        state: u16,
+        _block_pos: &BlockPos,
+        _direction: &BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: u16,
+    ) -> u16 {
+        state
     }
 
     async fn on_scheduled_tick(
@@ -123,4 +146,6 @@ pub trait PumpkinBlock: Send + Sync {
         _block_pos: &BlockPos,
     ) {
     }
+
+    async fn on_state_replaced(&self, _world: &World, _block: &Block, _location: BlockPos) {}
 }

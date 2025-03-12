@@ -81,6 +81,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # plugins
 libloading = "0.8"
+bitflags = "2.9.0"
 
 [build-dependencies]
 git-version = "0.3"
