@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::{
@@ -9,9 +10,14 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::{Chest, OpenContainer};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use pumpkin_world::block::registry::get_block;
+
+type ChestLikeProperties = pumpkin_data::block::ChestLikeProperties;
 
 use crate::world::World;
 use crate::{
@@ -31,6 +37,28 @@ pub struct ChestBlock;
 
 #[async_trait]
 impl PumpkinBlock for ChestBlock {
+    async fn on_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        block: &Block,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        player_direction: &f32,
+        _other: bool,
+    ) -> u16 {
+        let direction = PreciseDirection::from(*player_direction).to_horizontal_direction();
+
+        let mut block_properties = ChestLikeProperties::default(block);
+
+        block_properties.facing = direction.opposite();
+
+        // TODO: check if next to other chest and combine
+
+        block_properties.to_state_id(block)
+    }
+
     async fn normal_use(
         &self,
         block: &Block,

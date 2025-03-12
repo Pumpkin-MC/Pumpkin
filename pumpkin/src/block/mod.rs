@@ -2,6 +2,7 @@ use blocks::doors::register_door_blocks;
 use blocks::fence_gates::register_fence_gate_blocks;
 use blocks::fences::register_fence_blocks;
 use blocks::logs::register_log_blocks;
+use blocks::signs::register_sign_blocks;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
@@ -29,6 +30,7 @@ pub mod registry;
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
+    // Single block
     manager.register(JukeboxBlock);
     manager.register(CraftingTableBlock);
     manager.register(FurnaceBlock);
@@ -36,10 +38,12 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TNTBlock);
     manager.register(LeverBlock);
 
+    // Multiple blocks
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
     register_fence_gate_blocks(&mut manager);
     register_log_blocks(&mut manager);
+    register_sign_blocks(&mut manager);
 
     Arc::new(manager)
 }

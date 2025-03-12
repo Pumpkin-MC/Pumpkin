@@ -3,12 +3,18 @@ use std::sync::Arc;
 use crate::entity::player::Player;
 use crate::{block::registry::BlockActionResult, world::World};
 use async_trait::async_trait;
+use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::Furnace;
 use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
+
+type FurnaceLikeProperties = pumpkin_data::block::FurnaceLikeProperties;
 
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server};
 
@@ -17,6 +23,26 @@ pub struct FurnaceBlock;
 
 #[async_trait]
 impl PumpkinBlock for FurnaceBlock {
+    async fn on_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        block: &Block,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        player_direction: &f32,
+        _other: bool,
+    ) -> u16 {
+        let direction = PreciseDirection::from(*player_direction).to_horizontal_direction();
+
+        let mut block_properties = FurnaceLikeProperties::default(block);
+
+        block_properties.facing = direction.opposite();
+
+        block_properties.to_state_id(block)
+    }
+
     async fn normal_use(
         &self,
         block: &Block,

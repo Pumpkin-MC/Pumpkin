@@ -1,5 +1,6 @@
-pub mod interactive;
+pub mod precise_direction;
 pub mod registry;
+pub mod sign;
 pub mod state;
 
 use num_derive::FromPrimitive;
@@ -8,7 +9,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 pub use state::ChunkBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug)]
 pub enum BlockDirection {
     Down = 0,
     Up,
