@@ -62,7 +62,6 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -1420,7 +1419,9 @@ impl Player {
             _ => HorizontalFacing::South, // Default case, should not occur
         }
     }
-
+    // TODO: replace
+    const WORLD_LOWEST_Y: i16 = -64;
+    const WORLD_MAX_Y: i16 = 384 - Self::WORLD_LOWEST_Y.abs();
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -1438,16 +1439,16 @@ impl Player {
         let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
         // check block under the world
-        if location.0.y + face.to_offset().y < WORLD_LOWEST_Y.into() {
+        if location.0.y + face.to_offset().y < Self::WORLD_LOWEST_Y.into() {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
         //check max world build height
-        if location.0.y + face.to_offset().y >= WORLD_MAX_Y.into() {
+        if location.0.y + face.to_offset().y >= Self::WORLD_MAX_Y.into() {
             self.send_system_message_raw(
                 &TextComponent::translate(
                     "build.tooHigh",
-                    vec![TextComponent::text((WORLD_MAX_Y - 1).to_string())],
+                    vec![TextComponent::text((Self::WORLD_MAX_Y - 1).to_string())],
                 )
                 .color_named(NamedColor::Red),
                 true,

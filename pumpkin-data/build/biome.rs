@@ -18,7 +18,7 @@ pub(crate) fn build() -> TokenStream {
         }]);
     }
     quote! {
-        #[derive(Clone, Deserialize, Copy, Hash, PartialEq, Eq)]
+        #[derive(Clone, Deserialize, Copy, Hash, PartialEq, Eq, Debug)]
         pub enum Biome {
             #variants
         }

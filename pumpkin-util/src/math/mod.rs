@@ -1,11 +1,13 @@
-use num_traits::{One, PrimInt, Zero};
+use num_traits::{Float, One, PrimInt, Zero};
 
 pub mod boundingbox;
 pub mod experience;
+pub mod float_provider;
 pub mod int_provider;
 pub mod position;
 pub mod vector2;
 pub mod vector3;
+pub mod vertical_surface_type;
 pub mod voxel_shape;
 
 pub fn wrap_degrees(degrees: f32) -> f32 {
@@ -80,6 +82,14 @@ where
 }
 
 #[inline]
+pub fn square<T>(n: T) -> T
+where
+    T: Float,
+{
+    n * n
+}
+
+#[inline]
 pub fn floor_mod<T>(x: T, y: T) -> T
 where
     T: PrimInt + Zero,
@@ -90,4 +100,72 @@ where
     } else {
         rem
     }
+}
+
+#[inline]
+pub fn map<T>(value: T, old_start: T, old_end: T, new_start: T, new_end: T) -> T
+where
+    T: Float,
+{
+    lerp(lerp_progress(value, old_start, old_end), new_start, new_end)
+}
+
+#[inline]
+pub fn lerp<T>(delta: T, start: T, end: T) -> T
+where
+    T: Float,
+{
+    start + delta * (end - start)
+}
+
+#[inline]
+pub fn lerp_progress<T>(value: T, start: T, end: T) -> T
+where
+    T: Float,
+{
+    (value - start) / (end - start)
+}
+
+pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
+    if delta < 0f64 {
+        start
+    } else if delta > 1f64 {
+        end
+    } else {
+        lerp(delta, start, end)
+    }
+}
+
+#[inline]
+pub fn clamped_map(value: f64, old_start: f64, old_end: f64, new_start: f64, new_end: f64) -> f64 {
+    clamped_lerp(new_start, new_end, lerp_progress(value, old_start, old_end))
+}
+
+pub fn lerp2(delta_x: f64, delta_y: f64, x0y0: f64, x1y0: f64, x0y1: f64, x1y1: f64) -> f64 {
+    lerp(
+        delta_y,
+        lerp(delta_x, x0y0, x1y0),
+        lerp(delta_x, x0y1, x1y1),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn lerp3(
+    delta_x: f64,
+    delta_y: f64,
+    delta_z: f64,
+    x0y0z0: f64,
+    x1y0z0: f64,
+    x0y1z0: f64,
+    x1y1z0: f64,
+    x0y0z1: f64,
+    x1y0z1: f64,
+    x0y1z1: f64,
+    x1y1z1: f64,
+) -> f64 {
+    lerp(
+        delta_z,
+        lerp2(delta_x, delta_y, x0y0z0, x1y0z0, x0y1z0, x1y1z0),
+        lerp2(delta_x, delta_y, x0y0z1, x1y0z1, x0y1z1, x1y1z1),
+    )
 }

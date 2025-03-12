@@ -1,14 +1,11 @@
-use pumpkin_util::random::RandomDeriver;
+use pumpkin_util::{math::clamped_map, random::RandomDeriver};
 
 use crate::{
     block::ChunkBlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter,
 };
 
-use super::{
-    noise::clamped_map,
-    noise_router::{
-        chunk_density_function::ChunkNoiseFunctionSampleOptions, density_function::NoisePos,
-    },
+use super::noise_router::{
+    chunk_density_function::ChunkNoiseFunctionSampleOptions, density_function::NoisePos,
 };
 
 pub struct OreVeinSampler {

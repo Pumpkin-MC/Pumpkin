@@ -11,8 +11,8 @@ pub trait GaussianGenerator: RandomImpl {
             gaussian
         } else {
             loop {
-                let d = 2f64.mul_add(self.next_f64(), -1f64);
-                let e = 2f64.mul_add(self.next_f64(), -1f64);
+                let d = self.next_f64() * 2.0 - 1.0;
+                let e = self.next_f64() * 2.0 - 1.0;
                 let f = d * d + e * e;
 
                 if f < 1f64 && f != 0f64 {

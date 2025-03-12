@@ -1,11 +1,8 @@
-use pumpkin_util::random::RandomGenerator;
+use pumpkin_util::{math::clamped_lerp, random::RandomGenerator};
 
 use crate::{
     generation::{
-        noise::{
-            clamped_lerp,
-            perlin::{DoublePerlinNoiseSampler, OctavePerlinNoiseSampler},
-        },
+        noise::perlin::{DoublePerlinNoiseSampler, OctavePerlinNoiseSampler},
         noise_router::{
             chunk_density_function::ChunkNoiseFunctionSampleOptions,
             chunk_noise_router::{

@@ -4,14 +4,16 @@ use serde::{Deserialize, Serialize};
 use std::iter::repeat_with;
 use thiserror::Error;
 
-use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
+use crate::coordinates::ChunkRelativeBlockCoordinates;
 
 pub mod format;
 pub mod io;
 
-pub const CHUNK_AREA: usize = 16 * 16;
-pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
-pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;
+pub const CHUNK_WIDTH: usize = 16;
+pub const WORLD_HEIGHT: usize = 384;
+pub const CHUNK_AREA: usize = CHUNK_WIDTH * CHUNK_WIDTH;
+pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
+pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / CHUNK_WIDTH;
 pub const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
 
 #[derive(Error, Debug)]
@@ -174,7 +176,7 @@ impl Subchunks {
         match &self {
             Self::Single(block) => Some(*block),
             Self::Multi(subchunks) => subchunks
-                .get((position.y.get_absolute() / 16) as usize)
+                .get(position.y.get_absolute() as usize / CHUNK_WIDTH)
                 .and_then(|subchunk| subchunk.get_block(position)),
         }
     }
@@ -200,14 +202,15 @@ impl Subchunks {
                 if *block != new_block {
                     let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
 
-                    subchunks[(position.y.get_absolute() / 16) as usize]
+                    subchunks[position.y.get_absolute() as usize / CHUNK_WIDTH]
                         .set_block(position, new_block);
 
                     *self = Self::Multi(subchunks.try_into().unwrap());
                 }
             }
             Self::Multi(subchunks) => {
-                subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block);
+                subchunks[position.y.get_absolute() as usize / CHUNK_WIDTH]
+                    .set_block(position, new_block);
 
                 if subchunks
                     .iter()
@@ -278,7 +281,9 @@ pub enum ChunkParsingError {
 
 fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
     // % works for negative numbers as intended.
-    (index.y.get_absolute() % 16) as usize * CHUNK_AREA + *index.z as usize * 16 + *index.x as usize
+    (index.y.get_absolute() as usize % CHUNK_WIDTH) * CHUNK_AREA
+        + *index.z as usize * CHUNK_WIDTH
+        + *index.x as usize
 }
 #[derive(Error, Debug)]
 pub enum ChunkSerializingError {

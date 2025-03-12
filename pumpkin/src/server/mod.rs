@@ -94,7 +94,7 @@ impl Server {
         let command_dispatcher = RwLock::new(default_dispatcher());
 
         let world = World::load(
-            Dimension::OverWorld.into_level(
+            Dimension::Overworld.into_level(
                 // TODO: load form config
                 "./world".parse().unwrap(),
             ),
