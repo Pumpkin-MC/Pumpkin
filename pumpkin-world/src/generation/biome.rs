@@ -1,12 +1,9 @@
-use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{floor_mod, square, vector3::Vector3};
 
-use crate::ProtoChunk;
-
-use super::{biome_coords, height_limit::HeightLimitView};
+use super::{biome_coords};
 
 // This blends biome boundaries, returning which biome to populate the surface on based on the seed
-pub fn get_biome_blend(chunk: &ProtoChunk, seed: u64, pos: &Vector3<i32>) -> Biome {
+pub fn get_biome_blend(bottom_y: i8, height: u16, seed: u64, pos: &Vector3<i32>) -> Vector3<i32> {
     // This is the "left" side of the biome boundary
     let offset_x = pos.x - 2;
     let offset_y = pos.y - 2;
@@ -95,12 +92,12 @@ pub fn get_biome_blend(chunk: &ProtoChunk, seed: u64, pos: &Vector3<i32>) -> Bio
     };
 
     // Java's `getBiomeForNoiseGen`
-    let bottom_y = chunk.bottom_y() as i32;
+    let bottom_y = bottom_y as i32;
     let biome_bottom = biome_coords::from_block(bottom_y);
-    let biome_top = biome_bottom + biome_coords::from_block(chunk.height() as i32) - 1;
+    let biome_top = biome_bottom + biome_coords::from_block(height as i32) - 1;
     let biome_y = biome_y.clamp(biome_bottom, biome_top);
 
-    chunk.get_biome(&Vector3::new(biome_x, biome_y, biome_z))
+    Vector3::new(biome_x, biome_y, biome_z)
 }
 
 // This is effectively getting a random offset (+/- 0.0-0.8ish) to our biome position quarters and
@@ -136,8 +133,42 @@ fn scale_mix(l: i64) -> f64 {
 
 #[inline]
 fn salt_mix(seed: i64, salt: i64) -> i64 {
-    let mix = seed
+    let mixed_seed = seed
         .wrapping_mul(6364136223846793005)
-        .wrapping_add(1442695040888963407);
-    mix.wrapping_add(salt)
+        .wrapping_add(1442695040888963407)
+        .wrapping_mul(seed);
+    mixed_seed.wrapping_add(salt)
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_util::math::vector3::Vector3;
+
+    use crate::generation::biome::{get_biome_blend, scale_mix, score_permutation};
+
+    use super::salt_mix;
+
+    #[test]
+    fn test_mix_seed() {
+        let seed = salt_mix(12345678, 12345678);
+        assert_eq!(seed, 2937271135939595220);
+    }
+    
+    #[test]
+    fn test_permutation() {
+        let seed = score_permutation(123, 123, 456, 456, 5.5, 5.5, 5.5);
+        assert_eq!(seed, 84.45165515899657);
+    }
+    
+    #[test]
+    fn test_biome_blend() {
+        let biome_pos = get_biome_blend(-64, 384, 1234567890, &Vector3::new(123, 123, 123));
+        assert_eq!(biome_pos, Vector3::new(31, 30, 30));
+    }
+    
+    #[test]
+    fn test_scale() {
+        let seed = scale_mix(12345678);
+        assert_eq!(seed, -0.45);
+    }
 }

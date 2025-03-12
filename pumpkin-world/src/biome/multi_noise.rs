@@ -44,7 +44,7 @@ impl NoiseHypercube {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ParameterRange {
     pub min: i64,
     pub max: i64,
@@ -96,7 +96,7 @@ impl<T: Clone> SearchTree<T> {
             .collect();
 
         Some(SearchTree {
-            root: create_node(leaves),
+            root: create_node(7, leaves),
         })
     }
 
@@ -121,81 +121,97 @@ impl<T: Clone> SearchTree<T> {
     }
 }
 
-fn create_node<T: Clone>(sub_tree: Vec<TreeNode<T>>) -> TreeNode<T> {
+fn create_node<T: Clone>(parameter_number: usize, sub_tree: Vec<TreeNode<T>>) -> TreeNode<T> {
     if sub_tree.is_empty() {
         panic!("Need at least one child to build a node");
-    } else if sub_tree.len() == 1 {
-        sub_tree.into_iter().next().unwrap()
-    } else if sub_tree.len() <= 6 {
+    }
+    if sub_tree.len() == 1 {
+        return sub_tree.into_iter().next().unwrap();
+    }
+    if sub_tree.len() <= 6 {
         let mut sorted_sub_tree = sub_tree;
-        sorted_sub_tree.sort_by_key(|a| calculate_midpoint_sum(a));
+        sorted_sub_tree.sort_by_key(|a| calculate_midpoint_sum(parameter_number, a));
         let bounds = calculate_bounds(&sorted_sub_tree);
-        TreeNode::Branch {
+        return TreeNode::Branch {
             children: sorted_sub_tree,
             bounds,
-        }
-    } else {
-        let best_split = (0..7)
-            .map(|param_idx| {
-                let mut sorted_sub_tree = sub_tree.clone();
-                sort_tree(&mut sorted_sub_tree, param_idx, false);
-                let batched_tree = get_batched_tree(sorted_sub_tree);
+        };
+    }
+    let mut best_split = (0..parameter_number)
+        .map(|param_idx| {
+            let mut sorted_sub_tree = sub_tree.clone();
+            sort_tree(&mut sorted_sub_tree, parameter_number, param_idx, false);
+            let batched_tree = get_batched_tree(sorted_sub_tree);
+            let range_sum: i64 = batched_tree
+                .iter()
+                .map(|node| calculate_bounds_sum(node.bounds()))
+                .sum();
+            (param_idx, batched_tree, range_sum)
+        })
+        .min_by_key(|(_, _, range_sum)| *range_sum)
+        .unwrap();
+    let (best_param, mut best_batched, _) = best_split;
+    sort_tree(&mut best_batched, parameter_number, best_param, true);
+    let children: Vec<TreeNode<T>> = best_batched
+        .into_iter()
+        .map(|batch| create_node(parameter_number, batch.children()))
+        .collect();
+    let bounds = calculate_bounds(&children);
+    TreeNode::Branch { children, bounds }
+}
 
-                let range_sum: i64 = batched_tree
-                    .iter()
-                    .map(|node| calculate_bounds_sum(node.bounds()))
-                    .sum();
+fn create_node_comparator<T: Clone>(
+    current_parameter: usize,
+    abs: bool,
+) -> impl Fn(&TreeNode<T>, &TreeNode<T>) -> Ordering {
+    move |a: &TreeNode<T>, b: &TreeNode<T>| {
+        let range_a = &a.bounds()[current_parameter];
+        let range_b = &b.bounds()[current_parameter];
 
-                (param_idx, batched_tree, range_sum)
-            })
-            .min_by_key(|(_, _, range_sum)| *range_sum)
-            .unwrap();
+        let mid_a = (range_a.min + range_a.max) / 2;
+        let mid_b = (range_b.min + range_b.max) / 2;
 
-        let (best_param, mut best_batched, _) = best_split;
-        sort_tree(&mut best_batched, best_param, true);
-        let children: Vec<TreeNode<T>> = best_batched
-            .into_iter()
-            .map(|batch| create_node(batch.children().to_vec()))
-            .collect();
-        let bounds = calculate_bounds(&children);
-        TreeNode::Branch { children, bounds }
+        let val_a = if abs { mid_a.abs() } else { mid_a };
+        let val_b = if abs { mid_b.abs() } else { mid_b };
+
+        val_a.cmp(&val_b)
     }
 }
 
-fn sort_tree<T: Clone>(sub_tree: &mut [TreeNode<T>], parameter_offset: usize, abs: bool) {
+fn sort_tree<T: Clone>(
+    sub_tree: &mut [TreeNode<T>],
+    parameter_number: usize,
+    current_parameter: usize,
+    abs: bool,
+) {
     sub_tree.sort_by(|a, b| {
-        for i in 0..7 {
-            // Calculate the parameter index in cyclic order
-            let current_param = (parameter_offset + i) % 7;
+        let mut comparator = create_node_comparator(current_parameter, abs);
 
-            // Get the midpoints for the current parameter
-            let mid_a = get_midpoint(a, current_param);
-            let mid_b = get_midpoint(b, current_param);
+        for i in 1..parameter_number {
+            let next_parameter = (current_parameter + i) % parameter_number;
 
-            // Apply absolute value if required
-            let val_a = if abs { mid_a.abs() } else { mid_a };
-            let val_b = if abs { mid_b.abs() } else { mid_b };
+            let next_comparator = create_node_comparator(next_parameter, abs);
 
-            match val_a.cmp(&val_b) {
-                Ordering::Equal => continue,   // Move to the next parameter if equal
-                non_equal => return non_equal, // Return the result if not equal
+            let result = comparator(a, b);
+
+            if result != Ordering::Equal {
+                return result;
             }
+            comparator = next_comparator;
         }
 
-        Ordering::Equal // All parameters are equal
+        comparator(a, b)
     });
 }
 
-fn get_midpoint<T: Clone>(node: &TreeNode<T>, parameter: usize) -> i64 {
-    let range = &node.bounds()[parameter];
-    (range.min + range.max) / 2
-}
-
-fn calculate_midpoint_sum<T: Clone>(node: &TreeNode<T>) -> i64 {
-    node.bounds()
-        .iter()
-        .map(|range| ((range.min + range.max) / 2).abs())
-        .sum()
+fn calculate_midpoint_sum<T: Clone>(parameter_number: usize, node: &TreeNode<T>) -> i64 {
+    let bounds = node.bounds();
+    let mut l = 0;
+    for j in 0..parameter_number {
+        let parameter_range = bounds[j];
+        l += ((parameter_range.min + parameter_range.max) / 2).abs();
+    }
+    l
 }
 
 fn get_batched_tree<T: Clone>(nodes: Vec<TreeNode<T>>) -> Vec<TreeNode<T>> {
@@ -242,10 +258,10 @@ fn calculate_bounds<T: Clone>(nodes: &[TreeNode<T>]) -> [ParameterRange; 7] {
 }
 
 fn calculate_bounds_sum(bounds: &[ParameterRange]) -> i64 {
-    bounds.iter().map(|range| range.max - range.min).sum()
+    bounds.iter().map(|range| (range.max - range.min).abs()).sum()
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum TreeNode<T: Clone> {
     Leaf(TreeLeafNode<T>),
     Branch {
@@ -254,7 +270,7 @@ pub enum TreeNode<T: Clone> {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TreeLeafNode<T: Clone> {
     value: T,
     point: [ParameterRange; 7],
@@ -268,6 +284,12 @@ impl<T: Clone> TreeNode<T> {
     // pub fn new_branch(children: Vec<TreeNode<T>>, bounds: [ParameterRange; 7]) -> Self {
     //     TreeNode::Branch { children, bounds }
     // }
+    fn is_leaf(&self, node: &TreeLeafNode<T>) -> bool {
+        match self {
+            TreeNode::Leaf(leaf) => leaf.point == node.point,
+            TreeNode::Branch { .. } => false,
+        }
+    }
 
     pub fn get_node(
         &self,
@@ -284,17 +306,25 @@ impl<T: Clone> TreeNode<T> {
                 let mut tree_leaf_node = alternative.clone();
                 for node in children {
                     let distance = squared_distance(node.bounds(), point);
-                    if distance < min {
-                        let tree_leaf_node2 = node
-                            .get_node(point, alternative)
-                            .expect("get_node should always return a value on a non empty tree");
-
-                        let distance2 = squared_distance(&tree_leaf_node2.point, point);
-                        if distance2 < min {
-                            min = distance2;
-                            tree_leaf_node = Some(tree_leaf_node2);
-                        }
+                    if min <= distance {
+                        continue;
                     }
+                    let tree_leaf_node2 = node
+                        .get_node(point, &tree_leaf_node)
+                        .expect("get_node should always return a value on a non empty tree");
+
+                    let n = if node.is_leaf(&tree_leaf_node2) {
+                        distance
+                    } else {
+                        squared_distance(&tree_leaf_node2.point, point)
+                    };
+
+                    if min <= n {
+                        continue;
+                    }
+
+                    min = n;
+                    tree_leaf_node = Some(tree_leaf_node2)
                 }
                 tree_leaf_node
             }
@@ -317,5 +347,11 @@ impl<T: Clone> TreeNode<T> {
 }
 
 fn squared_distance(a: &[ParameterRange; 7], b: &[i64; 7]) -> i64 {
-    a.iter().zip(b).map(|(a, b)| a.get_distance(*b)).sum()
+    a.iter()
+        .zip(b)
+        .map(|(a, b)| {
+            let distance = a.get_distance(*b);
+            distance * distance // Square the distance
+        })
+        .sum()
 }

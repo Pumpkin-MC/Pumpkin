@@ -9,21 +9,13 @@ use crate::{
 };
 
 use super::{
-    GlobalRandomConfig,
-    aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
-    biome_coords,
-    chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
-    noise_router::{
+    aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl}, biome_coords, chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK}, height_limit::HeightLimitView, noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::{DoublePerlinNoiseBuilder, GlobalProtoNoiseRouter},
         surface_height_sampler::{
             SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
         },
-    },
-    positions::chunk_pos::{start_block_x, start_block_z},
-    section_coords,
-    settings::GenerationSettings,
-    surface::MaterialRuleContext,
+    }, positions::chunk_pos::{start_block_x, start_block_z}, section_coords, settings::GenerationSettings, surface::MaterialRuleContext, GlobalRandomConfig
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -164,7 +156,7 @@ impl<'a> ProtoChunk<'a> {
             flat_block_map: vec![ChunkBlockState::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
             flat_biome_map: vec![
-                Biome::Desert;
+                Biome::Plains;
                 biome_coords::from_block(CHUNK_WIDTH)
                     * biome_coords::from_block(CHUNK_WIDTH)
                     * biome_coords::from_block(height as usize)
@@ -263,7 +255,7 @@ impl<'a> ProtoChunk<'a> {
 
         for i in bottom_section..=top_section {
             let block_y = section_coords::section_to_block(i);
-            let start_y = biome_coords::from_block(block_y);
+            let start_y = biome_coords::from_chunk(block_y);
             let biomes_per_section = biome_coords::from_block(CHUNK_WIDTH) as i32;
 
             for x in 0..biomes_per_section {
@@ -274,7 +266,7 @@ impl<'a> ProtoChunk<'a> {
                             &biome_pos,
                             &mut self.multi_noise_sampler,
                         );
-                        println!("Populating biome: {:?} -> {:?}", biome_pos, biome);
+                        panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
                         let local_biome_pos = Vector3 {
                             x,
@@ -441,7 +433,8 @@ impl<'a> ProtoChunk<'a> {
                     };
 
                     let biome_pos = Vector3::new(x, biome_y as i32, z);
-                    let biome = biome::get_biome_blend(self, self.random_config.seed, &biome_pos);
+                    let seed_biome_pos = biome::get_biome_blend(self.bottom_y(), self.height(), self.random_config.seed, &biome_pos);
+                    let biome = self.get_biome(&seed_biome_pos);
                     //println!("Blending with biome at: {:?}", biome_pos);
                     context.biome = biome;
 
