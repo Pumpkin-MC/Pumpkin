@@ -1,6 +1,6 @@
 use pumpkin_util::math::{floor_mod, square, vector3::Vector3};
 
-use super::{biome_coords};
+use super::biome_coords;
 
 // This blends biome boundaries, returning which biome to populate the surface on based on the seed
 pub fn get_biome_blend(bottom_y: i8, height: u16, seed: u64, pos: &Vector3<i32>) -> Vector3<i32> {
@@ -153,19 +153,19 @@ mod test {
         let seed = salt_mix(12345678, 12345678);
         assert_eq!(seed, 2937271135939595220);
     }
-    
+
     #[test]
     fn test_permutation() {
         let seed = score_permutation(123, 123, 456, 456, 5.5, 5.5, 5.5);
         assert_eq!(seed, 84.45165515899657);
     }
-    
+
     #[test]
     fn test_biome_blend() {
         let biome_pos = get_biome_blend(-64, 384, 1234567890, &Vector3::new(123, 123, 123));
         assert_eq!(biome_pos, Vector3::new(31, 30, 30));
     }
-    
+
     #[test]
     fn test_scale() {
         let seed = scale_mix(12345678);

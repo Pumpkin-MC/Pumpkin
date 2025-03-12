@@ -9,13 +9,22 @@ use crate::{
 };
 
 use super::{
-    aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl}, biome_coords, chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK}, height_limit::HeightLimitView, noise_router::{
+    GlobalRandomConfig,
+    aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
+    biome_coords,
+    chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
+    height_limit::HeightLimitView,
+    noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::{DoublePerlinNoiseBuilder, GlobalProtoNoiseRouter},
         surface_height_sampler::{
             SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
         },
-    }, positions::chunk_pos::{start_block_x, start_block_z}, section_coords, settings::GenerationSettings, surface::MaterialRuleContext, GlobalRandomConfig
+    },
+    positions::chunk_pos::{start_block_x, start_block_z},
+    section_coords,
+    settings::GenerationSettings,
+    surface::MaterialRuleContext,
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -184,13 +193,13 @@ impl<'a> ProtoChunk<'a> {
         {
             assert!(local_biome_pos.x >= 0 && local_biome_pos.x <= 3);
             assert!(
-                local_biome_pos.y < biome_coords::from_block(self.noise_sampler.height() as i32)
+                local_biome_pos.y < biome_coords::from_chunk(self.noise_sampler.height() as i32)
                     && local_biome_pos.y >= 0
             );
             assert!(local_biome_pos.z >= 0 && local_biome_pos.z <= 3);
         }
 
-        biome_coords::from_block(self.noise_sampler.height() as usize)
+        biome_coords::from_chunk(self.noise_sampler.height() as usize)
             * biome_coords::from_block(CHUNK_WIDTH)
             * local_biome_pos.x as usize
             + biome_coords::from_block(CHUNK_WIDTH) * local_biome_pos.y as usize
@@ -255,23 +264,25 @@ impl<'a> ProtoChunk<'a> {
 
         for i in bottom_section..=top_section {
             let block_y = section_coords::section_to_block(i);
-            let start_y = biome_coords::from_chunk(block_y);
+            let start_y = biome_coords::from_chunk(i - bottom_section);
+
             let biomes_per_section = biome_coords::from_block(CHUNK_WIDTH) as i32;
 
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
+                        // panic!("{}:{}", start_y, y);
                         let biome_pos = Vector3::new(start_x + x, start_y + y, start_z + z);
                         let biome = MultiNoiseBiomeSupplier::biome(
                             &biome_pos,
                             &mut self.multi_noise_sampler,
                         );
-                        panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
+                        // panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
                         let local_biome_pos = Vector3 {
                             x,
                             // Make the y start from 0
-                            y: start_y + y - biome_coords::from_block(min_y as i32),
+                            y: start_y + y - biome_coords::from_chunk(min_y as i32),
                             z,
                         };
                         let index = self.local_biome_pos_to_biome_index(&local_biome_pos);
@@ -433,7 +444,12 @@ impl<'a> ProtoChunk<'a> {
                     };
 
                     let biome_pos = Vector3::new(x, biome_y as i32, z);
-                    let seed_biome_pos = biome::get_biome_blend(self.bottom_y(), self.height(), self.random_config.seed, &biome_pos);
+                    let seed_biome_pos = biome::get_biome_blend(
+                        self.bottom_y(),
+                        self.height(),
+                        self.random_config.seed,
+                        &biome_pos,
+                    );
                     let biome = self.get_biome(&seed_biome_pos);
                     //println!("Blending with biome at: {:?}", biome_pos);
                     context.biome = biome;

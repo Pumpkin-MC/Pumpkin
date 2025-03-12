@@ -85,7 +85,7 @@ pub struct SearchTree<T: Clone> {
 }
 
 impl<T: Clone> SearchTree<T> {
-    pub fn create(entries: Vec<(T, NoiseHypercube)>) -> Option<Self> {
+    pub fn create(entries: Vec<(T, &NoiseHypercube)>) -> Option<Self> {
         if entries.is_empty() {
             return None;
         }
@@ -258,7 +258,10 @@ fn calculate_bounds<T: Clone>(nodes: &[TreeNode<T>]) -> [ParameterRange; 7] {
 }
 
 fn calculate_bounds_sum(bounds: &[ParameterRange]) -> i64 {
-    bounds.iter().map(|range| (range.max - range.min).abs()).sum()
+    bounds
+        .iter()
+        .map(|range| (range.max - range.min).abs())
+        .sum()
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -354,4 +357,11 @@ fn squared_distance(a: &[ParameterRange; 7], b: &[i64; 7]) -> i64 {
             distance * distance // Square the distance
         })
         .sum()
+}
+
+#[cfg(test)]
+mod test {
+    use super::squared_distance;
+
+    fn test_() {}
 }
