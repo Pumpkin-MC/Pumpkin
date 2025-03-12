@@ -1131,16 +1131,37 @@ impl World {
         let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
 
+        let block_moved = flags.contains(BlockFlags::MOVED);
+
         // WorldChunk.java line 310
-        if old_block != new_block
-            && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || flags.contains(BlockFlags::MOVED))
-        {
+        if old_block != new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
             self.block_registry
-                .on_state_replaced(self, &new_block, *position)
+                .on_state_replaced(
+                    self,
+                    &old_block,
+                    *position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
                 .await;
         }
 
         let block_state = self.get_block_state(position).await.unwrap();
+        let new_block = Block::from_state_id(block_state_id).unwrap();
+
+        // WorldChunk.java line 318
+        if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
+            self.block_registry
+                .on_placed(
+                    self,
+                    &new_block,
+                    block_state_id,
+                    position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
+                .await;
+        }
 
         // Ig they do this cause it could be modified in chunkPos.setBlockState?
         if block_state.id == block_state_id {

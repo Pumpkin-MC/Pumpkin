@@ -54,6 +54,14 @@ impl BlockPos {
     pub fn offset(&self, offset: Vector3<i32>) -> Self {
         BlockPos(self.0 + offset)
     }
+
+    pub fn up(&self) -> Self {
+        self.offset(Vector3::new(0, 1, 0))
+    }
+
+    pub fn down(&self) -> Self {
+        self.offset(Vector3::new(0, -1, 0))
+    }
 }
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

@@ -6,6 +6,19 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use syn::{Ident, LitBool, LitInt, LitStr};
 
+fn is_state_solid(state: &BlockState, all_shapes: &[CollisionShape]) -> bool {
+    // Needs min xyz to be 0,0,0 and max xyz to be 1,1,1
+    state.collision_shapes.iter().any(|shape| {
+        let shape = all_shapes.get(*shape as usize).unwrap();
+        shape.min[0] == 0.0
+            && shape.min[1] == 0.0
+            && shape.min[2] == 0.0
+            && shape.max[0] == 1.0
+            && shape.max[1] == 1.0
+            && shape.max[2] == 1.0
+    })
+}
+
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
 }
@@ -327,8 +340,9 @@ pub struct BlockStateRef {
     pub state_idx: u16,
 }
 
-impl ToTokens for BlockState {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+impl BlockState {
+    fn to_tokens(&self, all_shapes: &[CollisionShape]) -> TokenStream {
+        let mut tokens = TokenStream::new();
         //let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let air = LitBool::new(self.air, Span::call_site());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
@@ -359,6 +373,8 @@ impl ToTokens for BlockState {
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
 
+        let is_solid = is_state_solid(self, all_shapes);
+
         tokens.extend(quote! {
             PartialBlockState {
                 air: #air,
@@ -372,8 +388,10 @@ impl ToTokens for BlockState {
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
                 is_liquid: #is_liquid,
+                is_solid: #is_solid,
             }
         });
+        tokens
     }
 }
 
@@ -1001,7 +1019,9 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let unique_states = unique_states.iter().map(|state| state.to_token_stream());
+    let unique_states = unique_states
+        .iter()
+        .map(|state| state.to_tokens(&blocks_assets.shapes));
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
@@ -1065,6 +1085,7 @@ pub(crate) fn build() -> TokenStream {
             pub opacity: Option<u32>,
             pub block_entity_type: Option<u32>,
             pub is_liquid: bool,
+            pub is_solid: bool,
         }
 
         #[derive(Clone, Debug)]
@@ -1081,6 +1102,7 @@ pub(crate) fn build() -> TokenStream {
             pub opacity: Option<u32>,
             pub block_entity_type: Option<u32>,
             pub is_liquid: bool,
+            pub is_solid: bool,
         }
 
         #[derive(Clone, Debug)]
@@ -1123,22 +1145,6 @@ pub(crate) fn build() -> TokenStream {
             pub min: [f64; 3],
             pub max: [f64; 3],
         }
-
-        #[derive(Clone, Copy, Debug)]
-        pub struct BlockStateData {
-            pub air: bool,
-            pub luminance: u8,
-            pub burnable: bool,
-            pub tool_required: bool,
-            pub hardness: f32,
-            pub sided_transparency: bool,
-            pub replaceable: bool,
-            pub collision_shapes: &'static [u16],
-            pub opacity: Option<u32>,
-            pub block_entity_type: Option<u32>,
-            pub is_liquid: bool,
-        }
-
 
         pub trait BlockProperties where Self: 'static {
             // Convert properties to an index (0 to N-1)
@@ -1257,6 +1263,7 @@ pub(crate) fn build() -> TokenStream {
                     opacity: partial_state.opacity,
                     block_entity_type: partial_state.block_entity_type,
                     is_liquid: partial_state.is_liquid,
+                    is_solid: partial_state.is_solid,
                 }
             }
         }

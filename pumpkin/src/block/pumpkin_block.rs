@@ -47,6 +47,7 @@ pub trait PumpkinBlock: Send + Sync {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// getPlacementState in source code
     async fn on_place(
         &self,
         _server: &Server,
@@ -61,25 +62,19 @@ pub trait PumpkinBlock: Send + Sync {
         block.default_state_id
     }
 
-    async fn can_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        _block: &Block,
-        _face: &BlockDirection,
-        _block_pos: &BlockPos,
-        _player_direction: &HorizontalFacing,
-    ) -> bool {
+    async fn can_place_at(&self, _world: &World, _block_pos: &BlockPos) -> bool {
         true
     }
 
+    /// onBlockAdded in source code
     async fn placed(
         &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _server: &Server,
         _world: &World,
+        _block: &Block,
+        _state_id: u16,
+        _block_pos: &BlockPos,
+        _old_state_id: u16,
+        _notify: bool,
     ) {
     }
 
@@ -147,5 +142,44 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    async fn on_state_replaced(&self, _world: &World, _block: &Block, _location: BlockPos) {}
+    async fn on_state_replaced(
+        &self,
+        _world: &World,
+        _block: &Block,
+        _location: BlockPos,
+        _old_state_id: u16,
+        _moved: bool,
+    ) {
+    }
+
+    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState) -> bool {
+        false
+    }
+
+    async fn get_weak_redstone_power(
+        &self,
+        _block: &Block,
+        _world: &World,
+        _block_pos: &BlockPos,
+        _state: &BlockState,
+        _direction: &BlockDirection,
+    ) -> u8 {
+        0
+    }
+
+    async fn get_strong_redstone_power(
+        &self,
+        _block: &Block,
+        _world: &World,
+        _block_pos: &BlockPos,
+        _state: &BlockState,
+        _direction: &BlockDirection,
+    ) -> u8 {
+        0
+    }
+
+    /// ONLY USE IN REDSTONE WIRE
+    async fn get_strong_power(&self, _world: &World, _block_pos: &BlockPos) -> u8 {
+        0
+    }
 }

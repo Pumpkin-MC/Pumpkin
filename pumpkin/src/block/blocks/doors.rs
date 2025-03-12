@@ -103,15 +103,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 door_props.to_state_id(block)
             }
 
-            async fn can_place(
-                &self,
-                _server: &Server,
-                world: &World,
-                _block: &Block,
-                _face: &BlockDirection,
-                block_pos: &BlockPos,
-                _player_direction: &HorizontalFacing,
-            ) -> bool {
+            async fn can_place_at(&self, world: &World, block_pos: &BlockPos) -> bool {
                 if world
                     .get_block_state(&block_pos.offset(BlockDirection::Up.to_offset()))
                     .await
@@ -124,19 +116,19 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
 
             async fn placed(
                 &self,
-                block: &Block,
-                _player: &Player,
-                location: BlockPos,
-                _server: &Server,
                 world: &World,
+                block: &Block,
+                state_id: u16,
+                block_pos: &BlockPos,
+                _old_state_id: u16,
+                _notify: bool,
             ) {
-                let state_id = world.get_block_state_id(&location).await.unwrap();
                 let mut door_props = DoorProperties::from_state_id(state_id, block);
                 door_props.half = DoubleBlockHalf::Upper;
 
                 world
                     .set_block_state(
-                        &location.offset(BlockDirection::Up.to_offset()),
+                        &block_pos.offset(BlockDirection::Up.to_offset()),
                         door_props.to_state_id(block),
                         BlockFlags::NOTIFY_ALL,
                     )

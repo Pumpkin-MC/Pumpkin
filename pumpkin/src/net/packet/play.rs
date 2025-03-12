@@ -1528,22 +1528,11 @@ impl Player {
         if !intersects
             && server
                 .block_registry
-                .can_place(
-                    server,
-                    world,
-                    &block,
-                    face,
-                    &final_block_pos,
-                    &self.get_player_direction(),
-                )
+                .can_place_at(world, &block, &final_block_pos)
                 .await
         {
             let _replaced_id = world
                 .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
-                .await;
-            server
-                .block_registry
-                .on_placed(world, &block, self, final_block_pos, server)
                 .await;
 
             self.send_sign_packet(block, final_block_pos, face).await;

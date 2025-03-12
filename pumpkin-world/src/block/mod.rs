@@ -3,12 +3,12 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, HorizontalFacing};
+use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 pub use state::ChunkBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug)]
 pub enum BlockDirection {
     Down = 0,
     Up,
@@ -138,6 +138,38 @@ impl BlockDirection {
             BlockDirection::West => BlockDirection::North,
             BlockDirection::Up => BlockDirection::East,
             BlockDirection::Down => BlockDirection::West,
+        }
+    }
+}
+
+pub trait HorizontalFacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+}
+
+impl HorizontalFacingExt for HorizontalFacing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            HorizontalFacing::North => BlockDirection::North,
+            HorizontalFacing::South => BlockDirection::South,
+            HorizontalFacing::West => BlockDirection::West,
+            HorizontalFacing::East => BlockDirection::East,
+        }
+    }
+}
+
+pub trait FacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+}
+
+impl FacingExt for Facing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            Facing::North => BlockDirection::North,
+            Facing::South => BlockDirection::South,
+            Facing::West => BlockDirection::West,
+            Facing::East => BlockDirection::East,
+            Facing::Up => BlockDirection::Up,
+            Facing::Down => BlockDirection::Down,
         }
     }
 }

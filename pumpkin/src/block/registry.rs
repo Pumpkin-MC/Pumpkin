@@ -99,20 +99,10 @@ impl BlockRegistry {
         block.default_state_id
     }
 
-    pub async fn can_place(
-        &self,
-        server: &Server,
-        world: &World,
-        block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        player_direction: &HorizontalFacing,
-    ) -> bool {
+    pub async fn can_place_at(&self, world: &World, block: &Block, block_pos: &BlockPos) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_place(server, world, block, face, block_pos, player_direction)
-                .await;
+            return pumpkin_block.can_place_at(world, block_pos).await;
         }
         true
     }
@@ -121,14 +111,15 @@ impl BlockRegistry {
         &self,
         world: &World,
         block: &Block,
-        player: &Player,
-        location: BlockPos,
-        server: &Server,
+        state_id: u16,
+        block_pos: &BlockPos,
+        old_state_id: u16,
+        notify: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .placed(block, player, location, server, world)
+                .placed(world, block, state_id, block_pos, old_state_id, notify)
                 .await;
         }
         //world.update_neighbors(&location, None).await;
@@ -168,11 +159,18 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn on_state_replaced(&self, world: &World, block: &Block, location: BlockPos) {
+    pub async fn on_state_replaced(
+        &self,
+        world: &World,
+        block: &Block,
+        location: BlockPos,
+        old_state_id: u16,
+        moved: bool,
+    ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_state_replaced(world, block, location)
+                .on_state_replaced(world, block, location, old_state_id, moved)
                 .await;
         }
     }
@@ -273,5 +271,47 @@ impl BlockRegistry {
     pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn PumpkinBlock>> {
         self.blocks
             .get(format!("minecraft:{}", block.name).as_str())
+    }
+
+    pub async fn emits_redstone_power(&self, block: &Block, state: &BlockState) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block.emits_redstone_power(block, state).await;
+        }
+        false
+    }
+
+    pub async fn get_weak_redstone_power(
+        &self,
+        block: &Block,
+        world: &World,
+        block_pos: &BlockPos,
+        state: &BlockState,
+        direction: &BlockDirection,
+    ) -> u8 {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .get_weak_redstone_power(block, world, block_pos, state, direction)
+                .await;
+        }
+        0
+    }
+
+    pub async fn get_strong_redstone_power(
+        &self,
+        block: &Block,
+        world: &World,
+        block_pos: &BlockPos,
+        state: &BlockState,
+        direction: &BlockDirection,
+    ) -> u8 {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .get_strong_redstone_power(block, world, block_pos, state, direction)
+                .await;
+        }
+        0
     }
 }
