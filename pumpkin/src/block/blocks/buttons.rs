@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockFace;
+use pumpkin_data::block::BlockState;
 use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
@@ -12,6 +13,7 @@ use pumpkin_world::chunk::TickPriority;
 
 type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
 
+use crate::block::blocks::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
@@ -19,31 +21,33 @@ use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
 
-async fn click_button(world: &World, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
-
-    let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
-    if !button_props.powered.to_bool() {
-        button_props.powered = Boolean::True;
-        world
-            .set_block_state(
-                block_pos,
-                button_props.to_state_id(&block),
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
-        // TODO: Different times for stone and wood buttons
-        world
-            .schedule_block_tick(&block, *block_pos, 20, TickPriority::Normal)
-            .await;
-    }
-}
-
+#[allow(clippy::too_many_lines)]
 pub fn register_button_blocks(manager: &mut BlockRegistry) {
     let tag_values: &'static [&'static str] =
         get_tag_values(RegistryKey::Block, "minecraft:buttons").unwrap();
 
     for block in tag_values {
+        async fn click_button(world: &World, block_pos: &BlockPos) {
+            let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
+
+            let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
+            if !button_props.powered.to_bool() {
+                button_props.powered = Boolean::True;
+                world
+                    .set_block_state(
+                        block_pos,
+                        button_props.to_state_id(&block),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                let delay = if block == Block::STONE_BUTTON { 20 } else { 30 };
+                world
+                    .schedule_block_tick(&block, *block_pos, delay, TickPriority::Normal)
+                    .await;
+                ButtonBlock::update_neighbors(world, block_pos, &button_props).await;
+            }
+        }
+
         pub struct ButtonBlock {
             id: &'static str,
         }
@@ -110,6 +114,73 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 props.powered = Boolean::False;
                 world
                     .set_block_state(block_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                    .await;
+                Self::update_neighbors(world, block_pos, &props).await;
+            }
+
+            async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState) -> bool {
+                true
+            }
+
+            async fn get_weak_redstone_power(
+                &self,
+                block: &Block,
+                _world: &World,
+                _block_pos: &BlockPos,
+                state: &BlockState,
+                _direction: &BlockDirection,
+            ) -> u8 {
+                let button_props = ButtonLikeProperties::from_state_id(state.id, block);
+                if button_props.powered.to_bool() {
+                    15
+                } else {
+                    0
+                }
+            }
+
+            async fn get_strong_redstone_power(
+                &self,
+                block: &Block,
+                _world: &World,
+                _block_pos: &BlockPos,
+                state: &BlockState,
+                direction: &BlockDirection,
+            ) -> u8 {
+                let button_props = ButtonLikeProperties::from_state_id(state.id, block);
+                if button_props.powered.to_bool() && button_props.get_direction() == *direction {
+                    15
+                } else {
+                    0
+                }
+            }
+
+            async fn on_state_replaced(
+                &self,
+                world: &World,
+                block: &Block,
+                location: BlockPos,
+                old_state_id: u16,
+                moved: bool,
+            ) {
+                if !moved {
+                    let button_props = ButtonLikeProperties::from_state_id(old_state_id, block);
+                    if button_props.powered.to_bool() {
+                        Self::update_neighbors(world, &location, &button_props).await;
+                    }
+                }
+            }
+        }
+
+        impl ButtonBlock {
+            async fn update_neighbors(
+                world: &World,
+                block_pos: &BlockPos,
+                props: &ButtonLikeProperties,
+            ) {
+                let direction = props.get_direction().opposite();
+                world.update_neighbors(block_pos, None).await;
+                world
+                    .update_neighbors(&block_pos.offset(direction.to_offset()), None)
                     .await;
             }
         }
