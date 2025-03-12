@@ -130,6 +130,17 @@ impl BlockDirection {
         }
     }
 
+    pub fn to_facing(&self) -> Facing {
+        match self {
+            BlockDirection::North => Facing::North,
+            BlockDirection::South => Facing::South,
+            BlockDirection::West => Facing::West,
+            BlockDirection::East => Facing::East,
+            BlockDirection::Up => Facing::Up,
+            BlockDirection::Down => Facing::Down,
+        }
+    }
+
     pub fn rotate_clockwise(&self) -> BlockDirection {
         match self {
             BlockDirection::North => BlockDirection::East,

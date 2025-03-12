@@ -104,8 +104,8 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &World,
         _block: &Block,
         _block_pos: &BlockPos,
-        _source_face: &BlockDirection,
-        _source_block_pos: &BlockPos,
+        _source_block: &Block,
+        _notify: bool,
     ) {
     }
 

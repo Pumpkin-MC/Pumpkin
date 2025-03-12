@@ -1233,6 +1233,21 @@ impl World {
             target_block_id: block.id,
         });
     }
+
+    pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        let (chunk_coordinate, _relative_coordinates) =
+            block_pos.chunk_and_chunk_relative_position();
+
+        let chunk = self.receive_chunk(chunk_coordinate).await.0;
+        let block_ticks_guard = chunk.read().await;
+        let block_ticks = block_ticks_guard.block_ticks.read().await;
+        block_ticks.iter().any(|tick| {
+            tick.target_block_id == block.id
+                && tick.x == block_pos.0.x
+                && tick.y == block_pos.0.y
+                && tick.z == block_pos.0.z
+        })
+    }
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Spawns a tokio task to stream chunks.
     /// Important: must be called from an async function (or changed to accept a tokio runtime
@@ -1398,6 +1413,7 @@ impl World {
 
     /// Updates neighboring blocks of a block
     pub async fn update_neighbors(&self, block_pos: &BlockPos, except: Option<&BlockDirection>) {
+        let source_block = self.get_block(block_pos).await.unwrap();
         for direction in BlockDirection::update_order() {
             if Some(&direction) == except {
                 continue;
@@ -1413,12 +1429,29 @@ impl World {
                             self,
                             &neighbor_block,
                             &neighbor_pos,
-                            &direction,
-                            block_pos,
+                            &source_block,
+                            false,
                         )
                         .await;
                 }
             }
+        }
+    }
+
+    pub async fn update_neighbor(&self, neighbor_block_pos: &BlockPos, source_block: &Block) {
+        let neighbor_block = self.get_block(neighbor_block_pos).await.unwrap();
+
+        if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(&neighbor_block)
+        {
+            neighbor_pumpkin_block
+                .on_neighbor_update(
+                    self,
+                    &neighbor_block,
+                    neighbor_block_pos,
+                    source_block,
+                    false,
+                )
+                .await;
         }
     }
 

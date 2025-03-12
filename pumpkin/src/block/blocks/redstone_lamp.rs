@@ -39,8 +39,8 @@ impl PumpkinBlock for RedstoneLamp {
         world: &World,
         block: &Block,
         block_pos: &BlockPos,
-        _source_face: &BlockDirection,
-        _source_block_pos: &BlockPos,
+        _source_block: &Block,
+        _notify: bool,
     ) {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);

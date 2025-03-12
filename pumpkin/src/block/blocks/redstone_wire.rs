@@ -212,8 +212,8 @@ impl PumpkinBlock for RedstoneWireBlock {
         world: &World,
         block: &Block,
         block_pos: &BlockPos,
-        _source_face: &BlockDirection,
-        _source_block_pos: &BlockPos,
+        _source_block: &Block,
+        _notify: bool,
     ) {
         let block_state = world.get_block_state(block_pos).await.unwrap();
 
