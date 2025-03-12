@@ -25,8 +25,8 @@ impl Explosion {
                     }
 
                     let x = f64::from(x) / 15.0 * 2.0 - 1.0;
-                    let y = f64::from(z) / 15.0 * 2.0 - 1.0;
-                    let z = y / 15.0 * 2.0 - 1.0;
+                    let y = f64::from(y) / 15.0 * 2.0 - 1.0;
+                    let z = f64::from(z) / 15.0 * 2.0 - 1.0;
 
                     let sqrt = (x * x + y * y + z * z).sqrt();
                     let x_div = x / sqrt;
