@@ -2,6 +2,7 @@ use std::any::Any;
 
 pub mod block;
 pub mod player;
+pub mod server;
 pub mod world;
 
 /// A trait representing an event in the system.
