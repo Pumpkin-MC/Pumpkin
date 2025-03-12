@@ -670,7 +670,7 @@ impl World {
         position.y = f64::from(top + 1);
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch).await;
+        player.clone().request_teleport(position, yaw, pitch).await;
 
         player.living_entity.last_pos.store(position);
 
@@ -976,7 +976,7 @@ impl World {
     ///
     /// - This function assumes `broadcast_packet_expect` and `remove_entity` are defined elsewhere.
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
-    pub async fn remove_player(&self, player: Arc<Player>, fire_event: bool) {
+    pub async fn remove_player(&self, player: &Arc<Player>, fire_event: bool) {
         self.players
             .write()
             .await

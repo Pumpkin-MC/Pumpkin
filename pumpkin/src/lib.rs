@@ -6,7 +6,9 @@ use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter, Log};
 use net::PacketHandlerState;
 use plugin::PluginManager;
+use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
 use std::collections::HashMap;
@@ -343,25 +345,23 @@ impl PumpkinServer {
                     .make_player
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
-                    let (player, world) = server.add_player(client.clone()).await;
-                    world
-                        .spawn_player(&BASIC_CONFIG, player.clone(), &server)
-                        .await;
+                    if let Some((player, world)) = server.add_player(client.clone()).await {
+                        world
+                            .spawn_player(&BASIC_CONFIG, player.clone(), &server)
+                            .await;
 
-                    // poll Player
-                    while !player
-                        .client
-                        .closed
-                        .load(core::sync::atomic::Ordering::Relaxed)
-                    {
-                        let open = poll(&player.client, &mut connection_reader).await;
-                        if open {
-                            player.process_packets(&server).await;
-                        };
+                        // poll Player
+                        while !player
+                            .client
+                            .closed
+                            .load(core::sync::atomic::Ordering::Relaxed)
+                        {
+                            let open = poll(&player.client, &mut connection_reader).await;
+                            if open {
+                                player.process_packets(&server).await;
+                            };
+                        }
                     }
-                    log::debug!("Cleaning up player for id {}", id);
-                    player.remove().await;
-                    server.remove_player().await;
                 }
 
                 // Also handle case of client connects but does not become a player (like a server
@@ -432,12 +432,18 @@ fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
 
             match result {
                 Ok(ReadlineEvent::Line(line)) => {
-                    let dispatcher = server.command_dispatcher.read().await;
+                    send_cancellable! {{
+                        ServerCommandEvent::new(line.clone());
 
-                    dispatcher
-                        .handle_command(&mut command::CommandSender::Console, &server, &line)
-                        .await;
-                    rl.add_history_entry(line).unwrap();
+                        'after: {
+                            let dispatcher = server.command_dispatcher.read().await;
+
+                            dispatcher
+                                .handle_command(&mut command::CommandSender::Console, &server, &line)
+                                .await;
+                            rl.add_history_entry(line).unwrap();
+                        }
+                    }}
                 }
                 Ok(ReadlineEvent::Interrupted) => {
                     stop_server();
