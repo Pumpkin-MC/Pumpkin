@@ -233,7 +233,7 @@ impl PumpkinBlock for RedstoneWireBlock {
                 .set_block_state(
                     block_pos,
                     Block::AIR.default_state_id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL,
                 )
                 .await;
         }

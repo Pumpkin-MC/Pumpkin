@@ -258,6 +258,7 @@ impl BlockRegistry {
     ) {
         for direction in BlockDirection::abstract_block_update_order() {
             let pos = block_pos.offset(direction.to_offset());
+
             Box::pin(world.replace_with_state_for_neighbor_update(
                 &pos,
                 &direction.opposite(),

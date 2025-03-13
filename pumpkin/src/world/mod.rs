@@ -152,6 +152,8 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    /// Block State updates to send at the end of the tick
+    pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
 }
 
@@ -173,6 +175,7 @@ impl World {
             dimension_type,
             weather: Mutex::new(Weather::new()),
             block_registry,
+            block_state_updates: Mutex::new(HashMap::new()),
         }
     }
 
@@ -369,6 +372,16 @@ impl World {
                 entity.on_player_collision(player).await;
             }
         }
+
+        let mut block_state_updates = self.block_state_updates.lock().await;
+        for (position, block_state_id) in block_state_updates.iter() {
+            self.broadcast_packet_all(&CBlockUpdate::new(
+                position,
+                i32::from(*block_state_id).into(),
+            ))
+            .await;
+        }
+        block_state_updates.clear();
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -1122,11 +1135,10 @@ impl World {
             .subchunks
             .set_block(relative, block_state_id);
 
-        self.broadcast_packet_all(&CBlockUpdate::new(
-            position,
-            i32::from(block_state_id).into(),
-        ))
-        .await;
+        {
+            let mut block_state_updates = self.block_state_updates.lock().await;
+            block_state_updates.insert(*position, block_state_id);
+        };
 
         let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
