@@ -51,3 +51,46 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::chunk::Biome;
+
+    use crate::{
+        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
+        generation::noise_router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        },
+    };
+
+    use super::{BiomeSupplier, MultiNoiseBiomeSupplier};
+
+    #[test]
+    fn test_biome_lush_caves() {
+        let seed = 123;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let biome = MultiNoiseBiomeSupplier::biome(
+            &pumpkin_util::math::vector3::Vector3 { x: 1, y: 1, z: 1 },
+            &mut sampler,
+        );
+        assert_eq!(biome, Biome::LushCaves)
+    }
+    #[test]
+    fn test_biome_desert() {
+        let seed = 13579;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let biome = MultiNoiseBiomeSupplier::biome(
+            &pumpkin_util::math::vector3::Vector3 { x: -24, y: 1, z: 8 },
+            &mut sampler,
+        );
+        assert_eq!(biome, Biome::Desert)
+    }
+}

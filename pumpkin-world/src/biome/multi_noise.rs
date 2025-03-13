@@ -384,8 +384,4 @@ mod test {
     use crate::biome::BIOME_ENTRIES;
 
     use super::{ParameterRange, squared_distance};
-
-    fn test_entires() {
-        BIOME_ENTRIES.get(point, last_result_node).
-    }
 }

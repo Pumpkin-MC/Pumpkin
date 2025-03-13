@@ -228,6 +228,7 @@ mod test {
 
     use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
 
+    #[test]
     fn test_sample() {
         let seed = 123;
         let random_config = GlobalRandomConfig::new(seed, false);
