@@ -1049,6 +1049,10 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
+        self.handle_killed().await;
+    }
+
+    async fn handle_killed(&self) {
         self.set_client_loaded(false);
         self.client
             .send_packet(&CCombatDeath::new(
@@ -1382,7 +1386,14 @@ impl EntityBase for Player {
                 &self.living_entity.entity.pos.load(),
             )
             .await;
-        self.living_entity.damage(amount, damage_type).await
+        let result = self.living_entity.damage(amount, damage_type).await;
+        if result {
+            let health = self.living_entity.health.load();
+            if health <= 0.0 {
+                self.handle_killed().await;
+            }
+        }
+        result
     }
 
     fn get_entity(&self) -> &Entity {
