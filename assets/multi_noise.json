@@ -1,1599 +1,1353 @@
 {
   "nether": {
     "minecraft:nether_wastes": {
-      "temperature": [
-        0,
-        0
-      ],
-      "humidity": [
-        0,
-        0
-      ],
-      "continentalness": [
-        0,
-        0
-      ],
-      "erosion": [
-        0,
-        0
-      ],
-      "depth": [
-        0,
-        0
-      ],
-      "weirdness": [
-        0,
-        0
-      ],
-      "offset": 0
+      "erosion": 0.0,
+      "depth": 0.0,
+      "weirdness": 0.0,
+      "offset": 0.0,
+      "temperature": 0.0,
+      "humidity": 0.0,
+      "continentalness": 0.0
     },
     "minecraft:soul_sand_valley": {
-      "temperature": [
-        0,
-        0
-      ],
-      "humidity": [
-        -5000,
-        -5000
-      ],
-      "continentalness": [
-        0,
-        0
-      ],
-      "erosion": [
-        0,
-        0
-      ],
-      "depth": [
-        0,
-        0
-      ],
-      "weirdness": [
-        0,
-        0
-      ],
-      "offset": 0
+      "erosion": 0.0,
+      "depth": 0.0,
+      "weirdness": 0.0,
+      "offset": 0.0,
+      "temperature": 0.0,
+      "humidity": -0.5,
+      "continentalness": 0.0
     },
     "minecraft:crimson_forest": {
-      "temperature": [
-        4000,
-        4000
-      ],
-      "humidity": [
-        0,
-        0
-      ],
-      "continentalness": [
-        0,
-        0
-      ],
-      "erosion": [
-        0,
-        0
-      ],
-      "depth": [
-        0,
-        0
-      ],
-      "weirdness": [
-        0,
-        0
-      ],
-      "offset": 0
+      "erosion": 0.0,
+      "depth": 0.0,
+      "weirdness": 0.0,
+      "offset": 0.0,
+      "temperature": 0.4,
+      "humidity": 0.0,
+      "continentalness": 0.0
     },
     "minecraft:warped_forest": {
-      "temperature": [
-        0,
-        0
-      ],
-      "humidity": [
-        5000,
-        5000
-      ],
-      "continentalness": [
-        0,
-        0
-      ],
-      "erosion": [
-        0,
-        0
-      ],
-      "depth": [
-        0,
-        0
-      ],
-      "weirdness": [
-        0,
-        0
-      ],
-      "offset": 3750
+      "erosion": 0.0,
+      "depth": 0.0,
+      "weirdness": 0.0,
+      "offset": 0.375,
+      "temperature": 0.0,
+      "humidity": 0.5,
+      "continentalness": 0.0
     },
     "minecraft:basalt_deltas": {
-      "temperature": [
-        -5000,
-        -5000
-      ],
-      "humidity": [
-        0,
-        0
-      ],
-      "continentalness": [
-        0,
-        0
-      ],
-      "erosion": [
-        0,
-        0
-      ],
-      "depth": [
-        0,
-        0
-      ],
-      "weirdness": [
-        0,
-        0
-      ],
-      "offset": 1750
+      "erosion": 0.0,
+      "depth": 0.0,
+      "weirdness": 0.0,
+      "offset": 0.175,
+      "temperature": -0.5,
+      "humidity": 0.0,
+      "continentalness": 0.0
     }
   },
   "overworld": {
     "minecraft:mushroom_fields": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -12000,
-        -10500
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -1.2,
+        -1.05
+      ]
     },
     "minecraft:deep_frozen_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -10500,
-        -4550
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -1.05,
+        -0.455
+      ]
     },
     "minecraft:frozen_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -4550,
-        -1900
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -0.455,
+        -0.19
+      ]
     },
     "minecraft:deep_cold_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -10500,
-        -4550
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -1.05,
+        -0.455
+      ]
     },
     "minecraft:cold_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -4550,
-        -1900
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -0.455,
+        -0.19
+      ]
     },
     "minecraft:deep_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -10500,
-        -4550
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -1.05,
+        -0.455
+      ]
     },
     "minecraft:ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -4550,
-        -1900
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -0.455,
+        -0.19
+      ]
     },
     "minecraft:deep_lukewarm_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -10500,
-        -4550
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -1.05,
+        -0.455
+      ]
     },
     "minecraft:lukewarm_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -4550,
-        -1900
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -0.455,
+        -0.19
+      ]
     },
     "minecraft:warm_ocean": {
+      "erosion": [
+        -1.0,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        5500,
-        10000
+        0.55,
+        1.0
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -4550,
-        -1900
-      ],
-      "erosion": [
-        -10000,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -0.455,
+        -0.19
+      ]
     },
     "minecraft:stony_shore": {
+      "erosion": [
+        -1.0,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        -10000,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:swamp": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        2000
+        -0.45,
+        0.2
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -1100,
-        10000
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.11,
+        1.0
+      ]
     },
     "minecraft:mangrove_swamp": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        10000
+        0.2,
+        1.0
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -1100,
-        10000
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.11,
+        1.0
+      ]
     },
     "minecraft:snowy_slopes": {
+      "erosion": [
+        -1.0,
+        -0.7799
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -3500,
-        -1000
+        -0.35,
+        -0.1
       ],
       "continentalness": [
-        -1100,
-        10000
-      ],
-      "erosion": [
-        -10000,
-        -7799
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.11,
+        1.0
+      ]
     },
     "minecraft:snowy_plains": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        -1000,
-        1000
+        -0.1,
+        0.1
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:snowy_beach": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.05,
+        0.2666
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        500,
-        2666
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:windswept_gravelly_hills": {
+      "erosion": [
+        0.45,
+        0.55
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        -3500,
-        -1000
+        -0.35,
+        -0.1
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        4500,
-        5500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:grove": {
+      "erosion": [
+        -1.0,
+        -0.7799
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1100,
-        10000
-      ],
-      "erosion": [
-        -10000,
-        -7799
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.11,
+        1.0
+      ]
     },
     "minecraft:windswept_hills": {
+      "erosion": [
+        0.45,
+        0.55
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -1000,
-        1000
+        -0.1,
+        0.1
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        4500,
-        5500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:snowy_taiga": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:windswept_forest": {
+      "erosion": [
+        0.45,
+        0.55
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        4500,
-        5500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:taiga": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:plains": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        -1000,
-        1000
+        -0.1,
+        0.1
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:meadow": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:beach": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.05,
+        0.2666
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        500,
-        2666
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:forest": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:old_growth_spruce_taiga": {
+      "erosion": [
+        0.45,
+        0.55
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -0.2666,
+        -0.05
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        4500,
-        5500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -2666,
-        -500
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:flower_forest": {
+      "erosion": [
+        0.45,
+        0.55
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -0.2666,
+        -0.05
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -10000,
-        -3500
+        -1.0,
+        -0.35
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        4500,
-        5500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -2666,
-        -500
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:birch_forest": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:dark_forest": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:savanna_plateau": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        -3500,
-        -1000
+        -0.35,
+        -0.1
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:savanna": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        -3500,
-        -1000
+        -0.35,
+        -0.1
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:jungle": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:badlands": {
+      "erosion": [
+        -0.2225,
+        0.05
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        5500,
-        10000
+        0.55,
+        1.0
       ],
       "humidity": [
-        -1000,
-        1000
+        -0.1,
+        0.1
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        -2225,
-        500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:desert": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        5500,
-        10000
+        0.55,
+        1.0
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:wooded_badlands": {
+      "erosion": [
+        -0.2225,
+        0.05
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        5500,
-        10000
+        0.55,
+        1.0
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        -2225,
-        500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:jagged_peaks": {
+      "erosion": [
+        -1.0,
+        -0.7799
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -0.5666,
+        -0.4
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        -10000,
-        -7799
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -5666,
-        -4000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:stony_peaks": {
+      "erosion": [
+        -1.0,
+        -0.7799
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.7666,
+        0.9333
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        -10000,
-        -7799
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        7666,
-        9333
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:frozen_river": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -0.05,
+        0.05
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -1100,
-        10000
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -500,
-        500
-      ],
-      "offset": 0
+        -0.11,
+        1.0
+      ]
     },
     "minecraft:river": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        -0.05,
+        0.05
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        10000
+        -0.45,
+        1.0
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        -500,
-        500
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:ice_spikes": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        -4500
+        -1.0,
+        -0.45
       ],
       "humidity": [
-        -10000,
-        -3500
+        -1.0,
+        -0.35
       ],
       "continentalness": [
-        -1100,
-        10000
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.11,
+        1.0
+      ]
     },
     "minecraft:old_growth_pine_taiga": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -4500,
-        -1500
+        -0.45,
+        -0.15
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:sunflower_plains": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -10000,
-        -3500
+        -1.0,
+        -0.35
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:old_growth_birch_forest": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:sparse_jungle": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:bamboo_jungle": {
+      "erosion": [
+        0.55,
+        1.0
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        2000,
-        5500
+        0.2,
+        0.55
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        -1900,
-        -1100
-      ],
-      "erosion": [
-        5500,
-        10000
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.19,
+        -0.11
+      ]
     },
     "minecraft:eroded_badlands": {
+      "erosion": [
+        -0.2225,
+        0.05
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        5500,
-        10000
+        0.55,
+        1.0
       ],
       "humidity": [
-        -3500,
-        -1000
+        -0.35,
+        -0.1
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        -2225,
-        500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:windswept_savanna": {
+      "erosion": [
+        0.45,
+        0.55
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        5500,
-        10000
+        0.55,
+        1.0
       ],
       "humidity": [
-        1000,
-        3000
+        0.1,
+        0.3
       ],
       "continentalness": [
-        -1100,
-        300
-      ],
-      "erosion": [
-        4500,
-        5500
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        -0.11,
+        0.03
+      ]
     },
     "minecraft:cherry_grove": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        -3500,
-        -1000
+        -0.35,
+        -0.1
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:pale_garden": {
+      "erosion": [
+        -0.375,
+        -0.2225
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.9333,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        3000,
-        10000
-      ],
-      "erosion": [
-        -3750,
-        -2225
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        9333,
-        10000
-      ],
-      "offset": 0
+        0.3,
+        1.0
+      ]
     },
     "minecraft:frozen_peaks": {
+      "erosion": [
+        -1.0,
+        -0.7799
+      ],
+      "depth": 1.0,
+      "weirdness": [
+        0.7666,
+        0.9333
+      ],
+      "offset": 0.0,
       "temperature": [
-        -1500,
-        2000
+        -0.15,
+        0.2
       ],
       "humidity": [
-        3000,
-        10000
+        0.3,
+        1.0
       ],
       "continentalness": [
-        300,
-        10000
-      ],
-      "erosion": [
-        -10000,
-        -7799
-      ],
-      "depth": [
-        10000,
-        10000
-      ],
-      "weirdness": [
-        7666,
-        9333
-      ],
-      "offset": 0
+        0.03,
+        1.0
+      ]
     },
     "minecraft:dripstone_caves": {
-      "temperature": [
-        -10000,
-        10000
-      ],
-      "humidity": [
-        -10000,
-        10000
-      ],
-      "continentalness": [
-        8000,
-        10000
-      ],
       "erosion": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "depth": [
-        2000,
-        9000
+        0.2,
+        0.9
       ],
       "weirdness": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
-      "offset": 0
+      "offset": 0.0,
+      "temperature": [
+        -1.0,
+        1.0
+      ],
+      "humidity": [
+        -1.0,
+        1.0
+      ],
+      "continentalness": [
+        0.8,
+        1.0
+      ]
     },
     "minecraft:lush_caves": {
-      "temperature": [
-        -10000,
-        10000
-      ],
-      "humidity": [
-        7000,
-        10000
-      ],
-      "continentalness": [
-        -10000,
-        10000
-      ],
       "erosion": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "depth": [
-        2000,
-        9000
+        0.2,
+        0.9
       ],
       "weirdness": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
-      "offset": 0
+      "offset": 0.0,
+      "temperature": [
+        -1.0,
+        1.0
+      ],
+      "humidity": [
+        0.7,
+        1.0
+      ],
+      "continentalness": [
+        -1.0,
+        1.0
+      ]
     },
     "minecraft:deep_dark": {
+      "erosion": [
+        -1.0,
+        -0.375
+      ],
+      "depth": 1.1,
+      "weirdness": [
+        -1.0,
+        1.0
+      ],
+      "offset": 0.0,
       "temperature": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "humidity": [
-        -10000,
-        10000
+        -1.0,
+        1.0
       ],
       "continentalness": [
-        -10000,
-        10000
-      ],
-      "erosion": [
-        -10000,
-        -3750
-      ],
-      "depth": [
-        11000,
-        11000
-      ],
-      "weirdness": [
-        -10000,
-        10000
-      ],
-      "offset": 0
+        -1.0,
+        1.0
+      ]
     }
   }
 }

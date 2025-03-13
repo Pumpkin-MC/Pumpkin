@@ -218,3 +218,31 @@ impl<'a> MultiNoiseSampler<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
+        biome::multi_noise::NoiseValuePoint,
+    };
+
+    use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
+
+    fn test_sample() {
+        let seed = 123;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let expected = NoiseValuePoint {
+            temperature: -5727,
+            humidity: 55,
+            continentalness: 4996,
+            erosion: 2371,
+            depth: -19774,
+            weirdness: 4421,
+        };
+        assert_eq!(sampler.sample(123, 123, 123), expected)
+    }
+}

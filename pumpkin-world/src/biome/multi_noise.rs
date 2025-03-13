@@ -1,12 +1,13 @@
 use std::cmp::Ordering;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
 pub fn to_long(float: f32) -> i64 {
     (float * 10000.0) as i64
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct NoiseValuePoint {
     pub temperature: i64,
     pub humidity: i64,
@@ -24,7 +25,7 @@ pub struct NoiseHypercube {
     pub continentalness: ParameterRange,
     pub weirdness: ParameterRange,
     pub humidity: ParameterRange,
-    pub offset: i64,
+    pub offset: f32,
 }
 
 impl NoiseHypercube {
@@ -37,8 +38,8 @@ impl NoiseHypercube {
             self.depth,
             self.weirdness,
             ParameterRange {
-                min: self.offset,
-                max: self.offset,
+                min: to_long(self.offset),
+                max: to_long(self.offset),
             },
         ]
     }
@@ -55,11 +56,39 @@ impl<'de> Deserialize<'de> for ParameterRange {
     where
         D: Deserializer<'de>,
     {
-        let arr: [f32; 2] = Deserialize::deserialize(deserializer)?;
-        Ok(ParameterRange {
-            min: to_long(arr[0]),
-            max: to_long(arr[1]),
-        })
+        let value: Value = Deserialize::deserialize(deserializer)?;
+
+        match value {
+            Value::Array(arr) if arr.len() == 2 => {
+                let min = arr[0]
+                    .as_f64()
+                    .ok_or_else(|| serde::de::Error::custom("Expected float"))?
+                    as f32;
+                let max = arr[1]
+                    .as_f64()
+                    .ok_or_else(|| serde::de::Error::custom("Expected float"))?
+                    as f32;
+                assert!(min < max, "min is more max");
+                Ok(ParameterRange {
+                    min: to_long(min),
+                    max: to_long(max),
+                })
+            }
+            Value::Number(num) if num.is_f64() => {
+                let val = num
+                    .as_f64()
+                    .ok_or_else(|| serde::de::Error::custom("Expected float"))?
+                    as f32;
+                let converted_val = to_long(val);
+                Ok(ParameterRange {
+                    min: converted_val,
+                    max: converted_val,
+                })
+            }
+            _ => Err(serde::de::Error::custom(
+                "Expected array of two floats or a single float",
+            )),
+        }
     }
 }
 
@@ -81,7 +110,7 @@ impl ParameterRange {
 #[derive(Clone)]
 /// T = Biome
 pub struct SearchTree<T: Clone> {
-    root: TreeNode<T>,
+    pub root: TreeNode<T>,
 }
 
 impl<T: Clone> SearchTree<T> {
@@ -122,16 +151,17 @@ impl<T: Clone> SearchTree<T> {
 }
 
 fn create_node<T: Clone>(parameter_number: usize, sub_tree: Vec<TreeNode<T>>) -> TreeNode<T> {
-    if sub_tree.is_empty() {
-        panic!("Need at least one child to build a node");
-    }
+    assert!(
+        !sub_tree.is_empty(),
+        "Need at least one child to build a node"
+    );
     if sub_tree.len() == 1 {
-        return sub_tree.into_iter().next().unwrap();
+        return sub_tree.get(0).unwrap().clone();
     }
     if sub_tree.len() <= 6 {
         let mut sorted_sub_tree = sub_tree;
-        sorted_sub_tree.sort_by_key(|a| calculate_midpoint_sum(parameter_number, a));
-        let bounds = calculate_bounds(&sorted_sub_tree);
+        sorted_sub_tree.sort_by_key(|a| calculate_bounds_sum(a.bounds()));
+        let bounds = get_enclosing_parameters(&sorted_sub_tree);
         return TreeNode::Branch {
             children: sorted_sub_tree,
             bounds,
@@ -156,7 +186,7 @@ fn create_node<T: Clone>(parameter_number: usize, sub_tree: Vec<TreeNode<T>>) ->
         .into_iter()
         .map(|batch| create_node(parameter_number, batch.children()))
         .collect();
-    let bounds = calculate_bounds(&children);
+    let bounds = get_enclosing_parameters(&children);
     TreeNode::Branch { children, bounds }
 }
 
@@ -204,16 +234,6 @@ fn sort_tree<T: Clone>(
     });
 }
 
-fn calculate_midpoint_sum<T: Clone>(parameter_number: usize, node: &TreeNode<T>) -> i64 {
-    let bounds = node.bounds();
-    let mut l = 0;
-    for j in 0..parameter_number {
-        let parameter_range = bounds[j];
-        l += ((parameter_range.min + parameter_range.max) / 2).abs();
-    }
-    l
-}
-
 fn get_batched_tree<T: Clone>(nodes: Vec<TreeNode<T>>) -> Vec<TreeNode<T>> {
     let mut result = Vec::new();
     let mut current_batch = Vec::new();
@@ -228,7 +248,7 @@ fn get_batched_tree<T: Clone>(nodes: Vec<TreeNode<T>>) -> Vec<TreeNode<T>> {
         if current_batch.len() >= batch_size {
             result.push(TreeNode::Branch {
                 children: current_batch.clone(),
-                bounds: calculate_bounds(&current_batch),
+                bounds: get_enclosing_parameters(&current_batch),
             });
             current_batch.clear();
         }
@@ -238,19 +258,19 @@ fn get_batched_tree<T: Clone>(nodes: Vec<TreeNode<T>>) -> Vec<TreeNode<T>> {
     if !current_batch.is_empty() {
         result.push(TreeNode::Branch {
             children: current_batch.clone(),
-            bounds: calculate_bounds(&current_batch),
+            bounds: get_enclosing_parameters(&current_batch),
         });
     }
 
     result
 }
 
-fn calculate_bounds<T: Clone>(nodes: &[TreeNode<T>]) -> [ParameterRange; 7] {
+fn get_enclosing_parameters<T: Clone>(nodes: &[TreeNode<T>]) -> [ParameterRange; 7] {
+    assert!(!nodes.is_empty(), "SubTree needs at least one child");
     let mut bounds = *nodes[0].bounds();
-
-    for node in nodes.iter().skip(1) {
+    for node in nodes {
         for (i, range) in node.bounds().iter().enumerate() {
-            bounds[i] = bounds[i].combine(range);
+            bounds[i] = *range;
         }
     }
 
@@ -354,14 +374,18 @@ fn squared_distance(a: &[ParameterRange; 7], b: &[i64; 7]) -> i64 {
         .zip(b)
         .map(|(a, b)| {
             let distance = a.get_distance(*b);
-            distance * distance // Square the distance
+            distance * distance
         })
         .sum()
 }
 
 #[cfg(test)]
 mod test {
-    use super::squared_distance;
+    use crate::biome::BIOME_ENTRIES;
 
-    fn test_() {}
+    use super::{ParameterRange, squared_distance};
+
+    fn test_entires() {
+        BIOME_ENTRIES.get(point, last_result_node).
+    }
 }
