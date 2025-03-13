@@ -18,10 +18,7 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         buf.put_i32(self.0.position.z);
 
-        let mut heightmap_nbt = Vec::new();
-        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap, &mut heightmap_nbt).unwrap();
-        // Heightmaps
-        buf.put_slice(&heightmap_nbt);
+        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap, buf.writer()).unwrap();
 
         let mut data_buf = BytesMut::new();
         self.0.subchunks.array_iter().for_each(|subchunk| {

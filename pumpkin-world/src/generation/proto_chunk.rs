@@ -276,7 +276,7 @@ impl<'a> ProtoChunk<'a> {
                             &biome_pos,
                             &mut self.multi_noise_sampler,
                         );
-                        panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
+                        // panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
                         let local_biome_pos = Vector3 {
                             x,

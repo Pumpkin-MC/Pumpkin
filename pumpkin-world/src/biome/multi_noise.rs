@@ -45,7 +45,7 @@ impl NoiseHypercube {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ParameterRange {
     pub min: i64,
     pub max: i64,
@@ -156,7 +156,7 @@ fn create_node<T: Clone>(parameter_number: usize, sub_tree: Vec<TreeNode<T>>) ->
         "Need at least one child to build a node"
     );
     if sub_tree.len() == 1 {
-        return sub_tree.get(0).unwrap().clone();
+        return sub_tree.first().unwrap().clone();
     }
     if sub_tree.len() <= 6 {
         let mut sorted_sub_tree = sub_tree;
@@ -284,7 +284,7 @@ fn calculate_bounds_sum(bounds: &[ParameterRange]) -> i64 {
         .sum()
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TreeNode<T: Clone> {
     Leaf(TreeLeafNode<T>),
     Branch {
@@ -293,7 +293,7 @@ pub enum TreeNode<T: Clone> {
     },
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TreeLeafNode<T: Clone> {
     value: T,
     point: [ParameterRange; 7],
@@ -381,7 +381,60 @@ fn squared_distance(a: &[ParameterRange; 7], b: &[i64; 7]) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use crate::biome::BIOME_ENTRIES;
+    use crate::biome::{
+        BIOME_ENTRIES,
+        multi_noise::{TreeNode, create_node},
+    };
 
-    use super::{ParameterRange, squared_distance};
+    use super::{NoiseHypercube, ParameterRange, squared_distance};
+
+    #[test]
+    fn test_create_node_single_leaf() {
+        let hypercube = NoiseHypercube {
+            temperature: ParameterRange { min: 0, max: 10 },
+            humidity: ParameterRange { min: 0, max: 10 },
+            continentalness: ParameterRange { min: 0, max: 10 },
+            erosion: ParameterRange { min: 0, max: 10 },
+            depth: ParameterRange { min: 0, max: 10 },
+            weirdness: ParameterRange { min: 0, max: 10 },
+            offset: 0.0,
+        };
+        let leaves = vec![TreeNode::new_leaf(1, hypercube.to_parameters())];
+        let node = create_node(7, leaves.clone());
+        assert_eq!(node, leaves[0]);
+    }
+
+    #[test]
+    fn test_create_node_multiple_leaves_small() {
+        let hypercube1 = NoiseHypercube {
+            temperature: ParameterRange { min: 0, max: 10 },
+            humidity: ParameterRange { min: 0, max: 10 },
+            continentalness: ParameterRange { min: 0, max: 10 },
+            erosion: ParameterRange { min: 0, max: 10 },
+            depth: ParameterRange { min: 0, max: 10 },
+            weirdness: ParameterRange { min: 0, max: 10 },
+            offset: 0.0,
+        };
+        let hypercube2 = NoiseHypercube {
+            temperature: ParameterRange { min: 10, max: 20 },
+            humidity: ParameterRange { min: 10, max: 20 },
+            continentalness: ParameterRange { min: 10, max: 20 },
+            erosion: ParameterRange { min: 10, max: 20 },
+            depth: ParameterRange { min: 10, max: 20 },
+            weirdness: ParameterRange { min: 10, max: 20 },
+            offset: 0.0,
+        };
+        let leaves = vec![
+            TreeNode::new_leaf(1, hypercube1.to_parameters()),
+            TreeNode::new_leaf(2, hypercube2.to_parameters()),
+        ];
+        let node = create_node(7, leaves.clone());
+        if let TreeNode::Branch { children, .. } = node {
+            assert_eq!(children.len(), 2);
+            assert_eq!(children[0], leaves[0]);
+            assert_eq!(children[1], leaves[1]);
+        } else {
+            panic!("Expected a branch node");
+        }
+    }
 }
