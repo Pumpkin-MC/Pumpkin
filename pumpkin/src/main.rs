@@ -76,7 +76,6 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
-    console_subscriber::init();
     let time = Instant::now();
 
     init_log!();

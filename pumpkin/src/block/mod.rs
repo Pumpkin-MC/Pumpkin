@@ -3,10 +3,10 @@ use blocks::doors::register_door_blocks;
 use blocks::fence_gates::register_fence_gate_blocks;
 use blocks::fences::register_fence_blocks;
 use blocks::logs::register_log_blocks;
-use blocks::observer::ObserverBlock;
-use blocks::redstone_block::RedstoneBlock;
-use blocks::redstone_lamp::RedstoneLamp;
-use blocks::redstone_wire::RedstoneWireBlock;
+use blocks::redstone::observer::ObserverBlock;
+use blocks::redstone::redstone_block::RedstoneBlock;
+use blocks::redstone::redstone_lamp::RedstoneLamp;
+use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
@@ -29,8 +29,6 @@ use std::sync::atomic::AtomicBool;
 
 mod blocks;
 pub mod pumpkin_block;
-pub mod redstone_controller;
-pub mod redstone_view;
 pub mod registry;
 
 #[must_use]
@@ -43,12 +41,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(TNTBlock);
     manager.register(LeverBlock);
-    manager.register(RedstoneWireBlock {
-        wire_gives_power: AtomicBool::new(true),
-    });
+    manager.register(RedstoneWireBlock);
     manager.register(RedstoneBlock);
-    manager.register(RedstoneLamp);
-    manager.register(ObserverBlock);
+    //manager.register(RedstoneLamp);
+    //manager.register(ObserverBlock);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);

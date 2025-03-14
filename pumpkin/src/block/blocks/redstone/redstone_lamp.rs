@@ -1,21 +1,11 @@
-use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, Boolean, HorizontalFacing};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{block::BlockDirection, chunk::TickPriority};
-
-use crate::{
-    block::{pumpkin_block::PumpkinBlock, redstone_view::is_receiving_redstone_power},
-    server::Server,
-    world::{BlockFlags, World},
-};
 
 type RedstoneLampProperties = pumpkin_data::block::RedstoneOreLikeProperties;
 
 #[pumpkin_block("minecraft:redstone_lamp")]
 pub struct RedstoneLamp;
 
+/*
 #[async_trait]
 impl PumpkinBlock for RedstoneLamp {
     async fn on_place(
@@ -89,3 +79,4 @@ impl PumpkinBlock for RedstoneLamp {
         }
     }
 }
+*/

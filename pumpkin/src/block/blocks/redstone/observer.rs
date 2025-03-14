@@ -1,23 +1,8 @@
-use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, BlockState, Boolean, HorizontalFacing, ObserverLikeProperties,
-};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    block::{BlockDirection, FacingExt, HorizontalFacingExt},
-    chunk::TickPriority,
-};
-
-use crate::{
-    block::pumpkin_block::PumpkinBlock,
-    server::Server,
-    world::{BlockFlags, World},
-};
 
 #[pumpkin_block("minecraft:observer")]
 pub struct ObserverBlock;
+/*
 
 #[async_trait]
 impl PumpkinBlock for ObserverBlock {
@@ -183,3 +168,4 @@ impl ObserverBlock {
             .await;
     }
 }
+ */
