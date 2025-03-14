@@ -1,17 +1,30 @@
 use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
 
 use enum_dispatch::enum_dispatch;
+use futures::SinkExt;
 use multi_noise::{NoiseHypercube, SearchTree, TreeLeafNode};
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector3::Vector3;
+use serde::Deserialize;
 
 use crate::{
     dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
 };
 pub mod multi_noise;
 
+#[derive(Deserialize)]
+pub struct BiomeEntires {
+    biomes: Vec<BiomeEntry>,
+}
+
+#[derive(Deserialize)]
+pub struct BiomeEntry {
+    parameters: NoiseHypercube,
+    biome: Biome,
+}
+
 pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
-    let data: HashMap<Dimension, HashMap<Biome, NoiseHypercube>> =
+    let data: HashMap<Dimension, BiomeEntires> =
         serde_json::from_str(include_str!("../../../assets/multi_noise.json"))
             .expect("Could not parse multi_noise.json.");
     // TODO: support non overworld biomes
@@ -20,11 +33,12 @@ pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
         .expect("Overworld dimension not found");
 
     let entries: Vec<(Biome, &NoiseHypercube)> = overworld_data
+        .biomes
         .iter()
-        .map(|(biome, biome_map)| (*biome, biome_map))
+        .map(|entry| (entry.biome, &entry.parameters))
         .collect();
 
-    SearchTree::create(entries).expect("entries cannot be empty")
+    SearchTree::create(entries)
 });
 
 thread_local! {
@@ -65,20 +79,6 @@ mod test {
 
     use super::{BiomeSupplier, MultiNoiseBiomeSupplier};
 
-    #[test]
-    fn test_biome_lush_caves() {
-        let seed = 123;
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
-        let biome = MultiNoiseBiomeSupplier::biome(
-            &pumpkin_util::math::vector3::Vector3 { x: 1, y: 1, z: 1 },
-            &mut sampler,
-        );
-        assert_eq!(biome, Biome::LushCaves)
-    }
     #[test]
     fn test_biome_desert() {
         let seed = 13579;

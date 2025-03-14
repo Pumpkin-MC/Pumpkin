@@ -114,19 +114,17 @@ pub struct SearchTree<T: Clone> {
 }
 
 impl<T: Clone> SearchTree<T> {
-    pub fn create(entries: Vec<(T, &NoiseHypercube)>) -> Option<Self> {
-        if entries.is_empty() {
-            return None;
-        }
+    pub fn create(entries: Vec<(T, &NoiseHypercube)>) -> Self {
+        assert!(!entries.is_empty(), "entries cannot be empty");
 
         let leaves: Vec<TreeNode<T>> = entries
             .into_iter()
             .map(|(value, hypercube)| TreeNode::new_leaf(value, hypercube.to_parameters()))
             .collect();
 
-        Some(SearchTree {
+        SearchTree {
             root: create_node(7, leaves),
-        })
+        }
     }
 
     pub fn get(

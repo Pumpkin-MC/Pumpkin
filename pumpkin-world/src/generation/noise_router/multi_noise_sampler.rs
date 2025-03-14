@@ -246,4 +246,24 @@ mod test {
         };
         assert_eq!(sampler.sample(123, 123, 123), expected)
     }
+
+    #[test]
+    fn test_sample_2() {
+        // we use a different seed
+        let seed = 13579;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let expected = NoiseValuePoint {
+            temperature: 7489,
+            humidity: 3502,
+            continentalness: -2168,
+            erosion: -3511,
+            depth: -21237,
+            weirdness: -5222,
+        };
+        assert_eq!(sampler.sample(123, 123, 123), expected)
+    }
 }

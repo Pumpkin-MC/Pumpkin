@@ -450,7 +450,7 @@ impl<'a> ProtoChunk<'a> {
                         &biome_pos,
                     );
                     let biome = self.get_biome(&seed_biome_pos);
-                    //println!("Blending with biome at: {:?}", biome_pos);
+                    // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
                     context.biome = biome;
 
                     stone_depth_above += 1;
