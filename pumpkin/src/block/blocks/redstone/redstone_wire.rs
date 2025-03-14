@@ -5,22 +5,16 @@ use pumpkin_data::block::{
     SouthWireConnection, WestWireConnection,
 };
 use pumpkin_data::block::{BlockProperties, HorizontalFacing};
+use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
+use crate::block::registry::BlockActionResult;
+use crate::entity::player::Player;
 use crate::world::BlockFlags;
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server, world::World};
-
-/// This is a bit confusing but dot state is actually the X shape
-const DOT_STATE: RedstoneWireLikeProperties = RedstoneWireLikeProperties {
-    power: Integer0To15::L0,
-    east: EastWireConnection::Side,
-    north: NorthWireConnection::Side,
-    south: SouthWireConnection::Side,
-    west: WestWireConnection::Side,
-};
 
 type RedstoneWireProperties = RedstoneWireLikeProperties;
 
@@ -70,7 +64,7 @@ impl PumpkinBlock for RedstoneWireBlock {
     ) -> u16 {
         let mut wire = RedstoneWireProperties::from_state_id(state, block);
         let old_state = wire.clone();
-        let new_side;
+        let new_side: WireConnection;
 
         match direction {
             BlockDirection::Up => {
@@ -107,7 +101,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         if is_cross(old_state) && new_side.is_none() {
             return wire.to_state_id(block);
         }
-        if !is_dot(wire) && is_dot(old_state) {
+        if !is_dot(old_state) && is_dot(wire) {
             let power = wire.power;
             wire = make_cross(power);
         }
@@ -155,6 +149,62 @@ impl PumpkinBlock for RedstoneWireBlock {
             }
         }
     }
+
+    async fn normal_use(
+        &self,
+        block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: &World,
+    ) {
+        let state = world.get_block_state(&location).await.unwrap();
+        let wire = RedstoneWireProperties::from_state_id(state.id, block);
+        on_use(wire, world, location).await;
+    }
+
+    async fn use_with_item(
+        &self,
+        block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _item: &Item,
+        _server: &Server,
+        world: &World,
+    ) -> BlockActionResult {
+        let state = world.get_block_state(&location).await.unwrap();
+        let wire = RedstoneWireProperties::from_state_id(state.id, block);
+        if on_use(wire, world, location).await {
+            BlockActionResult::Consume
+        } else {
+            BlockActionResult::Continue
+        }
+    }
+}
+
+async fn on_use(wire: RedstoneWireProperties, world: &World, block_pos: BlockPos) -> bool {
+    if is_cross(wire) || is_dot(wire) {
+        let mut new_wire = if is_cross(wire) {
+            RedstoneWireProperties::default(&Block::REDSTONE_WIRE)
+        } else {
+            make_cross(wire.power)
+        };
+        new_wire.power = wire.power;
+
+        new_wire = get_regulated_sides(new_wire, world, block_pos).await;
+        if wire != new_wire {
+            world
+                .set_block_state(
+                    &block_pos,
+                    new_wire.to_state_id(&Block::REDSTONE_WIRE),
+                    BlockFlags::empty(),
+                )
+                .await;
+            //update_wire_neighbors(world, block_pos);
+            return true;
+        }
+    }
+    false
 }
 
 pub fn make_cross(power: Integer0To15) -> RedstoneWireProperties {

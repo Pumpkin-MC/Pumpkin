@@ -109,6 +109,7 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
+    /// Called if a block state is replaced or it replaces another state
     async fn prepare(
         &self,
         _world: &World,
