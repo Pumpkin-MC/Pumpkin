@@ -24,8 +24,7 @@ use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
-    RawPacket, ServerPacket,
-    bytebuf::packet::Packet,
+    IdOr, RawPacket, ServerPacket,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
@@ -34,6 +33,7 @@ use pumpkin_protocol::{
         CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
+    ser::packet::Packet,
     server::play::{
         SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
         SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
@@ -490,8 +490,7 @@ impl Player {
     ) {
         self.client
             .send_packet(&CSoundEffect::new(
-                VarInt(i32::from(sound_id)),
-                None,
+                IdOr::Id(sound_id as u32),
                 category,
                 position,
                 volume,
@@ -1429,117 +1428,118 @@ impl Player {
     pub async fn handle_play_packet(
         self: &Arc<Self>,
         server: &Arc<Server>,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SConfirmTeleport::PACKET_ID => {
-                self.handle_confirm_teleport(SConfirmTeleport::read(bytebuf)?)
+                self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
                     .await;
             }
             SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, &(SChatCommand::read(bytebuf)?))
+                self.handle_chat_command(server, &(SChatCommand::read(payload)?))
                     .await;
             }
             SChatMessage::PACKET_ID => {
-                self.handle_chat_message(SChatMessage::read(bytebuf)?).await;
+                self.handle_chat_message(SChatMessage::read(payload)?).await;
             }
             SClientInformationPlay::PACKET_ID => {
-                self.handle_client_information(SClientInformationPlay::read(bytebuf)?)
+                self.handle_client_information(SClientInformationPlay::read(payload)?)
                     .await;
             }
             SClientCommand::PACKET_ID => {
-                self.handle_client_status(SClientCommand::read(bytebuf)?)
+                self.handle_client_status(SClientCommand::read(payload)?)
                     .await;
             }
             SPlayerInput::PACKET_ID => {
                 // TODO
             }
             SInteract::PACKET_ID => {
-                self.handle_interact(SInteract::read(bytebuf)?).await;
+                self.handle_interact(SInteract::read(payload)?).await;
             }
             SKeepAlive::PACKET_ID => {
-                self.handle_keep_alive(SKeepAlive::read(bytebuf)?).await;
+                self.handle_keep_alive(SKeepAlive::read(payload)?).await;
             }
             SClientTickEnd::PACKET_ID => {
                 // TODO
             }
             SPlayerPosition::PACKET_ID => {
-                self.handle_position(SPlayerPosition::read(bytebuf)?).await;
+                self.handle_position(SPlayerPosition::read(payload)?).await;
             }
             SPlayerPositionRotation::PACKET_ID => {
-                self.handle_position_rotation(SPlayerPositionRotation::read(bytebuf)?)
+                self.handle_position_rotation(SPlayerPositionRotation::read(payload)?)
                     .await;
             }
             SPlayerRotation::PACKET_ID => {
-                self.handle_rotation(SPlayerRotation::read(bytebuf)?).await;
+                self.handle_rotation(SPlayerRotation::read(payload)?).await;
             }
             SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(&SSetPlayerGround::read(bytebuf)?);
+                self.handle_player_ground(&SSetPlayerGround::read(payload)?);
             }
             SPickItemFromBlock::PACKET_ID => {
-                self.handle_pick_item_from_block(SPickItemFromBlock::read(bytebuf)?)
+                self.handle_pick_item_from_block(SPickItemFromBlock::read(payload)?)
                     .await;
             }
             SPlayerAbilities::PACKET_ID => {
-                self.handle_player_abilities(SPlayerAbilities::read(bytebuf)?)
+                self.handle_player_abilities(SPlayerAbilities::read(payload)?)
                     .await;
             }
             SPlayerAction::PACKET_ID => {
-                self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
+                self.clone()
+                    .handle_player_action(SPlayerAction::read(payload)?, server)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {
-                self.handle_player_command(SPlayerCommand::read(bytebuf)?)
+                self.handle_player_command(SPlayerCommand::read(payload)?)
                     .await;
             }
             SPlayerLoaded::PACKET_ID => self.handle_player_loaded(),
             SPlayPingRequest::PACKET_ID => {
-                self.handle_play_ping_request(SPlayPingRequest::read(bytebuf)?)
+                self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
                     .await;
             }
             SClickContainer::PACKET_ID => {
-                self.handle_click_container(server, SClickContainer::read(bytebuf)?)
+                self.handle_click_container(server, SClickContainer::read(payload)?)
                     .await?;
             }
             SSetHeldItem::PACKET_ID => {
-                self.handle_set_held_item(SSetHeldItem::read(bytebuf)?)
+                self.handle_set_held_item(SSetHeldItem::read(payload)?)
                     .await;
             }
             SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
+                self.handle_set_creative_slot(SSetCreativeSlot::read(payload)?)
                     .await?;
             }
             SSwingArm::PACKET_ID => {
-                self.handle_swing_arm(SSwingArm::read(bytebuf)?).await;
+                self.handle_swing_arm(SSwingArm::read(payload)?).await;
             }
             SUpdateSign::PACKET_ID => {
-                self.handle_sign_update(SUpdateSign::read(bytebuf)?).await;
+                self.handle_sign_update(SUpdateSign::read(payload)?).await;
             }
             SUseItemOn::PACKET_ID => {
-                self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
+                self.handle_use_item_on(SUseItemOn::read(payload)?, server)
                     .await?;
             }
             SUseItem::PACKET_ID => {
-                self.handle_use_item(&SUseItem::read(bytebuf)?, server)
+                self.handle_use_item(&SUseItem::read(payload)?, server)
                     .await;
             }
             SCommandSuggestion::PACKET_ID => {
-                self.handle_command_suggestion(SCommandSuggestion::read(bytebuf)?, server)
+                self.handle_command_suggestion(SCommandSuggestion::read(payload)?, server)
                     .await;
             }
             SPCookieResponse::PACKET_ID => {
-                self.handle_cookie_response(&SPCookieResponse::read(bytebuf)?);
+                self.handle_cookie_response(&SPCookieResponse::read(payload)?);
             }
             SCloseContainer::PACKET_ID => {
-                self.handle_close_container(server, SCloseContainer::read(bytebuf)?)
+                self.handle_close_container(server, SCloseContainer::read(payload)?)
                     .await;
             }
             SChunkBatch::PACKET_ID => {
-                self.handle_chunk_batch(SChunkBatch::read(bytebuf)?).await;
+                self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
             _ => {
-                log::warn!("Failed to handle player packet id {}", packet.id.0);
+                log::warn!("Failed to handle player packet id {}", packet.id);
                 // TODO: We give an error if all play packets are implemented
                 //  return Err(Box::new(DeserializerError::UnknownPacket));
             }

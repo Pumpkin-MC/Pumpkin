@@ -1,10 +1,10 @@
-use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    ClientPacket, PositionFlag, ServerPacket, VarInt, bytebuf::ByteBuf, bytebuf::ByteBufMut,
+    ClientPacket, PositionFlag, ServerPacket, VarInt,
+    ser::{NetworkRead, NetworkWrite, WritingError},
 };
 
 #[packet(PLAY_PLAYER_POSITION)]
@@ -38,39 +38,44 @@ impl<'a> CPlayerPosition<'a> {
 }
 
 impl ServerPacket for CPlayerPosition<'_> {
-    fn read(bytebuf: &mut impl bytes::Buf) -> Result<Self, crate::bytebuf::ReadingError> {
+    fn read(read: impl NetworkRead) -> Result<Self, crate::ser::ReadingError> {
+        let mut read = read;
+
         fn get_vec(
-            bytebuf: &mut impl bytes::Buf,
-        ) -> Result<Vector3<f64>, crate::bytebuf::ReadingError> {
+            read_helper: &mut impl NetworkRead,
+        ) -> Result<Vector3<f64>, crate::ser::ReadingError> {
             Ok(Vector3::new(
-                bytebuf.try_get_f64()?,
-                bytebuf.try_get_f64()?,
-                bytebuf.try_get_f64()?,
+                read_helper.get_f64_be()?,
+                read_helper.get_f64_be()?,
+                read_helper.get_f64_be()?,
             ))
         }
+
         Ok(Self {
-            teleport_id: bytebuf.try_get_var_int()?,
-            position: get_vec(bytebuf)?,
-            delta: get_vec(bytebuf)?,
-            yaw: bytebuf.try_get_f32()?,
-            pitch: bytebuf.try_get_f32()?,
+            teleport_id: read.get_var_int()?,
+            position: get_vec(&mut read)?,
+            delta: get_vec(&mut read)?,
+            yaw: read.get_f32_be()?,
+            pitch: read.get_f32_be()?,
             releatives: &[], // TODO
         })
     }
 }
 
 impl ClientPacket for CPlayerPosition<'_> {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_var_int(&self.teleport_id);
-        bytebuf.put_f64(self.position.x);
-        bytebuf.put_f64(self.position.y);
-        bytebuf.put_f64(self.position.z);
-        bytebuf.put_f64(self.delta.x);
-        bytebuf.put_f64(self.delta.y);
-        bytebuf.put_f64(self.delta.z);
-        bytebuf.put_f32(self.yaw);
-        bytebuf.put_f32(self.pitch);
+    fn write(&self, write: impl NetworkWrite) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_var_int(&self.teleport_id)?;
+        write.write_f64_be(self.position.x)?;
+        write.write_f64_be(self.position.y)?;
+        write.write_f64_be(self.position.z)?;
+        write.write_f64_be(self.delta.x)?;
+        write.write_f64_be(self.delta.y)?;
+        write.write_f64_be(self.delta.z)?;
+        write.write_f32_be(self.yaw)?;
+        write.write_f32_be(self.pitch)?;
         // not sure about that
-        bytebuf.put_i32(PositionFlag::get_bitfield(self.releatives));
+        write.write_i32_be(PositionFlag::get_bitfield(self.releatives))
     }
 }

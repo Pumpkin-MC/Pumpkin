@@ -1,9 +1,12 @@
-use bytes::BufMut;
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
 use serde::Serialize;
 
-use crate::{ClientPacket, bytebuf::ByteBufMut, codec::identifier::Identifier};
+use crate::{
+    ClientPacket,
+    codec::identifier::Identifier,
+    ser::{NetworkWrite, WritingError},
+};
 
 #[packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
@@ -37,11 +40,12 @@ impl RegistryEntry {
 }
 
 impl ClientPacket for CRegistryData<'_> {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_identifier(self.registry_id);
-        bytebuf.put_list::<RegistryEntry>(self.entries, |p, v| {
-            p.put_identifier(&v.entry_id);
-            p.put_option(&v.data, |p, v| p.put_slice(v));
-        });
+    fn write(&self, write: impl NetworkWrite) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_identifier(self.registry_id)?;
+        write.write_list::<RegistryEntry>(self.entries, |p, v| {
+            p.write_identifier(&v.entry_id)?;
+            p.write_option(&v.data, |p, v| p.write_slice(v))
+        })
     }
 }

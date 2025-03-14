@@ -30,7 +30,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
-    ClientPacket,
+    ClientPacket, IdOr, SoundEvent,
     client::play::{
         CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
         CSpawnEntity, GameEvent, PlayerAction,
@@ -598,10 +598,7 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = pumpkin_protocol::IDOrSoundEvent {
-            id: VarInt(Sound::EntityGenericExplode as i32 + 1),
-            sound_event: None,
-        };
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u32);
         for (_, player) in self.players.read().await.iter() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
@@ -719,7 +716,7 @@ impl World {
                     use pumpkin_protocol::client::play::CChunkData;
                     let binding = chunk.read().await;
                     let packet = CChunkData(&binding);
-                    let mut test = bytes::BytesMut::new();
+                    let mut test = Vec::new();
                     packet.write(&mut test);
                     let len = test.len();
                     log::debug!(

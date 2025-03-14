@@ -7,7 +7,7 @@ use bytes::{BufMut, BytesMut};
 use hmac::{Hmac, Mac};
 use pumpkin_config::networking::proxy::VelocityConfig;
 use pumpkin_protocol::{
-    Property, bytebuf::ByteBuf, client::login::CLoginPluginRequest,
+    Property, client::login::CLoginPluginRequest, ser::NetworkRead,
     server::login::SLoginPluginResponse,
 };
 use rand::Rng;
@@ -68,19 +68,21 @@ pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     mac.verify_slice(signature).is_ok()
 }
 
-fn read_game_profile(buf: &mut BytesMut) -> Result<GameProfile, VelocityError> {
-    let id = buf
-        .try_get_uuid()
+fn read_game_profile(read: impl NetworkRead) -> Result<GameProfile, VelocityError> {
+    let mut read = read;
+    let id = read
+        .get_uuid()
         .map_err(|_| VelocityError::FailedReadProfileUUID)?;
 
-    let name = buf
-        .try_get_string()
+    let name = read
+        .get_string()
         .map_err(|_| VelocityError::FailedReadProfileName)?;
-    let properties = buf
+
+    let properties = read
         .get_list(|data| {
-            let name = data.try_get_string()?;
-            let value = data.try_get_string()?;
-            let signature = data.try_get_option(ByteBuf::try_get_string)?;
+            let name = data.get_string()?;
+            let value = data.get_string()?;
+            let signature = data.get_option(|d| d.get_string())?;
 
             Ok(Property {
                 name,
@@ -89,6 +91,7 @@ fn read_game_profile(buf: &mut BytesMut) -> Result<GameProfile, VelocityError> {
             })
         })
         .map_err(|_| VelocityError::FailedReadProfileProperties)?;
+
     Ok(GameProfile {
         id,
         name,
@@ -104,18 +107,17 @@ pub fn receive_velocity_plugin_response(
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
     log::debug!("received velocity response");
     if let Some(data) = response.data {
-        let (signature, data_without_signature) = data.split_at(32);
+        let (signature, mut data_without_signature) = data.split_at(32);
 
         if !check_integrity((signature, data_without_signature), &config.secret) {
             return Err(VelocityError::FailedVerifyIntegrity);
         }
-        let mut buf = BytesMut::new();
-        buf.put_slice(data_without_signature);
 
         // check velocity version
-        let version = buf
-            .try_get_var_int()
+        let version = data_without_signature
+            .get_var_int()
             .map_err(|_| VelocityError::FailedReadForwardVersion)?;
+
         let version = version.0 as u8;
         if version > MAX_SUPPORTED_FORWARDING_VERSION {
             return Err(VelocityError::UnsupportedForwardVersion(
@@ -123,8 +125,8 @@ pub fn receive_velocity_plugin_response(
                 MAX_SUPPORTED_FORWARDING_VERSION,
             ));
         }
-        let addr = buf
-            .try_get_string()
+        let addr = data_without_signature
+            .get_string()
             .map_err(|_| VelocityError::FailedReadAddress)?;
 
         let socket_addr: SocketAddr = SocketAddr::new(
@@ -132,7 +134,8 @@ pub fn receive_velocity_plugin_response(
                 .map_err(|_| VelocityError::FailedParseAddress)?,
             port,
         );
-        let profile = read_game_profile(&mut buf)?;
+
+        let profile = read_game_profile(&mut data_without_signature)?;
         return Ok((profile, socket_addr));
     }
     Err(VelocityError::NoData)

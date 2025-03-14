@@ -307,9 +307,11 @@ impl PumpkinServer {
                 while let Some(notif) = rx.recv().await {
                     match notif {
                         PacketHandlerState::PacketReady => {
+                            todo!();
+                            /*
                             let buf = {
                                 let mut enc = client_clone.enc.lock().await;
-                                enc.take()
+                                //enc.take()
                             };
 
                             if let Err(e) = connection_writer.write_all(&buf).await {
@@ -317,6 +319,7 @@ impl PumpkinServer {
                                 client_clone.close().await;
                                 break;
                             }
+                            */
                         }
                         PacketHandlerState::Stop => break,
                     }
@@ -469,6 +472,8 @@ async fn poll(client: &Client, connection_reader: &mut OwnedReadHalf) -> bool {
 
         let mut dec = client.dec.lock().await;
 
+        todo!();
+        /*
         match dec.decode() {
             Ok(Some(packet)) => {
                 client.add_packet(packet).await;
@@ -484,6 +489,8 @@ async fn poll(client: &Client, connection_reader: &mut OwnedReadHalf) -> bool {
 
         dec.reserve(4096);
         let mut buf = dec.take_capacity();
+        */
+        let mut buf = Vec::new();
 
         let bytes_read = connection_reader.read_buf(&mut buf).await;
         match bytes_read {
@@ -503,7 +510,8 @@ async fn poll(client: &Client, connection_reader: &mut OwnedReadHalf) -> bool {
 
         // This should always be an O(1) unsplit because we reserved space earlier and
         // the call to `read_buf` shouldn't have grown the allocation.
-        dec.queue_bytes(buf);
+
+        //dec.queue_bytes(buf);
     }
 }
 

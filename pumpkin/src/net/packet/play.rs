@@ -1373,10 +1373,9 @@ impl Player {
     pub fn handle_cookie_response(&self, packet: &SPCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-            "Received cookie_response[play]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            "Received cookie_response[play]: key: \"{}\", payload_length: \"{:?}\"",
             packet.key.to_string(),
-            packet.has_payload,
-            packet.payload_length.unwrap_or(VarInt::from(0)).0
+            packet.payload.as_ref().map(|p| p.len())
         );
     }
 

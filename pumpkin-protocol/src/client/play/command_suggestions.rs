@@ -1,9 +1,11 @@
-use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_COMMAND_SUGGESTIONS;
 use pumpkin_macros::packet;
 use pumpkin_util::text::TextComponent;
 
-use crate::{ClientPacket, VarInt, bytebuf::ByteBufMut};
+use crate::{
+    ClientPacket, VarInt,
+    ser::{NetworkWrite, WritingError},
+};
 
 #[packet(PLAY_COMMAND_SUGGESTIONS)]
 pub struct CCommandSuggestions {
@@ -25,18 +27,23 @@ impl CCommandSuggestions {
 }
 
 impl ClientPacket for CCommandSuggestions {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_var_int(&self.id);
-        bytebuf.put_var_int(&self.start);
-        bytebuf.put_var_int(&self.length);
+    fn write(&self, write: impl NetworkWrite) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_var_int(&self.id)?;
+        write.write_var_int(&self.start)?;
+        write.write_var_int(&self.length)?;
 
-        bytebuf.put_list(&self.matches, |bytebuf, suggestion| {
-            bytebuf.put_string(&suggestion.suggestion);
-            bytebuf.put_bool(suggestion.tooltip.is_some());
+        write.write_list(&self.matches, |write, suggestion| {
+            write.write_string(&suggestion.suggestion)?;
+            write.write_bool(suggestion.tooltip.is_some())?;
             if let Some(tooltip) = &suggestion.tooltip {
-                bytebuf.put_slice(&tooltip.encode());
+                write.write_slice(&tooltip.encode())?;
             }
-        })
+
+            Ok(())
+        })?;
+
+        Ok(())
     }
 }
 

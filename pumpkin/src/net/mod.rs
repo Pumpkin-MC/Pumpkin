@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    io::Cursor,
     net::SocketAddr,
     num::NonZeroU8,
     sync::{
@@ -14,15 +15,15 @@ use crate::{
     server::Server,
 };
 
+use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
-    ServerPacket,
-    bytebuf::{ReadingError, packet::Packet},
+    ClientPacket, ConnectionState, Property, RawPacket, ServerPacket,
     client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
-    packet_decoder::PacketDecoder,
-    packet_encoder::{PacketEncodeError, PacketEncoder},
+    packet_decoder::NetworkDecoder,
+    packet_encoder::{NetworkEncoder, PacketEncodeError},
+    ser::{ReadingError, packet::Packet},
     server::{
         config::{
             SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
@@ -40,8 +41,8 @@ use pumpkin_util::{ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::{net::tcp::OwnedReadHalf, sync::Mutex};
 
 use thiserror::Error;
 use uuid::Uuid;
@@ -136,9 +137,9 @@ pub struct Client {
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
     /// The packet encoder for outgoing packets.
-    pub enc: Arc<Mutex<PacketEncoder>>,
+    pub enc: Arc<Mutex<NetworkEncoder<Cursor<Vec<u8>>>>>,
     /// The packet decoder for incoming packets.
-    pub dec: Arc<Mutex<PacketDecoder>>,
+    pub dec: Arc<Mutex<NetworkDecoder<Cursor<Bytes>>>>,
     /// A channel for sending packets to the client.
     pub server_packets_channel: mpsc::Sender<PacketHandlerState>,
     /// A queue of raw packets received from the client, waiting to be processed.
@@ -163,8 +164,8 @@ impl Client {
             server_address: Mutex::new(String::new()),
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
-            enc: Arc::new(Mutex::new(PacketEncoder::default())),
-            dec: Arc::new(Mutex::new(PacketDecoder::default())),
+            enc: Arc::new(Mutex::new(NetworkEncoder::new(Cursor::new(Vec::new())))),
+            dec: Arc::new(Mutex::new(NetworkDecoder::new(Cursor::new(Bytes::new())))),
             closed: AtomicBool::new(false),
             server_packets_channel,
             client_packets_queue: Arc::new(Mutex::new(VecDeque::new())),
@@ -206,18 +207,13 @@ impl Client {
     /// ```
     pub async fn set_encryption(
         &self,
-        shared_secret: Option<&[u8]>, // decrypted
+        shared_secret: &[u8], // decrypted
     ) -> Result<(), EncryptionError> {
-        if let Some(shared_secret) = shared_secret {
-            let crypt_key: [u8; 16] = shared_secret
-                .try_into()
-                .map_err(|_| EncryptionError::SharedWrongLength)?;
-            self.dec.lock().await.set_encryption(Some(&crypt_key));
-            self.enc.lock().await.set_encryption(Some(&crypt_key));
-        } else {
-            self.dec.lock().await.set_encryption(None);
-            self.enc.lock().await.set_encryption(None);
-        }
+        let crypt_key: [u8; 16] = shared_secret
+            .try_into()
+            .map_err(|_| EncryptionError::SharedWrongLength)?;
+        self.dec.lock().await.set_encryption(&crypt_key);
+        self.enc.lock().await.set_encryption(&crypt_key);
         Ok(())
     }
 
@@ -230,14 +226,21 @@ impl Client {
     ///
     /// * `compression`: An optional `CompressionInfo` struct containing the compression threshold and compression level.
     pub async fn set_compression(&self, compression: Option<CompressionInfo>) {
-        self.dec.lock().await.set_compression(compression.is_some());
+        if let Some(compression) = &compression {
+            if compression.level > 9 {
+                log::error!("Invalid compression level! Clients will not be able to read this!");
+            }
+        }
+
+        self.dec
+            .lock()
+            .await
+            .set_compression(compression.as_ref().map(|info| info.threshold as usize));
+
         self.enc
             .lock()
             .await
-            .set_compression(
-                compression.map(|s| (CompressionThreshold(s.threshold), CompressionLevel(s.level))),
-            )
-            .unwrap_or_else(|_| log::warn!("invalid compression level"));
+            .set_compression(compression.map(|s| (s.threshold as usize, s.level)));
     }
 
     /// Sends a clientbound packet to the connected client.
@@ -254,10 +257,13 @@ impl Client {
 
         {
             let mut enc = self.enc.lock().await;
+            todo!();
+            /*
             if let Err(error) = enc.append_packet(packet) {
                 self.kick(TextComponent::text(error.to_string())).await;
                 return;
             }
+            */
         }
 
         let _ = self
@@ -308,7 +314,8 @@ impl Client {
         */
 
         let mut enc = self.enc.lock().await;
-        enc.append_packet(packet)?;
+        todo!();
+        //enc.append_packet(packet)?;
 
         let _ = self
             .server_packets_channel
@@ -351,7 +358,7 @@ impl Client {
                 let text = format!("Error while reading incoming packet {error}");
                 log::error!(
                     "Failed to read incoming packet with id {}: {}",
-                    i32::from(packet.id),
+                    packet.id,
                     error
                 );
                 self.kick(TextComponent::text(text)).await;
@@ -410,17 +417,17 @@ impl Client {
         }
     }
 
-    async fn handle_handshake_packet(&self, packet: &mut RawPacket) -> Result<(), ReadingError> {
+    async fn handle_handshake_packet(&self, packet: &RawPacket) -> Result<(), ReadingError> {
         log::debug!("Handling handshake group");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             0 => {
-                self.handle_handshake(SHandShake::read(bytebuf)?).await;
+                self.handle_handshake(SHandShake::read(payload)?).await;
             }
             _ => {
                 log::error!(
                     "Failed to handle packet id {} in Handshake state",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -430,22 +437,22 @@ impl Client {
     async fn handle_status_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         log::debug!("Handling status group");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SStatusRequest::PACKET_ID => {
                 self.handle_status_request(server).await;
             }
             SStatusPingRequest::PACKET_ID => {
-                self.handle_ping_request(SStatusPingRequest::read(bytebuf)?)
+                self.handle_ping_request(SStatusPingRequest::read(payload)?)
                     .await;
             }
             _ => {
                 log::error!(
                     "Failed to handle client packet id {} in Status State",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -456,33 +463,33 @@ impl Client {
     async fn handle_login_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         log::debug!("Handling login group for id");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SLoginStart::PACKET_ID => {
-                self.handle_login_start(server, SLoginStart::read(bytebuf)?)
+                self.handle_login_start(server, SLoginStart::read(payload)?)
                     .await;
             }
             SEncryptionResponse::PACKET_ID => {
-                self.handle_encryption_response(server, SEncryptionResponse::read(bytebuf)?)
+                self.handle_encryption_response(server, SEncryptionResponse::read(payload)?)
                     .await;
             }
             SLoginPluginResponse::PACKET_ID => {
-                self.handle_plugin_response(SLoginPluginResponse::read(bytebuf)?)
+                self.handle_plugin_response(SLoginPluginResponse::read(payload)?)
                     .await;
             }
             SLoginAcknowledged::PACKET_ID => {
                 self.handle_login_acknowledged(server).await;
             }
             SLoginCookieResponse::PACKET_ID => {
-                self.handle_login_cookie_response(&SLoginCookieResponse::read(bytebuf)?);
+                self.handle_login_cookie_response(&SLoginCookieResponse::read(payload)?);
             }
             _ => {
                 log::error!(
                     "Failed to handle client packet id {} in Login State",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -492,37 +499,37 @@ impl Client {
     async fn handle_config_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         log::debug!("Handling config group");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SClientInformationConfig::PACKET_ID => {
-                self.handle_client_information_config(SClientInformationConfig::read(bytebuf)?)
+                self.handle_client_information_config(SClientInformationConfig::read(payload)?)
                     .await;
             }
             SPluginMessage::PACKET_ID => {
-                self.handle_plugin_message(SPluginMessage::read(bytebuf)?)
+                self.handle_plugin_message(SPluginMessage::read(payload)?)
                     .await;
             }
             SAcknowledgeFinishConfig::PACKET_ID => {
                 self.handle_config_acknowledged().await;
             }
             SKnownPacks::PACKET_ID => {
-                self.handle_known_packs(server, SKnownPacks::read(bytebuf)?)
+                self.handle_known_packs(server, SKnownPacks::read(payload)?)
                     .await;
             }
             SConfigCookieResponse::PACKET_ID => {
-                self.handle_config_cookie_response(&SConfigCookieResponse::read(bytebuf)?);
+                self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);
             }
             SConfigResourcePack::PACKET_ID => {
-                self.handle_resource_pack_response(SConfigResourcePack::read(bytebuf)?)
+                self.handle_resource_pack_response(SConfigResourcePack::read(payload)?)
                     .await;
             }
             _ => {
                 log::error!(
                     "Failed to handle client packet id {} in Config State",
-                    packet.id.0
+                    packet.id
                 );
             }
         };

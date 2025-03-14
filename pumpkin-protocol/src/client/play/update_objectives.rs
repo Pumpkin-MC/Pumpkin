@@ -1,9 +1,11 @@
-use bytes::BufMut;
 use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
 use pumpkin_macros::packet;
 use pumpkin_util::text::TextComponent;
 
-use crate::{ClientPacket, NumberFormat, VarInt, bytebuf::ByteBufMut};
+use crate::{
+    ClientPacket, NumberFormat, VarInt,
+    ser::{NetworkWrite, WritingError},
+};
 
 #[packet(PLAY_SET_OBJECTIVE)]
 pub struct CUpdateObjectives<'a> {
@@ -33,30 +35,32 @@ impl<'a> CUpdateObjectives<'a> {
 }
 
 impl ClientPacket for CUpdateObjectives<'_> {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_string(self.objective_name);
-        bytebuf.put_u8(self.mode);
+    fn write(&self, write: impl NetworkWrite) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_string(self.objective_name)?;
+        write.write_u8_be(self.mode)?;
         if self.mode == 0 || self.mode == 2 {
-            bytebuf.put_slice(&self.display_name.encode());
-            bytebuf.put_var_int(&self.render_type);
-            bytebuf.put_option(&self.number_format, |p, v| {
+            write.write_slice(&self.display_name.encode())?;
+            write.write_var_int(&self.render_type)?;
+            write.write_option(&self.number_format, |p, v| {
                 match v {
-                    NumberFormat::Blank => {
-                        p.put_var_int(&VarInt(0));
-                    }
+                    NumberFormat::Blank => p.write_var_int(&VarInt(0)),
                     NumberFormat::Styled(style) => {
-                        p.put_var_int(&VarInt(1));
+                        p.write_var_int(&VarInt(1))?;
                         // TODO
                         let mut style_buf = Vec::new();
                         pumpkin_nbt::serializer::to_bytes_unnamed(style, &mut style_buf).unwrap();
-                        p.put_slice(&style_buf);
+                        p.write_slice(&style_buf)
                     }
                     NumberFormat::Fixed(text_component) => {
-                        p.put_var_int(&VarInt(2));
-                        p.put_slice(&text_component.encode());
+                        p.write_var_int(&VarInt(2))?;
+                        p.write_slice(&text_component.encode())
                     }
                 }
-            });
+            })
+        } else {
+            Ok(())
         }
     }
 }

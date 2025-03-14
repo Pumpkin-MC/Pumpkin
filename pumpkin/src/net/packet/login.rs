@@ -168,7 +168,7 @@ impl Client {
         log::debug!("Handling encryption");
         let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
 
-        if let Err(error) = self.set_encryption(Some(&shared_secret)).await {
+        if let Err(error) = self.set_encryption(&shared_secret).await {
             self.kick(TextComponent::text(error.to_string())).await;
             return;
         }
@@ -309,10 +309,9 @@ impl Client {
     pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-            "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            "Received cookie_response[login]: key: \"{}\", payload_length: \"{:?}\"",
             packet.key.to_string(),
-            packet.has_payload,
-            packet.payload_length.unwrap_or(VarInt::from(0)).0
+            packet.payload.as_ref().map(|p| p.len())
         );
     }
     pub async fn handle_plugin_response(&self, plugin_response: SLoginPluginResponse) {

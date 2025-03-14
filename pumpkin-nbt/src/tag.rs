@@ -1,5 +1,5 @@
 use compound::NbtCompound;
-use deserializer::ReadAdaptor;
+use deserializer::NbtReadHelper;
 use io::Read;
 use serializer::WriteAdaptor;
 
@@ -112,7 +112,7 @@ impl NbtTag {
         Ok(())
     }
 
-    pub fn deserialize<R>(reader: &mut ReadAdaptor<R>) -> Result<NbtTag, Error>
+    pub fn deserialize<R>(reader: &mut NbtReadHelper<R>) -> Result<NbtTag, Error>
     where
         R: Read,
     {
@@ -120,7 +120,7 @@ impl NbtTag {
         Self::deserialize_data(reader, tag_id)
     }
 
-    pub fn skip_data<R>(reader: &mut ReadAdaptor<R>, tag_id: u8) -> Result<(), Error>
+    pub fn skip_data<R>(reader: &mut NbtReadHelper<R>, tag_id: u8) -> Result<(), Error>
     where
         R: Read,
     {
@@ -177,7 +177,7 @@ impl NbtTag {
         }
     }
 
-    pub fn deserialize_data<R>(reader: &mut ReadAdaptor<R>, tag_id: u8) -> Result<NbtTag, Error>
+    pub fn deserialize_data<R>(reader: &mut NbtReadHelper<R>, tag_id: u8) -> Result<NbtTag, Error>
     where
         R: Read,
     {
