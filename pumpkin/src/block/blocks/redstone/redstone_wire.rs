@@ -16,6 +16,8 @@ use crate::entity::player::Player;
 use crate::world::BlockFlags;
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server, world::World};
 
+use super::update_wire_neighbors;
+
 type RedstoneWireProperties = RedstoneWireLikeProperties;
 
 #[pumpkin_block("minecraft:redstone_wire")]
@@ -200,7 +202,7 @@ async fn on_use(wire: RedstoneWireProperties, world: &World, block_pos: BlockPos
                     BlockFlags::empty(),
                 )
                 .await;
-            //update_wire_neighbors(world, block_pos);
+            update_wire_neighbors(world, block_pos).await;
             return true;
         }
     }

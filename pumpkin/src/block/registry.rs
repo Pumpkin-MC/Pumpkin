@@ -268,6 +268,22 @@ impl BlockRegistry {
         }
     }
 
+    pub async fn on_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        block_pos: &BlockPos,
+        source_block: &Block,
+        notify: bool,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .on_neighbor_update(world, block, block_pos, source_block, notify)
+                .await;
+        }
+    }
+
     #[must_use]
     pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn PumpkinBlock>> {
         self.blocks
