@@ -6,7 +6,7 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_protocol::{
     ConnectionState,
     client::config::{CFinishConfig, CRegistryData},
@@ -70,7 +70,7 @@ impl Client {
     }
 
     pub async fn handle_resource_pack_response(&self, packet: SConfigResourcePack) {
-        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        let resource_config = &advanced_config().resource_pack;
         if resource_config.enabled {
             let expected_uuid =
                 uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());

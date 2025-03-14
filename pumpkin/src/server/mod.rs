@@ -12,7 +12,7 @@ use crate::{
 };
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block::Block;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
@@ -81,10 +81,10 @@ impl Server {
         let auth_client = BASIC_CONFIG.online_mode.then(|| {
             reqwest::Client::builder()
                 .connect_timeout(Duration::from_millis(u64::from(
-                    ADVANCED_CONFIG.networking.authentication.connect_timeout,
+                    advanced_config().networking.authentication.connect_timeout,
                 )))
                 .read_timeout(Duration::from_millis(u64::from(
-                    ADVANCED_CONFIG.networking.authentication.read_timeout,
+                    advanced_config().networking.authentication.read_timeout,
                 )))
                 .build()
                 .expect("Failed to to make reqwest client")

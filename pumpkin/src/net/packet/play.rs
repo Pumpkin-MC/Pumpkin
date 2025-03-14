@@ -15,7 +15,7 @@ use crate::{
     server::Server,
     world::chunker,
 };
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
@@ -455,7 +455,7 @@ impl Player {
                         .await;
                 });
 
-                if ADVANCED_CONFIG.commands.log_console {
+                if advanced_config().commands.log_console {
                     log::info!(
                         "Player ({}): executed command /{}",
                         self.gameprofile.name,
@@ -854,7 +854,7 @@ impl Player {
         match action {
             ActionType::Attack => {
                 let entity_id = interact.entity_id;
-                let config = &ADVANCED_CONFIG.pvp;
+                let config = &advanced_config().pvp;
                 // TODO: do validation and stuff
                 if !config.enabled {
                     return;

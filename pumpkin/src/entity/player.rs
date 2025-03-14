@@ -11,7 +11,7 @@ use std::{
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::{
     block::BlockState,
     damage::DamageType,
@@ -297,7 +297,7 @@ impl Player {
                 .iter()
                 .find(|op| op.uuid == gameprofile_clone.id)
                 .map_or(
-                    AtomicCell::new(ADVANCED_CONFIG.commands.default_op_level),
+                    AtomicCell::new(advanced_config().commands.default_op_level),
                     |op| AtomicCell::new(op.level),
                 ),
             inventory: Mutex::new(PlayerInventory::new()),
@@ -359,7 +359,7 @@ impl Player {
         let world = self.world().await;
         let victim_entity = victim.get_entity();
         let attacker_entity = &self.living_entity.entity;
-        let config = &ADVANCED_CONFIG.pvp;
+        let config = &advanced_config().pvp;
 
         let inventory = self.inventory().lock().await;
         let item_slot = inventory.held_item();

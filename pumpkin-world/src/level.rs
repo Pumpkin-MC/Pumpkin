@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
-use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
+use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     sync::{RwLock, mpsc},
@@ -40,9 +40,16 @@ pub struct Level {
     pub level_info: LevelData,
     world_info_writer: Arc<dyn WorldInfoWriter>,
     level_folder: LevelFolder,
+
+    // Holds this level's spawn chunks, which are always loaded
+    spawn_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+
+    // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
+    // from the loaded chunks map and sent to the underlying ChunkIO
     loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
-    chunk_saver: Arc<dyn ChunkIO<SyncChunk>>,
+
+    chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
@@ -103,7 +110,7 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
-        let chunk_saver: Arc<dyn ChunkIO<SyncChunk>> = match ADVANCED_CONFIG.chunk.format {
+        let chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile>::default()),
             ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFile>::default()),
@@ -115,6 +122,7 @@ impl Level {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
             chunk_saver,
+            spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
@@ -315,13 +323,29 @@ impl Level {
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
 
-        trace!("Writing chunks to disk {:}", chunks_to_write.len());
+        trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
         if let Err(error) = chunk_saver
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
             log::error!("Failed writing Chunk to disk {}", error.to_string());
         }
+    }
+
+    /// Initializes the spawn chunks to these chunks
+    pub async fn read_spawn_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+        let (send, mut recv) = mpsc::unbounded_channel();
+
+        let fetcher = self.fetch_chunks(chunks, send);
+        let handler = async {
+            while let Some((chunk, _)) = recv.recv().await {
+                let pos = chunk.read().await.position;
+                self.spawn_chunks.insert(pos, chunk);
+            }
+        };
+
+        let _ = tokio::join!(fetcher, handler);
+        log::debug!("Read {} chunks as spawn chunks", chunks.len());
     }
 
     /// Reads/Generates many chunks in a world
@@ -350,6 +374,11 @@ impl Level {
         for chunk in chunks {
             if let Some(chunk) = self.loaded_chunks.get(chunk) {
                 send_chunk(false, chunk.value().clone(), &channel);
+            } else if let Some(spawn_chunk) = self.spawn_chunks.get(chunk) {
+                // Also clone the arc into the loaded chunks
+                self.loaded_chunks
+                    .insert(*chunk, spawn_chunk.value().clone());
+                send_chunk(false, spawn_chunk.value().clone(), &channel);
             } else {
                 remaining_chunks.push(*chunk);
             }

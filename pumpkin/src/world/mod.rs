@@ -110,10 +110,6 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
-    // An LFU cache for storing the most frequently used 16 chunks that are singleton called (not a
-    // part of chunk loading), if a chunk is called in this manner, it is likely to be called again,
-    // so we will watch all chunks while they remain in this cache
-    single_chunk_lfu: Mutex<[Vector2<i32>; 16]>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
@@ -137,7 +133,6 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
-            single_chunk_lfu: Mutex::new([Vector2::default(); 16]),
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -1055,12 +1050,11 @@ impl World {
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
-        let replaced_block_state_id = chunk.read().await.subchunks.get_block(relative).unwrap();
-        chunk
-            .write()
-            .await
-            .subchunks
-            .set_block(relative, block_state_id);
+        let mut chunk = chunk.write().await;
+        chunk.dirty = true;
+        let replaced_block_state_id = chunk.subchunks.get_block(relative).unwrap();
+        chunk.subchunks.set_block(relative, block_state_id);
+        drop(chunk);
 
         self.broadcast_packet_all(&CBlockUpdate::new(
             position,
@@ -1102,47 +1096,6 @@ impl World {
 
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
         let mut receiver = self.receive_chunks(vec![chunk_pos], false);
-
-        // If we are only getting one chunk, we are probably doing something that requires multiple
-        // calls to it. "Watch" it temp.
-
-        let mut lfu = self.single_chunk_lfu.lock().await;
-
-        #[allow(clippy::single_match_else)]
-        let pos_to_clean = match lfu.iter().position(|pos| *pos == chunk_pos) {
-            Some(index) => {
-                if index > 0 {
-                    lfu[..=index].rotate_right(1);
-                }
-                None
-            }
-            None => {
-                // The position isn't in the cache
-                lfu.rotate_right(1);
-                let to_remove = lfu[0];
-                lfu[0] = chunk_pos;
-                self.level.mark_chunk_as_newly_watched(chunk_pos).await;
-
-                if to_remove == Vector2::<i32>::default() {
-                    // This is our dummy value and spawn chunks are watched anyway
-                    // TODO: What if we call this on our default?
-                    None
-                } else {
-                    Some(to_remove)
-                }
-            }
-        };
-
-        if let Some(pos) = pos_to_clean {
-            self.level.mark_chunk_as_not_watched(pos).await;
-            if !self.level.is_chunk_watched(&pos) {
-                log::trace!(
-                    "Chunk {:?} evicted from single chunk cache... cleaning",
-                    chunk_pos
-                );
-                self.level.clean_chunk(&pos).await;
-            }
-        }
 
         receiver
             .recv()

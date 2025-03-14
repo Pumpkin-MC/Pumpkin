@@ -76,6 +76,8 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             subchunks,
             heightmap: Default::default(),
             position: at,
+            // We just generated this chunk! Mark it as dirty
+            dirty: true,
         }
     }
 }

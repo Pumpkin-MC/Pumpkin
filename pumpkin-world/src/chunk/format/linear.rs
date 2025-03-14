@@ -1,18 +1,16 @@
 use std::io::ErrorKind;
-use std::sync::Arc;
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::AnvilChunkFile;
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
-use crate::level::SyncChunk;
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_util::math::vector2::Vector2;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
-use tokio::sync::RwLock;
+use tokio::io::{AsyncWriteExt, BufWriter};
 
 use super::anvil::{CHUNK_COUNT, chunk_to_bytes};
 
@@ -162,17 +160,32 @@ impl Default for LinearFile {
 
 #[async_trait]
 impl ChunkSerializer for LinearFile {
-    type Data = SyncChunk;
+    type Data = ChunkData;
+    type WriteBackend = PathBuf;
+
+    fn should_write(&self, is_watched: bool) -> bool {
+        !is_watched
+    }
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
         format!("./r.{}.{}.linear", region_x, region_z)
     }
 
-    async fn write(
-        &self,
-        write: &mut (impl AsyncWrite + Unpin + Send),
-    ) -> Result<(), std::io::Error> {
+    async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
+        let temp_path = path.with_extension("tmp");
+        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+
+        let file = tokio::fs::OpenOptions::new()
+            .read(false)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&temp_path)
+            .await?;
+
+        let mut write = BufWriter::new(file);
+
         // Parse the headers to a buffer
         let mut data_buffer: Vec<u8> = self
             .chunks_headers
@@ -187,14 +200,14 @@ impl ChunkSerializer for LinearFile {
         // TODO: maybe zstd lib has memory leaks
         let compressed_buffer = zstd::bulk::compress(
             data_buffer.as_slice(),
-            ADVANCED_CONFIG.chunk.compression.level as i32,
+            advanced_config().chunk.compression.level as i32,
         )
         .expect("Failed to compress the data buffer")
         .into_boxed_slice();
 
         let file_header = LinearFileHeader {
             chunks_bytes: compressed_buffer.len(),
-            compression_level: ADVANCED_CONFIG.chunk.compression.level as u8,
+            compression_level: advanced_config().chunk.compression.level as u8,
             chunks_count: self
                 .chunks_headers
                 .iter()
@@ -216,6 +229,13 @@ impl ChunkSerializer for LinearFile {
         write.write_all(&compressed_buffer).await?;
         write.write_all(&SIGNATURE).await?;
 
+        write.flush().await?;
+
+        // The rename of the file works like an atomic operation ensuring
+        // that the data is not corrupted before the rename is completed
+        tokio::fs::rename(temp_path, &path).await?;
+
+        log::trace!("Wrote file to Disk: {:?}", path);
         Ok(())
     }
 
@@ -286,25 +306,21 @@ impl ChunkSerializer for LinearFile {
         })
     }
 
-    async fn update_chunks(&mut self, chunks_data: &[Self::Data]) -> Result<(), ChunkWritingError> {
-        for chunk_data in chunks_data {
-            let chunk_data = chunk_data.read().await;
-            let index = LinearFile::get_chunk_index(&chunk_data.position);
-            let chunk_raw: Bytes = chunk_to_bytes(&chunk_data)
-                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
-                .into();
-            drop(chunk_data);
+    async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
+        let index = LinearFile::get_chunk_index(&chunk.position);
+        let chunk_raw: Bytes = chunk_to_bytes(chunk)
+            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
+            .into();
 
-            let header = &mut self.chunks_headers[index];
-            header.size = chunk_raw.len() as u32;
-            header.timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
+        let header = &mut self.chunks_headers[index];
+        header.size = chunk_raw.len() as u32;
+        header.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
 
-            // We update the data buffer
-            self.chunks_data[index] = Some(chunk_raw);
-        }
+        // We update the data buffer
+        self.chunks_data[index] = Some(chunk_raw);
 
         Ok(())
     }
@@ -312,7 +328,7 @@ impl ChunkSerializer for LinearFile {
     async fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<SyncChunk, ChunkReadingError>>,
+        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
     ) {
         // Create an unbounded buffer so we don't block the rayon thread pool
         let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::unbounded_channel();
@@ -329,7 +345,7 @@ impl ChunkSerializer for LinearFile {
                     match ChunkData::from_bytes(&data, chunk)
                         .map_err(ChunkReadingError::ParsingError)
                     {
-                        Ok(chunk) => LoadedData::Loaded(Arc::new(RwLock::new(chunk))),
+                        Ok(chunk) => LoadedData::Loaded(chunk),
                         Err(err) => LoadedData::Error((chunk, err)),
                     }
                 } else {
@@ -399,6 +415,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_writing() {
+        let _ = env_logger::try_init();
+
         let generator = get_world_gen(Seed(0));
 
         let temp_dir = TempDir::new().unwrap();
@@ -421,6 +439,12 @@ mod tests {
 
         for i in 0..5 {
             println!("Iteration {}", i + 1);
+            // Mark the chunks as dirty so we save them again
+            for (_, chunk) in &chunks {
+                let mut chunk = chunk.write().await;
+                chunk.dirty = true;
+            }
+
             chunk_saver
                 .save_chunks(
                     &level_folder,

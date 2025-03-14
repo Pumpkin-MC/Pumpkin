@@ -117,6 +117,8 @@ impl ChunkData {
             subchunks,
             heightmap: chunk_data.heightmaps,
             position,
+            // This chunk is read from disk, so it has not been modified
+            dirty: false,
         })
     }
 }
