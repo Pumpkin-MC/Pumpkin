@@ -264,7 +264,7 @@ impl<'a> ProtoChunk<'a> {
 
         for i in bottom_section..=top_section {
             let block_y = section_coords::section_to_block(i);
-            let start_y = biome_coords::from_block(i - bottom_section);
+            let start_y = biome_coords::from_chunk(i);
 
             let biomes_per_section = biome_coords::from_block(CHUNK_WIDTH) as i32;
             for x in 0..biomes_per_section {
@@ -276,7 +276,7 @@ impl<'a> ProtoChunk<'a> {
                             &biome_pos,
                             &mut self.multi_noise_sampler,
                         );
-                        // panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
+                        //panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
                         let local_biome_pos = Vector3 {
                             x,
