@@ -15,36 +15,52 @@ async fn get_strong_power_at(world: &World, block_pos: &BlockPos) -> u8 {
         .await
 }
 
-async fn get_wire_power_at(world: &World, block_pos: &BlockPos) -> u8 {
-    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
-    if block == Block::REDSTONE_WIRE {
-        let wire_props = RedstoneWireLikeProperties::from_state_id(state.id, &block);
+async fn get_wire_power_at(_pos: &BlockPos, state: &BlockState, other_block: &Block) -> u8 {
+    if *other_block == Block::REDSTONE_WIRE {
+        let wire_props = RedstoneWireLikeProperties::from_state_id(state.id, other_block);
         return wire_props.power.to_index() as u8;
     }
     0
 }
 
 async fn calculate_wire_power_at(world: &World, block_pos: &BlockPos) -> u8 {
-    // Using i8 here so we don't panic if we get negative power
-    let mut power: i8 = 0;
+    let mut power = 0u8;
 
     for direction in BlockDirection::horizontal() {
         let other_pos = block_pos.offset(direction.to_offset());
-        let other_block_state = world.get_block_state(&other_pos).await.unwrap();
-        let up_pos = block_pos.up();
-        let up_block_state = world.get_block_state(&up_pos).await.unwrap();
-        power = std::cmp::max(power, get_wire_power_at(world, &other_pos).await as i8);
+        let (other_block, other_state) = world.get_block_and_block_state(&other_pos).await.unwrap();
 
-        if other_block_state.is_solid && !up_block_state.is_solid {
+        power = std::cmp::max(
+            power,
+            get_wire_power_at(&other_pos, &other_state, &other_block).await,
+        );
+
+        let block_up_pos = block_pos.up();
+        let block_up_state = world.get_block_state(&block_up_pos).await.unwrap();
+        if other_state.is_solid && !block_up_state.is_solid {
             let other_up_pos = other_pos.up();
-            power = std::cmp::max(power, get_wire_power_at(world, &other_up_pos).await as i8);
-        } else if !other_block_state.is_solid {
+            let (other_up_block, other_up_state) = world
+                .get_block_and_block_state(&other_up_pos)
+                .await
+                .unwrap();
+            power = std::cmp::max(
+                power,
+                get_wire_power_at(&other_up_pos, &other_up_state, &other_up_block).await,
+            );
+        } else {
             let other_down_pos = other_pos.down();
-            power = std::cmp::max(power, get_wire_power_at(world, &other_down_pos).await as i8);
+            let (other_down_block, other_down_state) = world
+                .get_block_and_block_state(&other_down_pos)
+                .await
+                .unwrap();
+            power = std::cmp::max(
+                power,
+                get_wire_power_at(&other_down_pos, &other_down_state, &other_down_block).await,
+            );
         }
     }
 
-    std::cmp::max(power - 1, 0) as u8
+    if power > 0 { power - 1 } else { 0 }
 }
 
 pub async fn update(

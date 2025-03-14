@@ -1376,10 +1376,6 @@ impl World {
                 }
                 None => self.broadcast_packet_all(&particles_packet).await,
             }
-
-            if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
-                self.update_neighbors(position, None).await;
-            }
         }
     }
 

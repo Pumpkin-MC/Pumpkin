@@ -1066,9 +1066,9 @@ impl Player {
                                     &location,
                                     Some(self.clone()),
                                     if drop {
-                                        BlockFlags::empty()
+                                        BlockFlags::NOTIFY_NEIGHBORS
                                     } else {
-                                        BlockFlags::SKIP_DROPS
+                                        BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
                                     },
                                 )
                                 .await;
