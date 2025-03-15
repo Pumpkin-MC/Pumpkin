@@ -100,6 +100,16 @@ impl BlockDirection {
         ]
     }
 
+    pub fn is_horizontal(&self) -> bool {
+        matches!(
+            self,
+            BlockDirection::North
+                | BlockDirection::South
+                | BlockDirection::West
+                | BlockDirection::East
+        )
+    }
+
     pub fn vertical() -> [BlockDirection; 2] {
         [BlockDirection::Down, BlockDirection::Up]
     }
@@ -155,6 +165,8 @@ impl BlockDirection {
 
 pub trait HorizontalFacingExt {
     fn to_block_direction(&self) -> BlockDirection;
+    fn rotate(&self) -> HorizontalFacing;
+    fn rotate_ccw(&self) -> HorizontalFacing;
 }
 
 impl HorizontalFacingExt for HorizontalFacing {
@@ -164,6 +176,22 @@ impl HorizontalFacingExt for HorizontalFacing {
             HorizontalFacing::South => BlockDirection::South,
             HorizontalFacing::West => BlockDirection::West,
             HorizontalFacing::East => BlockDirection::East,
+        }
+    }
+    fn rotate(&self) -> HorizontalFacing {
+        match self {
+            HorizontalFacing::North => HorizontalFacing::East,
+            HorizontalFacing::South => HorizontalFacing::West,
+            HorizontalFacing::West => HorizontalFacing::North,
+            HorizontalFacing::East => HorizontalFacing::South,
+        }
+    }
+    fn rotate_ccw(&self) -> HorizontalFacing {
+        match self {
+            HorizontalFacing::North => HorizontalFacing::West,
+            HorizontalFacing::South => HorizontalFacing::East,
+            HorizontalFacing::West => HorizontalFacing::North,
+            HorizontalFacing::East => HorizontalFacing::South,
         }
     }
 }

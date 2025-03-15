@@ -90,7 +90,7 @@ impl PumpkinBlock for LeverBlock {
         toggle_lever(world, &location).await;
     }
 
-    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState) -> bool {
+    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState, _direction: &BlockDirection) -> bool {
         true
     }
 

@@ -25,7 +25,7 @@ use border::Worldborder;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::Block,
+    block::{Block, BlockProperties},
     entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -35,8 +35,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-        CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
+        CRemovePlayerInfo, CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -48,8 +48,8 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::level::SyncChunk;
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
@@ -152,8 +152,6 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
-    /// Block State updates to send at the end of the tick
-    pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
 }
 
@@ -175,7 +173,6 @@ impl World {
             dimension_type,
             weather: Mutex::new(Weather::new()),
             block_registry,
-            block_state_updates: Mutex::new(HashMap::new()),
         }
     }
 
@@ -373,15 +370,29 @@ impl World {
             }
         }
 
-        let mut block_state_updates = self.block_state_updates.lock().await;
-        for (position, block_state_id) in block_state_updates.iter() {
-            self.broadcast_packet_all(&CBlockUpdate::new(
-                position,
-                i32::from(*block_state_id).into(),
-            ))
-            .await;
+        {
+            let block_state_updates = self.level.get_block_state_updates().await;
+
+            // TODO: only send packet to players who have the chunks loaded
+            for chunk in block_state_updates {
+                for chunk_section in chunk {
+                    if chunk_section.len() == 0 {
+                        continue;
+                    }
+                    if chunk_section.len() == 1 {
+                        let (block_pos, block_state_id) = chunk_section[0];
+                        self.broadcast_packet_all(&CBlockUpdate::new(
+                            &block_pos,
+                            i32::from(block_state_id).into(),
+                        ))
+                        .await;
+                    } else {
+                        self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
+                            .await;
+                    }
+                }
+            }
         }
-        block_state_updates.clear();
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -1135,10 +1146,13 @@ impl World {
             .subchunks
             .set_block(relative, block_state_id);
 
-        {
-            let mut block_state_updates = self.block_state_updates.lock().await;
-            block_state_updates.insert(*position, block_state_id);
-        };
+        chunk
+            .read()
+            .await
+            .block_state_updates
+            .lock()
+            .await
+            .insert(*position, block_state_id);
 
         let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
@@ -1407,6 +1421,13 @@ impl World {
         position: &BlockPos,
     ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
+        get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    pub async fn get_state_by_id(
+        &self,
+        id: u16,
+    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 

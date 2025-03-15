@@ -153,10 +153,12 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState) -> bool {
+    /// Sides where redstone connects to
+    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState, _direction: &BlockDirection) -> bool {
         false
     }
 
+    /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
     async fn get_weak_redstone_power(
         &self,
         _block: &Block,
@@ -168,6 +170,7 @@ pub trait PumpkinBlock: Send + Sync {
         0
     }
 
+    /// Strong redstone power. this can power a block that then gives power
     async fn get_strong_redstone_power(
         &self,
         _block: &Block,
@@ -176,11 +179,6 @@ pub trait PumpkinBlock: Send + Sync {
         _state: &BlockState,
         _direction: &BlockDirection,
     ) -> u8 {
-        0
-    }
-
-    /// ONLY USE IN REDSTONE WIRE
-    async fn get_strong_power(&self, _world: &World, _block_pos: &BlockPos) -> u8 {
         0
     }
 }

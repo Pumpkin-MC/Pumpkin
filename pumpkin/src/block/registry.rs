@@ -290,10 +290,10 @@ impl BlockRegistry {
             .get(format!("minecraft:{}", block.name).as_str())
     }
 
-    pub async fn emits_redstone_power(&self, block: &Block, state: &BlockState) -> bool {
+    pub async fn emits_redstone_power(&self, block: &Block, state: &BlockState, direction: &BlockDirection) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.emits_redstone_power(block, state).await;
+            return pumpkin_block.emits_redstone_power(block, state, direction).await;
         }
         false
     }

@@ -13,7 +13,7 @@ use pumpkin_world::chunk::TickPriority;
 
 type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
 
-use crate::block::blocks::lever::LeverLikePropertiesExt;
+use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
@@ -118,7 +118,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 Self::update_neighbors(world, block_pos, &props).await;
             }
 
-            async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState) -> bool {
+            async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState, _direction: &BlockDirection) -> bool {
                 true
             }
 

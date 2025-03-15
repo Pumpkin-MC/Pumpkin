@@ -1,8 +1,23 @@
+use async_trait::async_trait;
+use pumpkin_data::block::{
+    Block, BlockProperties, BlockState, Boolean, HorizontalFacing, ObserverLikeProperties,
+};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{
+    block::{BlockDirection, FacingExt, HorizontalFacingExt},
+    chunk::TickPriority,
+};
+
+use crate::{
+    block::pumpkin_block::PumpkinBlock,
+    server::Server,
+    world::{BlockFlags, World},
+};
 
 #[pumpkin_block("minecraft:observer")]
 pub struct ObserverBlock;
-/*
 
 #[async_trait]
 impl PumpkinBlock for ObserverBlock {
@@ -87,8 +102,14 @@ impl PumpkinBlock for ObserverBlock {
         state
     }
 
-    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState) -> bool {
-        true
+    async fn emits_redstone_power(
+        &self,
+        block: &Block,
+        state: &BlockState,
+        direction: &BlockDirection,
+    ) -> bool {
+        let props = ObserverLikeProperties::from_state_id(state.id, block);
+        props.facing.to_block_direction() == *direction
     }
 
     async fn get_weak_redstone_power(
@@ -168,4 +189,3 @@ impl ObserverBlock {
             .await;
     }
 }
- */

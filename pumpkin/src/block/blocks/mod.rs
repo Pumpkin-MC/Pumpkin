@@ -5,7 +5,6 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{entity::player::Player, server::Server};
 
-pub(crate) mod buttons;
 pub(crate) mod chest;
 pub(crate) mod crafting_table;
 pub(crate) mod doors;
@@ -13,7 +12,6 @@ pub(crate) mod fence_gates;
 pub(crate) mod fences;
 pub(crate) mod furnace;
 pub(crate) mod jukebox;
-pub(crate) mod lever;
 pub(crate) mod logs;
 pub(crate) mod redstone;
 pub(crate) mod tnt;

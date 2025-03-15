@@ -5,7 +5,7 @@ use pumpkin_nbt::{from_bytes, nbt_long_array};
 
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     block::ChunkBlockState,
@@ -151,6 +151,7 @@ impl ChunkData {
                     })
                     .collect(),
             )),
+            block_state_updates: Mutex::new(HashMap::new()),
         })
     }
 }

@@ -1,9 +1,9 @@
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::math::{vector2::{start_block_x, start_block_z, Vector2}, vector3::Vector3};
 
 use crate::{
     block::ChunkBlockState,
     generation::{
-        chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape, positions::chunk_pos,
+        chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape,
     },
 };
 
@@ -12,7 +12,6 @@ use super::{
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, STONE_BLOCK, WATER_BLOCK},
     noise_router::proto_noise_router::GlobalProtoNoiseRouter,
-    positions::chunk_pos::{start_block_x, start_block_z},
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -73,8 +72,8 @@ impl<'a> ProtoChunk<'a> {
             base_router,
             random_config,
             horizontal_cell_count,
-            chunk_pos::start_block_x(&chunk_pos),
-            chunk_pos::start_block_z(&chunk_pos),
+            start_block_x(&chunk_pos),
+            start_block_z(&chunk_pos),
             generation_shape,
             sampler,
             true,

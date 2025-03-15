@@ -3,6 +3,8 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::Float;
 
+use super::{floor_log2, smallest_encompassing_power_of_two};
+
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector3<T> {
     pub x: T,
@@ -307,4 +309,47 @@ impl serde::Serialize for Vector3<i32> {
         buf.put_i32(self.z);
         serializer.serialize_bytes(&buf)
     }
+}
+
+const MAX_BLOCK_AXIS: u32 = 30000000;
+const SIZE_BITS_X: u8 = 1 + floor_log2(smallest_encompassing_power_of_two(MAX_BLOCK_AXIS));
+const BITS_X: u64 = (1 << SIZE_BITS_X) - 1;
+const SIZE_BITS_Z: u8 = SIZE_BITS_X;
+const BITS_Z: u64 = (1 << SIZE_BITS_Z) - 1;
+pub const SIZE_BITS_Y: u8 = 64 - SIZE_BITS_X - SIZE_BITS_Z;
+const BITS_Y: u64 = (1 << SIZE_BITS_Y) - 1;
+const BIT_SHIFT_Z: u8 = SIZE_BITS_Y;
+const BIT_SHIFT_X: u8 = SIZE_BITS_Y + SIZE_BITS_Z;
+
+#[inline]
+pub const fn unpack_x(packed: i64) -> i32 {
+    ((packed << (64 - BIT_SHIFT_X - SIZE_BITS_X)) >> (64 - SIZE_BITS_X)) as i32
+}
+
+#[inline]
+pub const fn unpack_y(packed: i64) -> i32 {
+    ((packed << (64 - SIZE_BITS_Y)) >> (64 - SIZE_BITS_Y)) as i32
+}
+
+#[inline]
+pub const fn unpack_z(packed: i64) -> i32 {
+    ((packed << (64 - BIT_SHIFT_Z - SIZE_BITS_Z)) >> (64 - SIZE_BITS_Z)) as i32
+}
+
+#[inline]
+pub const fn packed(vec: &Vector3<i32>) -> i64 {
+    let mut result = 0i64;
+    // Need to go to i64 first to conserve sign
+    result |= (vec.x as i64 & BITS_X as i64) << BIT_SHIFT_X;
+    result |= (vec.z as i64 & BITS_Z as i64) << BIT_SHIFT_Z;
+    result |= vec.y as i64 & BITS_Y as i64;
+    result
+}
+
+#[inline]
+pub const fn packed_local(vec: &Vector3<i32>) -> i16 {
+    let x = vec.x as i16;
+    let y = vec.y as i16;
+    let z = vec.z as i16;
+    x << 8 | z << 4 | y
 }

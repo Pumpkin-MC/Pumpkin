@@ -1,3 +1,10 @@
+/**
+ * This implementation is heavily based on https://github.com/MCHPR/MCHPRS
+ * Updated to fit pumpkin by 4lve
+ */
+use pumpkin_data::block::{
+    Block, BlockProperties, BlockState, EnumVariants, RedstoneWireLikeProperties,
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
@@ -7,6 +14,10 @@ pub(crate) mod observer;
 pub(crate) mod redstone_block;
 pub(crate) mod redstone_lamp;
 pub(crate) mod redstone_wire;
+pub(crate) mod repeater;
+pub(crate) mod turbo;
+pub(crate) mod buttons;
+pub(crate) mod lever;
 
 pub async fn update_wire_neighbors(world: &World, pos: BlockPos) {
     for direction in &BlockDirection::all() {
@@ -25,4 +36,130 @@ pub async fn update_wire_neighbors(world: &World, pos: BlockPos) {
                 .await;
         }
     }
+}
+
+pub async fn get_redstone_power(
+    block: &Block,
+    state: &BlockState,
+    world: &World,
+    pos: BlockPos,
+    facing: BlockDirection,
+) -> u8 {
+    if *block == Block::REDSTONE_BLOCK {
+        return 15;
+    }
+    if state.is_solid {
+        get_max_strong_power(world, pos, true).await
+    } else {
+        get_weak_power(block, state, world, pos, facing, true).await
+    }
+}
+
+async fn get_redstone_power_no_dust(
+    block: &Block,
+    state: &BlockState,
+    world: &World,
+    pos: BlockPos,
+    facing: BlockDirection,
+) -> u8 {
+    if *block == Block::REDSTONE_BLOCK {
+        return 15;
+    }
+    if state.is_solid {
+        get_max_strong_power(world, pos, false).await
+    } else {
+        get_weak_power(block, state, world, pos, facing, false).await
+    }
+}
+
+async fn get_max_strong_power(world: &World, pos: BlockPos, dust_power: bool) -> u8 {
+    let mut max_power = 0;
+    for side in &BlockDirection::all() {
+        let (block, state) = world
+            .get_block_and_block_state(&pos.offset(side.to_offset()))
+            .await
+            .unwrap();
+        max_power = max_power.max(
+            get_strong_power(
+                &block,
+                &state,
+                world,
+                pos.offset(side.to_offset()),
+                *side,
+                dust_power,
+            )
+            .await,
+        );
+    }
+    max_power
+}
+
+async fn get_weak_power(
+    block: &Block,
+    state: &BlockState,
+    world: &World,
+    pos: BlockPos,
+    side: BlockDirection,
+    dust_power: bool,
+) -> u8 {
+    if !dust_power && *block == Block::REDSTONE_WIRE {
+        return 0;
+    }
+    world
+        .block_registry
+        .get_weak_redstone_power(block, world, &pos, state, &side.opposite())
+        .await
+}
+
+async fn get_strong_power(
+    block: &Block,
+    state: &BlockState,
+    world: &World,
+    pos: BlockPos,
+    side: BlockDirection,
+    dust_power: bool,
+) -> u8 {
+    if !dust_power && *block == Block::REDSTONE_WIRE {
+        return 0;
+    }
+    world
+        .block_registry
+        .get_strong_redstone_power(block, world, &pos, state, &side.opposite())
+        .await
+}
+
+pub async fn block_recives_redstone_power(world: &World, pos: BlockPos) -> bool {
+    for face in &BlockDirection::all() {
+        let neighbor_pos = pos.offset(face.to_offset());
+        let (block, state) = world
+            .get_block_and_block_state(&neighbor_pos)
+            .await
+            .unwrap();
+        if get_redstone_power(&block, &state, world, neighbor_pos, *face).await > 0 {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn is_diode(block: &Block) -> bool {
+    if *block == Block::REPEATER || *block == Block::COMPARATOR {
+        true
+    } else {
+        false
+    }
+}
+
+pub async fn diode_get_input_strength(world: &World, pos: BlockPos, facing: BlockDirection) -> u8 {
+    let input_pos = pos.offset(facing.to_offset());
+    let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
+    let mut power: u8 =
+        get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
+    if power == 0 {
+        if input_block == Block::REDSTONE_WIRE {
+            let wire = RedstoneWireLikeProperties::from_state_id(input_state.id, &input_block);
+            power = wire.power.to_index() as u8;
+        }
+    }
+    power
 }

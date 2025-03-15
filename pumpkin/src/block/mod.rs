@@ -1,13 +1,16 @@
-use blocks::buttons::register_button_blocks;
 use blocks::doors::register_door_blocks;
 use blocks::fence_gates::register_fence_gate_blocks;
 use blocks::fences::register_fence_blocks;
 use blocks::logs::register_log_blocks;
+use blocks::redstone::buttons::register_button_blocks;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
-use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
+use blocks::redstone::repeater::RepeaterBlock;
+use blocks::{
+    chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
+};
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -43,8 +46,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LeverBlock);
     manager.register(RedstoneWireBlock);
     manager.register(RedstoneBlock);
-    //manager.register(RedstoneLamp);
-    //manager.register(ObserverBlock);
+    manager.register(RedstoneLamp);
+    manager.register(RepeaterBlock);
+    manager.register(ObserverBlock);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);

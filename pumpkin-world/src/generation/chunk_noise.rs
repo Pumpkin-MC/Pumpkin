@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_macros::block_state;
-use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2};
+use pumpkin_util::math::{floor_div, floor_mod, vector2::{self, Vector2}};
 
 use crate::{block::ChunkBlockState, generation::section_coords};
 
@@ -22,8 +22,7 @@ use super::{
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
         proto_noise_router::GlobalProtoNoiseRouter,
     },
-    ore_sampler::OreVeinSampler,
-    positions::chunk_pos,
+    ore_sampler::OreVeinSampler
 };
 
 pub const STONE_BLOCK: ChunkBlockState = block_state!("stone");
@@ -52,7 +51,7 @@ impl ChunkNoiseHeightEstimator {
     ) -> i32 {
         let biome_aligned_x = biome_coords::to_block(biome_coords::from_block(block_x));
         let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
-        let packed = chunk_pos::packed(&Vector2::new(biome_aligned_x, biome_aligned_z));
+        let packed = vector2::packed(&Vector2::new(biome_aligned_x, biome_aligned_z));
 
         if let Some(estimate) = self.surface_height_estimate.get(&packed) {
             *estimate
@@ -69,8 +68,8 @@ impl ChunkNoiseHeightEstimator {
         options: &ChunkNoiseFunctionSampleOptions,
         packed_pos: u64,
     ) -> i32 {
-        let x = chunk_pos::unpack_x(packed_pos);
-        let z = chunk_pos::unpack_z(packed_pos);
+        let x = vector2::unpack_x(packed_pos);
+        let z = vector2::unpack_z(packed_pos);
 
         for y in (self.minimum_height_y..=self.maximum_height_y)
             .rev()

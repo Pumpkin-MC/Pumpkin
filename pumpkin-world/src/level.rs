@@ -4,7 +4,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{ADVANCED_CONFIG, chunk::ChunkFormat};
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use tokio::{
     sync::{RwLock, mpsc},
     task::JoinSet,
@@ -452,5 +452,16 @@ impl Level {
             }
         }
         blocks_to_tick
+    }
+
+    // Each unique chunk needs a Vec<Vec<(BlockPos, u16)>> cause it needs all chunk sections
+    pub async fn get_block_state_updates(&self) -> Vec<Vec<Vec<(BlockPos, u16)>>> {
+        let mut block_state_updates = Vec::new();
+        for chunk in self.loaded_chunks.iter() {
+            let chunk_data = chunk.value().read().await;
+            let updates = chunk_data.get_block_state_updates().await;
+            block_state_updates.push(updates);
+        }
+        block_state_updates
     }
 }
