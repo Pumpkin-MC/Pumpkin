@@ -234,9 +234,9 @@ impl<'a> ProtoChunk<'a> {
     #[inline]
     pub fn get_biome(&self, global_biome_pos: &Vector3<i32>) -> Biome {
         let local_pos = Vector3::new(
-            global_biome_pos.x & 3,
+            global_biome_pos.x & biome_coords::from_block(15),
             global_biome_pos.y - biome_coords::from_block(self.noise_sampler.min_y() as i32),
-            global_biome_pos.z & 3,
+            global_biome_pos.z & biome_coords::from_block(15),
         );
         if local_pos.y < 0
             || local_pos.y >= biome_coords::from_block(self.noise_sampler.height() as i32)
@@ -264,7 +264,7 @@ impl<'a> ProtoChunk<'a> {
 
         for i in bottom_section..=top_section {
             let block_y = section_coords::section_to_block(i);
-            let start_y = biome_coords::from_chunk(i);
+            let start_y = biome_coords::from_block(block_y);
 
             let biomes_per_section = biome_coords::from_block(CHUNK_WIDTH) as i32;
             for x in 0..biomes_per_section {
