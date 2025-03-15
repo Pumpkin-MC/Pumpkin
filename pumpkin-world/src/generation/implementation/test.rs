@@ -2,7 +2,7 @@ use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
     WORLD_LOWEST_Y, WORLD_MAX_Y,
-    chunk::{ChunkData, Subchunks},
+    chunk::{ChunkData, ChunkBlockData},
     coordinates::ChunkRelativeBlockCoordinates,
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
@@ -30,7 +30,7 @@ impl GeneratorInit for TestGenerator {
 
 impl WorldGenerator for TestGenerator {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut subchunks = Subchunks::Single(0);
+        let mut block_data = ChunkBlockData::Homogeneous(0);
         let mut proto_chunk = ProtoChunk::new(at, &self.base_router, &self.random_config);
         proto_chunk.populate_noise();
 
@@ -48,13 +48,13 @@ impl WorldGenerator for TestGenerator {
                         proto_chunk.get_block_state(&Vector3::new(x.into(), y.into(), z.into()));
 
                     //println!("{:?}: {:?}", coordinates, block);
-                    subchunks.set_block(coordinates, block.state_id);
+                    block_data.set_block(coordinates, block.state_id);
                 }
             }
         }
 
         ChunkData {
-            subchunks,
+            block_data,
             heightmap: Default::default(),
             position: at,
             // This chunk was just created! We want to say its been changed

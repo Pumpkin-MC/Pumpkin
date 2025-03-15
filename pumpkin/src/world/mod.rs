@@ -1052,8 +1052,8 @@ impl World {
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
         let mut chunk = chunk.write().await;
         chunk.dirty = true;
-        let replaced_block_state_id = chunk.subchunks.get_block(relative).unwrap();
-        chunk.subchunks.set_block(relative, block_state_id);
+        let replaced_block_state_id = chunk.block_data.get_block(relative).unwrap();
+        chunk.block_data.set_block(relative, block_state_id);
         drop(chunk);
 
         self.broadcast_packet_all(&CBlockUpdate::new(
@@ -1154,7 +1154,7 @@ impl World {
         let chunk = self.receive_chunk(chunk).await.0;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
-        let Some(id) = chunk.subchunks.get_block(relative) else {
+        let Some(id) = chunk.block_data.get_block(relative) else {
             return Err(GetBlockError::BlockOutOfWorldBounds);
         };
 
