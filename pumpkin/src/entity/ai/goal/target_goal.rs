@@ -38,7 +38,7 @@ impl Goal for TargetGoal {
             .await
             .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
             .await;
-        // we can't use filter because of async clousures
+        // we can't use filter because of async closures
         if let Some(player) = target.as_ref() {
             if player.abilities.lock().await.invulnerable {
                 *target = None;
