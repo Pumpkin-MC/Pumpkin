@@ -398,7 +398,7 @@ impl World {
         player.living_entity.last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
-        // Firstly, send an info update to our new player, so they can see thier skin
+        // Firstly, send an info update to our new player, so they can see their skin
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
