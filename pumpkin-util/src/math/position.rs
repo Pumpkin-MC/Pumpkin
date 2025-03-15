@@ -8,7 +8,7 @@ use crate::math::vector2::Vector2;
 use num_traits::Euclid;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Aka Block Position
 pub struct BlockPos(pub Vector3<i32>);
 
@@ -142,7 +142,7 @@ pub const fn get_local_cord(cord: i32) -> i32 {
 }
 
 #[must_use]
-pub const fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
+pub fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
     let x = get_local_cord(block_pos.0.x);
     let z = get_local_cord(block_pos.0.z);
     let y = get_local_cord(block_pos.0.y);

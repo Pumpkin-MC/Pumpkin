@@ -10,14 +10,14 @@ use pumpkin_world::block::BlockDirection;
 
 use crate::world::World;
 
+pub(crate) mod buttons;
+pub(crate) mod lever;
 pub(crate) mod observer;
 pub(crate) mod redstone_block;
 pub(crate) mod redstone_lamp;
 pub(crate) mod redstone_wire;
 pub(crate) mod repeater;
 pub(crate) mod turbo;
-pub(crate) mod buttons;
-pub(crate) mod lever;
 
 pub async fn update_wire_neighbors(world: &World, pos: BlockPos) {
     for direction in &BlockDirection::all() {
@@ -107,7 +107,7 @@ async fn get_weak_power(
     }
     world
         .block_registry
-        .get_weak_redstone_power(block, world, &pos, state, &side.opposite())
+        .get_weak_redstone_power(block, world, &pos, state, &side)
         .await
 }
 
@@ -124,7 +124,7 @@ async fn get_strong_power(
     }
     world
         .block_registry
-        .get_strong_redstone_power(block, world, &pos, state, &side.opposite())
+        .get_strong_redstone_power(block, world, &pos, state, &side)
         .await
 }
 

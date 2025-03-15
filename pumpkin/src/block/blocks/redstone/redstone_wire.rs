@@ -199,6 +199,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         let new_power = calculate_power(world, *block_pos).await;
         if wire.power.to_index() as u8 != new_power {
             wire.power = Integer0To15::from_index(new_power.into());
+            println!("Wire changed to {:?}", wire);
             world
                 .set_block_state(
                     block_pos,

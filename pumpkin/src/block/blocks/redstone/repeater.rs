@@ -161,7 +161,7 @@ impl PumpkinBlock for RepeaterBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        if repeater_props.facing.to_block_direction() == *direction
+        if repeater_props.facing.to_block_direction() == direction.opposite()
             && repeater_props.powered.to_bool()
         {
             return 15;

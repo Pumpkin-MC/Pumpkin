@@ -1,10 +1,11 @@
-use pumpkin_util::math::{vector2::{start_block_x, start_block_z, Vector2}, vector3::Vector3};
+use pumpkin_util::math::{
+    vector2::{Vector2, start_block_x, start_block_z},
+    vector3::Vector3,
+};
 
 use crate::{
     block::ChunkBlockState,
-    generation::{
-        chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape,
-    },
+    generation::{chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape},
 };
 
 use super::{

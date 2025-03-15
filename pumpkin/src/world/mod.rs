@@ -48,8 +48,8 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::level::SyncChunk;
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
@@ -305,6 +305,8 @@ impl World {
     }
 
     pub async fn tick(&self, server: &Server) {
+        self.flush_block_updates().await;
+
         // world ticks
         {
             let mut level_time = self.level_time.lock().await;
@@ -369,27 +371,31 @@ impl World {
                 entity.on_player_collision(player).await;
             }
         }
+    }
 
-        {
-            let block_state_updates = self.level.get_block_state_updates().await;
+    pub async fn flush_block_updates(&self) {
+        let block_state_updates = self.level.get_block_state_updates().await;
 
-            // TODO: only send packet to players who have the chunks loaded
-            for chunk in block_state_updates {
-                for chunk_section in chunk {
-                    if chunk_section.len() == 0 {
-                        continue;
-                    }
-                    if chunk_section.len() == 1 {
-                        let (block_pos, block_state_id) = chunk_section[0];
-                        self.broadcast_packet_all(&CBlockUpdate::new(
-                            &block_pos,
-                            i32::from(block_state_id).into(),
-                        ))
+        // TODO: only send packet to players who have the chunks loaded
+        for chunk in block_state_updates {
+            for chunk_section in chunk {
+                if chunk_section.len() == 0 {
+                    continue;
+                }
+                if chunk_section.len() == 1 {
+                    let (block_pos, block_state_id) = chunk_section[0];
+                    self.broadcast_packet_all(&CBlockUpdate::new(
+                        &block_pos,
+                        i32::from(block_state_id).into(),
+                    ))
+                    .await;
+                } else {
+                    println!(
+                        "Sending multi block update for chunk section: {:?}",
+                        chunk_section
+                    );
+                    self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
                         .await;
-                    } else {
-                        self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
-                            .await;
-                    }
                 }
             }
         }
@@ -1353,7 +1359,6 @@ impl World {
             .expect("Channel closed for unknown reason")
     }
 
-    /// If server is sent, it will do a block update
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,

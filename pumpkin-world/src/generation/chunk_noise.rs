@@ -1,7 +1,10 @@
 use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_macros::block_state;
-use pumpkin_util::math::{floor_div, floor_mod, vector2::{self, Vector2}};
+use pumpkin_util::math::{
+    floor_div, floor_mod,
+    vector2::{self, Vector2},
+};
 
 use crate::{block::ChunkBlockState, generation::section_coords};
 
@@ -22,7 +25,7 @@ use super::{
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
         proto_noise_router::GlobalProtoNoiseRouter,
     },
-    ore_sampler::OreVeinSampler
+    ore_sampler::OreVeinSampler,
 };
 
 pub const STONE_BLOCK: ChunkBlockState = block_state!("stone");

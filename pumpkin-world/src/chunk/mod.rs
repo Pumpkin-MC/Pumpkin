@@ -1,6 +1,9 @@
 use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::{position::{chunk_section_from_pos, BlockPos}, vector2::Vector2};
+use pumpkin_util::math::{
+    position::{BlockPos, chunk_section_from_pos},
+    vector2::Vector2,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, iter::repeat_with, sync::Arc};
 use thiserror::Error;

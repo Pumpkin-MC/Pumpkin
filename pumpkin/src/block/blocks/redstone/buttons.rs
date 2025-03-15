@@ -118,7 +118,12 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 Self::update_neighbors(world, block_pos, &props).await;
             }
 
-            async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState, _direction: &BlockDirection) -> bool {
+            async fn emits_redstone_power(
+                &self,
+                _block: &Block,
+                _state: &BlockState,
+                _direction: &BlockDirection,
+            ) -> bool {
                 true
             }
 

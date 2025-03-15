@@ -122,7 +122,6 @@ impl BlockRegistry {
                 .placed(world, block, state_id, block_pos, old_state_id, notify)
                 .await;
         }
-        //world.update_neighbors(&location, None).await;
     }
 
     pub async fn broken(
@@ -140,7 +139,6 @@ impl BlockRegistry {
                 .broken(block, player, location, server, world.clone(), state)
                 .await;
         }
-        //world.update_neighbors(&location, None).await;
     }
 
     pub async fn close(
@@ -290,10 +288,17 @@ impl BlockRegistry {
             .get(format!("minecraft:{}", block.name).as_str())
     }
 
-    pub async fn emits_redstone_power(&self, block: &Block, state: &BlockState, direction: &BlockDirection) -> bool {
+    pub async fn emits_redstone_power(
+        &self,
+        block: &Block,
+        state: &BlockState,
+        direction: &BlockDirection,
+    ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.emits_redstone_power(block, state, direction).await;
+            return pumpkin_block
+                .emits_redstone_power(block, state, direction)
+                .await;
         }
         false
     }

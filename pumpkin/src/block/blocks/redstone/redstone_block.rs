@@ -22,7 +22,12 @@ impl PumpkinBlock for RedstoneBlock {
         15
     }
 
-    async fn emits_redstone_power(&self, _block: &Block, _state: &BlockState, _direction: &BlockDirection) -> bool {
+    async fn emits_redstone_power(
+        &self,
+        _block: &Block,
+        _state: &BlockState,
+        _direction: &BlockDirection,
+    ) -> bool {
         true
     }
 }
