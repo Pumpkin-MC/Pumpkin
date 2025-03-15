@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -16,25 +17,25 @@ impl Explosion {
         Self { power, pos }
     }
     async fn get_blocks_to_destroy(&self, world: &World) -> Vec<BlockPos> {
-        let mut set = Vec::new();
+        let mut set = HashSet::new();
         for x in 0..16 {
-            for z in 0..16 {
-                'block2: for y in 0..16 {
+            for y in 0..16 {
+                'block2: for z in 0..16 {
                     if x != 0 && x != 15 && z != 0 && z != 15 && y != 0 && y != 15 {
                         continue;
                     }
 
-                    let x = f64::from(x) / 15.0 * 2.0 - 1.0;
-                    let y = f64::from(z) / 15.0 * 2.0 - 1.0;
-                    let z = y / 15.0 * 2.0 - 1.0;
+                    let mut x = f64::from(x) / 15.0 * 2.0 - 1.0;
+                    let mut y = f64::from(y) / 15.0 * 2.0 - 1.0;
+                    let mut z = f64::from(z) / 15.0 * 2.0 - 1.0;
 
                     let sqrt = (x * x + y * y + z * z).sqrt();
-                    let x_div = x / sqrt;
-                    let y_div = y / sqrt;
-                    let z_div = z / sqrt;
+                    x /= sqrt;
+                    y /= sqrt;
+                    z /= sqrt;
 
                     let mut pos_x = self.pos.x;
-                    let mut pos_y = self.pos.y;
+                    let mut pos_y = self.pos.y + 0.0625;
                     let mut pos_z = self.pos.z;
 
                     let mut h = self.power * (0.7 + rand::random::<f32>() * 0.6);
@@ -53,19 +54,18 @@ impl Explosion {
                             h -= (block.blast_resistance + 0.3) * 0.3;
                         }
                         if h > 0.0 {
-                            set.push(block_pos);
+                            set.insert(block_pos);
                         }
-
-                        pos_x += x_div * 0.3;
-                        pos_y += y_div * 0.3;
-                        pos_z += z_div * 0.3;
+                        pos_x += x * 0.3;
+                        pos_y += y * 0.3;
+                        pos_z += z * 0.3;
                         h -= 0.225_000_01f32;
                     }
                 }
             }
         }
 
-        set
+        set.into_iter().collect()
     }
 
     pub async fn explode(&self, server: &Server, world: &Arc<World>) {
