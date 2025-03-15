@@ -11,7 +11,7 @@ use crate::{
     world::{BlockFlags, World},
 };
 
-use super::block_recives_redstone_power;
+use super::block_receives_redstone_power;
 
 type RedstoneLampProperties = pumpkin_data::block::RedstoneOreLikeProperties;
 
@@ -32,7 +32,7 @@ impl PumpkinBlock for RedstoneLamp {
         _other: bool,
     ) -> u16 {
         let mut props = RedstoneLampProperties::default(block);
-        props.lit = Boolean::from_bool(block_recives_redstone_power(world, *block_pos).await);
+        props.lit = Boolean::from_bool(block_receives_redstone_power(world, *block_pos).await);
         props.to_state_id(block)
     }
 
@@ -47,7 +47,7 @@ impl PumpkinBlock for RedstoneLamp {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);
         let is_lit = props.lit.to_bool();
-        let is_receiving_power = block_recives_redstone_power(world, *block_pos).await;
+        let is_receiving_power = block_receives_redstone_power(world, *block_pos).await;
 
         if is_lit != is_receiving_power {
             if is_lit {
@@ -77,7 +77,7 @@ impl PumpkinBlock for RedstoneLamp {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);
         let is_lit = props.lit.to_bool();
-        let is_receiving_power = block_recives_redstone_power(world, *block_pos).await;
+        let is_receiving_power = block_receives_redstone_power(world, *block_pos).await;
 
         if is_lit && !is_receiving_power {
             props.lit = props.lit.flip();

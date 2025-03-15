@@ -25,7 +25,7 @@ use border::Worldborder;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::{Block, BlockProperties},
+    block::Block,
     entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -1142,15 +1142,12 @@ impl World {
         chunk.dirty = true;
 
         chunk.subchunks.set_block(relative, block_state_id);
-        drop(chunk);
-
         chunk
-            .read()
-            .await
             .block_state_updates
             .lock()
             .await
             .insert(*position, block_state_id);
+        drop(chunk);
 
         let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();

@@ -119,7 +119,6 @@ impl PumpkinBlock for LeverBlock {
         state: &BlockState,
         direction: &BlockDirection,
     ) -> u8 {
-        println!("Getting strong redstone power for {:?}", direction);
         let lever_props = LeverLikeProperties::from_state_id(state.id, block);
         if lever_props.powered.to_bool() && lever_props.get_direction() == *direction {
             15

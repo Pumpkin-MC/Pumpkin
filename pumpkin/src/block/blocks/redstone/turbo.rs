@@ -1,5 +1,5 @@
 //! The implementation of "Redstone Wire Turbo" was largely based on
-//! the accelorator created by theosib. For more information, see:
+//! the accelerator created by theosib. For more information, see:
 //! https://bugs.mojang.com/browse/MC-81098.
 
 use pumpkin_data::block::{

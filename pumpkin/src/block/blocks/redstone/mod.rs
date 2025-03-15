@@ -128,7 +128,7 @@ async fn get_strong_power(
         .await
 }
 
-pub async fn block_recives_redstone_power(world: &World, pos: BlockPos) -> bool {
+pub async fn block_receives_redstone_power(world: &World, pos: BlockPos) -> bool {
     for face in &BlockDirection::all() {
         let neighbor_pos = pos.offset(face.to_offset());
         let (block, state) = world
