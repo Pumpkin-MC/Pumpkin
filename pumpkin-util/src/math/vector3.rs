@@ -361,5 +361,5 @@ pub const fn packed_local(vec: &Vector3<i32>) -> i16 {
     let x = vec.x as i16;
     let y = vec.y as i16;
     let z = vec.z as i16;
-    x << 8 | z << 4 | y
+    (x << 8) | (z << 4) | y
 }

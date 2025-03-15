@@ -68,7 +68,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _neighbor_state: u16,
     ) -> u16 {
         let mut wire = RedstoneWireProperties::from_state_id(state, block);
-        let old_state = wire.clone();
+        let old_state = wire;
         let new_side: WireConnection;
 
         match direction {
@@ -199,7 +199,6 @@ impl PumpkinBlock for RedstoneWireBlock {
         let new_power = calculate_power(world, *block_pos).await;
         if wire.power.to_index() as u8 != new_power {
             wire.power = Integer0To15::from_index(new_power.into());
-            println!("Wire changed to {:?}", wire);
             world
                 .set_block_state(
                     block_pos,
@@ -217,10 +216,14 @@ impl PumpkinBlock for RedstoneWireBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        _direction: &BlockDirection,
+        direction: &BlockDirection,
     ) -> u8 {
         let wire = RedstoneWireProperties::from_state_id(state.id, block);
-        wire.power.to_index() as u8
+        if wire.is_side_connected(direction.opposite()) {
+            wire.power.to_index() as u8
+        } else {
+            0
+        }
     }
 
     async fn placed(
@@ -291,7 +294,7 @@ async fn can_connect_to(
 ) -> bool {
     if world
         .block_registry
-        .emits_redstone_power(&block, state, &side)
+        .emits_redstone_power(block, state, &side)
         .await
     {
         return true;
@@ -451,7 +454,7 @@ impl WireConnection {
         self == Self::None
     }
 
-    fn to_north(&self) -> NorthWireConnection {
+    fn to_north(self) -> NorthWireConnection {
         match self {
             Self::Up => NorthWireConnection::Up,
             Self::Side => NorthWireConnection::Side,
@@ -459,7 +462,7 @@ impl WireConnection {
         }
     }
 
-    fn to_south(&self) -> SouthWireConnection {
+    fn to_south(self) -> SouthWireConnection {
         match self {
             Self::Up => SouthWireConnection::Up,
             Self::Side => SouthWireConnection::Side,
@@ -467,7 +470,7 @@ impl WireConnection {
         }
     }
 
-    fn to_east(&self) -> EastWireConnection {
+    fn to_east(self) -> EastWireConnection {
         match self {
             Self::Up => EastWireConnection::Up,
             Self::Side => EastWireConnection::Side,
@@ -475,7 +478,7 @@ impl WireConnection {
         }
     }
 
-    fn to_west(&self) -> WestWireConnection {
+    fn to_west(self) -> WestWireConnection {
         match self {
             Self::Up => WestWireConnection::Up,
             Self::Side => WestWireConnection::Side,

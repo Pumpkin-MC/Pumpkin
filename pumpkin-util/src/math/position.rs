@@ -40,12 +40,11 @@ impl BlockPos {
         let (_y_chunk, y_rem) = self.0.y.div_rem_euclid(&16);
 
         // Since we divide by 16 remnant can never exceed u8
-        let relative = Vector3 {
+        Vector3 {
             x: x_rem,
             z: z_rem,
             y: y_rem,
-        };
-        relative
+        }
     }
     pub fn from_i64(encoded_position: i64) -> Self {
         BlockPos(Vector3 {

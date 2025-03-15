@@ -1,6 +1,6 @@
 //! The implementation of "Redstone Wire Turbo" was largely based on
 //! the accelerator created by theosib. For more information, see:
-//! https://bugs.mojang.com/browse/MC-81098.
+//! <https://bugs.mojang.com/browse/MC-81098>.
 
 use pumpkin_data::block::{
     Block, BlockProperties, BlockState, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
@@ -37,8 +37,8 @@ struct UpdateNode {
 }
 
 impl UpdateNode {
-    async fn new(world: &World, pos: BlockPos) -> UpdateNode {
-        UpdateNode {
+    async fn new(world: &World, pos: BlockPos) -> Self {
+        Self {
             pos,
             state: world.get_block_state(&pos).await.unwrap(),
             visited: false,
@@ -64,8 +64,8 @@ impl RedstoneWireTurbo {
     const SOUTH: usize = 2;
     const WEST: usize = 3;
 
-    fn new() -> RedstoneWireTurbo {
-        RedstoneWireTurbo {
+    pub fn new() -> Self {
+        Self {
             nodes: Vec::new(),
             node_cache: FxHashMap::default(),
             update_queue: vec![vec![], vec![], vec![]],
@@ -112,15 +112,10 @@ impl RedstoneWireTurbo {
     fn compute_heading(rx: i32, rz: i32) -> usize {
         let code = (rx + 1) + 3 * (rz + 1);
         match code {
-            0 => Self::NORTH,
-            1 => Self::NORTH,
-            2 => Self::EAST,
-            3 => Self::WEST,
-            4 => Self::WEST,
-            5 => Self::EAST,
-            6 => Self::SOUTH,
-            7 => Self::SOUTH,
-            8 => Self::SOUTH,
+            0 | 1 => Self::NORTH,
+            2 | 5 => Self::EAST,
+            3 | 4 => Self::WEST,
+            6..=8 => Self::SOUTH,
             _ => unreachable!(),
         }
     }
@@ -138,16 +133,16 @@ impl RedstoneWireTurbo {
         let mut neighbors_visited = Vec::with_capacity(24);
         let mut neighbor_nodes = Vec::with_capacity(24);
 
-        for (_i, neighbor_pos) in neighbors[0..24].iter().enumerate() {
-            let neighbor = if !self.node_cache.contains_key(neighbor_pos) {
+        for neighbor_pos in &neighbors[0..24] {
+            let neighbor = if self.node_cache.contains_key(neighbor_pos) {
+                self.node_cache[neighbor_pos]
+            } else {
                 let node_id = NodeId {
                     index: self.nodes.len(),
                 };
                 self.node_cache.insert(*neighbor_pos, node_id);
                 self.nodes.push(UpdateNode::new(world, *neighbor_pos).await);
                 node_id
-            } else {
-                self.node_cache[neighbor_pos]
             };
 
             let node = &self.nodes[neighbor.index];
@@ -247,7 +242,7 @@ impl RedstoneWireTurbo {
 
     /// This is the start of a great adventure
     pub async fn update_surrounding_neighbors(world: &World, pos: BlockPos) {
-        let mut turbo = RedstoneWireTurbo::new();
+        let mut turbo = Self::new();
         let mut root_node = UpdateNode::new(world, pos).await;
         root_node.visited = true;
         let node_id = NodeId { index: 0 };
@@ -302,8 +297,8 @@ impl RedstoneWireTurbo {
                     // never change the state of the block. If that changes in the future,
                     // the cached state will need to be updated
                     world
-                        .update_neighbor(&self.nodes[node_id.index].pos, &block)
-                        .await
+                        .update_neighbor(&self.nodes[node_id.index].pos, block)
+                        .await;
                 }
             }
 
@@ -334,7 +329,6 @@ impl RedstoneWireTurbo {
             wire.power = new_wire.power;
             node.state = world
                 .get_state_by_id(wire.to_state_id(&Block::REDSTONE_WIRE))
-                .await
                 .unwrap();
 
             self.propagate_changes(world, upd1, layer).await;

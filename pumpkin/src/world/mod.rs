@@ -375,7 +375,7 @@ impl World {
         // TODO: Send light updates to update the wire directly next to a broken block
         for chunk in block_state_updates {
             for chunk_section in chunk {
-                if chunk_section.len() == 0 {
+                if chunk_section.is_empty() {
                     continue;
                 }
                 if chunk_section.len() == 1 {
@@ -386,10 +386,6 @@ impl World {
                     ))
                     .await;
                 } else {
-                    println!(
-                        "Sending multi block update for chunk section: {:?}",
-                        chunk_section
-                    );
                     self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
                         .await;
                 }
@@ -1378,7 +1374,7 @@ impl World {
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    pub async fn get_state_by_id(
+    pub fn get_state_by_id(
         &self,
         id: u16,
     ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {

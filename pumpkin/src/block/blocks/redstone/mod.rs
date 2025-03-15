@@ -1,5 +1,5 @@
 /**
- * This implementation is heavily based on https://github.com/MCHPR/MCHPRS
+ * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
 use pumpkin_data::block::{
@@ -143,11 +143,7 @@ pub async fn block_receives_redstone_power(world: &World, pos: BlockPos) -> bool
 }
 
 pub fn is_diode(block: &Block) -> bool {
-    if *block == Block::REPEATER || *block == Block::COMPARATOR {
-        true
-    } else {
-        false
-    }
+    *block == Block::REPEATER || *block == Block::COMPARATOR
 }
 
 pub async fn diode_get_input_strength(world: &World, pos: BlockPos, facing: BlockDirection) -> u8 {
@@ -155,11 +151,9 @@ pub async fn diode_get_input_strength(world: &World, pos: BlockPos, facing: Bloc
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
     let mut power: u8 =
         get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
-    if power == 0 {
-        if input_block == Block::REDSTONE_WIRE {
-            let wire = RedstoneWireLikeProperties::from_state_id(input_state.id, &input_block);
-            power = wire.power.to_index() as u8;
-        }
+    if power == 0 && input_block == Block::REDSTONE_WIRE {
+        let wire = RedstoneWireLikeProperties::from_state_id(input_state.id, &input_block);
+        power = wire.power.to_index() as u8;
     }
     power
 }
