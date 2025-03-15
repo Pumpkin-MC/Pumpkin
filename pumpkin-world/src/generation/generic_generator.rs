@@ -3,7 +3,7 @@ use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
     WORLD_LOWEST_Y,
-    chunk::{ChunkData, ChunkBlockData},
+    chunk::{ChunkBlockData, ChunkData},
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
 };
 

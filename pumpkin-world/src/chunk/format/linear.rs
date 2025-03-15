@@ -483,7 +483,10 @@ mod tests {
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
-                        assert_eq!(chunk.block_data, read_chunk.block_data, "Chunks don't match");
+                        assert_eq!(
+                            chunk.block_data, read_chunk.block_data,
+                            "Chunks don't match"
+                        );
                         break;
                     }
                 }

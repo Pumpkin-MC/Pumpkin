@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, SUBCHUNK_VOLUME, ChunkBlockData,
+    CHUNK_AREA, ChunkBlockData, ChunkData, ChunkHeightmaps, ChunkParsingError, SUBCHUNK_VOLUME,
 };
 
 pub mod anvil;
