@@ -24,7 +24,7 @@ use super::{
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
     settings::GenerationSettings,
-    surface::MaterialRuleContext,
+    surface::{MaterialRuleContext, terrain::SurfaceTerrainBuilder},
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -386,11 +386,15 @@ impl<'a> ProtoChunk<'a> {
         let start_z = chunk_pos::start_block_z(&self.chunk_pos);
         let min_y = self.noise_sampler.min_y();
 
+        let random = &self.random_config.base_random_deriver;
+        let mut noise_builder = DoublePerlinNoiseBuilder::new(self.random_config);
+        let terrain_builder = SurfaceTerrainBuilder::new(&mut noise_builder, random);
         let mut context = MaterialRuleContext::new(
             self.settings.noise.min_y,
             self.settings.noise.height,
-            DoublePerlinNoiseBuilder::new(self.random_config),
-            &self.random_config.base_random_deriver,
+            noise_builder,
+            random,
+            &terrain_builder,
         );
         for x in 0..16 {
             for z in 0..16 {

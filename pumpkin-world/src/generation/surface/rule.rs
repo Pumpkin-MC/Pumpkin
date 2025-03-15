@@ -10,7 +10,7 @@ use crate::{
 #[serde(tag = "type")]
 pub enum MaterialRule {
     #[serde(rename = "minecraft:bandlands")]
-    Badlands,
+    Badlands(BadLandsMaterialRule),
     #[serde(rename = "minecraft:block")]
     Block(BlockMaterialRule),
     #[serde(rename = "minecraft:sequence")]
@@ -26,7 +26,7 @@ impl MaterialRule {
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<ChunkBlockState> {
         match self {
-            MaterialRule::Badlands => todo!(),
+            MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => block.try_apply(),
             MaterialRule::Sequence(sequence) => {
                 sequence.try_apply(context, surface_height_estimate_sampler)
@@ -35,6 +35,19 @@ impl MaterialRule {
                 condition.try_apply(context, surface_height_estimate_sampler)
             }
         }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct BadLandsMaterialRule;
+
+impl BadLandsMaterialRule {
+    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<ChunkBlockState> {
+        Some(
+            context
+                .terrain_builder
+                .get_terracotta_block(&context.block_pos),
+        )
     }
 }
 

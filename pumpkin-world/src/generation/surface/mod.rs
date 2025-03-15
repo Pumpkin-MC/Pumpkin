@@ -4,6 +4,7 @@ use pumpkin_util::{
     random::RandomDeriver,
 };
 use serde::Deserialize;
+use terrain::SurfaceTerrainBuilder;
 
 use crate::generation::{positions::chunk_pos, section_coords};
 
@@ -17,6 +18,7 @@ use super::{
 };
 
 pub mod rule;
+pub mod terrain;
 
 pub struct MaterialRuleContext<'a> {
     pub min_y: i8,
@@ -38,6 +40,7 @@ pub struct MaterialRuleContext<'a> {
     pub secondary_noise: DoublePerlinNoiseSampler,
     pub stone_depth_below: i32,
     pub stone_depth_above: i32,
+    pub terrain_builder: &'a SurfaceTerrainBuilder,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -46,6 +49,7 @@ impl<'a> MaterialRuleContext<'a> {
         height: u16,
         mut noise_builder: DoublePerlinNoiseBuilder<'a>,
         random_deriver: &'a RandomDeriver,
+        terrain_builder: &'a SurfaceTerrainBuilder,
     ) -> Self {
         const HORIZONTAL_POS: i64 = -i64::MAX; // Vanilla
         Self {
@@ -58,6 +62,7 @@ impl<'a> MaterialRuleContext<'a> {
             last_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             last_est_heiht_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             random_deriver,
+            terrain_builder,
             fluid_height: 0,
             block_pos: Vector3::new(0, 0, 0),
             biome: Biome::Plains,
