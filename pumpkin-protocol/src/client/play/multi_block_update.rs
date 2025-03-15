@@ -18,8 +18,6 @@ pub struct CMultiBlockUpdate {
 impl CMultiBlockUpdate {
     pub fn new(positions_to_state_ids: Vec<(BlockPos, u16)>) -> Self {
         let chunk_section = chunk_section_from_pos(&positions_to_state_ids[0].0);
-        let mut positions_to_state_ids = positions_to_state_ids;
-        positions_to_state_ids.sort_by_key(|(position, _)| pack_local_chunk_section(position));
         Self {
             chunk_section,
             positions_to_state_ids: positions_to_state_ids

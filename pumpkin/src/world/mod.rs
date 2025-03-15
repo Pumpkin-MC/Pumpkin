@@ -372,6 +372,7 @@ impl World {
         let block_state_updates = self.level.get_block_state_updates().await;
 
         // TODO: only send packet to players who have the chunks loaded
+        // TODO: Send light updates to update the wire directly next to a broken block
         for chunk in block_state_updates {
             for chunk_section in chunk {
                 if chunk_section.len() == 0 {
