@@ -3,12 +3,12 @@ pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, HorizontalFacing};
+use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 pub use state::ChunkBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug)]
 pub enum BlockDirection {
     Down = 0,
     Up,
@@ -80,6 +80,17 @@ impl BlockDirection {
         ]
     }
 
+    pub fn abstract_block_update_order() -> [BlockDirection; 6] {
+        [
+            BlockDirection::West,
+            BlockDirection::East,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::Down,
+            BlockDirection::Up,
+        ]
+    }
+
     pub fn horizontal() -> [BlockDirection; 4] {
         [
             BlockDirection::North,
@@ -87,6 +98,16 @@ impl BlockDirection {
             BlockDirection::West,
             BlockDirection::East,
         ]
+    }
+
+    pub fn is_horizontal(&self) -> bool {
+        matches!(
+            self,
+            BlockDirection::North
+                | BlockDirection::South
+                | BlockDirection::West
+                | BlockDirection::East
+        )
     }
 
     pub fn vertical() -> [BlockDirection; 2] {
@@ -119,6 +140,17 @@ impl BlockDirection {
         }
     }
 
+    pub fn to_facing(&self) -> Facing {
+        match self {
+            BlockDirection::North => Facing::North,
+            BlockDirection::South => Facing::South,
+            BlockDirection::West => Facing::West,
+            BlockDirection::East => Facing::East,
+            BlockDirection::Up => Facing::Up,
+            BlockDirection::Down => Facing::Down,
+        }
+    }
+
     pub fn rotate_clockwise(&self) -> BlockDirection {
         match self {
             BlockDirection::North => BlockDirection::East,
@@ -127,6 +159,56 @@ impl BlockDirection {
             BlockDirection::West => BlockDirection::North,
             BlockDirection::Up => BlockDirection::East,
             BlockDirection::Down => BlockDirection::West,
+        }
+    }
+}
+
+pub trait HorizontalFacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+    fn rotate(&self) -> HorizontalFacing;
+    fn rotate_ccw(&self) -> HorizontalFacing;
+}
+
+impl HorizontalFacingExt for HorizontalFacing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            HorizontalFacing::North => BlockDirection::North,
+            HorizontalFacing::South => BlockDirection::South,
+            HorizontalFacing::West => BlockDirection::West,
+            HorizontalFacing::East => BlockDirection::East,
+        }
+    }
+    fn rotate(&self) -> HorizontalFacing {
+        match self {
+            HorizontalFacing::North => HorizontalFacing::East,
+            HorizontalFacing::South => HorizontalFacing::West,
+            HorizontalFacing::West => HorizontalFacing::North,
+            HorizontalFacing::East => HorizontalFacing::South,
+        }
+    }
+    fn rotate_ccw(&self) -> HorizontalFacing {
+        match self {
+            HorizontalFacing::North => HorizontalFacing::West,
+            HorizontalFacing::South => HorizontalFacing::East,
+            HorizontalFacing::West => HorizontalFacing::North,
+            HorizontalFacing::East => HorizontalFacing::South,
+        }
+    }
+}
+
+pub trait FacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+}
+
+impl FacingExt for Facing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            Facing::North => BlockDirection::North,
+            Facing::South => BlockDirection::South,
+            Facing::West => BlockDirection::West,
+            Facing::East => BlockDirection::East,
+            Facing::Up => BlockDirection::Up,
+            Facing::Down => BlockDirection::Down,
         }
     }
 }

@@ -1,8 +1,13 @@
+use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{
+    position::{BlockPos, chunk_section_from_pos},
+    vector2::Vector2,
+};
 use serde::{Deserialize, Serialize};
-use std::iter::repeat_with;
+use std::{collections::HashMap, iter::repeat_with, sync::Arc};
 use thiserror::Error;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
 
@@ -54,7 +59,67 @@ pub enum CompressionError {
     ZstdError(std::io::Error),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum TickPriority {
+    ExtremelyHigh = -3,
+    VeryHigh = -2,
+    High = -1,
+    Normal = 0,
+    Low = 1,
+    VeryLow = 2,
+    ExtremelyLow = 3,
+}
+
+impl TickPriority {
+    pub fn values() -> [TickPriority; 7] {
+        [
+            TickPriority::ExtremelyHigh,
+            TickPriority::VeryHigh,
+            TickPriority::High,
+            TickPriority::Normal,
+            TickPriority::Low,
+            TickPriority::VeryLow,
+            TickPriority::ExtremelyLow,
+        ]
+    }
+}
+
+impl From<i32> for TickPriority {
+    fn from(value: i32) -> Self {
+        match value {
+            -3 => TickPriority::ExtremelyHigh,
+            -2 => TickPriority::VeryHigh,
+            -1 => TickPriority::High,
+            0 => TickPriority::Normal,
+            1 => TickPriority::Low,
+            2 => TickPriority::VeryLow,
+            3 => TickPriority::ExtremelyLow,
+            _ => panic!("Invalid tick priority: {}", value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScheduledTick {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub delay: u16,
+    pub priority: TickPriority,
+    pub target_block_id: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct FluidTick {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub delay: u16,
+    pub priority: TickPriority,
+    pub target_block: Block,
+}
+
 pub struct ChunkData {
     /// See description in `Subchunks`
     pub subchunks: Subchunks,
@@ -62,6 +127,9 @@ pub struct ChunkData {
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
     pub dirty: bool,
+    pub block_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
+    pub fluid_ticks: Arc<RwLock<Vec<FluidTick>>>,
+    pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
 }
 
 /// # Subchunks
@@ -265,8 +333,41 @@ impl ChunkData {
         // figure out how to find out if block is motion blocking
         todo!()
     }
-}
 
+    pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
+        let mut blocks_to_tick = Vec::new();
+        let mut block_ticks = self.block_ticks.write().await;
+        for priority in TickPriority::values() {
+            for tick in block_ticks.iter_mut() {
+                if tick.priority == priority {
+                    tick.delay -= 1;
+                    if tick.delay == 0 {
+                        blocks_to_tick.push(tick.clone());
+                    }
+                }
+            }
+        }
+        block_ticks.retain(|tick| tick.delay > 0);
+        blocks_to_tick
+    }
+
+    pub async fn get_block_state_updates(&self) -> Vec<Vec<(BlockPos, u16)>> {
+        let mut block_state_updates = self.block_state_updates.lock().await;
+        // Needs to group by chunk section
+        let mut block_state_updates_by_chunk_section = HashMap::new();
+        for (position, block_state_id) in block_state_updates.drain() {
+            let chunk_section = chunk_section_from_pos(&position);
+            block_state_updates_by_chunk_section
+                .entry(chunk_section)
+                .or_insert(Vec::new())
+                .push((position, block_state_id));
+        }
+        block_state_updates_by_chunk_section
+            .values()
+            .cloned()
+            .collect()
+    }
+}
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
     #[error("Failed reading chunk status {0}")]
