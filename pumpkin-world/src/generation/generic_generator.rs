@@ -79,6 +79,8 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             subchunks,
             heightmap: Default::default(),
             position: at,
+            // We just generated this chunk! Mark it as dirty
+            dirty: true,
             block_ticks: Arc::new(RwLock::new(vec![])),
             fluid_ticks: Arc::new(RwLock::new(vec![])),
             block_state_updates: Mutex::new(HashMap::new()),

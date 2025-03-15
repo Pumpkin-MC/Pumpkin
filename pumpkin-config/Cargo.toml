@@ -10,3 +10,7 @@ log.workspace = true
 uuid.workspace = true
 
 toml = "0.8"
+
+[features]
+# Adds helper to change the config at runtime
+test_helper = []

@@ -60,6 +60,8 @@ impl WorldGenerator for TestGenerator {
             subchunks,
             heightmap: Default::default(),
             position: at,
+            // This chunk was just created! We want to say its been changed
+            dirty: true,
             block_ticks: Arc::new(RwLock::new(vec![])),
             fluid_ticks: Arc::new(RwLock::new(vec![])),
             block_state_updates: Mutex::new(HashMap::new()),

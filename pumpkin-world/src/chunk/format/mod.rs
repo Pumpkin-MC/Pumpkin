@@ -119,6 +119,8 @@ impl ChunkData {
             subchunks,
             heightmap: chunk_data.heightmaps,
             position,
+            // This chunk is read from disk, so it has not been modified
+            dirty: false,
             block_ticks: Arc::new(RwLock::new(
                 chunk_data
                     .block_ticks

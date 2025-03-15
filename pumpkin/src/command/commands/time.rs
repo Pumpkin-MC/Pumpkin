@@ -130,7 +130,7 @@ impl CommandExecutor for ChangeExecutor {
                 level_time.send_time(world).await;
                 let curr_time = level_time.query_daytime();
                 TextComponent::translate(
-                    "commands.time.add",
+                    "commands.time.set",
                     [TextComponent::text(curr_time.to_string())],
                 )
             }

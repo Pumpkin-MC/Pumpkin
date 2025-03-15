@@ -36,10 +36,46 @@ use resource_pack::ResourcePackConfig;
 
 const CONFIG_ROOT_FOLDER: &str = "config/";
 
-pub static ADVANCED_CONFIG: LazyLock<AdvancedConfiguration> =
-    LazyLock::new(AdvancedConfiguration::load);
+pub static BASIC_CONFIG: LazyLock<BasicConfiguration> = LazyLock::new(|| {
+    let exec_dir = env::current_dir().unwrap();
+    BasicConfiguration::load(&exec_dir)
+});
 
-pub static BASIC_CONFIG: LazyLock<BasicConfiguration> = LazyLock::new(BasicConfiguration::load);
+#[cfg(not(feature = "test_helper"))]
+static ADVANCED_CONFIG: LazyLock<AdvancedConfiguration> = LazyLock::new(|| {
+    let exec_dir = env::current_dir().unwrap();
+    AdvancedConfiguration::load(&exec_dir)
+});
+
+#[cfg(not(feature = "test_helper"))]
+pub fn advanced_config() -> &'static AdvancedConfiguration {
+    &ADVANCED_CONFIG
+}
+
+// This is pretty jank but it works :(
+// TODO: Can we refactor this better?
+#[cfg(feature = "test_helper")]
+use std::cell::RefCell;
+
+// Yes, we are leaking memory here, but it is only for tests. Need to maintain pairity with the
+// non-test code
+#[cfg(feature = "test_helper")]
+thread_local! {
+    // Needs to be thread local so we don't override the config while another test is running
+    static ADVANCED_CONFIG: RefCell<&'static AdvancedConfiguration> = RefCell::new(Box::leak(Box::new(AdvancedConfiguration::default())));
+}
+
+#[cfg(feature = "test_helper")]
+pub fn override_config_for_testing(config: AdvancedConfiguration) {
+    ADVANCED_CONFIG.with_borrow_mut(|ref_config| {
+        *ref_config = Box::leak(Box::new(config));
+    });
+}
+
+#[cfg(feature = "test_helper")]
+pub fn advanced_config() -> &'static AdvancedConfiguration {
+    ADVANCED_CONFIG.with_borrow(|config| *config)
+}
 
 /// The idea is that Pumpkin should very customizable.
 /// You can Enable or Disable Features depending on your needs.
@@ -125,12 +161,11 @@ impl Default for BasicConfiguration {
 }
 
 trait LoadConfiguration {
-    fn load() -> Self
+    fn load(exec_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
-        let exe_dir = env::current_dir().unwrap();
-        let config_dir = exe_dir.join(CONFIG_ROOT_FOLDER);
+        let config_dir = exec_dir.join(CONFIG_ROOT_FOLDER);
         if !config_dir.exists() {
             log::debug!("creating new config root folder");
             fs::create_dir(&config_dir).expect("Failed to create Config root folder");

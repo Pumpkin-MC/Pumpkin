@@ -126,6 +126,7 @@ pub struct ChunkData {
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
+    pub dirty: bool,
     pub block_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
     pub fluid_ticks: Arc<RwLock<Vec<FluidTick>>>,
     pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
