@@ -61,7 +61,7 @@ impl Client {
             .to_string()
             .starts_with("minecraft:brand")
         {
-            log::debug!("got a client brand");
+            log::debug!("Got a client brand");
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
@@ -103,7 +103,7 @@ impl Client {
                     }
                     ResourcePackResponseResult::InvalidUrl => {
                         log::warn!(
-                            "Client {} reported that the resource pack url is invalid!",
+                            "Client {} reported that the resource pack URL is invalid!",
                             self.id
                         );
                     }
@@ -157,12 +157,12 @@ impl Client {
         }
 
         // We are done with configuring
-        log::debug!("finished config");
+        log::debug!("Finished config");
         self.send_packet(&CFinishConfig).await;
     }
 
     pub async fn handle_config_acknowledged(&self) {
-        log::debug!("Handling config acknowledge");
+        log::debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
         if let Some(reason) = self.can_not_join().await {

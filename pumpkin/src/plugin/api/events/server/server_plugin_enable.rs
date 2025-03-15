@@ -4,7 +4,7 @@ use crate::plugin::PluginMetadata;
 
 /// An event that occurs when a plugin is enabled.
 ///
-/// This event wraps the PluginMetadata for the plugin being enabled.
+/// This event wraps the [`PluginMetadata`] for the plugin being enabled.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct ServerPluginEnableEvent {

@@ -8,9 +8,9 @@ pub struct ResourcePackConfig {
     pub url: String,
     /// The SHA1 hash (40) of the resource pack.
     pub sha1: String,
-    /// Custom prompt Text component, Leave blank for none
+    /// Custom prompt text component; leave blank for none.
     pub prompt_message: String,
-    /// Will force the Player to accept the resource pack
+    /// Force players to accept the resource pack.
     pub force: bool,
 }
 
@@ -23,13 +23,13 @@ impl ResourcePackConfig {
         assert_eq!(
             !self.url.is_empty(),
             !self.sha1.is_empty(),
-            "Resource Pack path or Sha1 hash is missing"
+            "Resource pack path or SHA1 hash is missing"
         );
 
         let hash_len = self.sha1.len();
         assert!(
             hash_len == 40,
-            "Resource pack sha1 hash is the wrong length (should be 40, is {})",
+            "Resource pack SHA1 hash is the wrong length (should be 40, is {})",
             hash_len
         )
     }

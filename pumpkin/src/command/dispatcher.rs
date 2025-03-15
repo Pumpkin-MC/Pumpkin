@@ -38,13 +38,13 @@ impl CommandError {
                 log::error!(
                     "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                 );
-                Ok("Internal Error (See logs for details)".into())
+                Ok("Internal error (See logs for details)".into())
             }
             InvalidRequirement => {
                 log::error!(
                     "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                 );
-                Ok("Internal Error (See logs for details)".into())
+                Ok("Internal error (See logs for details)".into())
             }
             PermissionDenied => {
                 log::warn!("Permission denied for command \"{cmd}\"");

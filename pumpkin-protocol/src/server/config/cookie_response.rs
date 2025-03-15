@@ -9,8 +9,8 @@ use crate::{
 };
 
 #[packet(CONFIG_COOKIE_RESPONSE)]
-/// Response to a Cookie Request (configuration) from the server.
-/// The Notchian (vanilla) server only accepts responses of up to 5 kiB in size.
+/// Response to a `CCookieRequest` (configuration) from the server.
+/// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
 pub struct SConfigCookieResponse {
     pub key: Identifier,
     pub has_payload: bool,

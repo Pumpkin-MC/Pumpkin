@@ -34,7 +34,7 @@ impl KeyStore {
         let mut rng = OsRng;
 
         // let pub_key = RsaPublicKey::from(&priv_key);
-        RsaPrivateKey::new(&mut rng, 1024).expect("failed to generate a key")
+        RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
     }
 
     pub fn encryption_request<'a>(

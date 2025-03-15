@@ -234,7 +234,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                 Fields::Unit => panic!("Block properties must have fields"),
             };
             if fields.len() != 1 {
-                panic!("Block properties structs must have exactly one field");
+                panic!("Block properties `struct`s must have exactly one field");
             }
             let struct_type = match fields.first().unwrap().ty {
                 syn::Type::Path(ref type_path) => {
@@ -250,10 +250,10 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                     ],
                     false,
                 ),
-                _ => panic!("This type is not supported (Why not implement it yourself?)"),
+                _ => panic!("This type is not supported (why not implement it yourself?)"),
             }
         }
-        _ => panic!("Block properties can only be enums or structs"),
+        _ => panic!("Block properties can only be `enum`s or `struct`s"),
     };
 
     let values = variants.iter().enumerate().map(|(i, v)| match is_enum {

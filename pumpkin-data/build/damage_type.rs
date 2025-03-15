@@ -141,7 +141,7 @@ pub(crate) fn build() -> TokenStream {
         impl DamageType {
             #(#constants)*
 
-            #[doc = r" Try to parse a damage type from a resource location string"]
+            #[doc = r" Try to parse a damage type from a resource location string."]
             pub fn from_name(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name

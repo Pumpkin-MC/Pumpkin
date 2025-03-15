@@ -93,13 +93,13 @@ impl EntityBase for ItemEntity {
                         if let Some(existing_stack) = maybe_stack {
                             // We have the item in this stack already
 
-                            // This is bounded to u8::MAX
+                            // This is bounded to `u8::MAX`
                             let amount_to_fill = u32::from(max_stack - existing_stack.item_count);
-                            // This is also bounded to u8::MAX since amount_to_fill is max u8::MAX
+                            // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
                             let amount_to_add = amount_to_fill.min(*stack_size);
                             // Therefore this is safe
 
-                            // Update referenced stack so next call to get_pickup_item_slot is
+                            // Update referenced stack so next call to `get_pickup_item_slot` is
                             // correct
                             existing_stack.item_count += amount_to_add as u8;
                             total_pick_up += amount_to_add;
@@ -111,9 +111,9 @@ impl EntityBase for ItemEntity {
                         } else {
                             // A new stack
 
-                            // This is bounded to u8::MAX
+                            // This is bounded to `u8::MAX`
                             let amount_to_fill = u32::from(max_stack);
-                            // This is also bounded to u8::MAX since amount_to_fill is max u8::MAX
+                            // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
                             let amount_to_add = amount_to_fill.min(*stack_size);
                             total_pick_up += amount_to_add;
 
@@ -123,7 +123,7 @@ impl EntityBase for ItemEntity {
                             // Therefore this is safe
                             let item_stack = ItemStack::new(amount_to_add as u8, self.item.clone());
 
-                            // Update referenced stack so next call to get_pickup_item_slot is
+                            // Update referenced stack so next call to `get_pickup_item_slot` is
                             // correct
                             *maybe_stack = Some(item_stack.clone());
 

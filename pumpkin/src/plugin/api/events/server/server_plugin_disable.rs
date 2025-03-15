@@ -4,7 +4,7 @@ use crate::plugin::PluginMetadata;
 
 /// An event that occurs when a plugin is disabled.
 ///
-/// This event wraps the PluginMetadata for the plugin being disabled.
+/// This event wraps the [`PluginMetadata`] for the plugin being disabled.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct ServerPluginDisableEvent {

@@ -6,7 +6,7 @@ use crate::entity::player::Player;
 
 use super::PlayerEvent;
 
-/// An event that occurs when a player moves
+/// An event that occurs when a player moves.
 ///
 /// If the event is cancelled, the player will not be allowed to move.
 ///

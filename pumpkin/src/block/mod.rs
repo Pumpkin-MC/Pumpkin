@@ -108,7 +108,7 @@ pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name
     player.get_mining_speed(block_name).await / hardness / i as f32
 }
 
-// These traits need to be implemented here so they have accses to pumpkin_data
+// These traits need to be implemented here so they have access to pumpkin_data
 
 trait LootTableExt {
     fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
@@ -205,7 +205,7 @@ trait LootConditionExt {
 }
 
 impl LootConditionExt for LootCondition {
-    // TODO: This is trash, Make this right
+    // TODO: This is trash. Make this right
     fn test(&self, block_props: &[(&str, &str)]) -> bool {
         match self {
             Self::SurvivesExplosion => true,

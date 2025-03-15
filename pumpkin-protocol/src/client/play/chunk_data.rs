@@ -116,7 +116,7 @@ impl ClientPacket for CChunkData<'_> {
 
         // Sky Light Mask
         // All of the chunks, this is not optimal and uses way more data than needed but will be
-        // overhauled with full lighting system.
+        // overhauled with a full lighting system.
         buf.put_bit_set(&BitSet(VarInt(1), vec![0b01111111111111111111111110]));
         // Block Light Mask
         buf.put_bit_set(&BitSet(VarInt(1), vec![0]));

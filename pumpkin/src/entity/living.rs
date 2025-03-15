@@ -27,7 +27,7 @@ use super::{Entity, EntityId, NBTStorage, effect::Effect};
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
-    /// Previously last known position of the entity
+    /// The last known position of the entity.
     pub last_pos: AtomicCell<Vector3<f64>>,
     /// Tracks the remaining time until the entity can regenerate health.
     pub time_until_regen: AtomicI32,
@@ -36,7 +36,7 @@ pub struct LivingEntity {
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
     pub death_time: AtomicU8,
-    /// The distance the entity has been falling
+    /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<EffectType, Effect>>,
 }

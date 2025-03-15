@@ -14,7 +14,7 @@ pub mod color;
 pub mod hover;
 pub mod style;
 
-/// Represents a Text component
+/// Represents a text component
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TextComponent(pub TextComponentBase);
 
@@ -68,7 +68,7 @@ impl TextComponentBase {
         }
         if style.click_event.is_some() {
             if let Some(ClickEvent::OpenUrl(url)) = style.click_event {
-                //TODO: check if term supports hyperlinks before
+                // TODO: check if the terminal supports hyperlinks first
                 text = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text).to_string()
             }
         }
@@ -208,13 +208,13 @@ impl TextComponent {
         self
     }
 
-    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages
+    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages.
     pub fn insertion(mut self, text: String) -> Self {
         self.0.style.insertion = Some(text);
         self
     }
 
-    /// Allows for events to occur when the player clicks on text. Only work in chat.
+    /// Allows for events to occur when the player clicks on text. Only works in chat.
     pub fn click_event(mut self, event: ClickEvent) -> Self {
         self.0.style.click_event = Some(event);
         self
@@ -243,7 +243,7 @@ impl TextComponent {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum TextContent {
-    /// Raw Text
+    /// Raw text
     Text { text: Cow<'static, str> },
     /// Translated text
     Translate {

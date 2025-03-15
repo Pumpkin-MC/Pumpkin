@@ -83,7 +83,7 @@ mod test {
     }
 
     #[test]
-    // This makes sure that all recipes are able deserialized properly
+    // This makes sure that all recipes are able to be deserialized properly.
     fn check_parsing() {
         assert!(!RECIPES.is_empty())
     }

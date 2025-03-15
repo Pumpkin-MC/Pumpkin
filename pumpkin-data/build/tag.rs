@@ -107,7 +107,7 @@ pub(crate) fn build() -> TokenStream {
         #registry_key_enum
 
         impl RegistryKey {
-            // IDK why the linter is saying this isnt used
+            // IDK why the linter is saying this isn't used
             #[allow(dead_code)]
             pub fn identifier_string(&self) -> &str {
                 match self {
@@ -134,7 +134,7 @@ pub(crate) fn build() -> TokenStream {
             fn tag_key() -> RegistryKey;
             fn registry_key(&self) -> &str;
 
-            /// Returns none if tag does not exist
+            /// Returns `None` if the tag does not exist.
             fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix("#").unwrap_or(tag);
                 let items = get_tag_values(Self::tag_key(), tag)?;

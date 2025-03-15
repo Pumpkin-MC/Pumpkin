@@ -4,7 +4,7 @@ We appreciate your interest in contributing to Pumpkin! This document outlines t
 
 ## Getting Started
 
-The easiest way to get started is by asking for help in our [discord](https://discord.gg/wT8XjrjKkf).
+The easiest way to get started is by asking for help in [our Discord server](https://discord.gg/wT8XjrjKkf).
 
 ### How to Contribute
 
@@ -33,14 +33,14 @@ The Documentation of Pumpkin can be found at <https://pumpkinmc.org/>
 
 ### Coding Guidelines
 
-Things need to be done before this Pull Request can be merged. Your CI also checks most of them automatically and fill fail if something is not fulfilled
-Note: Pumpkin's clippy settings are relatively strict, this can be may frustrating but is necessary so the code says clean and consistent
+Things need to be done before a pull request can be merged. Your CI also checks most of them automatically and will fail if something is not fulfilled.
+Note: Pumpkin's clippy settings are relatively strict, this can be may frustrating but is necessary so the code says clean and consistent.
 **Basic**
 
 - **Title:** Use a concise and informative title that clearly communicates the purpose of the PR.  Anyone reviewing the PR should quickly understand the changes being proposed.  
 - **Description:** Provide a comprehensive description of the changes. Explain:
 - What was changed?
-- Why was this change necessary?
+- Why were these changes necessary?
 - What is the impact of this change?
 - Are there any known issues or limitations?
 - Include any relevant context, such as related issues or discussions.

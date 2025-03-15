@@ -21,13 +21,13 @@ pub struct PlayerChangeWorldEvent {
     /// The new world the player is in.
     pub new_world: Arc<World>,
 
-    /// Position the player is teleported to.
+    /// The position the player is teleported to.
     pub position: Vector3<f64>,
 
-    /// Yaw of the player after teleportation.
+    /// The yaw of the player after teleportation.
     pub yaw: f32,
 
-    /// Pitch of the player after teleportation.
+    /// The pitch of the player after teleportation.
     pub pitch: f32,
 }
 
@@ -39,8 +39,8 @@ impl PlayerChangeWorldEvent {
     /// - `previous_world`: The previous world the player was in.
     /// - `new_world`: The new world the player is in.
     /// - `position`: Position the player is teleported to.
-    /// - `yaw`: Yaw of the player after teleportation.
-    /// - `pitch`: Pitch of the player after teleportation.
+    /// - `yaw`: The yaw of the player after teleportation.
+    /// - `pitch`: The pitch of the player after teleportation.
     ///
     /// # Returns
     /// A new instance of `PlayerChangeWorldEvent`.

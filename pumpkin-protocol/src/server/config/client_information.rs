@@ -9,7 +9,7 @@ use crate::VarInt;
 pub struct SClientInformationConfig {
     pub locale: String, // 16
     pub view_distance: i8,
-    pub chat_mode: VarInt, // Varint
+    pub chat_mode: VarInt, // VarInt
     pub chat_colors: bool,
     pub skin_parts: u8,
     pub main_hand: VarInt,

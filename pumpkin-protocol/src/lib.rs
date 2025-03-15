@@ -17,8 +17,8 @@ pub mod query;
 #[cfg(feature = "serverbound")]
 pub mod server;
 
-/// To current Minecraft protocol
-/// Don't forget to change this when porting
+/// The current Minecraft protocol number.
+/// Don't forget to change this when porting.
 pub const CURRENT_MC_PROTOCOL: NonZeroU16 = unsafe { NonZeroU16::new_unchecked(769) };
 
 pub const MAX_PACKET_SIZE: usize = 2097152;
@@ -35,7 +35,7 @@ pub struct CompressionThreshold(pub u32);
 /// Represents a compression level.
 ///
 /// The level controls the amount of compression applied to the data.
-/// Higher levels generally result in higher compression ratios but also
+/// Higher levels generally result in higher compression ratios, but also
 /// increase CPU usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompressionLevel(pub u32);
@@ -114,41 +114,41 @@ pub trait ServerPacket: Packet + Sized {
 
 #[derive(Serialize)]
 pub struct StatusResponse {
-    /// The version on which the Server is running. Optional
+    /// The version on which the server is running. (Optional)
     pub version: Option<Version>,
-    /// Information about currently connected Players. Optional
+    /// Information about currently connected players. (Optional)
     pub players: Option<Players>,
-    /// The description displayed also called MOTD (Message of the day). Optional
+    /// The description displayed, also called MOTD (Message of the Day). (Optional)
     pub description: String,
-    /// The icon displayed, Optional
+    /// The icon displayed. (Optional)
     pub favicon: Option<String>,
-    /// Players are forced to use Secure chat
+    /// Whether players are forced to use secure chat.
     pub enforce_secure_chat: bool,
 }
 #[derive(Serialize)]
 pub struct Version {
-    /// The current name of the Version (e.g. 1.21.4)
+    /// The name of the version (e.g. 1.21.4)
     pub name: String,
-    /// The current Protocol Version (e.g. 767)
+    /// The protocol version (e.g. 767)
     pub protocol: u32,
 }
 
 #[derive(Serialize)]
 pub struct Players {
-    /// The maximum Player count the server allows
+    /// The maximum player count that the server allows.
     pub max: u32,
-    /// The current online player count
+    /// The current online player count.
     pub online: u32,
     /// Information about currently connected players.
-    /// Note player can disable listing here.
+    /// Note: players can disable listing here.
     pub sample: Vec<Sample>,
 }
 
 #[derive(Serialize)]
 pub struct Sample {
-    /// Players Name
+    /// The player's name.
     pub name: String,
-    /// Players UUID
+    /// The player's UUID.
     pub id: String,
 }
 
@@ -170,11 +170,11 @@ pub struct KnownPack<'a> {
 
 #[derive(Serialize)]
 pub enum NumberFormat {
-    /// Show nothing
+    /// Show nothing.
     Blank,
-    /// The styling to be used when formatting the score number
+    /// The styling to be used when formatting the score number.
     Styled(Style),
-    /// The text to be used as placeholder.
+    /// The text to be used as a placeholder.
     Fixed(TextComponent),
 }
 

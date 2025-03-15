@@ -20,7 +20,7 @@ impl Ticker {
         }
     }
 
-    /// IMPORTANT: Run this in a new thread/tokio task
+    /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(&mut self, server: &Server) {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
             let now = Instant::now();
@@ -30,7 +30,7 @@ impl Ticker {
                 server.tick().await;
                 self.last_tick = now;
             } else {
-                // Wait for the remaining time until the next tick
+                // Wait for the remaining time until the next tick.
                 let sleep_time = self.tick_interval - elapsed;
                 sleep(sleep_time).await;
             }

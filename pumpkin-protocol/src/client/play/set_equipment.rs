@@ -40,7 +40,7 @@ impl ClientPacket for CSetEquipment {
             equipment
                 .1
                 .serialize(&mut serializer)
-                .expect("Could not serialize Equipment Slot");
+                .expect("Could not serialize `EquipmentSlot`");
             bytebuf.put(serializer.output);
         }
     }

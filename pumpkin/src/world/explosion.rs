@@ -47,7 +47,7 @@ impl Explosion {
                         //     continue 'block2;
                         // }
 
-                        // TODO: This should only check Air & Fluid
+                        // TODO: This should only check air & fluid
                         // AIR has blast_resistance of 0
                         if block.blast_resistance > 0.0 {
                             h -= (block.blast_resistance + 0.3) * 0.3;

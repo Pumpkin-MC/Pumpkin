@@ -177,9 +177,9 @@ fn bench_chunk_io_parallel(c: &mut Criterion) {
 
 // Depends on config options from `./config`
 fn bench_chunk_io(c: &mut Criterion) {
-    // System temp dirs are in-memory, so we cant use temp_dir
+    // System temp dirs are in-memory, so we can't use temp_dir
     let root_dir = global_path!("./bench_root_tmp");
-    let _ = fs::remove_dir_all(&root_dir); // delete if it exists
+    let _ = fs::remove_dir_all(&root_dir); // delete it if it exists
     fs::create_dir(&root_dir).unwrap(); // create the directory
 
     let async_handler = tokio::runtime::Builder::new_current_thread()

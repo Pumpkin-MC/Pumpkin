@@ -44,7 +44,7 @@ pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
-/// properly flush logs to output while they happen instead of batched
+/// properly flush logs to the output while they happen instead of batched
 pub struct ReadlineLogWrapper {
     internal: Box<dyn Log>,
     readline: std::sync::Mutex<Option<Readline>>,
@@ -74,7 +74,7 @@ impl ReadlineLogWrapper {
     }
 }
 
-// writing to stdout is expensive anyway, so I dont think having a mutex here is a big deal.
+// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
 impl Log for ReadlineLogWrapper {
     fn log(&self, record: &log::Record) {
         self.internal.log(record);
@@ -117,7 +117,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 config.set_level_color(level, None);
             }
         } else {
-            // We are technically logging to a file like object
+            // We are technically logging to a file-like object.
             config.set_write_log_enable_colors(true);
         }
 
@@ -142,7 +142,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
                 Err(e) => {
                     log::warn!(
-                        "Failed to initialize console input ({}), falling back to simple logger",
+                        "Failed to initialize console input ({}); falling back to simple logger",
                         e
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
@@ -194,11 +194,11 @@ impl PumpkinServer {
         // Setup the TCP server socket.
         let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.server_address)
             .await
-            .expect("Failed to start TcpListener");
+            .expect("Failed to start `TcpListener`");
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
         let addr = listener
             .local_addr()
-            .expect("Unable to get the address of server!");
+            .expect("Unable to get the address of the server!");
 
         let rcon = advanced_config().networking.rcon.clone();
 
@@ -220,12 +220,12 @@ impl PumpkinServer {
         }
 
         if advanced_config().networking.query.enabled {
-            log::info!("Query protocol enabled. Starting...");
+            log::info!("Query protocol is enabled. Starting...");
             tokio::spawn(query::start_query_handler(server.clone(), addr));
         }
 
         if advanced_config().networking.lan_broadcast.enabled {
-            log::info!("LAN broadcast enabled. Starting...");
+            log::info!("LAN broadcast is enabled. Starting...");
             tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
         }
 
@@ -275,7 +275,7 @@ impl PumpkinServer {
             };
 
             if let Err(e) = connection.set_nodelay(true) {
-                log::warn!("failed to set TCP_NODELAY {e}");
+                log::warn!("Failed to set TCP_NODELAY {e}");
             }
 
             let id = master_client_id;
@@ -302,8 +302,8 @@ impl PumpkinServer {
             tokio::spawn(async move {
                 let mut connection_writer = connection_writer;
 
-                // We clone ownership of `tx` into here thru the client so this will never drop
-                // since there is always a tx in memory. We need to explicitly tell the recv to stop
+                // We clone ownership of `tx` into here through the client, so this will never drop
+                // since there is always a `tx` in memory. We need to explicitly tell the `recv` to stop.
                 while let Some(notif) = rx.recv().await {
                     match notif {
                         PacketHandlerState::PacketReady => {
@@ -325,7 +325,7 @@ impl PumpkinServer {
 
             let server = self.server.clone();
             let tasks_clone = tasks.clone();
-            // We need to await these to verify all cleanup code is complete
+            // We need to `await` these to verify all cleanup code is complete.
             let handle = tokio::spawn(async move {
                 while !client.closed.load(std::sync::atomic::Ordering::Relaxed)
                     && !client
@@ -346,7 +346,7 @@ impl PumpkinServer {
                             .spawn_player(&BASIC_CONFIG, player.clone(), &server)
                             .await;
 
-                        // poll Player
+                        // Poll the player
                         while !player
                             .client
                             .closed
@@ -360,7 +360,7 @@ impl PumpkinServer {
                     }
                 }
 
-                // Also handle case of client connects but does not become a player (like a server
+                // Also handle the case where the client connects but does not become a player (like a server
                 // ping)
                 client.close().await;
                 tasks_clone.lock().await.remove(&id);
@@ -402,7 +402,7 @@ impl PumpkinServer {
 
         log::info!("Completed save!");
 
-        // Explicitly drop the line reader to return the terminal to the original state
+        // Explicitly drop the line reader to return the terminal to the original state.
         if let Some((wrapper, _)) = &*LOGGER_IMPL {
             if let Some(rl) = wrapper.take_readline() {
                 let _ = rl;
@@ -412,7 +412,7 @@ impl PumpkinServer {
 }
 
 fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
-    // This needs to be async or it will hog a thread
+    // This needs to be async, or it will hog a thread.
     tokio::spawn(async move {
         let mut rl = rl;
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
@@ -463,7 +463,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
 async fn poll(client: &Client, connection_reader: &mut OwnedReadHalf) -> bool {
     loop {
         if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
-            // If we manually close (like a kick) we dont want to keep reading bytes
+            // If we manually close (like a kick), we don't want to keep reading bytes.
             return false;
         }
 

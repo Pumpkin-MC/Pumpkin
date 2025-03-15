@@ -18,7 +18,7 @@ impl BlockPos {
             z: z_chunk,
         };
 
-        // Since we divide by 16 remnant can never exceed u8
+        // Since we divide by 16, remnant can never exceed u8
         let relative = Vector3 {
             x: x_rem,
             z: z_rem,

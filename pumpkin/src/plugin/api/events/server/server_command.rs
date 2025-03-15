@@ -1,12 +1,12 @@
 use pumpkin_macros::{Event, cancellable};
 
-/// An event that occurs when a command is sent to the server console
+/// An event that occurs when a command is sent to the server console.
 ///
 /// This event contains information about the command being executed.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct ServerCommandEvent {
-    /// The command being executed
+    /// The command being executed.
     pub command: String,
 }
 

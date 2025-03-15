@@ -9,7 +9,7 @@ use super::PlayerEvent;
 ///
 /// If the event is cancelled, the command will not be executed.
 ///
-/// This event contains information about the player, and the command being executed.
+/// This event contains information about the player and the command being executed.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerCommandSendEvent {
@@ -24,7 +24,7 @@ impl PlayerCommandSendEvent {
     /// Creates a new instance of `PlayerCommandSendEvent`.
     ///
     /// # Arguments
-    /// - `player`: A reference to the player running a command.
+    /// - `player`: A reference to the player running the command.
     /// - `command`: The command being executed.
     ///
     /// # Returns

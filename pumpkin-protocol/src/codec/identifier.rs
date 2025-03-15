@@ -22,7 +22,7 @@ impl Identifier {
     }
 }
 impl Codec<Self> for Identifier {
-    /// The maximum number of bytes a `Identifier` is the same as for a normal String.
+    /// The maximum number of bytes an `Identifier` is the same as for a normal `String`.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(i16::MAX as usize) };
 
     fn written_size(&self) -> usize {
@@ -67,7 +67,7 @@ impl<'de> Deserialize<'de> for Identifier {
             type Value = Identifier;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid Identifier (namespace:path)")
+                formatter.write_str("a valid identifier (namespace:path)")
             }
 
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
@@ -86,7 +86,7 @@ impl<'de> Deserialize<'de> for Identifier {
                         namespace: namespace.to_string(),
                         path: path.to_string(),
                     }),
-                    None => Err(serde::de::Error::custom("Identifier can't be split")),
+                    None => Err(serde::de::Error::custom("identifier can't be split")),
                 }
             }
         }

@@ -12,13 +12,13 @@ use super::PlayerEvent;
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerGamemodeChangeEvent {
-    /// The player who's gamemode is changing.
+    /// The player whose gamemode is changing.
     pub player: Arc<Player>,
 
-    /// Previous gamemode of the player.
+    /// The previous gamemode of the player.
     pub previous_gamemode: GameMode,
 
-    /// New gamemode of the player.
+    /// The new gamemode of the player.
     pub new_gamemode: GameMode,
 }
 
@@ -26,7 +26,7 @@ impl PlayerGamemodeChangeEvent {
     /// Creates a new instance of `PlayerGamemodeChangeEvent`.
     ///
     /// # Arguments
-    /// - `player`: A reference to the player who is changing gamemode.
+    /// - `player`: A reference to the player who is changing gamemodes.
     /// - `previous_gamemode`: The previous gamemode of the player.
     /// - `new_gamemode`: The new gamemode of the player.
     ///
