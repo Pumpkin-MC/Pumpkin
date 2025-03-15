@@ -1170,7 +1170,7 @@ impl World {
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    /// Gets the `BlockState` from the block registry. Returns `None`` if the block state was not found.
+    /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
