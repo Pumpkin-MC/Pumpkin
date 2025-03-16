@@ -221,8 +221,8 @@ impl ChunkBlocks {
             Self::Homogeneous(block) => {
                 Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
             }
-            Self::Subchunks(blocks) => {
-                Box::new(blocks.iter().map(|subchunk| subchunk.clone_as_array()))
+            Self::Subchunks(subchunks) => {
+                Box::new(subchunks.iter().map(|subchunk| subchunk.clone_as_array()))
             }
         }
     }
