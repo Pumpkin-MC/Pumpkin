@@ -74,7 +74,7 @@ pub struct ChunkData {
 #[derive(PartialEq, Debug, Clone)]
 pub enum ChunkBlocks {
     Homogeneous(u16),
-    Heterogeneous(Box<[SubchunkBlocks; SUBCHUNKS_COUNT]>),
+    Subchunks(Box<[SubchunkBlocks; SUBCHUNKS_COUNT]>),
 }
 
 /// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
@@ -167,7 +167,7 @@ impl ChunkBlocks {
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
             Self::Homogeneous(block) => Some(*block),
-            Self::Heterogeneous(subchunks) => subchunks
+            Self::Subchunks(subchunks) => subchunks
                 .get((position.y.get_absolute() / 16) as usize)
                 .and_then(|subchunk| subchunk.get_block(position)),
         }
@@ -197,10 +197,10 @@ impl ChunkBlocks {
                     subchunks[(position.y.get_absolute() / 16) as usize]
                         .set_block(position, new_block);
 
-                    *self = Self::Heterogeneous(subchunks.try_into().unwrap());
+                    *self = Self::Subchunks(subchunks.try_into().unwrap());
                 }
             }
-            Self::Heterogeneous(subchunks) => {
+            Self::Subchunks(subchunks) => {
                 subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block);
 
                 if subchunks
@@ -221,7 +221,7 @@ impl ChunkBlocks {
             Self::Homogeneous(block) => {
                 Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
             }
-            Self::Heterogeneous(blocks) => {
+            Self::Subchunks(blocks) => {
                 Box::new(blocks.iter().map(|subchunk| subchunk.clone_as_array()))
             }
         }
