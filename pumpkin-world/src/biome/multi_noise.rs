@@ -64,10 +64,12 @@ impl<'de> Deserialize<'de> for ParameterRange {
                     .as_f64()
                     .ok_or_else(|| serde::de::Error::custom("Expected float"))?
                     as f32;
+                assert!(min >= -2.0);
                 let max = arr[1]
                     .as_f64()
                     .ok_or_else(|| serde::de::Error::custom("Expected float"))?
                     as f32;
+                assert!(max <= 2.0);
                 assert!(min < max, "min is more max");
                 Ok(ParameterRange {
                     min: to_long(min),
@@ -148,7 +150,7 @@ impl<T: Clone> SearchTree<T> {
     }
 }
 
-fn create_node<T: Clone>(parameter_number: usize, sub_tree: Vec<TreeNode<T>>) -> TreeNode<T> {
+fn create_node<T: Clone>(parameter_number: usize, mut sub_tree: Vec<TreeNode<T>>) -> TreeNode<T> {
     assert!(
         !sub_tree.is_empty(),
         "Need at least one child to build a node"
@@ -165,25 +167,32 @@ fn create_node<T: Clone>(parameter_number: usize, sub_tree: Vec<TreeNode<T>>) ->
             bounds,
         };
     }
-    let mut best_split = (0..parameter_number)
-        .map(|param_idx| {
-            let mut sorted_sub_tree = sub_tree.clone();
-            sort_tree(&mut sorted_sub_tree, parameter_number, param_idx, false);
-            let batched_tree = get_batched_tree(sorted_sub_tree);
-            let range_sum: i64 = batched_tree
-                .iter()
-                .map(|node| calculate_bounds_sum(node.bounds()))
-                .sum();
-            (param_idx, batched_tree, range_sum)
-        })
-        .min_by_key(|(_, _, range_sum)| *range_sum)
-        .unwrap();
-    let (best_param, mut best_batched, _) = best_split;
+    let mut best_range_sum = i64::MAX;
+    let mut best_param = 0;
+    let mut best_batched = Vec::new();
+
+    for param_idx in 0..parameter_number {
+        sort_tree(&mut sub_tree, parameter_number, param_idx, false);
+        let batched_tree = get_batched_tree(sub_tree.clone());
+        let range_sum: i64 = batched_tree
+            .iter()
+            .map(|node| get_range_length_sum(node.bounds()))
+            .sum();
+
+        if best_range_sum > range_sum {
+            best_range_sum = range_sum;
+            best_param = param_idx;
+            best_batched = batched_tree;
+        }
+    }
+
     sort_tree(&mut best_batched, parameter_number, best_param, true);
+
     let children: Vec<TreeNode<T>> = best_batched
         .into_iter()
         .map(|batch| create_node(parameter_number, batch.children()))
         .collect();
+
     let bounds = get_enclosing_parameters(&children);
     TreeNode::Branch { children, bounds }
 }
@@ -275,10 +284,17 @@ fn get_enclosing_parameters<T: Clone>(nodes: &[TreeNode<T>]) -> [ParameterRange;
     bounds
 }
 
-fn calculate_bounds_sum(bounds: &[ParameterRange]) -> i64 {
+fn get_range_length_sum(bounds: &[ParameterRange]) -> i64 {
     bounds
         .iter()
         .map(|range| (range.max - range.min).abs())
+        .sum()
+}
+
+fn calculate_bounds_sum(bounds: &[ParameterRange]) -> i64 {
+    bounds
+        .iter()
+        .map(|range| ((range.min + range.max) / 2).abs())
         .sum()
 }
 
