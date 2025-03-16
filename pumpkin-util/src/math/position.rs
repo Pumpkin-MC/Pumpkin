@@ -1,11 +1,12 @@
 use super::vector3::Vector3;
 use std::fmt;
+use std::hash::Hash;
 
 use crate::math::vector2::Vector2;
 use num_traits::Euclid;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// Aka Block Position
 pub struct BlockPos(pub Vector3<i32>);
 
@@ -18,7 +19,7 @@ impl BlockPos {
             z: z_chunk,
         };
 
-        // Since we divide by 16 remnant can never exceed u8
+        // Since we divide by 16, remnant can never exceed u8
         let relative = Vector3 {
             x: x_rem,
             z: z_rem,

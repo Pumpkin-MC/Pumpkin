@@ -195,7 +195,7 @@ impl<'de> Deserialize<'de> for RecipeResult {
             }
         }
 
-        // Evaluate putting type constraint on RecipeResult, because only Crafting Transmute can call visit_str
+        // Evaluate putting type constraint on `RecipeResult`, because only Crafting Transmute can call visit_str
         deserializer.deserialize_any(ResultVisitor)
     }
 }

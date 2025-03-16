@@ -21,13 +21,13 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
-- **Compatibility**: Supports the latest Minecraft server version and adheres to vanilla game mechanics.
+- **Compatibility**: Supports the latest Minecraft server version while adhering to Vanilla game mechanics.
 - **Security**: Prioritizes security by preventing known security exploits.
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.
 
 > [!IMPORTANT]
-> Pumpkin is currently under heavy development. Biomes are currently not implemented but the Terrain matches Vanilla
+> Pumpkin is currently under heavy development. Biomes are currently not implemented, but the terrain noise matches Vanilla.
 ![image](https://github.com/user-attachments/assets/aa24941f-216c-47b8-830c-ed5d7bb9ebca)
 
 
@@ -102,11 +102,11 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Bungeecord
   - [x] Velocity
 
-Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress
+Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress.
 
 ## How to run
 
-See our [Quick Start](https://pumpkinmc.org/about/quick-start.html) Guide to get Pumpkin running
+See our [Quick Start](https://pumpkinmc.org/about/quick-start.html) guide to get Pumpkin running.
 
 ## Contributions
 
@@ -114,12 +114,12 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Docs
 
-The Documentation of Pumpkin can be found at https://pumpkinmc.org/
+Pumpkin's documentation can be found at https://pumpkinmc.org/
 
 ## Communication
 
-Consider joining our [discord](https://discord.gg/wT8XjrjKkf) to stay up-to-date on events, updates, and connect with other members.
+Consider joining [our Discord server](https://discord.gg/wT8XjrjKkf) to stay up-to-date on events, updates, and connect with other members.
 
 ## Funding
 
-If you want to fund me and help the project, Check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii) or my [PayPal](https://www.paypal.me/alexxmedvedev)
+If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii) or my [PayPal](https://www.paypal.me/alexxmedvedev).

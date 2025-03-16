@@ -12,7 +12,7 @@ impl Client {
             .store(version, std::sync::atomic::Ordering::Relaxed);
         *self.server_address.lock().await = handshake.server_address;
 
-        log::debug!("Handshake: next state {:?}", &handshake.next_state);
+        log::debug!("Handshake: next state is {:?}", &handshake.next_state);
         self.connection_state.store(handshake.next_state);
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;

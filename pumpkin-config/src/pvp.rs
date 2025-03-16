@@ -3,15 +3,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct PVPConfig {
-    /// Is PVP enabled ?
+    /// Whether PVP is enabled.
     pub enabled: bool,
-    /// Do we want to have the Red hurt animation & fov bobbing
+    /// Whether to use the red hurt animation and FOV bobbing.
     pub hurt_animation: bool,
-    /// Should players in creative be protected against PVP
+    /// Whether players in creative mode are protected against PVP.
     pub protect_creative: bool,
-    /// Has PVP Knockback?
+    /// Whether PVP knockback is enabled.
     pub knockback: bool,
-    /// Should player swing when attacking?
+    /// Whether players swing when attacking.
     pub swing: bool,
 }
 

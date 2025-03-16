@@ -23,7 +23,7 @@ pub struct PacketEncoder {
 }
 
 impl PacketEncoder {
-    /// Appends a Clientbound `ClientPacket` to the internal buffer and applies compression when needed.
+    /// Appends a clientbound `ClientPacket` to the internal buffer and applies compression when needed.
     ///
     /// If compression is enabled and the packet size exceeds the threshold, the packet is compressed.
     /// The packet is prefixed with its length and, if compressed, the uncompressed data length.
@@ -240,7 +240,7 @@ mod tests {
         }
     }
 
-    /// Helper function to decode a VarInt from bytes
+    /// Helper function to decode a `VarInt` from bytes
     fn decode_varint(buffer: &mut &[u8]) -> Result<i32, DecodeError> {
         VarInt::decode(buffer).map(|varint| varint.0)
     }

@@ -354,7 +354,7 @@ impl CustomBossbars {
     ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
-            // Get difference between old and new player list and remove bossbars from old players
+            // Get the difference between the old and new player list and remove bossbars from old players.
             let removed_players: Vec<Uuid> = bossbar
                 .player
                 .iter()

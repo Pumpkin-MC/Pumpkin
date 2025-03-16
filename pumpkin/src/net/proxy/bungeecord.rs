@@ -8,11 +8,11 @@ use crate::net::{GameProfile, offline_uuid};
 
 #[derive(Error, Debug)]
 pub enum BungeeCordError {
-    #[error("Failed to parse Address")]
+    #[error("Failed to parse address")]
     FailedParseAddress,
     #[error("Failed to parse UUID")]
     FailedParseUUID,
-    #[error("Failed to parse Properties")]
+    #[error("Failed to parse properties")]
     FailedParseProperties,
     #[error("Failed to make offline UUID")]
     FailedMakeOfflineUUID,
@@ -37,7 +37,7 @@ pub async fn bungeecord_login(
 ) -> Result<(IpAddr, GameProfile), BungeeCordError> {
     let data = server_address.split('\0').take(4).collect::<Vec<_>>();
 
-    // Ip of player, only given if ip_forward on bungee is true
+    // The IP address of the player; only given if `ip_forward` on bungee is true.
     let ip = match data.get(1) {
         Some(ip) => ip
             .parse()
@@ -45,15 +45,15 @@ pub async fn bungeecord_login(
         None => client_address.lock().await.ip(),
     };
 
-    // Uuid of player, only given if ip_forward on bungee is true
+    // The UUID of the player; only given if `ip_forward` on bungee is true.
     let id = match data.get(2) {
         Some(uuid) => uuid.parse().map_err(|_| BungeeCordError::FailedParseUUID)?,
         None => offline_uuid(name.as_str()).map_err(|_| BungeeCordError::FailedMakeOfflineUUID)?,
     };
 
-    // Read properties and get textures
-    // Properties of player's game profile, only given if ip_forward and online_mode
-    // on bungee both are true
+    // Read properties and get textures.
+    // Properties of the player's game profile are only given if `ip_forward` and `online_mode`
+    // on bungee are both `true`.
     let properties: Vec<Property> = match data.get(3) {
         Some(properties) => {
             serde_json::from_str(properties).map_err(|_| BungeeCordError::FailedParseProperties)?

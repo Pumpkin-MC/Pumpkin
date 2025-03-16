@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct CommandsConfig {
-    /// Are commands from the Console accepted ?
+    /// Whether commands from the console are accepted.
     pub use_console: bool,
-    /// Should be commands from players be logged in console?
+    /// Whether commands from players are logged in the console.
     pub log_console: bool, // TODO: commands...
-    /// The op permission level of everyone that is not in the ops file
+    /// The `op` permission level of everyone that is not in the `ops` file.
     pub default_op_level: PermissionLvl,
 }
 

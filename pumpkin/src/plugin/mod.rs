@@ -1,7 +1,11 @@
 pub mod api;
 
+use api::server::{
+    server_plugin_disable::ServerPluginDisableEvent, server_plugin_enable::ServerPluginEnableEvent,
+};
 pub use api::*;
 use async_trait::async_trait;
+use pumpkin_macros::send_cancellable;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -219,15 +223,30 @@ impl PluginManager {
             self.handlers.clone(),
         );
         let mut plugin_box = plugin_fn();
-        let res = plugin_box.on_load(&context).await;
-        let mut loaded = true;
-        if let Err(e) = res {
-            log::error!("Error loading plugin: {}", e);
-            loaded = false;
-        }
+        send_cancellable! {{
+            ServerPluginEnableEvent {
+                metadata: metadata.clone(),
+                cancelled: false,
+            };
 
-        self.plugins
-            .push((metadata.clone(), plugin_box, library, loaded));
+            'after: {
+                let res = plugin_box.on_load(&context).await;
+                let mut loaded = true;
+                if let Err(e) = res {
+                    log::error!("Error loading plugin: {}", e);
+                    loaded = false;
+                }
+
+                self.plugins
+                    .push((metadata.clone(), plugin_box, library, loaded));
+            }
+
+            'cancelled: {
+                self.plugins
+                    .push((metadata.clone(), plugin_box, library, false));
+            }
+        }}
+
         Ok(())
     }
 
@@ -251,7 +270,7 @@ impl PluginManager {
     /// - `name`: The name of the plugin to load.
     ///
     /// # Returns
-    /// A result indicating success or failure. If it fails, it returns an error message.
+    /// A `Result` indicating success or failure. If it fails, it returns an error message.
     pub async fn load_plugin(&mut self, name: &str) -> Result<(), String> {
         let plugin = self
             .plugins
@@ -263,14 +282,23 @@ impl PluginManager {
                 return Err(format!("Plugin {name} is already loaded"));
             }
 
-            let context = Context::new(
-                metadata.clone(),
-                self.server.clone().expect("Server not set"),
-                self.handlers.clone(),
-            );
-            let res = plugin.on_load(&context).await;
-            res?;
-            *loaded = true;
+            send_cancellable! {{
+                ServerPluginEnableEvent {
+                    metadata: metadata.clone(),
+                    cancelled: false,
+                };
+
+                'after: {
+                    let context = Context::new(
+                        metadata.clone(),
+                        self.server.clone().expect("Server not set"),
+                        self.handlers.clone(),
+                    );
+                    let res = plugin.on_load(&context).await;
+                    res?;
+                    *loaded = true;
+                }
+            }}
             Ok(())
         } else {
             Err(format!("Plugin {name} not found"))
@@ -283,7 +311,7 @@ impl PluginManager {
     /// - `name`: The name of the plugin to unload.
     ///
     /// # Returns
-    /// A result indicating success or failure. If it fails, it returns an error message.
+    /// A `Result` indicating success or failure. If it fails, it returns an error message.
     pub async fn unload_plugin(&mut self, name: &str) -> Result<(), String> {
         let plugin = self
             .plugins
@@ -291,14 +319,23 @@ impl PluginManager {
             .find(|(metadata, _, _, _)| metadata.name == name);
 
         if let Some((metadata, plugin, _, loaded)) = plugin {
-            let context = Context::new(
-                metadata.clone(),
-                self.server.clone().expect("Server not set"),
-                self.handlers.clone(),
-            );
-            let res = plugin.on_unload(&context).await;
-            res?;
-            *loaded = false;
+            send_cancellable! {{
+                ServerPluginDisableEvent {
+                    metadata: metadata.clone(),
+                    cancelled: false,
+                };
+
+                'after: {
+                    let context = Context::new(
+                        metadata.clone(),
+                        self.server.clone().expect("Server not set"),
+                        self.handlers.clone(),
+                    );
+                    let res = plugin.on_unload(&context).await;
+                    res?;
+                    *loaded = false;
+                }
+            }}
             Ok(())
         } else {
             Err(format!("Plugin {name} not found"))
@@ -400,21 +437,21 @@ impl PluginManager {
 /// Error when failed to load the entire Plugin directory
 #[derive(Error, Debug)]
 pub enum PluginsLoadError {
-    #[error("Failed to Create new Plugins directory")]
+    #[error("Failed to create new plugins directory")]
     CreatePluginDir,
-    #[error("Failed to Read Plugins directory")]
+    #[error("Failed to read plugins directory")]
     ReadPluginDir,
-    #[error("Failed to load Plugin {0}")]
+    #[error("Failed to load plugin {0}")]
     LoadPlugin(String, PluginLoadError),
 }
 
-/// Error when failed to load a single Plugin
+/// Error when failed to load a single plugin
 #[derive(Error, Debug)]
 pub enum PluginLoadError {
-    #[error("Failed to load Library: {0}")]
+    #[error("Failed to load library: {0}")]
     LoadLibrary(String),
-    #[error("Failed to load Plugin entry function")]
+    #[error("Failed to load plugin entry function")]
     GetPluginMain,
-    #[error("Failed to load Plugin Metadata")]
+    #[error("Failed to load plugin metadata")]
     GetPluginMeta,
 }

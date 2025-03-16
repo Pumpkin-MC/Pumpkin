@@ -82,7 +82,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
-        let mut level_data = info.clone();
+        let mut level_data = info;
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };
 

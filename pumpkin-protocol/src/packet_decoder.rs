@@ -225,7 +225,7 @@ mod tests {
         let mut buffer = BytesMut::new();
 
         if compress {
-            // Create a buffer that includes packet_id_varint and payload
+            // Create a buffer that includes `packet_id_varint` and payload
             let mut data_to_compress = BytesMut::new();
             let packet_id_varint = VarInt(packet_id);
             data_to_compress.put_var_int(&packet_id_varint);
@@ -238,7 +238,7 @@ mod tests {
             buffer.put_var_int(&data_len_varint);
             buffer.put_slice(&compressed_payload);
         } else {
-            // No compression; data_len is payload length
+            // No compression; `data_len` is payload length
             let packet_id_varint = VarInt(packet_id);
             buffer.put_var_int(&packet_id_varint);
             buffer.put_slice(payload);
@@ -257,7 +257,7 @@ mod tests {
         packet.extend_from_slice(&packet_length_encoded);
         packet.extend_from_slice(&buffer);
 
-        // Encrypt if key and iv are provided
+        // Encrypt if key and IV are provided.
         if let (Some(k), Some(v)) = (key, iv) {
             encrypt_aes128(&mut packet, k, v);
             packet
@@ -471,13 +471,13 @@ mod tests {
         let result = decoder.decode().expect("Decoding failed");
         assert!(
             result.is_some(),
-            "Decoder returned None when it should have decoded a packet"
+            "Decoder returned `None` when it should have decoded a packet"
         );
 
         let raw_packet = result.unwrap();
         assert_eq!(
             raw_packet.id.0, packet_id,
-            "Decoded packet_id does not match"
+            "Decoded `packet_id` does not match"
         );
         assert_eq!(
             raw_packet.bytebuf.as_ref(),

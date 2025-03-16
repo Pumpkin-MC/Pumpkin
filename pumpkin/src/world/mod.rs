@@ -110,24 +110,20 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
-    // An LFU cache for storing the most frequently used 16 chunks that are singleton called (not a
-    // part of chunk loading), if a chunk is called in this manner, it is likely to be called again,
-    // so we will watch all chunks while they remain in this cache
-    single_chunk_lfu: Mutex<[Vector2<i32>; 16]>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
-    /// This does not include Players
+    /// This does not include players.
     pub entities: Arc<RwLock<HashMap<uuid::Uuid, Arc<dyn EntityBase>>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
     pub worldborder: Mutex<Worldborder>,
-    /// The world's time, including counting ticks for weather, time cycles and statistics
+    /// The world's time, including counting ticks for weather, time cycles, and statistics.
     pub level_time: Mutex<LevelTime>,
-    /// The type of dimension the world is in
+    /// The type of dimension the world is in.
     pub dimension_type: DimensionType,
-    /// The world's weather, including rain and thunder levels
+    /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
     // TODO: entities
 }
@@ -137,7 +133,6 @@ impl World {
     pub fn load(level: Level, dimension_type: DimensionType) -> Self {
         Self {
             level: Arc::new(level),
-            single_chunk_lfu: Mutex::new([Vector2::default(); 16]),
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -277,7 +272,7 @@ impl World {
     }
 
     pub async fn tick(&self, server: &Server) {
-        // world ticks
+        // World ticks
         {
             let mut level_time = self.level_time.lock().await;
             level_time.tick_time();
@@ -291,17 +286,17 @@ impl World {
             weather.tick_weather(self).await;
         };
 
-        // player ticks
+        // Player ticks
         for player in self.players.read().await.values() {
             player.tick(server).await;
         }
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
-        // entities tick
+        // Entity ticks
         for entity in entities_to_tick {
             entity.tick(server).await;
-            // this boolean thing prevents deadlocks, since we lock players we can't broadcast packets
+            // This boolean thing prevents deadlocks. Since we lock players, we can't broadcast packets.
             let mut collied_player = None;
             for player in self.players.read().await.values() {
                 if player
@@ -309,7 +304,7 @@ impl World {
                     .entity
                     .bounding_box
                     .load()
-                    // This is vanilla, but TODO: change this when is in a Vehicle
+                    // This is vanilla, but TODO: change this when is in a vehicle
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
@@ -357,7 +352,7 @@ impl World {
             entity_id
         );
 
-        // login packet for our new player
+        // Send the login packet for our new player
         player
             .client
             .send_packet(&CLogin::new(
@@ -383,10 +378,10 @@ impl World {
                 false,
             ))
             .await;
-        // permissions, i. e. the commands a player may use
+        // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
         client_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
-        // teleport
+        // Teleport
         let info = &self.level.level_info;
         let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
         let yaw = info.spawn_angle;
@@ -403,8 +398,8 @@ impl World {
         player.living_entity.last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
-        // first send info update to our new player, So he can see his Skin
-        // also send his info to everyone else
+        // Firstly, send an info update to our new player, so they can see their skin
+        // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
             0x01 | 0x04 | 0x08,
@@ -423,7 +418,7 @@ impl World {
         .await;
         player.send_client_information().await;
 
-        // here we send all the infos of already joined players
+        // Here, we send all the infos of players who already joined.
         let mut entries = Vec::new();
         {
             let current_players = self.players.read().await;
@@ -453,7 +448,7 @@ impl World {
         let gameprofile = &player.gameprofile;
 
         log::debug!("Broadcasting player spawn for {}", player.gameprofile.name);
-        // spawn player for every client
+        // Spawn the player for every client.
         self.broadcast_packet_except(
             &[player.gameprofile.id],
             // TODO: add velo
@@ -470,7 +465,7 @@ impl World {
             ),
         )
         .await;
-        // spawn players for our client
+        // Spawn players for our client.
         let id = player.gameprofile.id;
         for (_, existing_player) in self.players.read().await.iter().filter(|c| c.0 != &id) {
             let entity = &existing_player.living_entity.entity;
@@ -492,11 +487,11 @@ impl World {
                 ))
                 .await;
         }
-        // entity meta data
-        // set skin parts
+        // Entity meta data
+        // Set skin parts
         player.send_client_information().await;
 
-        // Start waiting for level chunks, Sets the "Loading Terrain" screen
+        // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
         player
             .client
@@ -590,7 +585,7 @@ impl World {
         player.send_client_information().await;
 
         chunker::player_join(player).await;
-        // update commands
+        // Update commands
 
         player.set_health(20.0).await;
     }
@@ -658,7 +653,7 @@ impl World {
 
         player.send_permission_lvl_update().await;
 
-        // teleport
+        // Teleport
         let info = &self.level.level_info;
         let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
         let yaw = info.spawn_angle;
@@ -670,7 +665,7 @@ impl World {
         position.y = f64::from(top + 1);
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch).await;
+        player.clone().request_teleport(position, yaw, pitch).await;
 
         player.living_entity.last_pos.store(position);
 
@@ -692,13 +687,13 @@ impl World {
             .closed
             .load(std::sync::atomic::Ordering::Relaxed)
         {
-            log::info!("The connection has closed before world chunks were spawned",);
+            log::info!("The connection has closed before world chunks were spawned");
             return;
         }
         #[cfg(debug_assertions)]
         let inst = std::time::Instant::now();
 
-        // Sort such that the first chunks are closest to the center
+        // Sort such that the first chunks are closest to the center.
         let mut chunks = chunks;
         chunks.sort_unstable_by_key(|pos| {
             let rel_x = pos.x - center_chunk.x;
@@ -706,7 +701,7 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        // We are loading a completely new work section: prioritize chunks the player is on top
+        // We are loading a completely new world section; prioritize chunks the player is on top
         // of
         let new_spawn = chunks[0] == player.watched_section.load().center;
         let mut receiver = self.receive_chunks(chunks, new_spawn);
@@ -791,11 +786,11 @@ impl World {
             }
 
             #[cfg(debug_assertions)]
-            log::debug!("chunks queued after {}ms ", inst.elapsed().as_millis(),);
+            log::debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
         });
     }
 
-    /// Gets a Player by entity id
+    /// Gets a `Player` by an entity id
     pub async fn get_player_by_id(&self, id: EntityId) -> Option<Arc<Player>> {
         for player in self.players.read().await.values() {
             if player.entity_id() == id {
@@ -805,7 +800,7 @@ impl World {
         None
     }
 
-    /// Gets a Entity by entity id
+    /// Gets an entity by an entity id
     pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<dyn EntityBase>> {
         for entity in self.entities.read().await.values() {
             if entity.get_entity().entity_id == id {
@@ -815,7 +810,7 @@ impl World {
         None
     }
 
-    /// Gets a Player by username
+    /// Gets a `Player` by a username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
         for player in self.players.read().await.values() {
             if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
@@ -841,11 +836,11 @@ impl World {
         return self.players.read().await.get(&id).cloned();
     }
 
-    /// Gets a list of players who's location equals the given position in the world.
+    /// Gets a list of players whose location equals the given position in the world.
     ///
     /// It iterates through the players in the world and checks their location. If the player's location matches the
-    /// given position it will add this to a Vec which it later returns. If no
-    /// player was found in that position it will just return an empty Vec.
+    /// given position, it will add this to a `Vec` which it later returns. If no
+    /// player was found in that position, it will just return an empty `Vec`.
     ///
     /// # Arguments
     ///
@@ -865,15 +860,15 @@ impl World {
             .collect::<HashMap<uuid::Uuid, Arc<Player>>>()
     }
 
-    /// Gets the nearby players around a given world position
+    /// Gets the nearby players around a given world position.
     /// It "creates" a sphere and checks if whether players are inside
-    /// and returns a hashmap where the uuid is the key and the player
-    /// object the value.
+    /// and returns a `HashMap` where the UUID is the key and the `Player`
+    /// object is the value.
     ///
     /// # Arguments
-    /// * `pos`: The middlepoint of the sphere
-    /// * `radius`: The radius of the sphere. The higher the radius
-    ///             the more area will be checked, in every direction.
+    /// * `pos`: The center of the sphere.
+    /// * `radius`: The radius of the sphere. The higher the radius,
+    ///             the more area will be checked (in every direction).
     pub async fn get_nearby_players(
         &self,
         pos: Vector3<f64>,
@@ -919,7 +914,7 @@ impl World {
     ///
     /// This function takes a player's UUID and an `Arc<Player>` reference.
     /// It inserts the player into the world's `current_players` map using the UUID as the key.
-    /// Additionally, it may broadcasts a join message to all connected players in the world.
+    /// Additionally, it broadcasts a join message to all connected players in the world.
     ///
     /// # Arguments
     ///
@@ -976,7 +971,7 @@ impl World {
     ///
     /// - This function assumes `broadcast_packet_expect` and `remove_entity` are defined elsewhere.
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
-    pub async fn remove_player(&self, player: Arc<Player>, fire_event: bool) {
+    pub async fn remove_player(&self, player: &Arc<Player>, fire_event: bool) {
         self.players
             .write()
             .await
@@ -1024,7 +1019,7 @@ impl World {
         Entity::new(uuid, self.clone(), position, entity_type, false)
     }
 
-    /// Adds a entity to the world.
+    /// Adds an entity to the world.
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
@@ -1047,20 +1042,19 @@ impl World {
         .await;
     }
 
-    /// Sets a block
+    /// Sets a block.
     pub async fn set_block_state(&self, position: &BlockPos, block_state_id: u16) -> u16 {
         let (chunk_coordinate, relative_coordinates) = position.chunk_and_chunk_relative_position();
 
-        // Since we divide by 16 remnant can never exceed u8
+        // Since we divide by 16, remnant can never exceed `u8::MAX`
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
-        let replaced_block_state_id = chunk.read().await.subchunks.get_block(relative).unwrap();
-        chunk
-            .write()
-            .await
-            .subchunks
-            .set_block(relative, block_state_id);
+        let mut chunk = chunk.write().await;
+        chunk.dirty = true;
+        let replaced_block_state_id = chunk.blocks.get_block(relative).unwrap();
+        chunk.blocks.set_block(relative, block_state_id);
+        drop(chunk);
 
         self.broadcast_packet_all(&CBlockUpdate::new(
             position,
@@ -1086,7 +1080,7 @@ impl World {
         tokio::spawn(async move {
             if new_spawn {
                 if let Some((priority, rest)) = chunks.split_at_checked(9) {
-                    // Ensure client gets 9 closest chunks first
+                    // Ensure the client gets the 9 closest chunks first
                     level.fetch_chunks(priority, sender.clone()).await;
                     level.fetch_chunks(rest, sender).await;
                 } else {
@@ -1103,54 +1097,13 @@ impl World {
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
         let mut receiver = self.receive_chunks(vec![chunk_pos], false);
 
-        // If we are only getting one chunk, we are probably doing something that requires multiple
-        // calls to it. "Watch" it temp.
-
-        let mut lfu = self.single_chunk_lfu.lock().await;
-
-        #[allow(clippy::single_match_else)]
-        let pos_to_clean = match lfu.iter().position(|pos| *pos == chunk_pos) {
-            Some(index) => {
-                if index > 0 {
-                    lfu[..=index].rotate_right(1);
-                }
-                None
-            }
-            None => {
-                // The position isn't in the cache
-                lfu.rotate_right(1);
-                let to_remove = lfu[0];
-                lfu[0] = chunk_pos;
-                self.level.mark_chunk_as_newly_watched(chunk_pos).await;
-
-                if to_remove == Vector2::<i32>::default() {
-                    // This is our dummy value and spawn chunks are watched anyway
-                    // TODO: What if we call this on our default?
-                    None
-                } else {
-                    Some(to_remove)
-                }
-            }
-        };
-
-        if let Some(pos) = pos_to_clean {
-            self.level.mark_chunk_as_not_watched(pos).await;
-            if !self.level.is_chunk_watched(&pos) {
-                log::trace!(
-                    "Chunk {:?} evicted from single chunk cache... cleaning",
-                    chunk_pos
-                );
-                self.level.clean_chunk(&pos).await;
-            }
-        }
-
         receiver
             .recv()
             .await
             .expect("Channel closed for unknown reason")
     }
 
-    /// If server is sent, it will do a block update
+    /// If `server` is sent, it will do a block update.
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -1201,14 +1154,14 @@ impl World {
         let chunk = self.receive_chunk(chunk).await.0;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
-        let Some(id) = chunk.subchunks.get_block(relative) else {
+        let Some(id) = chunk.blocks.get_block(relative) else {
             return Err(GetBlockError::BlockOutOfWorldBounds);
         };
 
         Ok(id)
     }
 
-    /// Gets the Block from the Block Registry, Returns None if the Block has not been found
+    /// Gets a `Block` from the block registry. Returns `None` if the block was not found.
     pub async fn get_block(
         &self,
         position: &BlockPos,
@@ -1217,7 +1170,7 @@ impl World {
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    /// Gets the Block state from the Block Registry, Returns None if the Block state has not been found
+    /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
@@ -1226,7 +1179,7 @@ impl World {
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
+    /// Gets a `Block` + `BlockState` from the block registry. Returns `None` if the block state has not been found.
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
@@ -1235,7 +1188,7 @@ impl World {
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    /// Updates neighboring blocks of a block
+    /// Updates neighboring blocks of a block.
     pub async fn update_neighbors(
         &self,
         server: &Server,

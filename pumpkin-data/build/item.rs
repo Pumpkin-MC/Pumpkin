@@ -97,13 +97,13 @@ impl ToTokens for ItemComponents {
                 let rules_code = tool.rules.iter().map(|rule| {
                     let mut block_array = Vec::new();
 
-                    // TODO: According to the wiki, this can be a string or a list,
+                    // TODO: According to the wiki, this can be a string or a list.
                     // I dont think there'll be any issues with always using a list, but we can
-                    // probably save bandwidth doing single strings
+                    // probably save bandwidth by doing single strings.
                     for reg in rule.blocks.get_values() {
                         let tag_string = reg.serialize();
-                        // The client knows what tags are, just send them the tag instead of all the
-                        // blocks that is a part of the tag.
+                        // The client knows what tags are; just send them the tag instead of all the
+                        // blocks that are a part of the tag.
                         block_array.extend(quote! { #tag_string });
                     }
 
@@ -317,7 +317,7 @@ pub(crate) fn build() -> TokenStream {
                 serde_json::from_str(self.components.item_name.unwrap()).expect("Could not parse item name.")
             }
 
-            #[doc = "Try to parse a Item from a resource location string"]
+            #[doc = "Try to parse an item from a resource location string."]
             pub fn from_registry_key(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
@@ -325,7 +325,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = "Try to parse a Item from a raw id"]
+            #[doc = "Try to parse an item from a raw id."]
             pub const fn from_id(id: u16) -> Option<Self> {
                 match id {
                     #type_from_raw_id_arms

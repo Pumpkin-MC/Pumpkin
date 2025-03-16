@@ -68,14 +68,14 @@ pub async fn update_position(player: &Arc<Player>) {
         );
 
         // Make sure the watched section and the chunk watcher updates are async atomic. We want to
-        // ensure what we unload when the player disconnects is correct
+        // ensure what we unload when the player disconnects is correct.
         let level = &entity.world.read().await.level;
         level.mark_chunks_as_newly_watched(&loading_chunks).await;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
         {
             // After marking the chunks as watched, remove chunks that we are already in the process
-            // of sending
+            // of sending.
             let chunk_manager = player.chunk_manager.lock().await;
             loading_chunks.retain(|pos| !chunk_manager.is_chunk_pending(pos));
         };
@@ -85,7 +85,7 @@ pub async fn update_position(player: &Arc<Player>) {
         if !chunks_to_clean.is_empty() {
             level.clean_chunks(&chunks_to_clean).await;
 
-            // This can take a little if we are sending a bunch of packets, queue it up :p
+            // This can take a little if we are sending a bunch of packets; queue it up :p
             let client = player.client.clone();
             tokio::spawn(async move {
                 for chunk in unloading_chunks {

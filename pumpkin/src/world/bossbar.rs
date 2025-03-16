@@ -57,10 +57,10 @@ impl Bossbar {
     }
 }
 
-/// Extension of the player to send the manage the bossbar
+/// Extra methods for [`Player`] to send and manage the bossbar.
 impl Player {
     pub async fn send_bossbar(&self, bossbar: &Bossbar) {
-        // Maybe this section could be implemented. feel free to change
+        // Maybe this section could be implemented. Feel free to change it.
         let bossbar = bossbar.clone();
         let boss_action = BosseventAction::Add {
             title: bossbar.title,

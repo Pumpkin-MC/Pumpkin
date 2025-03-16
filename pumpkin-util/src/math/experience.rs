@@ -19,7 +19,7 @@ impl ToTokens for Experience {
     }
 }
 
-/// Get the number of points in a level
+/// Get the number of points in a level.
 pub fn points_in_level(level: i32) -> i32 {
     match level {
         0..=15 => 2 * level + 7,
@@ -28,7 +28,7 @@ pub fn points_in_level(level: i32) -> i32 {
     }
 }
 
-/// Calculate the total number of points to reach a level
+/// Calculate the total number of points to reach a level.
 pub fn points_to_level(level: i32) -> i32 {
     match level {
         0..=15 => (level * level + 6 * level) / 2,
@@ -37,7 +37,7 @@ pub fn points_to_level(level: i32) -> i32 {
     }
 }
 
-/// Calculate level and points from total points
+/// Calculate level and points from total points.
 pub fn total_to_level_and_points(total_points: i32) -> (i32, i32) {
     let level = match total_points {
         0..=352 => ((total_points as f64 + 9.0).sqrt() - 3.0) as i32,
@@ -51,7 +51,7 @@ pub fn total_to_level_and_points(total_points: i32) -> (i32, i32) {
     (level, points_into_level)
 }
 
-/// Calculate progress (0.0 to 1.0) from points within a level
+/// Calculate progress (0.0 to 1.0) from points within a level.
 pub fn progress_in_level(points: i32, level: i32) -> f32 {
     let max_points = points_in_level(level);
 

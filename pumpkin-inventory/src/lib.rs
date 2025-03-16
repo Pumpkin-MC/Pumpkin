@@ -16,7 +16,7 @@ pub use open_container::*;
 
 pub struct ContainerStruct<const SLOTS: usize>([Option<ItemStack>; SLOTS]);
 
-// Container needs Sync + Send to be able to be in async Server
+// `Container` needs to be `Sync + Send` to be able to be in the async server.
 pub trait Container: Sync + Send {
     fn window_type(&self) -> &'static WindowType;
 
@@ -97,25 +97,25 @@ pub struct EmptyContainer;
 impl Container for EmptyContainer {
     fn window_type(&self) -> &'static WindowType {
         unreachable!(
-            "you should never be able to get here because this type is always wrapped in an option"
+            "You should never be able to get here because this type is always wrapped in an `Option`."
         );
     }
 
     fn window_name(&self) -> &'static str {
         unreachable!(
-            "you should never be able to get here because this type is always wrapped in an option"
+            "You should never be able to get here because this type is always wrapped in an `Option`."
         );
     }
 
     fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
         unreachable!(
-            "you should never be able to get here because this type is always wrapped in an option"
+            "You should never be able to get here because this type is always wrapped in an `Option`."
         );
     }
 
     fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
         unreachable!(
-            "you should never be able to get here because this type is always wrapped in an option"
+            "You should never be able to get here because this type is always wrapped in an `Option`."
         );
     }
 }
@@ -227,7 +227,7 @@ impl<'a, 'b> OptionallyCombinedContainer<'a, 'b> {
             container,
         }
     }
-    /// Returns None if the slot is in the players inventory, Returns Some(Option<&ItemStack>) if it's inside of the container
+    /// Returns `None` if the slot is in the player's inventory. Returns `Some(Option<&ItemStack>)` if it's inside of the container.
     pub fn get_slot_excluding_inventory(&self, slot: usize) -> Option<Option<&ItemStack>> {
         self.container.as_ref()?.all_slots_ref().get(slot).copied()
     }
@@ -290,7 +290,7 @@ impl<'a> Container for OptionallyCombinedContainer<'a, 'a> {
         match &self.container {
             Some(container) => {
                 // We don't have to worry about length due to inventory crafting slots being inaccessible
-                // while inside container interfaces
+                // while inside container interfaces.
                 container.slot_in_crafting_input_slots(slot)
             }
             None => self.inventory.slot_in_crafting_input_slots(slot),

@@ -2,14 +2,15 @@ use std::str;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct ChunkConfig {
     pub compression: ChunkCompression,
     pub format: ChunkFormat,
+    pub write_in_place: bool,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct ChunkCompression {
     pub algorithm: Compression,
     pub level: u32,

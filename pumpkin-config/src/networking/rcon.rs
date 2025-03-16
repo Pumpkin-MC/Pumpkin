@@ -4,16 +4,16 @@ use std::net::{Ipv4Addr, SocketAddr};
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct RCONConfig {
-    /// Is RCON Enabled?
+    /// Whether RCON is enabled.
     pub enabled: bool,
     /// The network address and port where the RCON server will listen for connections.
     pub address: SocketAddr,
     /// The password required for RCON authentication.
     pub password: String,
     /// The maximum number of concurrent RCON connections allowed.
-    /// If 0 there is no limit
+    /// If 0, there is no limit.
     pub max_connections: u32,
-    /// RCON Logging
+    /// RCON logging.
     pub logging: RCONLogging,
 }
 

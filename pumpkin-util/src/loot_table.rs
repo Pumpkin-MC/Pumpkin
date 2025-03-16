@@ -69,8 +69,8 @@ pub struct LootPoolEntry {
 pub enum LootTableType {
     /// Nothing will be dropped
     Empty,
-    /// A Block will be dropped
+    /// A block will be dropped
     Block,
-    /// A Item will be dropped
+    /// An item will be dropped
     Chest,
 }

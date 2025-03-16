@@ -6,7 +6,9 @@ use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter, Log};
 use net::PacketHandlerState;
 use plugin::PluginManager;
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use plugin::server::server_command::ServerCommandEvent;
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
 use std::collections::HashMap;
@@ -42,7 +44,7 @@ pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
-/// properly flush logs to output while they happen instead of batched
+/// properly flush logs to the output while they happen instead of batched
 pub struct ReadlineLogWrapper {
     internal: Box<dyn Log>,
     readline: std::sync::Mutex<Option<Readline>>,
@@ -72,7 +74,7 @@ impl ReadlineLogWrapper {
     }
 }
 
-// writing to stdout is expensive anyway, so I dont think having a mutex here is a big deal.
+// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
 impl Log for ReadlineLogWrapper {
     fn log(&self, record: &log::Record) {
         self.internal.log(record);
@@ -98,10 +100,10 @@ impl Log for ReadlineLogWrapper {
 }
 
 pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
-    if ADVANCED_CONFIG.logging.enabled {
+    if advanced_config().logging.enabled {
         let mut config = simplelog::ConfigBuilder::new();
 
-        if ADVANCED_CONFIG.logging.timestamp {
+        if advanced_config().logging.timestamp {
             config.set_time_format_custom(time::macros::format_description!(
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
@@ -110,16 +112,16 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_time_level(LevelFilter::Off);
         }
 
-        if !ADVANCED_CONFIG.logging.color {
+        if !advanced_config().logging.color {
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
         } else {
-            // We are technically logging to a file like object
+            // We are technically logging to a file-like object.
             config.set_write_log_enable_colors(true);
         }
 
-        if !ADVANCED_CONFIG.logging.threads {
+        if !advanced_config().logging.threads {
             config.set_thread_level(LevelFilter::Off);
         } else {
             config.set_thread_level(LevelFilter::Info);
@@ -132,7 +134,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if ADVANCED_CONFIG.commands.use_console {
+        if advanced_config().commands.use_console {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
@@ -140,7 +142,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
                 Err(e) => {
                     log::warn!(
-                        "Failed to initialize console input ({}), falling back to simple logger",
+                        "Failed to initialize console input ({}); falling back to simple logger",
                         e
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
@@ -185,24 +187,20 @@ impl PumpkinServer {
     pub async fn new() -> Self {
         let server = Arc::new(Server::new());
 
-        // Spawn chunks are never unloaded
-        for world in server.worlds.read().await.iter() {
-            world
-                .level
-                .mark_chunks_as_newly_watched(&Server::spawn_chunks())
-                .await;
+        for world in &*server.worlds.read().await {
+            world.level.read_spawn_chunks(&Server::spawn_chunks()).await;
         }
 
         // Setup the TCP server socket.
         let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.server_address)
             .await
-            .expect("Failed to start TcpListener");
+            .expect("Failed to start `TcpListener`");
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
         let addr = listener
             .local_addr()
-            .expect("Unable to get the address of server!");
+            .expect("Unable to get the address of the server!");
 
-        let rcon = ADVANCED_CONFIG.networking.rcon.clone();
+        let rcon = advanced_config().networking.rcon.clone();
 
         let mut ticker = Ticker::new(BASIC_CONFIG.tps);
 
@@ -221,13 +219,13 @@ impl PumpkinServer {
             });
         }
 
-        if ADVANCED_CONFIG.networking.query.enabled {
-            log::info!("Query protocol enabled. Starting...");
+        if advanced_config().networking.query.enabled {
+            log::info!("Query protocol is enabled. Starting...");
             tokio::spawn(query::start_query_handler(server.clone(), addr));
         }
 
-        if ADVANCED_CONFIG.networking.lan_broadcast.enabled {
-            log::info!("LAN broadcast enabled. Starting...");
+        if advanced_config().networking.lan_broadcast.enabled {
+            log::info!("LAN broadcast is enabled. Starting...");
             tokio::spawn(lan_broadcast::start_lan_broadcast(addr));
         }
 
@@ -277,7 +275,7 @@ impl PumpkinServer {
             };
 
             if let Err(e) = connection.set_nodelay(true) {
-                log::warn!("failed to set TCP_NODELAY {e}");
+                log::warn!("Failed to set TCP_NODELAY {e}");
             }
 
             let id = master_client_id;
@@ -304,8 +302,8 @@ impl PumpkinServer {
             tokio::spawn(async move {
                 let mut connection_writer = connection_writer;
 
-                // We clone ownership of `tx` into here thru the client so this will never drop
-                // since there is always a tx in memory. We need to explicitly tell the recv to stop
+                // We clone ownership of `tx` into here through the client, so this will never drop
+                // since there is always a `tx` in memory. We need to explicitly tell the `recv` to stop.
                 while let Some(notif) = rx.recv().await {
                     match notif {
                         PacketHandlerState::PacketReady => {
@@ -327,7 +325,7 @@ impl PumpkinServer {
 
             let server = self.server.clone();
             let tasks_clone = tasks.clone();
-            // We need to await these to verify all cleanup code is complete
+            // We need to `await` these to verify all cleanup code is complete.
             let handle = tokio::spawn(async move {
                 while !client.closed.load(std::sync::atomic::Ordering::Relaxed)
                     && !client
@@ -343,28 +341,26 @@ impl PumpkinServer {
                     .make_player
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
-                    let (player, world) = server.add_player(client.clone()).await;
-                    world
-                        .spawn_player(&BASIC_CONFIG, player.clone(), &server)
-                        .await;
+                    if let Some((player, world)) = server.add_player(client.clone()).await {
+                        world
+                            .spawn_player(&BASIC_CONFIG, player.clone(), &server)
+                            .await;
 
-                    // poll Player
-                    while !player
-                        .client
-                        .closed
-                        .load(core::sync::atomic::Ordering::Relaxed)
-                    {
-                        let open = poll(&player.client, &mut connection_reader).await;
-                        if open {
-                            player.process_packets(&server).await;
-                        };
+                        // Poll the player
+                        while !player
+                            .client
+                            .closed
+                            .load(core::sync::atomic::Ordering::Relaxed)
+                        {
+                            let open = poll(&player.client, &mut connection_reader).await;
+                            if open {
+                                player.process_packets(&server).await;
+                            };
+                        }
                     }
-                    log::debug!("Cleaning up player for id {}", id);
-                    player.remove().await;
-                    server.remove_player().await;
                 }
 
-                // Also handle case of client connects but does not become a player (like a server
+                // Also handle the case where the client connects but does not become a player (like a server
                 // ping)
                 client.close().await;
                 tasks_clone.lock().await.remove(&id);
@@ -406,7 +402,7 @@ impl PumpkinServer {
 
         log::info!("Completed save!");
 
-        // Explicitly drop the line reader to return the terminal to the original state
+        // Explicitly drop the line reader to return the terminal to the original state.
         if let Some((wrapper, _)) = &*LOGGER_IMPL {
             if let Some(rl) = wrapper.take_readline() {
                 let _ = rl;
@@ -416,7 +412,7 @@ impl PumpkinServer {
 }
 
 fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
-    // This needs to be async or it will hog a thread
+    // This needs to be async, or it will hog a thread.
     tokio::spawn(async move {
         let mut rl = rl;
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
@@ -432,12 +428,18 @@ fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
 
             match result {
                 Ok(ReadlineEvent::Line(line)) => {
-                    let dispatcher = server.command_dispatcher.read().await;
+                    send_cancellable! {{
+                        ServerCommandEvent::new(line.clone());
 
-                    dispatcher
-                        .handle_command(&mut command::CommandSender::Console, &server, &line)
-                        .await;
-                    rl.add_history_entry(line).unwrap();
+                        'after: {
+                            let dispatcher = server.command_dispatcher.read().await;
+
+                            dispatcher
+                                .handle_command(&mut command::CommandSender::Console, &server, &line)
+                                .await;
+                            rl.add_history_entry(line).unwrap();
+                        }
+                    }}
                 }
                 Ok(ReadlineEvent::Interrupted) => {
                     stop_server();
@@ -461,7 +463,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) -> JoinHandle<()> {
 async fn poll(client: &Client, connection_reader: &mut OwnedReadHalf) -> bool {
     loop {
         if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
-            // If we manually close (like a kick) we dont want to keep reading bytes
+            // If we manually close (like a kick), we don't want to keep reading bytes.
             return false;
         }
 

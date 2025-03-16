@@ -40,19 +40,19 @@ pub const LONG_ARRAY_ID: u8 = 0x0C;
 pub enum Error {
     #[error("The root tag of the NBT file is not a compound tag. Received tag id: {0}")]
     NoRootCompound(u8),
-    #[error("Encountered an unknown NBT tag id {0}.")]
+    #[error("Encountered an unknown NBT tag id: {0}.")]
     UnknownTagId(u8),
     #[error("Failed to Cesu 8 Decode")]
     Cesu8DecodingError,
     #[error("Serde error: {0}")]
     SerdeError(String),
-    #[error("NBT doesn't support this type {0}")]
+    #[error("NBT doesn't support this type: {0}")]
     UnsupportedType(String),
-    #[error("NBT reading was cut short {0}")]
+    #[error("NBT reading was cut short: {0}")]
     Incomplete(io::Error),
-    #[error("Negative list length {0}")]
+    #[error("Negative list length: {0}")]
     NegativeLength(i32),
-    #[error("Length too large {0}")]
+    #[error("Length too large: {0}")]
     LargeLength(usize),
 }
 
@@ -98,7 +98,7 @@ impl Nbt {
         })
     }
 
-    /// Reads NBT tag, that doesn't contain the name of root compound.
+    /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
     pub fn read_unnamed<R>(reader: &mut ReadAdaptor<R>) -> Result<Nbt, Error>
     where
         R: Read,
@@ -132,7 +132,7 @@ impl Nbt {
         Ok(())
     }
 
-    /// Writes NBT tag, without name of root compound.
+    /// Writes an NBT tag without a root `Compound` name.
     pub fn write_unnamed(&self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);

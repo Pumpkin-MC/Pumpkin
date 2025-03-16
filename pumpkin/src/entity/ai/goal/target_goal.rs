@@ -38,7 +38,7 @@ impl Goal for TargetGoal {
             .await
             .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
             .await;
-        // we can't use filter, because of async clousrers
+        // we can't use filter because of async closures
         if let Some(player) = target.as_ref() {
             if player.abilities.lock().await.invulnerable {
                 *target = None;
@@ -48,7 +48,7 @@ impl Goal for TargetGoal {
         target.is_some()
     }
     async fn should_continue(&self, mob: &MobEntity) -> bool {
-        // if an entity is found, lets check so its in range
+        // If an entity is found, let's check if it's in range
         if let Some(target) = self.target.lock().await.as_ref() {
             let mob_pos = mob.living_entity.entity.pos.load();
             let target_pos = target.living_entity.entity.pos.load();

@@ -9,7 +9,7 @@ pub struct CGameEvent {
     value: f32,
 }
 
-/// Somewhere you need to implement all the random stuff right?
+/// You need to implement all the random stuff somewhere, right?
 impl CGameEvent {
     pub fn new(event: GameEvent, value: f32) -> Self {
         Self {

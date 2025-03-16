@@ -47,7 +47,7 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         pub static GLOBAL_RUNTIME: std::sync::LazyLock<std::sync::Arc<tokio::runtime::Runtime>> =
             std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap()));
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub static METADATA: pumpkin::plugin::PluginMetadata = pumpkin::plugin::PluginMetadata {
             name: env!("CARGO_PKG_NAME"),
             version: env!("CARGO_PKG_VERSION"),
@@ -62,7 +62,7 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#methods)*
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub fn plugin() -> Box<dyn pumpkin::plugin::Plugin> {
             Box::new(#struct_ident::new())
         }

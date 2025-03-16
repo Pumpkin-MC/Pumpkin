@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
     client::{
@@ -27,47 +27,47 @@ use crate::{
 static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
     let mut links: Vec<Link> = Vec::new();
 
-    let bug_report = &ADVANCED_CONFIG.server_links.bug_report;
+    let bug_report = &advanced_config().server_links.bug_report;
     if !bug_report.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::BugReport), bug_report));
     }
 
-    let support = &ADVANCED_CONFIG.server_links.support;
+    let support = &advanced_config().server_links.support;
     if !support.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::Support), support));
     }
 
-    let status = &ADVANCED_CONFIG.server_links.status;
+    let status = &advanced_config().server_links.status;
     if !status.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::Status), status));
     }
 
-    let feedback = &ADVANCED_CONFIG.server_links.feedback;
+    let feedback = &advanced_config().server_links.feedback;
     if !feedback.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::Feedback), feedback));
     }
 
-    let community = &ADVANCED_CONFIG.server_links.community;
+    let community = &advanced_config().server_links.community;
     if !community.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::Community), community));
     }
 
-    let website = &ADVANCED_CONFIG.server_links.website;
+    let website = &advanced_config().server_links.website;
     if !website.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::Website), website));
     }
 
-    let forums = &ADVANCED_CONFIG.server_links.forums;
+    let forums = &advanced_config().server_links.forums;
     if !forums.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::Forums), forums));
     }
 
-    let news = &ADVANCED_CONFIG.server_links.news;
+    let news = &advanced_config().server_links.news;
     if !news.is_empty() {
         links.push(Link::new(Label::BuiltIn(LinkType::News), news));
     }
 
-    let announcements = &ADVANCED_CONFIG.server_links.announcements;
+    let announcements = &advanced_config().server_links.announcements;
     if !announcements.is_empty() {
         links.push(Link::new(
             Label::BuiltIn(LinkType::Announcements),
@@ -75,7 +75,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
         ));
     }
 
-    for (key, value) in &ADVANCED_CONFIG.server_links.custom {
+    for (key, value) in &advanced_config().server_links.custom {
         links.push(Link::new(
             Label::TextComponent(TextComponent::text(key).into()),
             value,
@@ -88,9 +88,9 @@ impl Client {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
         log::debug!("login start");
 
-        // Don't allow new logons when server is full.
-        // If max players is set to zero, then there is no max player count enforced.
-        // TODO: If client is an operator or otherwise suitable elevated permissions, allow client to bypass this requirement.
+        // Don't allow new logons when the server is full.
+        // If `max_players` is set to zero, then there is no max player count enforced.
+        // TODO: If client is an operator or has otherwise suitable elevated permissions, allow the client to bypass this requirement.
         let max_players = BASIC_CONFIG.max_players;
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
             self.kick(TextComponent::translate(
@@ -106,10 +106,10 @@ impl Client {
                 .await;
             return;
         }
-        // default game profile, when no online mode
-        // TODO: make offline uuid
+        // Default game profile, when no online mode
+        // TODO: Make offline UUID
         let mut gameprofile = self.gameprofile.lock().await;
-        let proxy = &ADVANCED_CONFIG.networking.proxy;
+        let proxy = &advanced_config().networking.proxy;
         if proxy.enabled {
             if proxy.velocity.enabled {
                 velocity::velocity_login(self).await;
@@ -150,7 +150,7 @@ impl Client {
                 )
                 .await;
             } else {
-                if ADVANCED_CONFIG.networking.packet_compression.enabled {
+                if advanced_config().networking.packet_compression.enabled {
                     self.enable_compression().await;
                 }
                 self.finish_login(&profile).await;
@@ -176,7 +176,7 @@ impl Client {
         let mut gameprofile = self.gameprofile.lock().await;
 
         let Some(profile) = gameprofile.as_mut() else {
-            self.kick(TextComponent::text("No Game profile")).await;
+            self.kick(TextComponent::text("No `GameProfile`")).await;
             return;
         };
 
@@ -239,14 +239,14 @@ impl Client {
             return;
         }
 
-        if ADVANCED_CONFIG.networking.packet_compression.enabled {
+        if advanced_config().networking.packet_compression.enabled {
             self.enable_compression().await;
         }
         self.finish_login(profile).await;
     }
 
     async fn enable_compression(&self) {
-        let compression = ADVANCED_CONFIG.networking.packet_compression.info.clone();
+        let compression = advanced_config().networking.packet_compression.info.clone();
         self.send_packet(&CSetCompression::new(compression.threshold.into()))
             .await;
         self.set_compression(Some(compression)).await;
@@ -268,15 +268,15 @@ impl Client {
             let ip = self.address.lock().await.ip();
             let profile = authentication::authenticate(username, &hash, &ip, auth_client).await?;
 
-            // Check if player should join
+            // Check if the player should join
             if let Some(actions) = &profile.profile_actions {
-                if ADVANCED_CONFIG
+                if advanced_config()
                     .networking
                     .authentication
                     .player_profile
                     .allow_banned_players
                 {
-                    for allowed in &ADVANCED_CONFIG
+                    for allowed in &advanced_config()
                         .networking
                         .authentication
                         .player_profile
@@ -293,11 +293,11 @@ impl Client {
                     return Err(AuthError::Banned);
                 }
             }
-            // validate textures
+            // Validate textures
             for property in &profile.properties {
                 authentication::validate_textures(
                     property,
-                    &ADVANCED_CONFIG.networking.authentication.textures,
+                    &advanced_config().networking.authentication.textures,
                 )
                 .map_err(AuthError::TextureError)?;
             }
@@ -317,7 +317,7 @@ impl Client {
     }
     pub async fn handle_plugin_response(&self, plugin_response: SLoginPluginResponse) {
         log::debug!("Handling plugin");
-        let velocity_config = &ADVANCED_CONFIG.networking.proxy.velocity;
+        let velocity_config = &advanced_config().networking.proxy.velocity;
         if velocity_config.enabled {
             let mut address = self.address.lock().await;
             match velocity::receive_velocity_plugin_response(
@@ -336,11 +336,11 @@ impl Client {
     }
 
     pub async fn handle_login_acknowledged(&self, server: &Server) {
-        log::debug!("Handling login acknowledged");
+        log::debug!("Handling login acknowledgement");
         self.connection_state.store(ConnectionState::Config);
         self.send_packet(&server.get_branding()).await;
 
-        if ADVANCED_CONFIG.server_links.enabled {
+        if advanced_config().server_links.enabled {
             self.send_packet(&CConfigServerLinks::new(
                 &VarInt(LINKS.len() as i32),
                 &LINKS,
@@ -349,14 +349,14 @@ impl Client {
         }
 
         // TODO: Is this the right place to send them?
-        // send tags
+        // Send tags.
         self.send_packet(&CUpdateTags::new(&[
             pumpkin_data::tag::RegistryKey::Block,
             pumpkin_data::tag::RegistryKey::Fluid,
         ]))
         .await;
 
-        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        let resource_config = &advanced_config().resource_pack;
         if resource_config.enabled {
             let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
             let resource_pack = CConfigAddResourcePack::new(
@@ -373,14 +373,14 @@ impl Client {
 
             self.send_packet(&resource_pack).await;
         } else {
-            // This will be invoked by our resource pack handler in the case of the above branch
+            // This will be invoked by our resource pack handler in the case of the above branch.
             self.send_known_packs().await;
         }
         log::debug!("login acknowledged");
     }
 
+    /// Send the known data packs to the client.
     pub async fn send_known_packs(&self) {
-        // known data packs
         self.send_packet(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",

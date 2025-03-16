@@ -33,7 +33,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl EffectType {
-            #[doc = r" Try to parse a Effect Type from a resource location string"]
+            #[doc = r" Try to parse an `EffectType` from a resource location string."]
             pub fn from_name(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name

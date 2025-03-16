@@ -6,7 +6,7 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_protocol::{
     ConnectionState,
     client::config::{CFinishConfig, CRegistryData},
@@ -61,7 +61,7 @@ impl Client {
             .to_string()
             .starts_with("minecraft:brand")
         {
-            log::debug!("got a client brand");
+            log::debug!("Got a client brand");
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
@@ -70,7 +70,7 @@ impl Client {
     }
 
     pub async fn handle_resource_pack_response(&self, packet: SConfigResourcePack) {
-        let resource_config = &ADVANCED_CONFIG.resource_pack;
+        let resource_config = &advanced_config().resource_pack;
         if resource_config.enabled {
             let expected_uuid =
                 uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
@@ -103,7 +103,7 @@ impl Client {
                     }
                     ResourcePackResponseResult::InvalidUrl => {
                         log::warn!(
-                            "Client {} reported that the resource pack url is invalid!",
+                            "Client {} reported that the resource pack URL is invalid!",
                             self.id
                         );
                     }
@@ -157,12 +157,12 @@ impl Client {
         }
 
         // We are done with configuring
-        log::debug!("finished config");
+        log::debug!("Finished config");
         self.send_packet(&CFinishConfig).await;
     }
 
     pub async fn handle_config_acknowledged(&self) {
-        log::debug!("Handling config acknowledge");
+        log::debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
         if let Some(reason) = self.can_not_join().await {

@@ -56,7 +56,7 @@ impl DragHandler {
         container_id: &u64,
         player: i32,
     ) -> Result<(), InventoryError> {
-        // Minecraft client does still send dragging packets when not carrying an item!
+        // The Minecraft client does still send dragging packets when not carrying an item!
         if maybe_carried_item.is_none() {
             return Ok(());
         }
@@ -75,7 +75,7 @@ impl DragHandler {
             return Ok(());
         };
         match drag.drag_type {
-            // This is only valid in Creative GameMode.
+            // This is only valid in the Creative gamemode.
             // Checked in any function that uses this function.
             MouseDragType::Middle => {
                 for slot in &drag.slots {
@@ -109,8 +109,8 @@ impl DragHandler {
                 }
             }
             MouseDragType::Left => {
-                // TODO: Handle dragging a stack with greater amount than item allows as max unstackable
-                // In that specific case, follow MouseDragType::Right behaviours instead!
+                // TODO: Handle dragging a stack with a greater amount than the item allows as max unstackable.
+                // In that specific case, follow `MouseDragType::Right` behaviours instead!
 
                 let changing_slots = drag.possibly_changing_slots(&slots, carried_item.item.id);
                 let amount_of_slots = changing_slots.len();

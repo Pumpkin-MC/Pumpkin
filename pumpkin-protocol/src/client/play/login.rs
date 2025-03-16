@@ -19,7 +19,7 @@ pub struct CLogin<'a> {
     reduced_debug_info: bool,
     enabled_respawn_screen: bool,
     limited_crafting: bool,
-    // Spawn Info
+    // Spawn info
     dimension_type: VarInt,
     dimension_name: Identifier,
     hashed_seed: i64,

@@ -96,14 +96,14 @@ impl<W: Write> Serializer<W> {
     }
 }
 
-// NBT has a different order of things, then most other formats
-// So I use State, to keep what serializer has to do, and some information like field name
+// NBT has a different order of things than most other formats,
+// so I use `State` to keep what the serializer has to do, and some information like the field name.
 #[derive(Clone, Debug, PartialEq)]
 enum State {
-    // In network NBT root name is not present
+    // In network NBT, the root name is not present.
     Root(Option<String>),
     Named(String),
-    // Used by maps, to check if key is String
+    // Used by maps to check if key is a `String`.
     MapKey,
     FirstListElement {
         len: i32,
@@ -131,7 +131,7 @@ impl<W: Write> Serializer<W> {
             State::MapKey => {
                 if tag != STRING_ID {
                     return Err(Error::SerdeError(format!(
-                        "Map key can only be string, not {tag}"
+                        "Map key can only be `String`, not {tag}"
                     )));
                 }
             }
@@ -154,7 +154,7 @@ impl<W: Write> Serializer<W> {
                 } else {
                     if tag != COMPOUND_ID {
                         return Err(Error::SerdeError(format!(
-                            "Invalid state: root is not a compound! ({})",
+                            "Invalid state: root is not a `Compound`! ({})",
                             tag
                         )));
                     }
@@ -361,7 +361,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         if name == NBT_ARRAY_TAG {
             let name = match self.state {
                 State::Named(ref name) => name.clone(),
-                _ => return Err(Error::SerdeError("Invalid Serializer state!".to_string())),
+                _ => return Err(Error::SerdeError("Invalid `Serializer` state!".to_string())),
             };
 
             self.state = State::Array {
@@ -377,7 +377,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         let Some(len) = len else {
             return Err(Error::SerdeError(
-                "Length of the sequence must be known first!".to_string(),
+                "The length of the sequence must be known first!".to_string(),
             ));
         };
         if len > i32::MAX as usize {
@@ -392,7 +392,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
                     NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
                     _ => {
                         return Err(Error::SerdeError(
-                            "Array supports only byte, int, long".to_string(),
+                            "Array supports only `byte`, `int`, and `long`".to_string(),
                         ));
                     }
                 };
@@ -400,7 +400,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
                 self.parse_state(id)?;
                 self.output.write_i32_be(len as i32)?;
 
-                // We can mark anything as an nbt array list, so mark as needed to be checked
+                // We can mark anything as an NBT array list, so mark as needed to be checked.
                 self.expected_list_tag = expected_tag;
                 self.state = State::CheckedListElement;
             }
@@ -408,7 +408,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
                 self.parse_state(LIST_ID)?;
                 self.state = State::FirstListElement { len: len as i32 };
                 if len == 0 {
-                    // If we have no elements, FirstListElement state will never be invoked; so
+                    // If we have no elements, the `FirstListElement` state will never be invoked, so
                     // write the (unknown) list type and length here.
                     self.output.write_u8_be(END_ID)?;
                     self.output.write_i32_be(0)?;

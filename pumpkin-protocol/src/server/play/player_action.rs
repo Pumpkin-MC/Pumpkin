@@ -14,7 +14,7 @@ pub struct SPlayerAction {
 }
 
 pub enum Status {
-    /// Sent when the player starts digging a block. If the block was instamined or the player is in creative mode, the client will not send Status = Finished digging, and will assume the server completed the destruction. To detect this, it is necessary to calculate the block destruction speed server-side.
+    /// Sent when the player starts digging a block. If the block was insta-mined or the player is in creative mode, the client will not send `Status` = `FinishedDigging``, and will assume the server completed the destruction. To detect this, it is necessary to calculate the block destruction speed server-side.
     StartedDigging = 0,
     /// Sent when the player lets go of the Mine Block key (default: left click). Face is always set to -Y.
     CancelledDigging,

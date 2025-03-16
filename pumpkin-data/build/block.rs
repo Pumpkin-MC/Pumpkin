@@ -192,8 +192,8 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
-                ///NOTE: `to_index` and `from_index` depend on Java's
-                ///`net.minecraft.state.StateManager` logic. If these stop working, look there.
+                // NOTE: `to_index` and `from_index` depend on Java's
+                // `net.minecraft.state.StateManager` logic. If these stop working, look there.
 
                 #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
@@ -238,7 +238,7 @@ impl ToTokens for BlockPropertyStruct {
                         let index = state_id - block.states[0].id;
                         Self::from_index(index)
                     } else {
-                        panic!("State id {} does not exist for {}", state_id, &block.name);
+                        panic!("State ID {} does not exist for {}", state_id, &block.name);
                     }
                 }
 
@@ -391,7 +391,7 @@ impl ToTokens for BlockStateRef {
     }
 }
 
-/// These are required to be defined twice, cause serde can't deseraliz into static context for obvious reasons
+/// These are required to be defined twice because serde can't deseralize into static context for obvious reasons.
 #[derive(Deserialize, Clone, Debug)]
 pub struct LootTableStruct {
     r#type: LootTableTypeStruct,
@@ -651,13 +651,13 @@ impl ToTokens for LootPoolEntryStruct {
 #[serde(rename = "snake_case")]
 pub enum LootTableTypeStruct {
     #[serde(rename = "minecraft:empty")]
-    /// Nothing will be dropped
+    /// Nothing will be dropped.
     Empty,
     #[serde(rename = "minecraft:block")]
-    /// A Block will be dropped
+    /// A block will be dropped.
     Block,
     #[serde(rename = "minecraft:chest")]
-    /// A Item will be dropped
+    /// An item will be dropped.
     Chest,
 }
 
@@ -842,11 +842,11 @@ pub(crate) fn build() -> TokenStream {
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
 
-    // Collect unique block states to create partial block states to save memory
+    // Collect unique block states to create partial block states to save memory.
     let mut unique_states = Vec::new();
     for block in blocks_assets.blocks.clone() {
         for state in block.states.clone() {
-            // Check if this state is already in unique_states by comparing all fields except id
+            // Check if this state is already in `unique_states` by comparing all fields except `id`.
             let already_exists = unique_states.iter().any(|s: &BlockState| {
                 s.air == state.air
                     && s.luminance == state.luminance
@@ -865,13 +865,13 @@ pub(crate) fn build() -> TokenStream {
         }
     }
 
-    // Used to create property enums
+    // Used to create property `enum`s.
     let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
-    // Property implementation for a block
+    // Property implementation for a block.
     let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
-    // Mapping of a collection of property hashes -> blocks that have these properties
+    // Mapping of a collection of property hashes -> blocks that have these properties.
     let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
-    // Validator that we have no enum collisions
+    // Validator that we have no `enum` collisions.
     let mut enum_to_values: HashMap<String, Vec<String>> = HashMap::new();
     let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
     for block in blocks_assets.blocks.clone() {
@@ -892,7 +892,7 @@ pub(crate) fn build() -> TokenStream {
                 .states
                 .iter()
                 .map(|state| {
-                    // Find the index in unique_states by comparing all fields except id
+                    // Find the index in `unique_states` by comparing all fields except `id`.
                     let state_idx = unique_states
                         .iter()
                         .position(|s| {
@@ -928,7 +928,7 @@ pub(crate) fn build() -> TokenStream {
             property_collection.insert(generated_property.hash_key);
             let property = generated_property.to_property();
 
-            // Get mapped property enum name
+            // Get mapped property `enum` name
             let renamed_property = property.enum_name.to_upper_camel_case();
 
             let expected_values = enum_to_values
@@ -947,7 +947,7 @@ pub(crate) fn build() -> TokenStream {
                 property_enum: renamed_property.clone(),
             });
 
-            // If this property doesnt have an enum yet, make one
+            // If this property doesnt have an `enum` yet, make one.
             let _ = property_enums
                 .entry(renamed_property.clone())
                 .or_insert_with(|| PropertyStruct {
@@ -956,9 +956,9 @@ pub(crate) fn build() -> TokenStream {
                 });
         }
 
-        // The minecraft java state manager deterministically produces a index given a set of properties. We must use
+        // The Minecraft Java state manager deterministically produces an index given a set of properties. We must use
         // the original property names here when checking for unique combinations of properties, and
-        // sort them to make a deterministic hash
+        // sort them to make a deterministic hash.
 
         if !property_collection.is_empty() {
             let mut property_collection = Vec::from_iter(property_collection);
@@ -995,7 +995,7 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    // Generate collision shapes array
+    // Generate the collision shapes array.
     let shapes = blocks_assets
         .shapes
         .iter()
@@ -1006,13 +1006,13 @@ pub(crate) fn build() -> TokenStream {
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
 
-    // Generate block entity types array
+    // Generate the block entity types array.
     let block_entity_types = blocks_assets
         .block_entity_types
         .iter()
         .map(|entity_type| LitStr::new(entity_type, Span::call_site()));
 
-    // Generate constants and match arms for each block
+    // Generate constants and `match` arms for each block.
     for (name, block) in optimized_blocks {
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
         let block_tokens = block.to_token_stream();
@@ -1141,22 +1141,22 @@ pub(crate) fn build() -> TokenStream {
 
 
         pub trait BlockProperties where Self: 'static {
-            // Convert properties to an index (0 to N-1)
+            // Convert properties to an index (`0` to `N-1`).
             fn to_index(&self) -> u16;
-            // Convert an index back to properties
+            // Convert an index back to properties.
             fn from_index(index: u16) -> Self where Self: Sized;
 
-            // Convert properties to a state id
+            // Convert properties to a state id.
             fn to_state_id(&self, block: &Block) -> u16;
-            // Convert a state id back to properties
+            // Convert a state id back to properties.
             fn from_state_id(state_id: u16, block: &Block) -> Self where Self: Sized;
-            // Get the default properties
+            // Get the default properties.
             fn default(block: &Block) -> Self where Self: Sized;
 
-            // Convert properties to a vec of (name, value)
+            // Convert properties to a `Vec` of `(name, value)`
             fn to_props(&self) -> Vec<(String, String)>;
 
-            // Convert properties to a block state, add them onto the default state
+            // Convert properties to a block state, and add them onto the default state.
             fn from_props(props: Vec<(String, String)>, block: &Block) -> Self where Self: Sized;
         }
 
@@ -1187,7 +1187,7 @@ pub(crate) fn build() -> TokenStream {
         impl Block {
             #constants
 
-            #[doc = r" Try to parse a Block from a resource location string"]
+            #[doc = r" Try to parse a block from a resource location string."]
             pub fn from_registry_key(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
@@ -1195,7 +1195,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Try to parse a Block from a raw id"]
+            #[doc = r" Try to parse a block from a raw id."]
             pub const fn from_id(id: u16) -> Option<Self> {
                 match id {
                     #type_from_raw_id_arms
@@ -1203,7 +1203,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Try to parse a Block from a state id"]
+            #[doc = r" Try to parse a block from a state id."]
             pub const fn from_state_id(id: u16) -> Option<Self> {
                 match id {
                     #block_from_state_id
@@ -1211,7 +1211,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Try to parse a Block from an item id"]
+            #[doc = r" Try to parse a block from an item id."]
             pub const fn from_item_id(id: u16) -> Option<Self> {
                 #[allow(unreachable_patterns)]
                 match id {
@@ -1220,7 +1220,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Get the properties of the block"]
+            #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
                 match self.name {
                     #block_properties_from_state_and_name
@@ -1228,7 +1228,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Get the properties of the block"]
+            #[doc = r" Get the properties of the block."]
             pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn BlockProperties>> {
                 match self.name {
                     #block_properties_from_props_and_name

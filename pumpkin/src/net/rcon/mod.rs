@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
-use pumpkin_config::{ADVANCED_CONFIG, RCONConfig};
+use pumpkin_config::{RCONConfig, advanced_config};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -58,15 +58,15 @@ impl RCONClient {
         }
     }
 
-    /// Returns if client is closed or not
+    /// Returns whether the client is closed or not.
     pub async fn handle(&mut self, server: &Arc<Server>, password: &str) -> bool {
         if !self.closed {
             match self.read_bytes().await {
-                // Stream closed, so we can't reply, so we just close everything.
+                // The stream is closed, so we can't reply, so we just close everything.
                 Ok(true) => return true,
                 Ok(false) => {}
                 Err(e) => {
-                    log::error!("could not read packet: {e}");
+                    log::error!("Could not read packet: {e}");
                     return true;
                 }
             }
@@ -83,7 +83,7 @@ impl RCONClient {
         let Some(packet) = self.receive_packet().await? else {
             return Ok(());
         };
-        let config = &ADVANCED_CONFIG.networking.rcon;
+        let config = &advanced_config().networking.rcon;
         match packet.get_type() {
             ServerboundPacket::Auth => {
                 if packet.get_body() == password {
@@ -95,7 +95,7 @@ impl RCONClient {
                     self.logged_in = true;
                 } else {
                     if config.logging.wrong_password {
-                        log::info!("RCON ({}): Client has tried wrong password", self.address);
+                        log::info!("RCON ({}): Client tried the wrong password", self.address);
                     }
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
                     self.closed = true;

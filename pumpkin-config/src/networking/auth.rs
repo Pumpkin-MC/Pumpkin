@@ -35,9 +35,9 @@ impl Default for AuthenticationConfig {
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct PlayerProfileConfig {
-    /// Allow players flagged by Mojang (banned, forced name change).
+    /// Allow players flagged by Mojang (e.g. banned, forced name change).
     pub allow_banned_players: bool,
-    /// Depends on the value above
+    /// Depends on [`PlayerProfileConfig::allow_banned_players`].
     pub allowed_actions: Vec<ProfileAction>,
 }
 

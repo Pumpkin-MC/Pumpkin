@@ -1,4 +1,4 @@
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 use tokio::net::UdpSocket;
@@ -10,7 +10,7 @@ const BROADCAST_ADDRESS: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(224, 0, 2, 60)), 4445);
 
 pub async fn start_lan_broadcast(bound_addr: SocketAddr) {
-    let port = ADVANCED_CONFIG.networking.lan_broadcast.port.unwrap_or(0);
+    let port = advanced_config().networking.lan_broadcast.port.unwrap_or(0);
 
     let socket = UdpSocket::bind(format!("0.0.0.0:{port}"))
         .await
@@ -21,7 +21,7 @@ pub async fn start_lan_broadcast(bound_addr: SocketAddr) {
     let mut interval = time::interval(Duration::from_millis(1500));
 
     let motd: String;
-    let advanced_motd = &ADVANCED_CONFIG
+    let advanced_motd = &advanced_config()
         .networking
         .lan_broadcast
         .motd

@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
@@ -27,7 +27,7 @@ use super::{Entity, EntityId, NBTStorage, effect::Effect};
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
-    /// Previously last known position of the entity
+    /// The last known position of the entity.
     pub last_pos: AtomicCell<Vector3<f64>>,
     /// Tracks the remaining time until the entity can regenerate health.
     pub time_until_regen: AtomicI32,
@@ -36,7 +36,7 @@ pub struct LivingEntity {
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
     pub death_time: AtomicU8,
-    /// The distance the entity has been falling
+    /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<EffectType, Effect>>,
 }
@@ -274,7 +274,7 @@ impl EntityBase for LivingEntity {
         if !self.check_damage(amount) {
             return false;
         }
-        let config = &ADVANCED_CONFIG.pvp;
+        let config = &advanced_config().pvp;
 
         if !self
             .damage_with_context(amount, damage_type, None, None, None)

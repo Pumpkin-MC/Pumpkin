@@ -7,7 +7,7 @@ use pumpkin_world::{
     NOISE_ROUTER_ASTS, bench_create_and_populate_noise, chunk::ChunkData, global_path,
     level::Level,
 };
-use tokio::{runtime::Runtime, sync::RwLock, task::JoinSet};
+use tokio::{runtime::Runtime, sync::RwLock};
 
 fn bench_populate_noise(c: &mut Criterion) {
     let seed = 0;
@@ -33,6 +33,8 @@ async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
         let _ = x;
     }
 }
+
+/*
 async fn test_reads_parallel(level: &Arc<Level>, positions: Vec<Vector2<i32>>, threads: usize) {
     let mut tasks = JoinSet::new();
 
@@ -49,11 +51,13 @@ async fn test_reads_parallel(level: &Arc<Level>, positions: Vec<Vector2<i32>>, t
 
     let _ = tasks.join_all().await;
 }
+*/
 
 async fn test_writes(level: &Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
     level.write_chunks(chunks).await;
 }
 
+/*
 async fn test_writes_parallel(
     level: &Arc<Level>,
     chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>,
@@ -74,13 +78,14 @@ async fn test_writes_parallel(
 
     let _ = tasks.join_all().await;
 }
+*/
 
 // -16..16 == 32 chunks, 32*32 == 1024 chunks
 const MIN_CHUNK: i32 = -16;
 const MAX_CHUNK: i32 = 16;
 
-/// How many chunks to use on parallel tests
-const CHUNKS_ON_PARALLEL: usize = 32;
+// How many chunks to use on parallel tests
+//const CHUNKS_ON_PARALLEL: usize = 32;
 
 fn initialize_level(
     async_handler: &Runtime,
@@ -118,6 +123,8 @@ fn initialize_level(
 }
 
 // Depends on config options from `./config`
+/*
+// This doesn't really test anything...
 fn bench_chunk_io_parallel(c: &mut Criterion) {
     // System temp dirs are in-memory, so we cant use temp_dir
     let root_dir = global_path!("./bench_root_tmp");
@@ -168,13 +175,15 @@ fn bench_chunk_io_parallel(c: &mut Criterion) {
     read_group.finish();
 
     fs::remove_dir_all(&root_dir).unwrap(); // cleanup
+
 }
+*/
 
 // Depends on config options from `./config`
 fn bench_chunk_io(c: &mut Criterion) {
-    // System temp dirs are in-memory, so we cant use temp_dir
+    // System temp dirs are in-memory, so we can't use temp_dir
     let root_dir = global_path!("./bench_root_tmp");
-    let _ = fs::remove_dir_all(&root_dir); // delete if it exists
+    let _ = fs::remove_dir_all(&root_dir); // delete it if it exists
     fs::create_dir(&root_dir).unwrap(); // create the directory
 
     let async_handler = tokio::runtime::Builder::new_current_thread()
@@ -239,10 +248,5 @@ fn bench_chunk_io(c: &mut Criterion) {
     fs::remove_dir_all(&root_dir).unwrap(); // cleanup
 }
 
-criterion_group!(
-    benches,
-    bench_populate_noise,
-    bench_chunk_io_parallel,
-    bench_chunk_io
-);
+criterion_group!(benches, bench_populate_noise, bench_chunk_io);
 criterion_main!(benches);

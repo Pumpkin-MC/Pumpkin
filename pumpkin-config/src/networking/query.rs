@@ -4,6 +4,6 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct QueryConfig {
     pub enabled: bool,
-    // Optional so if not specified the port server is running on will be used
+    /// Optional; if not specified, the port the server is running on will be used.
     pub port: Option<u16>,
 }

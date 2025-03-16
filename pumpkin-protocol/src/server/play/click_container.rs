@@ -75,7 +75,7 @@ impl<'de> Deserialize<'de> for SClickContainer {
                     slot,
                     button,
                     mode: SlotActionType::try_from(mode.0)
-                        .expect("Invalid Slot action, TODO better error handling ;D"),
+                        .expect("Invalid slot action, TODO better error handling ;D"),
                     length_of_array,
                     array_of_changed_slots,
                     carried_item,
@@ -89,7 +89,7 @@ impl<'de> Deserialize<'de> for SClickContainer {
 
 #[derive(Deserialize, Debug)]
 pub enum SlotActionType {
-    /// Performs a normal slot click. This can pickup or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
+    /// Performs a normal slot click. This can pick up or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
     Pickup,
     /// Performs a shift-click. This usually quickly moves items between the player's inventory and the open screen handler.
     QuickMove,
@@ -104,7 +104,7 @@ pub enum SlotActionType {
     /// Drags items between multiple slots. This is usually triggered by the player clicking and dragging between slots.
     /// This action happens in 3 stages. Stage 0 signals that the drag has begun, and stage 2 signals that the drag has ended. In between multiple stage 1s signal which slots were dragged on.
     QuickCraft,
-    /// Replenishes the cursor stack with items from the screen handler. This is usually triggered by the player double clicking
+    /// Replenishes the cursor stack with items from the screen handler. This is usually triggered by the player double clicking.
     PickupAll,
 }
 

@@ -4,16 +4,19 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::entity::EntityId;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
+use crate::plugin::player::player_login::PlayerLoginEvent;
+use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
 };
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block::Block;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
+use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
@@ -45,15 +48,15 @@ pub struct Server {
     server_listing: Mutex<CachedStatus>,
     /// Saves server branding information.
     server_branding: CachedBranding,
-    /// Saves and Dispatches commands to appropriate handlers.
+    /// Saves and dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
-    /// Block Behaviour
+    /// Block behaviour.
     pub block_registry: Arc<BlockRegistry>,
-    /// Item Behaviour
+    /// Item behaviour.
     pub item_registry: Arc<ItemRegistry>,
     /// Manages multiple worlds within the server.
     pub worlds: RwLock<Vec<Arc<World>>>,
-    // All the dimensions that exists on the server,
+    // All the dimensions that exist on the server.
     pub dimensions: Vec<DimensionType>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
@@ -63,7 +66,7 @@ pub struct Server {
     pub drag_handler: DragHandler,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
-    /// Manages authentication with a authentication server, if enabled.
+    /// Manages authentication with an authentication server, if enabled.
     pub auth_client: Option<reqwest::Client>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
@@ -78,16 +81,16 @@ impl Server {
         let auth_client = BASIC_CONFIG.online_mode.then(|| {
             reqwest::Client::builder()
                 .connect_timeout(Duration::from_millis(u64::from(
-                    ADVANCED_CONFIG.networking.authentication.connect_timeout,
+                    advanced_config().networking.authentication.connect_timeout,
                 )))
                 .read_timeout(Duration::from_millis(u64::from(
-                    ADVANCED_CONFIG.networking.authentication.read_timeout,
+                    advanced_config().networking.authentication.read_timeout,
                 )))
                 .build()
                 .expect("Failed to to make reqwest client")
         });
 
-        // First register default command, after that plugins can put in their own
+        // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher());
 
         let world = World::load(
@@ -145,7 +148,7 @@ impl Server {
     /// 3. **(TODO: Select default from config)** Selects the world for the player (currently uses the first world).
     /// 4. Creates a new `Player` instance using the provided information.
     /// 5. Adds the player to the chosen world.
-    /// 6. **(TODO: Config if we want increase online)** Optionally updates server listing information based on player's configuration.
+    /// 6. **(TODO: Config if we want increase online)** Optionally updates server listing information based on the player's configuration.
     ///
     /// # Arguments
     ///
@@ -160,26 +163,37 @@ impl Server {
     ///
     /// # Note
     ///
-    /// You still have to spawn the Player in the World to make then to let them Join and make them Visible
-    pub async fn add_player(&self, client: Arc<Client>) -> (Arc<Player>, Arc<World>) {
+    /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
+    pub async fn add_player(&self, client: Arc<Client>) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
         // Basically the default world
         // TODO: select default from config
         let world = &self.worlds.read().await[0];
 
         let player = Arc::new(Player::new(client, world.clone(), gamemode).await);
-        world
-            .add_player(player.gameprofile.id, player.clone())
-            .await;
-        // TODO: Config if we want increase online
-        if let Some(config) = player.client.config.lock().await.as_ref() {
-            // TODO: Config so we can also just ignore this hehe
-            if config.server_listing {
-                self.server_listing.lock().await.add_player();
-            }
-        }
+        send_cancellable! {{
+            PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
 
-        (player, world.clone())
+            'after: {
+                world
+                    .add_player(player.gameprofile.id, player.clone())
+                    .await;
+                // TODO: Config if we want increase online
+                if let Some(config) = player.client.config.lock().await.as_ref() {
+                    // TODO: Config so we can also just ignore this hehe
+                    if config.server_listing {
+                        self.server_listing.lock().await.add_player();
+                    }
+                }
+
+                Some((player, world.clone()))
+            }
+
+            'cancelled: {
+                player.kick(event.kick_message).await;
+                None
+            }
+        }}
     }
 
     pub async fn remove_player(&self) {
@@ -275,11 +289,17 @@ impl Server {
         chat_type: u32,
         target_name: Option<&TextComponent>,
     ) {
-        for world in self.worlds.read().await.iter() {
-            world
-                .broadcast_message(message, sender_name, chat_type, target_name)
-                .await;
-        }
+        send_cancellable! {{
+            ServerBroadcastEvent::new(message.clone(), sender_name.clone());
+
+            'after: {
+                for world in self.worlds.read().await.iter() {
+                    world
+                        .broadcast_message(&event.message, &event.sender, chat_type, target_name)
+                        .await;
+                }
+            }
+        }}
     }
 
     /// Searches for a player by their username across all worlds.
@@ -307,7 +327,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.players.read().await.iter() {
+            for player in world.players.read().await.values() {
                 if player.client.address.lock().await.ip() == ip {
                     players.push(player.clone());
                 }
@@ -322,7 +342,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for (_, player) in world.players.read().await.iter() {
+            for player in world.players.read().await.values() {
                 players.push(player.clone());
             }
         }
@@ -330,7 +350,7 @@ impl Server {
         players
     }
 
-    /// Returns a random player from any of the worlds or None if all worlds are empty.
+    /// Returns a random player from any of the worlds, or `None` if all worlds are empty.
     pub async fn get_random_player(&self) -> Option<Arc<Player>> {
         let players = self.get_all_players().await;
 
@@ -373,7 +393,7 @@ impl Server {
         count
     }
 
-    /// Similar to [`Server::get_player_count`] >= n, but may be more efficient since it stops it's iteration through all worlds as soon as n players were found.
+    /// Similar to [`Server::get_player_count`] >= n, but may be more efficient since it stops its iteration through all worlds as soon as n players were found.
     pub async fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
         for world in self.worlds.read().await.iter() {
@@ -385,7 +405,7 @@ impl Server {
         false
     }
 
-    /// Generates a new container id
+    /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
     }

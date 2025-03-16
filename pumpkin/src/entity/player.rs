@@ -11,7 +11,7 @@ use std::{
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_config::{ADVANCED_CONFIG, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::{
     block::BlockState,
     damage::DamageType,
@@ -21,6 +21,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::player::PlayerInventory;
+use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     RawPacket, ServerPacket,
@@ -29,8 +30,8 @@ use pumpkin_protocol::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
         CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
-        GameEvent, MetaDataType, PlayerAction,
+        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
+        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
     server::play::{
@@ -76,6 +77,10 @@ use crate::{
     command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
     net::{Client, PlayerConfig},
+    plugin::player::{
+        player_change_world::PlayerChangeWorldEvent,
+        player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
+    },
     server::Server,
     world::World,
 };
@@ -165,26 +170,25 @@ pub struct Player {
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
     pub client: Arc<Client>,
-    /// Players Inventory
+    /// The player's inventory.
     pub inventory: Mutex<PlayerInventory>,
-    /// The player's configuration settings. Changes when the Player changes their settings.
+    /// The player's configuration settings. Changes when the player changes their settings.
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
-    /// The Hunger Manager manages Players hunger level
+    /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
-    /// send `send_abilities_update` when changed
     /// The player's abilities and special powers.
     ///
     /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
     ///
     /// **Note:** When the `abilities` field is updated, the server should send a `send_abilities_update` packet to the client to notify them of the changes.
     pub abilities: Mutex<Abilities>,
-    /// The current stage of the block the player is breaking.
+    /// The current stage of block destruction of the block the player is breaking.
     pub current_block_destroy_stage: AtomicI32,
     /// Indicates if the player is currently mining a block.
     pub mining: AtomicBool,
@@ -198,27 +202,27 @@ pub struct Player {
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
-    /// Did we send a keep alive Packet and wait for the response?
+    /// Whether we are waiting for a response after sending a keep alive packet.
     pub wait_for_keep_alive: AtomicBool,
-    /// Whats the keep alive packet payload we send, The client should respond with the same id
+    /// The keep alive packet payload we send. The client should respond with the same id.
     pub keep_alive_id: AtomicI64,
-    /// Last time we send a keep alive
+    /// The last time we sent a keep alive packet.
     pub last_keep_alive_time: AtomicCell<Instant>,
-    /// Amount of ticks since last attack
+    /// The amount of ticks since the player's last attack.
     pub last_attacked_ticks: AtomicU32,
-    /// The players op permission level
+    /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
-    /// Tell tasks to stop if we are closing
+    /// Tell tasks to stop if we are closing.
     cancel_tasks: Notify,
-    /// whether the client has reported it has loaded
+    /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
-    /// timeout (in ticks) client has to report it has finished loading.
+    /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
-    /// The player's experience level
+    /// The player's experience level.
     pub experience_level: AtomicI32,
-    /// The player's experience progress (0.0 to 1.0)
+    /// The player's experience progress (`0.0` to `1.0`)
     pub experience_progress: AtomicCell<f32>,
-    /// The player's total experience points
+    /// The player's total experience points.
     pub experience_points: AtomicI32,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
@@ -270,7 +274,7 @@ impl Player {
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
-            // will mark chunks as watched for a new join rather than a respawn
+            // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
             watched_section: AtomicCell::new(Cylindrical::new(
                 Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
@@ -283,8 +287,8 @@ impl Player {
             cancel_tasks: Notify::new(),
             client_loaded: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
-            // Minecraft has no why to change the default permission level of new players.
-            // Minecrafts default permission level is 0
+            // Minecraft has no way to change the default permission level of new players.
+            // Minecraft's default permission level is 0.
             permission_lvl: OPERATOR_CONFIG
                 .read()
                 .await
@@ -292,14 +296,14 @@ impl Player {
                 .iter()
                 .find(|op| op.uuid == gameprofile_clone.id)
                 .map_or(
-                    AtomicCell::new(ADVANCED_CONFIG.commands.default_op_level),
+                    AtomicCell::new(advanced_config().commands.default_op_level),
                     |op| AtomicCell::new(op.level),
                 ),
             inventory: Mutex::new(PlayerInventory::new()),
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
-            // Default to sending 16 chunks per tick
+            // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(16)),
         }
     }
@@ -308,18 +312,18 @@ impl Player {
         &self.inventory
     }
 
-    /// Removes the Player out of the current World
+    /// Removes the [`Player`] out of the current [`World`].
     #[allow(unused_variables)]
-    pub async fn remove(self: Arc<Self>) {
+    pub async fn remove(self: &Arc<Self>) {
         let world = self.world().await;
         self.cancel_tasks.notify_waiters();
 
-        world.remove_player(self.clone(), true).await;
+        world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
 
-        // Radial chunks are all of the chunks the player is theoretically viewing
-        // Giving enough time, all of these chunks will be in memory
+        // Radial chunks are all of the chunks the player is theoretically viewing.
+        // Given enough time, all of these chunks will be in memory.
         let radial_chunks = cylindrical.all_chunks_within();
 
         log::debug!(
@@ -331,7 +335,7 @@ impl Player {
 
         let level = &world.level;
 
-        // Decrement value of watched chunks
+        // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
@@ -354,7 +358,7 @@ impl Player {
         let world = self.world().await;
         let victim_entity = victim.get_entity();
         let attacker_entity = &self.living_entity.entity;
-        let config = &ADVANCED_CONFIG.pvp;
+        let config = &advanced_config().pvp;
 
         let inventory = self.inventory().lock().await;
         let item_slot = inventory.held_item();
@@ -366,7 +370,7 @@ impl Player {
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
 
-        // get attack damage
+        // Get the attack damage
         if let Some(item_stack) = item_slot {
             // TODO: this should be cached in memory
             if let Some(modifiers) = &item_stack.item.components.attribute_modifiers {
@@ -390,12 +394,12 @@ impl Player {
         self.last_attacked_ticks
             .store(0, std::sync::atomic::Ordering::Relaxed);
 
-        // only reduce attack damage if in cooldown
-        // TODO: Enchantments are reduced same way just without the square
+        // Only reduce attack damage if in cooldown
+        // TODO: Enchantments are reduced in the same way, just without the square.
         if attack_cooldown_progress < 1.0 {
             damage_multiplier = 0.2 + attack_cooldown_progress.powi(2) * 0.8;
         }
-        // modify added damage based on multiplier
+        // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
 
         let pos = victim_entity.pos.load();
@@ -546,8 +550,8 @@ impl Player {
             self.client.send_packet(&CChunkBatchStart {}).await;
             for chunk in chunk_of_chunks {
                 let chunk = chunk.read().await;
-                // TODO: Can we check if we still need the chunk to send? Like if its a fast moving
-                // player or something
+                // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
+                // player or something.
                 self.client.send_packet(&CChunkData(&chunk)).await;
             }
             self.client
@@ -562,7 +566,7 @@ impl Player {
             let world = self.world().await;
             let block = world.get_block(&pos).await.unwrap();
             let state = world.get_block_state(&pos).await.unwrap();
-            // Is block broken ?
+            // Is the block broken?
             if state.air {
                 world
                     .set_block_breaking(&self.living_entity.entity, *pos, -1)
@@ -588,12 +592,12 @@ impl Player {
         self.living_entity.tick(server).await;
         self.hunger_manager.tick(self).await;
 
-        // timeout/keep alive handling
+        // Timeout/keep alive handling
         self.tick_client_load_timeout();
 
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            // We never got a response from our last keep alive we send
+            // We never got a response from the last keep alive we sent.
             if self
                 .wait_for_keep_alive
                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -642,7 +646,7 @@ impl Player {
 
     #[expect(clippy::cast_precision_loss)]
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
-        // TODO: Swming, Glding...
+        // TODO: Swimming, gliding...
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
             if delta > 0 {
@@ -690,7 +694,7 @@ impl Player {
         self.living_entity.entity.pos.load()
     }
 
-    /// Updates the current abilities the Player has
+    /// Updates the current abilities the player has.
     pub async fn send_abilities_update(&self) {
         let mut b = 0i8;
         let abilities = &self.abilities.lock().await;
@@ -716,7 +720,7 @@ impl Player {
             .await;
     }
 
-    /// syncs the players permission level with the client
+    /// Updates the client of the player's current permission level.
     pub async fn send_permission_lvl_update(&self) {
         let status = match self.permission_lvl.load() {
             PermissionLvl::Zero => EntityStatus::SetOpLevel0,
@@ -731,7 +735,7 @@ impl Player {
             .await;
     }
 
-    /// sets the players permission level and syncs it with the client
+    /// Sets the player's permission level and notifies the client.
     pub async fn set_permission_lvl(
         self: &Arc<Self>,
         lvl: PermissionLvl,
@@ -742,7 +746,7 @@ impl Player {
         client_suggestions::send_c_commands_packet(self, command_dispatcher).await;
     }
 
-    /// Sends the world time to just the player.
+    /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
         self.client
@@ -754,11 +758,11 @@ impl Player {
             .await;
     }
 
-    /// Sends the mobs to just the player.
-    // TODO: This should be optimized for larger servers based on current player chunk
+    /// Sends a world's mobs to only this player.
+    // TODO: This should be optimized for larger servers based on the player's current chunk.
     pub async fn send_mobs(&self, world: &World) {
         let entities = world.entities.read().await.clone();
-        for (_, entity) in entities {
+        for entity in entities.values() {
             self.client
                 .send_packet(&entity.get_entity().create_spawn_packet())
                 .await;
@@ -789,43 +793,13 @@ impl Player {
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
     pub async fn teleport_world(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         new_world: Arc<World>,
         position: Option<Vector3<f64>>,
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        self.set_client_loaded(false);
         let current_world = self.living_entity.entity.world.read().await.clone();
-        let uuid = self.gameprofile.id;
-        current_world.remove_player(self.clone(), false).await;
-        *self.living_entity.entity.world.write().await = new_world.clone();
-        new_world.players.write().await.insert(uuid, self.clone());
-        self.unload_watched_chunks(&current_world).await;
-        let last_pos = self.living_entity.last_pos.load();
-        let death_dimension = self.world().await.dimension_type.name();
-        let death_location = BlockPos(Vector3::new(
-            last_pos.x.round() as i32,
-            last_pos.y.round() as i32,
-            last_pos.z.round() as i32,
-        ));
-        self.client
-            .send_packet(&CRespawn::new(
-                (new_world.dimension_type as u8).into(),
-                new_world.dimension_type.name(),
-                0, // seed
-                self.gamemode.load() as u8,
-                self.gamemode.load() as i8,
-                false,
-                false,
-                Some((death_dimension, death_location)),
-                0.into(),
-                0.into(),
-                1,
-            ))
-            .await;
-        self.send_abilities_update().await;
-        self.send_permission_lvl_update().await;
         let info = &new_world.level.level_info;
         let position = if let Some(pos) = position {
             pos
@@ -846,38 +820,139 @@ impl Player {
         };
         let yaw = yaw.unwrap_or(info.spawn_angle);
         let pitch = pitch.unwrap_or(10.0);
-        self.request_teleport(position, yaw, pitch).await;
-        self.living_entity.last_pos.store(position);
 
-        new_world.send_world_info(&self, position, yaw, pitch).await;
-    }
-
-    /// Yaw and Pitch in degrees
-    /// Rarly used, For example when waking up player from bed or first time spawn. Otherwise entity teleport is used
-    /// Player should respond with the `SConfirmTeleport` packet
-    pub async fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        // this is the ultra special magic code used to create the teleport id
-        // This returns the old value
-        // This operation wraps around on overflow.
-        let i = self
-            .teleport_id_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let teleport_id = i + 1;
-        self.living_entity.set_pos(position);
-        let entity = &self.living_entity.entity;
-        entity.set_rotation(yaw, pitch);
-        *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
-        self.client
-            .send_packet(&CPlayerPosition::new(
-                teleport_id.into(),
+        send_cancellable! {{
+            PlayerChangeWorldEvent {
+                player: self.clone(),
+                previous_world: current_world.clone(),
+                new_world: new_world.clone(),
                 position,
-                Vector3::new(0.0, 0.0, 0.0),
                 yaw,
                 pitch,
-                // TODO
-                &[],
-            ))
-            .await;
+                cancelled: false,
+            };
+
+            'after: {
+                let position = event.position;
+                let yaw = event.yaw;
+                let pitch = event.pitch;
+                let new_world = event.new_world;
+
+                self.set_client_loaded(false);
+                let uuid = self.gameprofile.id;
+                current_world.remove_player(self, false).await;
+                *self.living_entity.entity.world.write().await = new_world.clone();
+                new_world.players.write().await.insert(uuid, self.clone());
+                self.unload_watched_chunks(&current_world).await;
+                let last_pos = self.living_entity.last_pos.load();
+                let death_dimension = self.world().await.dimension_type.name();
+                let death_location = BlockPos(Vector3::new(
+                    last_pos.x.round() as i32,
+                    last_pos.y.round() as i32,
+                    last_pos.z.round() as i32,
+                ));
+                self.client
+                    .send_packet(&CRespawn::new(
+                        (new_world.dimension_type as u8).into(),
+                        new_world.dimension_type.name(),
+                        0, // seed
+                        self.gamemode.load() as u8,
+                        self.gamemode.load() as i8,
+                        false,
+                        false,
+                        Some((death_dimension, death_location)),
+                        0.into(),
+                        0.into(),
+                        1,
+                    ))
+                    .await;
+                self.send_abilities_update().await;
+                self.send_permission_lvl_update().await;
+                self.clone().request_teleport(position, yaw, pitch).await;
+                self.living_entity.last_pos.store(position);
+
+                new_world.send_world_info(self, position, yaw, pitch).await;
+            }
+        }}
+    }
+
+    /// `yaw` and `pitch` are in degrees.
+    /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
+    /// The player should respond with the `SConfirmTeleport` packet.
+    pub async fn request_teleport(self: &Arc<Self>, position: Vector3<f64>, yaw: f32, pitch: f32) {
+        // This is the ultra special magic code used to create the teleport id
+        // This returns the old value
+        // This operation wraps around on overflow.
+
+        send_cancellable! {{
+            PlayerTeleportEvent {
+                player: self.clone(),
+                from: self.living_entity.entity.pos.load(),
+                to: position,
+                cancelled: false,
+            };
+
+            'after: {
+                let position = event.to;
+                let i = self
+                    .teleport_id_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let teleport_id = i + 1;
+                self.living_entity.set_pos(position);
+                let entity = &self.living_entity.entity;
+                entity.set_rotation(yaw, pitch);
+                *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+                self.client
+                    .send_packet(&CPlayerPosition::new(
+                        teleport_id.into(),
+                        position,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        yaw,
+                        pitch,
+                        // TODO
+                        &[],
+                    ))
+                    .await;
+            }
+        }}
+    }
+
+    /// Teleports the player to a different position with an optional yaw and pitch.
+    /// This method is identical to `entity.teleport()` but emits a `PlayerTeleportEvent` instead of a `EntityTeleportEvent`.
+    pub async fn teleport(self: &Arc<Self>, position: Vector3<f64>, yaw: f32, pitch: f32) {
+        send_cancellable! {{
+            PlayerTeleportEvent {
+                player: self.clone(),
+                from: self.living_entity.entity.pos.load(),
+                to: position,
+                cancelled: false,
+            };
+
+            'after: {
+                let position = event.to;
+                self.living_entity
+                    .entity
+                    .world
+                    .read()
+                    .await
+                    .broadcast_packet_all(&CTeleportEntity::new(
+                        self.living_entity.entity.entity_id.into(),
+                        position,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        yaw,
+                        pitch,
+                        // TODO
+                        &[],
+                        self.living_entity
+                            .entity
+                            .on_ground
+                            .load(std::sync::atomic::Ordering::SeqCst),
+                    ))
+                    .await;
+                self.living_entity.entity.set_pos(position);
+                self.living_entity.entity.set_rotation(yaw, pitch);
+            }
+        }}
     }
 
     pub fn block_interaction_range(&self) -> f64 {
@@ -900,7 +975,7 @@ impl Player {
         }) < d * d
     }
 
-    /// Kicks the Client with a reason depending on the connection state
+    /// Kicks the player with a reason depending on the connection state.
     pub async fn kick(&self, reason: TextComponent) {
         if self
             .client
@@ -908,7 +983,7 @@ impl Player {
             .load(std::sync::atomic::Ordering::Relaxed)
         {
             log::debug!(
-                "Tried to kick id {} but connection is closed!",
+                "Tried to kick client id {} but connection is closed!",
                 self.client.id
             );
             return;
@@ -920,7 +995,7 @@ impl Player {
             .await;
 
         log::info!(
-            "Kicked Player {} ({}) for {}",
+            "Kicked player {} (client {}) for {}",
             self.gameprofile.name,
             self.client.id,
             reason.to_pretty_console()
@@ -973,6 +1048,10 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
+        self.handle_killed().await;
+    }
+
+    async fn handle_killed(&self) {
         self.set_client_loaded(false);
         self.client
             .send_packet(&CCombatDeath::new(
@@ -982,48 +1061,60 @@ impl Player {
             .await;
     }
 
-    pub async fn set_gamemode(&self, gamemode: GameMode) {
-        // We could send the same gamemode without problems. But why waste bandwidth ?
+    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
+        // We could send the same gamemode without any problems. But why waste bandwidth?
         assert_ne!(
             self.gamemode.load(),
             gamemode,
-            "Setting the same gamemode as already is"
+            "Attempt to set the gamemode to the already current gamemode"
         );
-        self.gamemode.store(gamemode);
-        {
-            // use another scope so we instantly unlock abilities
-            let mut abilities = self.abilities.lock().await;
-            abilities.set_for_gamemode(gamemode);
-        };
-        self.send_abilities_update().await;
+        send_cancellable! {{
+            PlayerGamemodeChangeEvent {
+                player: self.clone(),
+                new_gamemode: gamemode,
+                previous_gamemode: self.gamemode.load(),
+                cancelled: false,
+            };
 
-        self.living_entity.entity.invulnerable.store(
-            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
-            std::sync::atomic::Ordering::Relaxed,
-        );
-        self.living_entity
-            .entity
-            .world
-            .read()
-            .await
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                0x04,
-                &[pumpkin_protocol::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: vec![PlayerAction::UpdateGameMode((gamemode as i32).into())],
-                }],
-            ))
-            .await;
+            'after: {
+                let gamemode = event.new_gamemode;
+                self.gamemode.store(gamemode);
+                {
+                    // Use another scope so that we instantly unlock `abilities`.
+                    let mut abilities = self.abilities.lock().await;
+                    abilities.set_for_gamemode(gamemode);
+                };
+                self.send_abilities_update().await;
 
-        self.client
-            .send_packet(&CGameEvent::new(
-                GameEvent::ChangeGameMode,
-                gamemode as i32 as f32,
-            ))
-            .await;
+                self.living_entity.entity.invulnerable.store(
+                    matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+                self.living_entity
+                    .entity
+                    .world
+                    .read()
+                    .await
+                    .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                        0x04,
+                        &[pumpkin_protocol::client::play::Player {
+                            uuid: self.gameprofile.id,
+                            actions: vec![PlayerAction::UpdateGameMode((gamemode as i32).into())],
+                        }],
+                    ))
+                    .await;
+
+                self.client
+                    .send_packet(&CGameEvent::new(
+                        GameEvent::ChangeGameMode,
+                        gamemode as i32 as f32,
+                    ))
+                    .await;
+            }
+        }}
     }
 
-    /// Send skin layers and used hand to all players
+    /// Send the player's skin layers and used hand to all players.
     pub async fn send_client_information(&self) {
         let config = self.config.lock().await;
         self.living_entity
@@ -1075,7 +1166,7 @@ impl Player {
             };
             speed *= fatigue_speed;
         }
-        // TODO: Handle when in Water
+        // TODO: Handle when in water
         if !self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             speed /= 5.0;
         }
@@ -1147,7 +1238,7 @@ impl Player {
             .await;
     }
 
-    /// Sets the player's experience level and updates the client
+    /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
@@ -1162,17 +1253,17 @@ impl Player {
             .await;
     }
 
-    /// Sets the player's experience level directly
+    /// Sets the player's experience level directly.
     pub async fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
         let progress = self.experience_progress.load();
         let mut points = self.experience_points.load(Ordering::Relaxed);
 
-        // If keep progress is true then calculate the number of points needed to keep the same progress scaled
+        // If `keep_progress` is `true` then calculate the number of points needed to keep the same progress scaled.
         if keep_progress {
             // Get our current level
             let current_level = self.experience_level.load(Ordering::Relaxed);
             let current_max_points = experience::points_in_level(current_level);
-            // Calculate the max value for new level
+            // Calculate the max value for the new level
             let new_max_points = experience::points_in_level(new_level);
             // Calculate the scaling factor
             let scale = new_max_points as f32 / current_max_points as f32;
@@ -1211,14 +1302,14 @@ impl Player {
         self.living_entity.add_effect(effect).await;
     }
 
-    /// Add experience levels to the player
+    /// Add experience levels to the player.
     pub async fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let new_level = current_level + added_levels;
         self.set_experience_level(new_level, true).await;
     }
 
-    /// Set the player's experience points directly, Returns true if successful.
+    /// Set the player's experience points directly. Returns `true` if successful.
     pub async fn set_experience_points(&self, new_points: i32) -> bool {
         let current_points = self.experience_points.load(Ordering::Relaxed);
 
@@ -1239,7 +1330,7 @@ impl Player {
         true
     }
 
-    /// Add experience points to the player
+    /// Add experience points to the player.
     pub async fn add_experience_points(&self, added_points: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
@@ -1294,7 +1385,14 @@ impl EntityBase for Player {
                 &self.living_entity.entity.pos.load(),
             )
             .await;
-        self.living_entity.damage(amount, damage_type).await
+        let result = self.living_entity.damage(amount, damage_type).await;
+        if result {
+            let health = self.living_entity.health.load();
+            if health <= 0.0 {
+                self.handle_killed().await;
+            }
+        }
+        result
     }
 
     fn get_entity(&self) -> &Entity {
@@ -1324,7 +1422,7 @@ impl Player {
                                     self.kick(TextComponent::text(kick_reason)).await;
                                 } else {
                                     self.kick(TextComponent::text(format!(
-                                        "Error while reading incoming packet {e}"
+                                        "Error while reading incoming packet: {e}"
                                     )))
                                     .await;
                                 }
@@ -1350,7 +1448,8 @@ impl Player {
                     .await;
             }
             SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, &(SChatCommand::read(bytebuf)?));
+                self.handle_chat_command(server, &(SChatCommand::read(bytebuf)?))
+                    .await;
             }
             SChatMessage::PACKET_ID => {
                 self.handle_chat_message(SChatMessage::read(bytebuf)?).await;
@@ -1397,8 +1496,7 @@ impl Player {
                     .await;
             }
             SPlayerAction::PACKET_ID => {
-                self.clone()
-                    .handle_player_action(SPlayerAction::read(bytebuf)?, server)
+                self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {
@@ -1581,9 +1679,9 @@ impl TryFrom<i32> for Hand {
 pub enum ChatMode {
     /// Chat is enabled for the player.
     Enabled,
-    /// The player should only see chat messages from commands
+    /// The player should only see chat messages from commands.
     CommandsOnly,
-    /// All messages should be hidden
+    /// All messages should be hidden.
     Hidden,
 }
 
