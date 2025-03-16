@@ -24,7 +24,7 @@ impl ClientPacket for CChunkData<'_> {
         buf.put_slice(&heightmap_nbt);
 
         let mut data_buf = BytesMut::new();
-        self.0.block_data.array_iter().for_each(|subchunk| {
+        self.0.blocks.array_iter_subchunks().for_each(|subchunk| {
             let block_count = subchunk.len() as i16;
             // Block count
             data_buf.put_i16(block_count);
@@ -126,7 +126,7 @@ impl ClientPacket for CChunkData<'_> {
         buf.put_bit_set(&BitSet(VarInt(1), vec![0]));
 
         buf.put_var_int(&VarInt(SUBCHUNKS_COUNT as i32));
-        self.0.block_data.array_iter().for_each(|chunk| {
+        self.0.blocks.array_iter_subchunks().for_each(|chunk| {
             let mut chunk_light = [0u8; 2048];
             for (i, _) in chunk.iter().enumerate() {
                 // if !block .is_air() {

@@ -26,7 +26,7 @@ pub enum ChunkReadingError {
     Compression(CompressionError),
     #[error("Tried to read chunk which does not exist")]
     ChunkNotExist,
-    #[error("Failed to parse Chunk from bytes: {0}")]
+    #[error("Failed to parse chunk from bytes: {0}")]
     ParsingError(ChunkParsingError),
 }
 
@@ -56,8 +56,8 @@ pub enum CompressionError {
 
 #[derive(Clone)]
 pub struct ChunkData {
-    /// See description in [`ChunkBlockData`]
-    pub block_data: ChunkBlockData,
+    /// See description in [`ChunkBlocks`]
+    pub blocks: ChunkBlocks,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
@@ -72,9 +72,9 @@ pub struct ChunkData {
 /// - Homogeneous: the whole chunk is filled with one block type, like air or water.
 /// - Heterogeneous: 24 separate subchunks are stored.
 #[derive(PartialEq, Debug, Clone)]
-pub enum ChunkBlockData {
+pub enum ChunkBlocks {
     Homogeneous(u16),
-    Heterogeneous(Box<[Subchunk; SUBCHUNKS_COUNT]>),
+    Heterogeneous(Box<[SubchunkBlocks; SUBCHUNKS_COUNT]>),
 }
 
 /// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
@@ -83,7 +83,7 @@ pub enum ChunkBlockData {
 /// - Homogeneous: the whole subchunk is filled with one block type, like air or water.
 /// - Heterogeneous: 16^3 = 4096 individual blocks are stored.
 #[derive(Clone, PartialEq, Debug)]
-pub enum Subchunk {
+pub enum SubchunkBlocks {
     Homogeneous(u16),
     // The packet relies on this ordering -> leave it like this for performance
     /// Ordering: yzx (y being the most significant)
@@ -110,7 +110,7 @@ impl Default for ChunkHeightmaps {
     }
 }
 
-impl Subchunk {
+impl SubchunkBlocks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
@@ -162,7 +162,7 @@ impl Subchunk {
     }
 }
 
-impl ChunkBlockData {
+impl ChunkBlocks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
@@ -192,7 +192,7 @@ impl ChunkBlockData {
         match self {
             Self::Homogeneous(block) => {
                 if *block != new_block {
-                    let mut subchunks = vec![Subchunk::Homogeneous(0); SUBCHUNKS_COUNT];
+                    let mut subchunks = vec![SubchunkBlocks::Homogeneous(0); SUBCHUNKS_COUNT];
 
                     subchunks[(position.y.get_absolute() / 16) as usize]
                         .set_block(position, new_block);
@@ -205,7 +205,7 @@ impl ChunkBlockData {
 
                 if subchunks
                     .iter()
-                    .all(|subchunk| *subchunk == Subchunk::Homogeneous(new_block))
+                    .all(|subchunk| *subchunk == SubchunkBlocks::Homogeneous(new_block))
                 {
                     *self = Self::Homogeneous(new_block)
                 }
@@ -214,7 +214,7 @@ impl ChunkBlockData {
     }
 
     //TODO: Needs optimizations
-    pub fn array_iter(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
+    pub fn array_iter_subchunks(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
         match self {
             Self::Homogeneous(block) => {
                 Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
@@ -229,13 +229,13 @@ impl ChunkBlockData {
 impl ChunkData {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-        self.block_data.get_block(position)
+        self.blocks.get_block(position)
     }
 
     /// Sets the given block in the chunk, returning the old block
     pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
         // TODO @LUK_ESC? update the heightmap
-        self.block_data.set_block(position, block_id);
+        self.blocks.set_block(position, block_id);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -248,7 +248,7 @@ impl ChunkData {
         position: ChunkRelativeBlockCoordinates,
         block: u16,
     ) {
-        self.block_data
+        self.blocks
             .set_block_no_heightmap_update(position, block);
     }
 

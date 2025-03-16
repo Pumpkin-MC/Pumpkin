@@ -484,7 +484,7 @@ mod tests {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
                         assert_eq!(
-                            chunk.block_data, read_chunk.block_data,
+                            chunk.blocks, read_chunk.blocks,
                             "Chunks don't match"
                         );
                         break;
