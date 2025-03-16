@@ -214,7 +214,9 @@ impl ChunkBlocks {
     }
 
     //TODO: Needs optimizations
-    pub fn array_iter_subchunks(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
+    pub fn array_iter_subchunks(
+        &self,
+    ) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
         match self {
             Self::Homogeneous(block) => {
                 Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
@@ -248,8 +250,7 @@ impl ChunkData {
         position: ChunkRelativeBlockCoordinates,
         block: u16,
     ) {
-        self.blocks
-            .set_block_no_heightmap_update(position, block);
+        self.blocks.set_block_no_heightmap_update(position, block);
     }
 
     #[expect(dead_code)]
