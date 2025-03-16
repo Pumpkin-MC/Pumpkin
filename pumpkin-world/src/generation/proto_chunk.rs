@@ -440,26 +440,25 @@ impl<'a> ProtoChunk<'a> {
                             break;
                         }
                     }
-                    let biome_y = if self.settings.legacy_random_source {
-                        0
-                    } else {
-                        top
-                    };
+                    // let biome_y = if self.settings.legacy_random_source {
+                    //     0
+                    // } else {
+                    //     top
+                    // };
 
-                    let biome_pos = Vector3::new(x, biome_y as i32, z);
+                    // let biome_pos = Vector3::new(x, biome_y as i32, z);
+                    stone_depth_above += 1;
+                    stone_depth_below = y - min + 1;
+                    context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
                     let seed_biome_pos = biome::get_biome_blend(
                         self.bottom_y(),
                         self.height(),
                         self.random_config.seed,
-                        &biome_pos,
+                        &context.block_pos,
                     );
                     let biome = self.get_biome(&seed_biome_pos);
                     // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
                     context.biome = biome;
-
-                    stone_depth_above += 1;
-                    stone_depth_below = y - min + 1;
-                    context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
                     let new_state = self
                         .settings
                         .surface_rule

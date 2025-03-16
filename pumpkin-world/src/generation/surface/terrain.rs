@@ -105,7 +105,8 @@ impl SurfaceTerrainBuilder {
             .sample(pos.x as f64, 0.0, pos.z as f64)
             * 4.0)
             .round() as i32;
-        self.terracotta_bands[((pos.y as usize + offset as usize + self.terracotta_bands.len())
+        let offset = pos.y + offset;
+        self.terracotta_bands[((offset as usize + self.terracotta_bands.len())
             % self.terracotta_bands.len()) as usize]
     }
 }
