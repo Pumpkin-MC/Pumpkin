@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, FluidTick, SUBCHUNK_VOLUME,
-    ScheduledTick, Subchunks, TickPriority,
+    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, SUBCHUNK_VOLUME, ScheduledTick,
+    Subchunks, TickPriority,
 };
 
 pub mod anvil;
@@ -143,13 +143,17 @@ impl ChunkData {
                 chunk_data
                     .fluid_ticks
                     .iter()
-                    .map(|tick| FluidTick {
+                    .map(|tick| ScheduledTick {
                         x: tick.x,
                         y: tick.y,
                         z: tick.z,
                         delay: tick.delay as u16,
                         priority: TickPriority::from(tick.priority),
-                        target_block: Block::from_registry_key(&tick.target_block).unwrap(),
+                        target_block_id: Block::from_registry_key(
+                            &tick.target_block.replace("minecraft:", ""),
+                        )
+                        .unwrap()
+                        .id,
                     })
                     .collect(),
             )),

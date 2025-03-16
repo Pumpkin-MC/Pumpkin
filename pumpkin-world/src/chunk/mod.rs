@@ -110,16 +110,6 @@ pub struct ScheduledTick {
     pub target_block_id: u16,
 }
 
-#[derive(Debug, Clone)]
-pub struct FluidTick {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-    pub delay: u16,
-    pub priority: TickPriority,
-    pub target_block: Block,
-}
-
 pub struct ChunkData {
     /// See description in `Subchunks`
     pub subchunks: Subchunks,
@@ -128,7 +118,7 @@ pub struct ChunkData {
     pub position: Vector2<i32>,
     pub dirty: bool,
     pub block_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
-    pub fluid_ticks: Arc<RwLock<Vec<FluidTick>>>,
+    pub fluid_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
     pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
 }
 
