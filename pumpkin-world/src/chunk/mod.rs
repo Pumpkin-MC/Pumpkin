@@ -70,7 +70,7 @@ pub struct ChunkData {
 ///
 /// A chunk can be:
 /// - Homogeneous: the whole chunk is filled with one block type, like air or water.
-/// - Heterogeneous: 24 separate subchunks are stored.
+/// - Subchunks: 24 separate subchunks are stored.
 #[derive(PartialEq, Debug, Clone)]
 pub enum ChunkBlocks {
     Homogeneous(u16),
