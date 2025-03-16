@@ -4,7 +4,7 @@ use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use crate::{
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
     block::{ChunkBlockState, registry::get_state_by_state_id},
-    chunk::{CHUNK_AREA, CHUNK_WIDTH},
+    chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
 };
 
@@ -12,7 +12,7 @@ use super::{
     GlobalRandomConfig,
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     biome_coords,
-    chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
+    chunk_noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
     height_limit::HeightLimitView,
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -106,8 +106,7 @@ impl<'a> ProtoChunk<'a> {
     ) -> Self {
         let generation_shape = &settings.noise;
 
-        let horizontal_cell_count =
-            CHUNK_WIDTH / generation_shape.horizontal_cell_block_count() as usize;
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
         // TODO: Customize these
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
@@ -122,7 +121,7 @@ impl<'a> ProtoChunk<'a> {
         let sampler = ChunkNoiseGenerator::new(
             base_router,
             random_config,
-            horizontal_cell_count,
+            horizontal_cell_count as usize,
             start_x,
             start_z,
             generation_shape,
@@ -136,16 +135,19 @@ impl<'a> ProtoChunk<'a> {
             biome_coords::from_block(start_z),
         );
         let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count * generation_shape.horizontal_cell_block_count() as usize,
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
         );
-        let multi_noise_config =
-            MultiNoiseSamplerBuilderOptions::new(biome_pos.x, biome_pos.z, horizontal_biome_end);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.z,
+            horizontal_biome_end as usize,
+        );
         let multi_noise_sampler = MultiNoiseSampler::generate(base_router, &multi_noise_config);
 
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
             biome_pos.x,
             biome_pos.z,
-            horizontal_biome_end,
+            horizontal_biome_end as usize,
             generation_shape.min_y as i32,
             generation_shape.max_y() as i32,
             generation_shape.vertical_cell_block_count() as usize,
@@ -166,8 +168,8 @@ impl<'a> ProtoChunk<'a> {
                 .into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::Plains;
-                biome_coords::from_block(CHUNK_WIDTH)
-                    * biome_coords::from_block(CHUNK_WIDTH)
+                biome_coords::from_block(CHUNK_DIM as usize)
+                    * biome_coords::from_block(CHUNK_DIM as usize)
                     * biome_coords::from_block(height as usize)
             ]
             .into_boxed_slice(),
@@ -182,8 +184,8 @@ impl<'a> ProtoChunk<'a> {
             assert!(local_pos.y < self.noise_sampler.height() as i32 && local_pos.y >= 0);
             assert!(local_pos.z >= 0 && local_pos.z <= 15);
         }
-        self.noise_sampler.height() as usize * CHUNK_WIDTH * local_pos.x as usize
-            + CHUNK_WIDTH * local_pos.y as usize
+        self.noise_sampler.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
+            + CHUNK_DIM as usize * local_pos.y as usize
             + local_pos.z as usize
     }
 
@@ -200,9 +202,9 @@ impl<'a> ProtoChunk<'a> {
         }
 
         biome_coords::from_block(self.noise_sampler.height() as usize)
-            * biome_coords::from_block(CHUNK_WIDTH)
+            * biome_coords::from_block(CHUNK_DIM as usize)
             * local_biome_pos.x as usize
-            + biome_coords::from_block(CHUNK_WIDTH) * local_biome_pos.y as usize
+            + biome_coords::from_block(CHUNK_DIM as usize) * local_biome_pos.y as usize
             + local_biome_pos.z as usize
     }
 
@@ -266,7 +268,7 @@ impl<'a> ProtoChunk<'a> {
             let block_y = section_coords::section_to_block(i);
             let start_y = biome_coords::from_block(block_y);
 
-            let biomes_per_section = biome_coords::from_block(CHUNK_WIDTH) as i32;
+            let biomes_per_section = biome_coords::from_block(CHUNK_DIM) as i32;
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
@@ -300,7 +302,7 @@ impl<'a> ProtoChunk<'a> {
         let horizontal_cell_block_count = self.noise_sampler.horizontal_cell_block_count();
         let vertical_cell_block_count = self.noise_sampler.vertical_cell_block_count();
 
-        let horizontal_cells = (CHUNK_WIDTH / horizontal_cell_block_count as usize) as u8;
+        let horizontal_cells = (CHUNK_DIM / horizontal_cell_block_count) as u8;
 
         let min_y = self.noise_sampler.min_y();
         let minimum_cell_y = min_y / vertical_cell_block_count as i8;

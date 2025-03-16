@@ -27,6 +27,8 @@ use super::{
 pub const LAVA_BLOCK: ChunkBlockState = block_state!("lava");
 pub const WATER_BLOCK: ChunkBlockState = block_state!("water");
 
+pub const CHUNK_DIM: u8 = 16;
+
 pub enum BlockStateSampler {
     Aquifer(AquiferSampler),
     Ore(OreVeinSampler),

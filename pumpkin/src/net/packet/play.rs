@@ -5,6 +5,9 @@ use crate::block;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
+use crate::plugin::player::player_chat::PlayerChatEvent;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -12,7 +15,7 @@ use crate::{
     server::Server,
     world::chunker,
 };
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
@@ -23,9 +26,10 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
-use pumpkin_macros::block_entity;
+use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
+    CSetHeldItem, EquipmentSlot,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -102,14 +106,15 @@ impl PumpkinError for BlockPlacingError {
     }
 }
 
-/// Handles all Play Packets send by a real Player
-/// NEVER TRUST THE CLIENT. HANDLE EVERY ERROR, UNWRAP/EXPECT ARE FORBIDDEN
+/// Handles all Play packets sent by a real player.
+/// NEVER TRUST THE CLIENT. HANDLE EVERY ERROR; UNWRAP/EXPECT ARE FORBIDDEN.
 impl Player {
     pub async fn handle_confirm_teleport(&self, confirm_teleport: SConfirmTeleport) {
         let mut awaiting_teleport = self.awaiting_teleport.lock().await;
         if let Some((id, position)) = awaiting_teleport.as_ref() {
             if id == &confirm_teleport.teleport_id {
-                // we should set the pos now to that we requested in the teleport packet, Is may fixed issues when the client sended position packets while being teleported
+                // We should set the position now to what we requested in the teleport packet.
+                // This may fix issues when the client sends the position while being teleported.
                 self.living_entity.set_pos(*position);
 
                 *awaiting_teleport = None;
@@ -155,69 +160,93 @@ impl Player {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
-        let entity = &self.living_entity.entity;
-        let last_pos = entity.pos.load();
-        self.living_entity.set_pos(position);
 
-        let height_difference = position.y - last_pos.y;
-        if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
-            && !packet.ground
-            && height_difference > 0.0
-        {
-            self.jump().await;
-        }
+        send_cancellable! {{
+            PlayerMoveEvent {
+                player: self.clone(),
+                from: self.living_entity.entity.pos.load(),
+                to: position,
+                cancelled: false,
+            };
 
-        entity
-            .on_ground
-            .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
+            'after: {
+                let position = event.to;
+                let entity = &self.living_entity.entity;
+                let last_pos = entity.pos.load();
+                self.living_entity.set_pos(position);
 
-        let entity_id = entity.entity_id;
-        let Vector3 { x, y, z } = position;
-        let world = &entity.world.read().await;
+                let height_difference = position.y - last_pos.y;
+                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                    && !packet.ground
+                    && height_difference > 0.0
+                {
+                    self.jump().await;
+                }
 
-        // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
-        // let velocity = self.velocity;
+                entity
+                    .on_ground
+                    .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
 
-        // // Player is falling down fast, we should account for that
-        // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
+                let entity_id = entity.entity_id;
+                let Vector3 { x, y, z } = position;
+                let world = &entity.world.read().await;
 
-        // teleport when more than 8 blocks (i guess 8 blocks)
-        // TODO: REPLACE * 2.0 by movement packets. see vanilla for details
-        // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
-        //     self.teleport(x, y, z, self.entity.yaw, self.entity.pitch);
-        //     return;
-        // }
-        // send new position to all other players
-        world
-            .broadcast_packet_except(
-                &[self.gameprofile.id],
-                &CUpdateEntityPos::new(
-                    entity_id.into(),
-                    Vector3::new(
-                        x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                        y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                        z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
-                    ),
-                    packet.ground,
-                ),
-            )
-            .await;
-        if !self.abilities.lock().await.flying {
-            self.living_entity
-                .update_fall_distance(
-                    height_difference,
-                    packet.ground,
-                    self.gamemode.load() == GameMode::Creative,
-                )
+                // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
+                // let velocity = self.velocity;
+
+                // // The player is falling down fast; we should account for that.
+                // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
+
+                // Teleport when more than 8 blocks (i guess 8 blocks)
+                // TODO: REPLACE * 2.0 by movement packets. See Vanilla for details.
+                // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
+                //     self.teleport(x, y, z, self.entity.yaw, self.entity.pitch);
+                //     return;
+                // }
+                // Send the new position to all other players.
+                world
+                    .broadcast_packet_except(
+                        &[self.gameprofile.id],
+                        &CUpdateEntityPos::new(
+                            entity_id.into(),
+                            Vector3::new(
+                                x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                            ),
+                            packet.ground,
+                        ),
+                    )
+                    .await;
+                if !self.abilities.lock().await.flying {
+                    self.living_entity
+                        .update_fall_distance(
+                            height_difference,
+                            packet.ground,
+                            self.gamemode.load() == GameMode::Creative,
+                        )
+                        .await;
+                }
+                chunker::update_position(self).await;
+                self.progress_motion(Vector3::new(
+                    position.x - last_pos.x,
+                    position.y - last_pos.y,
+                    position.z - last_pos.z,
+                ))
                 .await;
-        }
-        chunker::update_position(self).await;
-        self.progress_motion(Vector3::new(
-            position.x - last_pos.x,
-            position.y - last_pos.y,
-            position.z - last_pos.z,
-        ))
-        .await;
+            }
+
+            'cancelled: {
+                self.client.send_packet(&CPlayerPosition::new(
+                    self.teleport_id_count.load(std::sync::atomic::Ordering::Relaxed).into(),
+                    self.living_entity.entity.pos.load(),
+                    Vector3::new(0.0, 0.0, 0.0),
+                    self.living_entity.entity.yaw.load(),
+                    self.living_entity.entity.pitch.load(),
+                    &[],
+                )).await;
+            }
+        }}
     }
 
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
@@ -245,83 +274,117 @@ impl Player {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
-        let entity = &self.living_entity.entity;
-        let last_pos = entity.pos.load();
-        self.living_entity.set_pos(position);
 
-        let height_difference = position.y - last_pos.y;
-        if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
-            && !packet.ground
-            && height_difference > 0.0
-        {
-            self.jump().await;
-        }
-        entity
-            .on_ground
-            .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
+        send_cancellable! {{
+            PlayerMoveEvent::new(
+                self.clone(),
+                self.living_entity.entity.pos.load(),
+                position,
+            );
 
-        entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
+            'after: {
+                let position = event.to;
+                let entity = &self.living_entity.entity;
+                let last_pos = entity.pos.load();
+                self.living_entity.set_pos(position);
 
-        let entity_id = entity.entity_id;
-        let Vector3 { x, y, z } = position;
+                let height_difference = position.y - last_pos.y;
+                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                    && !packet.ground
+                    && height_difference > 0.0
+                {
+                    self.jump().await;
+                }
+                entity
+                    .on_ground
+                    .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
 
-        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
-        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
-        // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-        let world = &entity.world.read().await;
+                entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
-        // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
-        // let velocity = self.velocity;
+                let entity_id = entity.entity_id;
+                let Vector3 { x, y, z } = position;
 
-        // // Player is falling down fast, we should account for that
-        // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
+                let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+                let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
+                // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
+                let world = &entity.world.read().await;
 
-        // // teleport when more than 8 blocks (i guess 8 blocks)
-        // // TODO: REPLACE * 2.0 by movement packets. see vanilla for details
-        // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
-        //     self.teleport(x, y, z, yaw, pitch);
-        //     return;
-        // }
-        // send new position to all other players
+                // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
+                // let velocity = self.velocity;
 
-        world
-            .broadcast_packet_except(
-                &[self.gameprofile.id],
-                &CUpdateEntityPosRot::new(
-                    entity_id.into(),
-                    Vector3::new(
-                        x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                        y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                        z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
-                    ),
-                    yaw as u8,
-                    pitch as u8,
-                    packet.ground,
-                ),
-            )
-            .await;
-        world
-            .broadcast_packet_except(
-                &[self.gameprofile.id],
-                &CHeadRot::new(entity_id.into(), yaw as u8),
-            )
-            .await;
-        if !self.abilities.lock().await.flying {
-            self.living_entity
-                .update_fall_distance(
-                    height_difference,
-                    packet.ground,
-                    self.gamemode.load() == GameMode::Creative,
-                )
+                // // The player is falling down fast; we should account for that.
+                // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
+
+                // // Teleport when more than 8 blocks (i guess 8 blocks)
+                // // TODO: REPLACE * 2.0 by movement packets. see vanilla for details
+                // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
+                //     self.teleport(x, y, z, yaw, pitch);
+                //     return;
+                // }
+                // Send the new position to all other players.
+
+                world
+                    .broadcast_packet_except(
+                        &[self.gameprofile.id],
+                        &CUpdateEntityPosRot::new(
+                            entity_id.into(),
+                            Vector3::new(
+                                x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                            ),
+                            yaw as u8,
+                            pitch as u8,
+                            packet.ground,
+                        ),
+                    )
+                    .await;
+                world
+                    .broadcast_packet_except(
+                        &[self.gameprofile.id],
+                        &CHeadRot::new(entity_id.into(), yaw as u8),
+                    )
+                    .await;
+                if !self.abilities.lock().await.flying {
+                    self.living_entity
+                        .update_fall_distance(
+                            height_difference,
+                            packet.ground,
+                            self.gamemode.load() == GameMode::Creative,
+                        )
+                        .await;
+                }
+                chunker::update_position(self).await;
+                self.progress_motion(Vector3::new(
+                    position.x - last_pos.x,
+                    position.y - last_pos.y,
+                    position.z - last_pos.z,
+                ))
                 .await;
-        }
-        chunker::update_position(self).await;
-        self.progress_motion(Vector3::new(
-            position.x - last_pos.x,
-            position.y - last_pos.y,
-            position.z - last_pos.z,
-        ))
-        .await;
+            }
+
+            'cancelled: {
+                self.force_tp(position).await;
+            }
+        }}
+    }
+
+    pub async fn force_tp(&self, position: Vector3<f64>) {
+        let teleport_id = self
+            .teleport_id_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+        self.client
+            .send_packet(&CPlayerPosition::new(
+                teleport_id.into(),
+                self.living_entity.entity.pos.load(),
+                Vector3::new(0.0, 0.0, 0.0),
+                self.living_entity.entity.yaw.load(),
+                self.living_entity.entity.pitch.load(),
+                &[],
+            ))
+            .await;
     }
 
     pub async fn handle_rotation(&self, rotation: SPlayerRotation) {
@@ -344,7 +407,7 @@ impl Player {
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
         );
-        // send new position to all other players
+        // Send the new position to all other players.
         let entity_id = entity.entity_id;
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
@@ -362,30 +425,45 @@ impl Player {
             .await;
     }
 
-    pub fn handle_chat_command(self: &Arc<Self>, server: &Arc<Server>, command: &SChatCommand) {
+    pub async fn handle_chat_command(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        command: &SChatCommand,
+    ) {
         let player_clone = self.clone();
         let server_clone = server.clone();
-        let command_clone = command.command.clone();
-        // Some commands can take a long time to execute. If they do, they block packet processing for the player
-        // Thats why we will spawn a task instead
-        tokio::spawn(async move {
-            let dispatcher = server_clone.command_dispatcher.read().await;
-            dispatcher
-                .handle_command(
-                    &mut CommandSender::Player(player_clone),
-                    &server_clone,
-                    &command_clone,
-                )
-                .await;
-        });
+        send_cancellable! {{
+            PlayerCommandSendEvent {
+                player: self.clone(),
+                command: command.command.clone(),
+                cancelled: false
+            };
 
-        if ADVANCED_CONFIG.commands.log_console {
-            log::info!(
-                "Player ({}): executed command /{}",
-                self.gameprofile.name,
-                command.command
-            );
-        }
+            'after: {
+                let command = event.command;
+                let command_clone = command.clone();
+                // Some commands can take a long time to execute. If they do, they block packet processing for the player.
+                // That's why we will spawn a task instead.
+                tokio::spawn(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(
+                            &mut CommandSender::Player(player_clone),
+                            &server_clone,
+                            &command_clone,
+                        )
+                        .await;
+                });
+
+                if advanced_config().commands.log_console {
+                    log::info!(
+                        "Player ({}): executed command /{}",
+                        self.gameprofile.name,
+                        command
+                    );
+                }
+            }
+        }}
     }
 
     pub fn handle_player_ground(&self, ground: &SSetPlayerGround) {
@@ -584,7 +662,7 @@ impl Player {
             .await;
     }
 
-    pub async fn handle_chat_message(&self, chat_message: SChatMessage) {
+    pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
         let message = chat_message.message;
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
@@ -601,26 +679,53 @@ impl Player {
         }
 
         let gameprofile = &self.gameprofile;
-        log::info!("<chat>{}: {}", gameprofile.name, message);
+        send_cancellable! {{
+            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
 
-        let entity = &self.living_entity.entity;
-        let world = &entity.world.read().await;
-        world
-            .broadcast_packet_all(&CPlayerChatMessage::new(
-                gameprofile.id,
-                1.into(),
-                chat_message.signature.as_deref(),
-                &message,
-                chat_message.timestamp,
-                chat_message.salt,
-                &[],
-                Some(TextComponent::text(message.clone())),
-                FilterType::PassThrough,
-                (CHAT + 1).into(),
-                TextComponent::text(gameprofile.name.clone()),
-                None,
-            ))
-            .await;
+            'after: {
+                log::info!("<chat>{}: {}", gameprofile.name, event.message);
+
+                let entity = &self.living_entity.entity;
+                if event.recipients.is_empty() {
+                    let world = &entity.world.read().await;
+                    world
+                        .broadcast_packet_all(&CPlayerChatMessage::new(
+                            gameprofile.id,
+                            1.into(),
+                            chat_message.signature.as_deref(),
+                            &event.message,
+                            chat_message.timestamp,
+                            chat_message.salt,
+                            &[],
+                            Some(TextComponent::text(event.message.clone())),
+                            FilterType::PassThrough,
+                            (CHAT + 1).into(),
+                            TextComponent::text(gameprofile.name.clone()),
+                            None,
+                        ))
+                        .await;
+                } else {
+                    for recipient in event.recipients {
+                        recipient.client.send_packet(
+                            &CPlayerChatMessage::new(
+                                gameprofile.id,
+                                1.into(),
+                                chat_message.signature.as_deref(),
+                                &event.message,
+                                chat_message.timestamp,
+                                chat_message.salt,
+                                &[],
+                                Some(TextComponent::text(event.message.clone())),
+                                FilterType::PassThrough,
+                                (CHAT + 1).into(),
+                                TextComponent::text(gameprofile.name.clone()),
+                                None,
+                            ),
+                        ).await;
+                    }
+                }
+            }
+        }}
 
         /* server.broadcast_packet(
             self,
@@ -661,7 +766,7 @@ impl Player {
                         false
                     } else {
                         log::debug!(
-                            "Player {} ({}) updated render distance: {} -> {}.",
+                            "Player {} ({}) updated their render distance: {} -> {}.",
                             self.gameprofile.name,
                             self.client.id,
                             old_view_distance,
@@ -673,7 +778,7 @@ impl Player {
 
                 *config = PlayerConfig {
                     locale: client_information.locale,
-                    // A Negative view distance would be impossible and make no sense right ?, Mojang: Lets make is signed :D
+                    // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it signed :D
                     view_distance: unsafe {
                         NonZeroU8::new_unchecked(client_information.view_distance as u8)
                     },
@@ -708,14 +813,11 @@ impl Player {
     pub async fn handle_client_status(self: &Arc<Self>, client_status: SClientCommand) {
         match client_status.action_id.0 {
             0 => {
-                // Perform Respawn
+                // Perform respawn
                 if self.living_entity.health.load() > 0.0 {
                     return;
                 }
-                self.world()
-                    .await
-                    .respawn_player(&self.clone(), false)
-                    .await;
+                self.world().await.respawn_player(self, false).await;
 
                 // Restore abilities based on gamemode after respawn
                 let mut abilities = self.abilities.lock().await;
@@ -724,7 +826,7 @@ impl Player {
                 self.send_abilities_update().await;
             }
             1 => {
-                // request stats
+                // Request stats
                 log::debug!("todo");
             }
             _ => {
@@ -752,7 +854,7 @@ impl Player {
         match action {
             ActionType::Attack => {
                 let entity_id = interact.entity_id;
-                let config = &ADVANCED_CONFIG.pvp;
+                let config = &advanced_config().pvp;
                 // TODO: do validation and stuff
                 if !config.enabled {
                     return;
@@ -763,7 +865,7 @@ impl Player {
                 let world = &entity.world.read().await;
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == self.entity_id() {
-                    // this can't be triggered from a non-modded client.
+                    // This can't be triggered from a non-modded client.
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.invalid_entity_attacked",
                         [],
@@ -773,8 +875,8 @@ impl Player {
                 }
                 if let Some(player_victim) = player_victim {
                     if player_victim.living_entity.health.load() <= 0.0 {
-                        // you can trigger this from a non-modded / innocent client client,
-                        // so we shouldn't kick the player
+                        // You can trigger this from a non-modded / innocent client,
+                        // so we shouldn't kick the player.
                         return;
                     }
                     if config.protect_creative
@@ -794,7 +896,7 @@ impl Player {
                     self.attack(entity_victim).await;
                 } else {
                     log::error!(
-                        "Player id {} interacted with entity id {} which was not found.",
+                        "Player id {} interacted with entity id {}, which was not found.",
                         self.entity_id(),
                         entity_id.0
                     );
@@ -814,7 +916,7 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub async fn handle_player_action(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         player_action: SPlayerAction,
         server: &Server,
     ) {
@@ -839,7 +941,7 @@ impl Player {
                     let state = world.get_block_state(&location).await.unwrap();
 
                     if let Some(held) = self.inventory.lock().await.held_item() {
-                        if !server.item_registry.can_mine(&held.item, &self) {
+                        if !server.item_registry.can_mine(&held.item, self) {
                             self.client
                                 .send_packet(&CBlockUpdate::new(
                                     &location,
@@ -854,7 +956,7 @@ impl Player {
                     // TODO: do validation
                     // TODO: Config
                     if self.gamemode.load() == GameMode::Creative {
-                        // Block break & block break sound
+                        // Block break & play sound
 
                         let broken_state = world.get_block_state(&location).await.unwrap();
                         world
@@ -865,7 +967,7 @@ impl Player {
                             .broken(
                                 Arc::clone(world),
                                 &block,
-                                &self,
+                                self,
                                 location,
                                 server,
                                 broken_state,
@@ -878,7 +980,7 @@ impl Player {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     if !state.air {
-                        let speed = block::calc_block_breaking(&self, &state, block.name).await;
+                        let speed = block::calc_block_breaking(self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&location).await.unwrap();
@@ -890,7 +992,7 @@ impl Player {
                                 .broken(
                                     Arc::clone(world),
                                     &block,
-                                    &self,
+                                    self,
                                     location,
                                     server,
                                     broken_state,
@@ -937,7 +1039,7 @@ impl Player {
                         );
                         return;
                     }
-                    // Block break & block break sound
+                    // Block break & play sound
                     let entity = &self.living_entity.entity;
                     let world = &entity.world.read().await;
                     self.mining
@@ -959,7 +1061,7 @@ impl Player {
                             .broken(
                                 Arc::clone(world),
                                 &block,
-                                &self,
+                                self,
                                 location,
                                 server,
                                 broken_state,
@@ -1086,13 +1188,13 @@ impl Player {
                 }
             }
         }
-        // check if item is a block, Because Not every item can be placed :D
+        // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(stack.item.id) {
             should_try_decrement = self
                 .run_is_block_place(block.clone(), server, use_item_on, location, &face)
                 .await?;
         }
-        // check if item is a spawn egg
+        // Check if the item is a spawn egg
         if let Some(entity) = entity_from_egg(stack.item.id) {
             self.spawn_entity_from_egg(entity, location, &face).await;
             should_try_decrement = true;
@@ -1100,7 +1202,7 @@ impl Player {
 
         if should_try_decrement {
             // TODO: Config
-            // Decrease Block count
+            // Decrease block count
             if self.gamemode.load() != GameMode::Creative {
                 let mut inventory = self.inventory().lock().await;
 
@@ -1203,8 +1305,8 @@ impl Player {
     }
 
     // TODO:
-    // This function will in the future be used to keep track of if the client is in a valid state.
-    // But this is not possible yet
+    // In the future, this function will be used to keep track of if the client is in a valid state.
+    // However, this is not possible yet.
     pub async fn handle_close_container(&self, server: &Server, _packet: SCloseContainer) {
         // TODO: This should check if player sent this packet before
         // let Some(_window_type) = WindowType::from_i32(packet.window_id.0) else {
@@ -1217,7 +1319,7 @@ impl Player {
         if let Some(id) = open_container {
             let mut open_containers = server.open_containers.write().await;
             if let Some(container) = open_containers.get_mut(&id) {
-                // If container contains both a location and a type, run the on_close block_manager handler
+                // If the container contains both a location and a type, run the `on_close` `block_manager` handler
                 if let Some(pos) = container.get_location() {
                     if let Some(block) = container.get_block() {
                         server
@@ -1285,26 +1387,26 @@ impl Player {
         face: &BlockDirection,
     ) {
         let world_pos = BlockPos(location.0 + face.to_offset());
-        // align position like Vanilla does
+        // Align the position like Vanilla does
         let pos = Vector3::new(
             f64::from(world_pos.0.x) + 0.5,
             f64::from(world_pos.0.y),
             f64::from(world_pos.0.z) + 0.5,
         );
-        // create rotation like Vanilla
+        // Create rotation like Vanilla
         let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
         let world = self.world().await;
-        // create new mob and uuid based on spawn egg id
+        // Create a new mob and UUID based on the spawn egg id
         let mob = mob::from_type(EntityType::from_raw(entity_type.id).unwrap(), pos, &world).await;
 
-        // set the rotation
+        // Set the rotation
         mob.get_entity().set_rotation(yaw, 0.0);
 
-        // broadcast new mob to all players
+        // Broadcast the new mob to all players
         world.spawn_entity(mob).await;
 
-        // TODO: send/configure additional commands/data based on type of entity (horse, slime, etc)
+        // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
     fn get_player_direction(&self) -> HorizontalFacing {
@@ -1318,9 +1420,10 @@ impl Player {
             _ => HorizontalFacing::South, // Default case, should not occur
         }
     }
-    // TODO: replace
-    const WORLD_LOWEST_Y: i16 = -64;
-    const WORLD_MAX_Y: i16 = 384 - Self::WORLD_LOWEST_Y.abs();
+
+    const WORLD_LOWEST_Y: i8 = -64;
+    const WORLD_MAX_Y: u16 = 384;
+
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -1337,12 +1440,12 @@ impl Player {
         let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;
         let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
-        // check block under the world
+        // Check if the block is under the world
         if location.0.y + face.to_offset().y < Self::WORLD_LOWEST_Y.into() {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
-        //check max world build height
+        // Check the world's max build height
         if location.0.y + face.to_offset().y >= Self::WORLD_MAX_Y.into() {
             self.send_system_message_raw(
                 &TextComponent::translate(
@@ -1394,7 +1497,7 @@ impl Player {
             )
             .await;
 
-        // To this point we must have the new block state
+        // At this point, we must have the new block state.
         let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
         let mut intersects = false;
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
@@ -1428,14 +1531,14 @@ impl Player {
                 .await;
 
             self.send_sign_packet(block, final_block_pos, face).await;
-            // Block was placed successfully, decrement inventory
+            // The block was placed successfully, so decrement their inventory
             return Ok(true);
         }
 
         Ok(false)
     }
 
-    /// Checks if block placed was a sign, then opens a dialog
+    /// Checks if the block placed was a sign, then opens a dialog.
     async fn send_sign_packet(
         &self,
         block: Block,

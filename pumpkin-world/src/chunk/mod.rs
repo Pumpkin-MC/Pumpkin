@@ -4,11 +4,13 @@ use serde::{Deserialize, Serialize};
 use std::iter::repeat_with;
 use thiserror::Error;
 
-use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
+use crate::coordinates::ChunkRelativeBlockCoordinates;
 
 pub mod format;
 pub mod io;
 
+// TODO
+const WORLD_HEIGHT: usize = 384;
 pub const CHUNK_AREA: usize = 16 * 16;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
 pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;

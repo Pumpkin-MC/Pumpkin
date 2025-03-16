@@ -3,7 +3,7 @@ pub mod superflat;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    chunk::{ChunkData, Subchunks},
+    chunk::{ChunkBlocks, ChunkData},
     coordinates::ChunkRelativeBlockCoordinates,
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
@@ -35,7 +35,7 @@ impl GeneratorInit for VanillaGenerator {
 
 impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut subchunks = Subchunks::Single(0);
+        let mut blocks = ChunkBlocks::Homogeneous(0);
         // TODO: This is bad, but it works
         let generation_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
@@ -67,15 +67,16 @@ impl WorldGenerator for VanillaGenerator {
                         continue;
                     }
 
-                    subchunks.set_block(coordinates, block.state_id);
+                    blocks.set_block(coordinates, block.state_id);
                 }
             }
         }
 
         ChunkData {
-            subchunks,
+            blocks,
             heightmap: Default::default(),
             position: at,
+            dirty: true,
         }
     }
 }
