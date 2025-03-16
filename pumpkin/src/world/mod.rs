@@ -1240,8 +1240,9 @@ impl World {
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
 
-        let block_ticks_guard = chunk.read().await;
-        let mut block_ticks = block_ticks_guard.block_ticks.write().await;
+        let mut chunk = chunk.write().await;
+        chunk.dirty = true;
+        let mut block_ticks = chunk.block_ticks.write().await;
         block_ticks.push(ScheduledTick {
             x: block_pos.0.x,
             y: block_pos.0.y,
@@ -1257,8 +1258,8 @@ impl World {
             block_pos.chunk_and_chunk_relative_position();
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
-        let block_ticks_guard = chunk.read().await;
-        let block_ticks = block_ticks_guard.block_ticks.read().await;
+        let chunk = chunk.read().await;
+        let block_ticks = chunk.block_ticks.read().await;
         block_ticks.iter().any(|tick| {
             tick.target_block_id == block.id
                 && tick.x == block_pos.0.x
