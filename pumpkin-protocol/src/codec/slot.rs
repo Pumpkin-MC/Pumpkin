@@ -150,7 +150,7 @@ impl Slot {
         let item_id = item_id.0.try_into().map_err(|_| "Item id too large")?;
         let item = Item::from_id(item_id).ok_or("Item id invalid")?;
         if self.item_count.0 > item.components.max_stack_size as i32 {
-            Err("Over sized stack")
+            Err("Oversized stack")
         } else {
             let stack = ItemStack {
                 item,

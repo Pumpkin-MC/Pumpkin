@@ -6,7 +6,7 @@ use crate::entity::player::Player;
 
 use super::PlayerEvent;
 
-/// An event that occurs when a player teleports
+/// An event that occurs when a player teleports.
 ///
 /// If the event is cancelled, the teleportation will not happen.
 ///

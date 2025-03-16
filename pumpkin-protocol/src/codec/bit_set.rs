@@ -11,7 +11,7 @@ use super::{Codec, DecodeError, var_int::VarInt};
 pub struct BitSet(pub VarInt, pub Vec<i64>);
 
 impl Codec<BitSet> for BitSet {
-    /// The maximum size of the BitSet is `remaining / 8`.
+    /// The maximum size of the `BitSet` is `remaining / 8`.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(usize::MAX) };
 
     fn written_size(&self) -> usize {
@@ -26,11 +26,11 @@ impl Codec<BitSet> for BitSet {
     }
 
     fn decode(read: &mut impl Buf) -> Result<Self, DecodeError> {
-        // read length
+        // Read length
         let length = read
             .try_get_var_int()
             .map_err(|_| DecodeError::Incomplete)?;
-        // vanilla uses remaining / 8
+        // Vanilla uses `remaining / 8`
         if length.0 as usize >= read.remaining() / 8 {
             return Err(DecodeError::TooLarge);
         }

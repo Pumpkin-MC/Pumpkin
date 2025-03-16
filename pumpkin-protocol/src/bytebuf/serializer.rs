@@ -21,7 +21,7 @@ impl<B: BufMut> Serializer<B> {
 
 #[derive(Debug, Error)]
 pub enum SerializerError {
-    #[error("serializer error {0}")]
+    #[error("Serializer error: {0}")]
     Message(String),
 }
 
@@ -34,8 +34,8 @@ impl ser::Error for SerializerError {
 // General notes on the serializer:
 //
 // Primitives are written as-is
-// Strings automatically pre-pend a varint
-// Enums are written as a varint of the index
+// Strings automatically prepend a VarInt
+// Enums are written as a VarInt of the index
 // Structs are ignored
 // Iterables' values are written in order, but NO information (e.g. size) about the
 // iterable itself is written (list sizes should be a separate field)
@@ -303,24 +303,24 @@ impl<B: BufMut> ser::SerializeTupleVariant for &mut Serializer<B> {
 }
 
 // Some `Serialize` types are not able to hold a key and value in memory at the
-// same time so `SerializeMap` implementations are required to support
+// same time, so `SerializeMap` implementations are required to support
 // `serialize_key` and `serialize_value` individually.
 //
 // There is a third optional method on the `SerializeMap` trait. The
 // `serialize_entry` method allows serializers to optimize for the case where
 // key and value are both available simultaneously. In JSON it doesn't make a
-// difference so the default behavior for `serialize_entry` is fine.
+// difference, so the default behavior for `serialize_entry` is fine.
 impl<B: BufMut> ser::SerializeMap for &mut Serializer<B> {
     type Ok = ();
     type Error = SerializerError;
 
     // The Serde data model allows map keys to be any serializable type. JSON
-    // only allows string keys so the implementation below will produce invalid
+    // only allows string keys, so the implementation below will produce invalid
     // JSON if the key serializes as something other than a string.
     //
     // A real JSON serializer would need to validate that map keys are strings.
-    // This can be done by using a different Serializer to serialize the key
-    // (instead of `&mut **self`) and having that other serializer only
+    // This can be done by using a different `Serializer` to serialize the key
+    // (instead of `&mut **self`) and having that other `Serializer` only
     // implement `serialize_str` and return an error on any other data type.
     fn serialize_key<T>(&mut self, _key: &T) -> Result<(), Self::Error>
     where
@@ -330,7 +330,7 @@ impl<B: BufMut> ser::SerializeMap for &mut Serializer<B> {
     }
 
     // It doesn't make a difference whether the colon is printed at the end of
-    // `serialize_key` or at the beginning of `serialize_value`. In this case
+    // `serialize_key` or at the beginning of `serialize_value`. In this case,
     // the code is a bit simpler having it here.
     fn serialize_value<T>(&mut self, _value: &T) -> Result<(), Self::Error>
     where

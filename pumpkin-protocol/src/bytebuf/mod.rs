@@ -17,11 +17,11 @@ pub mod serializer;
 #[derive(Debug, Error)]
 pub enum ReadingError {
     /// End-of-File
-    #[error("EOF, Tried to read {0} but No bytes left to consume")]
+    #[error("EOF, Tried to read {0}, but there are no bytes left to consume")]
     EOF(String),
-    #[error("{0} is Incomplete")]
+    #[error("{0} is incomplete")]
     Incomplete(String),
-    #[error("{0} is too Large")]
+    #[error("{0} is too large")]
     TooLarge(String),
     #[error("{0}")]
     Message(String),
@@ -91,7 +91,7 @@ impl<T: Buf> ByteBuf for T {
     ) -> Result<bytes::Bytes, ReadingError> {
         if len > max_size {
             return Err(ReadingError::Message(
-                "Tried to copy bytes but length exceeds maximum length".to_string(),
+                "Tried to copy bytes, but length exceeds maximum length".to_string(),
             ));
         }
         if self.remaining() >= len {

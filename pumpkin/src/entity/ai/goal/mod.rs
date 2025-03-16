@@ -7,10 +7,10 @@ pub mod target_goal;
 
 #[async_trait]
 pub trait Goal: Send + Sync {
-    /// How Should the Goal initially start?
+    /// How should the `Goal` initially start?
     async fn can_start(&self, mob: &MobEntity) -> bool;
-    /// When its started, How it should Continue to run
+    /// When it's started, how should it continue to run?
     async fn should_continue(&self, mob: &MobEntity) -> bool;
-    /// If the Goal is running, this gets called every tick
+    /// If the `Goal` is running, this gets called every tick.
     async fn tick(&self, mob: &MobEntity);
 }

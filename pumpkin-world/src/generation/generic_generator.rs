@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     WORLD_LOWEST_Y,
-    chunk::{ChunkData, Subchunks},
+    chunk::{ChunkBlocks, ChunkData},
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
 };
 
@@ -37,7 +37,7 @@ impl<B: BiomeGenerator + GeneratorInit, T: PerlinTerrainGenerator + GeneratorIni
 
 impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGenerator<B, T> {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut subchunks = Subchunks::Single(0);
+        let mut blocks = ChunkBlocks::Homogeneous(0);
         self.terrain_generator.prepare_chunk(&at, &self.perlin);
         let noise_value = self.perlin.get([at.x as f64 / 16.0, at.z as f64 / 16.0]);
 
@@ -67,7 +67,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
                     self.terrain_generator.generate_block(
                         coordinates,
                         coordinates.with_chunk_coordinates(at),
-                        &mut subchunks,
+                        &mut blocks,
                         chunk_height,
                         biome,
                     );
@@ -76,7 +76,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
         }
 
         ChunkData {
-            subchunks,
+            blocks,
             heightmap: Default::default(),
             position: at,
             // We just generated this chunk! Mark it as dirty

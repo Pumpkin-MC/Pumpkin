@@ -35,16 +35,16 @@ pub const SLOT_MAX: usize = SLOT_OFFHAND;
 pub const SLOT_INDEX_OUTSIDE: i16 = -999;
 
 pub struct PlayerInventory {
-    // Main Inventory + Hotbar
+    // Main inventory + hotbar
     crafting: [Option<ItemStack>; 4],
     crafting_output: Option<ItemStack>,
     items: [Option<ItemStack>; 36],
     armor: [Option<ItemStack>; 4],
     offhand: Option<ItemStack>,
-    // current selected slot in hotbar
+    /// The hotbar's current selected slot.
     pub selected: usize,
     pub state_id: u32,
-    // Notchian server wraps this value at 100, we can just keep it as a u8 that automatically wraps
+    // Notchian server wraps this value at 100, we can just keep it as a u8 that automatically wraps.
     pub total_opened_containers: i32,
 }
 
@@ -64,19 +64,19 @@ impl PlayerInventory {
             items: [const { None }; 36],
             armor: [const { None }; 4],
             offhand: None,
-            // TODO: What when player spawns in with an different index ?
+            // TODO: What happens when a player spawns in with a different index?
             selected: 0,
             state_id: 0,
             total_opened_containers: 2,
         }
     }
-    /// Set the contents of an item in a slot
+    /// Set the contents of an item in a slot.
     ///
-    /// ## Item
+    /// ## `item`
     /// The optional item to place in the slot
     ///
-    /// ## Item allowed override
-    /// An override, which when enabled, makes it so that invalid items, can be placed in slots they normally can't.
+    /// ## `item_allowed_override`
+    /// An override, which when enabled, makes it so that invalid items can be placed in slots they normally can't.
     /// Useful functionality for plugins in the future.
     pub fn set_slot(
         &mut self,
@@ -150,7 +150,7 @@ impl PlayerInventory {
             .map_or_else(|| 1.0, |e| e.get_speed(block_name))
     }
 
-    //NOTE: We actually want &mut Option instead of Option<&mut>
+    // NOTE: We actually want &mut Option instead of Option<&mut>
     pub fn held_item_mut(&mut self) -> &mut Option<ItemStack> {
         debug_assert!((0..=SLOT_HOTBAR_INDEX).contains(&self.selected));
         &mut self.items[self.get_selected_slot() - SLOT_INV_START]
@@ -233,8 +233,8 @@ impl PlayerInventory {
         })
     }
 
-    /// Returns a slot that has an item with less than the max stack size, if none, returns an empty
-    /// slot, if none, returns None
+    /// Returns a slot that has an item with less than the max stack size. If none, returns an empty
+    /// slot. If none, returns `None`.`
     pub fn get_pickup_item_slot(&self, item_id: u16) -> Option<usize> {
         self.get_nonfull_slot_with_item(item_id)
             .or_else(|| self.get_empty_slot())
@@ -293,7 +293,7 @@ impl Container for PlayerInventory {
     }
 
     fn window_name(&self) -> &'static str {
-        // We never send an OpenContainer with inventory, so it has no name.
+        // We never send an `OpenContainer` with inventory, so it has no name.
         ""
     }
 
@@ -309,7 +309,7 @@ impl Container for PlayerInventory {
         if let Some(item) = carried_slot {
             debug_assert!(
                 item.item_count > 0,
-                "We aren't setting the stack to None somewhere"
+                "We aren't setting the stack to `None` somewhere"
             );
             if slot_condition(item) {
                 if invert {

@@ -121,11 +121,11 @@ impl ProtoNode<'_> {
                     override_suggestion_type,
                 } => {
                     // suggestion type
-                    let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not None.");
+                    let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not `None`.");
                     bytebuf.put_string(suggestion_type.identifier());
                 }
                 _ => unimplemented!(
-                    "ProtoNode::FLAG_HAS_SUGGESTION_TYPE is only implemented for ProtoNodeType::Argument"
+                    "`ProtoNode::FLAG_HAS_SUGGESTION_TYPE` is only implemented for `ProtoNodeType::Argument`"
                 ),
             }
         }

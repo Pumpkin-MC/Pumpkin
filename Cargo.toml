@@ -34,7 +34,7 @@ debug = true
 
 [workspace.dependencies]
 log = "0.4"
-tokio = { version = "1.43", features = [
+tokio = { version = "1.44", features = [
     "macros",
     "net",
     "rt-multi-thread",

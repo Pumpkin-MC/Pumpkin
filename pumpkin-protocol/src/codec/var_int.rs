@@ -19,7 +19,7 @@ impl Codec<Self> for VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
 
-    /// Returns the exact number of bytes this varint will write when
+    /// Returns the exact number of bytes this VarInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     fn written_size(&self) -> usize {
         match self.0 {

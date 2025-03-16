@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct Style {
-    /// Changes the color to render the content
+    /// The color to render the content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<Color>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -26,10 +26,10 @@ pub struct Style {
     /// Whether to render the content in obfuscated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub obfuscated: Option<bool>,
-    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages
+    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub insertion: Option<String>,
-    /// Allows for events to occur when the player clicks on text. Only work in chat.
+    /// Allows for events to occur when the player clicks on text. Only works in chat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub click_event: Option<ClickEvent>,
     /// Allows for a tooltip to be displayed when the player hovers their mouse over text.
@@ -87,13 +87,13 @@ impl Style {
         self
     }
 
-    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages
+    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages.
     pub fn insertion(mut self, text: String) -> Self {
         self.insertion = Some(text);
         self
     }
 
-    /// Allows for events to occur when the player clicks on text. Only work in chat.
+    /// Allows for events to occur when the player clicks on text. Only works in chat.
     pub fn click_event(mut self, event: ClickEvent) -> Self {
         self.click_event = Some(event);
         self

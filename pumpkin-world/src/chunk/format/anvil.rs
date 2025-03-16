@@ -815,7 +815,7 @@ impl ChunkSerializer for AnvilChunkFile {
 pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
     let mut sections = Vec::new();
 
-    for (i, blocks) in chunk_data.subchunks.array_iter().enumerate() {
+    for (i, blocks) in chunk_data.blocks.array_iter_subchunks().enumerate() {
         // get unique blocks
         let unique_blocks: HashSet<_> = blocks.iter().collect();
 
@@ -1071,7 +1071,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                    assert_eq!(chunk.blocks, read_chunk.blocks, "Chunks don't match");
                     break;
                 }
             }
@@ -1081,7 +1081,7 @@ mod tests {
 
         // Idk what blocks these are, they just have to be different
         let mut chunk = chunks.first().unwrap().1.write().await;
-        chunk.subchunks.set_block(
+        chunk.blocks.set_block(
             ChunkRelativeBlockCoordinates {
                 x: 0u32.into(),
                 y: 0.into(),
@@ -1093,7 +1093,7 @@ mod tests {
         chunk.dirty = true;
         drop(chunk);
         let mut chunk = chunks.last().unwrap().1.write().await;
-        chunk.subchunks.set_block(
+        chunk.blocks.set_block(
             ChunkRelativeBlockCoordinates {
                 x: 0u32.into(),
                 y: 0.into(),
@@ -1119,7 +1119,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                    assert_eq!(chunk.blocks, read_chunk.blocks, "Chunks don't match");
                     break;
                 }
             }
@@ -1133,7 +1133,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..4 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.subchunks.set_block(
+                    chunk.blocks.set_block(
                         ChunkRelativeBlockCoordinates {
                             x: x.into(),
                             y: (y as i32).into(),
@@ -1152,7 +1152,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..4 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.subchunks.set_block(
+                    chunk.blocks.set_block(
                         ChunkRelativeBlockCoordinates {
                             x: x.into(),
                             y: (y as i32).into(),
@@ -1181,7 +1181,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                    assert_eq!(chunk.blocks, read_chunk.blocks, "Chunks don't match");
                     break;
                 }
             }
@@ -1195,7 +1195,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..16 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.subchunks.set_block(
+                    chunk.blocks.set_block(
                         ChunkRelativeBlockCoordinates {
                             x: x.into(),
                             y: (y as i32).into(),
@@ -1224,7 +1224,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                    assert_eq!(chunk.blocks, read_chunk.blocks, "Chunks don't match");
                     break;
                 }
             }
@@ -1281,7 +1281,7 @@ mod tests {
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
-                        assert_eq!(chunk.subchunks, read_chunk.subchunks, "Chunks don't match");
+                        assert_eq!(chunk.blocks, read_chunk.blocks, "Chunks don't match");
                         break;
                     }
                 }

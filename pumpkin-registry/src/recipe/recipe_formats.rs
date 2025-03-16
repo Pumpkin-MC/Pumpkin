@@ -59,9 +59,9 @@ impl RecipeTrait for ShapelessCrafting {
         RecipeType::Crafting(CraftingType::Shapeless)
     }
 
-    // Iterating over all permutations is cheaper than resolving and iterating over all tags when trying to check if recipe
+    // Iterating over all permutations is cheaper than resolving and iterating over all tags when trying to check if a recipe
     // is correct. Otherwise, we would have to backtrack and check for each item in the recipe input, which tags they are inside,
-    // and then sort those permutations
+    // and then sort those permutations.
     fn pattern(&self) -> Vec<[[std::option::Option<RegistryEntryList>; 3]; 3]> {
         vec![
             self.ingredients.clone(), //.permutations(self.ingredients.len())

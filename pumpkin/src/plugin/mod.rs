@@ -270,7 +270,7 @@ impl PluginManager {
     /// - `name`: The name of the plugin to load.
     ///
     /// # Returns
-    /// A result indicating success or failure. If it fails, it returns an error message.
+    /// A `Result` indicating success or failure. If it fails, it returns an error message.
     pub async fn load_plugin(&mut self, name: &str) -> Result<(), String> {
         let plugin = self
             .plugins
@@ -311,7 +311,7 @@ impl PluginManager {
     /// - `name`: The name of the plugin to unload.
     ///
     /// # Returns
-    /// A result indicating success or failure. If it fails, it returns an error message.
+    /// A `Result` indicating success or failure. If it fails, it returns an error message.
     pub async fn unload_plugin(&mut self, name: &str) -> Result<(), String> {
         let plugin = self
             .plugins
@@ -437,21 +437,21 @@ impl PluginManager {
 /// Error when failed to load the entire Plugin directory
 #[derive(Error, Debug)]
 pub enum PluginsLoadError {
-    #[error("Failed to Create new Plugins directory")]
+    #[error("Failed to create new plugins directory")]
     CreatePluginDir,
-    #[error("Failed to Read Plugins directory")]
+    #[error("Failed to read plugins directory")]
     ReadPluginDir,
-    #[error("Failed to load Plugin {0}")]
+    #[error("Failed to load plugin {0}")]
     LoadPlugin(String, PluginLoadError),
 }
 
-/// Error when failed to load a single Plugin
+/// Error when failed to load a single plugin
 #[derive(Error, Debug)]
 pub enum PluginLoadError {
-    #[error("Failed to load Library: {0}")]
+    #[error("Failed to load library: {0}")]
     LoadLibrary(String),
-    #[error("Failed to load Plugin entry function")]
+    #[error("Failed to load plugin entry function")]
     GetPluginMain,
-    #[error("Failed to load Plugin Metadata")]
+    #[error("Failed to load plugin metadata")]
     GetPluginMeta,
 }

@@ -88,9 +88,9 @@ impl Client {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
         log::debug!("login start");
 
-        // Don't allow new logons when server is full.
-        // If max players is set to zero, then there is no max player count enforced.
-        // TODO: If client is an operator or otherwise suitable elevated permissions, allow client to bypass this requirement.
+        // Don't allow new logons when the server is full.
+        // If `max_players` is set to zero, then there is no max player count enforced.
+        // TODO: If client is an operator or has otherwise suitable elevated permissions, allow the client to bypass this requirement.
         let max_players = BASIC_CONFIG.max_players;
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
             self.kick(TextComponent::translate(
@@ -106,8 +106,8 @@ impl Client {
                 .await;
             return;
         }
-        // default game profile, when no online mode
-        // TODO: make offline uuid
+        // Default game profile, when no online mode
+        // TODO: Make offline UUID
         let mut gameprofile = self.gameprofile.lock().await;
         let proxy = &advanced_config().networking.proxy;
         if proxy.enabled {
@@ -176,7 +176,7 @@ impl Client {
         let mut gameprofile = self.gameprofile.lock().await;
 
         let Some(profile) = gameprofile.as_mut() else {
-            self.kick(TextComponent::text("No Game profile")).await;
+            self.kick(TextComponent::text("No `GameProfile`")).await;
             return;
         };
 
@@ -268,7 +268,7 @@ impl Client {
             let ip = self.address.lock().await.ip();
             let profile = authentication::authenticate(username, &hash, &ip, auth_client).await?;
 
-            // Check if player should join
+            // Check if the player should join
             if let Some(actions) = &profile.profile_actions {
                 if advanced_config()
                     .networking
@@ -293,7 +293,7 @@ impl Client {
                     return Err(AuthError::Banned);
                 }
             }
-            // validate textures
+            // Validate textures
             for property in &profile.properties {
                 authentication::validate_textures(
                     property,
@@ -336,7 +336,7 @@ impl Client {
     }
 
     pub async fn handle_login_acknowledged(&self, server: &Server) {
-        log::debug!("Handling login acknowledged");
+        log::debug!("Handling login acknowledgement");
         self.connection_state.store(ConnectionState::Config);
         self.send_packet(&server.get_branding()).await;
 
@@ -349,7 +349,7 @@ impl Client {
         }
 
         // TODO: Is this the right place to send them?
-        // send tags
+        // Send tags.
         self.send_packet(&CUpdateTags::new(&[
             pumpkin_data::tag::RegistryKey::Block,
             pumpkin_data::tag::RegistryKey::Fluid,
@@ -373,14 +373,14 @@ impl Client {
 
             self.send_packet(&resource_pack).await;
         } else {
-            // This will be invoked by our resource pack handler in the case of the above branch
+            // This will be invoked by our resource pack handler in the case of the above branch.
             self.send_known_packs().await;
         }
         log::debug!("login acknowledged");
     }
 
+    /// Send the known data packs to the client.
     pub async fn send_known_packs(&self) {
-        // known data packs
         self.send_packet(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",

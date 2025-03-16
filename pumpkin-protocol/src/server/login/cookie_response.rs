@@ -8,7 +8,7 @@ use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;
 use pumpkin_macros::packet;
 
 #[packet(LOGIN_COOKIE_RESPONSE)]
-/// Response to a Cookie Request (login) from the server.
+/// Response to a `CCookieRequest` (login) from the server.
 /// The Notchian server only accepts responses of up to 5 kiB in size.
 pub struct SLoginCookieResponse {
     pub key: Identifier,

@@ -1,5 +1,5 @@
-# A whitelist of files that should be included into docker
-# Put an exclaimation mark before everything to include
+# A whitelist of files that should be included into Docker.
+# Put an exclaimation mark before everything to include.
 
 # Ignore everything
 *

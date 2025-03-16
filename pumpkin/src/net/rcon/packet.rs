@@ -12,7 +12,7 @@ use tokio::io::AsyncReadExt;
 pub enum ServerboundPacket {
     /// Typically, the first packet sent by the client, which is used to authenticate the connection with the server.
     Auth = 2,
-    /// This packet type represents a command issued to the server by a client. This can be a `ConCommand` such as kill <player> or weather clear.
+    /// This packet type represents a command issued by a client to the server. This can be a `ConCommand` such as /kill <player> or /weather clear.
     /// The response will vary depending on the command issued.
     ExecCommand = 3,
 }
@@ -55,18 +55,18 @@ impl ClientboundPacket {
 
 #[derive(Error, Debug)]
 pub enum PacketError {
-    #[error("invalid length")]
+    #[error("Invalid length")]
     InvalidLength,
-    #[error("failed to read packet")]
+    #[error("Failed to read packet")]
     FailedRead(std::io::Error),
-    #[error("failed to send packet")]
+    #[error("Dailed to send packet")]
     FailedSend(std::io::Error),
-    #[error("invalid Packet String body")]
+    #[error("Invalid packet string body")]
     InvalidBody(FromUtf8Error),
 }
 
 #[derive(Debug)]
-/// Serverbound Packet
+/// Serverbound packet
 pub struct Packet {
     id: i32,
     ptype: ServerboundPacket,

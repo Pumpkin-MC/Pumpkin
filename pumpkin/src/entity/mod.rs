@@ -79,7 +79,7 @@ pub trait EntityBase: Send + Sync {
 
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
-/// Represents a not living Entity (e.g. Item, Egg, Snowball...)
+/// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: EntityId,
@@ -101,7 +101,7 @@ pub struct Entity {
     pub sprinting: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
-    /// The entity's current velocity vector, aka Knockback
+    /// The entity's current velocity vector, aka knockback
     pub velocity: AtomicCell<Vector3<f64>>,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
@@ -246,8 +246,8 @@ impl Entity {
         self.pitch.store(pitch);
         self.yaw.store(yaw);
 
-        // send packet
-        // TODO: do caching, only send packet when needed
+        // Broadcast the update packet.
+        // TODO: Do caching to only send the packet when needed.
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
         self.world
@@ -286,14 +286,14 @@ impl Entity {
         self.set_rotation(yaw, pitch);
     }
 
-    /// Sets the Entity yaw & pitch Rotation
+    /// Sets the `Entity` yaw & pitch rotation
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
         self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
     }
 
-    /// Removes the Entity from their current World
+    /// Removes the `Entity` from their current `World`
     pub async fn remove(&self) {
         self.world.read().await.remove_entity(self).await;
     }

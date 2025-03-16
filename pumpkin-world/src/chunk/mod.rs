@@ -31,7 +31,7 @@ pub enum ChunkReadingError {
     Compression(CompressionError),
     #[error("Tried to read chunk which does not exist")]
     ChunkNotExist,
-    #[error("Failed to parse Chunk from bytes: {0}")]
+    #[error("Failed to parse chunk from bytes: {0}")]
     ParsingError(ChunkParsingError),
 }
 
@@ -111,8 +111,8 @@ pub struct ScheduledTick {
 }
 
 pub struct ChunkData {
-    /// See description in `Subchunks`
-    pub subchunks: Subchunks,
+    /// See description in [`ChunkBlocks`]
+    pub blocks: ChunkBlocks,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
@@ -122,37 +122,30 @@ pub struct ChunkData {
     pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
 }
 
-/// # Subchunks
-/// Subchunks - its an areas in chunk, what are 16 blocks in height.
-/// Current amount is 24.
+/// Represents pure block data for a chunk.
+/// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
+/// There are currently 24 subchunks per chunk.
 ///
-/// Subchunks can be single and multi.
-///
-/// Single means a single block in all chunk, like
-/// chunk, what filled only air or only water.
-///
-/// Multi means a normal chunk, what contains 24 subchunks.
+/// A chunk can be:
+/// - Homogeneous: the whole chunk is filled with one block type, like air or water.
+/// - Subchunks: 24 separate subchunks are stored.
 #[derive(PartialEq, Debug, Clone)]
-pub enum Subchunks {
-    Single(u16),
-    Multi(Box<[Subchunk; SUBCHUNKS_COUNT]>),
+pub enum ChunkBlocks {
+    Homogeneous(u16),
+    Subchunks(Box<[SubchunkBlocks; SUBCHUNKS_COUNT]>),
 }
 
-/// # Subchunk
-/// Subchunk - its an area in chunk, what are 16 blocks in height
+/// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
 ///
-/// Subchunk can be single and multi.
-///
-/// Single means a single block in all subchunk, like
-/// subchunk, what filled only air or only water.
-///
-/// Multi means a normal subchunk, what contains 4096 blocks.
+/// A subchunk can be:
+/// - Homogeneous: the whole subchunk is filled with one block type, like air or water.
+/// - Heterogeneous: 16^3 = 4096 individual blocks are stored.
 #[derive(Clone, PartialEq, Debug)]
-pub enum Subchunk {
-    Single(u16),
+pub enum SubchunkBlocks {
+    Homogeneous(u16),
     // The packet relies on this ordering -> leave it like this for performance
     /// Ordering: yzx (y being the most significant)
-    Multi(Box<[u16; SUBCHUNK_VOLUME]>),
+    Heterogeneous(Box<[u16; SUBCHUNK_VOLUME]>),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -175,12 +168,12 @@ impl Default for ChunkHeightmaps {
     }
 }
 
-impl Subchunk {
+impl SubchunkBlocks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
-            Self::Single(block) => Some(*block),
-            Self::Multi(blocks) => blocks.get(convert_index(position)).copied(),
+            Self::Homogeneous(block) => Some(*block),
+            Self::Heterogeneous(blocks) => blocks.get(convert_index(position)).copied(),
         }
     }
 
@@ -201,19 +194,19 @@ impl Subchunk {
         new_block: u16,
     ) {
         match self {
-            Self::Single(block) => {
+            Self::Homogeneous(block) => {
                 if *block != new_block {
                     let mut blocks = Box::new([*block; SUBCHUNK_VOLUME]);
                     blocks[convert_index(position)] = new_block;
 
-                    *self = Self::Multi(blocks)
+                    *self = Self::Heterogeneous(blocks)
                 }
             }
-            Self::Multi(blocks) => {
+            Self::Heterogeneous(blocks) => {
                 blocks[convert_index(position)] = new_block;
 
                 if blocks.iter().all(|b| *b == new_block) {
-                    *self = Self::Single(new_block)
+                    *self = Self::Homogeneous(new_block)
                 }
             }
         }
@@ -221,18 +214,18 @@ impl Subchunk {
 
     pub fn clone_as_array(&self) -> Box<[u16; SUBCHUNK_VOLUME]> {
         match &self {
-            Self::Single(block) => Box::new([*block; SUBCHUNK_VOLUME]),
-            Self::Multi(blocks) => blocks.clone(),
+            Self::Homogeneous(block) => Box::new([*block; SUBCHUNK_VOLUME]),
+            Self::Heterogeneous(blocks) => blocks.clone(),
         }
     }
 }
 
-impl Subchunks {
+impl ChunkBlocks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
         match &self {
-            Self::Single(block) => Some(*block),
-            Self::Multi(subchunks) => subchunks
+            Self::Homogeneous(block) => Some(*block),
+            Self::Subchunks(subchunks) => subchunks
                 .get((position.y.get_absolute() / 16) as usize)
                 .and_then(|subchunk| subchunk.get_block(position)),
         }
@@ -255,37 +248,39 @@ impl Subchunks {
         new_block: u16,
     ) {
         match self {
-            Self::Single(block) => {
+            Self::Homogeneous(block) => {
                 if *block != new_block {
-                    let mut subchunks = vec![Subchunk::Single(0); SUBCHUNKS_COUNT];
+                    let mut subchunks = vec![SubchunkBlocks::Homogeneous(0); SUBCHUNKS_COUNT];
 
                     subchunks[(position.y.get_absolute() / 16) as usize]
                         .set_block(position, new_block);
 
-                    *self = Self::Multi(subchunks.try_into().unwrap());
+                    *self = Self::Subchunks(subchunks.try_into().unwrap());
                 }
             }
-            Self::Multi(subchunks) => {
+            Self::Subchunks(subchunks) => {
                 subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block);
 
                 if subchunks
                     .iter()
-                    .all(|subchunk| *subchunk == Subchunk::Single(new_block))
+                    .all(|subchunk| *subchunk == SubchunkBlocks::Homogeneous(new_block))
                 {
-                    *self = Self::Single(new_block)
+                    *self = Self::Homogeneous(new_block)
                 }
             }
         }
     }
 
     //TODO: Needs optimizations
-    pub fn array_iter(&self) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
+    pub fn array_iter_subchunks(
+        &self,
+    ) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
         match self {
-            Self::Single(block) => {
+            Self::Homogeneous(block) => {
                 Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
             }
-            Self::Multi(blocks) => {
-                Box::new(blocks.iter().map(|subchunk| subchunk.clone_as_array()))
+            Self::Subchunks(subchunks) => {
+                Box::new(subchunks.iter().map(|subchunk| subchunk.clone_as_array()))
             }
         }
     }
@@ -294,13 +289,13 @@ impl Subchunks {
 impl ChunkData {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-        self.subchunks.get_block(position)
+        self.blocks.get_block(position)
     }
 
     /// Sets the given block in the chunk, returning the old block
     pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
         // TODO @LUK_ESC? update the heightmap
-        self.subchunks.set_block(position, block_id);
+        self.blocks.set_block(position, block_id);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -313,8 +308,7 @@ impl ChunkData {
         position: ChunkRelativeBlockCoordinates,
         block: u16,
     ) {
-        self.subchunks
-            .set_block_no_heightmap_update(position, block);
+        self.blocks.set_block_no_heightmap_update(position, block);
     }
 
     #[expect(dead_code)]

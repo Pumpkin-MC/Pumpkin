@@ -24,7 +24,7 @@ impl ClientPacket for CChunkData<'_> {
         buf.put_slice(&heightmap_nbt);
 
         let mut data_buf = BytesMut::new();
-        self.0.subchunks.array_iter().for_each(|subchunk| {
+        self.0.blocks.array_iter_subchunks().for_each(|subchunk| {
             let block_count = subchunk.len() as i16;
             // Block count
             data_buf.put_i16(block_count);
@@ -116,7 +116,7 @@ impl ClientPacket for CChunkData<'_> {
 
         // Sky Light Mask
         // All of the chunks, this is not optimal and uses way more data than needed but will be
-        // overhauled with full lighting system.
+        // overhauled with a full lighting system.
         buf.put_bit_set(&BitSet(VarInt(1), vec![0b01111111111111111111111110]));
         // Block Light Mask
         buf.put_bit_set(&BitSet(VarInt(1), vec![0]));
@@ -126,7 +126,7 @@ impl ClientPacket for CChunkData<'_> {
         buf.put_bit_set(&BitSet(VarInt(1), vec![0]));
 
         buf.put_var_int(&VarInt(SUBCHUNKS_COUNT as i32));
-        self.0.subchunks.array_iter().for_each(|chunk| {
+        self.0.blocks.array_iter_subchunks().for_each(|chunk| {
             let mut chunk_light = [0u8; 2048];
             for (i, _) in chunk.iter().enumerate() {
                 // if !block .is_air() {

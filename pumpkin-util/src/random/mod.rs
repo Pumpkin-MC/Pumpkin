@@ -17,7 +17,7 @@ pub fn get_seed() -> u64 {
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
             Some(val.wrapping_mul(1181783497276652981u64))
         })
-        // We always return Some, so there will always be an Ok result
+        // We always return `Some``, so there will always be an `Ok` result
         .unwrap();
 
     let nanos = time::SystemTime::now()
@@ -222,8 +222,8 @@ pub fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
 
 pub fn java_string_hash(string: &str) -> i32 {
     // All byte values of latin1 align with
-    // the values of U+0000 - U+00FF making this code
-    // equivalent to both java hash implementations
+    // the values of U+0000 - U+00FF, making this code
+    // equivalent to both Java hash implementations
 
     let mut result = 0i32;
 

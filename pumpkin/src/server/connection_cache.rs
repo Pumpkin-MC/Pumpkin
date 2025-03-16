@@ -41,13 +41,13 @@ fn load_icon_from_bytes(png_data: &[u8]) -> Result<String, Box<dyn error::Error>
 
 pub struct CachedStatus {
     status_response: StatusResponse,
-    // We cache the json response here so we don't parse it every time someone makes a Status request.
-    // Keep in mind that we must parse this again, when the StatusResponse changes which usually happen when a player joins or leaves
+    // We cache the json response here so we don't parse it every time someone makes a status request.
+    // Keep in mind that we must parse this again when the StatusResponse changes, which usually happen when a player joins or leaves.
     status_response_json: String,
 }
 
 pub struct CachedBranding {
-    /// Cached Server brand buffer so we don't have to rebuild them every time a player joins
+    /// Cached server brand buffer so we don't have to rebuild them every time a player joins
     cached_server_brand: Box<[u8]>,
 }
 
@@ -76,7 +76,7 @@ impl CachedStatus {
     pub fn new() -> Self {
         let status_response = Self::build_response(&BASIC_CONFIG);
         let status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse Status response into JSON");
+            .expect("Failed to parse status response into JSON");
 
         Self {
             status_response,
@@ -96,7 +96,7 @@ impl CachedStatus {
         }
 
         self.status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse Status response into JSON");
+            .expect("Failed to parse status response into JSON");
     }
 
     pub fn remove_player(&mut self) {
@@ -106,7 +106,7 @@ impl CachedStatus {
         }
 
         self.status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse Status response into JSON");
+            .expect("Failed to parse status response into JSON");
     }
 
     pub fn build_response(config: &BasicConfiguration) -> StatusResponse {

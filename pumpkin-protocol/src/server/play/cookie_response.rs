@@ -8,8 +8,8 @@ use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
 use pumpkin_macros::packet;
 
 #[packet(PLAY_COOKIE_RESPONSE)]
-/// Response to a Cookie Request (play) from the server.
-/// The Notchian (vanilla) server only accepts responses of up to 5 kiB in size.
+/// Response to a `CCookieRequest` (play) from the server.
+/// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
 pub struct SCookieResponse {
     pub key: Identifier,
     pub has_payload: bool,

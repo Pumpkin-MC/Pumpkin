@@ -19,7 +19,7 @@ impl Codec<Self> for VarLong {
     /// The maximum number of bytes a `VarLong` can occupy.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(10) };
 
-    /// Returns the exact number of bytes this varlong will write when
+    /// Returns the exact number of bytes this VarLong will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     fn written_size(&self) -> usize {
         match self.0 {

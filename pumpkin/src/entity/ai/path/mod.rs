@@ -25,9 +25,9 @@ impl Navigator {
 
     pub async fn tick(&mut self, entity: &LivingEntity) {
         if let Some(goal) = &mut self.current_goal {
-            // first lets check if we reached destination
+            // First, let's check if we have reached the destination
             if goal.current_progress == goal.destination {
-                // if yes, we are done here
+                // If yes, we are done here.
                 self.current_goal = None;
                 return;
             }
@@ -56,7 +56,7 @@ impl Navigator {
                 }
             }
 
-            // this is important, first this saves us many packets when we don't actually move, and second this prevents division using zero
+            // This is important. Firstly, this saves us many packets when we don't actually move. Secondly, this prevents division using zero
             // when normalize
             if best_move.x == 0.0 && best_move.z == 0.0 {
                 return;
@@ -64,7 +64,7 @@ impl Navigator {
             // Update current progress based on the best move
             goal.current_progress += best_move.normalize() * goal.speed;
 
-            // now lets move
+            // Now let's move
             entity.set_pos(goal.current_progress);
             let pos = entity.entity.pos.load();
             let last_pos = entity.last_pos.load();
@@ -100,9 +100,9 @@ impl Node {
     pub fn new(location: Vector3<f64>) -> Self {
         Self { location }
     }
-    /// How expensive is it to go to a location
+    /// How expensive is it to go to a location?
     ///
-    /// Returns a f64, Higher = More Expensive
+    /// Returns an `f64`; higher means more expensive.
     #[must_use]
     pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
         self.location.squared_distance_to_vec(end).sqrt()

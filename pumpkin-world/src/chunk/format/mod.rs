@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, SUBCHUNK_VOLUME, ScheduledTick,
-    Subchunks, TickPriority,
+    ChunkBlocks, TickPriority,
 };
 
 pub mod anvil;
@@ -52,7 +52,7 @@ impl ChunkData {
         }
 
         // this needs to be boxed, otherwise it will cause a stack-overflow
-        let mut subchunks = Subchunks::Single(0);
+        let mut blocks = ChunkBlocks::Homogeneous(0);
         let mut block_index = 0; // which block we're currently at
 
         for section in chunk_data.sections.into_iter() {
@@ -95,7 +95,7 @@ impl ChunkData {
                     // TODO allow indexing blocks directly so we can just use block_index and save some time?
                     // this is fine because we initialized the heightmap of `blocks`
                     // from the cached value in the world file
-                    subchunks.set_block_no_heightmap_update(
+                    blocks.set_block_no_heightmap_update(
                         ChunkRelativeBlockCoordinates {
                             z: ((block_index % CHUNK_AREA) / 16).into(),
                             y: Height::from_absolute((block_index / CHUNK_AREA) as u16),
@@ -116,7 +116,7 @@ impl ChunkData {
         }
 
         Ok(ChunkData {
-            subchunks,
+            blocks,
             heightmap: chunk_data.heightmaps,
             position,
             // This chunk is read from disk, so it has not been modified

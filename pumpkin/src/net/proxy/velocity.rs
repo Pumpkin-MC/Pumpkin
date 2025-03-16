@@ -1,6 +1,6 @@
 /// Proxy implementation for Velocity <https://papermc.io/software/velocity> by `PaperMC`
-/// Sadly `PaperMC` does not care about 3th Parties providing support for Velocity, There is no documentation.
-/// I had to understand the Code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/master/patches/server/0731-Add-Velocity-IP-Forwarding-Support.patch>
+/// Sadly, `PaperMC` does not care about 3rd parties providing support for Velocity. There is no documentation.
+/// I had to understand the code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/master/patches/server/0731-Add-Velocity-IP-Forwarding-Support.patch>
 use std::net::{IpAddr, SocketAddr};
 
 use bytes::{BufMut, BytesMut};
@@ -44,7 +44,7 @@ pub enum VelocityError {
 }
 
 pub async fn velocity_login(client: &Client) {
-    // TODO: validate packet transaction id from plugin response with this
+    // TODO: Validate the packet transaction id from the plugin response with this
     let velocity_message_id: i32 = rand::thread_rng().r#gen();
 
     let mut buf = BytesMut::new();
@@ -61,7 +61,7 @@ pub async fn velocity_login(client: &Client) {
 #[must_use]
 pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     let (signature, data_without_signature) = data;
-    // Our fault, We can panic/expect ?
+    // Our fault, we can panic/expect?
     let mut mac =
         HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(data_without_signature);
@@ -102,7 +102,7 @@ pub fn receive_velocity_plugin_response(
     config: &VelocityConfig,
     response: SLoginPluginResponse,
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
-    log::debug!("received velocity response");
+    log::debug!("Received velocity response");
     if let Some(data) = response.data {
         let (signature, data_without_signature) = data.split_at(32);
 
@@ -112,7 +112,7 @@ pub fn receive_velocity_plugin_response(
         let mut buf = BytesMut::new();
         buf.put_slice(data_without_signature);
 
-        // check velocity version
+        // Check velocity version
         let version = buf
             .try_get_var_int()
             .map_err(|_| VelocityError::FailedReadForwardVersion)?;

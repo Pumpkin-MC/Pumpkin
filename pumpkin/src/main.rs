@@ -30,7 +30,7 @@
 #![expect(clippy::missing_errors_doc)]
 #![expect(clippy::module_name_repetitions)]
 #![expect(clippy::struct_excessive_bools)]
-// Not warn event sending macros
+// Don't warn on event sending macros
 #![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
@@ -84,7 +84,7 @@ async fn main() {
     std::panic::set_hook(Box::new(move |info| {
         default_panic(info);
         // TODO: Gracefully exit?
-        // we need to abide by the panic rules here
+        // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
 
@@ -110,8 +110,8 @@ async fn main() {
     );
 
     log::warn!("Pumpkin is currently under heavy development!");
-    log::info!("Report Issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    log::info!("Join our Discord for community support https://discord.com/invite/wT8XjrjKkf");
+    log::info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
+    log::info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
 
     tokio::spawn(async {
         setup_sighandler()
@@ -122,9 +122,9 @@ async fn main() {
     let pumpkin_server = PumpkinServer::new().await;
     pumpkin_server.init_plugins().await;
 
-    log::info!("Started Server took {}ms", time.elapsed().as_millis());
+    log::info!("Started server; took {}ms", time.elapsed().as_millis());
     log::info!(
-        "You now can connect to the server, Listening on {}",
+        "You now can connect to the server; listening on {}",
         pumpkin_server.server_addr
     );
 

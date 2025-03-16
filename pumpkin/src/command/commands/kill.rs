@@ -33,7 +33,7 @@ impl CommandExecutor for Executor {
         let target_count = targets.len();
         let mut name = String::new();
         for target in targets {
-            target.living_entity.kill().await;
+            target.kill().await;
             name.clone_from(&target.gameprofile.name);
         }
 
@@ -80,7 +80,7 @@ impl CommandExecutor for SelfExecutor {
         let name = target.gameprofile.name.clone();
         let entity = &target.living_entity.entity;
 
-        target.living_entity.kill().await;
+        target.kill().await;
 
         sender
             .send_message(TextComponent::translate(
