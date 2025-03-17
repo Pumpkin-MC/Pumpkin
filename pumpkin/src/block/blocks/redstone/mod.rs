@@ -45,10 +45,14 @@ pub async fn get_redstone_power(
     pos: BlockPos,
     facing: BlockDirection,
 ) -> u8 {
-    return std::cmp::max(
-        get_max_strong_power(world, pos, true).await,
-        get_weak_power(block, state, world, pos, facing, true).await,
-    );
+    if state.is_solid {
+        return std::cmp::max(
+            get_max_strong_power(world, pos, true).await,
+            get_weak_power(block, state, world, pos, facing, true).await,
+        );
+    } else {
+        get_weak_power(block, state, world, pos, facing, true).await
+    }
 }
 
 async fn get_redstone_power_no_dust(
@@ -145,8 +149,14 @@ pub fn is_diode(block: &Block) -> bool {
 pub async fn diode_get_input_strength(world: &World, pos: BlockPos, facing: BlockDirection) -> u8 {
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
-    let mut power: u8 =
-        get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
+    let mut power: u8 = get_redstone_power(
+        &input_block,
+        &input_state,
+        world,
+        input_pos,
+        facing.opposite(),
+    )
+    .await;
     if power == 0 && input_block == Block::REDSTONE_WIRE {
         let wire = RedstoneWireLikeProperties::from_state_id(input_state.id, &input_block);
         power = wire.power.to_index() as u8;
