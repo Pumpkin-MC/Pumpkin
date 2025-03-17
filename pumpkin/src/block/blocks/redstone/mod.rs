@@ -58,10 +58,14 @@ async fn get_redstone_power_no_dust(
     pos: BlockPos,
     facing: BlockDirection,
 ) -> u8 {
-    return std::cmp::max(
-        get_max_strong_power(world, pos, false).await,
-        get_weak_power(block, state, world, pos, facing, false).await,
-    );
+    if state.is_solid {
+        return std::cmp::max(
+            get_max_strong_power(world, pos, false).await,
+            get_weak_power(block, state, world, pos, facing, false).await,
+        );
+    } else {
+        get_weak_power(block, state, world, pos, facing, false).await
+    }
 }
 
 async fn get_max_strong_power(world: &World, pos: BlockPos, dust_power: bool) -> u8 {
