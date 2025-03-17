@@ -1,11 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::{from_bytes, nbt_long_array};
 
 use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     block::ChunkBlockState,
@@ -121,43 +120,39 @@ impl ChunkData {
             position,
             // This chunk is read from disk, so it has not been modified
             dirty: false,
-            block_ticks: Arc::new(RwLock::new(
-                chunk_data
-                    .block_ticks
-                    .iter()
-                    .map(|tick| ScheduledTick {
-                        x: tick.x,
-                        y: tick.y,
-                        z: tick.z,
-                        delay: tick.delay as u16,
-                        priority: TickPriority::from(tick.priority),
-                        target_block_id: Block::from_registry_key(
-                            &tick.target_block.replace("minecraft:", ""),
-                        )
-                        .unwrap()
-                        .id,
-                    })
-                    .collect(),
-            )),
-            fluid_ticks: Arc::new(RwLock::new(
-                chunk_data
-                    .fluid_ticks
-                    .iter()
-                    .map(|tick| ScheduledTick {
-                        x: tick.x,
-                        y: tick.y,
-                        z: tick.z,
-                        delay: tick.delay as u16,
-                        priority: TickPriority::from(tick.priority),
-                        target_block_id: Block::from_registry_key(
-                            &tick.target_block.replace("minecraft:", ""),
-                        )
-                        .unwrap()
-                        .id,
-                    })
-                    .collect(),
-            )),
-            block_state_updates: Mutex::new(HashMap::new()),
+            block_ticks: chunk_data
+                .block_ticks
+                .iter()
+                .map(|tick| ScheduledTick {
+                    x: tick.x,
+                    y: tick.y,
+                    z: tick.z,
+                    delay: tick.delay as u16,
+                    priority: TickPriority::from(tick.priority),
+                    target_block_id: Block::from_registry_key(
+                        &tick.target_block.replace("minecraft:", ""),
+                    )
+                    .unwrap()
+                    .id,
+                })
+                .collect(),
+            fluid_ticks: chunk_data
+                .fluid_ticks
+                .iter()
+                .map(|tick| ScheduledTick {
+                    x: tick.x,
+                    y: tick.y,
+                    z: tick.z,
+                    delay: tick.delay as u16,
+                    priority: TickPriority::from(tick.priority),
+                    target_block_id: Block::from_registry_key(
+                        &tick.target_block.replace("minecraft:", ""),
+                    )
+                    .unwrap()
+                    .id,
+                })
+                .collect(),
+            block_state_updates: HashMap::new(),
         })
     }
 }

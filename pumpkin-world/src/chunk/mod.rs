@@ -1,13 +1,11 @@
-use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos},
     vector2::Vector2,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with, sync::Arc};
+use std::{collections::HashMap, iter::repeat_with};
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
 
 use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
 
@@ -117,9 +115,9 @@ pub struct ChunkData {
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
     pub dirty: bool,
-    pub block_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
-    pub fluid_ticks: Arc<RwLock<Vec<ScheduledTick>>>,
-    pub block_state_updates: Mutex<HashMap<BlockPos, u16>>,
+    pub block_ticks: Vec<ScheduledTick>,
+    pub fluid_ticks: Vec<ScheduledTick>,
+    pub block_state_updates: HashMap<BlockPos, u16>,
 }
 
 /// Represents pure block data for a chunk.
@@ -318,28 +316,26 @@ impl ChunkData {
         todo!()
     }
 
-    pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
+    pub async fn get_blocks_to_tick(&mut self) -> Vec<ScheduledTick> {
         let mut blocks_to_tick = Vec::new();
-        let mut block_ticks = self.block_ticks.write().await;
         for priority in TickPriority::values() {
-            for tick in block_ticks.iter_mut() {
+            for tick in self.block_ticks.iter_mut() {
                 if tick.priority == priority {
-                    tick.delay -= 1;
+                    tick.delay.saturating_sub(1);
                     if tick.delay == 0 {
                         blocks_to_tick.push(tick.clone());
                     }
                 }
             }
         }
-        block_ticks.retain(|tick| tick.delay > 0);
+        self.block_ticks.retain(|tick| tick.delay > 0);
         blocks_to_tick
     }
 
-    pub async fn get_block_state_updates(&self) -> Vec<Vec<(BlockPos, u16)>> {
-        let mut block_state_updates = self.block_state_updates.lock().await;
+    pub async fn get_block_state_updates(&mut self) -> Vec<Vec<(BlockPos, u16)>> {
         // Needs to group by chunk section
         let mut block_state_updates_by_chunk_section = HashMap::new();
-        for (position, block_state_id) in block_state_updates.drain() {
+        for (position, block_state_id) in self.block_state_updates.drain() {
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)

@@ -474,7 +474,7 @@ impl Level {
     pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
         let mut blocks_to_tick = Vec::new();
         for chunk in self.loaded_chunks.iter() {
-            let chunk_data = chunk.value().read().await;
+            let mut chunk_data = chunk.value().write().await;
             let blocks = chunk_data.get_blocks_to_tick().await;
             for block in blocks {
                 blocks_to_tick.push(block);
@@ -487,7 +487,7 @@ impl Level {
     pub async fn get_block_state_updates(&self) -> Vec<Vec<Vec<(BlockPos, u16)>>> {
         let mut block_state_updates = Vec::new();
         for chunk in self.loaded_chunks.iter() {
-            let chunk_data = chunk.value().read().await;
+            let mut chunk_data = chunk.value().write().await;
             let updates = chunk_data.get_block_state_updates().await;
             block_state_updates.push(updates);
         }

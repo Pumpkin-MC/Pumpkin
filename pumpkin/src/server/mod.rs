@@ -101,7 +101,7 @@ impl Server {
                 "./world".parse().unwrap(),
             ),
             DimensionType::Overworld,
-            Arc::clone(&block_registry),
+            block_registry.clone(),
         );
 
         Self {

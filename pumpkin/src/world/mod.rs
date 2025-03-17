@@ -1139,11 +1139,7 @@ impl World {
         chunk.dirty = true;
 
         chunk.blocks.set_block(relative, block_state_id);
-        chunk
-            .block_state_updates
-            .lock()
-            .await
-            .insert(*position, block_state_id);
+        chunk.block_state_updates.insert(*position, block_state_id);
         drop(chunk);
 
         let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
@@ -1242,8 +1238,7 @@ impl World {
 
         let mut chunk = chunk.write().await;
         chunk.dirty = true;
-        let mut block_ticks = chunk.block_ticks.write().await;
-        block_ticks.push(ScheduledTick {
+        chunk.block_ticks.push(ScheduledTick {
             x: block_pos.0.x,
             y: block_pos.0.y,
             z: block_pos.0.z,
@@ -1259,8 +1254,7 @@ impl World {
 
         let chunk = self.receive_chunk(chunk_coordinate).await.0;
         let chunk = chunk.read().await;
-        let block_ticks = chunk.block_ticks.read().await;
-        block_ticks.iter().any(|tick| {
+        chunk.block_ticks.iter().any(|tick| {
             tick.target_block_id == block.id
                 && tick.x == block_pos.0.x
                 && tick.y == block_pos.0.y

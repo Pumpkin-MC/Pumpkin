@@ -81,9 +81,9 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             position: at,
             // We just generated this chunk! Mark it as dirty
             dirty: true,
-            block_ticks: Arc::new(RwLock::new(vec![])),
-            fluid_ticks: Arc::new(RwLock::new(vec![])),
-            block_state_updates: Mutex::new(HashMap::new()),
+            block_ticks: vec![],
+            fluid_ticks: vec![],
+            block_state_updates: HashMap::new(),
         }
     }
 }
