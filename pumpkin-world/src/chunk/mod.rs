@@ -321,7 +321,7 @@ impl ChunkData {
         for priority in TickPriority::values() {
             for tick in self.block_ticks.iter_mut() {
                 if tick.priority == priority {
-                    tick.delay.saturating_sub(1);
+                    tick.delay = tick.delay.saturating_sub(1);
                     if tick.delay == 0 {
                         blocks_to_tick.push(tick.clone());
                     }
