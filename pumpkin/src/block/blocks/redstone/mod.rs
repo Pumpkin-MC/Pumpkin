@@ -2,9 +2,7 @@
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
-use pumpkin_data::block::{
-    Block, BlockProperties, BlockState, EnumVariants, RedstoneWireLikeProperties,
-};
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
@@ -95,6 +93,28 @@ async fn get_max_strong_power(world: &World, pos: BlockPos, dust_power: bool) ->
     max_power
 }
 
+async fn get_max_weak_power(world: &World, pos: BlockPos, dust_power: bool) -> u8 {
+    let mut max_power = 0;
+    for side in &BlockDirection::all() {
+        let (block, state) = world
+            .get_block_and_block_state(&pos.offset(side.to_offset()))
+            .await
+            .unwrap();
+        max_power = max_power.max(
+            get_weak_power(
+                &block,
+                &state,
+                world,
+                pos.offset(side.to_offset()),
+                *side,
+                dust_power,
+            )
+            .await,
+        );
+    }
+    max_power
+}
+
 async fn get_weak_power(
     block: &Block,
     state: &BlockState,
@@ -150,17 +170,9 @@ pub fn is_diode(block: &Block) -> bool {
 pub async fn diode_get_input_strength(world: &World, pos: BlockPos, facing: BlockDirection) -> u8 {
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
-    let mut power: u8 = get_redstone_power(
-        &input_block,
-        &input_state,
-        world,
-        input_pos,
-        facing.opposite(),
-    )
-    .await;
-    if power == 0 && input_block == Block::REDSTONE_WIRE {
-        let wire = RedstoneWireLikeProperties::from_state_id(input_state.id, &input_block);
-        power = wire.power.to_index() as u8;
+    let power: u8 = get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
+    if power == 0 {
+        return get_max_weak_power(world, input_pos, true).await;
     }
     power
 }

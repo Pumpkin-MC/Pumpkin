@@ -1358,10 +1358,19 @@ impl World {
         }
     }
 
-    pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
+    pub async fn get_block_state_id(
+        &self,
+        position: &BlockPos,
+        load_chunk: bool,
+    ) -> Result<u16, GetBlockError> {
         let (chunk, relative) = position.chunk_and_chunk_relative_position();
         let relative = ChunkRelativeBlockCoordinates::from(relative);
-        let chunk = self.receive_chunk(chunk).await.0;
+        let chunk = if load_chunk {
+            self.receive_chunk(chunk).await.0
+        } else {
+            //TODO: Don't panic
+            self.level.try_get_chunk(chunk).unwrap().clone()
+        };
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         let Some(id) = chunk.blocks.get_block(relative) else {
@@ -1376,7 +1385,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::block::Block, GetBlockError> {
-        let id = self.get_block_state_id(position).await?;
+        let id = self.get_block_state_id(position, false).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1385,7 +1394,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
-        let id = self.get_block_state_id(position).await?;
+        let id = self.get_block_state_id(position, false).await?;
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1401,7 +1410,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<(pumpkin_data::block::Block, pumpkin_data::block::BlockState), GetBlockError> {
-        let id = self.get_block_state_id(position).await?;
+        let id = self.get_block_state_id(position, false).await?;
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1464,7 +1473,7 @@ impl World {
         }
 
         let neighbor_pos = block_pos.offset(direction.to_offset());
-        let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await.unwrap();
+        let neighbor_state_id = self.get_block_state_id(&neighbor_pos, false).await.unwrap();
 
         let new_state_id = self
             .block_registry
