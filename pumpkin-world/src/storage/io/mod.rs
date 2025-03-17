@@ -99,7 +99,7 @@ pub trait ChunkSerializer: Send + Sync + Default {
     async fn write(&self, backend: Self::WriteBackend) -> Result<(), std::io::Error>;
 
     /// Create a new instance from bytes
-    fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
+    fn read(bytes: Bytes) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunk data to the serializer
     async fn update_chunk(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError>;

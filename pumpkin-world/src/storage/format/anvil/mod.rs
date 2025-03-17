@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use bytes::*;
+use chunk::AnvilChunkFormat;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -19,20 +20,22 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::chunk::{
-    ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
+use crate::storage::{
+    ChunkData, ChunkReadingError, ChunkWritingError, CompressionError,
+    format::get_region_coords,
     io::{ChunkSerializer, LoadedData},
 };
 
-use super::{ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry};
+pub mod chunk;
+pub mod entity;
+
+use super::{
+    BytesToData, ChunkNbt, ChunkSection, ChunkSectionBlockStates, DataToBytes, PaletteEntry,
+    get_chunk_index,
+};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
-
-/// The number of bits that identify two chunks in the same region
-pub const SUBREGION_BITS: u8 = pumpkin_util::math::ceil_log2(REGION_SIZE as u32);
-
-pub const SUBREGION_AND: i32 = i32::pow(2, SUBREGION_BITS as u32) - 1;
 
 /// The number of chunks in a region
 pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
@@ -42,9 +45,6 @@ const SECTOR_BYTES: usize = 4096;
 
 // 1.21.4
 const WORLD_DATA_VERSION: i32 = 4189;
-
-#[derive(Clone, Default)]
-pub struct AnvilChunkFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -76,7 +76,7 @@ impl<R: Read> Read for CompressionRead<R> {
 }
 
 #[derive(Default, Clone)]
-pub struct AnvilChunkData {
+pub struct AnvilData {
     compression: Option<Compression>,
     // Length is always the length of this + compression byte (1) so we dont need to save a length
     compressed_data: Bytes,
@@ -106,239 +106,21 @@ impl WriteAction {
     }
 }
 
-struct AnvilChunkMetadata {
-    serialized_data: AnvilChunkData,
+struct AnvilMetadata {
+    serialized_data: AnvilData,
     timestamp: u32,
 
     // NOTE: This is only valid if our WriteAction is `Parts`
     file_sector_offset: u32,
 }
 
-pub struct AnvilChunkFile {
-    chunks_data: [Option<AnvilChunkMetadata>; CHUNK_COUNT],
+pub struct AnvilFile {
+    chunks_data: [Option<AnvilMetadata>; CHUNK_COUNT],
     end_sector: u32,
     write_action: Mutex<WriteAction>,
 }
 
-impl Compression {
-    const GZIP_ID: u8 = 1;
-    const ZLIB_ID: u8 = 2;
-    const NO_COMPRESSION_ID: u8 = 3;
-    const LZ4_ID: u8 = 4;
-    const CUSTOM_ID: u8 = 127;
-
-    fn decompress_data(&self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
-        match self {
-            Compression::GZip => {
-                let mut decoder = GzDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::GZipError)?;
-                Ok(chunk_data.into_boxed_slice())
-            }
-            Compression::ZLib => {
-                let mut decoder = ZlibDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::ZlibError)?;
-                Ok(chunk_data.into_boxed_slice())
-            }
-            Compression::LZ4 => {
-                let mut decoder =
-                    lz4::Decoder::new(compressed_data).map_err(CompressionError::LZ4Error)?;
-                let mut decompressed_data = Vec::new();
-                decoder
-                    .read_to_end(&mut decompressed_data)
-                    .map_err(CompressionError::LZ4Error)?;
-                Ok(decompressed_data.into_boxed_slice())
-            }
-            Compression::Custom => todo!(),
-        }
-    }
-
-    fn compress_data(
-        &self,
-        uncompressed_data: &[u8],
-        compression_level: u32,
-    ) -> Result<Vec<u8>, CompressionError> {
-        match self {
-            Compression::GZip => {
-                let mut encoder = GzEncoder::new(
-                    uncompressed_data,
-                    flate2::Compression::new(compression_level),
-                );
-                let mut chunk_data = Vec::new();
-                encoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::GZipError)?;
-                Ok(chunk_data)
-            }
-            Compression::ZLib => {
-                let mut encoder = ZlibEncoder::new(
-                    uncompressed_data,
-                    flate2::Compression::new(compression_level),
-                );
-                let mut chunk_data = Vec::new();
-                encoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::ZlibError)?;
-                Ok(chunk_data)
-            }
-
-            Compression::LZ4 => {
-                let mut compressed_data = Vec::new();
-                let mut encoder = lz4::EncoderBuilder::new()
-                    .level(compression_level)
-                    .build(&mut compressed_data)
-                    .map_err(CompressionError::LZ4Error)?;
-                if let Err(err) = encoder.write_all(uncompressed_data) {
-                    return Err(CompressionError::LZ4Error(err));
-                }
-                if let (_output, Err(err)) = encoder.finish() {
-                    return Err(CompressionError::LZ4Error(err));
-                }
-                Ok(compressed_data)
-            }
-            Compression::Custom => todo!(),
-        }
-    }
-
-    /// Returns Ok when a compression is found otherwise an Err
-    #[allow(clippy::result_unit_err)]
-    pub fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
-        match byte {
-            Self::GZIP_ID => Ok(Some(Self::GZip)),
-            Self::ZLIB_ID => Ok(Some(Self::ZLib)),
-            // Uncompressed (since a version before 1.15.1)
-            Self::NO_COMPRESSION_ID => Ok(None),
-            Self::LZ4_ID => Ok(Some(Self::LZ4)),
-            Self::CUSTOM_ID => Ok(Some(Self::Custom)),
-            // Unknown format
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<pumpkin_config::chunk::Compression> for Compression {
-    fn from(value: pumpkin_config::chunk::Compression) -> Self {
-        // :c
-        match value {
-            pumpkin_config::chunk::Compression::GZip => Self::GZip,
-            pumpkin_config::chunk::Compression::ZLib => Self::ZLib,
-            pumpkin_config::chunk::Compression::LZ4 => Self::LZ4,
-            pumpkin_config::chunk::Compression::Custom => Self::Custom,
-        }
-    }
-}
-
-impl AnvilChunkData {
-    /// Raw size of serialized chunk
-    #[inline]
-    fn raw_write_size(&self) -> usize {
-        // 4 bytes for the *length* and 1 byte for the *compression* method
-        self.compressed_data.remaining() + 4 + 1
-    }
-
-    /// Size of serialized chunk with padding
-    #[inline]
-    fn padded_size(&self) -> usize {
-        let sector_count = self.sector_count() as usize;
-        sector_count * SECTOR_BYTES
-    }
-
-    #[inline]
-    fn sector_count(&self) -> u32 {
-        let total_size = self.raw_write_size();
-        total_size.div_ceil(SECTOR_BYTES) as u32
-    }
-
-    fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
-        let mut bytes = bytes;
-        // Minus one for the compression byte
-        let length = bytes.get_u32() as usize - 1;
-
-        let compression_method = bytes.get_u8();
-        let compression = Compression::from_byte(compression_method)
-            .map_err(|_| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
-
-        Ok(AnvilChunkData {
-            compression,
-            // If this has padding, we need to trim it
-            compressed_data: bytes.slice(..length),
-        })
-    }
-
-    async fn write(&self, w: &mut (impl AsyncWrite + Unpin + Send)) -> Result<(), std::io::Error> {
-        let padded_size = self.padded_size();
-
-        w.write_u32((self.compressed_data.remaining() + 1) as u32)
-            .await?;
-        w.write_u8(
-            self.compression
-                .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8),
-        )
-        .await?;
-
-        w.write_all(&self.compressed_data).await?;
-        for _ in 0..(padded_size - self.raw_write_size()) {
-            w.write_u8(0).await?;
-        }
-
-        Ok(())
-    }
-
-    fn to_chunk(&self, pos: Vector2<i32>) -> Result<ChunkData, ChunkReadingError> {
-        let chunk = if let Some(compression) = self.compression {
-            let decompress_bytes = compression
-                .decompress_data(&self.compressed_data)
-                .map_err(ChunkReadingError::Compression)?;
-
-            ChunkData::from_bytes(&decompress_bytes, pos)
-        } else {
-            ChunkData::from_bytes(&self.compressed_data, pos)
-        }
-        .map_err(ChunkReadingError::ParsingError)?;
-
-        Ok(chunk)
-    }
-
-    fn from_chunk(
-        chunk: &ChunkData,
-        compression: Option<Compression>,
-    ) -> Result<Self, ChunkWritingError> {
-        let raw_bytes = chunk_to_bytes(chunk)
-            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
-
-        let compression = compression
-            .unwrap_or_else(|| advanced_config().chunk.compression.algorithm.clone().into());
-
-        // We need to buffer here anyway so theres no use in making an impl Write for this
-        let compressed_data = compression
-            .compress_data(&raw_bytes, advanced_config().chunk.compression.level)
-            .map_err(ChunkWritingError::Compression)?;
-
-        Ok(AnvilChunkData {
-            compression: Some(compression),
-            compressed_data: compressed_data.into(),
-        })
-    }
-}
-
-impl AnvilChunkFile {
-    pub const fn get_region_coords(at: &Vector2<i32>) -> (i32, i32) {
-        // Divide by 32 for the region coordinates
-        (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS)
-    }
-
-    pub const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
-        let local_x = pos.x & SUBREGION_AND;
-        let local_z = pos.z & SUBREGION_AND;
-        let index = (local_z << SUBREGION_BITS) + local_x;
-        index as usize
-    }
-
+impl AnvilFile {
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
         log::trace!("Writing in place: {:?}", path);
 
@@ -489,33 +271,15 @@ impl AnvilChunkFile {
         log::trace!("Wrote file to Disk: {:?}", path);
         Ok(())
     }
-}
-
-impl Default for AnvilChunkFile {
-    fn default() -> Self {
-        Self {
-            chunks_data: [const { None }; CHUNK_COUNT],
-            write_action: Mutex::new(WriteAction::Pass),
-            // Two sectors for offset + timestamp
-            end_sector: 2,
-        }
-    }
-}
-
-#[async_trait]
-impl ChunkSerializer for AnvilChunkFile {
-    type Data = ChunkData;
-    type WriteBackend = PathBuf;
 
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched
     }
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
-        let (region_x, region_z) = Self::get_region_coords(chunk);
+        let (region_x, region_z) = get_region_coords(chunk);
         format!("./r.{}.{}.mca", region_x, region_z)
     }
-
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
@@ -548,7 +312,7 @@ impl ChunkSerializer for AnvilChunkFile {
         let headers = raw_file_bytes.split_to(SECTOR_BYTES * 2);
         let (mut location_bytes, mut timestamp_bytes) = headers.split_at(SECTOR_BYTES);
 
-        let mut chunk_file = AnvilChunkFile::default();
+        let mut chunk_file = AnvilFile::default();
 
         let mut last_offset = 2;
         for i in 0..CHUNK_COUNT {
@@ -573,11 +337,11 @@ impl ChunkSerializer for AnvilChunkFile {
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
 
-            let serialized_data = AnvilChunkData::from_bytes(
+            let serialized_data = AnvilData::from_bytes(
                 raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
             )?;
 
-            chunk_file.chunks_data[i] = Some(AnvilChunkMetadata {
+            chunk_file.chunks_data[i] = Some(AnvilMetadata {
                 serialized_data,
                 timestamp,
                 file_sector_offset: sector_offset as u32,
@@ -588,29 +352,32 @@ impl ChunkSerializer for AnvilChunkFile {
         Ok(chunk_file)
     }
 
-    async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
-        let epoch = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as u32;
-
-        let index = AnvilChunkFile::get_chunk_index(&chunk.position);
+    async fn update_chunk<W: DataToBytes>(
+        &mut self,
+        pos: Vector2<i32>,
+        chunk: &W::Data,
+    ) -> Result<(), ChunkWritingError> {
+        let index = get_chunk_index(&pos);
         // Default to the compression type read from the file
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type)?;
+        let new_chunk_data = AnvilData::from_data::<W>(chunk, compression_type)?;
 
         let mut write_action = self.write_action.lock().await;
         if !advanced_config().chunk.write_in_place {
             *write_action = WriteAction::All;
         }
 
+        let epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
         match &*write_action {
             WriteAction::All => {
                 log::trace!("Write action is all: setting chunk in place");
                 // Doesn't matter, just add the data
-                self.chunks_data[index] = Some(AnvilChunkMetadata {
+                self.chunks_data[index] = Some(AnvilMetadata {
                     serialized_data: new_chunk_data,
                     timestamp: epoch,
                     file_sector_offset: 0,
@@ -627,7 +394,7 @@ impl ChunkSerializer for AnvilChunkFile {
                         );
                         // This chunk didn't exist before; append to EOF
                         let new_eof = self.end_sector + new_chunk_data.sector_count();
-                        self.chunks_data[index] = Some(AnvilChunkMetadata {
+                        self.chunks_data[index] = Some(AnvilMetadata {
                             serialized_data: new_chunk_data,
                             timestamp: epoch,
                             file_sector_offset: self.end_sector,
@@ -645,7 +412,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 new_chunk_data.sector_count()
                             );
                             // We can just add it
-                            self.chunks_data[index] = Some(AnvilChunkMetadata {
+                            self.chunks_data[index] = Some(AnvilMetadata {
                                 serialized_data: new_chunk_data,
                                 timestamp: epoch,
                                 file_sector_offset: old_chunk.file_sector_offset,
@@ -692,7 +459,7 @@ impl ChunkSerializer for AnvilChunkFile {
 
                                 // give up...
                                 *write_action = WriteAction::All;
-                                self.chunks_data[index] = Some(AnvilChunkMetadata {
+                                self.chunks_data[index] = Some(AnvilMetadata {
                                     serialized_data: new_chunk_data,
                                     timestamp: epoch,
                                     file_sector_offset: 0,
@@ -713,7 +480,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 let new_sectors = new_chunk_data.sector_count();
                                 let swapped_index = swap.0;
                                 let old_offset = old_chunk.file_sector_offset;
-                                self.chunks_data[index] = Some(AnvilChunkMetadata {
+                                self.chunks_data[index] = Some(AnvilMetadata {
                                     serialized_data: new_chunk_data,
                                     timestamp: epoch,
                                     file_sector_offset: swap.1.file_sector_offset,
@@ -762,149 +529,223 @@ impl ChunkSerializer for AnvilChunkFile {
 
         Ok(())
     }
+}
 
-    async fn get_chunks(
-        &self,
-        chunks: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
-    ) {
-        // Create an unbounded buffer so we don't block the rayon thread pool
-        let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::unbounded_channel();
+impl Compression {
+    const GZIP_ID: u8 = 1;
+    const ZLIB_ID: u8 = 2;
+    const NO_COMPRESSION_ID: u8 = 3;
+    const LZ4_ID: u8 = 4;
+    const CUSTOM_ID: u8 = 127;
 
-        // Don't par iter here so we can prevent backpressure with the await in the async
-        // runtime
-        for chunk in chunks.iter().cloned() {
-            let index = AnvilChunkFile::get_chunk_index(&chunk);
-            match &self.chunks_data[index] {
-                None => stream
-                    .send(LoadedData::Missing(chunk))
-                    .await
-                    .expect("Failed to send chunk"),
-                Some(chunk_metadata) => {
-                    let send = bridge_send.clone();
-                    let chunk_data = chunk_metadata.serialized_data.clone();
-                    rayon::spawn(move || {
-                        let result = match chunk_data.to_chunk(chunk) {
-                            Ok(chunk) => LoadedData::Loaded(chunk),
-                            Err(err) => LoadedData::Error((chunk, err)),
-                        };
-
-                        send.send(result)
-                            .expect("Failed to send anvil chunks from rayon thread");
-                    });
-                }
+    fn decompress_data(&self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
+        match self {
+            Compression::GZip => {
+                let mut decoder = GzDecoder::new(compressed_data);
+                let mut chunk_data = Vec::new();
+                decoder
+                    .read_to_end(&mut chunk_data)
+                    .map_err(CompressionError::GZipError)?;
+                Ok(chunk_data.into_boxed_slice())
             }
+            Compression::ZLib => {
+                let mut decoder = ZlibDecoder::new(compressed_data);
+                let mut chunk_data = Vec::new();
+                decoder
+                    .read_to_end(&mut chunk_data)
+                    .map_err(CompressionError::ZlibError)?;
+                Ok(chunk_data.into_boxed_slice())
+            }
+            Compression::LZ4 => {
+                let mut decoder =
+                    lz4::Decoder::new(compressed_data).map_err(CompressionError::LZ4Error)?;
+                let mut decompressed_data = Vec::new();
+                decoder
+                    .read_to_end(&mut decompressed_data)
+                    .map_err(CompressionError::LZ4Error)?;
+                Ok(decompressed_data.into_boxed_slice())
+            }
+            Compression::Custom => todo!(),
         }
-        // Drop the original so streams clean-up
-        drop(bridge_send);
+    }
 
-        // We don't want to waste work, so recv unbounded from the rayon thread pool, then re-send
-        // to the channel
+    fn compress_data(
+        &self,
+        uncompressed_data: &[u8],
+        compression_level: u32,
+    ) -> Result<Vec<u8>, CompressionError> {
+        match self {
+            Compression::GZip => {
+                let mut encoder = GzEncoder::new(
+                    uncompressed_data,
+                    flate2::Compression::new(compression_level),
+                );
+                let mut chunk_data = Vec::new();
+                encoder
+                    .read_to_end(&mut chunk_data)
+                    .map_err(CompressionError::GZipError)?;
+                Ok(chunk_data)
+            }
+            Compression::ZLib => {
+                let mut encoder = ZlibEncoder::new(
+                    uncompressed_data,
+                    flate2::Compression::new(compression_level),
+                );
+                let mut chunk_data = Vec::new();
+                encoder
+                    .read_to_end(&mut chunk_data)
+                    .map_err(CompressionError::ZlibError)?;
+                Ok(chunk_data)
+            }
 
-        while let Some(data) = bridge_recv.recv().await {
-            stream
-                .send(data)
-                .await
-                .expect("Failed to send anvil chunks from bridge");
+            Compression::LZ4 => {
+                let mut compressed_data = Vec::new();
+                let mut encoder = lz4::EncoderBuilder::new()
+                    .level(compression_level)
+                    .build(&mut compressed_data)
+                    .map_err(CompressionError::LZ4Error)?;
+                if let Err(err) = encoder.write_all(uncompressed_data) {
+                    return Err(CompressionError::LZ4Error(err));
+                }
+                if let (_output, Err(err)) = encoder.finish() {
+                    return Err(CompressionError::LZ4Error(err));
+                }
+                Ok(compressed_data)
+            }
+            Compression::Custom => todo!(),
+        }
+    }
+
+    /// Returns Ok when a compression is found otherwise an Err
+    #[allow(clippy::result_unit_err)]
+    pub fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
+        match byte {
+            Self::GZIP_ID => Ok(Some(Self::GZip)),
+            Self::ZLIB_ID => Ok(Some(Self::ZLib)),
+            // Uncompressed (since a version before 1.15.1)
+            Self::NO_COMPRESSION_ID => Ok(None),
+            Self::LZ4_ID => Ok(Some(Self::LZ4)),
+            Self::CUSTOM_ID => Ok(Some(Self::Custom)),
+            // Unknown format
+            _ => Err(()),
         }
     }
 }
 
-pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
-    let mut sections = Vec::new();
-
-    for (i, blocks) in chunk_data.blocks.array_iter_subchunks().enumerate() {
-        // get unique blocks
-        let unique_blocks: HashSet<_> = blocks.iter().collect();
-
-        let palette: IndexMap<_, _> = unique_blocks
-            .into_iter()
-            .enumerate()
-            .map(|(i, block)| {
-                let name = Block::from_state_id(*block).unwrap().name;
-                (block, (name, i))
-            })
-            .collect();
-
-        // Determine the number of bits needed to represent the largest index in the palette
-        let block_bit_size = if palette.len() < 16 {
-            4
-        } else {
-            ceil_log2(palette.len() as u32).max(4)
-        };
-
-        let mut section_longs = Vec::new();
-        let mut current_pack_long: i64 = 0;
-        let mut bits_used_in_pack: u32 = 0;
-
-        // Empty data if the palette only contains one index https://minecraft.fandom.com/wiki/Chunk_format
-        // if palette.len() > 1 {}
-        // TODO: Update to write empty data. Rn or read does not handle this elegantly
-        for block in blocks.iter() {
-            // Push if next bit does not fit
-            if bits_used_in_pack + block_bit_size as u32 > 64 {
-                section_longs.push(current_pack_long);
-                current_pack_long = 0;
-                bits_used_in_pack = 0;
-            }
-            let index = palette.get(block).expect("Just added all unique").1;
-            current_pack_long |= (index as i64) << bits_used_in_pack;
-            bits_used_in_pack += block_bit_size as u32;
-
-            assert!(bits_used_in_pack <= 64);
-
-            // If the current 64-bit integer is full, push it to the section_longs and start a new one
-            if bits_used_in_pack >= 64 {
-                section_longs.push(current_pack_long);
-                current_pack_long = 0;
-                bits_used_in_pack = 0;
-            }
+impl From<pumpkin_config::chunk::Compression> for Compression {
+    fn from(value: pumpkin_config::chunk::Compression) -> Self {
+        // :c
+        match value {
+            pumpkin_config::chunk::Compression::GZip => Self::GZip,
+            pumpkin_config::chunk::Compression::ZLib => Self::ZLib,
+            pumpkin_config::chunk::Compression::LZ4 => Self::LZ4,
+            pumpkin_config::chunk::Compression::Custom => Self::Custom,
         }
+    }
+}
 
-        // Push the last 64-bit integer if it contains any data
-        if bits_used_in_pack > 0 {
-            section_longs.push(current_pack_long);
-        }
-
-        sections.push(ChunkSection {
-            y: i as i8 - 4,
-            block_states: Some(ChunkSectionBlockStates {
-                data: Some(section_longs.into_boxed_slice()),
-                palette: palette
-                    .into_iter()
-                    .map(|entry| PaletteEntry {
-                        name: entry.1.0.to_string(),
-                        properties: {
-                            let block = Block::from_state_id(*entry.0).unwrap();
-                            if let Some(properties) = block.properties(*entry.0) {
-                                let props = properties.to_props();
-                                let mut props_map = HashMap::new();
-                                for prop in props {
-                                    props_map.insert(prop.0.clone(), prop.1.clone());
-                                }
-                                Some(props_map)
-                            } else {
-                                None
-                            }
-                        },
-                    })
-                    .collect(),
-            }),
-        });
+impl AnvilData {
+    /// Raw size of serialized chunk
+    #[inline]
+    fn raw_write_size(&self) -> usize {
+        // 4 bytes for the *length* and 1 byte for the *compression* method
+        self.compressed_data.remaining() + 4 + 1
     }
 
-    let nbt = ChunkNbt {
-        data_version: WORLD_DATA_VERSION,
-        x_pos: chunk_data.position.x,
-        z_pos: chunk_data.position.z,
-        status: ChunkStatus::Full,
-        heightmaps: chunk_data.heightmap.clone(),
-        sections,
-    };
+    /// Size of serialized chunk with padding
+    #[inline]
+    fn padded_size(&self) -> usize {
+        let sector_count = self.sector_count() as usize;
+        sector_count * SECTOR_BYTES
+    }
 
-    let mut result = Vec::new();
-    to_bytes(&nbt, &mut result).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-    Ok(result)
+    #[inline]
+    fn sector_count(&self) -> u32 {
+        let total_size = self.raw_write_size();
+        total_size.div_ceil(SECTOR_BYTES) as u32
+    }
+
+    fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
+        let mut bytes = bytes;
+        // Minus one for the compression byte
+        let length = bytes.get_u32() as usize - 1;
+
+        let compression_method = bytes.get_u8();
+        let compression = Compression::from_byte(compression_method)
+            .map_err(|_| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
+
+        Ok(AnvilData {
+            compression,
+            // If this has padding, we need to trim it
+            compressed_data: bytes.slice(..length),
+        })
+    }
+
+    async fn write(&self, w: &mut (impl AsyncWrite + Unpin + Send)) -> Result<(), std::io::Error> {
+        let padded_size = self.padded_size();
+
+        w.write_u32((self.compressed_data.remaining() + 1) as u32)
+            .await?;
+        w.write_u8(
+            self.compression
+                .map_or(Compression::NO_COMPRESSION_ID, |c| c as u8),
+        )
+        .await?;
+
+        w.write_all(&self.compressed_data).await?;
+        for _ in 0..(padded_size - self.raw_write_size()) {
+            w.write_u8(0).await?;
+        }
+
+        Ok(())
+    }
+
+    fn to_chunk<W: BytesToData>(&self, pos: Vector2<i32>) -> Result<W::Data, ChunkReadingError> {
+        let chunk = if let Some(compression) = self.compression {
+            let decompress_bytes = compression
+                .decompress_data(&self.compressed_data)
+                .map_err(ChunkReadingError::Compression)?;
+
+            W::bytes_to_data(&decompress_bytes, pos)
+        } else {
+            W::bytes_to_data(&self.compressed_data, pos)
+        }
+        .map_err(ChunkReadingError::ParsingError)?;
+
+        Ok(chunk)
+    }
+
+    fn from_data<T: DataToBytes>(
+        chunk: &T::Data,
+        compression: Option<Compression>,
+    ) -> Result<Self, ChunkWritingError> {
+        let raw_bytes = T::data_to_bytes(chunk)
+            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
+
+        let compression = compression
+            .unwrap_or_else(|| advanced_config().chunk.compression.algorithm.clone().into());
+
+        // We need to buffer here anyway so theres no use in making an impl Write for this
+        let compressed_data = compression
+            .compress_data(&raw_bytes, advanced_config().chunk.compression.level)
+            .map_err(ChunkWritingError::Compression)?;
+
+        Ok(AnvilData {
+            compression: Some(compression),
+            compressed_data: compressed_data.into(),
+        })
+    }
+}
+
+impl Default for AnvilFile {
+    fn default() -> Self {
+        Self {
+            chunks_data: [const { None }; CHUNK_COUNT],
+            write_action: Mutex::new(WriteAction::Pass),
+            // Two sectors for offset + timestamp
+            end_sector: 2,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -917,15 +758,17 @@ mod tests {
     use temp_dir::TempDir;
     use tokio::sync::RwLock;
 
-    use crate::chunk::format::anvil::AnvilChunkFile;
-    use crate::chunk::io::chunk_file_manager::ChunkFileManager;
-    use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::coordinates::ChunkRelativeBlockCoordinates;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::{LevelFolder, SyncChunk};
+    use crate::storage::format::anvil::AnvilFile;
+    use crate::storage::io::chunk_file_manager::ChunkFileManager;
+    use crate::storage::io::{ChunkIO, LoadedData};
+
+    use super::chunk::AnvilChunkFormat;
 
     async fn get_chunks(
-        saver: &ChunkFileManager<AnvilChunkFile>,
+        saver: &ChunkFileManager<AnvilChunkFormat>,
         folder: &LevelFolder,
         chunks: &[(Vector2<i32>, SyncChunk)],
     ) -> Box<[SyncChunk]> {
@@ -959,7 +802,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
 
         let mut chunks = Vec::new();
         let (send, mut recv) = tokio::sync::mpsc::channel(1);
@@ -968,6 +811,7 @@ mod tests {
             .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
+                    entities_folder: PathBuf::from(""),
                     region_folder: region_path,
                 },
                 &[Vector2::new(0, 0)],
@@ -996,10 +840,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
+            entities_folder: PathBuf::from(""),
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
 
         // Generate chunks
         let mut chunks = vec![];
@@ -1019,7 +864,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1067,7 +912,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1129,7 +974,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1172,7 +1017,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1201,10 +1046,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
+            entities_folder: PathBuf::from(""),
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
 
         // Generate chunks
         let mut chunks = vec![];
@@ -1229,7 +1075,7 @@ mod tests {
                 .expect("Failed to write chunk");
 
             // Create a new manager to ensure nothing is cached
-            let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+            let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
             let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
             for (_, chunk) in &chunks {

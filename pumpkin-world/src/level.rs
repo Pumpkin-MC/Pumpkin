@@ -11,13 +11,16 @@ use tokio::{
 };
 
 use crate::{
-    chunk::{
-        ChunkData, ChunkParsingError, ChunkReadingError,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
-    },
     generation::{Seed, WorldGenerator, get_world_gen},
     lock::{LevelLocker, anvil::AnvilLevelLocker},
+    storage::{
+        ChunkData, ChunkParsingError, ChunkReadingError,
+        format::{
+            anvil::{AnvilChunkFile, chunk::AnvilChunkFormat},
+            linear::LinearFile,
+        },
+        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
+    },
     world_info::{
         LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
         anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
@@ -49,7 +52,7 @@ pub struct Level {
     loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
+    chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>>,
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
@@ -59,6 +62,7 @@ pub struct Level {
 #[derive(Clone)]
 pub struct LevelFolder {
     pub root_folder: PathBuf,
+    pub entities_folder: PathBuf,
     pub region_folder: PathBuf,
 }
 
@@ -67,10 +71,15 @@ impl Level {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
         if !region_folder.exists() {
-            std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
+            std::fs::create_dir_all(&region_folder).expect("Failed to create region folder");
+        }
+        let entities_folder = root_folder.join("entities");
+        if !entities_folder.exists() {
+            std::fs::create_dir_all(&region_folder).expect("Failed to create entities folder");
         }
         let level_folder = LevelFolder {
             root_folder,
+            entities_folder,
             region_folder,
         };
 
@@ -110,10 +119,10 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
-        let chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
+        let chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile>::default()),
-            ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFile>::default()),
+            ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFormat>::default()),
         };
 
         Self {
@@ -121,7 +130,7 @@ impl Level {
             world_gen,
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
-            chunk_saver,
+            chunk_io,
             spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
@@ -134,7 +143,7 @@ impl Level {
         log::info!("Saving level...");
 
         // wait for chunks currently saving in other threads
-        self.chunk_saver.block_and_await_ongoing_tasks().await;
+        self.chunk_io.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
         let chunks_to_write = self
@@ -145,7 +154,7 @@ impl Level {
         self.loaded_chunks.clear();
 
         // TODO: I think the chunk_saver should be at the server level
-        self.chunk_saver.clear_watched_chunks().await;
+        self.chunk_io.clear_watched_chunks().await;
         self.write_chunks(chunks_to_write).await;
 
         // then lets save the world info
@@ -166,7 +175,7 @@ impl Level {
     }
 
     pub async fn clean_up_log(&self) {
-        self.chunk_saver.clean_up_log().await;
+        self.chunk_io.clean_up_log().await;
     }
 
     pub fn list_cached(&self) {
@@ -197,9 +206,7 @@ impl Level {
             }
         }
 
-        self.chunk_saver
-            .watch_chunks(&self.level_folder, chunks)
-            .await;
+        self.chunk_io.watch_chunks(&self.level_folder, chunks).await;
     }
 
     #[inline]
@@ -233,7 +240,7 @@ impl Level {
             }
         }
 
-        self.chunk_saver
+        self.chunk_io
             .unwatch_chunks(&self.level_folder, chunks)
             .await;
         chunks_to_clean
@@ -320,7 +327,7 @@ impl Level {
             return;
         }
 
-        let chunk_saver = self.chunk_saver.clone();
+        let chunk_saver = self.chunk_io.clone();
         let level_folder = self.level_folder.clone();
 
         trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
@@ -465,7 +472,7 @@ impl Level {
         set.spawn(handle_load);
         set.spawn(handle_generate);
 
-        self.chunk_saver
+        self.chunk_io
             .fetch_chunks(&self.level_folder, &remaining_chunks, load_bridge_send)
             .await;
         let _ = set.join_all().await;

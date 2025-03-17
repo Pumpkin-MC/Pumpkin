@@ -1,4 +1,4 @@
-use pumpkin_nbt::nbt_long_array;
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 use std::iter::repeat_with;
@@ -61,6 +61,7 @@ pub struct ChunkData {
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
+    pub entities: Vec<NbtCompound>,
     pub dirty: bool,
 }
 
