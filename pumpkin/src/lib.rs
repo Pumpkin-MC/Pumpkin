@@ -357,6 +357,13 @@ impl PumpkinServer {
                                 player.process_packets(&server).await;
                             };
                         }
+
+                        //TODO: Move these somewhere less likely to be forgotten
+
+                        // Remove the player from its world
+                        player.remove().await;
+                        // Tick down the online count
+                        server.remove_player().await;
                     }
                 }
 

@@ -762,7 +762,7 @@ impl Player {
     // TODO: This should be optimized for larger servers based on the player's current chunk.
     pub async fn send_mobs(&self, world: &World) {
         let entities = world.entities.read().await.clone();
-        for (_, entity) in entities {
+        for entity in entities.values() {
             self.client
                 .send_packet(&entity.get_entity().create_spawn_packet())
                 .await;
