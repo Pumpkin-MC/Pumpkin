@@ -47,13 +47,7 @@ impl PumpkinBlock for ObserverBlock {
     ) {
     }
 
-    async fn on_scheduled_tick(
-        &self,
-        _server: &Server,
-        world: &World,
-        block: &Block,
-        block_pos: &BlockPos,
-    ) {
+    async fn on_scheduled_tick(&self, world: &World, block: &Block, block_pos: &BlockPos) {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = ObserverLikeProperties::from_state_id(state.id, block);
 

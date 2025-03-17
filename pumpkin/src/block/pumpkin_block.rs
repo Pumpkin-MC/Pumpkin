@@ -134,14 +134,7 @@ pub trait PumpkinBlock: Send + Sync {
         state
     }
 
-    async fn on_scheduled_tick(
-        &self,
-        _server: &Server,
-        _world: &World,
-        _block: &Block,
-        _block_pos: &BlockPos,
-    ) {
-    }
+    async fn on_scheduled_tick(&self, _world: &World, _block: &Block, _block_pos: &BlockPos) {}
 
     async fn on_state_replaced(
         &self,

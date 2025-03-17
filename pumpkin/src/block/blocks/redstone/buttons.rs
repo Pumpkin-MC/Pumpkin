@@ -102,13 +102,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 click_button(world, &location).await;
             }
 
-            async fn on_scheduled_tick(
-                &self,
-                _server: &Server,
-                world: &World,
-                block: &Block,
-                block_pos: &BlockPos,
-            ) {
+            async fn on_scheduled_tick(&self, world: &World, block: &Block, block_pos: &BlockPos) {
                 let state = world.get_block_state(block_pos).await.unwrap();
                 let mut props = ButtonLikeProperties::from_state_id(state.id, block);
                 props.powered = Boolean::False;

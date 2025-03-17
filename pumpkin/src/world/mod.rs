@@ -316,25 +316,7 @@ impl World {
             weather.tick_weather(self).await;
         };
 
-        {
-            let blocks_to_tick = self.level.get_blocks_to_tick().await;
-            for scheduled_tick in blocks_to_tick {
-                let block_pos = BlockPos(Vector3::new(
-                    scheduled_tick.x,
-                    scheduled_tick.y,
-                    scheduled_tick.z,
-                ));
-                let block = self.get_block(&block_pos).await.unwrap();
-                if scheduled_tick.target_block_id != block.id {
-                    continue;
-                }
-                if let Some(pumpkin_block) = server.block_registry.get_pumpkin_block(&block) {
-                    pumpkin_block
-                        .on_scheduled_tick(server, self, &block, &block_pos)
-                        .await;
-                }
-            }
-        }
+        self.tick_scheduled_block_ticks().await;
 
         // player ticks
         for player in self.players.read().await.values() {
@@ -389,6 +371,26 @@ impl World {
                     self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
                         .await;
                 }
+            }
+        }
+    }
+
+    pub async fn tick_scheduled_block_ticks(&self) {
+        let blocks_to_tick = self.level.get_blocks_to_tick().await;
+        for scheduled_tick in blocks_to_tick {
+            let block_pos = BlockPos(Vector3::new(
+                scheduled_tick.x,
+                scheduled_tick.y,
+                scheduled_tick.z,
+            ));
+            let block = self.get_block(&block_pos).await.unwrap();
+            if scheduled_tick.target_block_id != block.id {
+                continue;
+            }
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
+                pumpkin_block
+                    .on_scheduled_tick(self, &block, &block_pos)
+                    .await;
             }
         }
     }
