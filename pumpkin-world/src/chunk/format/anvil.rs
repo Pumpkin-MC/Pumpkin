@@ -907,9 +907,9 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 .block_ticks
                 .iter()
                 .map(|tick| SerializedScheduledTick {
-                    x: tick.x,
-                    y: tick.y,
-                    z: tick.z,
+                    x: tick.block_pos.0.x,
+                    y: tick.block_pos.0.y,
+                    z: tick.block_pos.0.z,
                     delay: tick.delay as i32,
                     priority: tick.priority as i32,
                     target_block: format!(
@@ -924,9 +924,9 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 .fluid_ticks
                 .iter()
                 .map(|tick| SerializedScheduledTick {
-                    x: tick.x,
-                    y: tick.y,
-                    z: tick.z,
+                    x: tick.block_pos.0.x,
+                    y: tick.block_pos.0.y,
+                    z: tick.block_pos.0.z,
                     delay: tick.delay as i32,
                     priority: tick.priority as i32,
                     target_block: format!(

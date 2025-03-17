@@ -1,5 +1,5 @@
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::iter::repeat_with;
 use thiserror::Error;
@@ -97,9 +97,7 @@ impl From<i32> for TickPriority {
 
 #[derive(Debug, Clone)]
 pub struct ScheduledTick {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
+    pub block_pos: BlockPos,
     pub delay: u16,
     pub priority: TickPriority,
     pub target_block_id: u16,
@@ -310,22 +308,6 @@ impl ChunkData {
         // figure out how LongArray is formatted
         // figure out how to find out if block is motion blocking
         todo!()
-    }
-
-    pub async fn get_blocks_to_tick(&mut self) -> Vec<ScheduledTick> {
-        let mut blocks_to_tick = Vec::new();
-        for priority in TickPriority::values() {
-            for tick in self.block_ticks.iter_mut() {
-                if tick.priority == priority {
-                    tick.delay = tick.delay.saturating_sub(1);
-                    if tick.delay == 0 {
-                        blocks_to_tick.push(tick.clone());
-                    }
-                }
-            }
-        }
-        self.block_ticks.retain(|tick| tick.delay > 0);
-        blocks_to_tick
     }
 }
 #[derive(Error, Debug)]

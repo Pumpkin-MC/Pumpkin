@@ -59,10 +59,7 @@ use pumpkin_world::{
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
-use pumpkin_world::{
-    chunk::{ScheduledTick, TickPriority},
-    level::Level,
-};
+use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
@@ -385,21 +382,16 @@ impl World {
     }
 
     pub async fn tick_scheduled_block_ticks(&self) {
-        let blocks_to_tick = self.level.get_blocks_to_tick().await;
+        let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
-            let block_pos = BlockPos(Vector3::new(
-                scheduled_tick.x,
-                scheduled_tick.y,
-                scheduled_tick.z,
-            ));
-            let block = self.get_block(&block_pos).await.unwrap();
+            let block = self.get_block(&scheduled_tick.block_pos).await.unwrap();
             if scheduled_tick.target_block_id != block.id {
                 continue;
             }
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
                 pumpkin_block
-                    .on_scheduled_tick(self, &block, &block_pos)
+                    .on_scheduled_tick(self, &block, &scheduled_tick.block_pos)
                     .await;
             }
         }
@@ -1251,35 +1243,15 @@ impl World {
         delay: u16,
         priority: TickPriority,
     ) {
-        let (chunk_coordinate, _relative_coordinates) =
-            block_pos.chunk_and_chunk_relative_position();
-
-        let chunk = self.receive_chunk(chunk_coordinate).await.0;
-
-        let mut chunk = chunk.write().await;
-        chunk.dirty = true;
-        chunk.block_ticks.push(ScheduledTick {
-            x: block_pos.0.x,
-            y: block_pos.0.y,
-            z: block_pos.0.z,
-            delay,
-            priority,
-            target_block_id: block.id,
-        });
+        self.level
+            .schedule_block_tick(block.id, &block_pos, delay, priority)
+            .await;
     }
 
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
-        let (chunk_coordinate, _relative_coordinates) =
-            block_pos.chunk_and_chunk_relative_position();
-
-        let chunk = self.receive_chunk(chunk_coordinate).await.0;
-        let chunk = chunk.read().await;
-        chunk.block_ticks.iter().any(|tick| {
-            tick.target_block_id == block.id
-                && tick.x == block_pos.0.x
-                && tick.y == block_pos.0.y
-                && tick.z == block_pos.0.z
-        })
+        self.level
+            .is_block_tick_scheduled(block_pos, block.id)
+            .await
     }
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Spawns a tokio task to stream chunks.

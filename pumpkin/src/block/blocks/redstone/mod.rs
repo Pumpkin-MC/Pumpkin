@@ -171,7 +171,7 @@ pub async fn diode_get_input_strength(world: &World, pos: BlockPos, facing: Bloc
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
     let power: u8 = get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
-    if power == 0 {
+    if power == 0 && input_state.is_solid {
         return get_max_weak_power(world, input_pos, true).await;
     }
     power

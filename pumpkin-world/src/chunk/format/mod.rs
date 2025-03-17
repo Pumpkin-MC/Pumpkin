@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::{from_bytes, nbt_long_array};
 
-use pumpkin_util::math::{ceil_log2, vector2::Vector2};
+use pumpkin_util::math::{ceil_log2, position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -124,9 +124,7 @@ impl ChunkData {
                 .block_ticks
                 .iter()
                 .map(|tick| ScheduledTick {
-                    x: tick.x,
-                    y: tick.y,
-                    z: tick.z,
+                    block_pos: BlockPos::new(tick.x, tick.y, tick.z),
                     delay: tick.delay as u16,
                     priority: TickPriority::from(tick.priority),
                     target_block_id: Block::from_registry_key(
@@ -140,9 +138,7 @@ impl ChunkData {
                 .fluid_ticks
                 .iter()
                 .map(|tick| ScheduledTick {
-                    x: tick.x,
-                    y: tick.y,
-                    z: tick.z,
+                    block_pos: BlockPos::new(tick.x, tick.y, tick.z),
                     delay: tick.delay as u16,
                     priority: TickPriority::from(tick.priority),
                     target_block_id: Block::from_registry_key(

@@ -4,15 +4,15 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use tokio::{
-    sync::{RwLock, mpsc},
+    sync::{Mutex, RwLock, mpsc},
     task::JoinSet,
 };
 
 use crate::{
     chunk::{
-        ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick,
+        ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
@@ -54,6 +54,7 @@ pub struct Level {
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
+    block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
 }
 
 #[derive(Clone)]
@@ -127,6 +128,7 @@ impl Level {
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
             _locker: Arc::new(locker),
+            block_ticks: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -319,6 +321,24 @@ impl Level {
         if chunks_to_write.is_empty() {
             return;
         }
+        let mut block_ticks = self.block_ticks.lock().await;
+
+        for (coord, chunk) in &chunks_to_write {
+            let mut chunk_data = chunk.write().await;
+            chunk_data.block_ticks.clear();
+            // Only keep ticks that are not saved in the chunk
+            block_ticks.retain(|tick| {
+                let (chunk_coord, _relative_coord) =
+                    tick.block_pos.chunk_and_chunk_relative_position();
+                if chunk_coord == *coord {
+                    chunk_data.block_ticks.push(tick.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+        drop(block_ticks);
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
@@ -396,11 +416,19 @@ impl Level {
 
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
+        let level_block_ticks = self.block_ticks.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
                 match data {
                     LoadedData::Loaded(chunk) => {
                         let position = chunk.read().await.position;
+
+                        // Load the block ticks from the chunk
+                        let block_ticks = chunk.read().await.block_ticks.clone();
+                        let mut level_block_ticks = level_block_ticks.lock().await;
+                        level_block_ticks.extend(block_ticks);
+                        drop(level_block_ticks);
+
                         let value = loaded_chunks
                             .entry(position)
                             .or_insert(chunk)
@@ -471,22 +499,48 @@ impl Level {
         let _ = set.join_all().await;
     }
 
-    pub async fn get_blocks_to_tick(&self) -> Vec<ScheduledTick> {
-        let mut blocks_to_tick = Vec::new();
-        for chunk in self.loaded_chunks.iter() {
-            let mut chunk_data = chunk.value().write().await;
-            let blocks = chunk_data.get_blocks_to_tick().await;
-            for block in blocks {
-                blocks_to_tick.push(block);
-            }
-        }
-        blocks_to_tick
-    }
-
     pub fn try_get_chunk(
         &self,
         coordinates: Vector2<i32>,
     ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkData>>>> {
         self.loaded_chunks.try_get(&coordinates).try_unwrap()
+    }
+
+    pub async fn get_and_tick_block_ticks(&self) -> Vec<ScheduledTick> {
+        let mut block_ticks = self.block_ticks.lock().await;
+        let mut ticks = Vec::new();
+        block_ticks.retain_mut(|tick| {
+            tick.delay = tick.delay.saturating_sub(1);
+            if tick.delay == 0 {
+                ticks.push(tick.clone());
+                false
+            } else {
+                true
+            }
+        });
+        ticks
+    }
+
+    pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
+        let block_ticks = self.block_ticks.lock().await;
+        block_ticks
+            .iter()
+            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
+    }
+
+    pub async fn schedule_block_tick(
+        &self,
+        block_id: u16,
+        block_pos: &BlockPos,
+        delay: u16,
+        priority: TickPriority,
+    ) {
+        let mut block_ticks = self.block_ticks.lock().await;
+        block_ticks.push(ScheduledTick {
+            block_pos: *block_pos,
+            delay,
+            priority,
+            target_block_id: block_id,
+        });
     }
 }
