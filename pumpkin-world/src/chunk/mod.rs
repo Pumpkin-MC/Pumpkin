@@ -1,10 +1,7 @@
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::{
-    position::{BlockPos, chunk_section_from_pos},
-    vector2::Vector2,
-};
+use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with};
+use std::iter::repeat_with;
 use thiserror::Error;
 
 use crate::{WORLD_HEIGHT, coordinates::ChunkRelativeBlockCoordinates};
@@ -117,7 +114,6 @@ pub struct ChunkData {
     pub dirty: bool,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
-    pub block_state_updates: HashMap<BlockPos, u16>,
 }
 
 /// Represents pure block data for a chunk.
@@ -330,22 +326,6 @@ impl ChunkData {
         }
         self.block_ticks.retain(|tick| tick.delay > 0);
         blocks_to_tick
-    }
-
-    pub async fn get_block_state_updates(&mut self) -> Vec<Vec<(BlockPos, u16)>> {
-        // Needs to group by chunk section
-        let mut block_state_updates_by_chunk_section = HashMap::new();
-        for (position, block_state_id) in self.block_state_updates.drain() {
-            let chunk_section = chunk_section_from_pos(&position);
-            block_state_updates_by_chunk_section
-                .entry(chunk_section)
-                .or_insert(Vec::new())
-                .push((position, block_state_id));
-        }
-        block_state_updates_by_chunk_section
-            .values()
-            .cloned()
-            .collect()
     }
 }
 #[derive(Error, Debug)]

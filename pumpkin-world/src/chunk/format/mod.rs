@@ -152,7 +152,6 @@ impl ChunkData {
                     .id,
                 })
                 .collect(),
-            block_state_updates: HashMap::new(),
         })
     }
 }

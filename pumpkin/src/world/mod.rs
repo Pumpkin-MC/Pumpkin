@@ -48,8 +48,8 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::level::SyncChunk;
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
@@ -81,15 +81,16 @@ use weather::Weather;
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct BlockFlags: u32 {
-        const NOTIFY_NEIGHBORS                      = 0b0000_0001;
-        const NOTIFY_LISTENERS                      = 0b0000_0010;
-        const NOTIFY_ALL                            = 0b0000_0011;
-        const FORCE_STATE                           = 0b0000_0100;
-        const SKIP_DROPS                            = 0b0000_1000;
-        const MOVED                                 = 0b0001_0000;
-        const SKIP_REDSTONE_WIRE_STATE_REPLACEMENT  = 0b0010_0000;
-        const SKIP_BLOCK_ENTITY_REPLACED_CALLBACK   = 0b0100_0000;
-        const SKIP_BLOCK_ADDED_CALLBACK             = 0b1000_0000;
+        const NOTIFY_NEIGHBORS                      = 0b000_0000_0001;
+        const NOTIFY_LISTENERS                      = 0b000_0000_0010;
+        const NOTIFY_ALL                            = 0b000_0000_0011;
+        const FORCE_STATE                           = 0b000_0000_0100;
+        const SKIP_DROPS                            = 0b000_0000_1000;
+        const MOVED                                 = 0b000_0001_0000;
+        const SKIP_REDSTONE_WIRE_STATE_REPLACEMENT  = 0b000_0010_0000;
+        const SKIP_BLOCK_ENTITY_REPLACED_CALLBACK   = 0b000_0100_0000;
+        const SKIP_BLOCK_ADDED_CALLBACK             = 0b000_1000_0000;
+        const ALLOW_UNLOADED_CHUNKS                 = 0b001_0000_0000;
     }
 }
 
@@ -148,6 +149,8 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    /// A map of unsent block changes, keyed by block position.
+    unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
 }
 
@@ -168,6 +171,7 @@ impl World {
             dimension_type,
             weather: Mutex::new(Weather::new()),
             block_registry,
+            unsent_block_changes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -351,32 +355,38 @@ impl World {
     }
 
     pub async fn flush_block_updates(&self) {
-        let block_state_updates = self.level.get_block_state_updates().await;
+        let mut block_state_updates_by_chunk_section = HashMap::new();
+        for (position, block_state_id) in self.unsent_block_changes.lock().await.drain() {
+            let chunk_section = chunk_section_from_pos(&position);
+            block_state_updates_by_chunk_section
+                .entry(chunk_section)
+                .or_insert(Vec::new())
+                .push((position, block_state_id));
+        }
 
         // TODO: only send packet to players who have the chunks loaded
         // TODO: Send light updates to update the wire directly next to a broken block
-        for chunk in block_state_updates {
-            for chunk_section in chunk {
-                if chunk_section.is_empty() {
-                    continue;
-                }
-                if chunk_section.len() == 1 {
-                    let (block_pos, block_state_id) = chunk_section[0];
-                    self.broadcast_packet_all(&CBlockUpdate::new(
-                        &block_pos,
-                        i32::from(block_state_id).into(),
-                    ))
+        for chunk_section in block_state_updates_by_chunk_section.values() {
+            if chunk_section.is_empty() {
+                continue;
+            }
+            if chunk_section.len() == 1 {
+                let (block_pos, block_state_id) = chunk_section[0];
+                self.broadcast_packet_all(&CBlockUpdate::new(
+                    &block_pos,
+                    i32::from(block_state_id).into(),
+                ))
+                .await;
+            } else {
+                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
                     .await;
-                } else {
-                    self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
-                        .await;
-                }
             }
         }
     }
 
     pub async fn tick_scheduled_block_ticks(&self) {
         let blocks_to_tick = self.level.get_blocks_to_tick().await;
+
         for scheduled_tick in blocks_to_tick {
             let block_pos = BlockPos(Vector3::new(
                 scheduled_tick.x,
@@ -1131,7 +1141,12 @@ impl World {
         // Since we divide by 16, remnant can never exceed `u8::MAX`
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
-        let chunk = self.receive_chunk(chunk_coordinate).await.0;
+        let chunk = if flags.contains(BlockFlags::ALLOW_UNLOADED_CHUNKS) {
+            self.receive_chunk(chunk_coordinate).await.0
+        } else {
+            // TODO: Don't panic
+            self.level.try_get_chunk(chunk_coordinate).unwrap().clone()
+        };
         let mut chunk = chunk.write().await;
         // TODO: chunkPos.setBlockState(pos, state, flags);
         let replaced_block_state_id = chunk.blocks.get_block(relative).unwrap();
@@ -1141,7 +1156,10 @@ impl World {
         chunk.dirty = true;
 
         chunk.blocks.set_block(relative, block_state_id);
-        chunk.block_state_updates.insert(*position, block_state_id);
+        self.unsent_block_changes
+            .lock()
+            .await
+            .insert(*position, block_state_id);
         drop(chunk);
 
         let old_block = Block::from_state_id(replaced_block_state_id).unwrap();

@@ -1,8 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
-
 use noise::{NoiseFn, Perlin};
 use pumpkin_util::math::vector2::Vector2;
-use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     WORLD_LOWEST_Y,
@@ -83,7 +80,6 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             dirty: true,
             block_ticks: vec![],
             fluid_ticks: vec![],
-            block_state_updates: HashMap::new(),
         }
     }
 }

@@ -1,7 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
-
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
-use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     WORLD_LOWEST_Y, WORLD_MAX_Y,
@@ -64,7 +61,6 @@ impl WorldGenerator for TestGenerator {
             dirty: true,
             block_ticks: vec![],
             fluid_ticks: vec![],
-            block_state_updates: HashMap::new(),
         }
     }
 }

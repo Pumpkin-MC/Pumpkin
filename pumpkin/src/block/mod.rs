@@ -4,6 +4,7 @@ use blocks::fences::register_fence_blocks;
 use blocks::logs::register_log_blocks;
 use blocks::redstone::buttons::register_button_blocks;
 use blocks::redstone::observer::ObserverBlock;
+use blocks::redstone::piston::PistonBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
@@ -48,6 +49,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(RedstoneLamp);
     manager.register(RepeaterBlock);
     manager.register(ObserverBlock);
+    manager.register(PistonBlock);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
