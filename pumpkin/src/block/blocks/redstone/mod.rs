@@ -16,6 +16,7 @@ pub(crate) mod redstone_block;
 pub(crate) mod redstone_lamp;
 pub(crate) mod redstone_wire;
 pub(crate) mod repeater;
+pub(crate) mod target_block;
 pub(crate) mod turbo;
 
 pub async fn update_wire_neighbors(world: &World, pos: BlockPos) {
