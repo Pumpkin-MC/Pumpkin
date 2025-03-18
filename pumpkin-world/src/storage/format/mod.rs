@@ -51,7 +51,7 @@ where
 {
     type Data: Send + Sync + Sized;
 
-    fn data_to_bytes(chunk_data: &Self::Data) -> Result<Vec<u8>, ChunkSerializingError>;
+    fn data_to_bytes(data: &Self::Data) -> Result<Vec<u8>, ChunkSerializingError>;
 }
 
 /// Used for Reading
@@ -61,10 +61,7 @@ where
 {
     type Data: Send + Sync + Sized;
 
-    fn bytes_to_data(
-        chunk_data: &[u8],
-        position: Vector2<i32>,
-    ) -> Result<Self::Data, ChunkParsingError>;
+    fn bytes_to_data(data: &[u8], position: Vector2<i32>) -> Result<Self::Data, ChunkParsingError>;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -113,6 +110,7 @@ struct ChunkNbt {
 // #[serde(rename_all = "PascalCase")]
 struct EntityNbt {
     data_version: i32,
-    position: [i32; 2],
+    /// The Chunk position
+    position: Vector2<i32>,
     entities: Vec<NbtCompound>,
 }

@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use bytes::Bytes;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::{
+    compound::NbtCompound, deserializer::ReadAdaptor, serializer::WriteAdaptor, tag::NbtTag,
+    to_bytes,
+};
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::storage::{
@@ -95,7 +98,26 @@ impl ChunkSerializer for AnvilEntityFormat {
 impl DataToBytes for AnvilEntityFormat {
     type Data = EntityNbt;
 
-    fn data_to_bytes(chunk_data: &Self::Data) -> Result<Vec<u8>, ChunkSerializingError> {}
+    fn data_to_bytes(data: &Self::Data) -> Result<Vec<u8>, ChunkSerializingError> {
+        let mut content = NbtCompound::new();
+        content.put_int("DataVersion", data.data_version);
+        content.put(
+            "Position",
+            NbtTag::IntArray(vec![data.position.x, data.position.z].into_boxed_slice()),
+        );
+        let mut entities = Vec::new();
+        for entity in &data.entities {
+            entities.push(NbtTag::Compound(entity.clone()));
+        }
+        content.put_list("Entities", entities.into_boxed_slice());
+
+        let mut result = Vec::new();
+        let mut writer = WriteAdaptor::new(&mut result);
+        content
+            .serialize_content(&mut writer)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        Ok(result)
+    }
 }
 
 impl BytesToData for AnvilEntityFormat {
@@ -105,6 +127,18 @@ impl BytesToData for AnvilEntityFormat {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self::Data, crate::storage::ChunkParsingError> {
-        todo!()
+        let content = NbtCompound::deserialize_content(&mut ReadAdaptor::new(chunk_data)).unwrap();
+        let data_version = content.get_int("DataVersion").unwrap();
+        let position = content.get_int_array("Position").unwrap();
+        let entities = content.get_list("Entities").unwrap();
+        let mut entity_components = Vec::new();
+        for entity in entities {
+            entity_components.push(entity.extract_compound().unwrap().clone());
+        }
+        Ok(EntityNbt {
+            data_version,
+            position: Vector2::new(position[0], position[1]),
+            entities: entity_components,
+        })
     }
 }
