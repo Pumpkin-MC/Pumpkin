@@ -275,6 +275,24 @@ impl PlayerInventory {
         slots.into_boxed_slice()
     }
 
+    pub fn armor_slots(&self) -> Box<[Option<&ItemStack>]> {
+        self.armor.iter().map(|item| item.as_ref()).collect()
+    }
+
+    pub fn crafting_slots(&self) -> Box<[Option<&ItemStack>]> {
+        let mut slots = vec![self.crafting_output.as_ref()];
+        slots.extend(self.crafting.iter().map(|c| c.as_ref()));
+        slots.into_boxed_slice()
+    }
+
+    pub fn item_slots(&self) -> Box<[Option<&ItemStack>]> {
+        self.items.iter().map(|item| item.as_ref()).collect()
+    }
+
+    pub fn offhand_slot(&self) -> Option<&ItemStack> {
+        self.offhand.as_ref()
+    }
+
     pub fn iter_items_mut(&mut self) -> IterMut<Option<ItemStack>> {
         self.items.iter_mut()
     }
