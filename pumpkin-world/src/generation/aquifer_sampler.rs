@@ -652,7 +652,6 @@ mod test {
 
     use crate::{
         block::ChunkBlockState,
-        chunk::CHUNK_WIDTH,
         generation::{
             GlobalRandomConfig, biome_coords,
             chunk_noise::{
@@ -702,6 +701,7 @@ mod test {
             FluidLevel::new(63, WATER_BLOCK),
             FluidLevel::new(-54, LAVA_BLOCK),
         ));
+        const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
             base_router,
             &RANDOM_CONFIG,
