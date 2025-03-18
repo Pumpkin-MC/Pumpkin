@@ -226,6 +226,22 @@ impl PumpkinBlock for RedstoneWireBlock {
         }
     }
 
+    async fn get_strong_redstone_power(
+        &self,
+        block: &Block,
+        _world: &World,
+        _block_pos: &BlockPos,
+        state: &BlockState,
+        direction: &BlockDirection,
+    ) -> u8 {
+        let wire = RedstoneWireProperties::from_state_id(state.id, block);
+        if *direction == BlockDirection::Up || wire.is_side_connected(direction.opposite()) {
+            wire.power.to_index() as u8
+        } else {
+            0
+        }
+    }
+
     async fn placed(
         &self,
         world: &World,
