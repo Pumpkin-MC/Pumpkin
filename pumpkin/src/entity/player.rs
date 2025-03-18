@@ -810,7 +810,7 @@ impl Player {
                     new_world
                         .get_top_block(Vector2::new(
                             f64::from(info.spawn_x) as i32,
-                            f64::from(info.spawn_x) as i32,
+                            f64::from(info.spawn_z) as i32,
                         ))
                         .await
                         + 1,
