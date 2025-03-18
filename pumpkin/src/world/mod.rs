@@ -87,7 +87,6 @@ bitflags! {
         const SKIP_REDSTONE_WIRE_STATE_REPLACEMENT  = 0b000_0010_0000;
         const SKIP_BLOCK_ENTITY_REPLACED_CALLBACK   = 0b000_0100_0000;
         const SKIP_BLOCK_ADDED_CALLBACK             = 0b000_1000_0000;
-        const ALLOW_UNLOADED_CHUNKS                 = 0b001_0000_0000;
     }
 }
 
@@ -1133,11 +1132,9 @@ impl World {
         // Since we divide by 16, remnant can never exceed `u8::MAX`
         let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
 
-        let chunk = if flags.contains(BlockFlags::ALLOW_UNLOADED_CHUNKS) {
-            self.receive_chunk(chunk_coordinate).await.0
-        } else {
-            // TODO: Don't panic
-            self.level.try_get_chunk(chunk_coordinate).unwrap().clone()
+        let chunk = match self.level.try_get_chunk(chunk_coordinate) {
+            Some(chunk) => chunk.clone(),
+            None => self.receive_chunk(chunk_coordinate).await.0,
         };
         let mut chunk = chunk.write().await;
         // TODO: chunkPos.setBlockState(pos, state, flags);
@@ -1330,18 +1327,12 @@ impl World {
         }
     }
 
-    pub async fn get_block_state_id(
-        &self,
-        position: &BlockPos,
-        load_chunk: bool,
-    ) -> Result<u16, GetBlockError> {
-        let (chunk, relative) = position.chunk_and_chunk_relative_position();
+    pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let relative = ChunkRelativeBlockCoordinates::from(relative);
-        let chunk = if load_chunk {
-            self.receive_chunk(chunk).await.0
-        } else {
-            //TODO: Don't panic
-            self.level.try_get_chunk(chunk).unwrap().clone()
+        let chunk = match self.level.try_get_chunk(chunk_coordinate) {
+            Some(chunk) => chunk.clone(),
+            None => self.receive_chunk(chunk_coordinate).await.0,
         };
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
@@ -1357,7 +1348,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::block::Block, GetBlockError> {
-        let id = self.get_block_state_id(position, false).await?;
+        let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1366,7 +1357,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
-        let id = self.get_block_state_id(position, false).await?;
+        let id = self.get_block_state_id(position).await?;
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1382,7 +1373,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<(pumpkin_data::block::Block, pumpkin_data::block::BlockState), GetBlockError> {
-        let id = self.get_block_state_id(position, false).await?;
+        let id = self.get_block_state_id(position).await?;
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1445,7 +1436,7 @@ impl World {
         }
 
         let neighbor_pos = block_pos.offset(direction.to_offset());
-        let neighbor_state_id = self.get_block_state_id(&neighbor_pos, false).await.unwrap();
+        let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await.unwrap();
 
         let new_state_id = self
             .block_registry
