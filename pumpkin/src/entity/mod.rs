@@ -478,6 +478,7 @@ impl EntityBase for Entity {
 #[async_trait]
 impl NBTStorage for Entity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        nbt.put_int("id", self.entity_type.id as i32);
         let position = self.pos.load();
         nbt.put(
             "Pos",
@@ -492,9 +493,9 @@ impl NBTStorage for Entity {
                 vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
             ),
         );
-        nbt.put(
+        nbt.put_list(
             "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
+            vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice(),
         );
 
         // todo more...

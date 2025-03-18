@@ -3,8 +3,8 @@ use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
     WORLD_LOWEST_Y,
-    chunk::{ChunkBlocks, ChunkData},
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
+    storage::{ChunkBlocks, ChunkData},
 };
 
 use super::{
@@ -76,6 +76,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             blocks,
             heightmap: Default::default(),
             position: at,
+            entities: vec![], // TODO: chunks do have inital entities
             // We just generated this chunk! Mark it as dirty
             dirty: true,
         }

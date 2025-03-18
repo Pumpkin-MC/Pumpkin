@@ -2,9 +2,10 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::chunk::format::anvil::AnvilChunkFile;
-use crate::chunk::io::{ChunkSerializer, LoadedData};
-use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
+use crate::storage::format::anvil::AnvilFile;
+use crate::storage::format::get_region_coords;
+use crate::storage::io::{ChunkSerializer, LoadedData};
+use crate::storage::{ChunkData, ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
@@ -12,7 +13,9 @@ use pumpkin_config::advanced_config;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::io::{AsyncWriteExt, BufWriter};
 
-use super::anvil::{CHUNK_COUNT, chunk_to_bytes};
+use super::anvil::CHUNK_COUNT;
+use super::anvil::chunk::AnvilChunkFormat;
+use super::{BytesToData, DataToBytes, get_chunk_index};
 
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
@@ -136,7 +139,7 @@ impl LinearFileHeader {
 
 impl LinearFile {
     const fn get_chunk_index(at: &Vector2<i32>) -> usize {
-        AnvilChunkFile::get_chunk_index(at)
+        get_chunk_index(at)
     }
 
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
@@ -168,7 +171,7 @@ impl ChunkSerializer for LinearFile {
     }
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
-        let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
+        let (region_x, region_z) = get_region_coords(chunk);
         format!("./r.{}.{}.linear", region_x, region_z)
     }
 
@@ -308,7 +311,7 @@ impl ChunkSerializer for LinearFile {
 
     async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
         let index = LinearFile::get_chunk_index(&chunk.position);
-        let chunk_raw: Bytes = chunk_to_bytes(chunk)
+        let chunk_raw: Bytes = AnvilChunkFormat::data_to_bytes(chunk)
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
             .into();
 
@@ -342,7 +345,7 @@ impl ChunkSerializer for LinearFile {
             let send = bridge_send.clone();
             rayon::spawn(move || {
                 let result = if let Some(data) = linear_chunk_data {
-                    match ChunkData::from_bytes(&data, chunk)
+                    match AnvilChunkFormat::bytes_to_data(&data, chunk)
                         .map_err(ChunkReadingError::ParsingError)
                     {
                         Ok(chunk) => LoadedData::Loaded(chunk),
@@ -381,11 +384,11 @@ mod tests {
     use temp_dir::TempDir;
     use tokio::sync::RwLock;
 
-    use crate::chunk::format::linear::LinearFile;
-    use crate::chunk::io::chunk_file_manager::ChunkFileManager;
-    use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::generation::{Seed, get_world_gen};
     use crate::level::LevelFolder;
+    use crate::storage::format::linear::LinearFile;
+    use crate::storage::io::chunk_file_manager::ChunkFileManager;
+    use crate::storage::io::{ChunkIO, LoadedData};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
@@ -399,6 +402,7 @@ mod tests {
             .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
+                    entities_folder: PathBuf::from(""),
                     region_folder: region_path,
                 },
                 &[Vector2::new(0, 0)],
@@ -422,6 +426,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
+            entities_folder: PathBuf::from(""),
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");

@@ -2,13 +2,13 @@ use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
     WORLD_LOWEST_Y, WORLD_MAX_Y,
-    chunk::{ChunkBlocks, ChunkData},
     coordinates::ChunkRelativeBlockCoordinates,
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
         noise_router::proto_noise_router::GlobalProtoNoiseRouter, proto_chunk::ProtoChunk,
     },
     noise_router::NOISE_ROUTER_ASTS,
+    storage::{ChunkBlocks, ChunkData},
 };
 
 pub struct TestGenerator {
@@ -57,6 +57,7 @@ impl WorldGenerator for TestGenerator {
             blocks,
             heightmap: Default::default(),
             position: at,
+            entities: vec![], // TODO: chunks do have inital entities
             // This chunk was just created! We want to say its been changed
             dirty: true,
         }

@@ -6,7 +6,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_world::{
     DIRECT_PALETTE_BITS,
-    chunk::{ChunkData, SUBCHUNKS_COUNT},
+    storage::{ChunkData, SUBCHUNKS_COUNT},
 };
 
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]

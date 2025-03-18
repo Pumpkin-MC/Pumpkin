@@ -2,7 +2,6 @@ use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
 pub mod block;
-pub mod chunk;
 pub mod coordinates;
 pub mod cylindrical_chunk_iterator;
 pub mod dimension;
@@ -11,6 +10,7 @@ pub mod item;
 pub mod level;
 mod lock;
 mod noise_router;
+pub mod storage;
 pub mod world_info;
 pub const WORLD_HEIGHT: usize = 384;
 pub const WORLD_LOWEST_Y: i16 = -64;

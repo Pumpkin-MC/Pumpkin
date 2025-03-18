@@ -50,7 +50,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::level::Level;
 use pumpkin_world::level::SyncChunk;
-use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
+use pumpkin_world::{block::BlockDirection, storage::ChunkData};
 use pumpkin_world::{
     block::registry::{
         get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,

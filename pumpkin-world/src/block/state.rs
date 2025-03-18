@@ -1,4 +1,4 @@
-use crate::chunk::format::PaletteEntry;
+use crate::storage::format::PaletteEntry;
 
 use super::registry::{get_block, get_state_by_state_id};
 

@@ -18,8 +18,8 @@ use tokio::{
 };
 
 use crate::{
-    chunk::{ChunkData, ChunkReadingError, ChunkWritingError},
     level::{LevelFolder, SyncChunk},
+    storage::{ChunkData, ChunkReadingError, ChunkWritingError},
 };
 
 use super::{ChunkIO, ChunkSerializer, LoadedData};

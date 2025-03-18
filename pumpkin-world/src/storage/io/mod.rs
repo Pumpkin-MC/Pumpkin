@@ -7,7 +7,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
-pub mod chunk_file_manager;
+pub mod file_manager;
 
 /// The result of loading a chunk data.
 ///
@@ -99,7 +99,7 @@ pub trait ChunkSerializer: Send + Sync + Default {
     async fn write(&self, backend: Self::WriteBackend) -> Result<(), std::io::Error>;
 
     /// Create a new instance from bytes
-    fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
+    fn read(bytes: Bytes) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunk data to the serializer
     async fn update_chunk(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError>;
