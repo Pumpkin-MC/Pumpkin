@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::living::LivingEntity;
 use super::{
     Entity, EntityBase, EntityId, NBTStorage,
     combat::{self, AttackType, player_attack_sound},
@@ -40,9 +41,14 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_inventory::player::PlayerInventory;
+use pumpkin_inventory::player::{
+    PlayerInventory, SLOT_BOOT, SLOT_CRAFT_INPUT_END, SLOT_CRAFT_INPUT_START, SLOT_HELM,
+    SLOT_HOTBAR_END, SLOT_INV_START, SLOT_OFFHAND,
+};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::client::play::CSetHeldItem;
 use pumpkin_protocol::{
     RawPacket, ServerPacket,
     bytebuf::packet::Packet,
@@ -84,8 +90,6 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::{Mutex, Notify, RwLock};
-
-use super::living::LivingEntity;
 
 enum BatchState {
     Initial,
@@ -230,6 +234,7 @@ pub struct Player {
     pub experience_points: AtomicI32,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
+    pub has_played_before: AtomicBool,
 }
 
 impl Player {
@@ -313,6 +318,7 @@ impl Player {
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU32::new(0),
             last_food_saturation: AtomicBool::new(true),
+            has_played_before: AtomicBool::new(false),
         }
     }
 
@@ -1367,7 +1373,8 @@ impl Player {
         }
 
         let progress = new_points as f32 / max_points as f32;
-        self.set_experience(current_level, progress, new_points).await;
+        self.set_experience(current_level, progress, new_points)
+            .await;
         true
     }
 
@@ -1381,16 +1388,23 @@ impl Player {
         let progress = experience::progress_in_level(new_points, new_level);
         self.set_experience(new_level, progress, new_points).await;
     }
+
+    /// Send the player's inventory to the client.
+    pub async fn send_inventory(&self) {
+        self.set_container_content(None).await;
+        self.client
+            .send_packet(&CSetHeldItem::new(
+                self.inventory.lock().await.selected as i8,
+            ))
+            .await;
+    }
 }
 
 #[async_trait]
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.living_entity.write_nbt(nbt).await;
-        nbt.put_int(
-            "SelectedItemSlot",
-            self.inventory.lock().await.selected as i32,
-        );
+        self.inventory.lock().await.write_nbt(nbt).await;
 
         self.abilities.lock().await.write_nbt(nbt).await;
 
@@ -1400,19 +1414,28 @@ impl NBTStorage for Player {
         nbt.put_int("XpTotal", total_exp);
         nbt.put_byte("playerGameType", self.gamemode.load() as i8);
 
+        nbt.put_bool(
+            "HasPlayedBefore",
+            self.has_played_before.load(Ordering::Relaxed),
+        );
+
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt).await;
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
-        self.inventory.lock().await.selected =
-            nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
+        self.inventory.lock().await.read_nbt(nbt).await;
         self.abilities.lock().await.read_nbt(nbt).await;
 
         self.gamemode.store(
             GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
                 .unwrap_or(GameMode::Survival),
+        );
+
+        self.has_played_before.store(
+            nbt.get_bool("HasPlayedBefore").unwrap_or(false),
+            Ordering::Relaxed,
         );
 
         // Load food level, saturation, exhaustion, and tick timer
@@ -1425,6 +1448,67 @@ impl NBTStorage for Player {
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress);
         self.experience_points.store(points, Ordering::Relaxed);
+    }
+}
+
+#[async_trait]
+impl NBTStorage for PlayerInventory {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        // Save the selected slot (hotbar)
+        nbt.put_int("SelectedItemSlot", self.selected as i32);
+
+        // Create inventory list with the correct capacity (inventory size)
+        let mut vec: Vec<NbtTag> = Vec::with_capacity(SLOT_OFFHAND);
+
+        // Helper function to add items to the vector
+        let mut add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
+            if let Some(stack) = stack_ref {
+                let mut item_compound = NbtCompound::new();
+                item_compound.put_byte("Slot", slot as i8);
+                stack.write_item_stack(&mut item_compound);
+                vec.push(NbtTag::Compound(item_compound));
+            }
+        };
+
+        // Crafting input slots
+        for slot in SLOT_CRAFT_INPUT_START..=SLOT_CRAFT_INPUT_END {
+            add_item(slot, self.crafting_slots()[slot - SLOT_CRAFT_INPUT_START]);
+        }
+
+        // Armor slots
+        for slot in SLOT_HELM..=SLOT_BOOT {
+            add_item(slot, self.armor_slots()[slot - SLOT_HELM]);
+        }
+
+        // Main inventory slots (includes hotbar in the data structure)
+        for slot in SLOT_INV_START..=SLOT_HOTBAR_END {
+            add_item(slot, self.item_slots()[slot - SLOT_INV_START]);
+        }
+
+        // Offhand
+        add_item(SLOT_OFFHAND, self.offhand_slot());
+
+        // Save the inventory list
+        nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+        // Read selected hotbar slot
+        self.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
+
+        // Process inventory list
+        if let Some(inventory_list) = nbt.get_list("Inventory") {
+            for tag in inventory_list {
+                if let Some(item_compound) = tag.extract_compound() {
+                    if let Some(slot_byte) = item_compound.get_byte("Slot") {
+                        let slot = slot_byte as usize;
+                        if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                            let _ = self.set_slot(slot, Some(item_stack), true);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

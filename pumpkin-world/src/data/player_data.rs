@@ -1,4 +1,4 @@
-use pumpkin_config::ADVANCED_CONFIG;
+use pumpkin_config::advanced_config;
 use pumpkin_nbt::compound::NbtCompound;
 use std::fs::{File, create_dir_all};
 use std::io;
@@ -38,11 +38,9 @@ impl PlayerDataStorage {
             }
         }
 
-        let config = &ADVANCED_CONFIG.player_data;
-
         Self {
             data_path: path,
-            save_enabled: config.save_player_data,
+            save_enabled: advanced_config().player_data.save_player_data,
         }
     }
 
@@ -63,43 +61,37 @@ impl PlayerDataStorage {
     /// # Returns
     ///
     /// A Result containing either the player's NBT data or an error.
-    pub async fn load_player_data(&self, uuid: &Uuid) -> Result<NbtCompound, PlayerDataError> {
+    pub fn load_player_data(&self, uuid: &Uuid) -> Result<(bool, NbtCompound), PlayerDataError> {
         // If player data saving is disabled, return empty data
         if !self.save_enabled {
-            return Ok(NbtCompound::new());
+            return Ok((false, NbtCompound::new()));
         }
 
         // If not in cache, load from disk
         let path = self.get_player_data_path(uuid);
         if !path.exists() {
             log::debug!("No player data file found for {}", uuid);
-            return Ok(NbtCompound::new());
+            return Ok((false, NbtCompound::new()));
         }
 
-        // Offload file I/O to a separate tokio task
-        let uuid_copy = *uuid;
-        let nbt = tokio::task::spawn_blocking(move || -> Result<NbtCompound, PlayerDataError> {
-            match File::open(&path) {
-                Ok(file) => {
-                    // Read directly from the file with GZip decompression
-                    pumpkin_nbt::nbt_compress::read_gzip_compound_tag(file)
-                        .map_err(|e| PlayerDataError::Nbt(e.to_string()))
-                }
-                Err(e) => Err(PlayerDataError::Io(e)),
+        let file = match File::open(&path) {
+            Ok(file) => file,
+            Err(e) => {
+                log::error!("Failed to open player data file for {}: {}", uuid, e);
+                return Err(PlayerDataError::Io(e));
             }
-        })
-        .await
-        .unwrap_or_else(|e| {
-            log::error!(
-                "Task error when loading player data for {}: {}",
-                uuid_copy,
-                e
-            );
-            Err(PlayerDataError::Nbt(format!("Task join error: {e}")))
-        })?;
+        };
 
-        log::debug!("Loaded player data for {} from disk", uuid);
-        Ok(nbt)
+        match pumpkin_nbt::nbt_compress::read_gzip_compound_tag(file) {
+            Ok(nbt) => {
+                log::debug!("Loaded player data for {} from disk", uuid);
+                Ok((true, nbt))
+            }
+            Err(e) => {
+                log::error!("Failed to read player data for {}: {}", uuid, e);
+                Err(PlayerDataError::Nbt(e.to_string()))
+            }
+        }
     }
 
     /// Saves player data to NBT file and updates cache.
@@ -115,11 +107,7 @@ impl PlayerDataStorage {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn save_player_data(
-        &self,
-        uuid: &Uuid,
-        data: NbtCompound,
-    ) -> Result<(), PlayerDataError> {
+    pub fn save_player_data(&self, uuid: &Uuid, data: NbtCompound) -> Result<(), PlayerDataError> {
         // Skip saving if disabled in config
         if !self.save_enabled {
             return Ok(());
@@ -127,52 +115,28 @@ impl PlayerDataStorage {
 
         let path = self.get_player_data_path(uuid);
 
-        // Run disk I/O in a separate tokio task
-        let uuid_copy = *uuid;
-        let data_clone = data;
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            if let Err(e) = create_dir_all(parent) {
+                log::error!("Failed to create player data directory for {}: {}", uuid, e);
+                return Err(PlayerDataError::Io(e));
+            }
+        }
 
-        match tokio::spawn(async move {
-            // Ensure parent directory exists
-            if let Some(parent) = path.parent() {
-                if let Err(e) = create_dir_all(parent) {
-                    log::error!(
-                        "Failed to create player data directory for {}: {}",
-                        uuid_copy,
-                        e
-                    );
-                    return Err(PlayerDataError::Io(e));
+        // Create the file and write directly with GZip compression
+        match File::create(&path) {
+            Ok(file) => {
+                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data, file) {
+                    log::error!("Failed to write compressed player data for {}: {}", uuid, e);
+                    Err(PlayerDataError::Nbt(e.to_string()))
+                } else {
+                    log::debug!("Saved player data for {} to disk", uuid);
+                    Ok(())
                 }
             }
-
-            // Create the file and write directly with GZip compression
-            match File::create(&path) {
-                Ok(file) => {
-                    if let Err(e) =
-                        pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data_clone, file)
-                    {
-                        log::error!(
-                            "Failed to write compressed player data for {}: {}",
-                            uuid_copy,
-                            e
-                        );
-                        Err(PlayerDataError::Nbt(e.to_string()))
-                    } else {
-                        log::debug!("Saved player data for {} to disk", uuid_copy);
-                        Ok(())
-                    }
-                }
-                Err(e) => {
-                    log::error!("Failed to create player data file for {}: {}", uuid_copy, e);
-                    Err(PlayerDataError::Io(e))
-                }
-            }
-        })
-        .await
-        {
-            Ok(result) => result,
             Err(e) => {
-                log::error!("Task panicked while saving player data for {}: {}", uuid, e);
-                Err(PlayerDataError::Nbt(format!("Task join error: {e}")))
+                log::error!("Failed to create player data file for {}: {}", uuid, e);
+                Err(PlayerDataError::Io(e))
             }
         }
     }

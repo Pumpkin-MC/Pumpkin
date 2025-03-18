@@ -166,23 +166,24 @@ impl Executor {
         }
     }
 
-    fn handle_modify(
+    async fn handle_modify(
         &self,
         target: &Player,
         amount: i32,
         exp_type: ExpType,
+        mode: Mode,
     ) -> Result<(), &'static str> {
         match exp_type {
             ExpType::Levels => {
-                if self.mode == Mode::Add {
-                    target.add_experience_levels(amount);
+                if mode == Mode::Add {
+                    target.add_experience_levels(amount).await;
                 } else {
-                    target.set_experience_level(amount, true);
+                    target.set_experience_level(amount, true).await;
                 }
             }
             ExpType::Points => {
-                if self.mode == Mode::Add {
-                    target.add_experience_points(amount);
+                if mode == Mode::Add {
+                    target.add_experience_points(amount).await;
                 } else {
                     // target.set_experience_points(amount).await; This could
                     let current_level = target.experience_level.load(Ordering::Relaxed);
@@ -192,7 +193,7 @@ impl Executor {
                         return Err("commands.experience.set.points.invalid");
                     }
 
-                    target.set_experience_points(amount);
+                    target.set_experience_points(amount).await;
                 }
             }
         }
@@ -242,7 +243,10 @@ impl CommandExecutor for Executor {
                 }
 
                 for target in targets {
-                    match self.handle_modify(target, amount, self.exp_type.unwrap()) {
+                    match self
+                        .handle_modify(target, amount, self.exp_type.unwrap(), self.mode)
+                        .await
+                    {
                         Ok(()) => {
                             let msg = Self::get_success_message(
                                 self.mode,

@@ -84,7 +84,7 @@ impl EntityBase for ExperienceOrbEntity {
         if *delay == 0 {
             *delay = 2;
             player.living_entity.pickup(&self.entity, 1).await;
-            player.add_experience_points(self.amount as i32);
+            player.add_experience_points(self.amount as i32).await;
             // TODO: pickingCount for merging
             self.entity.remove().await;
         }

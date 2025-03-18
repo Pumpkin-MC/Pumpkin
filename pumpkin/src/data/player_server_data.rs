@@ -61,9 +61,7 @@ impl ServerPlayerData {
         player.write_nbt(&mut nbt).await;
 
         // Save to disk
-        self.storage
-            .save_player_data(&player.gameprofile.id, nbt)
-            .await?;
+        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
 
         Ok(())
     }
@@ -89,11 +87,7 @@ impl ServerPlayerData {
                     player.write_nbt(&mut nbt).await;
 
                     // Save to disk periodically to prevent data loss on server crash
-                    if let Err(e) = self
-                        .storage
-                        .save_player_data(&player.gameprofile.id, nbt)
-                        .await
-                    {
+                    if let Err(e) = self.storage.save_player_data(&player.gameprofile.id, nbt) {
                         log::error!(
                             "Failed to save player data for {}: {}",
                             player.gameprofile.id,
@@ -146,8 +140,12 @@ impl ServerPlayerData {
         player: &mut Player,
     ) -> Result<(), PlayerDataError> {
         let uuid = &player.gameprofile.id;
-        match self.storage.load_player_data(uuid).await {
-            Ok(mut data) => {
+        match self.storage.load_player_data(uuid) {
+            Ok((should_load, mut data)) => {
+                if !should_load {
+                    // No data to load, continue with default data
+                    return Ok(());
+                }
                 player.read_nbt(&mut data).await;
                 Ok(())
             }
@@ -180,9 +178,13 @@ impl ServerPlayerData {
         &self,
         player: &Player,
     ) -> Result<(), PlayerDataError> {
+        if !self.storage.save_enabled {
+            return Ok(());
+        }
+
         let uuid = &player.gameprofile.id;
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
-        self.storage.save_player_data(uuid, nbt).await
+        self.storage.save_player_data(uuid, nbt)
     }
 }

@@ -381,18 +381,24 @@ impl World {
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
         client_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
+
         // Teleport
-        let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
-        let yaw = info.spawn_angle;
-        let pitch = 10.0;
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
+            let pitch = player.living_entity.entity.pitch.load();
 
-        // teleport
-        let position = player.position();
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level.level_info;
+            let position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+            let yaw = info.spawn_angle;
+            let pitch = 10.0;
+
+            (position, yaw, pitch)
+        };
+
         let velocity = player.living_entity.entity.velocity.load();
-
-        let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
-        let pitch = player.living_entity.entity.pitch.load();
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
@@ -542,7 +548,9 @@ impl World {
         //     }
         // }
 
+        player.has_played_before.store(true, Ordering::Relaxed);
         player.send_mobs(self).await;
+        player.send_inventory().await;
     }
 
     pub async fn send_world_info(

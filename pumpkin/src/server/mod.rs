@@ -129,7 +129,7 @@ impl Server {
             }),
             player_data_storage: ServerPlayerData::new(
                 format!("{world_name}/playerdata"),
-                Duration::from_secs(ADVANCED_CONFIG.player_data.save_player_cron_interval),
+                Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
         }
     }
