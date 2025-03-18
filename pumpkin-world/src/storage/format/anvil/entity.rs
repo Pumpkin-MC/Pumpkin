@@ -6,7 +6,7 @@ use pumpkin_util::math::vector2::Vector2;
 
 use crate::storage::{
     ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
-    format::{DataToBytes, EntityNbt, get_chunk_index},
+    format::{BytesToData, DataToBytes, EntityNbt, get_chunk_index},
     io::{ChunkSerializer, LoadedData},
 };
 
@@ -40,13 +40,15 @@ impl ChunkSerializer for AnvilEntityFormat {
     }
 
     async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
-        self.anvil.update_chunk::<Self>(chunk.position, chunk).await
+        self.anvil
+            .update_chunk::<Self>(Vector2::new(chunk.position[0], chunk.position[1]), chunk)
+            .await
     }
 
     async fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Create an unbounded buffer so we don't block the rayon thread pool
         let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::unbounded_channel();
@@ -94,4 +96,15 @@ impl DataToBytes for AnvilEntityFormat {
     type Data = EntityNbt;
 
     fn data_to_bytes(chunk_data: &Self::Data) -> Result<Vec<u8>, ChunkSerializingError> {}
+}
+
+impl BytesToData for AnvilEntityFormat {
+    type Data = EntityNbt;
+
+    fn bytes_to_data(
+        chunk_data: &[u8],
+        position: Vector2<i32>,
+    ) -> Result<Self::Data, crate::storage::ChunkParsingError> {
+        todo!()
+    }
 }

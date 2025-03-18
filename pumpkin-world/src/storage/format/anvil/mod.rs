@@ -134,34 +134,26 @@ impl AnvilFile {
             .await?;
 
         let mut write = BufWriter::new(file);
-        // The first two sectors are reserved for the location table
-        for (index, metadata) in self.chunks_data.iter().enumerate() {
-            if let Some(chunk) = metadata {
-                let chunk_data = &chunk.serialized_data;
-                let sector_count = chunk_data.sector_count();
-                log::trace!(
-                    "Writing position for chunk {} - {}:{}",
-                    index,
-                    chunk.file_sector_offset,
-                    sector_count
-                );
-                write
-                    .write_u32((chunk.file_sector_offset << 8) | sector_count)
-                    .await?;
-            } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.write_u32(0).await?;
-            };
-        }
-
+        let mut timestamp_buf = Vec::new();
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
-                write.write_u32(chunk.timestamp).await?;
+                let chunk_data = &chunk.serialized_data;
+                let combined_value = (chunk.file_sector_offset << 8) | chunk_data.sector_count();
+                write.write_u32(combined_value).await?;
+                timestamp_buf.write_u32(chunk.timestamp).await?;
+                log::trace!(
+                    "Writing position and timestamp for chunk: {}:{}, timestamp:{}",
+                    chunk.file_sector_offset,
+                    chunk_data.sector_count(),
+                    chunk.timestamp
+                );
             } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
+                // Write 0 for both location/size and timestamp in one iteration.
                 write.write_u32(0).await?;
+                timestamp_buf.write_u32(0).await?;
             }
         }
+        write.write(&timestamp_buf).await?;
 
         let mut chunks = indices
             .iter()
@@ -233,11 +225,13 @@ impl AnvilFile {
             .await?;
 
         let mut write = BufWriter::new(file);
+        let mut timestamp_buf = Vec::new();
 
         // The first two sectors are reserved for the location table
         let mut current_sector: u32 = 2;
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
+                timestamp_buf.write_u32(chunk.timestamp).await?;
                 let chunk = &chunk.serialized_data;
                 let sector_count = chunk.sector_count();
                 write
@@ -247,17 +241,10 @@ impl AnvilFile {
             } else {
                 // If the chunk is not present, we write 0 to the location and timestamp tables
                 write.write_u32(0).await?;
+                timestamp_buf.write_u32(0).await?;
             };
         }
-
-        for metadata in &self.chunks_data {
-            if let Some(chunk) = metadata {
-                write.write_u32(chunk.timestamp).await?;
-            } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.write_u32(0).await?;
-            }
-        }
+        write.write(&timestamp_buf).await?;
 
         for chunk in self.chunks_data.iter().flatten() {
             chunk.serialized_data.write(&mut write).await?;
@@ -761,14 +748,13 @@ mod tests {
     use crate::coordinates::ChunkRelativeBlockCoordinates;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::{LevelFolder, SyncChunk};
-    use crate::storage::format::anvil::AnvilFile;
-    use crate::storage::io::chunk_file_manager::ChunkFileManager;
+    use crate::storage::io::file_manager::FileManager;
     use crate::storage::io::{ChunkIO, LoadedData};
 
     use super::chunk::AnvilChunkFormat;
 
     async fn get_chunks(
-        saver: &ChunkFileManager<AnvilChunkFormat>,
+        saver: &FileManager<AnvilChunkFormat>,
         folder: &LevelFolder,
         chunks: &[(Vector2<i32>, SyncChunk)],
     ) -> Box<[SyncChunk]> {
@@ -802,7 +788,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
 
         let mut chunks = Vec::new();
         let (send, mut recv) = tokio::sync::mpsc::channel(1);
@@ -844,7 +830,7 @@ mod tests {
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
 
         // Generate chunks
         let mut chunks = vec![];
@@ -864,7 +850,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -912,7 +898,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -974,7 +960,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1017,7 +1003,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1050,7 +1036,7 @@ mod tests {
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+        let chunk_saver = FileManager::<AnvilChunkFormat>::default();
 
         // Generate chunks
         let mut chunks = vec![];
@@ -1075,7 +1061,7 @@ mod tests {
                 .expect("Failed to write chunk");
 
             // Create a new manager to ensure nothing is cached
-            let chunk_saver = ChunkFileManager::<AnvilChunkFormat>::default();
+            let chunk_saver = FileManager::<AnvilChunkFormat>::default();
             let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
             for (_, chunk) in &chunks {

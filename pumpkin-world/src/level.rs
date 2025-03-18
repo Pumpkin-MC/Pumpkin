@@ -19,7 +19,7 @@ use crate::{
             anvil::{AnvilChunkFile, chunk::AnvilChunkFormat},
             linear::LinearFile,
         },
-        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
+        io::{ChunkIO, LoadedData, file_manager::FileManager},
     },
     world_info::{
         LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
@@ -121,8 +121,8 @@ impl Level {
 
         let chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
-            ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile>::default()),
-            ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFormat>::default()),
+            ChunkFormat::Linear => Arc::new(FileManager::<LinearFile>::default()),
+            ChunkFormat::Anvil => Arc::new(FileManager::<AnvilChunkFormat>::default()),
         };
 
         Self {
