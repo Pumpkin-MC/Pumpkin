@@ -1,7 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
 
 use enum_dispatch::enum_dispatch;
-use futures::SinkExt;
 use multi_noise::{NoiseHypercube, SearchTree, TreeLeafNode};
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector3::Vector3;
@@ -13,7 +12,7 @@ use crate::{
 pub mod multi_noise;
 
 #[derive(Deserialize)]
-pub struct BiomeEntires {
+pub struct BiomeEntries {
     biomes: Vec<BiomeEntry>,
 }
 
@@ -24,7 +23,7 @@ pub struct BiomeEntry {
 }
 
 pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
-    let data: HashMap<Dimension, BiomeEntires> =
+    let data: HashMap<Dimension, BiomeEntries> =
         serde_json::from_str(include_str!("../../../assets/multi_noise.json"))
             .expect("Could not parse multi_noise.json.");
     // TODO: support non overworld biomes

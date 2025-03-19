@@ -26,6 +26,7 @@ pub enum GeneratorSetting {
 #[derive(Deserialize)]
 pub struct GenerationSettings {
     pub legacy_random_source: bool,
+    pub sea_level: i32,
     pub noise: GenerationShapeConfig,
     pub surface_rule: MaterialRule,
     pub default_block: BlockStateCodec,

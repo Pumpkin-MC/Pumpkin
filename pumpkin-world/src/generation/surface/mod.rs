@@ -227,57 +227,51 @@ impl SurfaceMaterialCondition {
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> bool {
-        fn estimate_surface_height(
-            context: &mut MaterialRuleContext,
-            surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-        ) -> i32 {
-            if context.last_est_heiht_unique_horizontal_pos_value
-                != context.unique_horizontal_pos_value
-            {
-                context.last_est_heiht_unique_horizontal_pos_value =
-                    context.unique_horizontal_pos_value;
-                let x = section_coords::block_to_section(context.block_pos.x);
-                let z = section_coords::block_to_section(context.block_pos.z);
-                let packed = chunk_pos::packed(&Vector2::new(x, z)) as i64;
-                if context.packed_chunk_pos != packed {
-                    context.packed_chunk_pos = packed;
-                    context.estimated_surface_heights[0] = surface_height_estimate_sampler
-                        .estimate_height(
-                            section_coords::section_to_block(x),
-                            section_coords::section_to_block(z),
-                        );
-                    context.estimated_surface_heights[1] = surface_height_estimate_sampler
-                        .estimate_height(
-                            section_coords::section_to_block(x + 1),
-                            section_coords::section_to_block(z),
-                        );
-                    context.estimated_surface_heights[2] = surface_height_estimate_sampler
-                        .estimate_height(
-                            section_coords::section_to_block(x),
-                            section_coords::section_to_block(z + 1),
-                        );
-                    context.estimated_surface_heights[3] = surface_height_estimate_sampler
-                        .estimate_height(
-                            section_coords::section_to_block(x + 1),
-                            section_coords::section_to_block(z + 1),
-                        );
-                }
-                let surface = lerp2(
-                    ((context.block_pos.x & 15) as f32 / 16.0) as f64,
-                    ((context.block_pos.z & 15) as f32 / 16.0) as f64,
-                    context.estimated_surface_heights[0] as f64,
-                    context.estimated_surface_heights[1] as f64,
-                    context.estimated_surface_heights[2] as f64,
-                    context.estimated_surface_heights[3] as f64,
-                )
-                .floor() as i32;
-                context.surface_min_y = surface + context.run_depth - 8;
-            }
-            context.surface_min_y
-        }
         // TODO
         context.block_pos.y >= estimate_surface_height(context, surface_height_estimate_sampler)
     }
+}
+
+pub fn estimate_surface_height(
+    context: &mut MaterialRuleContext,
+    surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+) -> i32 {
+    if context.last_est_heiht_unique_horizontal_pos_value != context.unique_horizontal_pos_value {
+        context.last_est_heiht_unique_horizontal_pos_value = context.unique_horizontal_pos_value;
+        let x = section_coords::block_to_section(context.block_pos.x);
+        let z = section_coords::block_to_section(context.block_pos.z);
+        let packed = chunk_pos::packed(&Vector2::new(x, z)) as i64;
+        if context.packed_chunk_pos != packed {
+            context.packed_chunk_pos = packed;
+            context.estimated_surface_heights[0] = surface_height_estimate_sampler.estimate_height(
+                section_coords::section_to_block(x),
+                section_coords::section_to_block(z),
+            );
+            context.estimated_surface_heights[1] = surface_height_estimate_sampler.estimate_height(
+                section_coords::section_to_block(x + 1),
+                section_coords::section_to_block(z),
+            );
+            context.estimated_surface_heights[2] = surface_height_estimate_sampler.estimate_height(
+                section_coords::section_to_block(x),
+                section_coords::section_to_block(z + 1),
+            );
+            context.estimated_surface_heights[3] = surface_height_estimate_sampler.estimate_height(
+                section_coords::section_to_block(x + 1),
+                section_coords::section_to_block(z + 1),
+            );
+        }
+        let surface = lerp2(
+            ((context.block_pos.x & 15) as f32 / 16.0) as f64,
+            ((context.block_pos.z & 15) as f32 / 16.0) as f64,
+            context.estimated_surface_heights[0] as f64,
+            context.estimated_surface_heights[1] as f64,
+            context.estimated_surface_heights[2] as f64,
+            context.estimated_surface_heights[3] as f64,
+        )
+        .floor() as i32;
+        context.surface_min_y = surface + context.run_depth - 8;
+    }
+    context.surface_min_y
 }
 
 #[derive(Deserialize)]

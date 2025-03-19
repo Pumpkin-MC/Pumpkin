@@ -24,7 +24,7 @@ use super::{
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
     settings::GenerationSettings,
-    surface::{MaterialRuleContext, terrain::SurfaceTerrainBuilder},
+    surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -108,10 +108,9 @@ impl<'a> ProtoChunk<'a> {
 
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
-        // TODO: Customize these
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(63, WATER_BLOCK),
-            FluidLevel::new(-54, LAVA_BLOCK),
+            FluidLevel::new(settings.sea_level, WATER_BLOCK),
+            FluidLevel::new(-54, LAVA_BLOCK), // this is always the same for every dimension
         ));
 
         let height = generation_shape.height;
@@ -302,7 +301,7 @@ impl<'a> ProtoChunk<'a> {
         let horizontal_cell_block_count = self.noise_sampler.horizontal_cell_block_count();
         let vertical_cell_block_count = self.noise_sampler.vertical_cell_block_count();
 
-        let horizontal_cells = (CHUNK_DIM / horizontal_cell_block_count) as u8;
+        let horizontal_cells = CHUNK_DIM / horizontal_cell_block_count;
 
         let min_y = self.noise_sampler.min_y();
         let minimum_cell_y = min_y / vertical_cell_block_count as i8;
@@ -403,6 +402,28 @@ impl<'a> ProtoChunk<'a> {
                 let x = start_x + x;
                 let z = start_z + z;
                 let top = self.noise_sampler.height(); // TODO: use heightmaps
+                let biome_y = if self.settings.legacy_random_source {
+                    0
+                } else {
+                    top
+                };
+                let seed_biome_pos = biome::get_biome_blend(
+                    self.bottom_y(),
+                    self.height(),
+                    self.random_config.seed,
+                    &context.block_pos,
+                );
+                let this_biome = self.get_biome(&Vector3::new(x, biome_y as i32, z));
+                if this_biome == Biome::ErodedBadlands {
+                    terrain_builder.place_badlands_pillar(
+                        self,
+                        x,
+                        z,
+                        top as i32,
+                        min_y as i32,
+                        self.default_block,
+                    );
+                }
                 let mut pos = Vector3::new(x, 0, z);
                 context.init_horizontal(x, z);
 
@@ -442,22 +463,11 @@ impl<'a> ProtoChunk<'a> {
                             break;
                         }
                     }
-                    // let biome_y = if self.settings.legacy_random_source {
-                    //     0
-                    // } else {
-                    //     top
-                    // };
 
                     // let biome_pos = Vector3::new(x, biome_y as i32, z);
                     stone_depth_above += 1;
                     stone_depth_below = y - min + 1;
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
-                    let seed_biome_pos = biome::get_biome_blend(
-                        self.bottom_y(),
-                        self.height(),
-                        self.random_config.seed,
-                        &context.block_pos,
-                    );
                     let biome = self.get_biome(&seed_biome_pos);
                     // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
                     context.biome = biome;
@@ -469,6 +479,21 @@ impl<'a> ProtoChunk<'a> {
                     if let Some(state) = new_state {
                         self.set_block_state(&pos, state);
                     }
+                }
+                if this_biome == Biome::FrozenOcean || this_biome == Biome::DeepFrozenOcean {
+                    let min_y = estimate_surface_height(
+                        &mut context,
+                        &mut self.surface_height_estimate_sampler,
+                    );
+                    terrain_builder.place_iceberg(
+                        self,
+                        min_y,
+                        x,
+                        z,
+                        top as i32,
+                        self.settings.sea_level,
+                        &self.random_config.base_random_deriver,
+                    );
                 }
             }
         }

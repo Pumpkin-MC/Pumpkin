@@ -686,6 +686,7 @@ mod test {
 
     fn create_aquifer(
         base_router: &GlobalProtoNoiseRouter,
+        sea_level: i32,
     ) -> (
         WorldAquiferSampler,
         ChunkNoiseRouter,
