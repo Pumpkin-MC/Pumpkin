@@ -275,12 +275,11 @@ fn get_batched_tree<T: Clone>(nodes: Vec<TreeNode<T>>) -> Vec<TreeNode<T>> {
 fn get_enclosing_parameters<T: Clone>(nodes: &[TreeNode<T>]) -> [ParameterRange; 7] {
     assert!(!nodes.is_empty(), "SubTree needs at least one child");
     let mut bounds = *nodes[0].bounds();
-    for node in nodes {
+    for node in nodes.iter().skip(1) {
         for (i, range) in node.bounds().iter().enumerate() {
-            bounds[i] = *range;
+            bounds[i] = bounds[i].combine(range);
         }
     }
-
     bounds
 }
 
