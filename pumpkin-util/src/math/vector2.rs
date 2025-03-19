@@ -2,7 +2,7 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use num_traits::Float;
 
-use super::vector3::{SIZE_BITS_Y, Vector3};
+use super::vector3::Vector3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector2<T> {
@@ -115,41 +115,6 @@ impl Math for f32 {}
 impl Math for i32 {}
 impl Math for i64 {}
 impl Math for i8 {}
-
-pub const MAX_HEIGHT: u32 = (1 << SIZE_BITS_Y) - 32;
-pub const MAX_COLUMN_HEIGHT: u32 = (MAX_HEIGHT >> 1) - 1;
-pub const MIN_HEIGHT: i32 = MAX_COLUMN_HEIGHT as i32 - MAX_HEIGHT as i32 + 1;
-pub const MIN_HEIGHT_CELL: i32 = MIN_HEIGHT << 4;
-
-pub const MARKER: u64 = packed(&Vector2::new(1875066, 1875066));
-
-pub const fn packed(vec: &Vector2<i32>) -> u64 {
-    (vec.x as u64 & 4294967295u64) | ((vec.z as u64 & 4294967295u64) << 32)
-}
-
-pub const fn unpack_x(packed: u64) -> i32 {
-    (packed & 4294967295u64) as i32
-}
-
-pub const fn unpack_z(packed: u64) -> i32 {
-    ((packed >> 32) & 4294967295u64) as i32
-}
-
-pub const fn start_block_x(vec: &Vector2<i32>) -> i32 {
-    vec.x << 4
-}
-
-pub const fn end_block_x(vec: &Vector2<i32>) -> i32 {
-    start_block_x(vec) + 15
-}
-
-pub const fn start_block_z(vec: &Vector2<i32>) -> i32 {
-    vec.z << 4
-}
-
-pub const fn end_block_z(vec: &Vector2<i32>) -> i32 {
-    start_block_z(vec) + 15
-}
 
 pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
     Vector2::new(vec.x >> 4, vec.z >> 4)
