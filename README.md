@@ -27,9 +27,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - **Extensibility**: Provides a foundation for plugin development.
 
 > [!IMPORTANT]
-> Pumpkin is currently under heavy development. Biomes are currently not implemented, but the terrain noise matches Vanilla.
-![image](https://github.com/user-attachments/assets/aa24941f-216c-47b8-830c-ed5d7bb9ebca)
-
+> Pumpkin is currently under heavy development
 
 ## Features
 
@@ -62,7 +60,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Chunk Saving (Vanilla, Linear)
   - [ ] Redstone
   - [ ] Liquid Physics
-  - [ ] Biomes
+  - [x] Biomes
   - [ ] Vegetation
 - Player
   - [x] Skins
