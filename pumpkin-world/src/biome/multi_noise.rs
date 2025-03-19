@@ -394,12 +394,9 @@ fn squared_distance(a: &[ParameterRange; 7], b: &[i64; 7]) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use crate::biome::{
-        BIOME_ENTRIES,
-        multi_noise::{TreeNode, create_node},
-    };
+    use crate::biome::multi_noise::{TreeNode, create_node};
 
-    use super::{NoiseHypercube, ParameterRange, squared_distance};
+    use super::{NoiseHypercube, ParameterRange};
 
     #[test]
     fn test_create_node_single_leaf() {
