@@ -38,10 +38,10 @@ zstd = "0.13.3"
 
 itertools = "0.14.0"
 file-guard = "0.2"
-indexmap = "2.7"
+indexmap = "2.8"
 enum_dispatch = "0.3"
 noise = "0.9"
-serde_json5 = "0.2.0"
+serde_json5 = "0.2.1"
 derive-getters = "0.5.0"
 
 [dev-dependencies]
