@@ -14,7 +14,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
     
-![2025-03-0615-45-42chunkloading](https://github.com/user-attachments/assets/c29096c7-230d-4093-b139-38ac339f38cc)
+![gif](https://github.com/user-attachments/assets/eb50fd34-8fd4-4ded-8a86-6ab13804f99a)
 
 </div>
 
