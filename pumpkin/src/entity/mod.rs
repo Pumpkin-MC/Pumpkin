@@ -428,10 +428,12 @@ impl Entity {
             || self.damage_immunities.contains(damage_type)
     }
 
-    async fn velocity_multiplier(&self, _pos: Vector3<f64>) -> f32 {
-        let world = self.world.read().await;
-        let block = world.get_block(&self.block_pos.load()).await.unwrap();
-        block.velocity_multiplier
+    fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {
+        // let world = self.world.read().await;
+        // TODO: handle when player is outside world
+        // let block = world.get_block(&self.block_pos.load()).await;
+        // block.velocity_multiplier
+        0.0
         // if velo_multiplier == 1.0 {
         //     const VELOCITY_OFFSET: f64 = 0.500001; // Vanilla
         //     let pos_with_y_offset = BlockPos(Vector3::new(
@@ -445,12 +447,12 @@ impl Entity {
         // }
     }
 
-    async fn tick_move(&self) {
+    fn tick_move(&self) {
         let velo = self.velocity.load();
         let pos = self.pos.load();
         self.pos
             .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
-        let multiplier = f64::from(self.velocity_multiplier(pos).await);
+        let multiplier = f64::from(Self::velocity_multiplier(pos));
         self.velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
     }
@@ -463,7 +465,7 @@ impl EntityBase for Entity {
     }
 
     async fn tick(&self, _: &Server) {
-        self.tick_move().await;
+        self.tick_move();
     }
 
     fn get_entity(&self) -> &Entity {

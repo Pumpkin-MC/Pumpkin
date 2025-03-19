@@ -96,7 +96,7 @@ impl Server {
         let block_registry = super::block::default_registry();
 
         let world = World::load(
-            Dimension::OverWorld.into_level(
+            Dimension::Overworld.into_level(
                 // TODO: load form config
                 "./world".parse().unwrap(),
             ),

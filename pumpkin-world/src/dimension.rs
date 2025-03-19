@@ -7,7 +7,7 @@ use crate::level::Level;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Dimension {
-    OverWorld,
+    Overworld,
     Nether,
     End,
 }
@@ -15,7 +15,7 @@ pub enum Dimension {
 impl Dimension {
     pub fn into_level(&self, mut base_directory: PathBuf) -> Level {
         match self {
-            Dimension::OverWorld => {}
+            Dimension::Overworld => {}
             Dimension::Nether => base_directory.push("DIM-1"),
             Dimension::End => base_directory.push("DIM1"),
         }

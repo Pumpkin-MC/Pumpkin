@@ -1,11 +1,12 @@
 use std::ops::Deref;
 
-use crate::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use derive_more::derive::{AsMut, AsRef, Display, Into};
 use num_traits::{PrimInt, Signed, Unsigned};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
+
+use crate::generation::settings::{GENERATION_SETTINGS, GeneratorSetting};
 
 #[derive(
     Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, AsRef, AsMut, Into, Display,
@@ -14,14 +15,23 @@ use serde::{Deserialize, Serialize};
 pub struct Height(pub i16);
 
 impl Height {
-    pub const fn from_absolute(height: u16) -> Self {
-        Self(height as i16 - WORLD_LOWEST_Y.abs())
+    pub fn from_absolute(height: u16) -> Self {
+        // TODO: :crying
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+
+        Self((height as i32 + surface_config.noise.min_y as i32) as i16)
     }
 
     /// Absolute height ranges from `0..WORLD_HEIGHT`
     /// instead of `WORLD_LOWEST_Y..WORLD_MAX_Y`
-    pub const fn get_absolute(self) -> u16 {
-        (self.0 + WORLD_LOWEST_Y.abs()) as u16
+    pub fn get_absolute(self) -> u16 {
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+
+        (self.0 as i32 - surface_config.noise.min_y as i32) as u16
     }
 }
 
@@ -29,8 +39,8 @@ impl<T: PrimInt + Signed> From<T> for Height {
     fn from(height: T) -> Self {
         let height = height.to_i16().unwrap();
 
-        assert!(height <= WORLD_MAX_Y);
-        assert!(height >= WORLD_LOWEST_Y);
+        // assert!(height <= WORLD_MAX_Y);
+        // assert!(height >= WORLD_LOWEST_Y);
         Self(height)
     }
 }

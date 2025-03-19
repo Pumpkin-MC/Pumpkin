@@ -1,8 +1,8 @@
 use num_traits::Pow;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
-use pumpkin_util::random::RandomGenerator;
+use pumpkin_util::{math::lerp3, random::RandomGenerator};
 
-use super::{GRADIENTS, lerp3};
+use super::GRADIENTS;
 
 #[derive(Clone)]
 pub struct PerlinNoiseSampler {

@@ -3,19 +3,23 @@ use std::{fs, path::PathBuf, sync::Arc};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_world::{
-    GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS, bench_create_and_populate_noise,
-    chunk::ChunkData, global_path, level::Level,
+    GENERATION_SETTINGS, GeneratorSetting, GlobalProtoNoiseRouter, GlobalRandomConfig,
+    NOISE_ROUTER_ASTS, bench_create_and_populate_noise, chunk::ChunkData, global_path,
+    level::Level,
 };
 use tokio::{runtime::Runtime, sync::RwLock};
 
 fn bench_populate_noise(c: &mut Criterion) {
     let seed = 0;
-    let random_config = GlobalRandomConfig::new(seed);
+    let random_config = GlobalRandomConfig::new(seed, false);
     let base_router =
         GlobalProtoNoiseRouter::generate(NOISE_ROUTER_ASTS.overworld(), &random_config);
+    let surface_config = GENERATION_SETTINGS
+        .get(&GeneratorSetting::Overworld)
+        .unwrap();
 
     c.bench_function("overworld noise", |b| {
-        b.iter(|| bench_create_and_populate_noise(&base_router, &random_config));
+        b.iter(|| bench_create_and_populate_noise(&base_router, &random_config, surface_config));
     });
 }
 

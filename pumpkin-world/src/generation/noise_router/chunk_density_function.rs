@@ -5,12 +5,9 @@ use super::{
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange, NoisePos},
 };
 use enum_dispatch::enum_dispatch;
-use pumpkin_util::math::vector2::{self, Vector2};
+use pumpkin_util::math::{lerp, lerp3, vector2::Vector2};
 
-use crate::generation::{
-    biome_coords,
-    noise::{lerp, lerp3},
-};
+use crate::generation::{biome_coords, positions::chunk_pos};
 
 pub struct WrapperData {
     // Our relative position within the cell
@@ -395,7 +392,7 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let packed_column = vector2::packed(&Vector2::new(pos.x(), pos.z()));
+        let packed_column = chunk_pos::packed(&Vector2::new(pos.x(), pos.z()));
         if packed_column == self.last_sample_column {
             self.last_sample_result
         } else {
@@ -418,7 +415,7 @@ impl Cache2D {
             input_index,
             // I know this is because theres is definitely world coords that are this marker, but this
             // is how vanilla does it, so I'm going to for pairity
-            last_sample_column: vector2::MARKER,
+            last_sample_column: chunk_pos::MARKER,
             last_sample_result: Default::default(),
             min_value,
             max_value,

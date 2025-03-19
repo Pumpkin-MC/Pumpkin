@@ -161,8 +161,6 @@ impl Level {
         }
     }
 
-    pub fn get_block() {}
-
     pub fn loaded_chunk_count(&self) -> usize {
         self.loaded_chunks.len()
     }

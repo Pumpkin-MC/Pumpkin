@@ -3,6 +3,7 @@ use crate::{ClientPacket, VarInt, bytebuf::ByteBufMut, codec::bit_set::BitSet};
 use bytes::{BufMut, BytesMut};
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
+use pumpkin_util::math::ceil_log2;
 use pumpkin_world::{
     DIRECT_PALETTE_BITS,
     chunk::{ChunkData, SUBCHUNKS_COUNT},
@@ -18,13 +19,24 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         buf.put_i32(self.0.position.z);
 
-        let mut heightmap_nbt = Vec::new();
-        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap, &mut heightmap_nbt).unwrap();
-        // Heightmaps
-        buf.put_slice(&heightmap_nbt);
+        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap, &mut buf.writer()).unwrap();
 
         let mut data_buf = BytesMut::new();
+        let mut light_buf = BytesMut::new();
         self.0.blocks.array_iter_subchunks().for_each(|subchunk| {
+            let mut chunk_light = [0u8; 2048];
+            for i in 0..subchunk.len() {
+                // if !block .is_air() {
+                //     continue;
+                // }
+                let index = i / 2;
+                let mask = if i % 2 == 1 { 0xF0 } else { 0x0F };
+                chunk_light[index] |= mask;
+            }
+
+            light_buf.put_var_int(&VarInt(chunk_light.len() as i32));
+            light_buf.put_slice(&chunk_light);
+
             let block_count = subchunk.len() as i16;
             // Block count
             data_buf.put_i16(block_count);
@@ -34,28 +46,37 @@ impl ClientPacket for CChunkData<'_> {
             // TODO: make dynamic block_size work
             // TODO: make direct block_size work
             enum PaletteType {
+                Single,
                 Indirect(u32),
                 Direct,
             }
             let palette_type = {
-                let palette_bit_len = 64 - (palette.len() as i64 - 1).leading_zeros();
-                if palette_bit_len > 8 {
-                    PaletteType::Direct
-                } else if palette_bit_len > 3 {
-                    PaletteType::Indirect(palette_bit_len)
-                } else {
+                let palette_bit_len = ceil_log2(palette.len() as u32);
+                if palette_bit_len == 0 {
+                    PaletteType::Single
+                } else if palette_bit_len <= 4 {
                     PaletteType::Indirect(4)
+                } else if palette_bit_len <= 8 {
+                    PaletteType::Indirect(palette_bit_len as u32)
+                } else {
+                    PaletteType::Direct
                 }
+
                 // TODO: fix indirect palette to work correctly
                 // PaletteType::Direct
             };
 
             match palette_type {
+                PaletteType::Single => {
+                    data_buf.put_u8(0);
+                    data_buf.put_var_int(&VarInt(*palette.first().unwrap() as i32));
+                    data_buf.put_var_int(&VarInt(0));
+                }
                 PaletteType::Indirect(block_size) => {
                     // Bits per entry
                     data_buf.put_u8(block_size as u8);
                     // Palette length
-                    data_buf.put_var_int(&VarInt(palette.len() as i32));
+                    data_buf.put_var_int(&VarInt(palette.len() as i32 - 1));
 
                     palette.iter().for_each(|id| {
                         // Palette
@@ -88,10 +109,8 @@ impl ClientPacket for CChunkData<'_> {
                     data_buf.reserve(data_array_len * 8);
                     for block_clump in subchunk.chunks(64 / DIRECT_PALETTE_BITS as usize) {
                         let mut out_long: i64 = 0;
-                        let mut shift = 0;
-                        for block in block_clump {
-                            out_long |= (*block as i64) << shift;
-                            shift += DIRECT_PALETTE_BITS;
+                        for (i, &block) in block_clump.iter().enumerate() {
+                            out_long |= (block as i64) << (i as u32 * DIRECT_PALETTE_BITS);
                         }
                         data_buf.put_i64(out_long);
                     }
@@ -125,21 +144,9 @@ impl ClientPacket for CChunkData<'_> {
         // Empty Block Light Mask
         buf.put_bit_set(&BitSet(VarInt(1), vec![0]));
 
+        // Sky light
         buf.put_var_int(&VarInt(SUBCHUNKS_COUNT as i32));
-        self.0.blocks.array_iter_subchunks().for_each(|chunk| {
-            let mut chunk_light = [0u8; 2048];
-            for (i, _) in chunk.iter().enumerate() {
-                // if !block .is_air() {
-                //     continue;
-                // }
-                let index = i / 2;
-                let mask = if i % 2 == 1 { 0xF0 } else { 0x0F };
-                chunk_light[index] |= mask;
-            }
-
-            buf.put_var_int(&VarInt(chunk_light.len() as i32));
-            buf.put_slice(&chunk_light);
-        });
+        buf.put_slice(&light_buf);
 
         // Block Lighting
         buf.put_var_int(&VarInt(0));

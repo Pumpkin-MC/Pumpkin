@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
+use pumpkin_util::math::vector2::Vector2;
+
 use crate::{
     GlobalProtoNoiseRouter,
-    biome::multi_noise::{NoiseValuePoint, to_long},
-    generation::biome_coords,
+    generation::{biome_coords, positions::chunk_pos},
     noise_router::density_function_ast::WrapperType,
 };
 
@@ -15,95 +18,93 @@ use super::{
     proto_noise_router::ProtoNoiseFunctionComponent,
 };
 
-pub struct MultiNoiseSamplerBuilderOptions {
+pub struct SurfaceHeightSamplerBuilderOptions {
     // The biome coords of this chunk
     start_biome_x: i32,
     start_biome_z: i32,
 
     // Number of biome regions per chunk per axis
     horizontal_biome_end: usize,
+
+    // Minimum y level to check
+    minimum_y: i32,
+    // Maximum y level to check
+    maximum_y: i32,
+    y_level_step_count: usize,
 }
 
-impl MultiNoiseSamplerBuilderOptions {
-    pub fn new(start_biome_x: i32, start_biome_z: i32, horizontal_biome_end: usize) -> Self {
+impl SurfaceHeightSamplerBuilderOptions {
+    pub fn new(
+        start_biome_x: i32,
+        start_biome_z: i32,
+        horizontal_biome_end: usize,
+        minimum_y: i32,
+        maximum_y: i32,
+        y_level_step_count: usize,
+    ) -> Self {
         Self {
             start_biome_x,
             start_biome_z,
             horizontal_biome_end,
+            minimum_y,
+            maximum_y,
+            y_level_step_count,
         }
     }
 }
 
-pub struct MultiNoiseSampler<'a> {
-    temperature: usize,
-    humidity: usize,
-    continentalness: usize,
-    erosion: usize,
-    depth: usize,
-    // AKA: Weirdness
-    ridges: usize,
+pub struct SurfaceHeightEstimateSampler<'a> {
+    minimum_y: i32,
+    maximum_y: i32,
+    y_level_step_count: usize,
+
+    initial_density_without_jaggedness: usize,
     component_stack: Box<[ChunkNoiseFunctionComponent<'a>]>,
+
+    // TODO: Can this be a flat map? I think the aquifer sampler samples outside of the chunk
+    cache: HashMap<u64, i32>,
 }
 
-impl<'a> MultiNoiseSampler<'a> {
-    pub fn sample(&mut self, biome_x: i32, biome_y: i32, biome_z: i32) -> NoiseValuePoint {
-        let block_x = biome_coords::to_block(biome_x);
-        let block_y = biome_coords::to_block(biome_y);
-        let block_z = biome_coords::to_block(biome_z);
+impl<'a> SurfaceHeightEstimateSampler<'a> {
+    const NOTCHIAN_SAMPLE_CUTOFF: f64 = 0.390625;
 
-        let pos = UnblendedNoisePos::new(block_x, block_y, block_z);
-        let sample_options =
-            ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
+    pub fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32 {
+        let biome_aligned_x = biome_coords::to_block(biome_coords::from_block(block_x));
+        let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
 
-        let temperature = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.temperature],
-            &pos,
-            &sample_options,
-        ) as f32;
-
-        let humidity = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.humidity],
-            &pos,
-            &sample_options,
-        ) as f32;
-
-        let continentalness = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.continentalness],
-            &pos,
-            &sample_options,
-        ) as f32;
-
-        let erosion = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.erosion],
-            &pos,
-            &sample_options,
-        ) as f32;
-
-        let depth = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.depth],
-            &pos,
-            &sample_options,
-        ) as f32;
-
-        let weirdness = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.ridges],
-            &pos,
-            &sample_options,
-        ) as f32;
-
-        NoiseValuePoint {
-            temperature: to_long(temperature),
-            humidity: to_long(humidity),
-            continentalness: to_long(continentalness),
-            erosion: to_long(erosion),
-            depth: to_long(depth),
-            weirdness: to_long(weirdness),
+        let packed_column = chunk_pos::packed(&Vector2::new(biome_aligned_x, biome_aligned_z));
+        if let Some(estimate) = self.cache.get(&packed_column) {
+            *estimate
+        } else {
+            let estimate = self.calculate_height_estimate(biome_aligned_x, biome_aligned_z);
+            self.cache.insert(packed_column, estimate);
+            estimate
         }
+    }
+
+    fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
+        for y in (self.minimum_y..=self.maximum_y)
+            .rev()
+            .step_by(self.y_level_step_count)
+        {
+            let pos = UnblendedNoisePos::new(aligned_x, y, aligned_z);
+            let density_sample = ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut self.component_stack[..=self.initial_density_without_jaggedness],
+                &pos,
+                &ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0),
+            );
+
+            if density_sample > Self::NOTCHIAN_SAMPLE_CUTOFF {
+                return y;
+            }
+        }
+
+        i32::MAX
     }
 
     pub fn generate(
         base: &'a GlobalProtoNoiseRouter,
-        build_options: &MultiNoiseSamplerBuilderOptions,
+        build_options: &SurfaceHeightSamplerBuilderOptions,
     ) -> Self {
         // TODO: It seems kind of wasteful to iter over all components (even those we dont need
         // because they're for chunk population), but this is the best I've got for now.
@@ -195,7 +196,7 @@ impl<'a> MultiNoiseSampler<'a> {
                             ))
                         }
                         // Java passes thru if the noise pos is not the chunk itself, which it is
-                        // never for the MultiNoiseSampler
+                        // never for the Height estimator
                         _ => ChunkNoiseFunctionComponent::PassThrough(PassThrough {
                             input_index: wrapper.input_index,
                             min_value,
@@ -208,62 +209,14 @@ impl<'a> MultiNoiseSampler<'a> {
         }
 
         Self {
-            temperature: base.temperature,
-            humidity: base.vegetation,
-            continentalness: base.continents,
-            depth: base.depth,
-            erosion: base.erosion,
-            ridges: base.ridges,
+            initial_density_without_jaggedness: base.initial_density_without_jaggedness,
             component_stack: component_stack.into_boxed_slice(),
+
+            maximum_y: build_options.maximum_y,
+            minimum_y: build_options.minimum_y,
+            y_level_step_count: build_options.y_level_step_count,
+
+            cache: HashMap::new(),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::{
-        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
-        biome::multi_noise::NoiseValuePoint,
-    };
-
-    use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
-
-    #[test]
-    fn test_sample() {
-        let seed = 123;
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
-        let expected = NoiseValuePoint {
-            temperature: -5727,
-            humidity: 55,
-            continentalness: 4996,
-            erosion: 2371,
-            depth: -19774,
-            weirdness: 4421,
-        };
-        assert_eq!(sampler.sample(123, 123, 123), expected)
-    }
-
-    #[test]
-    fn test_sample_2() {
-        // we use a different seed
-        let seed = 13579;
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
-        let expected = NoiseValuePoint {
-            temperature: 7489,
-            humidity: 3502,
-            continentalness: -2168,
-            erosion: -3511,
-            depth: -21237,
-            weirdness: -5222,
-        };
-        assert_eq!(sampler.sample(123, 123, 123), expected)
     }
 }
