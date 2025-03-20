@@ -54,31 +54,33 @@ impl SurfaceTerrainBuilder {
     const RED_TERRACOTTA: ChunkBlockState = block_state!("red_terracotta");
     const WHITE_TERRACOTTA: ChunkBlockState = block_state!("white_terracotta");
     const LIGHT_GRAY_TERRACOTTA: ChunkBlockState = block_state!("light_gray_terracotta");
+    const TERRACOTTA: ChunkBlockState = block_state!("terracotta");
 
     fn create_terracotta_bands(mut random: RandomGenerator) -> Box<[ChunkBlockState]> {
-        let mut block_states = [ChunkBlockState::AIR; 192];
+        let mut block_states = [Self::TERRACOTTA; 192];
 
         let mut i = 0;
         while i < block_states.len() {
-            i += random.next_bounded_i32(5) as usize;
+            i += random.next_bounded_i32(5) as usize + 1;
             if i >= block_states.len() {
                 break;
             }
             block_states[i] = Self::ORANGE_TERRACOTTA;
+            i += 1;
         }
 
         Self::add_terracotta_bands(&mut random, &mut block_states, 1, Self::YELLOW_TERRACOTTA);
         Self::add_terracotta_bands(&mut random, &mut block_states, 2, Self::BROWN_TERRACOTTA);
         Self::add_terracotta_bands(&mut random, &mut block_states, 1, Self::RED_TERRACOTTA);
 
-        let band_count = random.next_bounded_i32(15);
+        let band_count = random.next_inbetween_i32(9, 15);
         let mut current_band = 0;
         let mut index = 0;
 
         while current_band < band_count && index < block_states.len() {
             block_states[index] = Self::WHITE_TERRACOTTA;
 
-            if index > 0 && random.next_bool() {
+            if index > 1 && random.next_bool() {
                 block_states[index - 1] = Self::LIGHT_GRAY_TERRACOTTA;
             }
 
@@ -86,7 +88,7 @@ impl SurfaceTerrainBuilder {
                 block_states[index + 1] = Self::LIGHT_GRAY_TERRACOTTA;
             }
 
-            index += random.next_bounded_i32(19) as usize;
+            index += random.next_bounded_i32(16) as usize + 4;
             current_band += 1;
         }
 
@@ -106,7 +108,7 @@ impl SurfaceTerrainBuilder {
             let start_index = random.next_bounded_i32(terracotta_bands.len() as i32);
 
             for m in 0..band_width {
-                if start_index + m < terracotta_bands.len() as i32 {
+                if (start_index + m < terracotta_bands.len() as i32) && (m < band_width) {
                     terracotta_bands[(start_index + m) as usize] = state;
                 } else {
                     break; // Stop if we reach the end of the array
