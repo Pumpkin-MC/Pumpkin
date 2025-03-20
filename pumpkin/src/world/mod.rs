@@ -380,7 +380,7 @@ impl World {
             if chunk_section.len() == 1 {
                 let (block_pos, block_state_id) = chunk_section[0];
                 self.broadcast_packet_all(&CBlockUpdate::new(
-                    &block_pos,
+                    block_pos,
                     i32::from(block_state_id).into(),
                 ))
                 .await;
