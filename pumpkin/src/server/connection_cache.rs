@@ -63,9 +63,10 @@ impl CachedBranding {
     }
     const BRAND: &str = "Pumpkin";
     const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
+
     fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
-        VarInt(Self::BRAND.len() as i32).encode(&mut buf);
+        VarInt(Self::BRAND.len() as i32).encode(&mut buf).unwrap();
         buf.extend_from_slice(Self::BRAND_BYTES);
         buf.into_boxed_slice()
     }

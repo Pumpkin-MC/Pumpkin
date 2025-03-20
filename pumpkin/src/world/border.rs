@@ -46,7 +46,7 @@ impl Worldborder {
 
     pub async fn init_client(&self, client: &Client) {
         client
-            .send_packet(&CInitializeWorldBorder::new(
+            .enqueue_packet(&CInitializeWorldBorder::new(
                 self.center_x,
                 self.center_z,
                 self.old_diameter,

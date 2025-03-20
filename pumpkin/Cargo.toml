@@ -84,6 +84,9 @@ libloading = "0.8"
 bitflags = "2.9.0"
 rustc-hash = "2.1.1"
 
+# Task handling
+tokio-util = { version = "0.7.14", features = ["rt"] }
+
 [build-dependencies]
 git-version = "0.3"
 # This makes it so the entire project doesn't recompile on each build on linux.

@@ -48,7 +48,7 @@ use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
-use pumpkin::{PumpkinServer, SHOULD_STOP, init_log, stop_server};
+use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
 use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;

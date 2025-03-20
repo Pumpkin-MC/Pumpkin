@@ -33,7 +33,7 @@ impl GetClientSideArgParser for EntitiesArgumentConsumer {
 impl ArgumentConsumer for EntitiesArgumentConsumer {
     async fn consume<'a>(
         &'a self,
-        src: &CommandSender<'a>,
+        src: &CommandSender,
         server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
@@ -46,7 +46,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
 
     async fn suggest<'a>(
         &'a self,
-        _sender: &CommandSender<'a>,
+        _sender: &CommandSender,
         _server: &'a Server,
         _input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use pumpkin_protocol::client::play::{CCommands, ProtoNode, ProtoNodeType};
-use tokio::sync::RwLock;
 
 use crate::entity::player::Player;
 
@@ -10,11 +9,10 @@ use super::{
     tree::{Node, NodeType},
 };
 
-pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<CommandDispatcher>) {
+pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &CommandDispatcher) {
     let cmd_src = super::CommandSender::Player(player.clone());
     let mut first_level = Vec::new();
 
-    let dispatcher = dispatcher.read().await;
     for key in dispatcher.commands.keys() {
         let Ok(tree) = dispatcher.get_tree(key) else {
             continue;
@@ -51,7 +49,7 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &RwLock<Co
     let root_node_index = root.build(&mut proto_nodes);
 
     let packet = CCommands::new(proto_nodes, root_node_index.into());
-    player.client.send_packet(&packet).await;
+    player.client.enqueue_packet(&packet).await;
 }
 
 #[derive(Debug)]

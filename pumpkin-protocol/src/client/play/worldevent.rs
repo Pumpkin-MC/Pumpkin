@@ -6,20 +6,15 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 #[packet(PLAY_LEVEL_EVENT)]
-pub struct CWorldEvent<'a> {
+pub struct CWorldEvent {
     event: i32,
-    location: &'a BlockPos,
+    location: BlockPos,
     data: i32,
     disable_relative_volume: bool,
 }
 
-impl<'a> CWorldEvent<'a> {
-    pub fn new(
-        event: i32,
-        location: &'a BlockPos,
-        data: i32,
-        disable_relative_volume: bool,
-    ) -> Self {
+impl CWorldEvent {
+    pub fn new(event: i32, location: BlockPos, data: i32, disable_relative_volume: bool) -> Self {
         Self {
             event,
             location,

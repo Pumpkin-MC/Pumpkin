@@ -66,7 +66,7 @@ pub struct CommandDispatcher {
 impl CommandDispatcher {
     pub async fn handle_command<'a>(
         &'a self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) {
@@ -95,7 +95,7 @@ impl CommandDispatcher {
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
     pub(crate) async fn find_suggestions<'a>(
         &'a self,
-        src: &mut CommandSender<'a>,
+        src: &mut CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Vec<CommandSuggestion> {
@@ -156,7 +156,7 @@ impl CommandDispatcher {
     /// Execute a command using its corresponding [`CommandTree`].
     pub(crate) async fn dispatch<'a>(
         &'a self,
-        src: &mut CommandSender<'a>,
+        src: &mut CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
@@ -194,7 +194,7 @@ impl CommandDispatcher {
         )))
     }
 
-    pub(crate) fn get_tree(&self, key: &str) -> Result<&CommandTree, CommandError> {
+    pub(crate) fn get_tree<'a>(&'a self, key: &str) -> Result<&'a CommandTree, CommandError> {
         let command = self
             .commands
             .get(key)
@@ -221,7 +221,7 @@ impl CommandDispatcher {
     }
 
     async fn try_is_fitting_path<'a>(
-        src: &mut CommandSender<'a>,
+        src: &mut CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
@@ -264,7 +264,7 @@ impl CommandDispatcher {
     }
 
     async fn try_find_suggestions_on_path<'a>(
-        src: &mut CommandSender<'a>,
+        src: &mut CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,

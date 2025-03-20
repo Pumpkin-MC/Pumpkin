@@ -26,7 +26,7 @@ const CARGO_PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

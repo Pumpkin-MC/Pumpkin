@@ -1,4 +1,4 @@
-use crate::deserializer::ReadAdaptor;
+use crate::deserializer::NbtReadHelper;
 use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
 use crate::{END_ID, Error, Nbt, get_nbt_string};
@@ -17,7 +17,7 @@ impl NbtCompound {
         }
     }
 
-    pub fn skip_content<R>(reader: &mut ReadAdaptor<R>) -> Result<(), Error>
+    pub fn skip_content<R>(reader: &mut NbtReadHelper<R>) -> Result<(), Error>
     where
         R: Read,
     {
@@ -51,7 +51,7 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn deserialize_content<R>(reader: &mut ReadAdaptor<R>) -> Result<NbtCompound, Error>
+    pub fn deserialize_content<R>(reader: &mut NbtReadHelper<R>) -> Result<NbtCompound, Error>
     where
         R: Read,
     {

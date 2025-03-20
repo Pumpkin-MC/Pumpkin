@@ -1,11 +1,12 @@
-use bytes::Buf;
+use std::io::Read;
+
 use pumpkin_data::packet::serverbound::PLAY_SIGN_UPDATE;
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{
     ServerPacket,
-    bytebuf::{ByteBuf, ReadingError},
+    ser::{NetworkReadExt, ReadingError},
 };
 
 #[packet(PLAY_SIGN_UPDATE)]
@@ -18,15 +19,19 @@ pub struct SUpdateSign {
     pub line_4: String,
 }
 
+const MAX_LINE_LENGTH: usize = 386;
+
 impl ServerPacket for SUpdateSign {
-    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
+    fn read(read: impl Read) -> Result<Self, ReadingError> {
+        let mut read = read;
+
         Ok(Self {
-            location: BlockPos::from_i64(bytebuf.try_get_i64()?),
-            is_front_text: bytebuf.try_get_bool()?,
-            line_1: bytebuf.try_get_string_len(386)?,
-            line_2: bytebuf.try_get_string_len(386)?,
-            line_3: bytebuf.try_get_string_len(386)?,
-            line_4: bytebuf.try_get_string_len(386)?,
+            location: BlockPos::from_i64(read.get_i64_be()?),
+            is_front_text: read.get_bool()?,
+            line_1: read.get_string_bounded(MAX_LINE_LENGTH)?,
+            line_2: read.get_string_bounded(MAX_LINE_LENGTH)?,
+            line_3: read.get_string_bounded(MAX_LINE_LENGTH)?,
+            line_4: read.get_string_bounded(MAX_LINE_LENGTH)?,
         })
     }
 }

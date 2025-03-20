@@ -22,6 +22,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use border::Worldborder;
+use bytes::Bytes;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
@@ -33,10 +34,10 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
-    ClientPacket,
+    ClientPacket, IdOr, SoundEvent,
     client::play::{
         CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSpawnEntity, GameEvent, PlayerAction,
+        CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -64,8 +65,11 @@ use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
 use time::LevelTime;
-use tokio::sync::{Mutex, mpsc::UnboundedReceiver};
 use tokio::sync::{RwLock, mpsc};
+use tokio::{
+    select,
+    sync::{Mutex, mpsc::UnboundedReceiver},
+};
 
 pub mod border;
 pub mod bossbar;
@@ -171,8 +175,8 @@ impl World {
         }
     }
 
-    pub async fn save(&self) {
-        self.level.save().await;
+    pub async fn shutdown(&self) {
+        self.level.shutdown().await;
     }
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
@@ -190,10 +194,7 @@ impl World {
     where
         P: ClientPacket,
     {
-        let current_players = self.players.read().await;
-        for player in current_players.values() {
-            player.client.send_packet(packet).await;
-        }
+        self.broadcast_packet_except(&[], packet).await;
     }
 
     pub async fn broadcast_message(
@@ -221,9 +222,16 @@ impl World {
     where
         P: ClientPacket,
     {
+        let mut packet_buf = Vec::new();
+        if let Err(err) = packet.write(&mut packet_buf) {
+            log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
+            return;
+        }
+        let packet_data: Bytes = packet_buf.into();
+
         let current_players = self.players.read().await;
         for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
-            player.client.send_packet(packet).await;
+            player.client.enqueue_packet_data(packet_data.clone()).await;
         }
     }
 
@@ -257,12 +265,15 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().r#gen::<f64>();
-        let players = self.players.read().await;
-        for (_, player) in players.iter() {
-            player
-                .play_sound(sound_id, category, position, volume, pitch, seed)
-                .await;
-        }
+        let packet = CSoundEffect::new(
+            IdOr::Id(u32::from(sound_id)),
+            category,
+            position,
+            volume,
+            pitch,
+            seed,
+        );
+        self.broadcast_packet_all(&packet).await;
     }
 
     pub async fn play_block_sound(
@@ -433,7 +444,7 @@ impl World {
         // Send the login packet for our new player
         player
             .client
-            .send_packet(&CLogin::new(
+            .send_packet_now(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
                 &dimensions,
@@ -458,7 +469,10 @@ impl World {
             .await;
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
-        client_suggestions::send_c_commands_packet(&player, &server.command_dispatcher).await;
+        {
+            let command_dispatcher = server.command_dispatcher.read().await;
+            client_suggestions::send_c_commands_packet(&player, &command_dispatcher).await;
+        };
         // Teleport
         let info = &self.level.level_info;
         let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
@@ -480,10 +494,11 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            // TODO: Remove magic numbers
             0x01 | 0x04 | 0x08,
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
-                actions: vec![
+                actions: &[
                     PlayerAction::AddPlayer {
                         name: &gameprofile.name,
                         properties: &gameprofile.properties,
@@ -494,32 +509,40 @@ impl World {
             }],
         ))
         .await;
-        player.send_client_information().await;
 
         // Here, we send all the infos of players who already joined.
-        let mut entries = Vec::new();
         {
             let current_players = self.players.read().await;
-            for (_, playerr) in current_players
+
+            let current_player_data = current_players
                 .iter()
                 .filter(|(c, _)| **c != player.gameprofile.id)
-            {
-                let gameprofile = &playerr.gameprofile;
-                entries.push(pumpkin_protocol::client::play::Player {
-                    uuid: gameprofile.id,
-                    actions: vec![
-                        PlayerAction::AddPlayer {
-                            name: &gameprofile.name,
-                            properties: &gameprofile.properties,
-                        },
-                        PlayerAction::UpdateListed(true),
-                    ],
-                });
-            }
+                .map(|(_, player)| {
+                    (
+                        &player.gameprofile.id,
+                        [
+                            PlayerAction::AddPlayer {
+                                name: &player.gameprofile.name,
+                                properties: &player.gameprofile.properties,
+                            },
+                            PlayerAction::UpdateListed(true),
+                        ],
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let entries = current_player_data
+                .iter()
+                .map(|(id, actions)| pumpkin_protocol::client::play::Player {
+                    uuid: **id,
+                    actions,
+                })
+                .collect::<Vec<_>>();
+
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .send_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
                 .await;
         };
 
@@ -543,6 +566,7 @@ impl World {
             ),
         )
         .await;
+
         // Spawn players for our client.
         let id = player.gameprofile.id;
         for (_, existing_player) in self.players.read().await.iter().filter(|c| c.0 != &id) {
@@ -552,7 +576,7 @@ impl World {
             log::debug!("Sending player entities to {}", player.gameprofile.name);
             player
                 .client
-                .send_packet(&CSpawnEntity::new(
+                .enqueue_packet(&CSpawnEntity::new(
                     existing_player.entity_id().into(),
                     gameprofile.id,
                     i32::from(EntityType::PLAYER.id).into(),
@@ -565,6 +589,7 @@ impl World {
                 ))
                 .await;
         }
+
         // Entity meta data
         // Set skin parts
         player.send_client_information().await;
@@ -573,7 +598,7 @@ impl World {
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
         player
             .client
-            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+            .send_packet_now(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
 
         self.worldborder
@@ -590,7 +615,7 @@ impl World {
         if weather.raining {
             player
                 .client
-                .send_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
+                .enqueue_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
                 .await;
 
             // Calculate rain and thunder levels directly from public fields
@@ -599,11 +624,11 @@ impl World {
 
             player
                 .client
-                .send_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
+                .enqueue_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
                 .await;
             player
                 .client
-                .send_packet(&CGameEvent::new(
+                .enqueue_packet(&CGameEvent::new(
                     GameEvent::ThunderLevelChange,
                     thunder_level,
                 ))
@@ -639,7 +664,7 @@ impl World {
 
         player
             .client
-            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+            .enqueue_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
 
         let entity = &player.living_entity.entity;
@@ -676,17 +701,14 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = pumpkin_protocol::IDOrSoundEvent {
-            id: VarInt(Sound::EntityGenericExplode as i32 + 1),
-            sound_event: None,
-        };
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u32);
         for (_, player) in self.players.read().await.iter() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
             }
             player
                 .client
-                .send_packet(&CExplosion::new(
+                .enqueue_packet(&CExplosion::new(
                     position,
                     None,
                     VarInt(particle as i32),
@@ -711,7 +733,7 @@ impl World {
 
         player
             .client
-            .send_packet(&CRespawn::new(
+            .enqueue_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
                 0, // seed
@@ -754,6 +776,7 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
+    #[allow(clippy::too_many_lines)]
     fn spawn_world_chunks(
         &self,
         player: Arc<Player>,
@@ -779,17 +802,25 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        // We are loading a completely new world section; prioritize chunks the player is on top
-        // of
-        let new_spawn = chunks[0] == player.watched_section.load().center;
-        let mut receiver = self.receive_chunks(chunks, new_spawn);
+        let mut receiver = self.receive_chunks(chunks);
         let level = self.level.clone();
 
-        // Only allow 128 chunk packets to be sent at a time to avoid overloading the client.
-        // TODO: Bulk chunks?
+        player.clone().spawn_task(async move {
+            'main: loop {
+                let recv_result = tokio::select! {
+                    () = player.client.await_close_interrupt() => {
+                        log::debug!("Canceling player packet processing");
+                        None
+                    },
+                    recv_result = receiver.recv() => {
+                        recv_result
+                    }
+                };
 
-        tokio::spawn(async move {
-            'main: while let Some((chunk, first_load)) = receiver.recv().await {
+                let Some((chunk, first_load)) = recv_result else {
+                    break;
+                };
+
                 let position = chunk.read().await.position;
 
                 #[cfg(debug_assertions)]
@@ -797,8 +828,8 @@ impl World {
                     use pumpkin_protocol::client::play::CChunkData;
                     let binding = chunk.read().await;
                     let packet = CChunkData(&binding);
-                    let mut test = bytes::BytesMut::new();
-                    packet.write(&mut test);
+                    let mut test = Vec::new();
+                    packet.write_packet_data(&mut test).unwrap();
                     let len = test.len();
                     log::debug!(
                         "Chunk packet size: {}B {}KB {}MB",
@@ -1005,7 +1036,7 @@ impl World {
         };
 
         let current_players = self.players.clone();
-        tokio::spawn(async move {
+        player.clone().spawn_task(async move {
             let msg_comp = TextComponent::translate(
                 "multiplayer.player.joined",
                 [TextComponent::text(player.gameprofile.name.clone())],
@@ -1257,30 +1288,26 @@ impl World {
     pub fn receive_chunks(
         &self,
         chunks: Vec<Vector2<i32>>,
-        new_spawn: bool,
     ) -> UnboundedReceiver<(SyncChunk, bool)> {
         let (sender, receiver) = mpsc::unbounded_channel();
         // Put this in another thread so we aren't blocking on it
         let level = self.level.clone();
-        tokio::spawn(async move {
-            if new_spawn {
-                if let Some((priority, rest)) = chunks.split_at_checked(9) {
-                    // Ensure the client gets the 9 closest chunks first
-                    level.fetch_chunks(priority, sender.clone()).await;
-                    level.fetch_chunks(rest, sender).await;
-                } else {
-                    level.fetch_chunks(&chunks, sender).await;
-                }
-            } else {
-                level.fetch_chunks(&chunks, sender).await;
-            }
+        self.level.spawn_task(async move {
+            let cancel_notifier = level.shutdown_notifier.notified();
+            let fetch_task = level.fetch_chunks(&chunks, sender);
+
+            // Don't continue to handle chunks if we are shutting down
+            select! {
+                () = cancel_notifier => {},
+                () = fetch_task => {}
+            };
         });
 
         receiver
     }
 
     pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
-        let mut receiver = self.receive_chunks(vec![chunk_pos], false);
+        let mut receiver = self.receive_chunks(vec![chunk_pos]);
 
         receiver
             .recv()
@@ -1308,7 +1335,7 @@ impl World {
 
             let particles_packet = CWorldEvent::new(
                 WorldEvent::BlockBroken as i32,
-                position,
+                *position,
                 broken_block_state_id.into(),
                 false,
             );

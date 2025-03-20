@@ -1,7 +1,13 @@
-use std::{num::NonZeroUsize, ops::Deref};
+use std::{
+    io::{Read, Write},
+    num::NonZeroUsize,
+    ops::Deref,
+};
 
-use super::{Codec, DecodeError};
-use bytes::{Buf, BufMut};
+use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+
+use super::Codec;
+use bytes::BufMut;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, SeqAccess, Visitor},
@@ -28,32 +34,31 @@ impl Codec<Self> for VarLong {
         }
     }
 
-    fn encode(&self, write: &mut impl BufMut) {
+    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut x = self.0;
         for _ in 0..Self::MAX_SIZE.get() {
             let byte = (x & 0x7F) as u8;
             x >>= 7;
             if x == 0 {
-                write.put_slice(&[byte]);
+                write.write_u8_be(byte)?;
                 break;
             }
-            write.put_slice(&[byte | 0x80]);
+            write.write_u8_be(byte | 0x80)?;
         }
+
+        Ok(())
     }
 
-    fn decode(read: &mut impl Buf) -> Result<Self, DecodeError> {
+    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
-            if !read.has_remaining() {
-                return Err(DecodeError::Incomplete);
-            }
-            let byte = read.get_u8();
+            let byte = read.get_u8_be()?;
             val |= (i64::from(byte) & 0b01111111) << (i * 7);
             if byte & 0b10000000 == 0 {
                 return Ok(VarLong(val));
             }
         }
-        Err(DecodeError::TooLarge)
+        Err(ReadingError::TooLarge("VarLong".to_string()))
     }
 }
 

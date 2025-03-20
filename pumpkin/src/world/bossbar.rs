@@ -71,27 +71,27 @@ impl Player {
         };
 
         let packet = CBossEvent::new(&bossbar.uuid, boss_action);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
     pub async fn remove_bossbar(&self, uuid: Uuid) {
         let boss_action = BosseventAction::Remove;
 
         let packet = CBossEvent::new(&uuid, boss_action);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
 
     pub async fn update_bossbar_health(&self, uuid: &Uuid, health: f32) {
         let boss_action = BosseventAction::UpdateHealth(health);
 
         let packet = CBossEvent::new(uuid, boss_action);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
 
     pub async fn update_bossbar_title(&self, uuid: &Uuid, title: TextComponent) {
         let boss_action = BosseventAction::UpdateTile(title);
 
         let packet = CBossEvent::new(uuid, boss_action);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
 
     pub async fn update_bossbar_style(
@@ -106,13 +106,13 @@ impl Player {
         };
 
         let packet = CBossEvent::new(uuid, boss_action);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
 
     pub async fn update_bossbar_flags(&self, uuid: &Uuid, flags: BossbarFlags) {
         let boss_action = BosseventAction::UpdateFlags(flags as u8);
 
         let packet = CBossEvent::new(uuid, boss_action);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
 }

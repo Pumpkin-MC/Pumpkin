@@ -24,8 +24,7 @@ use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
-    RawPacket, ServerPacket,
-    bytebuf::packet::Packet,
+    IdOr, RawPacket, ServerPacket,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
@@ -34,6 +33,7 @@ use pumpkin_protocol::{
         CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
+    ser::packet::Packet,
     server::play::{
         SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
         SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
@@ -63,7 +63,7 @@ use pumpkin_util::{
     text::TextComponent,
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::{sync::Mutex, task::JoinHandle};
 
 use super::{
     Entity, EntityBase, EntityId, NBTStorage,
@@ -169,7 +169,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: Arc<Client>,
+    pub client: Client,
     /// The player's inventory.
     pub inventory: Mutex<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
@@ -212,8 +212,6 @@ pub struct Player {
     pub last_attacked_ticks: AtomicU32,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
-    /// Tell tasks to stop if we are closing.
-    cancel_tasks: Notify,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
@@ -229,7 +227,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub async fn new(client: Arc<Client>, world: Arc<World>, gamemode: GameMode) -> Self {
+    pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
         let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
             || {
                 log::error!("Client {} has no game profile!", client.id);
@@ -284,7 +282,6 @@ impl Player {
             keep_alive_id: AtomicI64::new(0),
             last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
             last_attacked_ticks: AtomicU32::new(0),
-            cancel_tasks: Notify::new(),
             client_loaded: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
             // Minecraft has no way to change the default permission level of new players.
@@ -308,6 +305,19 @@ impl Player {
         }
     }
 
+    /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
+    /// when the client. This means tasks should complete in a reasonable amount of time or select
+    /// on `Self::await_close_interrupt` to cancel the task when the client is closed
+    ///
+    /// Returns an `Option<JoinHandle<F::Output>>`. If the client is closed, this returns `None`.
+    pub fn spawn_task<F>(&self, task: F) -> Option<JoinHandle<F::Output>>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.client.spawn_task(task)
+    }
+
     pub fn inventory(&self) -> &Mutex<PlayerInventory> {
         &self.inventory
     }
@@ -316,8 +326,6 @@ impl Player {
     #[allow(unused_variables)]
     pub async fn remove(self: &Arc<Self>) {
         let world = self.world().await;
-        self.cancel_tasks.notify_waiters();
-
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
@@ -343,9 +351,10 @@ impl Player {
         level.clean_memory();
 
         log::debug!(
-            "Removed player id {} ({}) ({} chunks remain cached)",
+            "Removed player id {} ({}) from world {} ({} chunks remain cached)",
             self.gameprofile.name,
             self.client.id,
+            "world", // TODO: Add world names
             level.loaded_chunk_count(),
         );
 
@@ -450,9 +459,9 @@ impl Player {
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
         match mode {
-            TitleMode::Title => self.client.send_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.send_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.send_packet(&CActionBar::new(text)).await,
+            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
+            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
+            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
         }
     }
 
@@ -465,7 +474,7 @@ impl Player {
         pariticle: Particle,
     ) {
         self.client
-            .send_packet(&CParticle::new(
+            .enqueue_packet(&CParticle::new(
                 false,
                 false,
                 position,
@@ -488,9 +497,8 @@ impl Player {
         seed: f64,
     ) {
         self.client
-            .send_packet(&CSoundEffect::new(
-                VarInt(i32::from(sound_id)),
-                None,
+            .enqueue_packet(&CSoundEffect::new(
+                IdOr::Id(u32::from(sound_id)),
                 category,
                 position,
                 volume,
@@ -508,12 +516,8 @@ impl Player {
     /// * `category`: An optional `SoundCategory` specifying the sound category to stop. If `None`, all sounds with the specified identifier (if any) will be stopped.
     pub async fn stop_sound(&self, sound_id: Option<Identifier>, category: Option<SoundCategory>) {
         self.client
-            .send_packet(&CStopSound::new(sound_id, category))
+            .enqueue_packet(&CStopSound::new(sound_id, category))
             .await;
-    }
-
-    pub async fn await_cancel(&self) {
-        self.cancel_tasks.notified().await;
     }
 
     pub async fn tick(&self, server: &Server) {
@@ -526,7 +530,7 @@ impl Player {
         }
         if self.packet_sequence.load(Ordering::Relaxed) > -1 {
             self.client
-                .send_packet(&CAcknowledgeBlockChange::new(
+                .enqueue_packet(&CAcknowledgeBlockChange::new(
                     self.packet_sequence.swap(-1, Ordering::Relaxed).into(),
                 ))
                 .await;
@@ -547,15 +551,15 @@ impl Player {
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            self.client.send_packet(&CChunkBatchStart {}).await;
+            self.client.send_packet_now(&CChunkBatchStart).await;
             for chunk in chunk_of_chunks {
                 let chunk = chunk.read().await;
                 // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
                 // player or something.
-                self.client.send_packet(&CChunkData(&chunk)).await;
+                self.client.send_packet_now(&CChunkData(&chunk)).await;
             }
             self.client
-                .send_packet(&CChunkBatchEnd::new(chunk_count))
+                .send_packet_now(&CChunkBatchEnd::new(chunk_count))
                 .await;
         }
 
@@ -612,7 +616,7 @@ impl Player {
             let id = now.elapsed().as_millis() as i64;
             self.keep_alive_id
                 .store(id, std::sync::atomic::Ordering::Relaxed);
-            self.client.send_packet(&CKeepAlive::new(id)).await;
+            self.client.enqueue_packet(&CKeepAlive::new(id)).await;
         }
     }
 
@@ -712,7 +716,7 @@ impl Player {
             b |= 8;
         }
         self.client
-            .send_packet(&CPlayerAbilities::new(
+            .enqueue_packet(&CPlayerAbilities::new(
                 b,
                 abilities.fly_speed,
                 abilities.walk_speed,
@@ -739,7 +743,7 @@ impl Player {
     pub async fn set_permission_lvl(
         self: &Arc<Self>,
         lvl: PermissionLvl,
-        command_dispatcher: &RwLock<CommandDispatcher>,
+        command_dispatcher: &CommandDispatcher,
     ) {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
@@ -750,7 +754,7 @@ impl Player {
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
         self.client
-            .send_packet(&CUpdateTime::new(
+            .enqueue_packet(&CUpdateTime::new(
                 l_world.world_age,
                 l_world.time_of_day,
                 true,
@@ -764,7 +768,7 @@ impl Player {
         let entities = world.entities.read().await.clone();
         for entity in entities.values() {
             self.client
-                .send_packet(&entity.get_entity().create_spawn_packet())
+                .enqueue_packet(&entity.get_entity().create_spawn_packet())
                 .await;
         }
     }
@@ -774,17 +778,12 @@ impl Player {
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         level.clean_chunks(&chunks_to_clean).await;
-        let client = self.client.clone();
-        tokio::spawn(async move {
-            for chunk in chunks_to_clean {
-                if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                    break;
-                }
-                client
-                    .send_packet(&CUnloadChunk::new(chunk.x, chunk.z))
-                    .await;
-            }
-        });
+        for chunk in chunks_to_clean {
+            self.client
+                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                .await;
+        }
+
         self.watched_section.store(Cylindrical::new(
             Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
             unsafe { NonZeroU8::new_unchecked(1) },
@@ -852,7 +851,7 @@ impl Player {
                     last_pos.z.round() as i32,
                 ));
                 self.client
-                    .send_packet(&CRespawn::new(
+                    .send_packet_now(&CRespawn::new(
                         (new_world.dimension_type as u8).into(),
                         new_world.dimension_type.name(),
                         0, // seed
@@ -864,8 +863,8 @@ impl Player {
                         0.into(),
                         0.into(),
                         1,
-                    ))
-                    .await;
+                    )).await
+                    ;
                 self.send_abilities_update().await;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
@@ -903,7 +902,7 @@ impl Player {
                 entity.set_rotation(yaw, pitch);
                 *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
                 self.client
-                    .send_packet(&CPlayerPosition::new(
+                    .send_packet_now(&CPlayerPosition::new(
                         teleport_id.into(),
                         position,
                         Vector3::new(0.0, 0.0, 0.0),
@@ -911,8 +910,7 @@ impl Player {
                         pitch,
                         // TODO
                         &[],
-                    ))
-                    .await;
+                    )).await;
             }
         }}
     }
@@ -989,9 +987,8 @@ impl Player {
             return;
         }
 
-        let _ = self
-            .client
-            .try_send_packet(&CPlayDisconnect::new(reason.clone()))
+        self.client
+            .send_packet_now(&CPlayDisconnect::new(&reason))
             .await;
 
         log::info!(
@@ -1001,7 +998,7 @@ impl Player {
             reason.to_pretty_console()
         );
 
-        self.client.close().await;
+        self.client.close();
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -1025,7 +1022,7 @@ impl Player {
 
     pub async fn send_health(&self) {
         self.client
-            .send_packet(&CSetHealth::new(
+            .enqueue_packet(&CSetHealth::new(
                 self.living_entity.health.load(),
                 self.hunger_manager.level.load().into(),
                 self.hunger_manager.saturation.load(),
@@ -1054,7 +1051,7 @@ impl Player {
     async fn handle_killed(&self) {
         self.set_client_loaded(false);
         self.client
-            .send_packet(&CCombatDeath::new(
+            .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
                 &TextComponent::text("noob"),
             ))
@@ -1096,20 +1093,20 @@ impl Player {
                     .read()
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                        // TODO: Remove magic number
                         0x04,
                         &[pumpkin_protocol::client::play::Player {
                             uuid: self.gameprofile.id,
-                            actions: vec![PlayerAction::UpdateGameMode((gamemode as i32).into())],
+                            actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
                         }],
                     ))
                     .await;
 
                 self.client
-                    .send_packet(&CGameEvent::new(
+                    .enqueue_packet(&CGameEvent::new(
                         GameEvent::ChangeGameMode,
                         gamemode as i32 as f32,
-                    ))
-                    .await;
+                    )).await;
             }
         }}
     }
@@ -1197,7 +1194,7 @@ impl Player {
         target_name: Option<&TextComponent>,
     ) {
         self.client
-            .send_packet(&CDisguisedChatMessage::new(
+            .enqueue_packet(&CDisguisedChatMessage::new(
                 message,
                 (chat_type + 1).into(),
                 sender_name,
@@ -1234,18 +1231,19 @@ impl Player {
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         self.client
-            .send_packet(&CSystemChatMessage::new(text, overlay))
+            .enqueue_packet(&CSystemChatMessage::new(text, overlay))
             .await;
     }
 
     /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
+        // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
         self.experience_points.store(points, Ordering::Relaxed);
 
         self.client
-            .send_packet(&CSetExperience::new(
+            .enqueue_packet(&CSetExperience::new(
                 progress.clamp(0.0, 1.0),
                 points.into(),
                 level.into(),
@@ -1291,7 +1289,7 @@ impl Player {
         }
         let effect_id = VarInt(effect.r#type as i32);
         self.client
-            .send_packet(&CUpdateMobEffect::new(
+            .enqueue_packet(&CUpdateMobEffect::new(
                 self.entity_id().into(),
                 effect_id,
                 effect.amplifier.into(),
@@ -1405,31 +1403,33 @@ impl EntityBase for Player {
 }
 
 impl Player {
+    pub async fn close(&self) {
+        self.client.close();
+        log::debug!("Awaiting tasks for player {}", self.gameprofile.name);
+        self.client.await_tasks().await;
+        log::debug!(
+            "Finished awaiting tasks for client {}",
+            self.gameprofile.name
+        );
+    }
+
     pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
-        let mut packets = self.client.client_packets_queue.lock().await;
-        while let Some(mut packet) = packets.pop_back() {
-            tokio::select! {
-                () = self.await_cancel() => {
-                    log::debug!("Canceling player packet processing");
-                    return;
-                },
-                packet_result = self.handle_play_packet(server, &mut packet) => {
-                    match packet_result {
-                        Ok(()) => {}
-                        Err(e) => {
-                            if e.is_kick() {
-                                if let Some(kick_reason) = e.client_kick_reason() {
-                                    self.kick(TextComponent::text(kick_reason)).await;
-                                } else {
-                                    self.kick(TextComponent::text(format!(
-                                        "Error while reading incoming packet: {e}"
-                                    )))
-                                    .await;
-                                }
-                            }
-                            e.log();
+        while let Some(packet) = self.client.get_packet().await {
+            let packet_result = self.handle_play_packet(server, &packet).await;
+            match packet_result {
+                Ok(()) => {}
+                Err(e) => {
+                    if e.is_kick() {
+                        if let Some(kick_reason) = e.client_kick_reason() {
+                            self.kick(TextComponent::text(kick_reason)).await;
+                        } else {
+                            self.kick(TextComponent::text(format!(
+                                "Error while handling incoming packet {e}"
+                            )))
+                            .await;
                         }
-                    };
+                    }
+                    e.log();
                 }
             }
         }
@@ -1439,117 +1439,118 @@ impl Player {
     pub async fn handle_play_packet(
         self: &Arc<Self>,
         server: &Arc<Server>,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SConfirmTeleport::PACKET_ID => {
-                self.handle_confirm_teleport(SConfirmTeleport::read(bytebuf)?)
+                self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
                     .await;
             }
             SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, &(SChatCommand::read(bytebuf)?))
+                self.handle_chat_command(server, &(SChatCommand::read(payload)?))
                     .await;
             }
             SChatMessage::PACKET_ID => {
-                self.handle_chat_message(SChatMessage::read(bytebuf)?).await;
+                self.handle_chat_message(SChatMessage::read(payload)?).await;
             }
             SClientInformationPlay::PACKET_ID => {
-                self.handle_client_information(SClientInformationPlay::read(bytebuf)?)
+                self.handle_client_information(SClientInformationPlay::read(payload)?)
                     .await;
             }
             SClientCommand::PACKET_ID => {
-                self.handle_client_status(SClientCommand::read(bytebuf)?)
+                self.handle_client_status(SClientCommand::read(payload)?)
                     .await;
             }
             SPlayerInput::PACKET_ID => {
                 // TODO
             }
             SInteract::PACKET_ID => {
-                self.handle_interact(SInteract::read(bytebuf)?).await;
+                self.handle_interact(SInteract::read(payload)?).await;
             }
             SKeepAlive::PACKET_ID => {
-                self.handle_keep_alive(SKeepAlive::read(bytebuf)?).await;
+                self.handle_keep_alive(SKeepAlive::read(payload)?).await;
             }
             SClientTickEnd::PACKET_ID => {
                 // TODO
             }
             SPlayerPosition::PACKET_ID => {
-                self.handle_position(SPlayerPosition::read(bytebuf)?).await;
+                self.handle_position(SPlayerPosition::read(payload)?).await;
             }
             SPlayerPositionRotation::PACKET_ID => {
-                self.handle_position_rotation(SPlayerPositionRotation::read(bytebuf)?)
+                self.handle_position_rotation(SPlayerPositionRotation::read(payload)?)
                     .await;
             }
             SPlayerRotation::PACKET_ID => {
-                self.handle_rotation(SPlayerRotation::read(bytebuf)?).await;
+                self.handle_rotation(SPlayerRotation::read(payload)?).await;
             }
             SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(&SSetPlayerGround::read(bytebuf)?);
+                self.handle_player_ground(&SSetPlayerGround::read(payload)?);
             }
             SPickItemFromBlock::PACKET_ID => {
-                self.handle_pick_item_from_block(SPickItemFromBlock::read(bytebuf)?)
+                self.handle_pick_item_from_block(SPickItemFromBlock::read(payload)?)
                     .await;
             }
             SPlayerAbilities::PACKET_ID => {
-                self.handle_player_abilities(SPlayerAbilities::read(bytebuf)?)
+                self.handle_player_abilities(SPlayerAbilities::read(payload)?)
                     .await;
             }
             SPlayerAction::PACKET_ID => {
-                self.handle_player_action(SPlayerAction::read(bytebuf)?, server)
+                self.clone()
+                    .handle_player_action(SPlayerAction::read(payload)?, server)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {
-                self.handle_player_command(SPlayerCommand::read(bytebuf)?)
+                self.handle_player_command(SPlayerCommand::read(payload)?)
                     .await;
             }
             SPlayerLoaded::PACKET_ID => self.handle_player_loaded(),
             SPlayPingRequest::PACKET_ID => {
-                self.handle_play_ping_request(SPlayPingRequest::read(bytebuf)?)
+                self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
                     .await;
             }
             SClickContainer::PACKET_ID => {
-                self.handle_click_container(server, SClickContainer::read(bytebuf)?)
+                self.handle_click_container(server, SClickContainer::read(payload)?)
                     .await?;
             }
             SSetHeldItem::PACKET_ID => {
-                self.handle_set_held_item(SSetHeldItem::read(bytebuf)?)
+                self.handle_set_held_item(SSetHeldItem::read(payload)?)
                     .await;
             }
             SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(bytebuf)?)
+                self.handle_set_creative_slot(SSetCreativeSlot::read(payload)?)
                     .await?;
             }
             SSwingArm::PACKET_ID => {
-                self.handle_swing_arm(SSwingArm::read(bytebuf)?).await;
+                self.handle_swing_arm(SSwingArm::read(payload)?).await;
             }
             SUpdateSign::PACKET_ID => {
-                self.handle_sign_update(SUpdateSign::read(bytebuf)?).await;
+                self.handle_sign_update(SUpdateSign::read(payload)?).await;
             }
             SUseItemOn::PACKET_ID => {
-                self.handle_use_item_on(SUseItemOn::read(bytebuf)?, server)
+                self.handle_use_item_on(SUseItemOn::read(payload)?, server)
                     .await?;
             }
             SUseItem::PACKET_ID => {
-                self.handle_use_item(&SUseItem::read(bytebuf)?, server)
+                self.handle_use_item(&SUseItem::read(payload)?, server)
                     .await;
             }
             SCommandSuggestion::PACKET_ID => {
-                self.handle_command_suggestion(SCommandSuggestion::read(bytebuf)?, server)
+                self.handle_command_suggestion(SCommandSuggestion::read(payload)?, server)
                     .await;
             }
             SPCookieResponse::PACKET_ID => {
-                self.handle_cookie_response(&SPCookieResponse::read(bytebuf)?);
+                self.handle_cookie_response(&SPCookieResponse::read(payload)?);
             }
             SCloseContainer::PACKET_ID => {
-                self.handle_close_container(server, SCloseContainer::read(bytebuf)?)
+                self.handle_close_container(server, SCloseContainer::read(payload)?)
                     .await;
             }
             SChunkBatch::PACKET_ID => {
-                self.handle_chunk_batch(SChunkBatch::read(bytebuf)?).await;
+                self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
             _ => {
-                log::warn!("Failed to handle player packet id {}", packet.id.0);
+                log::warn!("Failed to handle player packet id {}", packet.id);
                 // TODO: We give an error if all play packets are implemented
                 //  return Err(Box::new(DeserializerError::UnknownPacket));
             }

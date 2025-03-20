@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::CClearTtitle;
+use pumpkin_protocol::client::play::CClearTitle;
 use pumpkin_util::text::TextComponent;
 
 use crate::{
@@ -29,7 +29,7 @@ struct ClearOrResetExecutor(bool);
 impl CommandExecutor for ClearOrResetExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -39,7 +39,7 @@ impl CommandExecutor for ClearOrResetExecutor {
         let reset = self.0;
 
         for target in targets {
-            target.client.send_packet(&CClearTtitle::new(reset)).await;
+            target.client.enqueue_packet(&CClearTitle::new(reset)).await;
         }
         sender
             .send_message(if targets.len() == 1 {
@@ -72,7 +72,7 @@ struct TitleExecutor(TitleMode);
 impl CommandExecutor for TitleExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

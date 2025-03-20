@@ -42,7 +42,7 @@ struct NoReasonExecutor;
 impl CommandExecutor for NoReasonExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -61,7 +61,7 @@ struct ReasonExecutor;
 impl CommandExecutor for ReasonExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -78,7 +78,7 @@ impl CommandExecutor for ReasonExecutor {
     }
 }
 
-async fn ban_ip(sender: &CommandSender<'_>, server: &Server, target: &str, reason: Option<String>) {
+async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: Option<String>) {
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
     let Some(target_ip) = parse_ip(target, server).await else {

@@ -30,7 +30,7 @@ struct ListExecutor;
 impl CommandExecutor for ListExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -80,7 +80,7 @@ struct LoadExecutor;
 impl CommandExecutor for LoadExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -130,7 +130,7 @@ struct UnloadExecutor;
 impl CommandExecutor for UnloadExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
