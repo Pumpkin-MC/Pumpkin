@@ -382,56 +382,72 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
+    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> Biome {
+        let seed_biome_pos = biome::get_biome_blend(
+            self.bottom_y(),
+            self.height(),
+            self.random_config.seed,
+            global_block_pos,
+        );
+        self.get_biome(&seed_biome_pos)
+    }
+
     pub fn build_surface(&mut self) {
         let start_x = chunk_pos::start_block_x(&self.chunk_pos);
         let start_z = chunk_pos::start_block_z(&self.chunk_pos);
-        let min_y = self.noise_sampler.min_y();
+        let min_y = self.bottom_y();
 
         let random = &self.random_config.base_random_deriver;
         let mut noise_builder = DoublePerlinNoiseBuilder::new(self.random_config);
         let terrain_builder = SurfaceTerrainBuilder::new(&mut noise_builder, random);
         let mut context = MaterialRuleContext::new(
-            self.settings.noise.min_y,
-            self.settings.noise.height,
+            min_y,
+            self.height(),
             noise_builder,
             random,
             &terrain_builder,
         );
-        for x in 0..16 {
-            for z in 0..16 {
-                let x = start_x + x;
-                let z = start_z + z;
-                let top = self.noise_sampler.height(); // TODO: use heightmaps
+        for local_x in 0..16 {
+            for local_z in 0..16 {
+                let x = start_x + local_x;
+                let z = start_z + local_z;
+
+                // TODO: use heightmaps
+                let top_y = self.top_y() as i32;
+                let mut top = i32::MIN;
+                for y in (self.bottom_y() as i32..=top_y).rev() {
+                    let state = self.get_block_state(&Vector3::new(local_x, y, local_z));
+                    if !state.is_air() {
+                        // +1 happens in the height map and another +1 happens when it's sampled
+                        top = y + 2;
+                        break;
+                    }
+                }
+
                 let biome_y = if self.settings.legacy_random_source {
                     0
                 } else {
                     top
                 };
-                let seed_biome_pos = biome::get_biome_blend(
-                    self.bottom_y(),
-                    self.height(),
-                    self.random_config.seed,
-                    &context.block_pos,
-                );
-                let this_biome = self.get_biome(&Vector3::new(x, biome_y as i32, z));
+
+                let this_biome = self.get_biome_for_terrain_gen(&Vector3::new(x, biome_y, z));
                 if this_biome == Biome::ErodedBadlands {
                     terrain_builder.place_badlands_pillar(
                         self,
                         x,
                         z,
-                        top as i32,
+                        top,
                         min_y as i32,
                         self.default_block,
                     );
                 }
-                let mut pos = Vector3::new(x, 0, z);
+                let mut pos = Vector3::new(local_x, 0, local_z);
                 context.init_horizontal(x, z);
 
-                let mut stone_depth_above = -1; // Because pre increment
+                let mut stone_depth_above = 0;
                 let mut min = i32::MAX;
                 let mut fluid_height = i32::MIN;
-                for y in (min_y as i32..=top as i32).rev() {
-                    let mut stone_depth_below;
+                for y in (min_y as i32..=top).rev() {
                     pos.y = y;
 
                     let state = self.get_block_state(&pos);
@@ -442,42 +458,41 @@ impl<'a> ProtoChunk<'a> {
                         continue;
                     }
                     if state.is_liquid {
-                        if fluid_height != i32::MIN {
-                            continue;
+                        if fluid_height == i32::MIN {
+                            fluid_height = y + 1;
                         }
-                        fluid_height = y + 1;
                         continue;
                     }
                     if min >= y {
                         let shift = min_y << 4;
                         min = shift as i32;
-                        for o in y - 1..min_y as i32 - 1 {
-                            stone_depth_below = o;
+
+                        for search_y in (min_y as i32 - 1..=y - 1).rev() {
                             let state =
-                                self.get_block_state(&Vector3::new(x, stone_depth_above, z));
-                            let state = get_state_by_state_id(state.state_id).unwrap();
-                            if !state.air && !state.is_liquid {
-                                continue;
+                                self.get_block_state(&Vector3::new(local_x, search_y, local_z));
+                            if self.default_block != state {
+                                min = search_y + 1;
+                                break;
                             }
-                            min = stone_depth_below + 1;
-                            break;
                         }
                     }
 
                     // let biome_pos = Vector3::new(x, biome_y as i32, z);
                     stone_depth_above += 1;
-                    stone_depth_below = y - min + 1;
+                    let stone_depth_below = y - min + 1;
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
-                    let biome = self.get_biome(&seed_biome_pos);
                     // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
-                    context.biome = biome;
-                    let new_state = self
-                        .settings
-                        .surface_rule
-                        .try_apply(&mut context, &mut self.surface_height_estimate_sampler);
 
-                    if let Some(state) = new_state {
-                        self.set_block_state(&pos, state);
+                    if state.id == self.default_block.state_id {
+                        context.biome = self.get_biome_for_terrain_gen(&context.block_pos);
+                        let new_state = self
+                            .settings
+                            .surface_rule
+                            .try_apply(&mut context, &mut self.surface_height_estimate_sampler);
+
+                        if let Some(state) = new_state {
+                            self.set_block_state(&pos, state);
+                        }
                     }
                 }
                 if this_biome == Biome::FrozenOcean || this_biome == Biome::DeepFrozenOcean {
@@ -490,7 +505,7 @@ impl<'a> ProtoChunk<'a> {
                         min_y,
                         x,
                         z,
-                        top as i32,
+                        top,
                         self.settings.sea_level,
                         &self.random_config.base_random_deriver,
                     );
