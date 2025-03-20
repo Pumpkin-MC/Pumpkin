@@ -24,6 +24,8 @@ use super::{diode_get_input_strength, get_weak_power, is_diode};
 
 type RepeaterProperties = pumpkin_data::block::RepeaterLikeProperties;
 
+// TODO: There is some bug when creating a repeater clock.
+
 #[pumpkin_block("minecraft:repeater")]
 pub struct RepeaterBlock;
 
@@ -88,13 +90,17 @@ impl PumpkinBlock for RepeaterBlock {
         let should_be_powered = should_be_powered(rep, world, *block_pos).await;
         if rep.powered.to_bool() && !should_be_powered {
             rep.powered = Boolean::False;
-        } else {
+            world
+                .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
+                .await;
+            on_state_change(rep, world, *block_pos).await;
+        } else if !rep.powered.to_bool() {
             rep.powered = Boolean::True;
+            world
+                .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
+                .await;
+            on_state_change(rep, world, *block_pos).await;
         }
-        world
-            .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
-            .await;
-        on_state_change(rep, world, *block_pos).await;
     }
 
     async fn normal_use(

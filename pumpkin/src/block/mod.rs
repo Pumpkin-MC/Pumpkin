@@ -7,9 +7,11 @@ use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
+use blocks::redstone::redstone_torch::register_redstone_torch_blocks;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
+use blocks::torches::register_torch_blocks;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
@@ -58,6 +60,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     register_fence_gate_blocks(&mut manager);
     register_log_blocks(&mut manager);
     register_button_blocks(&mut manager);
+    register_torch_blocks(&mut manager);
+    register_redstone_torch_blocks(&mut manager);
 
     Arc::new(manager)
 }

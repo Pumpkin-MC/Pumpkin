@@ -14,6 +14,7 @@ pub(crate) mod observer;
 pub(crate) mod piston;
 pub(crate) mod redstone_block;
 pub(crate) mod redstone_lamp;
+pub(crate) mod redstone_torch;
 pub(crate) mod redstone_wire;
 pub(crate) mod repeater;
 pub(crate) mod target_block;

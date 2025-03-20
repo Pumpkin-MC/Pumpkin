@@ -122,6 +122,15 @@ impl BlockDirection {
         [BlockDirection::Down, BlockDirection::Up]
     }
 
+    pub fn to_horizontal_facing(&self) -> Option<HorizontalFacing> {
+        match self {
+            BlockDirection::North => Some(HorizontalFacing::North),
+            BlockDirection::South => Some(HorizontalFacing::South),
+            BlockDirection::West => Some(HorizontalFacing::West),
+            BlockDirection::East => Some(HorizontalFacing::East),
+            _ => None,
+        }
+    }
     pub fn to_cardinal_direction(&self) -> HorizontalFacing {
         match self {
             BlockDirection::North => HorizontalFacing::North,
