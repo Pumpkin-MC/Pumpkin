@@ -107,6 +107,7 @@ impl<T: Buf> ByteBuf for T {
             Err(error) => match error {
                 DecodeError::Incomplete => Err(ReadingError::Incomplete("varint".to_string())),
                 DecodeError::TooLarge => Err(ReadingError::TooLarge("varint".to_string())),
+                _ => unreachable!(),
             },
         }
     }
@@ -116,6 +117,7 @@ impl<T: Buf> ByteBuf for T {
             Err(error) => match error {
                 DecodeError::Incomplete => Err(ReadingError::Incomplete("varint".to_string())),
                 DecodeError::TooLarge => Err(ReadingError::TooLarge("varlong".to_string())),
+                _ => unreachable!(),
             },
         }
     }
@@ -176,6 +178,7 @@ impl<T: Buf> ByteBuf for T {
             Err(error) => match error {
                 DecodeError::Incomplete => Err(ReadingError::Incomplete("identifier".to_string())),
                 DecodeError::TooLarge => Err(ReadingError::TooLarge("identifier".to_string())),
+                _ => unreachable!(),
             },
         }
     }

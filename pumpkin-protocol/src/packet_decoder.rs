@@ -28,7 +28,7 @@ impl PacketDecoder {
         let packet_len = match VarInt::decode(&mut r) {
             Ok(len) => len,
             Err(DecodeError::Incomplete) => return Ok(None),
-            Err(DecodeError::TooLarge) => Err(PacketDecodeError::MalformedLength)?,
+            Err(_) => Err(PacketDecodeError::MalformedLength)?,
         };
         let packet_len = packet_len.0;
 

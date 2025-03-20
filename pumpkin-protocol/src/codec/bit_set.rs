@@ -14,10 +14,6 @@ impl Codec<BitSet> for BitSet {
     /// The maximum size of the `BitSet` is `remaining / 8`.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(usize::MAX) };
 
-    fn written_size(&self) -> usize {
-        todo!()
-    }
-
     fn encode(&self, write: &mut impl BufMut) {
         write.put_var_int(&self.0);
         for b in &self.1 {
