@@ -55,5 +55,9 @@ env_logger = "0.11.7"
 pumpkin-config = { path = "../pumpkin-config", features = ["test_helper"] }
 
 [[bench]]
-name = "chunk_noise_populate"
+name = "chunk"
+harness = false
+
+[[bench]]
+name = "chunk_io"
 harness = false

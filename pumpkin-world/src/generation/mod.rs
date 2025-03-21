@@ -13,7 +13,7 @@ mod implementation;
 pub mod noise;
 pub mod noise_router;
 pub mod ore_sampler;
-mod positions;
+pub mod positions;
 pub mod proto_chunk;
 mod seed;
 pub mod settings;
