@@ -143,16 +143,18 @@ impl Client {
                 profile_actions: None,
             };
 
+            if advanced_config().networking.packet_compression.enabled {
+                self.enable_compression().await;
+            }
+
             if BASIC_CONFIG.encryption {
                 let verify_token: [u8; 4] = rand::random();
-                self.send_packet(
+                // Wait until we have sent the encryption packet to the client
+                self.send_packet_now(
                     &server.encryption_request(&verify_token, BASIC_CONFIG.online_mode),
                 )
                 .await;
             } else {
-                if advanced_config().networking.packet_compression.enabled {
-                    self.enable_compression().await;
-                }
                 self.finish_login(&profile).await;
             }
 
@@ -168,7 +170,7 @@ impl Client {
         log::debug!("Handling encryption");
         let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
 
-        if let Err(error) = self.set_encryption(Some(&shared_secret)).await {
+        if let Err(error) = self.set_encryption(&shared_secret).await {
             self.kick(TextComponent::text(error.to_string())).await;
             return;
         }
@@ -239,22 +241,20 @@ impl Client {
             return;
         }
 
-        if advanced_config().networking.packet_compression.enabled {
-            self.enable_compression().await;
-        }
         self.finish_login(profile).await;
     }
 
     async fn enable_compression(&self) {
         let compression = advanced_config().networking.packet_compression.info.clone();
-        self.send_packet(&CSetCompression::new(compression.threshold.into()))
+        // We want to wait until we have sent the compression packet to the client
+        self.send_packet_now(&CSetCompression::new(compression.threshold.into()))
             .await;
-        self.set_compression(Some(compression)).await;
+        self.set_compression(compression).await;
     }
 
     async fn finish_login(&self, profile: &GameProfile) {
         let packet = CLoginSuccess::new(&profile.id, &profile.name, &profile.properties);
-        self.send_packet(&packet).await;
+        self.send_packet_now(&packet).await;
     }
 
     async fn authenticate(
@@ -309,10 +309,9 @@ impl Client {
     pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-            "Received cookie_response[login]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            "Received cookie_response[login]: key: \"{}\", payload_length: \"{:?}\"",
             packet.key.to_string(),
-            packet.has_payload,
-            packet.payload_length.unwrap_or(VarInt::from(0)).0
+            packet.payload.as_ref().map(|p| p.len())
         );
     }
     pub async fn handle_plugin_response(&self, plugin_response: SLoginPluginResponse) {
@@ -338,10 +337,10 @@ impl Client {
     pub async fn handle_login_acknowledged(&self, server: &Server) {
         log::debug!("Handling login acknowledgement");
         self.connection_state.store(ConnectionState::Config);
-        self.send_packet(&server.get_branding()).await;
+        self.send_packet_now(&server.get_branding()).await;
 
         if advanced_config().server_links.enabled {
-            self.send_packet(&CConfigServerLinks::new(
+            self.send_packet_now(&CConfigServerLinks::new(
                 &VarInt(LINKS.len() as i32),
                 &LINKS,
             ))
@@ -350,7 +349,8 @@ impl Client {
 
         // TODO: Is this the right place to send them?
         // Send tags.
-        self.send_packet(&CUpdateTags::new(&[
+
+        self.send_packet_now(&CUpdateTags::new(&[
             pumpkin_data::tag::RegistryKey::Block,
             pumpkin_data::tag::RegistryKey::Fluid,
         ]))
@@ -371,7 +371,7 @@ impl Client {
                 },
             );
 
-            self.send_packet(&resource_pack).await;
+            self.send_packet_now(&resource_pack).await;
         } else {
             // This will be invoked by our resource pack handler in the case of the above branch.
             self.send_known_packs().await;
@@ -381,7 +381,7 @@ impl Client {
 
     /// Send the known data packs to the client.
     pub async fn send_known_packs(&self) {
-        self.send_packet(&CKnownPacks::new(&[KnownPack {
+        self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
             version: "1.21",

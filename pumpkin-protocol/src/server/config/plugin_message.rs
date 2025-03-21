@@ -1,25 +1,28 @@
-use bytes::Buf;
+use std::io::Read;
+
 use pumpkin_data::packet::serverbound::CONFIG_CUSTOM_PAYLOAD;
 use pumpkin_macros::packet;
 
 use crate::{
     ServerPacket,
-    bytebuf::{ByteBuf, ReadingError},
     codec::identifier::Identifier,
+    ser::{NetworkReadExt, ReadingError},
 };
 const MAX_PAYLOAD_SIZE: usize = 1048576;
 
 #[packet(CONFIG_CUSTOM_PAYLOAD)]
 pub struct SPluginMessage {
     pub channel: Identifier,
-    pub data: bytes::Bytes,
+    pub data: Box<[u8]>,
 }
 
 impl ServerPacket for SPluginMessage {
-    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
+    fn read(read: impl Read) -> Result<Self, ReadingError> {
+        let mut read = read;
+
         Ok(Self {
-            channel: bytebuf.try_get_identifier()?,
-            data: bytebuf.try_copy_to_bytes_len(bytebuf.remaining(), MAX_PAYLOAD_SIZE)?,
+            channel: read.get_identifier()?,
+            data: read.read_remaining_to_boxed_slice(MAX_PAYLOAD_SIZE)?,
         })
     }
 }

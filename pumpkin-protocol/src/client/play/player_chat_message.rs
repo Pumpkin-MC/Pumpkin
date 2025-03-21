@@ -8,16 +8,16 @@ use crate::{VarInt, codec::bit_set::BitSet};
 
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_CHAT)]
-pub struct CPlayerChatMessage<'a> {
+pub struct CPlayerChatMessage {
     #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
     index: VarInt,
-    message_signature: Option<&'a [u8]>,
-    message: &'a str,
+    message_signature: Option<Box<[u8]>>, // always 256
+    message: String,
     timestamp: i64,
     salt: i64,
     previous_messages_count: VarInt,
-    previous_messages: &'a [PreviousMessage<'a>], // max 20
+    previous_messages: Box<[PreviousMessage]>, // max 20
     unsigned_content: Option<TextComponent>,
     filter_type: FilterType,
     /// This should not be zero, (index + 1)
@@ -26,16 +26,16 @@ pub struct CPlayerChatMessage<'a> {
     target_name: Option<TextComponent>,
 }
 
-impl<'a> CPlayerChatMessage<'a> {
+impl CPlayerChatMessage {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         sender: uuid::Uuid,
         index: VarInt,
-        message_signature: Option<&'a [u8]>,
-        message: &'a str,
+        message_signature: Option<Box<[u8]>>,
+        message: String,
         timestamp: i64,
         salt: i64,
-        previous_messages: &'a [PreviousMessage<'a>],
+        previous_messages: Box<[PreviousMessage]>,
         unsigned_content: Option<TextComponent>,
         filter_type: FilterType,
         chat_type: VarInt,
@@ -61,9 +61,9 @@ impl<'a> CPlayerChatMessage<'a> {
 }
 
 #[derive(Serialize)]
-pub struct PreviousMessage<'a> {
+pub struct PreviousMessage {
     message_id: VarInt,
-    signature: Option<&'a [u8]>,
+    signature: Option<Box<[u8]>>, // Always 256
 }
 
 #[derive(Serialize)]

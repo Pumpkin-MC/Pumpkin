@@ -24,24 +24,24 @@ pub struct Executor;
 impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-        let mut category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
-        let mut sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
+        let category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
+        let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
 
         for target in targets {
             target
                 .stop_sound(
                     sound
-                        .as_mut()
+                        .as_ref()
                         .cloned()
                         .map(|s| Identifier::vanilla(s.to_name()))
                         .ok(),
-                    category.as_mut().map(|s| **s).ok(),
+                    category.as_ref().map(|s| **s).ok(),
                 )
                 .await;
         }

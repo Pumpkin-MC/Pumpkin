@@ -1,5 +1,6 @@
-use crate::bytebuf::{ByteBufMut, serializer::Serializer};
-use bytes::BytesMut;
+use std::io::Write;
+
+use crate::ser::{NetworkWriteExt, WritingError, serializer::Serializer};
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
 use pumpkin_macros::packet;
 use serde::Serialize;
@@ -25,24 +26,26 @@ impl CSetEquipment {
 }
 
 impl ClientPacket for CSetEquipment {
-    fn write(&self, bytebuf: &mut impl bytes::BufMut) {
-        bytebuf.put_var_int(&self.entity_id);
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_var_int(&self.entity_id)?;
         for i in 0..self.equipment.len() {
             let equipment = &self.equipment[i];
             let slot = &equipment.0;
             if i != self.equipment.len() - 1 {
-                bytebuf.put_i8(-128);
+                write.write_i8_be(-128)?;
             } else {
-                bytebuf.put_i8(*slot as i8);
+                write.write_i8_be(*slot as i8)?;
             }
-            let buf = BytesMut::new();
-            let mut serializer = Serializer::new(buf);
+            let mut serializer = Serializer::new(&mut write);
             equipment
                 .1
                 .serialize(&mut serializer)
                 .expect("Could not serialize `EquipmentSlot`");
-            bytebuf.put(serializer.output);
         }
+
+        Ok(())
     }
 }
 

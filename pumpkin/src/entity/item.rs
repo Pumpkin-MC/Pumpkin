@@ -141,7 +141,7 @@ impl EntityBase for ItemEntity {
             if total_pick_up > 0 {
                 player
                     .client
-                    .send_packet(&CTakeItemEntity::new(
+                    .enqueue_packet(&CTakeItemEntity::new(
                         self.entity.entity_id.into(),
                         player.entity_id().into(),
                         total_pick_up.into(),

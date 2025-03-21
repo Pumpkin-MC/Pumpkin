@@ -35,7 +35,7 @@ struct LocationExecutor;
 struct EntityExecutor(bool);
 
 async fn send_damage_result(
-    sender: &mut CommandSender<'_>,
+    sender: &mut CommandSender,
     success: bool,
     amount: f32,
     target_name: String,
@@ -65,7 +65,7 @@ async fn send_damage_result(
 impl CommandExecutor for LocationExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -105,7 +105,7 @@ impl CommandExecutor for LocationExecutor {
 impl CommandExecutor for EntityExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

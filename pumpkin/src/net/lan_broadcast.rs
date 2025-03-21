@@ -2,7 +2,9 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 use tokio::net::UdpSocket;
-use tokio::time;
+use tokio::{select, time};
+
+use crate::{SHOULD_STOP, STOP_INTERRUPT};
 
 // https://www.wikiwand.com/en/articles/Multicast_address
 
@@ -46,8 +48,19 @@ pub async fn start_lan_broadcast(bound_addr: SocketAddr) {
             .expect("Unable to find running address!")
     );
 
-    loop {
-        interval.tick().await;
+    while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        let t1 = interval.tick();
+        let t2 = STOP_INTERRUPT.notified();
+
+        let should_continue = select! {
+            _ = t1 => true,
+            () = t2 => false,
+        };
+
+        if !should_continue {
+            break;
+        }
+
         let _ = socket
             .send_to(advertisement.as_bytes(), BROADCAST_ADDRESS)
             .await;

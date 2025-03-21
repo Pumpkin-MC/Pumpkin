@@ -39,7 +39,7 @@ impl Player {
         let title = TextComponent::text(window_title);
 
         self.client
-            .send_packet(&COpenScreen::new(
+            .enqueue_packet(&COpenScreen::new(
                 inventory.total_opened_containers.into(),
                 VarInt(window_type as i32),
                 &title,
@@ -79,7 +79,7 @@ impl Player {
             &slots,
             &carried_item,
         );
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
     }
 
     /// The official Minecraft client is weird, and will always just close *any* window that is opened when this gets sent
@@ -88,7 +88,7 @@ impl Player {
         let mut inventory = self.inventory().lock().await;
         inventory.total_opened_containers += 1;
         self.client
-            .send_packet(&CCloseContainer::new(
+            .enqueue_packet(&CCloseContainer::new(
                 inventory.total_opened_containers.into(),
             ))
             .await;
@@ -100,7 +100,7 @@ impl Player {
     ) {
         let (id, value) = window_property.into_tuple();
         self.client
-            .send_packet(&CSetContainerProperty::new(
+            .enqueue_packet(&CSetContainerProperty::new(
                 self.inventory().lock().await.total_opened_containers.into(),
                 id,
                 value,
@@ -214,7 +214,7 @@ impl Player {
         let slot = Slot::from(item_stack);
         *state_id += 1;
         let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, &slot);
-        self.client.send_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await;
         Ok(())
     }
 
@@ -640,7 +640,7 @@ impl Player {
                 slot_index as i16,
                 &slot,
             );
-            player.client.send_packet(&packet).await;
+            player.client.enqueue_packet(&packet).await;
         }
         Ok(())
     }

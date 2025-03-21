@@ -1,11 +1,12 @@
 use std::fmt::Display;
 
-use super::{ByteBuf, ReadingError};
-use bytes::Buf;
+use crate::ser::NetworkReadExt;
+
+use super::{Read, ReadingError};
 use serde::de::{self, DeserializeSeed, SeqAccess};
 
-pub struct Deserializer<'a, B: Buf> {
-    inner: &'a mut B,
+pub struct Deserializer<R: Read> {
+    inner: R,
 }
 
 impl de::Error for ReadingError {
@@ -14,13 +15,13 @@ impl de::Error for ReadingError {
     }
 }
 
-impl<'a, B: Buf> Deserializer<'a, B> {
-    pub fn new(buf: &'a mut B) -> Self {
-        Self { inner: buf }
+impl<R: Read> Deserializer<R> {
+    pub fn new(read: R) -> Self {
+        Self { inner: read }
     }
 }
 
-impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
+impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     type Error = ReadingError;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -36,77 +37,77 @@ impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_bool(self.inner.try_get_bool()?)
+        visitor.visit_bool(self.inner.get_bool()?)
     }
 
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_i8(self.inner.try_get_i8()?)
+        visitor.visit_i8(self.inner.get_i8_be()?)
     }
 
     fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_i16(self.inner.try_get_i16()?)
+        visitor.visit_i16(self.inner.get_i16_be()?)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_i32(self.inner.try_get_i32()?)
+        visitor.visit_i32(self.inner.get_i32_be()?)
     }
 
     fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_i64(self.inner.try_get_i64()?)
+        visitor.visit_i64(self.inner.get_i64_be()?)
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_u8(self.inner.try_get_u8()?)
+        visitor.visit_u8(self.inner.get_u8_be()?)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_u16(self.inner.try_get_u16()?)
+        visitor.visit_u16(self.inner.get_u16_be()?)
     }
 
     fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_u32(self.inner.try_get_u32()?)
+        visitor.visit_u32(self.inner.get_u32_be()?)
     }
 
     fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_u64(self.inner.try_get_u64()?)
+        visitor.visit_u64(self.inner.get_u64_be()?)
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_f32(self.inner.try_get_f32()?)
+        visitor.visit_f32(self.inner.get_f32_be()?)
     }
 
     fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_f64(self.inner.try_get_f64()?)
+        visitor.visit_f64(self.inner.get_f64_be()?)
     }
 
     fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -120,14 +121,14 @@ impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_str(&self.inner.try_get_string()?)
+        self.deserialize_string(visitor)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_str(&self.inner.try_get_string()?)
+        visitor.visit_str(&self.inner.get_string()?)
     }
 
     fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -144,11 +145,15 @@ impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
         unimplemented!()
     }
 
-    fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        if self.inner.get_bool()? {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
+        }
     }
 
     fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -180,48 +185,41 @@ impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
         unimplemented!()
     }
 
-    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        struct Access<'a, 'b, B: Buf> {
-            deserializer: &'a mut Deserializer<'b, B>,
+        struct Access<'a, R: Read> {
+            deserializer: &'a mut Deserializer<R>,
         }
 
-        impl<'de, 'a, 'b: 'a, B: Buf> SeqAccess<'de> for Access<'a, 'b, B> {
+        impl<'de, R: Read> SeqAccess<'de> for Access<'_, R> {
             type Error = ReadingError;
 
             fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
             where
                 T: de::DeserializeSeed<'de>,
             {
-                let value = DeserializeSeed::deserialize(
-                    seed,
-                    Deserializer {
-                        inner: self.deserializer.inner,
-                    },
-                )?;
+                let value = DeserializeSeed::deserialize(seed, &mut *self.deserializer)?;
                 Ok(Some(value))
             }
         }
 
-        let value = visitor.visit_seq(Access {
-            deserializer: &mut self,
-        });
+        let value = visitor.visit_seq(Access { deserializer: self });
 
         value
     }
 
-    fn deserialize_tuple<V>(mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        struct Access<'a, 'b, B: Buf> {
-            deserializer: &'a mut Deserializer<'b, B>,
+        struct Access<'a, R: Read> {
+            deserializer: &'a mut Deserializer<R>,
             len: usize,
         }
 
-        impl<'de, 'a, 'b: 'a, B: Buf> SeqAccess<'de> for Access<'a, 'b, B> {
+        impl<'de, R: Read> SeqAccess<'de> for Access<'_, R> {
             type Error = ReadingError;
 
             fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -230,12 +228,7 @@ impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
             {
                 if self.len > 0 {
                     self.len -= 1;
-                    let value = DeserializeSeed::deserialize(
-                        seed,
-                        Deserializer {
-                            inner: self.deserializer.inner,
-                        },
-                    )?;
+                    let value = DeserializeSeed::deserialize(seed, &mut *self.deserializer)?;
                     Ok(Some(value))
                 } else {
                     Ok(None)
@@ -244,7 +237,7 @@ impl<'de, B: Buf> de::Deserializer<'de> for Deserializer<'_, B> {
         }
 
         let value = visitor.visit_seq(Access {
-            deserializer: &mut self,
+            deserializer: self,
             len,
         });
 

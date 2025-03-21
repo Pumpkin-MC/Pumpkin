@@ -10,6 +10,7 @@ use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
 };
+use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
@@ -33,6 +34,8 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Mutex, RwLock};
+use tokio::task::JoinHandle;
+use tokio_util::task::TaskTracker;
 
 mod connection_cache;
 mod key_store;
@@ -72,6 +75,8 @@ pub struct Server {
     pub bossbars: Mutex<CustomBossbars>,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
+
+    tasks: TaskTracker,
 }
 
 impl Server {
@@ -124,6 +129,7 @@ impl Server {
             defaultgamemode: Mutex::new(DefaultGamemode {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
+            tasks: TaskTracker::new(),
         }
     }
 
@@ -137,6 +143,16 @@ impl Server {
                     .map(move |z| Vector2::new(x, z))
             })
             .collect()
+    }
+
+    /// Spawns a task associated with this server. All tasks spawned with this method are awaited
+    /// when the server stops. This means tasks should complete in a reasonable (no looping) amount of time.
+    pub fn spawn_task<F>(&self, task: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.tasks.spawn(task)
     }
 
     /// Adds a new player to the server.
@@ -164,7 +180,7 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
-    pub async fn add_player(&self, client: Arc<Client>) -> Option<(Arc<Player>, Arc<World>)> {
+    pub async fn add_player(&self, client: Client) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
         // Basically the default world
         // TODO: select default from config
@@ -201,12 +217,17 @@ impl Server {
         self.server_listing.lock().await.remove_player();
     }
 
-    pub async fn save(&self) {
-        for world in self.worlds.read().await.iter() {
-            world.save().await;
-        }
+    pub async fn shutdown(&self) {
+        self.tasks.close();
+        log::debug!("Awaiting tasks for server");
+        self.tasks.wait().await;
+        log::debug!("Done awaiting tasks for server");
 
-        log::info!("Completed world save");
+        log::info!("Starting worlds");
+        for world in self.worlds.read().await.iter() {
+            world.shutdown().await;
+        }
+        log::info!("Completed worlds");
     }
 
     pub async fn try_get_container(
@@ -277,8 +298,18 @@ impl Server {
     where
         P: ClientPacket,
     {
+        let mut packet_buf = Vec::new();
+        if let Err(err) = packet.write(&mut packet_buf) {
+            log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
+            return;
+        }
+        let packet_data: Bytes = packet_buf.into();
+
         for world in self.worlds.read().await.iter() {
-            world.broadcast_packet_all(packet).await;
+            let current_players = world.players.read().await;
+            for player in current_players.values() {
+                player.client.enqueue_packet_data(packet_data.clone()).await;
+            }
         }
     }
 

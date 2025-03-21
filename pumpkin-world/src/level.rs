@@ -6,9 +6,10 @@ use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    sync::{RwLock, mpsc},
-    task::JoinSet,
+    sync::{Notify, RwLock, mpsc},
+    task::{JoinHandle, JoinSet},
 };
+use tokio_util::task::TaskTracker;
 
 use crate::{
     chunk::{
@@ -54,6 +55,10 @@ pub struct Level {
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
+    /// Tracks tasks associated with this world instance
+    tasks: TaskTracker,
+    /// Notification that interrupts tasks for shutdown
+    pub shutdown_notifier: Notify,
 }
 
 #[derive(Clone)]
@@ -127,11 +132,29 @@ impl Level {
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
             _locker: Arc::new(locker),
+            tasks: TaskTracker::new(),
+            shutdown_notifier: Notify::new(),
         }
     }
 
-    pub async fn save(&self) {
+    /// Spawns a task associated with this world. All tasks spawned with this method are awaited
+    /// when the client. This means tasks should complete in a reasonable (no looping) amount of time.
+    pub fn spawn_task<F>(&self, task: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.tasks.spawn(task)
+    }
+
+    pub async fn shutdown(&self) {
         log::info!("Saving level...");
+
+        self.shutdown_notifier.notify_waiters();
+        self.tasks.close();
+        log::debug!("Awaiting level tasks");
+        self.tasks.wait().await;
+        log::debug!("Done awaiting level tasks");
 
         // wait for chunks currently saving in other threads
         self.chunk_saver.block_and_await_ongoing_tasks().await;
@@ -270,7 +293,7 @@ impl Level {
             .collect::<Vec<_>>();
 
         let level = self.clone();
-        tokio::spawn(async move {
+        self.spawn_task(async move {
             let chunks_to_remove = chunks_with_no_watchers.clone();
             level.write_chunks(chunks_with_no_watchers).await;
             // Only after we have written the chunks to the serializer do we remove them from the

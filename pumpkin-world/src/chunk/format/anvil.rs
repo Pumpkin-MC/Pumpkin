@@ -768,9 +768,6 @@ impl ChunkSerializer for AnvilChunkFile {
         chunks: &[Vector2<i32>],
         stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
     ) {
-        // Create an unbounded buffer so we don't block the rayon thread pool
-        let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::unbounded_channel();
-
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
         for chunk in chunks.iter().cloned() {
@@ -781,31 +778,18 @@ impl ChunkSerializer for AnvilChunkFile {
                     .await
                     .expect("Failed to send chunk"),
                 Some(chunk_metadata) => {
-                    let send = bridge_send.clone();
-                    let chunk_data = chunk_metadata.serialized_data.clone();
-                    rayon::spawn(move || {
-                        let result = match chunk_data.to_chunk(chunk) {
-                            Ok(chunk) => LoadedData::Loaded(chunk),
-                            Err(err) => LoadedData::Error((chunk, err)),
-                        };
+                    let chunk_data = &chunk_metadata.serialized_data;
+                    let result = match chunk_data.to_chunk(chunk) {
+                        Ok(chunk) => LoadedData::Loaded(chunk),
+                        Err(err) => LoadedData::Error((chunk, err)),
+                    };
 
-                        send.send(result)
-                            .expect("Failed to send anvil chunks from rayon thread");
-                    });
+                    stream
+                        .send(result)
+                        .await
+                        .expect("Failed to read the chunk to the stream");
                 }
             }
-        }
-        // Drop the original so streams clean-up
-        drop(bridge_send);
-
-        // We don't want to waste work, so recv unbounded from the rayon thread pool, then re-send
-        // to the channel
-
-        while let Some(data) = bridge_recv.recv().await {
-            stream
-                .send(data)
-                .await
-                .expect("Failed to send anvil chunks from bridge");
         }
     }
 }
