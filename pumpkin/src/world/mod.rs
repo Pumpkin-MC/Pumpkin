@@ -514,7 +514,9 @@ impl World {
 
         // Entity meta data
         // Set skin parts
-        player.send_client_information().await;
+        for (_uuid, player) in self.players.read().await.iter() {
+            player.send_client_information().await;
+        }
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
