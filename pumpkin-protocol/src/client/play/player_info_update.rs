@@ -8,7 +8,7 @@ use super::PlayerAction;
 
 #[packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
-    pub actions: i8,
+    pub actions: i16,
     pub players: &'a [Player<'a>],
 }
 
@@ -18,7 +18,7 @@ pub struct Player<'a> {
 }
 
 impl<'a> CPlayerInfoUpdate<'a> {
-    pub fn new(actions: i8, players: &'a [Player]) -> Self {
+    pub fn new(actions: i16, players: &'a [Player]) -> Self {
         Self { actions, players }
     }
 }

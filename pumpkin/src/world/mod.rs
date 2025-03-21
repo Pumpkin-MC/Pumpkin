@@ -402,7 +402,7 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            0x01 | 0x04 | 0x08,
+            0x01 | 0x04 | 0x08 | 0x80,
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: vec![
@@ -439,10 +439,13 @@ impl World {
                 });
             }
             log::debug!("Sending player info to {}", player.gameprofile.name);
-            player
-                .client
-                .send_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
-                .await;
+            for (_uuid, player) in self.players.read().await.iter() {
+                player
+                    .client
+                    .send_packet(&CPlayerInfoUpdate::new(0x01 | 0x08 | 0x80, &entries))
+                    .await;
+            }
+
         };
 
         let gameprofile = &player.gameprofile;
