@@ -427,6 +427,7 @@ impl World {
                     },
                     PlayerAction::UpdateListed(true),
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
+                    PlayerAction::UpdateHat(true),
                 ],
             }],
         ))
