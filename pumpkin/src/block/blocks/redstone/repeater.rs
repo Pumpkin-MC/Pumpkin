@@ -24,8 +24,6 @@ use super::{diode_get_input_strength, get_weak_power, is_diode};
 
 type RepeaterProperties = pumpkin_data::block::RepeaterLikeProperties;
 
-// TODO: There is some bug when creating a repeater clock.
-
 #[pumpkin_block("minecraft:repeater")]
 pub struct RepeaterBlock;
 

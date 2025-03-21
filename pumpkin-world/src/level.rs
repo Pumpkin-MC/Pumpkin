@@ -539,6 +539,7 @@ impl Level {
                 true
             }
         });
+        ticks.sort_by_key(|tick| tick.priority);
         ticks
     }
 

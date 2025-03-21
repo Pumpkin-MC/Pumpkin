@@ -56,7 +56,7 @@ pub enum CompressionError {
     ZstdError(std::io::Error),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 #[repr(i32)]
 pub enum TickPriority {
     ExtremelyHigh = -3,
