@@ -130,7 +130,7 @@ impl ChunkData {
                     target_block_id: Block::from_registry_key(
                         &tick.target_block.replace("minecraft:", ""),
                     )
-                    .unwrap()
+                    .unwrap_or(Block::AIR)
                     .id,
                 })
                 .collect(),
@@ -144,7 +144,7 @@ impl ChunkData {
                     target_block_id: Block::from_registry_key(
                         &tick.target_block.replace("minecraft:", ""),
                     )
-                    .unwrap()
+                    .unwrap_or(Block::AIR)
                     .id,
                 })
                 .collect(),
