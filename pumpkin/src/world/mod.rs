@@ -1168,8 +1168,10 @@ impl World {
             None => self.receive_chunk(chunk_coordinate).await.0,
         };
         let mut chunk = chunk.write().await;
-        // TODO: chunkPos.setBlockState(pos, state, flags);
-        let replaced_block_state_id = chunk.blocks.get_block(relative).unwrap();
+        let replaced_block_state_id = chunk
+            .blocks
+            .get_block(relative)
+            .unwrap_or(Block::AIR.default_state_id);
         if replaced_block_state_id == block_state_id {
             return block_state_id;
         }

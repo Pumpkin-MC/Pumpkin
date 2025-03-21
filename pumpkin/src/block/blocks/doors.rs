@@ -130,7 +130,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                     .set_block_state(
                         &block_pos.offset(BlockDirection::Up.to_offset()),
                         door_props.to_state_id(block),
-                        BlockFlags::NOTIFY_ALL,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
                     )
                     .await;
             }

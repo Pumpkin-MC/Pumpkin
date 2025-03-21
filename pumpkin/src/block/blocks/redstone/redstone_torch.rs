@@ -177,7 +177,7 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                                 BlockFlags::NOTIFY_ALL,
                             )
                             .await;
-                        world.update_neighbors(&block_pos.up(), None).await;
+                        update_neighbors(world, *block_pos).await;
                     }
                 } else if *block == Block::REDSTONE_TORCH {
                     let mut props = RTorchProps::from_state_id(state.id, block);
@@ -192,9 +192,32 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                                 BlockFlags::NOTIFY_ALL,
                             )
                             .await;
-                        world.update_neighbors(&block_pos.up(), None).await;
+                        update_neighbors(world, *block_pos).await;
                     }
                 }
+            }
+
+            async fn placed(
+                &self,
+                world: &World,
+                _block: &Block,
+                _state_id: u16,
+                block_pos: &BlockPos,
+                _old_state_id: u16,
+                _notify: bool,
+            ) {
+                update_neighbors(world, *block_pos).await;
+            }
+
+            async fn on_state_replaced(
+                &self,
+                world: &World,
+                _block: &Block,
+                location: BlockPos,
+                _old_state_id: u16,
+                _moved: bool,
+            ) {
+                update_neighbors(world, location).await;
             }
         }
 
@@ -206,4 +229,11 @@ pub async fn should_be_lit(world: &World, pos: BlockPos, face: BlockDirection) -
     let other_pos = pos.offset(face.to_offset());
     let (block, state) = world.get_block_and_block_state(&other_pos).await.unwrap();
     get_redstone_power(&block, &state, world, other_pos, face).await == 0
+}
+
+pub async fn update_neighbors(world: &World, pos: BlockPos) {
+    for dir in BlockDirection::all() {
+        let other_pos = pos.offset(dir.to_offset());
+        world.update_neighbors(&other_pos, None).await;
+    }
 }
