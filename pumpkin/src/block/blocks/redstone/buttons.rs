@@ -4,6 +4,7 @@ use pumpkin_data::block::BlockFace;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
+use pumpkin_data::item::Item;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -15,6 +16,7 @@ type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
 
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::registry::BlockActionResult;
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -100,6 +102,19 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 world: &World,
             ) {
                 click_button(world, &location).await;
+            }
+
+            async fn use_with_item(
+                &self,
+                _block: &Block,
+                _player: &Player,
+                location: BlockPos,
+                _item: &Item,
+                _server: &Server,
+                world: &World,
+            ) -> BlockActionResult {
+                click_button(world, &location).await;
+                BlockActionResult::Consume
             }
 
             async fn on_scheduled_tick(&self, world: &World, block: &Block, block_pos: &BlockPos) {
