@@ -514,6 +514,8 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
+    pub fn carve(&self) {}
+
     fn start_cell_x(&self) -> i32 {
         self.start_block_x() / self.noise_sampler.horizontal_cell_block_count() as i32
     }
