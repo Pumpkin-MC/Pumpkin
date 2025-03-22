@@ -97,7 +97,7 @@ bitflags! {
 #[derive(Debug, Error)]
 pub enum GetBlockError {
     InvalidBlockId,
-    BlockOutOfWorldBounds
+    BlockOutOfWorldBounds,
 }
 
 impl std::fmt::Display for GetBlockError {
