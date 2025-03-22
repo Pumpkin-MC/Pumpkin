@@ -68,9 +68,11 @@ impl Cylindrical {
     /// Returns an iterator of all chunks within this cylinder
     pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
         // I came up with this formula by testing
-        // for view distances 2-32 it usally gives 5 - 15 chunks more than needed if the player is on ground
+        // for view distances 2-32 it usually gives 5 - 15 chunks more than needed if the player is on ground
         // this looks scary but this few u8 to f32 conversions are definitely faster than ~5 reallocations
-        let estimated_capacity = (std::f32::consts::PI * ((self.view_distance.get() + 2) as f32).powi(2)) as usize + self.view_distance.get() as usize;
+        let estimated_capacity =
+            (std::f32::consts::PI * ((self.view_distance.get() + 2) as f32).powi(2)) as usize
+                + self.view_distance.get() as usize;
         let mut all_chunks = Vec::with_capacity(estimated_capacity);
 
         for x in self.left()..=self.right() {
