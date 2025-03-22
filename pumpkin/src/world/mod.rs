@@ -97,6 +97,7 @@ bitflags! {
 #[derive(Debug, Error)]
 pub enum GetBlockError {
     InvalidBlockId,
+    BlockOutOfWorldBounds
 }
 
 impl std::fmt::Display for GetBlockError {
@@ -1364,7 +1365,11 @@ impl World {
         };
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
-        Ok(chunk.blocks.get_block(relative).unwrap_or(Block::AIR.id))
+        let Some(id) = chunk.blocks.get_block(relative) else {
+            return Err(GetBlockError::BlockOutOfWorldBounds);
+        };
+
+        Ok(id)
     }
 
     /// Gets a `Block` from the block registry. Returns `None` if the block was not found.
