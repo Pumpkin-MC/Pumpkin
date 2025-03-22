@@ -1,3 +1,4 @@
+use pumpkin_data::block::Block;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
@@ -217,6 +218,10 @@ impl SubchunkBlocks {
 impl ChunkBlocks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
+        if position.y.0 < -64 {
+            return Some(Block::AIR.id)
+        }
+
         match &self {
             Self::Homogeneous(block) => Some(*block),
             Self::Subchunks(subchunks) => subchunks
