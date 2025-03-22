@@ -1456,7 +1456,13 @@ impl World {
         direction: &BlockDirection,
         flags: BlockFlags,
     ) {
-        let (block, block_state) = self.get_block_and_block_state(block_pos).await.unwrap();
+        let (block, block_state) = match self.get_block_and_block_state(block_pos).await {
+            Ok(block) => block,
+            Err(_error) => {
+                // Neighbor is outside the world. Don't try to update it
+                return;
+            }
+        };
 
         if flags.contains(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT)
             && block.id == Block::REDSTONE_WIRE.id
