@@ -217,7 +217,6 @@ impl SubchunkBlocks {
 impl ChunkBlocks {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-
         match &self {
             Self::Homogeneous(block) => Some(*block),
             Self::Subchunks(subchunks) => subchunks
