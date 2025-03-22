@@ -16,6 +16,7 @@ use pumpkin_util::math::{ceil_log2, vector2::Vector2};
 use crate::{
     block::ChunkBlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
+    level::LevelFolder,
     storage::{
         CHUNK_AREA, ChunkBlocks, ChunkData, ChunkParsingError, ChunkReadingError,
         ChunkSerializingError, ChunkWritingError, SUBCHUNK_VOLUME,
@@ -35,6 +36,10 @@ impl ChunkSerializer for AnvilChunkFormat {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         AnvilFile::get_chunk_key(chunk)
+    }
+
+    fn get_folder(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.region_folder.join(file_name)
     }
 
     fn should_write(&self, is_watched: bool) -> bool {

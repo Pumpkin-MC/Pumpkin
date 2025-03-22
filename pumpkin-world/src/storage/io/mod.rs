@@ -1,4 +1,4 @@
-use std::error;
+use std::{error, path::PathBuf};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -94,6 +94,8 @@ pub trait ChunkSerializer: Send + Sync + Default {
     fn get_chunk_key(chunk: &Vector2<i32>) -> String;
 
     fn should_write(&self, is_watched: bool) -> bool;
+
+    fn get_folder(folder: &LevelFolder, file_name: &str) -> PathBuf;
 
     /// Serialize the data to bytes.
     async fn write(&self, backend: Self::WriteBackend) -> Result<(), std::io::Error>;

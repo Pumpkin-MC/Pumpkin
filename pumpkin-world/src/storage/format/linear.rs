@@ -2,6 +2,7 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::level::LevelFolder;
 use crate::storage::format::anvil::AnvilFile;
 use crate::storage::format::get_region_coords;
 use crate::storage::io::{ChunkSerializer, LoadedData};
@@ -168,6 +169,10 @@ impl ChunkSerializer for LinearFile {
 
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched
+    }
+
+    fn get_folder(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.region_folder.join(file_name)
     }
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
@@ -387,13 +392,13 @@ mod tests {
     use crate::generation::{Seed, get_world_gen};
     use crate::level::LevelFolder;
     use crate::storage::format::linear::LinearFile;
-    use crate::storage::io::chunk_file_manager::ChunkFileManager;
+    use crate::storage::io::file_manager::FileManager;
     use crate::storage::io::{ChunkIO, LoadedData};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let chunk_saver = ChunkFileManager::<LinearFile>::default();
+        let chunk_saver = FileManager::<LinearFile>::default();
 
         let mut chunks = Vec::new();
         let (send, mut recv) = tokio::sync::mpsc::channel(1);
@@ -430,7 +435,7 @@ mod tests {
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<LinearFile>::default();
+        let chunk_saver = FileManager::<LinearFile>::default();
 
         // Generate chunks
         let mut chunks = vec![];

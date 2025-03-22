@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use pumpkin_nbt::{
     compound::NbtCompound, deserializer::ReadAdaptor, serializer::WriteAdaptor, tag::NbtTag,
@@ -7,10 +8,13 @@ use pumpkin_nbt::{
 };
 use pumpkin_util::math::vector2::Vector2;
 
-use crate::storage::{
-    ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
-    format::{BytesToData, DataToBytes, EntityNbt, get_chunk_index},
-    io::{ChunkSerializer, LoadedData},
+use crate::{
+    level::LevelFolder,
+    storage::{
+        ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
+        format::{BytesToData, DataToBytes, EntityNbt, get_chunk_index},
+        io::{ChunkSerializer, LoadedData},
+    },
 };
 
 use super::{AnvilFile, chunk::AnvilChunkFormat};
@@ -27,6 +31,10 @@ impl ChunkSerializer for AnvilEntityFormat {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         AnvilFile::get_chunk_key(chunk)
+    }
+
+    fn get_folder(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.entities_folder.join(file_name)
     }
 
     fn should_write(&self, is_watched: bool) -> bool {

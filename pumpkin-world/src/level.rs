@@ -16,7 +16,7 @@ use crate::{
     storage::{
         ChunkData, ChunkParsingError, ChunkReadingError,
         format::{
-            anvil::{AnvilChunkFile, chunk::AnvilChunkFormat},
+            anvil::{AnvilChunkFile, chunk::AnvilChunkFormat, entity::AnvilEntityFormat},
             linear::LinearFile,
         },
         io::{ChunkIO, LoadedData, file_manager::FileManager},
@@ -53,6 +53,8 @@ pub struct Level {
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>>,
+    entity_io: Arc<dyn ChunkIO<Data = SyncChunk>>,
+
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
@@ -120,10 +122,10 @@ impl Level {
         let world_gen = get_world_gen(seed).into();
 
         let chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
-            //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
             ChunkFormat::Linear => Arc::new(FileManager::<LinearFile>::default()),
             ChunkFormat::Anvil => Arc::new(FileManager::<AnvilChunkFormat>::default()),
         };
+        let entity_io = Arc::new(FileManager::<AnvilEntityFormat>::default());
 
         Self {
             seed,
@@ -131,6 +133,7 @@ impl Level {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
             chunk_io,
+            entity_io,
             spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
