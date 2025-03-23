@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::VecDeque,
     num::NonZeroU8,
     ops::AddAssign,
@@ -459,9 +460,21 @@ impl Player {
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
         match mode {
-            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
+            TitleMode::Title => {
+                self.client
+                    .enqueue_packet(&CTitleText::new(Cow::Borrowed(text)))
+                    .await
+            }
+            TitleMode::SubTitle => {
+                self.client
+                    .enqueue_packet(&CSubtitle::new(Cow::Borrowed(text)))
+                    .await
+            }
+            TitleMode::ActionBar => {
+                self.client
+                    .enqueue_packet(&CActionBar::new(Cow::Borrowed(text)))
+                    .await
+            }
         }
     }
 
@@ -988,7 +1001,7 @@ impl Player {
         }
 
         self.client
-            .send_packet_now(&CPlayDisconnect::new(&reason))
+            .send_packet_now(&CPlayDisconnect::new(Cow::Borrowed(&reason)))
             .await;
 
         log::info!(
@@ -1053,7 +1066,7 @@ impl Player {
         self.client
             .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
-                &TextComponent::text("noob"),
+                Cow::Borrowed(&TextComponent::text("noob")),
             ))
             .await;
     }
@@ -1191,13 +1204,13 @@ impl Player {
         message: &TextComponent,
         chat_type: u32,
         sender_name: &TextComponent,
-        target_name: Option<&TextComponent>,
+        target_name: Option<Cow<'_, TextComponent>>,
     ) {
         self.client
             .enqueue_packet(&CDisguisedChatMessage::new(
-                message,
+                Cow::Borrowed(message),
                 (chat_type + 1).into(),
-                sender_name,
+                Cow::Borrowed(sender_name),
                 target_name,
             ))
             .await;
@@ -1231,7 +1244,7 @@ impl Player {
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         self.client
-            .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+            .enqueue_packet(&CSystemChatMessage::new(Cow::Borrowed(text), overlay))
             .await;
     }
 

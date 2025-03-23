@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     net::SocketAddr,
     num::NonZeroU8,
     sync::{
@@ -640,7 +641,10 @@ impl Client {
                     .await;
             }
             // This way players get kicked when players using client functions (e.g. poll, send_packet)
-            ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
+            ConnectionState::Play => {
+                self.send_packet_now(&CPlayDisconnect::new(Cow::Borrowed(&reason)))
+                    .await
+            }
             _ => {
                 log::warn!("Can't kick in {:?} State", self.connection_state);
                 return;

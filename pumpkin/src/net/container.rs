@@ -19,6 +19,7 @@ use pumpkin_protocol::server::play::SClickContainer;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{GameMode, MutableSplitSlice};
 use pumpkin_world::item::ItemStack;
+use std::borrow::Cow;
 use std::sync::Arc;
 
 impl Player {
@@ -42,7 +43,7 @@ impl Player {
             .enqueue_packet(&COpenScreen::new(
                 inventory.total_opened_containers.into(),
                 VarInt(window_type as i32),
-                &title,
+                Cow::Borrowed(&title),
             ))
             .await;
         drop(inventory);
@@ -76,8 +77,8 @@ impl Player {
         let packet = CSetContainerContent::new(
             id.into(),
             (inventory.state_id).into(),
-            &slots,
-            &carried_item,
+            Cow::Borrowed(&slots),
+            Cow::Borrowed(&carried_item),
         );
         self.client.enqueue_packet(&packet).await;
     }
@@ -213,7 +214,7 @@ impl Player {
         // TODO: check and iterate over all players in player inventory
         let slot = Slot::from(item_stack);
         *state_id += 1;
-        let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, &slot);
+        let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, Cow::Borrowed(&slot));
         self.client.enqueue_packet(&packet).await;
         Ok(())
     }
@@ -638,7 +639,7 @@ impl Player {
                 total_opened_containers as i8,
                 (inventory.state_id) as i32,
                 slot_index as i16,
-                &slot,
+                Cow::Borrowed(&slot),
             );
             player.client.enqueue_packet(&packet).await;
         }

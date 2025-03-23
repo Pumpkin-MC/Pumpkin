@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
@@ -489,7 +490,7 @@ impl Player {
                 PlayerInventory::CONTAINER_ID,
                 inventory.state_id as i32,
                 slot as i16,
-                &slot_data,
+                Cow::Borrowed(&slot_data),
             );
             self.client.enqueue_packet(&dest_packet).await;
         }

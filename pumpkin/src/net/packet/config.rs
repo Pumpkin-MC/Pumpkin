@@ -1,4 +1,4 @@
-use std::num::NonZeroU8;
+use std::{borrow::Cow, num::NonZeroU8};
 
 use crate::{
     entity::player::{ChatMode, Hand},
@@ -149,7 +149,7 @@ impl Client {
         log::debug!("Handling known packs");
         for registry in &server.cached_registry {
             self.send_packet_now(&CRegistryData::new(
-                &registry.registry_id,
+                Cow::Borrowed(&registry.registry_id),
                 &registry.registry_entries,
             ))
             .await;

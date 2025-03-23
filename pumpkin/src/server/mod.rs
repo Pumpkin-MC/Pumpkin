@@ -26,6 +26,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
@@ -321,7 +322,7 @@ impl Server {
         message: &TextComponent,
         sender_name: &TextComponent,
         chat_type: u32,
-        target_name: Option<&TextComponent>,
+        target_name: Option<Cow<'_, TextComponent>>,
     ) {
         send_cancellable! {{
             ServerBroadcastEvent::new(message.clone(), sender_name.clone());
@@ -329,7 +330,7 @@ impl Server {
             'after: {
                 for world in self.worlds.read().await.iter() {
                     world
-                        .broadcast_message(&event.message, &event.sender, chat_type, target_name)
+                        .broadcast_message(&event.message, &event.sender, chat_type, target_name.clone())
                         .await;
                 }
             }

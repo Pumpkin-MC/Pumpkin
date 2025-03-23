@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
 use pumpkin_util::text::{TextComponent, click::ClickEvent, hover::HoverEvent};
@@ -41,8 +43,8 @@ impl CommandExecutor for Executor {
                     &TextComponent::text(msg.clone()),
                     MSG_COMMAND_OUTGOING,
                     &TextComponent::text(player.gameprofile.name.clone()),
-                    Some(
-                        &TextComponent::text(target.gameprofile.name.clone())
+                    Some(Cow::Owned(
+                        TextComponent::text(target.gameprofile.name.clone())
                             .hover_event(HoverEvent::show_entity(
                                 target.living_entity.entity.entity_uuid.to_string(),
                                 target.living_entity.entity.entity_type.resource_name.into(),
@@ -51,7 +53,7 @@ impl CommandExecutor for Executor {
                             .click_event(ClickEvent::SuggestCommand(
                                 format!("/tell {} ", target.gameprofile.name.clone()).into(),
                             )),
-                    ),
+                    )),
                 )
                 .await;
         }
@@ -69,7 +71,9 @@ impl CommandExecutor for Executor {
                         .click_event(ClickEvent::SuggestCommand(
                             format!("/tell {} ", player.gameprofile.name.clone()).into(),
                         )),
-                    Some(&TextComponent::text(target.gameprofile.name.clone())),
+                    Some(Cow::Owned(TextComponent::text(
+                        target.gameprofile.name.clone(),
+                    ))),
                 )
                 .await;
         }

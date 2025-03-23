@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
 };
@@ -202,12 +203,12 @@ impl World {
         message: &TextComponent,
         sender_name: &TextComponent,
         chat_type: u32,
-        target_name: Option<&TextComponent>,
+        target_name: Option<Cow<'_, TextComponent>>,
     ) {
         self.broadcast_packet_all(&CDisguisedChatMessage::new(
-            message,
+            Cow::Borrowed(message),
             (chat_type + 1).into(),
-            sender_name,
+            Cow::Borrowed(sender_name),
             target_name,
         ))
         .await;
@@ -429,8 +430,11 @@ impl World {
         player: Arc<Player>,
         server: &Server,
     ) {
-        let dimensions: Vec<Identifier> =
-            server.dimensions.iter().map(DimensionType::name).collect();
+        let dimensions: Vec<Cow<'_, Identifier>> = server
+            .dimensions
+            .iter()
+            .map(|d| Cow::Owned(d.name()))
+            .collect();
 
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
@@ -447,7 +451,7 @@ impl World {
             .send_packet_now(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
-                &dimensions,
+                dimensions,
                 base_config.max_players.into(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance
@@ -1089,10 +1093,12 @@ impl World {
         let uuid = player.gameprofile.id;
         self.broadcast_packet_except(
             &[player.gameprofile.id],
-            &CRemovePlayerInfo::new(1.into(), &[uuid]),
+            &CRemovePlayerInfo::new(1.into(), Cow::Borrowed(&[uuid])),
         )
         .await;
-        self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
+        self.broadcast_packet_all(&CRemoveEntities::new(Cow::Borrowed(&[player
+            .entity_id()
+            .into()])))
             .await;
 
         if fire_event {
@@ -1139,7 +1145,9 @@ impl World {
 
     pub async fn remove_entity(&self, entity: &Entity) {
         self.entities.write().await.remove(&entity.entity_uuid);
-        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
+        self.broadcast_packet_all(&CRemoveEntities::new(Cow::Borrowed(&[entity
+            .entity_id
+            .into()])))
             .await;
     }
 
