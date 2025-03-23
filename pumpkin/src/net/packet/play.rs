@@ -62,7 +62,6 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use pumpkin_world::{WORLD_LOWEST_Y, WORLD_MAX_Y};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -238,7 +237,7 @@ impl Player {
             }
 
             'cancelled: {
-                self.client.send_packet(&CPlayerPosition::new(
+                self.client.enqueue_packet(&CPlayerPosition::new(
                     self.teleport_id_count.load(std::sync::atomic::Ordering::Relaxed).into(),
                     self.living_entity.entity.pos.load(),
                     Vector3::new(0.0, 0.0, 0.0),
@@ -377,7 +376,7 @@ impl Player {
             + 1;
         *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
         self.client
-            .send_packet(&CPlayerPosition::new(
+            .enqueue_packet(&CPlayerPosition::new(
                 teleport_id.into(),
                 self.living_entity.entity.pos.load(),
                 Vector3::new(0.0, 0.0, 0.0),
@@ -445,7 +444,7 @@ impl Player {
                 let command_clone = command.clone();
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
-                tokio::spawn(async move {
+                server.spawn_task(async move {
                     let dispatcher = server_clone.command_dispatcher.read().await;
                     dispatcher
                         .handle_command(
@@ -491,7 +490,7 @@ impl Player {
                 slot as i16,
                 &slot_data,
             );
-            self.client.send_packet(&dest_packet).await;
+            self.client.enqueue_packet(&dest_packet).await;
         }
     }
 
@@ -572,7 +571,7 @@ impl Player {
         let equipment = &[(EquipmentSlot::MainHand, stack.clone())];
         self.living_entity.send_equipment_changes(equipment).await;
         self.client
-            .send_packet(&CSetHeldItem::new(dest_slot as i8))
+            .enqueue_packet(&CSetHeldItem::new(dest_slot as i8))
             .await;
     }
 
@@ -693,12 +692,13 @@ impl Player {
                         .broadcast_packet_all(&CPlayerChatMessage::new(
                             gameprofile.id,
                             1.into(),
-                            chat_message.signature.as_deref(),
-                            &event.message,
+                            chat_message.signature,
+                            event.message.clone(),
                             chat_message.timestamp,
                             chat_message.salt,
-                            &[],
-                            Some(TextComponent::text(event.message.clone())),
+                            // TODO: Previous messages
+                            Box::new([]),
+                            Some(TextComponent::text(event.message)),
                             FilterType::PassThrough,
                             (CHAT + 1).into(),
                             TextComponent::text(gameprofile.name.clone()),
@@ -706,23 +706,24 @@ impl Player {
                         ))
                         .await;
                 } else {
+                    let packet =
+                        CPlayerChatMessage::new(
+                            gameprofile.id,
+                            1.into(),
+                            chat_message.signature,
+                            event.message.clone(),
+                            chat_message.timestamp,
+                            chat_message.salt,
+                            Box::new([]),
+                            Some(TextComponent::text(event.message)),
+                            FilterType::PassThrough,
+                            (CHAT + 1).into(),
+                            TextComponent::text(gameprofile.name.clone()),
+                            None,
+                        );
+
                     for recipient in event.recipients {
-                        recipient.client.send_packet(
-                            &CPlayerChatMessage::new(
-                                gameprofile.id,
-                                1.into(),
-                                chat_message.signature.as_deref(),
-                                &event.message,
-                                chat_message.timestamp,
-                                chat_message.salt,
-                                &[],
-                                Some(TextComponent::text(event.message.clone())),
-                                FilterType::PassThrough,
-                                (CHAT + 1).into(),
-                                TextComponent::text(gameprofile.name.clone()),
-                                None,
-                            ),
-                        ).await;
+                        recipient.client.enqueue_packet(&packet).await;
                     }
                 }
             }
@@ -944,8 +945,8 @@ impl Player {
                     if let Some(held) = self.inventory.lock().await.held_item() {
                         if !server.item_registry.can_mine(&held.item, self) {
                             self.client
-                                .send_packet(&CBlockUpdate::new(
-                                    &location,
+                                .enqueue_packet(&CBlockUpdate::new(
+                                    location,
                                     VarInt(i32::from(state.id)),
                                 ))
                                 .await;
@@ -1126,7 +1127,7 @@ impl Player {
 
     pub async fn handle_play_ping_request(&self, request: SPlayPingRequest) {
         self.client
-            .send_packet(&CPingResponse::new(request.payload))
+            .enqueue_packet(&CPingResponse::new(request.payload))
             .await;
     }
 
@@ -1368,16 +1369,15 @@ impl Player {
             suggestions,
         );
 
-        self.client.send_packet(&response).await;
+        self.client.enqueue_packet(&response).await;
     }
 
     pub fn handle_cookie_response(&self, packet: &SPCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-            "Received cookie_response[play]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            "Received cookie_response[play]: key: \"{}\", payload_length: \"{:?}\"",
             packet.key.to_string(),
-            packet.has_payload,
-            packet.payload_length.unwrap_or(VarInt::from(0)).0
+            packet.payload.as_ref().map(|p| p.len())
         );
     }
 
@@ -1422,6 +1422,9 @@ impl Player {
         }
     }
 
+    const WORLD_LOWEST_Y: i8 = -64;
+    const WORLD_MAX_Y: u16 = 384;
+
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -1439,16 +1442,16 @@ impl Player {
         let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
         // Check if the block is under the world
-        if location.0.y + face.to_offset().y < WORLD_LOWEST_Y.into() {
+        if location.0.y + face.to_offset().y < Self::WORLD_LOWEST_Y.into() {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
         // Check the world's max build height
-        if location.0.y + face.to_offset().y >= WORLD_MAX_Y.into() {
+        if location.0.y + face.to_offset().y >= Self::WORLD_MAX_Y.into() {
             self.send_system_message_raw(
                 &TextComponent::translate(
                     "build.tooHigh",
-                    vec![TextComponent::text((WORLD_MAX_Y - 1).to_string())],
+                    vec![TextComponent::text((Self::WORLD_MAX_Y - 1).to_string())],
                 )
                 .color_named(NamedColor::Red),
                 true,
@@ -1548,7 +1551,7 @@ impl Player {
                 || state.get_state().block_entity_type == Some(block_entity!("hanging_sign"))
         }) {
             self.client
-                .send_packet(&COpenSignEditor::new(
+                .enqueue_packet(&COpenSignEditor::new(
                     block_position,
                     selected_face.to_offset().z == 1,
                 ))

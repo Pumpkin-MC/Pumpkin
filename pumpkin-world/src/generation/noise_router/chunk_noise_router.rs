@@ -67,7 +67,9 @@ pub trait MutableChunkNoiseFunctionComponentImpl {
 pub enum ChunkNoiseFunctionComponent<'a> {
     Independent(&'a IndependentProtoNoiseFunctionComponent),
     Dependent(&'a DependentProtoNoiseFunctionComponent),
-    Chunk(ChunkSpecificNoiseFunctionComponent),
+    // NOTE: The box here is intentional: we want to bring down the size to keep the component stack
+    // smaller
+    Chunk(Box<ChunkSpecificNoiseFunctionComponent>),
     PassThrough(PassThrough),
     Panic(String),
 }
@@ -298,7 +300,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                     match wrapper.wrapper_type {
                         WrapperType::Interpolated => {
                             interpolator_indices.push(component_index);
-                            ChunkNoiseFunctionComponent::Chunk(
+                            ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::DensityInterpolator(
                                     DensityInterpolator::new(
                                         wrapper.input_index,
@@ -307,33 +309,33 @@ impl<'a> ChunkNoiseRouter<'a> {
                                         build_options,
                                     ),
                                 ),
-                            )
+                            ))
                         }
                         WrapperType::CellCache => {
                             cell_cache_indices.push(component_index);
-                            ChunkNoiseFunctionComponent::Chunk(
+                            ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::CellCache(CellCache::new(
                                     wrapper.input_index,
                                     min_value,
                                     max_value,
                                     build_options,
                                 )),
-                            )
+                            ))
                         }
-                        WrapperType::CacheOnce => ChunkNoiseFunctionComponent::Chunk(
+                        WrapperType::CacheOnce => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::CacheOnce(CacheOnce::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
                             )),
-                        ),
-                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(
+                        )),
+                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
                             )),
-                        ),
+                        )),
                         WrapperType::CacheFlat => {
                             let mut flat_cache = FlatCache::new(
                                 wrapper.input_index,
@@ -383,9 +385,9 @@ impl<'a> ChunkNoiseRouter<'a> {
                                 }
                             }
 
-                            ChunkNoiseFunctionComponent::Chunk(
+                            ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::FlatCache(flat_cache),
-                            )
+                            ))
                         }
                     }
                 }
@@ -424,7 +426,7 @@ impl<'a> ChunkNoiseRouter<'a> {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = component.first_mut().unwrap() else {
                 unreachable!();
             };
-            let ChunkSpecificNoiseFunctionComponent::CellCache(cell_cache) = chunk else {
+            let ChunkSpecificNoiseFunctionComponent::CellCache(cell_cache) = chunk.as_mut() else {
                 unreachable!();
             };
 
@@ -453,7 +455,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                 unreachable!();
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
-                chunk
+                chunk.as_mut()
             else {
                 unreachable!();
             };
@@ -486,7 +488,7 @@ impl<'a> ChunkNoiseRouter<'a> {
             };
 
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
-                chunk
+                chunk.as_mut()
             else {
                 unreachable!();
             };
@@ -505,7 +507,7 @@ impl<'a> ChunkNoiseRouter<'a> {
             };
 
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
-                chunk
+                chunk.as_mut()
             else {
                 unreachable!();
             };
@@ -523,7 +525,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                 unreachable!();
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
-                chunk
+                chunk.as_mut()
             else {
                 unreachable!();
             };
@@ -541,7 +543,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                 unreachable!();
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
-                chunk
+                chunk.as_mut()
             else {
                 unreachable!();
             };
@@ -559,7 +561,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                 unreachable!();
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
-                chunk
+                chunk.as_mut()
             else {
                 unreachable!();
             };

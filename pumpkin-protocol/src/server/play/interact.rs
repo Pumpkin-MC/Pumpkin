@@ -1,11 +1,12 @@
-use bytes::Buf;
+use std::io::Read;
+
 use pumpkin_data::packet::serverbound::PLAY_INTERACT;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     ServerPacket, VarInt,
-    bytebuf::{ByteBuf, ReadingError},
+    ser::{NetworkReadExt, ReadingError},
 };
 
 #[packet(PLAY_INTERACT)]
@@ -19,24 +20,26 @@ pub struct SInteract {
 
 // Great job Mojang ;D
 impl ServerPacket for SInteract {
-    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
-        let entity_id = bytebuf.try_get_var_int()?;
-        let r#type = bytebuf.try_get_var_int()?;
+    fn read(read: impl Read) -> Result<Self, ReadingError> {
+        let mut read = read;
+
+        let entity_id = read.get_var_int()?;
+        let r#type = read.get_var_int()?;
         let action = ActionType::try_from(r#type.0)
             .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
         let target_position: Option<Vector3<f32>> = match action {
             ActionType::Interact => None,
             ActionType::Attack => None,
             ActionType::InteractAt => Some(Vector3::new(
-                bytebuf.try_get_f32()?,
-                bytebuf.try_get_f32()?,
-                bytebuf.try_get_f32()?,
+                read.get_f32_be()?,
+                read.get_f32_be()?,
+                read.get_f32_be()?,
             )),
         };
         let hand = match action {
-            ActionType::Interact => Some(bytebuf.try_get_var_int()?),
+            ActionType::Interact => Some(read.get_var_int()?),
             ActionType::Attack => None,
-            ActionType::InteractAt => Some(bytebuf.try_get_var_int()?),
+            ActionType::InteractAt => Some(read.get_var_int()?),
         };
 
         Ok(Self {
@@ -44,7 +47,7 @@ impl ServerPacket for SInteract {
             r#type,
             target_position,
             hand,
-            sneaking: bytebuf.try_get_bool()?,
+            sneaking: read.get_bool()?,
         })
     }
 }

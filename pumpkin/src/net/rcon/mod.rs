@@ -3,24 +3,40 @@ use std::net::SocketAddr;
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::{RCONConfig, advanced_config};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    select,
+};
 
-use crate::server::Server;
+use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
 mod packet;
 
 pub struct RCONServer;
 
 impl RCONServer {
-    pub async fn new(config: &RCONConfig, server: Arc<Server>) -> Result<Self, std::io::Error> {
+    pub async fn run(config: &RCONConfig, server: Arc<Server>) -> Result<(), std::io::Error> {
         let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
 
         let password = Arc::new(config.password.clone());
 
         let mut connections = 0;
-        loop {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            let await_new_client = || async {
+                let t1 = listener.accept();
+                let t2 = STOP_INTERRUPT.notified();
+
+                select! {
+                    client = t1 => Some(client),
+                    () = t2 => None,
+                }
+            };
             // Asynchronously wait for an inbound socket.
-            let (connection, address) = listener.accept().await?;
+
+            let Some(result) = await_new_client().await else {
+                break;
+            };
+            let (connection, address) = result?;
 
             if config.max_connections != 0 && connections >= config.max_connections {
                 continue;
@@ -35,6 +51,7 @@ impl RCONServer {
             log::debug!("closed RCON connection");
             connections -= 1;
         }
+        Ok(())
     }
 }
 
@@ -103,7 +120,7 @@ impl RCONClient {
             }
             ServerboundPacket::ExecCommand => {
                 if self.logged_in {
-                    let output = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+                    let output = Arc::new(tokio::sync::Mutex::new(Vec::<String>::new()));
 
                     let server_clone = server.clone();
                     let output_clone = output.clone();
@@ -112,7 +129,7 @@ impl RCONClient {
                         let dispatcher = server_clone.command_dispatcher.read().await;
                         dispatcher
                             .handle_command(
-                                &mut crate::command::CommandSender::Rcon(&output_clone),
+                                &mut crate::command::CommandSender::Rcon(output_clone),
                                 &server_clone,
                                 &packet_body,
                             )

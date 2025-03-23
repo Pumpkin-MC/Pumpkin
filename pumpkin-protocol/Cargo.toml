@@ -29,4 +29,10 @@ aes = "0.8"
 cfb8 = "0.8"
 
 # compression
-libdeflater = "1.23"
+async-compression = { version = "0.4.20", features = ["tokio", "zlib"] }
+
+take_mut = "0.2.2"
+
+[dev-dependencies]
+# Validate correctness
+flate2 = "1.1.0"

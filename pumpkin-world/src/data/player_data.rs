@@ -13,7 +13,7 @@ pub struct PlayerDataStorage {
     /// Path to the directory where player data is stored
     data_path: PathBuf,
     /// Whether player data saving is enabled
-    pub save_enabled: bool,
+    save_enabled: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -44,9 +44,23 @@ impl PlayerDataStorage {
         }
     }
 
+    #[must_use]
+    pub fn get_data_path(&self) -> &PathBuf {
+        &self.data_path
+    }
+
+    #[must_use]
+    pub fn is_save_enabled(&self) -> bool {
+        self.save_enabled
+    }
+
+    pub fn set_save_enabled(&mut self, enabled: bool) {
+        self.save_enabled = enabled;
+    }
+
     /// Returns the path for a player's data file based on their UUID.
-    fn get_player_data_path(&self, uuid: &Uuid) -> PathBuf {
-        self.data_path.join(format!("{uuid}.dat"))
+    pub fn get_player_data_path(&self, uuid: &Uuid) -> PathBuf {
+        self.get_data_path().join(format!("{uuid}.dat"))
     }
 
     /// Loads player data from NBT file or cache.
@@ -63,7 +77,7 @@ impl PlayerDataStorage {
     /// A Result containing either the player's NBT data or an error.
     pub fn load_player_data(&self, uuid: &Uuid) -> Result<(bool, NbtCompound), PlayerDataError> {
         // If player data saving is disabled, return empty data
-        if !self.save_enabled {
+        if !self.is_save_enabled() {
             return Ok((false, NbtCompound::new()));
         }
 
@@ -109,7 +123,7 @@ impl PlayerDataStorage {
     /// A Result indicating success or the error that occurred.
     pub fn save_player_data(&self, uuid: &Uuid, data: NbtCompound) -> Result<(), PlayerDataError> {
         // Skip saving if disabled in config
-        if !self.save_enabled {
+        if !self.is_save_enabled() {
             return Ok(());
         }
 

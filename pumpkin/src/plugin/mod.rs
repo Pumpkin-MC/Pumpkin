@@ -1,11 +1,7 @@
 pub mod api;
 
-use api::server::{
-    server_plugin_disable::ServerPluginDisableEvent, server_plugin_enable::ServerPluginEnableEvent,
-};
 pub use api::*;
 use async_trait::async_trait;
-use pumpkin_macros::send_cancellable;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -223,29 +219,15 @@ impl PluginManager {
             self.handlers.clone(),
         );
         let mut plugin_box = plugin_fn();
-        send_cancellable! {{
-            ServerPluginEnableEvent {
-                metadata: metadata.clone(),
-                cancelled: false,
-            };
+        let res = plugin_box.on_load(&context).await;
+        let mut loaded = true;
+        if let Err(e) = res {
+            log::error!("Error loading plugin: {}", e);
+            loaded = false;
+        }
 
-            'after: {
-                let res = plugin_box.on_load(&context).await;
-                let mut loaded = true;
-                if let Err(e) = res {
-                    log::error!("Error loading plugin: {}", e);
-                    loaded = false;
-                }
-
-                self.plugins
-                    .push((metadata.clone(), plugin_box, library, loaded));
-            }
-
-            'cancelled: {
-                self.plugins
-                    .push((metadata.clone(), plugin_box, library, false));
-            }
-        }}
+        self.plugins
+            .push((metadata.clone(), plugin_box, library, loaded));
 
         Ok(())
     }
@@ -282,23 +264,15 @@ impl PluginManager {
                 return Err(format!("Plugin {name} is already loaded"));
             }
 
-            send_cancellable! {{
-                ServerPluginEnableEvent {
-                    metadata: metadata.clone(),
-                    cancelled: false,
-                };
+            let context = Context::new(
+                metadata.clone(),
+                self.server.clone().expect("Server not set"),
+                self.handlers.clone(),
+            );
+            let res = plugin.on_load(&context).await;
+            res?;
+            *loaded = true;
 
-                'after: {
-                    let context = Context::new(
-                        metadata.clone(),
-                        self.server.clone().expect("Server not set"),
-                        self.handlers.clone(),
-                    );
-                    let res = plugin.on_load(&context).await;
-                    res?;
-                    *loaded = true;
-                }
-            }}
             Ok(())
         } else {
             Err(format!("Plugin {name} not found"))
@@ -319,23 +293,14 @@ impl PluginManager {
             .find(|(metadata, _, _, _)| metadata.name == name);
 
         if let Some((metadata, plugin, _, loaded)) = plugin {
-            send_cancellable! {{
-                ServerPluginDisableEvent {
-                    metadata: metadata.clone(),
-                    cancelled: false,
-                };
-
-                'after: {
-                    let context = Context::new(
-                        metadata.clone(),
-                        self.server.clone().expect("Server not set"),
-                        self.handlers.clone(),
-                    );
-                    let res = plugin.on_unload(&context).await;
-                    res?;
-                    *loaded = false;
-                }
-            }}
+            let context = Context::new(
+                metadata.clone(),
+                self.server.clone().expect("Server not set"),
+                self.handlers.clone(),
+            );
+            let res = plugin.on_unload(&context).await;
+            res?;
+            *loaded = false;
             Ok(())
         } else {
             Err(format!("Plugin {name} not found"))

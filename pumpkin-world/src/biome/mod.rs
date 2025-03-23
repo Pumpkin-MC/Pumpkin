@@ -1,24 +1,43 @@
-use std::{cell::RefCell, sync::LazyLock};
+use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
 
 use enum_dispatch::enum_dispatch;
-use multi_noise::{BiomeEntries, SearchTree, TreeLeafNode};
+use multi_noise::{NoiseHypercube, SearchTree, TreeLeafNode};
 use pumpkin_data::chunk::Biome;
+use pumpkin_util::math::vector3::Vector3;
+use serde::Deserialize;
 
 use crate::{
-    coordinates::BlockCoordinates, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
+    dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
 };
 pub mod multi_noise;
 
+#[derive(Deserialize)]
+pub struct BiomeEntries {
+    biomes: Vec<BiomeEntry>,
+}
+
+#[derive(Deserialize)]
+pub struct BiomeEntry {
+    parameters: NoiseHypercube,
+    biome: Biome,
+}
+
 pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
-    SearchTree::create(
-        serde_json::from_str::<BiomeEntries>(include_str!("../../../assets/multi_noise.json"))
-            .expect("Could not parse multi_noise.json.")
-            .nodes
-            .into_iter()
-            .flat_map(|(_, biome_map)| biome_map.into_iter())
-            .collect(),
-    )
-    .expect("entries cannot be empty")
+    let data: HashMap<Dimension, BiomeEntries> =
+        serde_json::from_str(include_str!("../../../assets/multi_noise.json"))
+            .expect("Could not parse multi_noise.json.");
+    // TODO: support non overworld biomes
+    let overworld_data = data
+        .get(&Dimension::Overworld)
+        .expect("Overworld dimension not found");
+
+    let entries: Vec<(Biome, &NoiseHypercube)> = overworld_data
+        .biomes
+        .iter()
+        .map(|entry| (entry.biome, &entry.parameters))
+        .collect();
+
+    SearchTree::create(entries)
 });
 
 thread_local! {
@@ -27,29 +46,50 @@ thread_local! {
 
 #[enum_dispatch]
 pub trait BiomeSupplier {
-    fn biome(&mut self, at: BlockCoordinates) -> Biome;
+    fn biome(at: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome;
 }
 
-#[derive(Clone)]
-pub struct DebugBiomeSupplier;
+pub struct MultiNoiseBiomeSupplier;
 
-impl BiomeSupplier for DebugBiomeSupplier {
-    fn biome(&mut self, _at: BlockCoordinates) -> Biome {
-        Biome::Plains
-    }
-}
+// TODO: Add End supplier
 
-pub struct MultiNoiseBiomeSupplier<'a> {
-    noise: MultiNoiseSampler<'a>,
-}
-
-impl BiomeSupplier for MultiNoiseBiomeSupplier<'_> {
-    fn biome(&mut self, at: BlockCoordinates) -> Biome {
-        let point = self.noise.sample(at.x, at.y.0 as i32, at.z);
+impl BiomeSupplier for MultiNoiseBiomeSupplier {
+    fn biome(at: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome {
+        //panic!("{}:{}:{}", at.x, at.y, at.z);
+        let point = noise.sample(at.x, at.y, at.z);
         LAST_RESULT_NODE.with_borrow_mut(|last_result| {
             BIOME_ENTRIES
                 .get(&point, last_result)
                 .expect("failed to get biome entry")
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::chunk::Biome;
+
+    use crate::{
+        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
+        generation::noise_router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        },
+    };
+
+    use super::{BiomeSupplier, MultiNoiseBiomeSupplier};
+
+    #[test]
+    fn test_biome_desert() {
+        let seed = 13579;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let biome = MultiNoiseBiomeSupplier::biome(
+            &pumpkin_util::math::vector3::Vector3 { x: -24, y: 1, z: 8 },
+            &mut sampler,
+        );
+        assert_eq!(biome, Biome::Desert)
     }
 }

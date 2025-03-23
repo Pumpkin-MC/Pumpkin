@@ -36,9 +36,8 @@ impl MultiNoiseSamplerBuilderOptions {
 
 pub struct MultiNoiseSampler<'a> {
     temperature: usize,
-    // AKA: Humidity
-    vegetation: usize,
-    continents: usize,
+    humidity: usize,
+    continentalness: usize,
     erosion: usize,
     depth: usize,
     // AKA: Weirdness
@@ -63,13 +62,13 @@ impl<'a> MultiNoiseSampler<'a> {
         ) as f32;
 
         let humidity = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.vegetation],
+            &mut self.component_stack[..=self.humidity],
             &pos,
             &sample_options,
         ) as f32;
 
         let continentalness = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack[..=self.continents],
+            &mut self.component_stack[..=self.continentalness],
             &pos,
             &sample_options,
         ) as f32;
@@ -135,13 +134,13 @@ impl<'a> MultiNoiseSampler<'a> {
                     let max_value = component_stack[wrapper.input_index].max();
 
                     match wrapper.wrapper_type {
-                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(
+                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
                             )),
-                        ),
+                        )),
                         WrapperType::CacheFlat => {
                             let mut flat_cache = FlatCache::new(
                                 wrapper.input_index,
@@ -191,13 +190,17 @@ impl<'a> MultiNoiseSampler<'a> {
                                 }
                             }
 
-                            ChunkNoiseFunctionComponent::Chunk(
+                            ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::FlatCache(flat_cache),
-                            )
+                            ))
                         }
-                        _ => ChunkNoiseFunctionComponent::Panic(
-                            "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code".to_string()
-                        ),
+                        // Java passes thru if the noise pos is not the chunk itself, which it is
+                        // never for the MultiNoiseSampler
+                        _ => ChunkNoiseFunctionComponent::PassThrough(PassThrough {
+                            input_index: wrapper.input_index,
+                            min_value,
+                            max_value,
+                        }),
                     }
                 }
             };
@@ -206,12 +209,61 @@ impl<'a> MultiNoiseSampler<'a> {
 
         Self {
             temperature: base.temperature,
-            vegetation: base.vegetation,
-            continents: base.continents,
+            humidity: base.vegetation,
+            continentalness: base.continents,
             depth: base.depth,
             erosion: base.erosion,
             ridges: base.ridges,
             component_stack: component_stack.into_boxed_slice(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
+        biome::multi_noise::NoiseValuePoint,
+    };
+
+    use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
+
+    #[test]
+    fn test_sample() {
+        let seed = 123;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let expected = NoiseValuePoint {
+            temperature: -5727,
+            humidity: 55,
+            continentalness: 4996,
+            erosion: 2371,
+            depth: -19774,
+            weirdness: 4421,
+        };
+        assert_eq!(sampler.sample(123, 123, 123), expected)
+    }
+
+    #[test]
+    fn test_sample_2() {
+        // we use a different seed
+        let seed = 13579;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_rounter =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let expected = NoiseValuePoint {
+            temperature: 7489,
+            humidity: 3502,
+            continentalness: -2168,
+            erosion: -3511,
+            depth: -21237,
+            weirdness: -5222,
+        };
+        assert_eq!(sampler.sample(123, 123, 123), expected)
     }
 }

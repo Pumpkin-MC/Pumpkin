@@ -1,11 +1,12 @@
-use bytes::Buf;
+use std::io::Read;
+
 use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::packet;
 
 use crate::{
-    ServerPacket, VarInt,
-    bytebuf::{ByteBuf, ReadingError},
+    ServerPacket,
     codec::identifier::Identifier,
+    ser::{NetworkReadExt, ReadingError},
 };
 
 #[packet(CONFIG_COOKIE_RESPONSE)]
@@ -14,35 +15,35 @@ use crate::{
 pub struct SConfigCookieResponse {
     pub key: Identifier,
     pub has_payload: bool,
-    pub payload_length: Option<VarInt>,
-    pub payload: Option<bytes::Bytes>, // 5120,
+    pub payload: Option<Box<[u8]>>, // 5120,
 }
 
 const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl ServerPacket for SConfigCookieResponse {
-    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
-        let key = bytebuf.try_get_identifier()?;
-        let has_payload = bytebuf.try_get_bool()?;
+    fn read(read: impl Read) -> Result<Self, ReadingError> {
+        let mut read = read;
+
+        let key = read.get_identifier()?;
+        let has_payload = read.get_bool()?;
 
         if !has_payload {
             return Ok(Self {
                 key,
                 has_payload,
-                payload_length: None,
                 payload: None,
             });
         }
 
-        let payload_length = bytebuf.try_get_var_int()?;
-        let length = payload_length.0;
+        let payload_length = read.get_var_int()?.0 as usize;
+        if payload_length > MAX_COOKIE_LENGTH {
+            return Err(ReadingError::TooLarge("SConfigCookieResponse".to_string()));
+        }
 
-        let payload = bytebuf.try_copy_to_bytes_len(length as usize, MAX_COOKIE_LENGTH)?;
-
+        let payload = read.read_boxed_slice(payload_length)?;
         Ok(Self {
             key,
             has_payload,
-            payload_length: Some(payload_length),
             payload: Some(payload),
         })
     }

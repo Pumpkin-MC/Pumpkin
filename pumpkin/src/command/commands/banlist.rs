@@ -22,7 +22,7 @@ struct ListExecutor;
 impl CommandExecutor for ListExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -80,7 +80,7 @@ struct ListAllExecutor;
 impl CommandExecutor for ListAllExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -107,7 +107,7 @@ impl CommandExecutor for ListAllExecutor {
 }
 
 /// `Vec<(name, source, reason)>`
-async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender<'_>) {
+async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender) {
     if list.is_empty() {
         sender
             .send_message(TextComponent::translate("commands.banlist.none", []))

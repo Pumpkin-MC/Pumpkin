@@ -1,8 +1,12 @@
-use bytes::BufMut;
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::LOGIN_LOGIN_FINISHED;
 use pumpkin_macros::packet;
 
-use crate::{ClientPacket, Property, bytebuf::ByteBufMut};
+use crate::{
+    ClientPacket, Property,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 #[packet(LOGIN_LOGIN_FINISHED)]
 pub struct CLoginSuccess<'a> {
@@ -22,13 +26,14 @@ impl<'a> CLoginSuccess<'a> {
 }
 
 impl ClientPacket for CLoginSuccess<'_> {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_uuid(self.uuid);
-        bytebuf.put_string(self.username);
-        bytebuf.put_list::<Property>(self.properties, |p, v| {
-            p.put_string(&v.name);
-            p.put_string(&v.value);
-            p.put_option(&v.signature, |p, v| p.put_string(v));
-        });
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_uuid(self.uuid)?;
+        write.write_string(self.username)?;
+        write.write_list::<Property>(self.properties, |p, v| {
+            p.write_string(&v.name)?;
+            p.write_string(&v.value)?;
+            p.write_option(&v.signature, |p, v| p.write_string(v))
+        })
     }
 }

@@ -164,7 +164,7 @@ pub fn packet(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let code = quote! {
         #item
-        impl #impl_generics crate::bytebuf::packet::Packet for #name #ty_generics {
+        impl #impl_generics crate::ser::packet::Packet for #name #ty_generics {
             const PACKET_ID: i32 = #input;
         }
     };

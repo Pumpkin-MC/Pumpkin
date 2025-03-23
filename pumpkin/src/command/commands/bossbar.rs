@@ -58,7 +58,7 @@ struct AddExecuter;
 impl CommandExecutor for AddExecuter {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -107,7 +107,7 @@ struct GetExecuter(CommandValueGet);
 impl CommandExecutor for GetExecuter {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -185,7 +185,7 @@ struct ListExecuter;
 impl CommandExecutor for ListExecuter {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -244,7 +244,7 @@ struct RemoveExecuter;
 impl CommandExecutor for RemoveExecuter {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -296,7 +296,7 @@ impl CommandExecutor for SetExecuter {
     #[expect(clippy::too_many_lines)]
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -668,13 +668,13 @@ fn bossbar_prefix(title: TextComponent, namespace: String) -> TextComponent {
         .hover_event(HoverEvent::show_text(TextComponent::text(namespace)))
 }
 
-async fn send_error_message(sender: &CommandSender<'_>, message: TextComponent) {
+async fn send_error_message(sender: &CommandSender, message: TextComponent) {
     sender
         .send_message(message.color(Color::Named(NamedColor::Red)))
         .await;
 }
 
-async fn handle_bossbar_error(sender: &CommandSender<'_>, error: BossbarUpdateError<'_>) {
+async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<'_>) {
     match error {
         BossbarUpdateError::InvalidResourceLocation(location) => {
             send_error_message(

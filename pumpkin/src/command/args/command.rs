@@ -31,7 +31,7 @@ impl GetClientSideArgParser for CommandTreeArgumentConsumer {
 impl ArgumentConsumer for CommandTreeArgumentConsumer {
     async fn consume<'a>(
         &'a self,
-        _sender: &CommandSender<'a>,
+        _sender: &CommandSender,
         server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
@@ -45,7 +45,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
 
     async fn suggest<'a>(
         &'a self,
-        _sender: &CommandSender<'a>,
+        _sender: &CommandSender,
         server: &'a Server,
         input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {

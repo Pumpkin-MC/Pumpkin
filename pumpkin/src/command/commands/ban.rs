@@ -26,7 +26,7 @@ struct NoReasonExecutor;
 impl CommandExecutor for NoReasonExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -45,7 +45,7 @@ struct ReasonExecutor;
 impl CommandExecutor for ReasonExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -62,7 +62,7 @@ impl CommandExecutor for ReasonExecutor {
     }
 }
 
-async fn ban_player(sender: &CommandSender<'_>, player: &Player, reason: Option<String>) {
+async fn ban_player(sender: &CommandSender, player: &Player, reason: Option<String>) {
     let mut banned_players = BANNED_PLAYER_LIST.write().await;
 
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());

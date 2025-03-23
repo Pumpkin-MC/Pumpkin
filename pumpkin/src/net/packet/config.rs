@@ -10,7 +10,6 @@ use pumpkin_config::advanced_config;
 use pumpkin_protocol::{
     ConnectionState,
     client::config::{CFinishConfig, CRegistryData},
-    codec::var_int::VarInt,
     server::config::{
         ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
         SConfigResourcePack, SKnownPacks, SPluginMessage,
@@ -139,17 +138,17 @@ impl Client {
     pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse) {
         // TODO: allow plugins to access this
         log::debug!(
-            "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{}\"",
+            "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{:?}\"",
             packet.key.to_string(),
             packet.has_payload,
-            packet.payload_length.unwrap_or(VarInt::from(0)).0
+            packet.payload.as_ref().map(|p| p.len()),
         );
     }
 
     pub async fn handle_known_packs(&self, server: &Server, _config_acknowledged: SKnownPacks) {
         log::debug!("Handling known packs");
         for registry in &server.cached_registry {
-            self.send_packet(&CRegistryData::new(
+            self.send_packet_now(&CRegistryData::new(
                 &registry.registry_id,
                 &registry.registry_entries,
             ))
@@ -158,7 +157,7 @@ impl Client {
 
         // We are done with configuring
         log::debug!("Finished config");
-        self.send_packet(&CFinishConfig).await;
+        self.send_packet_now(&CFinishConfig).await;
     }
 
     pub async fn handle_config_acknowledged(&self) {

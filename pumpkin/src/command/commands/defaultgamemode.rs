@@ -26,7 +26,7 @@ struct DefaultGamemodeExecutor;
 impl CommandExecutor for DefaultGamemodeExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

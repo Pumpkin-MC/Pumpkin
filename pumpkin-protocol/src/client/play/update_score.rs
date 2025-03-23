@@ -8,18 +8,18 @@ use crate::{NumberFormat, VarInt};
 
 #[derive(Serialize)]
 #[packet(PLAY_SET_SCORE)]
-pub struct CUpdateScore<'a> {
-    entity_name: &'a str,
-    objective_name: &'a str,
+pub struct CUpdateScore {
+    entity_name: String,
+    objective_name: String,
     value: VarInt,
     display_name: Option<TextComponent>,
     number_format: Option<NumberFormat>,
 }
 
-impl<'a> CUpdateScore<'a> {
+impl CUpdateScore {
     pub fn new(
-        entity_name: &'a str,
-        objective_name: &'a str,
+        entity_name: String,
+        objective_name: String,
         value: VarInt,
         display_name: Option<TextComponent>,
         number_format: Option<NumberFormat>,

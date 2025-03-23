@@ -1,4 +1,4 @@
-use crate::deserializer::ReadAdaptor;
+use crate::deserializer::NbtReadHelper;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::io::{Read, Write};
@@ -15,7 +15,7 @@ use std::io::{Read, Write};
 pub fn read_gzip_compound_tag(input: impl Read) -> Result<NbtCompound, Error> {
     // Create a GZip decoder and directly chain it to the NBT reader
     let decoder = GzDecoder::new(input);
-    let mut reader = ReadAdaptor::new(decoder);
+    let mut reader = NbtReadHelper::new(decoder);
 
     // Read the NBT data directly from the decoder stream
     let nbt = Nbt::read(&mut reader)?;

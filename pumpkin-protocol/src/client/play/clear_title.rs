@@ -4,11 +4,11 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 #[packet(PLAY_CLEAR_TITLES)]
-pub struct CClearTtitle {
+pub struct CClearTitle {
     reset: bool,
 }
 
-impl CClearTtitle {
+impl CClearTitle {
     pub const fn new(reset: bool) -> Self {
         Self { reset }
     }

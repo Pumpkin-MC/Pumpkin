@@ -1,5 +1,7 @@
-use crate::bytebuf::ByteBufMut;
+use std::io::Write;
+
 use crate::codec::var_int::VarInt;
+use crate::ser::{NetworkWriteExt, WritingError};
 use crate::{ClientPacket, codec::identifier::Identifier};
 use pumpkin_data::{packet::clientbound::PLAY_STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::packet;
@@ -17,7 +19,9 @@ impl CStopSound {
 }
 
 impl ClientPacket for CStopSound {
-    fn write(&self, bytebuf: &mut impl bytes::BufMut) {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+
         const NO_CATEGORY_NO_SOUND: u8 = 0;
         const CATEGORY_ONLY: u8 = 1;
         const SOUND_ONLY: u8 = 2;
@@ -25,21 +29,19 @@ impl ClientPacket for CStopSound {
 
         match (self.category, &self.sound_id) {
             (Some(category), Some(sound_id)) => {
-                bytebuf.put_u8(CATEGORY_AND_SOUND);
-                bytebuf.put_var_int(&VarInt(category as i32));
-                bytebuf.put_identifier(sound_id);
+                write.write_u8_be(CATEGORY_AND_SOUND)?;
+                write.write_var_int(&VarInt(category as i32))?;
+                write.write_identifier(sound_id)
             }
             (Some(category), None) => {
-                bytebuf.put_u8(CATEGORY_ONLY);
-                bytebuf.put_var_int(&VarInt(category as i32));
+                write.write_u8_be(CATEGORY_ONLY)?;
+                write.write_var_int(&VarInt(category as i32))
             }
             (None, Some(sound_id)) => {
-                bytebuf.put_u8(SOUND_ONLY);
-                bytebuf.put_identifier(sound_id);
+                write.write_u8_be(SOUND_ONLY)?;
+                write.write_identifier(sound_id)
             }
-            (None, None) => {
-                bytebuf.put_u8(NO_CATEGORY_NO_SOUND);
-            }
+            (None, None) => write.write_u8_be(NO_CATEGORY_NO_SOUND),
         }
     }
 }

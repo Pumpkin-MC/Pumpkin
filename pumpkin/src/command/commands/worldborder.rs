@@ -54,7 +54,7 @@ struct GetExecutor;
 impl CommandExecutor for GetExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -82,7 +82,7 @@ struct SetExecutor;
 impl CommandExecutor for SetExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -134,7 +134,7 @@ struct SetTimeExecutor;
 impl CommandExecutor for SetTimeExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -219,7 +219,7 @@ struct AddExecutor;
 impl CommandExecutor for AddExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -273,7 +273,7 @@ struct AddTimeExecutor;
 impl CommandExecutor for AddTimeExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -360,7 +360,7 @@ struct CenterExecutor;
 impl CommandExecutor for CenterExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -393,7 +393,7 @@ struct DamageAmountExecutor;
 impl CommandExecutor for DamageAmountExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -445,7 +445,7 @@ struct DamageBufferExecutor;
 impl CommandExecutor for DamageBufferExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -497,7 +497,7 @@ struct WarningDistanceExecutor;
 impl CommandExecutor for WarningDistanceExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -548,7 +548,7 @@ struct WarningTimeExecutor;
 impl CommandExecutor for WarningTimeExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

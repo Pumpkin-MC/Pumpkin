@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     net::SocketAddr,
     num::NonZeroU8,
     sync::{
@@ -14,15 +13,15 @@ use crate::{
     server::Server,
 };
 
+use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    ClientPacket, CompressionLevel, CompressionThreshold, ConnectionState, Property, RawPacket,
-    ServerPacket,
-    bytebuf::{ReadingError, packet::Packet},
+    ClientPacket, ConnectionState, Property, RawPacket, ServerPacket,
     client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
-    packet_decoder::PacketDecoder,
-    packet_encoder::{PacketEncodeError, PacketEncoder},
+    packet_decoder::{NetworkDecoder, PacketDecodeError},
+    packet_encoder::NetworkEncoder,
+    ser::{ReadingError, packet::Packet},
     server::{
         config::{
             SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
@@ -40,10 +39,22 @@ use pumpkin_util::{ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
-use tokio::sync::Mutex;
-use tokio::sync::mpsc;
+use tokio::{
+    io::{BufReader, BufWriter},
+    net::tcp::OwnedWriteHalf,
+    sync::{
+        Notify,
+        mpsc::{Receiver, Sender},
+    },
+    task::JoinHandle,
+};
+use tokio::{
+    net::{TcpStream, tcp::OwnedReadHalf},
+    sync::Mutex,
+};
 
 use thiserror::Error;
+use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 mod authentication;
 mod container;
@@ -132,28 +143,30 @@ pub struct Client {
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
     pub connection_state: AtomicCell<ConnectionState>,
     /// Indicates if the client connection is closed.
-    pub closed: AtomicBool,
+    pub closed: Arc<AtomicBool>,
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
     /// The packet encoder for outgoing packets.
-    pub enc: Arc<Mutex<PacketEncoder>>,
+    network_writer: Arc<Mutex<NetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
-    pub dec: Arc<Mutex<PacketDecoder>>,
-    /// A channel for sending packets to the client.
-    pub server_packets_channel: mpsc::Sender<PacketHandlerState>,
-    /// A queue of raw packets received from the client, waiting to be processed.
-    pub client_packets_queue: Arc<Mutex<VecDeque<RawPacket>>>,
+    network_reader: Mutex<NetworkDecoder<BufReader<OwnedReadHalf>>>,
     /// Indicates whether the client should be converted into a player.
     pub make_player: AtomicBool,
+    /// A collection of tasks associated with this client. The tasks await completion when removing the client.
+    tasks: TaskTracker,
+    /// An notifier that is triggered when this client is closed.
+    close_interrupt: Arc<Notify>,
+    /// A queue of serialized packets to send to the network
+    outgoing_packet_queue_send: Sender<Bytes>,
+    /// A queue of serialized packets to send to the network
+    outgoing_packet_queue_recv: Option<Receiver<Bytes>>,
 }
 
 impl Client {
     #[must_use]
-    pub fn new(
-        server_packets_channel: mpsc::Sender<PacketHandlerState>,
-        address: SocketAddr,
-        id: usize,
-    ) -> Self {
+    pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: usize) -> Self {
+        let (read, write) = tcp_stream.into_split();
+        let (send, recv) = tokio::sync::mpsc::channel(128);
         Self {
             id,
             protocol_version: AtomicI32::new(0),
@@ -163,29 +176,97 @@ impl Client {
             server_address: Mutex::new(String::new()),
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
-            enc: Arc::new(Mutex::new(PacketEncoder::default())),
-            dec: Arc::new(Mutex::new(PacketDecoder::default())),
-            closed: AtomicBool::new(false),
-            server_packets_channel,
-            client_packets_queue: Arc::new(Mutex::new(VecDeque::new())),
+            network_writer: Arc::new(Mutex::new(NetworkEncoder::new(BufWriter::new(write)))),
+            network_reader: Mutex::new(NetworkDecoder::new(BufReader::new(read))),
+            closed: Arc::new(AtomicBool::new(false)),
             make_player: AtomicBool::new(false),
+            close_interrupt: Arc::new(Notify::new()),
+            tasks: TaskTracker::new(),
+            outgoing_packet_queue_send: send,
+            outgoing_packet_queue_recv: Some(recv),
         }
     }
 
-    /// Adds a Incoming packet to the queue
-    pub async fn add_packet(&self, packet: RawPacket) {
-        let mut client_packets_queue = self.client_packets_queue.lock().await;
-        client_packets_queue.push_back(packet);
+    pub fn init(&mut self) {
+        self.start_outgoing_packet_task();
     }
 
-    /// Enables or disables packet encryption for the connection.
+    fn start_outgoing_packet_task(&mut self) {
+        let mut packet_receiver = self
+            .outgoing_packet_queue_recv
+            .take()
+            .expect("This was set in the new fn");
+        let writer = self.network_writer.clone();
+        let close_interrupt = self.close_interrupt.clone();
+        let closed = self.closed.clone();
+        let id = self.id;
+        self.spawn_task(async move {
+            while !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                let recv_result = tokio::select! {
+                    () = close_interrupt.notified() => {
+                        None
+                    },
+                    recv_result = packet_receiver.recv() => {
+                        recv_result
+                    }
+                };
+
+                let Some(packet_data) = recv_result else {
+                    break;
+                };
+
+                if let Err(err) = writer.lock().await.write_packet(packet_data).await {
+                    // It is expected that the packet will fail if we are closed
+                    if !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                        log::warn!(
+                            "Failed to send packet to client {}: {}",
+                            id,
+                            err.to_string()
+                        );
+                        // We now need to close the connection to the client since the stream is in an
+                        // unknown state
+                        Self::thread_safe_close(&close_interrupt, &closed);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    pub async fn await_close_interrupt(&self) {
+        self.close_interrupt.notified().await;
+    }
+
+    pub async fn await_tasks(&self) {
+        self.tasks.close();
+        self.tasks.wait().await;
+    }
+
+    /// Spawns a task associated with this client. All tasks spawned with this method are awaited
+    /// when the client. This means tasks should complete in a reasonable amount of time or select
+    /// on `Self::await_close_interrupt` to cancel the task when the client is closed
     ///
-    /// This function takes an optional shared secret as input. If the shared secret is provided,
-    /// the connection's encryption is enabled using the provided secret key. Otherwise, encryption is disabled.
+    /// Returns an `Option<JoinHandle<F::Output>>`. If the client is closed, this returns `None`.
+    pub fn spawn_task<F>(&self, task: F) -> Option<JoinHandle<F::Output>>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            None
+        } else {
+            Some(self.tasks.spawn(task))
+        }
+    }
+
+    /// Enables packet encryption for the connection.
+    ///
+    /// This function takes a shared secret as input. The connection's encryption is enabled
+    /// using the provided secret key.
     ///
     /// # Arguments
     ///
-    /// * `shared_secret`: An optional **already decrypted** shared secret key used for encryption.
+    /// * `shared_secret`: An **already decrypted** shared secret key used for encryption.
     ///
     /// # Returns
     ///
@@ -199,89 +280,105 @@ impl Client {
     /// ```
     ///  let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
     ///
-    ///  if let Err(error) = self.set_encryption(Some(&shared_secret)).await {
+    ///  if let Err(error) = self.set_encryption(&shared_secret).await {
     ///       self.kick(&error.to_string()).await;
     ///       return;
     ///  }
     /// ```
     pub async fn set_encryption(
         &self,
-        shared_secret: Option<&[u8]>, // decrypted
+        shared_secret: &[u8], // decrypted
     ) -> Result<(), EncryptionError> {
-        if let Some(shared_secret) = shared_secret {
-            let crypt_key: [u8; 16] = shared_secret
-                .try_into()
-                .map_err(|_| EncryptionError::SharedWrongLength)?;
-            self.dec.lock().await.set_encryption(Some(&crypt_key));
-            self.enc.lock().await.set_encryption(Some(&crypt_key));
-        } else {
-            self.dec.lock().await.set_encryption(None);
-            self.enc.lock().await.set_encryption(None);
-        }
+        let crypt_key: [u8; 16] = shared_secret
+            .try_into()
+            .map_err(|_| EncryptionError::SharedWrongLength)?;
+        self.network_reader.lock().await.set_encryption(&crypt_key);
+        self.network_writer.lock().await.set_encryption(&crypt_key);
         Ok(())
     }
 
-    /// Enables or disables packet compression for the connection.
+    /// Enables packet compression for the connection.
     ///
-    /// This function takes an optional `CompressionInfo` struct as input. If the `CompressionInfo` is provided,
-    /// packet compression is enabled with the specified threshold. Otherwise, compression is disabled.
+    /// This function takes a `CompressionInfo` struct as input.
+    /// packet compression is enabled with the specified threshold.
     ///
     /// # Arguments
     ///
-    /// * `compression`: An optional `CompressionInfo` struct containing the compression threshold and compression level.
-    pub async fn set_compression(&self, compression: Option<CompressionInfo>) {
-        self.dec.lock().await.set_compression(compression.is_some());
-        self.enc
+    /// * `compression`: A `CompressionInfo` struct containing the compression threshold and compression level.
+    pub async fn set_compression(&self, compression: CompressionInfo) {
+        if compression.level > 9 {
+            log::error!("Invalid compression level! Clients will not be able to read this!");
+        }
+
+        self.network_reader
             .lock()
             .await
-            .set_compression(
-                compression.map(|s| (CompressionThreshold(s.threshold), CompressionLevel(s.level))),
-            )
-            .unwrap_or_else(|_| log::warn!("invalid compression level"));
+            .set_compression(compression.threshold as usize);
+
+        self.network_writer
+            .lock()
+            .await
+            .set_compression((compression.threshold as usize, compression.level));
     }
 
-    /// Sends a clientbound packet to the connected client.
+    /// Gets the next packet from the network or `None` if the connection has closed
+    pub async fn get_packet(&self) -> Option<RawPacket> {
+        let mut network_reader = self.network_reader.lock().await;
+        tokio::select! {
+            () = self.await_close_interrupt() => {
+                log::debug!("Canceling player packet processing");
+                None
+            },
+            packet_result = network_reader.get_raw_packet() => {
+                match packet_result {
+                    Ok(packet) => Some(packet),
+                    Err(err) => {
+                        if !matches!(err, PacketDecodeError::ConnectionClosed) {
+                            log::warn!("Failed to decode packet from client {}: {}", self.id, err);
+                            let text = format!("Error while reading incoming packet {err}");
+                            self.kick(TextComponent::text(text)).await;
+                        }
+                        None
+                    }
+                }
+            }
+        }
+    }
+
+    /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
+    /// in-order to the client
     ///
     /// # Arguments
     ///
     /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
-    pub async fn send_packet<P: ClientPacket>(&self, packet: &P) {
-        //log::debug!("Sending packet with id {} to {}", P::PACKET_ID, self.id);
-        // assert!(!self.closed);
-        if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+    pub async fn enqueue_packet<P>(&self, packet: &P)
+    where
+        P: ClientPacket,
+    {
+        let mut packet_buf = Vec::new();
+        if let Err(err) = packet.write(&mut packet_buf) {
+            log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
             return;
         }
-
-        {
-            let mut enc = self.enc.lock().await;
-            if let Err(error) = enc.append_packet(packet) {
-                self.kick(TextComponent::text(error.to_string())).await;
-                return;
-            }
-        }
-
-        let _ = self
-            .server_packets_channel
-            .send(PacketHandlerState::PacketReady)
-            .await;
-
-        /* let mut writer = self.connection_writer.lock().await;
-        if let Err(error) = writer.write_all(&enc.take()).await {
-            log::debug!("Unable to write to connection: {}", error.to_string());
-        } */
-
-        /*
-        else if let Err(error) = writer.flush().await {
-            log::warn!(
-                "Failed to flush writer for id {}: {}",
-                self.id,
-                error.to_string()
-            );
-        }
-        */
+        self.enqueue_packet_data(packet_buf.into()).await;
     }
 
-    /// Sends a clientbound packet to the connected client.
+    pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
+            // This is expected to fail if we are closed
+            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                log::error!(
+                    "Failed to add packet to the outgoing packet queue for client {}: {}",
+                    self.id,
+                    err.to_string()
+                );
+            }
+        }
+    }
+
+    /// Sends a clientbound packet to the connected client and awaits until the packet is sent.
+    /// Useful for blocking until the client has received a packet. Ignores the order of
+    /// `enqueue_chunk`.
     ///
     /// # Arguments
     ///
@@ -293,38 +390,33 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an `PacketError` if the could not be Send.
-    pub async fn try_send_packet<P: ClientPacket>(
-        &self,
-        packet: &P,
-    ) -> Result<(), PacketEncodeError> {
-        // assert!(!self.closed);
-        /*
-        log::debug!(
-            "Trying to send packet with id {} to {}",
-            P::PACKET_ID,
-            self.id
-        );
-        */
+    /// Returns an `PacketError` if the packet could not be Send.
+    pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
+        let mut packet_buf = Vec::new();
+        if let Err(err) = packet.write(&mut packet_buf) {
+            log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
+            return;
+        };
 
-        let mut enc = self.enc.lock().await;
-        enc.append_packet(packet)?;
-
-        let _ = self
-            .server_packets_channel
-            .send(PacketHandlerState::PacketReady)
-            .await;
-
-        /* let mut writer = self.connection_writer.lock().await;
-        let _ = writer.write_all(&enc.take()).await; */
-
-        /*
-        writer
-            .flush()
+        if let Err(err) = self
+            .network_writer
+            .lock()
             .await
-            .map_err(|_| PacketError::ConnectionWrite)?;
-        */
-        Ok(())
+            .write_packet(packet_buf.into())
+            .await
+        {
+            // It is expected that the packet will fail if we are closed
+            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                log::warn!(
+                    "Failed to send packet to client {}: {}",
+                    self.id,
+                    err.to_string()
+                );
+                // We now need to close the connection to the client since the stream is in an
+                // unknown state
+                self.close();
+            }
+        }
     }
 
     /// Processes all packets received from the connected client in a loop.
@@ -341,17 +433,15 @@ impl Client {
     ///
     /// * `server`: A reference to the `Server` instance.
     pub async fn process_packets(&self, server: &Server) {
-        let mut packet_queue = self.client_packets_queue.lock().await;
-        while let Some(mut packet) = packet_queue.pop_front() {
-            if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                log::debug!("Canceling client packet processing (pre)");
-                return;
-            }
-            if let Err(error) = self.handle_packet(server, &mut packet).await {
+        while !self.make_player.load(std::sync::atomic::Ordering::Relaxed) {
+            let packet = self.get_packet().await;
+            let Some(packet) = packet else { break };
+
+            if let Err(error) = self.handle_packet(server, &packet).await {
                 let text = format!("Error while reading incoming packet {error}");
                 log::error!(
                     "Failed to read incoming packet with id {}: {}",
-                    i32::from(packet.id),
+                    packet.id,
                     error
                 );
                 self.kick(TextComponent::text(text)).await;
@@ -386,7 +476,7 @@ impl Client {
     pub async fn handle_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         match self.connection_state.load() {
             pumpkin_protocol::ConnectionState::HandShake => {
@@ -410,17 +500,17 @@ impl Client {
         }
     }
 
-    async fn handle_handshake_packet(&self, packet: &mut RawPacket) -> Result<(), ReadingError> {
+    async fn handle_handshake_packet(&self, packet: &RawPacket) -> Result<(), ReadingError> {
         log::debug!("Handling handshake group");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             0 => {
-                self.handle_handshake(SHandShake::read(bytebuf)?).await;
+                self.handle_handshake(SHandShake::read(payload)?).await;
             }
             _ => {
                 log::error!(
                     "Failed to handle packet id {} in Handshake state",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -430,22 +520,22 @@ impl Client {
     async fn handle_status_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         log::debug!("Handling status group");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SStatusRequest::PACKET_ID => {
                 self.handle_status_request(server).await;
             }
             SStatusPingRequest::PACKET_ID => {
-                self.handle_ping_request(SStatusPingRequest::read(bytebuf)?)
+                self.handle_ping_request(SStatusPingRequest::read(payload)?)
                     .await;
             }
             _ => {
                 log::error!(
                     "Failed to handle client packet id {} in Status State",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -456,33 +546,33 @@ impl Client {
     async fn handle_login_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         log::debug!("Handling login group for id");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SLoginStart::PACKET_ID => {
-                self.handle_login_start(server, SLoginStart::read(bytebuf)?)
+                self.handle_login_start(server, SLoginStart::read(payload)?)
                     .await;
             }
             SEncryptionResponse::PACKET_ID => {
-                self.handle_encryption_response(server, SEncryptionResponse::read(bytebuf)?)
+                self.handle_encryption_response(server, SEncryptionResponse::read(payload)?)
                     .await;
             }
             SLoginPluginResponse::PACKET_ID => {
-                self.handle_plugin_response(SLoginPluginResponse::read(bytebuf)?)
+                self.handle_plugin_response(SLoginPluginResponse::read(payload)?)
                     .await;
             }
             SLoginAcknowledged::PACKET_ID => {
                 self.handle_login_acknowledged(server).await;
             }
             SLoginCookieResponse::PACKET_ID => {
-                self.handle_login_cookie_response(&SLoginCookieResponse::read(bytebuf)?);
+                self.handle_login_cookie_response(&SLoginCookieResponse::read(payload)?);
             }
             _ => {
                 log::error!(
                     "Failed to handle client packet id {} in Login State",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -492,37 +582,37 @@ impl Client {
     async fn handle_config_packet(
         &self,
         server: &Server,
-        packet: &mut RawPacket,
+        packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         log::debug!("Handling config group");
-        let bytebuf = &mut packet.bytebuf;
-        match packet.id.0 {
+        let payload = &packet.payload[..];
+        match packet.id {
             SClientInformationConfig::PACKET_ID => {
-                self.handle_client_information_config(SClientInformationConfig::read(bytebuf)?)
+                self.handle_client_information_config(SClientInformationConfig::read(payload)?)
                     .await;
             }
             SPluginMessage::PACKET_ID => {
-                self.handle_plugin_message(SPluginMessage::read(bytebuf)?)
+                self.handle_plugin_message(SPluginMessage::read(payload)?)
                     .await;
             }
             SAcknowledgeFinishConfig::PACKET_ID => {
                 self.handle_config_acknowledged().await;
             }
             SKnownPacks::PACKET_ID => {
-                self.handle_known_packs(server, SKnownPacks::read(bytebuf)?)
+                self.handle_known_packs(server, SKnownPacks::read(payload)?)
                     .await;
             }
             SConfigCookieResponse::PACKET_ID => {
-                self.handle_config_cookie_response(&SConfigCookieResponse::read(bytebuf)?);
+                self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);
             }
             SConfigResourcePack::PACKET_ID => {
-                self.handle_resource_pack_response(SConfigResourcePack::read(bytebuf)?)
+                self.handle_resource_pack_response(SConfigResourcePack::read(payload)?)
                     .await;
             }
             _ => {
                 log::error!(
                     "Failed to handle client packet id {} in Config State",
-                    packet.id.0
+                    packet.id
                 );
             }
         };
@@ -537,30 +627,27 @@ impl Client {
     ///
     /// * `reason`: A string describing the reason for kicking the client.
     pub async fn kick(&self, reason: TextComponent) {
-        let result = match self.connection_state.load() {
+        match self.connection_state.load() {
             ConnectionState::Login => {
                 // TextComponent implements Serialze and writes in bytes instead of String, thats the reasib we only use content
-                self.try_send_packet(&CLoginDisconnect::new(
+                self.send_packet_now(&CLoginDisconnect::new(
                     &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
-                .await
+                .await;
             }
             ConnectionState::Config => {
-                self.try_send_packet(&CConfigDisconnect::new(&reason.get_text()))
-                    .await
+                self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
+                    .await;
             }
             // This way players get kicked when players using client functions (e.g. poll, send_packet)
-            ConnectionState::Play => self.try_send_packet(&CPlayDisconnect::new(reason)).await,
+            ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
             _ => {
                 log::warn!("Can't kick in {:?} State", self.connection_state);
-                Ok(())
+                return;
             }
         };
-        if let Err(err) = result {
-            log::warn!("Failed to kick {}: {}", self.id, err.to_string());
-        }
         log::debug!("Closing connection for {}", self.id);
-        self.close().await;
+        self.close();
     }
 
     /// Checks if the client can join the server.
@@ -609,6 +696,11 @@ impl Client {
         None
     }
 
+    fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
+        interrupt.notify_waiters();
+        closed.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Closes the connection to the client.
     ///
     /// This function marks the connection as closed using an atomic flag. It's generally preferable
@@ -618,14 +710,10 @@ impl Client {
     /// # Notes
     ///
     /// This function does not attempt to send any disconnect packets to the client.
-    pub async fn close(&self) {
+    pub fn close(&self) {
+        self.close_interrupt.notify_waiters();
         self.closed
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        // We dont care if this fails because if it doesn that means the task has already stopped
-        let _ = self
-            .server_packets_channel
-            .send(PacketHandlerState::Stop)
-            .await;
         log::debug!("Closed connection for {}", self.id);
     }
 }

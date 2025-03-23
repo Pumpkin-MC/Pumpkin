@@ -6,6 +6,7 @@ use num_derive::FromPrimitive;
 use pumpkin_data::block::{Axis, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
+use serde::Deserialize;
 pub use state::ChunkBlockState;
 
 #[derive(FromPrimitive, PartialEq, Clone, Copy)]
@@ -34,6 +35,13 @@ impl TryFrom<i32> for BlockDirection {
             _ => Err(InvalidBlockFace),
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BlockStateCodec {
+    pub name: String,
+    // TODO: properties...
 }
 
 impl BlockDirection {

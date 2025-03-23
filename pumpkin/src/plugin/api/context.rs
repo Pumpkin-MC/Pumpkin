@@ -88,8 +88,8 @@ impl Context {
 
         for world in self.server.worlds.read().await.iter() {
             for player in world.players.read().await.values() {
-                client_suggestions::send_c_commands_packet(player, &self.server.command_dispatcher)
-                    .await;
+                let command_dispatcher = self.server.command_dispatcher.read().await;
+                client_suggestions::send_c_commands_packet(player, &command_dispatcher).await;
             }
         }
     }
@@ -106,8 +106,8 @@ impl Context {
 
         for world in self.server.worlds.read().await.iter() {
             for player in world.players.read().await.values() {
-                client_suggestions::send_c_commands_packet(player, &self.server.command_dispatcher)
-                    .await;
+                let command_dispatcher = self.server.command_dispatcher.read().await;
+                client_suggestions::send_c_commands_packet(player, &command_dispatcher).await;
             }
         }
     }

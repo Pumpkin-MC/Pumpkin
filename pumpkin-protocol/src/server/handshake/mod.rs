@@ -1,9 +1,7 @@
-use crate::bytebuf::ByteBufMut;
-use crate::{
-    ClientPacket, ConnectionState, ServerPacket, VarInt,
-    bytebuf::{ByteBuf, ReadingError},
-};
-use bytes::Buf;
+use std::io::Read;
+
+use crate::ser::NetworkReadExt;
+use crate::{ConnectionState, ServerPacket, VarInt, ser::ReadingError};
 use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::packet;
 
@@ -15,23 +13,16 @@ pub struct SHandShake {
     pub next_state: ConnectionState,
 }
 
-impl ClientPacket for SHandShake {
-    fn write(&self, bytebuf: &mut impl bytes::BufMut) {
-        bytebuf.put_var_int(&self.protocol_version);
-        bytebuf.put_string_len(&self.server_address, 255);
-        bytebuf.put_u16(self.server_port);
-        bytebuf.put_var_int(&VarInt(self.next_state as i32));
-    }
-}
-
 impl ServerPacket for SHandShake {
-    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
+    fn read(read: impl Read) -> Result<Self, ReadingError> {
+        let mut read = read;
+
         Ok(Self {
-            protocol_version: bytebuf.try_get_var_int()?,
-            server_address: bytebuf.try_get_string_len(255)?,
-            server_port: bytebuf.try_get_u16()?,
-            next_state: bytebuf
-                .try_get_var_int()?
+            protocol_version: read.get_var_int()?,
+            server_address: read.get_string_bounded(255)?,
+            server_port: read.get_u16_be()?,
+            next_state: read
+                .get_var_int()?
                 .try_into()
                 .map_err(|_| ReadingError::Message("Invalid status".to_string()))?,
         })

@@ -1,5 +1,5 @@
 use crate::{
-    entity::{NBTStorage, player::Player},
+    entity::{player::Player, NBTStorage},
     server::Server,
 };
 use crossbeam::atomic::AtomicCell;
@@ -77,7 +77,7 @@ impl ServerPlayerData {
         let last_save = self.last_save.load();
         let should_save = now.duration_since(last_save) >= self.save_interval;
 
-        if should_save && self.storage.save_enabled {
+        if should_save && self.storage.is_save_enabled() {
             self.last_save.store(now);
             // Save all online players periodically across all worlds
             for world in server.worlds.read().await.iter() {
@@ -150,7 +150,7 @@ impl ServerPlayerData {
                 Ok(())
             }
             Err(e) => {
-                if self.storage.save_enabled {
+                if self.storage.is_save_enabled() {
                     // Only log as error if player data saving is enabled
                     log::error!("Error loading player data for {}: {}", uuid, e);
                 } else {
@@ -178,7 +178,7 @@ impl ServerPlayerData {
         &self,
         player: &Player,
     ) -> Result<(), PlayerDataError> {
-        if !self.storage.save_enabled {
+        if !self.storage.is_save_enabled() {
             return Ok(());
         }
 
@@ -186,5 +186,144 @@ impl ServerPlayerData {
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
         self.storage.save_player_data(uuid, nbt)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::data::player_server_data::ServerPlayerData;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_world::data::player_data::PlayerDataStorage;
+    use std::time::Duration;
+    use std::time::Instant;
+    use tempfile::tempdir;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn test_player_data_storage_new() {
+        // Create a temporary directory for testing
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let storage = PlayerDataStorage::new(path.clone());
+
+        assert_eq!(storage.get_data_path().as_path(), path.as_path());
+        // Note: save_enabled might be configured differently in your actual code
+    }
+
+    #[tokio::test]
+    async fn test_player_data_storage_get_player_data_path() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let storage = PlayerDataStorage::new(path.clone());
+
+        let uuid = Uuid::new_v4();
+        let expected_path = path.join(format!("{uuid}.dat"));
+
+        assert_eq!(storage.get_player_data_path(&uuid), expected_path);
+    }
+
+    #[tokio::test]
+    async fn test_player_data_storage_save_and_load() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let mut storage = PlayerDataStorage::new(path);
+        storage.set_save_enabled(true); // Ensure saving is enabled for this test
+
+        let uuid = Uuid::new_v4();
+
+        // Create test data
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("TestKey", "TestValue".to_string());
+        nbt.put_int("TestInt", 42);
+
+        // Save the data
+        storage.save_player_data(&uuid, nbt).unwrap();
+
+        // Load the data
+        let (load_success, loaded_nbt) = storage.load_player_data(&uuid).unwrap();
+
+        assert!(load_success);
+        assert_eq!(loaded_nbt.get_string("TestKey").unwrap(), "TestValue");
+        assert_eq!(loaded_nbt.get_int("TestInt").unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_player_data_storage_load_nonexistent() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let mut storage = PlayerDataStorage::new(path);
+        storage.set_save_enabled(true); // Ensure saving is enabled for this test
+
+        let uuid = Uuid::new_v4();
+
+        // Try to load non-existent data
+        let (load_success, empty_nbt) = storage.load_player_data(&uuid).unwrap();
+
+        assert!(!load_success);
+        assert_eq!(empty_nbt.child_tags.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_player_data_storage_disabled() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let mut storage = PlayerDataStorage::new(path);
+        storage.set_save_enabled(false);
+
+        let uuid = Uuid::new_v4();
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("TestKey", "TestValue".to_string());
+
+        // Save should succeed but do nothing
+        let save_result = storage.save_player_data(&uuid, nbt);
+        assert!(save_result.is_ok());
+
+        // Load should return empty data
+        let (load_success, empty_nbt) = storage.load_player_data(&uuid).unwrap();
+        assert!(!load_success);
+        assert_eq!(empty_nbt.child_tags.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_server_player_data_new() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        let save_interval = Duration::from_secs(300);
+
+        let player_data = ServerPlayerData::new(path, save_interval);
+
+        assert_eq!(player_data.save_interval, save_interval);
+        assert!(Instant::now().duration_since(player_data.last_save.load()) < Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn test_player_data_file_structure() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let uuid = Uuid::new_v4();
+        let mut storage = PlayerDataStorage::new(path.clone());
+        storage.set_save_enabled(true);
+
+        // Create and save player data
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("name", "TestPlayer".to_string());
+        nbt.put_int("level", 42);
+        storage.save_player_data(&uuid, nbt).unwrap();
+
+        // Verify the file exists
+        let player_data_path = storage.get_player_data_path(&uuid);
+        assert!(player_data_path.exists());
+
+        // Load it again and verify content
+        let (success, loaded_data) = storage.load_player_data(&uuid).unwrap();
+        assert!(success);
+        assert_eq!(loaded_data.get_string("name").unwrap(), "TestPlayer");
+        assert_eq!(loaded_data.get_int("level").unwrap(), 42);
     }
 }
