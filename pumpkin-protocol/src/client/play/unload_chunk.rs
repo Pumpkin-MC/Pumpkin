@@ -1,8 +1,8 @@
 use pumpkin_data::packet::clientbound::PLAY_FORGET_LEVEL_CHUNK;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_FORGET_LEVEL_CHUNK)]
 pub struct CUnloadChunk {
     z: i32,

@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::CONFIG_RESOURCE_PACK;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
@@ -16,7 +16,7 @@ pub enum ResourcePackResponseResult {
     Unknown(i32),
 }
 
-#[derive(serde::Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[packet(CONFIG_RESOURCE_PACK)]
 pub struct SConfigResourcePack {
     #[serde(with = "uuid::serde::compact")]

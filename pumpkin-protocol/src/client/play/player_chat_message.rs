@@ -2,11 +2,11 @@ use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{VarInt, codec::bit_set::BitSet};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
     #[serde(with = "uuid::serde::compact")]
@@ -60,13 +60,13 @@ impl CPlayerChatMessage {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PreviousMessage {
     message_id: VarInt,
     signature: Option<Box<[u8]>>, // Always 256
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub enum FilterType {
     /// Message is not filtered at all
     PassThrough,

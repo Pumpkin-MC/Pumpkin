@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_ENTITY_DATA;
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_BLOCK_ENTITY_DATA)]
 pub struct CBlockEntityData {
     location: BlockPos,

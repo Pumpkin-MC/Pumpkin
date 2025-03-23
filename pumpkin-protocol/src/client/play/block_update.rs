@@ -2,11 +2,11 @@ use pumpkin_data::packet::clientbound::PLAY_BLOCK_UPDATE;
 use pumpkin_util::math::position::BlockPos;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_BLOCK_UPDATE)]
 pub struct CBlockUpdate {
     location: BlockPos,

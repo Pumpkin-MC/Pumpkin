@@ -1,9 +1,9 @@
 use pumpkin_data::packet::clientbound::PLAY_OPEN_SIGN_EDITOR;
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_OPEN_SIGN_EDITOR)]
 pub struct COpenSignEditor {
     location: BlockPos,

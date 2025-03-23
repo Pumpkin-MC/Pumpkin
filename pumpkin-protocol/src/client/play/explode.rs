@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_EXPLODE;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{IdOr, SoundEvent, codec::var_int::VarInt};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_EXPLODE)]
 pub struct CExplosion {
     center: Vector3<f64>,

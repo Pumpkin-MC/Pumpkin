@@ -3,9 +3,9 @@ use crate::codec::slot::Slot;
 
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_SLOT;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_CONTAINER_SET_SLOT)]
 pub struct CSetContainerSlot<'a> {
     window_id: i8,

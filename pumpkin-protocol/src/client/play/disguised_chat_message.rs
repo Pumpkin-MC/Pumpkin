@@ -2,11 +2,11 @@ use pumpkin_data::packet::clientbound::PLAY_DISGUISED_CHAT;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_DISGUISED_CHAT)]
 pub struct CDisguisedChatMessage<'a> {
     message: &'a TextComponent,

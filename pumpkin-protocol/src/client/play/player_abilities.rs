@@ -1,8 +1,8 @@
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_ABILITIES;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_PLAYER_ABILITIES)]
 pub struct CPlayerAbilities {
     flags: i8,

@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_COOKIE_REQUEST;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::codec::identifier::Identifier;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_COOKIE_REQUEST)]
 /// Requests a cookie that was previously stored.
 pub struct CPlayCookieRequest<'a> {

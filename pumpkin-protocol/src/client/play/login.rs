@@ -2,11 +2,11 @@ use pumpkin_data::packet::clientbound::PLAY_LOGIN;
 use pumpkin_util::math::position::BlockPos;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{VarInt, codec::identifier::Identifier};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_LOGIN)]
 pub struct CLogin<'a> {
     entity_id: i32,

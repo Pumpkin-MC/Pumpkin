@@ -1,11 +1,11 @@
 use pumpkin_data::packet::serverbound::PLAY_USE_ITEM_ON;
 use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_USE_ITEM_ON)]
 pub struct SUseItemOn {
     pub hand: VarInt,

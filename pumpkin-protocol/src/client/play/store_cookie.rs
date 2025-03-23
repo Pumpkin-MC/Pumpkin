@@ -1,11 +1,11 @@
 use crate::{VarInt, codec::identifier::Identifier};
 use pumpkin_data::packet::clientbound::PLAY_STORE_COOKIE;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Stores some arbitrary data on the client, which persists between server transfers.
 /// The Notchian client only accepts cookies of up to 5 kiB in size.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_STORE_COOKIE)]
 pub struct CStoreCookie<'a> {
     key: &'a Identifier,

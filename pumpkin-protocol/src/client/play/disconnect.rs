@@ -2,9 +2,9 @@ use pumpkin_data::packet::clientbound::PLAY_DISCONNECT;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_DISCONNECT)]
 pub struct CPlayDisconnect<'a> {
     pub reason: &'a TextComponent,

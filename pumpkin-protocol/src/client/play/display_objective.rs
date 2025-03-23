@@ -2,11 +2,11 @@ use pumpkin_data::{
     packet::clientbound::PLAY_SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
 };
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_SET_DISPLAY_OBJECTIVE)]
 pub struct CDisplayObjective {
     position: VarInt,

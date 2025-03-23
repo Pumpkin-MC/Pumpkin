@@ -4,7 +4,7 @@ use serde::{Serialize, ser::SerializeSeq};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_PLAYER_INFO_REMOVE)]
 pub struct CRemovePlayerInfo<'a> {
     players_count: VarInt,

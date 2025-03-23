@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_REMOVE_ENTITIES;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_REMOVE_ENTITIES)]
 pub struct CRemoveEntities<'a> {
     entity_count: VarInt,

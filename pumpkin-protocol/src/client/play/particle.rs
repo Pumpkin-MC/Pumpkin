@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_PARTICLES;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_LEVEL_PARTICLES)]
 pub struct CParticle<'a> {
     force_spawn: bool,
