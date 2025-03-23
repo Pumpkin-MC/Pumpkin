@@ -112,7 +112,7 @@ mod test {
     }
 
     #[test]
-    fn all_chunks_within() {
+    fn all_chunks_within_capacity_estimation() {
         let mut cylinder =
             Cylindrical::new(Vector2::new(0, 0), unsafe { NonZeroU8::new_unchecked(1) });
 
