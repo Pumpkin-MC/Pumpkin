@@ -22,16 +22,12 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::world::CHAT;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
-use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, EquipmentSlot,
-};
+use pumpkin_protocol::client::play::{CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
@@ -40,7 +36,7 @@ use pumpkin_protocol::server::play::{
 use pumpkin_protocol::{
     client::play::{
         Animation, CCommandSuggestions, CEntityAnimation, CHeadRot, CPingResponse,
-        CPlayerChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, FilterType,
+        CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
     },
     server::play::{
         Action, ActionType, SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay,
@@ -686,43 +682,26 @@ impl Player {
             'after: {
                 log::info!("<chat>{}: {}", gameprofile.name, event.message);
 
+                let config = advanced_config();
+
+                let message = &TextComponent::chat_decorated(
+                    config.chat.format.clone(),
+                    gameprofile.name.clone(),
+                    event.message,
+                );
+
+                let packet = CSystemChatMessage::new(
+                        message,
+                        false,
+                    );
+
                 let entity = &self.living_entity.entity;
                 if event.recipients.is_empty() {
                     let world = &entity.world.read().await;
                     world
-                        .broadcast_packet_all(&CPlayerChatMessage::new(
-                            gameprofile.id,
-                            1.into(),
-                            chat_message.signature,
-                            event.message.clone(),
-                            chat_message.timestamp,
-                            chat_message.salt,
-                            // TODO: Previous messages
-                            Box::new([]),
-                            Some(TextComponent::text(event.message)),
-                            FilterType::PassThrough,
-                            (CHAT + 1).into(),
-                            TextComponent::text(gameprofile.name.clone()),
-                            None,
-                        ))
+                        .broadcast_packet_all(&packet)
                         .await;
                 } else {
-                    let packet =
-                        CPlayerChatMessage::new(
-                            gameprofile.id,
-                            1.into(),
-                            chat_message.signature,
-                            event.message.clone(),
-                            chat_message.timestamp,
-                            chat_message.salt,
-                            Box::new([]),
-                            Some(TextComponent::text(event.message)),
-                            FilterType::PassThrough,
-                            (CHAT + 1).into(),
-                            TextComponent::text(gameprofile.name.clone()),
-                            None,
-                        );
-
                     for recipient in event.recipients {
                         recipient.client.enqueue_packet(&packet).await;
                     }
@@ -741,7 +720,7 @@ impl Player {
         ) */
     }
 
-    pub async fn handle_chat_session_update(&self, packet: SPlayerSession) {
+    pub async fn handle_chat_session_update(&self, _packet: SPlayerSession) {
         // TODO
     }
 
