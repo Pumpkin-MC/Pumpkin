@@ -741,7 +741,7 @@ impl Player {
         ) */
     }
 
-    pub fn handle_chat_session_update(&self, packet: SPlayerSession) {
+    pub async fn handle_chat_session_update(&self, packet: SPlayerSession) {
         log::info!("{:?}", packet)
     }
 

@@ -1550,7 +1550,7 @@ impl Player {
                 self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
             SPlayerSession::PACKET_ID => {
-                self.handle_chat_session_update(SPlayerSession::read(payload)?);
+                self.handle_chat_session_update(SPlayerSession::read(payload)?).await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
