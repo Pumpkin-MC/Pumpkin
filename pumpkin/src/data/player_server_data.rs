@@ -1,5 +1,5 @@
 use crate::{
-    entity::{player::Player, NBTStorage},
+    entity::{NBTStorage, player::Player},
     server::Server,
 };
 use crossbeam::atomic::AtomicCell;
@@ -298,7 +298,9 @@ mod test {
         let player_data = ServerPlayerData::new(path, save_interval);
 
         assert_eq!(player_data.save_interval, save_interval);
-        assert!(Instant::now().duration_since(player_data.last_save.load()) < Duration::from_secs(1));
+        assert!(
+            Instant::now().duration_since(player_data.last_save.load()) < Duration::from_secs(1)
+        );
     }
 
     #[tokio::test]
