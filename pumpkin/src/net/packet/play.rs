@@ -35,7 +35,7 @@ use pumpkin_protocol::client::play::{
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    SChunkBatch, SCookieResponse as SPCookieResponse, SUpdateSign,
+    SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign
 };
 use pumpkin_protocol::{
     client::play::{
@@ -739,6 +739,10 @@ impl Player {
                 None,
             ),
         ) */
+    }
+
+    pub fn handle_chat_session_update(&self, packet: SPlayerSession) {
+        log::info!("{:?}", packet)
     }
 
     pub async fn handle_client_information(
