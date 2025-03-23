@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
@@ -12,12 +12,12 @@ use crate::{
 
 #[packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
-    pub registry_id: &'a Identifier,
+    pub registry_id: Cow<'a, Identifier>,
     pub entries: &'a [RegistryEntry],
 }
 
 impl<'a> CRegistryData<'a> {
-    pub fn new(registry_id: &'a Identifier, entries: &'a [RegistryEntry]) -> Self {
+    pub fn new(registry_id: Cow<'a, Identifier>, entries: &'a [RegistryEntry]) -> Self {
         Self {
             registry_id,
             entries,
@@ -44,7 +44,7 @@ impl RegistryEntry {
 impl ClientPacket for CRegistryData<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
-        write.write_identifier(self.registry_id)?;
+        write.write_identifier(&self.registry_id)?;
         write.write_list::<RegistryEntry>(self.entries, |p, v| {
             p.write_identifier(&v.entry_id)?;
             p.write_option(&v.data, |p, v| p.write_slice(v))

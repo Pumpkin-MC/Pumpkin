@@ -2,6 +2,7 @@ use std::io::Read;
 use std::io::Write;
 use std::num::NonZeroUsize;
 
+use serde::Deserialize;
 use serde::{Serialize, Serializer};
 
 use crate::ser::NetworkReadExt;
@@ -46,6 +47,15 @@ impl Serialize for BitSet {
     fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
+    {
+        todo!()
+    }
+}
+
+impl<'de> Deserialize<'de> for BitSet {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
     {
         todo!()
     }

@@ -394,7 +394,7 @@ pub struct KnownPack<'a> {
     pub version: &'a str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::VarInt;
 use crate::codec::slot::Slot;
 
@@ -11,16 +13,16 @@ pub struct CSetContainerContent<'a> {
     window_id: VarInt,
     state_id: VarInt,
     count: VarInt,
-    slot_data: &'a [Slot],
-    carried_item: &'a Slot,
+    slot_data: Cow<'a, [Slot]>,
+    carried_item: Cow<'a, Slot>,
 }
 
 impl<'a> CSetContainerContent<'a> {
     pub fn new(
         window_id: VarInt,
         state_id: VarInt,
-        slots: &'a [Slot],
-        carried_item: &'a Slot,
+        slots: Cow<'a, [Slot]>,
+        carried_item: Cow<'a, Slot>,
     ) -> Self {
         Self {
             window_id,

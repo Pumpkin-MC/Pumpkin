@@ -1,8 +1,8 @@
 use pumpkin_data::packet::clientbound::CONFIG_DISCONNECT;
 use pumpkin_macros::packet;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(serde::Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(CONFIG_DISCONNECT)]
 pub struct CConfigDisconnect<'a> {
     pub reason: &'a str,

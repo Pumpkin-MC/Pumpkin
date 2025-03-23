@@ -1,6 +1,6 @@
 use pumpkin_data::{packet::clientbound::PLAY_SOUND_ENTITY, sound::SoundCategory};
 use pumpkin_macros::packet;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{IdOr, SoundEvent, VarInt};
 

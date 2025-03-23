@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::PLAY_LOGIN;
 use pumpkin_util::math::position::BlockPos;
 
@@ -12,7 +14,7 @@ pub struct CLogin<'a> {
     entity_id: i32,
     is_hardcore: bool,
     dimension_count: VarInt,
-    dimension_names: &'a [Identifier],
+    dimension_names: Vec<Cow<'a, Identifier>>,
     max_players: VarInt,
     view_distance: VarInt,
     simulated_distance: VarInt,
@@ -38,7 +40,7 @@ impl<'a> CLogin<'a> {
     pub fn new(
         entity_id: i32,
         is_hardcore: bool,
-        dimension_names: &'a [Identifier],
+        dimension_names: Vec<Cow<'a, Identifier>>,
         max_players: VarInt,
         view_distance: VarInt,
         simulated_distance: VarInt,

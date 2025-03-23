@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::PLAY_SET_TITLE_TEXT;
 use pumpkin_util::text::TextComponent;
 
@@ -7,11 +9,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_SET_TITLE_TEXT)]
 pub struct CTitleText<'a> {
-    title: &'a TextComponent,
+    title: Cow<'a, TextComponent>,
 }
 
 impl<'a> CTitleText<'a> {
-    pub fn new(title: &'a TextComponent) -> Self {
+    pub fn new(title: Cow<'a, TextComponent>) -> Self {
         Self { title }
     }
 }

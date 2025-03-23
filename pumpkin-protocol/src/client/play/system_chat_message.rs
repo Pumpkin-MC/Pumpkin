@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::PLAY_SYSTEM_CHAT;
 use pumpkin_util::text::TextComponent;
 
@@ -7,12 +9,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_SYSTEM_CHAT)]
 pub struct CSystemChatMessage<'a> {
-    content: &'a TextComponent,
+    content: Cow<'a, TextComponent>,
     overlay: bool,
 }
 
 impl<'a> CSystemChatMessage<'a> {
-    pub fn new(content: &'a TextComponent, overlay: bool) -> Self {
+    pub fn new(content: Cow<'a, TextComponent>, overlay: bool) -> Self {
         Self { content, overlay }
     }
 }

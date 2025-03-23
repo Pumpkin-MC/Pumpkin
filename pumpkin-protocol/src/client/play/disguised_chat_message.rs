@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::PLAY_DISGUISED_CHAT;
 use pumpkin_util::text::TextComponent;
 
@@ -9,18 +11,18 @@ use crate::VarInt;
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_DISGUISED_CHAT)]
 pub struct CDisguisedChatMessage<'a> {
-    message: &'a TextComponent,
+    message: Cow<'a, TextComponent>,
     chat_type: VarInt,
-    sender_name: &'a TextComponent,
-    target_name: Option<&'a TextComponent>,
+    sender_name: Cow<'a, TextComponent>,
+    target_name: Option<Cow<'a, TextComponent>>,
 }
 
 impl<'a> CDisguisedChatMessage<'a> {
     pub fn new(
-        message: &'a TextComponent,
+        message: Cow<'a, TextComponent>,
         chat_type: VarInt,
-        sender_name: &'a TextComponent,
-        target_name: Option<&'a TextComponent>,
+        sender_name: Cow<'a, TextComponent>,
+        target_name: Option<Cow<'a, TextComponent>>,
     ) -> Self {
         Self {
             message,
