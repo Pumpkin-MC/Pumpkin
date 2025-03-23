@@ -470,7 +470,7 @@ impl World {
                 None,
                 0.into(),
                 self.sea_level.into(),
-                base_config.enforce_secure_chat,
+                true,
             ))
             .await;
         // Permissions, i.e. the commands a player may use.

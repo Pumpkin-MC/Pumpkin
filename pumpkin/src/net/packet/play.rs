@@ -742,7 +742,7 @@ impl Player {
     }
 
     pub async fn handle_chat_session_update(&self, packet: SPlayerSession) {
-        log::info!("{:?}", packet)
+        // TODO
     }
 
     pub async fn handle_client_information(
