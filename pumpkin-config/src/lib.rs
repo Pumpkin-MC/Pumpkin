@@ -22,6 +22,7 @@ pub use networking::compression::CompressionConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
 pub use pvp::PVPConfig;
+pub use chat::ChatConfig;
 pub use server_links::ServerLinksConfig;
 
 mod commands;
@@ -30,6 +31,7 @@ pub mod chunk;
 pub mod op;
 mod pvp;
 mod server_links;
+mod chat;
 
 use networking::NetworkingConfig;
 use resource_pack::ResourcePackConfig;
@@ -90,6 +92,7 @@ pub struct AdvancedConfiguration {
     pub chunk: ChunkConfig,
     pub networking: NetworkingConfig,
     pub commands: CommandsConfig,
+    pub chat: ChatConfig,
     pub pvp: PVPConfig,
     pub server_links: ServerLinksConfig,
 }
