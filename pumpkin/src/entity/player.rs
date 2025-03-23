@@ -38,8 +38,8 @@ use pumpkin_protocol::{
         SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
         SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
         SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-        SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
+        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
     },
 };
 use pumpkin_protocol::{
@@ -1550,7 +1550,8 @@ impl Player {
                 self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
             SPlayerSession::PACKET_ID => {
-                self.handle_chat_session_update(SPlayerSession::read(payload)?).await;
+                self.handle_chat_session_update(SPlayerSession::read(payload)?)
+                    .await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);

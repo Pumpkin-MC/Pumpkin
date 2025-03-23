@@ -35,7 +35,7 @@ use pumpkin_protocol::client::play::{
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign
+    SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
 };
 use pumpkin_protocol::{
     client::play::{
