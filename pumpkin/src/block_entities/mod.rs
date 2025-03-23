@@ -2,8 +2,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 pub trait BlockEntity {
+    fn new(position: BlockPos) -> Self;
     fn write_nbt(&self, nbt: &mut NbtCompound);
-    fn read_nbt(nbt: &NbtCompound) -> Self;
+    fn read_nbt(&mut self, nbt: &NbtCompound);
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
     fn write_identifier_and_position(&self, nbt: &mut NbtCompound) {
