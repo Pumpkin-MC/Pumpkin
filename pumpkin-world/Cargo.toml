@@ -26,6 +26,7 @@ serde_json.workspace = true
 log.workspace = true
 
 num-derive = "0.4"
+sha2 = "0.10"
 
 dashmap = "6.1"
 
