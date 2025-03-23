@@ -51,7 +51,7 @@ impl DataSerializer for AnvilEntityFormat {
 
     // TODO: Should this be called something more generic now that we're working with other data?
     async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
-        self.anvil.update_chunk(chunk.position, chunk).await
+        self.anvil.update_chunk::<Self>(chunk.position, chunk).await
     }
 
     async fn get_chunks(
