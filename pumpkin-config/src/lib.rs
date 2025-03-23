@@ -134,7 +134,7 @@ pub struct BasicConfiguration {
     /// Path to server favicon
     pub favicon_path: String,
     /// Whether secure chat should be enabled
-    pub secure_chat: bool,
+    pub enforce_secure_chat: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -158,7 +158,7 @@ impl Default for BasicConfiguration {
             scrub_ips: true,
             use_favicon: true,
             favicon_path: "icon.png".to_string(),
-            secure_chat: true,
+            enforce_secure_chat: true,
         }
     }
 }
