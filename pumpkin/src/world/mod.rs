@@ -464,7 +464,7 @@ impl World {
                 None,
                 0.into(),
                 0.into(),
-                false,
+                base_config.secure_chat,
             ))
             .await;
         // Permissions, i.e. the commands a player may use.

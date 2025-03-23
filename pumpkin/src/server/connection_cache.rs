@@ -157,7 +157,7 @@ impl CachedStatus {
             }),
             description: config.motd.clone(),
             favicon,
-            enforce_secure_chat: false,
+            enforce_secure_chat: config.secure_chat,
         }
     }
 }
