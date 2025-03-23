@@ -67,12 +67,10 @@ impl Cylindrical {
 
     /// Returns an iterator of all chunks within this cylinder
     pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
-        // I came up with this formula by testing
-        // for view distances 2-32 it usually gives 5 - 15 chunks more than needed if the player is on ground
-        // this looks scary but this few u8 to f32 conversions are definitely faster than ~5 reallocations
-        let estimated_capacity =
-            (std::f32::consts::PI * ((self.view_distance.get() + 2) as f32).powi(2)) as usize
-                + self.view_distance.get() as usize;
+        // I came up with this formula by testin
+        // for view distances 2-32 it usually gives 5 - 20 chunks more than needed if the player is on ground
+        // this looks scary but this few calculations are definitely faster than ~5 reallocations
+        let estimated_capacity = (self.view_distance.get() as usize + 2).pow(2) * 3169 / 1000;
         let mut all_chunks = Vec::with_capacity(estimated_capacity);
 
         for x in self.left()..=self.right() {
@@ -109,6 +107,22 @@ mod test {
                     assert!(x >= cylinder.left() && x <= cylinder.right());
                     assert!(z >= cylinder.bottom() && z <= cylinder.top());
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn all_chunks_within() {
+        let mut cylinder =
+            Cylindrical::new(Vector2::new(0, 0), unsafe { NonZeroU8::new_unchecked(1) });
+
+        for distance in 1..=64 {
+            cylinder.view_distance = unsafe { NonZeroU8::new_unchecked(distance) };
+            let chunks = cylinder.all_chunks_within();
+            let estimated_capacity = (distance as usize + 2).pow(2) * 3169 / 1000;
+
+            if estimated_capacity < chunks.len() {
+                panic!()
             }
         }
     }
