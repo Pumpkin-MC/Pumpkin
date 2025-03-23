@@ -27,7 +27,10 @@ use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
-use pumpkin_protocol::client::play::{CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot};
+use pumpkin_protocol::client::play::{
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
+    CSetHeldItem, CSystemChatMessage, EquipmentSlot,
+};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{

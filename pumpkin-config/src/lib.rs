@@ -16,22 +16,22 @@ pub mod networking;
 
 pub mod resource_pack;
 
+pub use chat::ChatConfig;
 pub use commands::CommandsConfig;
 pub use networking::auth::AuthenticationConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
 pub use pvp::PVPConfig;
-pub use chat::ChatConfig;
 pub use server_links::ServerLinksConfig;
 
 mod commands;
 
+mod chat;
 pub mod chunk;
 pub mod op;
 mod pvp;
 mod server_links;
-mod chat;
 
 use networking::NetworkingConfig;
 use resource_pack::ResourcePackConfig;
