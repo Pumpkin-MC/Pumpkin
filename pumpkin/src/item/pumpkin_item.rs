@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
 
 pub trait ItemMetadata {
     const IDS: &'static [u16];
@@ -17,6 +18,7 @@ pub trait PumpkinItem: Send + Sync {
         _item: &Item,
         _player: &Player,
         _location: BlockPos,
+        _face: &BlockDirection,
         _block: &Block,
         _server: &Server,
     ) {

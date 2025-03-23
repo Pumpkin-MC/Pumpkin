@@ -54,7 +54,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &World,
         block: &Block,
         _face: &BlockDirection,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player_direction: &HorizontalFacing,
         _other: bool,
@@ -62,7 +62,9 @@ pub trait PumpkinBlock: Send + Sync {
         block.default_state_id
     }
 
-    async fn can_place_at(&self, _world: &World, _block_pos: &BlockPos) -> bool {
+    async fn random_tick(&self, _block: &Block, _world: &World, _pos: &BlockPos) {}
+
+    async fn can_place_at(&self, _world: &World, _pos: &BlockPos) -> bool {
         true
     }
 
@@ -72,7 +74,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &World,
         _block: &Block,
         _state_id: u16,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _old_state_id: u16,
         _notify: bool,
     ) {
@@ -103,7 +105,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _world: &World,
         _block: &Block,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _source_block: &Block,
         _notify: bool,
     ) {
@@ -113,7 +115,7 @@ pub trait PumpkinBlock: Send + Sync {
     async fn prepare(
         &self,
         _world: &World,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _block: &Block,
         _state_id: u16,
         _flags: BlockFlags,
@@ -126,7 +128,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &World,
         _block: &Block,
         state: u16,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _direction: &BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: u16,
@@ -134,7 +136,7 @@ pub trait PumpkinBlock: Send + Sync {
         state
     }
 
-    async fn on_scheduled_tick(&self, _world: &World, _block: &Block, _block_pos: &BlockPos) {}
+    async fn on_scheduled_tick(&self, _world: &World, _block: &Block, _pos: &BlockPos) {}
 
     async fn on_state_replaced(
         &self,
@@ -161,7 +163,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _world: &World,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _state: &BlockState,
         _direction: &BlockDirection,
     ) -> u8 {
@@ -173,7 +175,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _world: &World,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _state: &BlockState,
         _direction: &BlockDirection,
     ) -> u8 {
