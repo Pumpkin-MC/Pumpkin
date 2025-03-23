@@ -2,20 +2,12 @@ use std::collections::HashMap;
 
 use anvil::REGION_SIZE;
 use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 
-use pumpkin_util::math::{ceil_log2, vector2::Vector2};
+use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    block::ChunkBlockState,
-    coordinates::{ChunkRelativeBlockCoordinates, Height},
-};
-
-use super::{
-    CHUNK_AREA, ChunkBlocks, ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSerializingError,
-    SUBCHUNK_VOLUME,
-};
+use super::{ChunkHeightmaps, ChunkParsingError, ChunkSerializingError};
 
 pub mod anvil;
 pub mod linear;
@@ -108,7 +100,7 @@ struct ChunkNbt {
 }
 
 // #[serde(rename_all = "PascalCase")]
-struct EntityNbt {
+pub struct EntityNbt {
     data_version: i32,
     /// The Chunk position
     position: Vector2<i32>,

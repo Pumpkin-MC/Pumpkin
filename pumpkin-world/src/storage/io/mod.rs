@@ -86,7 +86,7 @@ where
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
 #[async_trait]
-pub trait ChunkSerializer: Send + Sync + Default {
+pub trait DataSerializer: Send + Sync + Default {
     type Data: Send + Sync + Sized;
     type WriteBackend;
 

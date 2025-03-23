@@ -22,7 +22,7 @@ use crate::{
     storage::{ChunkData, ChunkReadingError, ChunkWritingError},
 };
 
-use super::{ChunkIO, ChunkSerializer, LoadedData};
+use super::{ChunkIO, DataSerializer, LoadedData};
 
 /// A simple implementation of the ChunkSerializer trait
 /// that load and save the data from a file in the disk
@@ -30,7 +30,7 @@ use super::{ChunkIO, ChunkSerializer, LoadedData};
 ///
 /// It also avoid IO operations that could produce dataraces thanks to the
 /// custom *DashMap* like implementation.
-pub struct FileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
+pub struct FileManager<S: DataSerializer<WriteBackend = PathBuf>> {
     // Dashmap has rw-locks on shards, but we want per-serializer
     file_locks: RwLock<BTreeMap<PathBuf, SerializerCacheEntry<S>>>,
     watchers: RwLock<BTreeMap<PathBuf, usize>>,
@@ -38,7 +38,7 @@ pub struct FileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
 //to avoid clippy warnings we extract the type alias
 type SerializerCacheEntry<S> = OnceCell<Arc<RwLock<S>>>;
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for FileManager<S> {
+impl<S: DataSerializer<WriteBackend = PathBuf>> Default for FileManager<S> {
     fn default() -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
@@ -47,12 +47,12 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for FileManager<S> {
     }
 }
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> FileManager<S> {
+impl<S: DataSerializer<WriteBackend = PathBuf>> FileManager<S> {
     async fn read_file(&self, path: &Path) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
         // We get the entry from the DashMap and try to insert a new lock if it doesn't exist
         // using dead-lock safe methods like `or_try_insert_with`
 
-        async fn read_from_disk<S: ChunkSerializer>(
+        async fn read_from_disk<S: DataSerializer>(
             path: &Path,
         ) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
             trace!("Opening file from Disk: {:?}", path);
@@ -118,7 +118,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> FileManager<S> {
 #[async_trait]
 impl<S> ChunkIO for FileManager<S>
 where
-    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    S: DataSerializer<Data = ChunkData, WriteBackend = PathBuf>,
 {
     type Data = SyncChunk;
 
@@ -267,6 +267,7 @@ where
                     // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
                     // updating what we will write here
                     chunk.dirty = false;
+
                     // It is important that we keep the lock after we mark the chunk as clean so no one else
                     // can modify it
                     let chunk = chunk.downgrade();

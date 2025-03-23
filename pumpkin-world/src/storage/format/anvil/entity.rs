@@ -4,20 +4,19 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use pumpkin_nbt::{
     compound::NbtCompound, deserializer::ReadAdaptor, serializer::WriteAdaptor, tag::NbtTag,
-    to_bytes,
 };
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
     level::LevelFolder,
     storage::{
-        ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
+        ChunkReadingError, ChunkSerializingError, ChunkWritingError,
         format::{BytesToData, DataToBytes, EntityNbt, get_chunk_index},
-        io::{ChunkSerializer, LoadedData},
+        io::{DataSerializer, LoadedData},
     },
 };
 
-use super::{AnvilFile, chunk::AnvilChunkFormat};
+use super::AnvilFile;
 
 #[derive(Default)]
 pub struct AnvilEntityFormat {
@@ -25,7 +24,7 @@ pub struct AnvilEntityFormat {
 }
 
 #[async_trait]
-impl ChunkSerializer for AnvilEntityFormat {
+impl DataSerializer for AnvilEntityFormat {
     type Data = EntityNbt;
     type WriteBackend = PathBuf;
 
@@ -50,10 +49,9 @@ impl ChunkSerializer for AnvilEntityFormat {
         Ok(Self { anvil })
     }
 
+    // TODO: Should this be called something more generic now that we're working with other data?
     async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
-        self.anvil
-            .update_chunk::<Self>(Vector2::new(chunk.position[0], chunk.position[1]), chunk)
-            .await
+        self.anvil.update_chunk(chunk.position, chunk).await
     }
 
     async fn get_chunks(
@@ -133,7 +131,7 @@ impl BytesToData for AnvilEntityFormat {
 
     fn bytes_to_data(
         chunk_data: &[u8],
-        position: Vector2<i32>,
+        _position: Vector2<i32>,
     ) -> Result<Self::Data, crate::storage::ChunkParsingError> {
         let content = NbtCompound::deserialize_content(&mut ReadAdaptor::new(chunk_data)).unwrap();
         let data_version = content.get_int("DataVersion").unwrap();

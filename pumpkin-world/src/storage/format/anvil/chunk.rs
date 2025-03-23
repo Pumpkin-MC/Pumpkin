@@ -21,7 +21,7 @@ use crate::{
         CHUNK_AREA, ChunkBlocks, ChunkData, ChunkParsingError, ChunkReadingError,
         ChunkSerializingError, ChunkWritingError, SUBCHUNK_VOLUME,
         format::{BytesToData, ChunkStatusWrapper, DataToBytes, get_chunk_index},
-        io::{ChunkSerializer, LoadedData},
+        io::{DataSerializer, LoadedData},
     },
 };
 #[derive(Default)]
@@ -30,7 +30,7 @@ pub struct AnvilChunkFormat {
 }
 
 #[async_trait]
-impl ChunkSerializer for AnvilChunkFormat {
+impl DataSerializer for AnvilChunkFormat {
     type Data = ChunkData;
     type WriteBackend = PathBuf;
 
@@ -47,7 +47,7 @@ impl ChunkSerializer for AnvilChunkFormat {
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
-        self.anvil.write(path);
+        self.anvil.write(path).await
     }
 
     fn read(bytes: Bytes) -> Result<Self, ChunkReadingError> {
@@ -56,7 +56,7 @@ impl ChunkSerializer for AnvilChunkFormat {
     }
 
     async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
-        self.anvil.update_chunk::<Self>(chunk.position, chunk).await
+        self.anvil.update_chunk(chunk.position, chunk).await
     }
 
     async fn get_chunks(

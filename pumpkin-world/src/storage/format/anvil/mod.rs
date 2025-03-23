@@ -1,16 +1,10 @@
-use async_trait::async_trait;
 use bytes::*;
-use chunk::AnvilChunkFormat;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
-use indexmap::IndexMap;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::serializer::to_bytes;
-use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::{Read, SeekFrom, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -21,9 +15,7 @@ use tokio::{
 };
 
 use crate::storage::{
-    ChunkData, ChunkReadingError, ChunkWritingError, CompressionError,
-    format::get_region_coords,
-    io::{ChunkSerializer, LoadedData},
+    ChunkReadingError, ChunkWritingError, CompressionError, format::get_region_coords,
 };
 
 pub mod chunk;
@@ -153,7 +145,7 @@ impl AnvilFile {
                 timestamp_buf.write_u32(0).await?;
             }
         }
-        write.write(&timestamp_buf).await?;
+        write.write_all(&timestamp_buf).await?;
 
         let mut chunks = indices
             .iter()
@@ -244,7 +236,7 @@ impl AnvilFile {
                 timestamp_buf.write_u32(0).await?;
             };
         }
-        write.write(&timestamp_buf).await?;
+        write.write_all(&timestamp_buf).await?;
 
         for chunk in self.chunks_data.iter().flatten() {
             chunk.serialized_data.write(&mut write).await?;

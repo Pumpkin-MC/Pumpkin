@@ -3,9 +3,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::level::LevelFolder;
-use crate::storage::format::anvil::AnvilFile;
 use crate::storage::format::get_region_coords;
-use crate::storage::io::{ChunkSerializer, LoadedData};
+use crate::storage::io::{DataSerializer, LoadedData};
 use crate::storage::{ChunkData, ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
@@ -53,7 +52,7 @@ struct LinearFileHeader {
     chunks_count: u16,
     /// (12..16 Bytes) The total size in bytes of the compressed chunk headers and chunk data.
     chunks_bytes: usize,
-    /// (16..24 Bytes) A hash of the region file (unused).
+    /// (16..24 Bytes) A hash of the region file (currently unused).
     region_hash: u64,
 }
 pub struct LinearFile {
@@ -163,7 +162,7 @@ impl Default for LinearFile {
 }
 
 #[async_trait]
-impl ChunkSerializer for LinearFile {
+impl DataSerializer for LinearFile {
     type Data = ChunkData;
     type WriteBackend = PathBuf;
 

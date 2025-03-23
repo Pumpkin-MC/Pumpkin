@@ -16,7 +16,7 @@ use crate::{
     storage::{
         ChunkData, ChunkParsingError, ChunkReadingError,
         format::{
-            anvil::{AnvilChunkFile, chunk::AnvilChunkFormat, entity::AnvilEntityFormat},
+            anvil::{chunk::AnvilChunkFormat, entity::AnvilEntityFormat},
             linear::LinearFile,
         },
         io::{ChunkIO, LoadedData, file_manager::FileManager},
@@ -53,7 +53,10 @@ pub struct Level {
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>>,
-    entity_io: Arc<dyn ChunkIO<Data = SyncChunk>>,
+
+    // TODO: Do we want to make the entity IO generic like for the ChunkIO? The idea is to have
+    // abstractions for, like, databases right?
+    entity_io: FileManager<AnvilEntityFormat>,
 
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
@@ -125,7 +128,7 @@ impl Level {
             ChunkFormat::Linear => Arc::new(FileManager::<LinearFile>::default()),
             ChunkFormat::Anvil => Arc::new(FileManager::<AnvilChunkFormat>::default()),
         };
-        let entity_io = Arc::new(FileManager::<AnvilEntityFormat>::default());
+        let entity_io = FileManager::<AnvilEntityFormat>::default();
 
         Self {
             seed,
