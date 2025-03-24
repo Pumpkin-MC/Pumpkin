@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io::Write};
+use std::io::Write;
 
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
@@ -12,12 +12,12 @@ use crate::{
 
 #[packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
-    pub registry_id: Cow<'a, Identifier>,
-    pub entries: &'a [RegistryEntry],
+    pub registry_id: Identifier<'a>,
+    pub entries: &'a [RegistryEntry<'a>],
 }
 
 impl<'a> CRegistryData<'a> {
-    pub fn new(registry_id: Cow<'a, Identifier>, entries: &'a [RegistryEntry]) -> Self {
+    pub fn new(registry_id: Identifier<'a>, entries: &'a [RegistryEntry]) -> Self {
         Self {
             registry_id,
             entries,
@@ -25,13 +25,13 @@ impl<'a> CRegistryData<'a> {
     }
 }
 
-pub struct RegistryEntry {
-    pub entry_id: Identifier,
+pub struct RegistryEntry<'a> {
+    pub entry_id: Identifier<'a>,
     pub data: Option<Box<[u8]>>,
 }
 
-impl RegistryEntry {
-    pub fn from_nbt(name: &str, nbt: &impl Serialize) -> Self {
+impl<'a> RegistryEntry<'a> {
+    pub fn from_nbt(name: &'a str, nbt: &impl Serialize) -> Self {
         let mut data_buf = Vec::new();
         pumpkin_nbt::serializer::to_bytes_unnamed(nbt, &mut data_buf).unwrap();
         RegistryEntry {

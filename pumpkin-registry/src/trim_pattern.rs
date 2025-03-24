@@ -2,8 +2,10 @@ use pumpkin_protocol::codec::identifier::Identifier;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrimPattern {
-    asset_id: Identifier,
+#[serde(bound(deserialize = "'a: 'de"))]
+pub struct TrimPattern<'a> {
+    #[serde(borrow)]
+    asset_id: Identifier<'a>,
     template_item: String,
     //  description: TextComponent<'static>,
     decal: bool,

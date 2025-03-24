@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU8};
+use std::num::NonZeroU8;
 
 use crate::{
     entity::player::{ChatMode, Hand},
@@ -53,7 +53,7 @@ impl Client {
         }
     }
 
-    pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {
+    pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage<'_>) {
         log::debug!("Handling plugin message");
         if plugin_message
             .channel
@@ -149,7 +149,7 @@ impl Client {
         log::debug!("Handling known packs");
         for registry in &server.cached_registry {
             self.send_packet_now(&CRegistryData::new(
-                Cow::Borrowed(&registry.registry_id),
+                registry.registry_id.clone(),
                 &registry.registry_entries,
             ))
             .await;

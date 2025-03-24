@@ -6,32 +6,34 @@ use serde::{Deserialize, Serialize};
 use crate::{VarInt, codec::identifier::Identifier};
 
 #[derive(Serialize, Deserialize)]
+#[serde(bound(deserialize = "'a: 'de"))]
 #[packet(PLAY_RESPAWN)]
-pub struct CRespawn {
+pub struct CRespawn<'a> {
     dimension_type: VarInt,
-    dimension_name: Identifier,
+    #[serde(borrow)]
+    dimension_name: Identifier<'a>,
     hashed_seed: i64,
     game_mode: u8,
     previous_gamemode: i8,
     debug: bool,
     is_flat: bool,
-    death_dimension_name: Option<(Identifier, BlockPos)>,
+    death_dimension_name: Option<(Identifier<'a>, BlockPos)>,
     portal_cooldown: VarInt,
     sealevel: VarInt,
     data_kept: u8,
 }
 
-impl CRespawn {
+impl<'a> CRespawn<'a> {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         dimension_type: VarInt,
-        dimension_name: Identifier,
+        dimension_name: Identifier<'a>,
         hashed_seed: i64,
         game_mode: u8,
         previous_gamemode: i8,
         debug: bool,
         is_flat: bool,
-        death_dimension_name: Option<(Identifier, BlockPos)>,
+        death_dimension_name: Option<(Identifier<'a>, BlockPos)>,
         portal_cooldown: VarInt,
         sealevel: VarInt,
         data_kept: u8,

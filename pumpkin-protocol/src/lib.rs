@@ -183,8 +183,10 @@ impl<T: Serialize> Serialize for IdOr<T> {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct SoundEvent {
-    pub sound_name: Identifier,
+#[serde(bound(deserialize = "'a: 'de"))]
+pub struct SoundEvent<'a> {
+    #[serde(borrow)]
+    pub sound_name: Identifier<'a>,
     pub range: Option<f32>,
 }
 

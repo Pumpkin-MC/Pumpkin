@@ -6,9 +6,11 @@ use crate::{IdOr, SoundEvent, VarInt};
 
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize)]
+#[serde(bound(deserialize = "'a: 'de"))]
 #[packet(PLAY_SOUND_ENTITY)]
-pub struct CEntitySoundEffect {
-    sound_event: IdOr<SoundEvent>,
+pub struct CEntitySoundEffect<'a> {
+    #[serde(borrow)]
+    sound_event: IdOr<SoundEvent<'a>>,
     sound_category: VarInt,
     entity_id: VarInt,
     volume: f32,
@@ -16,10 +18,10 @@ pub struct CEntitySoundEffect {
     seed: f64,
 }
 
-impl CEntitySoundEffect {
+impl<'a> CEntitySoundEffect<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        sound_event: IdOr<SoundEvent>,
+        sound_event: IdOr<SoundEvent<'a>>,
         sound_category: SoundCategory,
         entity_id: VarInt,
         volume: f32,

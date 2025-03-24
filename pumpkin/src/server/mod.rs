@@ -63,7 +63,7 @@ pub struct Server {
     // All the dimensions that exist on the server.
     pub dimensions: Vec<DimensionType>,
     /// Caches game registries for efficient access.
-    pub cached_registry: Vec<Registry>,
+    pub cached_registry: Vec<Registry<'static>>,
     /// Tracks open containers used for item interactions.
     // TODO: should have per player open_containers
     pub open_containers: RwLock<HashMap<u64, OpenContainer>>,

@@ -6,20 +6,22 @@ use serde::{Deserialize, Serialize};
 use crate::{IdOr, SoundEvent, codec::var_int::VarInt};
 
 #[derive(Serialize, Deserialize)]
+#[serde(bound(deserialize = "'a: 'de"))]
 #[packet(PLAY_EXPLODE)]
-pub struct CExplosion {
+pub struct CExplosion<'a> {
     center: Vector3<f64>,
     knockback: Option<Vector3<f64>>,
     particle: VarInt,
-    sound: IdOr<SoundEvent>,
+    #[serde(borrow)]
+    sound: IdOr<SoundEvent<'a>>,
 }
 
-impl CExplosion {
+impl<'a> CExplosion<'a> {
     pub fn new(
         center: Vector3<f64>,
         knockback: Option<Vector3<f64>>,
         particle: VarInt,
-        sound: IdOr<SoundEvent>,
+        sound: IdOr<SoundEvent<'a>>,
     ) -> Self {
         Self {
             center,

@@ -12,15 +12,15 @@ use crate::{
 #[packet(CONFIG_COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (configuration) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
-pub struct SConfigCookieResponse {
-    pub key: Identifier,
+pub struct SConfigCookieResponse<'a> {
+    pub key: Identifier<'a>,
     pub has_payload: bool,
     pub payload: Option<Box<[u8]>>, // 5120,
 }
 
 const MAX_COOKIE_LENGTH: usize = 5120;
 
-impl ServerPacket for SConfigCookieResponse {
+impl ServerPacket for SConfigCookieResponse<'_> {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 

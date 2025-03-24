@@ -430,11 +430,8 @@ impl World {
         player: Arc<Player>,
         server: &Server,
     ) {
-        let dimensions: Vec<Cow<'_, Identifier>> = server
-            .dimensions
-            .iter()
-            .map(|d| Cow::Owned(d.name()))
-            .collect();
+        let dimensions: Vec<Identifier> =
+            server.dimensions.iter().map(DimensionType::name).collect();
 
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
@@ -724,7 +721,8 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.last_pos.load();
-        let death_dimension = player.world().await.dimension_type.name();
+        let world = player.world().await;
+        let death_dimension = world.dimension_type.name();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,

@@ -53,7 +53,7 @@ pub trait NetworkReadExt {
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
-    fn get_identifier(&mut self) -> Result<Identifier, ReadingError>;
+    fn get_identifier<'a>(&mut self) -> Result<Identifier<'a>, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -209,7 +209,7 @@ impl<R: Read> NetworkReadExt for R {
         self.get_string_bounded(i16::MAX as usize)
     }
 
-    fn get_identifier(&mut self) -> Result<Identifier, ReadingError> {
+    fn get_identifier<'a>(&mut self) -> Result<Identifier<'a>, ReadingError> {
         Identifier::decode(self)
     }
 
@@ -366,7 +366,7 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
-    fn write_identifier(&mut self, data: &Identifier) -> Result<(), WritingError> {
+    fn write_identifier(&mut self, data: &Identifier<'_>) -> Result<(), WritingError> {
         data.encode(self)
     }
 

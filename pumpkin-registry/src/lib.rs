@@ -36,23 +36,25 @@ pub static SYNCED_REGISTRIES: LazyLock<SyncedRegistry> = LazyLock::new(|| {
         .expect("Could not parse synced_registries.json registry.")
 });
 
-pub struct Registry {
-    pub registry_id: Identifier,
-    pub registry_entries: Vec<RegistryEntry>,
+pub struct Registry<'a> {
+    pub registry_id: Identifier<'a>,
+    pub registry_entries: Vec<RegistryEntry<'a>>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SyncedRegistry {
+#[serde(bound(deserialize = "'a: 'de"))]
+pub struct SyncedRegistry<'a> {
     #[serde(rename = "worldgen/biome")]
     biome: IndexMap<String, Biome>,
     chat_type: IndexMap<String, ChatType>,
-    trim_pattern: IndexMap<String, TrimPattern>,
+    trim_pattern: IndexMap<String, TrimPattern<'a>>,
     trim_material: IndexMap<String, TrimMaterial>,
     wolf_variant: IndexMap<String, WolfVariant>,
-    painting_variant: IndexMap<String, Painting>,
+    painting_variant: IndexMap<String, Painting<'a>>,
     dimension_type: IndexMap<String, Dimension>,
     damage_type: IndexMap<String, DamageType>,
-    banner_pattern: IndexMap<String, BannerPattern>,
+    #[serde(borrow)]
+    banner_pattern: IndexMap<String, BannerPattern<'a>>,
     enchantment: IndexMap<String, Enchantment>,
     pub jukebox_song: IndexMap<String, JukeboxSong>,
     instrument: IndexMap<String, Instrument>,
@@ -83,7 +85,7 @@ impl DimensionType {
     }
 }
 
-impl Registry {
+impl Registry<'_> {
     pub fn get_synced() -> Vec<Self> {
         let registry_entries = SYNCED_REGISTRIES
             .biome
