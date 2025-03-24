@@ -423,16 +423,8 @@ impl World {
         let blocks_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
-            log::info!("Fluid tick");
-            log::info!("{:?}", scheduled_tick.block_pos);
-            log::info!("{:?}", scheduled_tick.target_block_id);
             let fluid = self.get_fluid(&scheduled_tick.block_pos).await.unwrap();
             if scheduled_tick.target_block_id != fluid.id {
-                log::info!(
-                    "Fluid id not equal, {:?} != {:?}",
-                    scheduled_tick.target_block_id,
-                    fluid.id
-                );
                 continue;
             }
             if let Some(pumpkin_fluid) = self.fluid_registry.get_pumpkin_fluid(&fluid) {
