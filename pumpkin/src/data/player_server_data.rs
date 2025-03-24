@@ -89,9 +89,8 @@ impl ServerPlayerData {
                     // Save to disk periodically to prevent data loss on server crash
                     if let Err(e) = self.storage.save_player_data(&player.gameprofile.id, nbt) {
                         log::error!(
-                            "Failed to save player data for {}: {}",
+                            "Failed to save player data for {}: {e}",
                             player.gameprofile.id,
-                            e
                         );
                     }
                 }
@@ -119,7 +118,7 @@ impl ServerPlayerData {
             }
         }
 
-        log::debug!("Saved data for {} online players", total_players);
+        log::debug!("Saved data for {total_players} online players");
         Ok(())
     }
 
@@ -152,10 +151,10 @@ impl ServerPlayerData {
             Err(e) => {
                 if self.storage.is_save_enabled() {
                     // Only log as error if player data saving is enabled
-                    log::error!("Error loading player data for {}: {}", uuid, e);
+                    log::error!("Error loading player data for {uuid}: {e}");
                 } else {
                     // Otherwise just log as info since it's expected
-                    log::debug!("Not loading player data for {} (saving disabled)", uuid);
+                    log::debug!("Not loading player data for {uuid} (saving disabled)");
                 }
                 // Continue with default data even if there's an error
                 Ok(())

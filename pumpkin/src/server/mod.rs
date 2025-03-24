@@ -203,7 +203,7 @@ impl Server {
             .handle_player_join(&mut player)
             .await
         {
-            log::error!("Unexpected error loading player data: {}", e);
+            log::error!("Unexpected error loading player data: {e}");
         }
 
         // Wrap in Arc after data is loaded
@@ -493,7 +493,7 @@ impl Server {
         }
 
         if let Err(e) = self.player_data_storage.tick(self).await {
-            log::error!("Error ticking player data: {}", e);
+            log::error!("Error ticking player data: {e}");
         }
     }
 }
