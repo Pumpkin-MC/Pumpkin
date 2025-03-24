@@ -2,7 +2,8 @@ use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use serde::Deserialize;
-use syn::{LitInt, LitStr};
+use std::collections::{HashMap, HashSet};
+use syn::{Ident, LitInt, LitStr};
 
 fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
     fluid.to_shouty_snake_case()
@@ -225,12 +226,11 @@ impl ToTokens for FluidPropertyStruct {
                     }
 
                     let prop_index = self.to_index();
-
-                    if(prop_index >= fluid.states.len() as u16) {
-                        panic!("Invalid property index: {}", prop_index);
+                    if prop_index < fluid.states.len() as u16 {
+                        fluid.states[prop_index as usize].block_state_id
+                    } else {
+                        fluid.states[fluid.default_state_index as usize].block_state_id
                     }
-
-                    fluid.states[prop_index as usize].block_state_id
                 }
 
                 fn from_state_id(state_id: u16, fluid: &Fluid) -> Self {
@@ -238,7 +238,13 @@ impl ToTokens for FluidPropertyStruct {
                         panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
                     }
 
-                    Self::from_index(state_id)
+                    for (idx, state) in fluid.states.iter().enumerate() {
+                        if state.block_state_id == state_id {
+                            return Self::from_index(idx as u16);
+                        }
+                    }
+
+                    Self::from_index(fluid.default_state_index)
                 }
 
                 fn default(fluid: &Fluid) -> Self {
@@ -308,13 +314,13 @@ impl ToTokens for FluidStateRef {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Property {
     name: String,
     values: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Fluid {
     name: String,
     id: u16,
@@ -378,12 +384,12 @@ pub(crate) fn build() -> TokenStream {
         if fluid.properties.is_empty() {
             properties.extend(quote!(None));
         } else {
-            let internal_properties = fluid.properties.into_iter().map(|property| {
+            let internal_properties = fluid.properties.iter().map(|property| {
                 let key = LitStr::new(&property.name, proc_macro2::Span::call_site());
                 let values = property
                     .values
-                    .into_iter()
-                    .map(|value| LitStr::new(&value, proc_macro2::Span::call_site()));
+                    .iter()
+                    .map(|value| LitStr::new(value, proc_macro2::Span::call_site()));
 
                 quote! {
                     (#key, &[
@@ -479,6 +485,7 @@ pub(crate) fn build() -> TokenStream {
         constants.extend(quote! {
             pub const #const_ident: Fluid = Fluid {
                 id: #id_lit,
+                name: #id_name,
                 properties: #properties,
                 states: &[#(#fluid_states),*],
                 default_state_index: #state_id,
@@ -579,6 +586,9 @@ pub(crate) fn build() -> TokenStream {
             data: property_group,
         });
     }
+
+    let fluid_props = fluid_properties.iter().map(|prop| prop.to_token_stream());
+    let properties = property_enums.values().map(|prop| prop.to_token_stream());
 
     quote! {
         use crate::tag::{Tagable, RegistryKey};
