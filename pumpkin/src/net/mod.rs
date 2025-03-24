@@ -643,7 +643,7 @@ impl Client {
             // This way players get kicked when players using client functions (e.g. poll, send_packet)
             ConnectionState::Play => {
                 self.send_packet_now(&CPlayDisconnect::new(Cow::Borrowed(&reason)))
-                    .await
+                    .await;
             }
             _ => {
                 log::warn!("Can't kick in {:?} State", self.connection_state);

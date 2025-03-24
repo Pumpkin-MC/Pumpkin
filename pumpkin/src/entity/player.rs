@@ -463,17 +463,17 @@ impl Player {
             TitleMode::Title => {
                 self.client
                     .enqueue_packet(&CTitleText::new(Cow::Borrowed(text)))
-                    .await
+                    .await;
             }
             TitleMode::SubTitle => {
                 self.client
                     .enqueue_packet(&CSubtitle::new(Cow::Borrowed(text)))
-                    .await
+                    .await;
             }
             TitleMode::ActionBar => {
                 self.client
                     .enqueue_packet(&CActionBar::new(Cow::Borrowed(text)))
-                    .await
+                    .await;
             }
         }
     }
