@@ -18,11 +18,11 @@ use tokio::{
 };
 
 use crate::{
-    chunk::{ChunkData, ChunkReadingError, ChunkWritingError},
     level::{LevelFolder, SyncChunk},
+    storage::{ChunkData, ChunkReadingError, ChunkWritingError},
 };
 
-use super::{ChunkIO, ChunkSerializer, LoadedData};
+use super::{ChunkIO, DataSerializer, LoadedData};
 
 /// A simple implementation of the ChunkSerializer trait
 /// that load and save the data from a file in the disk
@@ -30,7 +30,7 @@ use super::{ChunkIO, ChunkSerializer, LoadedData};
 ///
 /// It also avoid IO operations that could produce dataraces thanks to the
 /// custom *DashMap* like implementation.
-pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
+pub struct FileManager<S: DataSerializer<WriteBackend = PathBuf>> {
     // Dashmap has rw-locks on shards, but we want per-serializer
     file_locks: RwLock<BTreeMap<PathBuf, SerializerCacheEntry<S>>>,
     watchers: RwLock<BTreeMap<PathBuf, usize>>,
@@ -38,7 +38,7 @@ pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
 //to avoid clippy warnings we extract the type alias
 type SerializerCacheEntry<S> = OnceCell<Arc<RwLock<S>>>;
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for ChunkFileManager<S> {
+impl<S: DataSerializer<WriteBackend = PathBuf>> Default for FileManager<S> {
     fn default() -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
@@ -47,16 +47,12 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for ChunkFileManager<S>
     }
 }
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
-    fn map_key(folder: &LevelFolder, file_name: &str) -> PathBuf {
-        folder.region_folder.join(file_name)
-    }
-
+impl<S: DataSerializer<WriteBackend = PathBuf>> FileManager<S> {
     async fn read_file(&self, path: &Path) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
         // We get the entry from the DashMap and try to insert a new lock if it doesn't exist
         // using dead-lock safe methods like `or_try_insert_with`
 
-        async fn read_from_disk<S: ChunkSerializer>(
+        async fn read_from_disk<S: DataSerializer>(
             path: &Path,
         ) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
             trace!("Opening file from Disk: {:?}", path);
@@ -120,9 +116,9 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
 }
 
 #[async_trait]
-impl<S> ChunkIO for ChunkFileManager<S>
+impl<S> ChunkIO for FileManager<S>
 where
-    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    S: DataSerializer<Data = ChunkData, WriteBackend = PathBuf>,
 {
     type Data = SyncChunk;
 
@@ -131,7 +127,7 @@ where
         let mut watchers = self.watchers.write().await;
         for chunk in chunks {
             let key = S::get_chunk_key(chunk);
-            let map_key = Self::map_key(folder, &key);
+            let map_key = S::get_folder(folder, &key);
             match watchers.entry(map_key) {
                 std::collections::btree_map::Entry::Vacant(vacant) => {
                     let _ = vacant.insert(1);
@@ -147,7 +143,7 @@ where
         let mut watchers = self.watchers.write().await;
         for chunk in chunks {
             let key = S::get_chunk_key(chunk);
-            let map_key = Self::map_key(folder, &key);
+            let map_key = S::get_folder(folder, &key);
             match watchers.entry(map_key) {
                 std::collections::btree_map::Entry::Vacant(_vacant) => {}
                 std::collections::btree_map::Entry::Occupied(mut occupied) => {
@@ -184,7 +180,7 @@ where
         // we use a Sync Closure with an Async Block to execute the tasks concurrently
         // Also improves File Cache utilizations.
         let region_read_tasks = regions_chunks.into_iter().map(async |(file_name, chunks)| {
-            let path = Self::map_key(folder, &file_name);
+            let path = S::get_folder(folder, &file_name);
             let chunk_serializer = match self.read_file(&path).await {
                 Ok(chunk_serializer) => chunk_serializer,
                 Err(ChunkReadingError::ChunkNotExist) => {
@@ -246,7 +242,7 @@ where
         let tasks = regions_chunks
             .into_iter()
             .map(async |(file_name, chunk_locks)| {
-                let path = Self::map_key(folder, &file_name);
+                let path = S::get_folder(folder, &file_name);
                 log::trace!("Updating data for file {:?}", path);
 
                 let chunk_serializer = match self.read_file(&path).await {
@@ -271,6 +267,7 @@ where
                     // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
                     // updating what we will write here
                     chunk.dirty = false;
+
                     // It is important that we keep the lock after we mark the chunk as clean so no one else
                     // can modify it
                     let chunk = chunk.downgrade();

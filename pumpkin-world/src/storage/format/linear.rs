@@ -2,9 +2,10 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::chunk::format::anvil::AnvilChunkFile;
-use crate::chunk::io::{ChunkSerializer, LoadedData};
-use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
+use crate::level::LevelFolder;
+use crate::storage::format::get_region_coords;
+use crate::storage::io::{DataSerializer, LoadedData};
+use crate::storage::{ChunkData, ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
@@ -12,7 +13,9 @@ use pumpkin_config::advanced_config;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::io::{AsyncWriteExt, BufWriter};
 
-use super::anvil::{CHUNK_COUNT, chunk_to_bytes};
+use super::anvil::CHUNK_COUNT;
+use super::anvil::chunk::AnvilChunkFormat;
+use super::{BytesToData, DataToBytes, get_chunk_index};
 
 /// The signature of the linear file format
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
@@ -49,7 +52,7 @@ struct LinearFileHeader {
     chunks_count: u16,
     /// (12..16 Bytes) The total size in bytes of the compressed chunk headers and chunk data.
     chunks_bytes: usize,
-    /// (16..24 Bytes) A hash of the region file (unused).
+    /// (16..24 Bytes) A hash of the region file (currently unused).
     region_hash: u64,
 }
 pub struct LinearFile {
@@ -136,7 +139,7 @@ impl LinearFileHeader {
 
 impl LinearFile {
     const fn get_chunk_index(at: &Vector2<i32>) -> usize {
-        AnvilChunkFile::get_chunk_index(at)
+        get_chunk_index(at)
     }
 
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
@@ -159,7 +162,7 @@ impl Default for LinearFile {
 }
 
 #[async_trait]
-impl ChunkSerializer for LinearFile {
+impl DataSerializer for LinearFile {
     type Data = ChunkData;
     type WriteBackend = PathBuf;
 
@@ -167,8 +170,12 @@ impl ChunkSerializer for LinearFile {
         !is_watched
     }
 
+    fn get_folder(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.region_folder.join(file_name)
+    }
+
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
-        let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
+        let (region_x, region_z) = get_region_coords(chunk);
         format!("./r.{}.{}.linear", region_x, region_z)
     }
 
@@ -308,7 +315,7 @@ impl ChunkSerializer for LinearFile {
 
     async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
         let index = LinearFile::get_chunk_index(&chunk.position);
-        let chunk_raw: Bytes = chunk_to_bytes(chunk)
+        let chunk_raw: Bytes = AnvilChunkFormat::data_to_bytes(chunk)
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
             .into();
 
@@ -330,25 +337,43 @@ impl ChunkSerializer for LinearFile {
         chunks: &[Vector2<i32>],
         stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
     ) {
+        // Create an unbounded buffer so we don't block the rayon thread pool
+        let (bridge_send, mut bridge_recv) = tokio::sync::mpsc::unbounded_channel();
+
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
         for chunk in chunks.iter().cloned() {
             let index = LinearFile::get_chunk_index(&chunk);
-            let linear_chunk_data = &self.chunks_data[index];
+            let linear_chunk_data = self.chunks_data[index].clone();
 
-            let result = if let Some(data) = linear_chunk_data {
-                match ChunkData::from_bytes(data, chunk).map_err(ChunkReadingError::ParsingError) {
-                    Ok(chunk) => LoadedData::Loaded(chunk),
-                    Err(err) => LoadedData::Error((chunk, err)),
-                }
-            } else {
-                LoadedData::Missing(chunk)
-            };
+            let send = bridge_send.clone();
+            rayon::spawn(move || {
+                let result = if let Some(data) = linear_chunk_data {
+                    match AnvilChunkFormat::bytes_to_data(&data, chunk)
+                        .map_err(ChunkReadingError::ParsingError)
+                    {
+                        Ok(chunk) => LoadedData::Loaded(chunk),
+                        Err(err) => LoadedData::Error((chunk, err)),
+                    }
+                } else {
+                    LoadedData::Missing(chunk)
+                };
 
+                send.send(result)
+                    .expect("Failed to send anvil chunks from rayon thread");
+            });
+        }
+        // Drop the original so streams clean-up
+        drop(bridge_send);
+
+        // We don't want to waste work, so recv unbounded from the rayon thread pool, then re-send
+        // to the channel
+
+        while let Some(data) = bridge_recv.recv().await {
             stream
-                .send(result)
+                .send(data)
                 .await
-                .expect("Failed to read chunks to stream");
+                .expect("Failed to send anvil chunks from bridge");
         }
     }
 }
@@ -363,16 +388,16 @@ mod tests {
     use temp_dir::TempDir;
     use tokio::sync::RwLock;
 
-    use crate::chunk::format::linear::LinearFile;
-    use crate::chunk::io::chunk_file_manager::ChunkFileManager;
-    use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::generation::{Seed, get_world_gen};
     use crate::level::LevelFolder;
+    use crate::storage::format::linear::LinearFile;
+    use crate::storage::io::file_manager::FileManager;
+    use crate::storage::io::{ChunkIO, LoadedData};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let chunk_saver = ChunkFileManager::<LinearFile>::default();
+        let chunk_saver = FileManager::<LinearFile>::default();
 
         let mut chunks = Vec::new();
         let (send, mut recv) = tokio::sync::mpsc::channel(1);
@@ -381,6 +406,7 @@ mod tests {
             .fetch_chunks(
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
+                    entities_folder: PathBuf::from(""),
                     region_folder: region_path,
                 },
                 &[Vector2::new(0, 0)],
@@ -404,10 +430,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
+            entities_folder: PathBuf::from(""),
             region_folder: temp_dir.path().join("region"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<LinearFile>::default();
+        let chunk_saver = FileManager::<LinearFile>::default();
 
         // Generate chunks
         let mut chunks = vec![];

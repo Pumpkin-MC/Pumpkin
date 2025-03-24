@@ -1,4 +1,4 @@
-use std::error;
+use std::{error, path::PathBuf};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -7,7 +7,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
-pub mod chunk_file_manager;
+pub mod file_manager;
 
 /// The result of loading a chunk data.
 ///
@@ -86,7 +86,7 @@ where
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
 #[async_trait]
-pub trait ChunkSerializer: Send + Sync + Default {
+pub trait DataSerializer: Send + Sync + Default {
     type Data: Send + Sync + Sized;
     type WriteBackend;
 
@@ -95,11 +95,13 @@ pub trait ChunkSerializer: Send + Sync + Default {
 
     fn should_write(&self, is_watched: bool) -> bool;
 
+    fn get_folder(folder: &LevelFolder, file_name: &str) -> PathBuf;
+
     /// Serialize the data to bytes.
     async fn write(&self, backend: Self::WriteBackend) -> Result<(), std::io::Error>;
 
     /// Create a new instance from bytes
-    fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
+    fn read(bytes: Bytes) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunk data to the serializer
     async fn update_chunk(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError>;

@@ -3,7 +3,6 @@ use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
 pub mod block;
-pub mod chunk;
 pub mod coordinates;
 pub mod cylindrical_chunk_iterator;
 pub mod data;
@@ -13,6 +12,7 @@ pub mod item;
 pub mod level;
 mod lock;
 mod noise_router;
+pub mod storage;
 pub mod world_info;
 pub const DIRECT_PALETTE_BITS: u32 = 15;
 

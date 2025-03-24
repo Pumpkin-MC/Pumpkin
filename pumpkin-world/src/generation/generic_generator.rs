@@ -2,8 +2,9 @@ use noise::{NoiseFn, Perlin};
 use pumpkin_util::math::vector2::Vector2;
 
 use crate::{
-    chunk::{ChunkBlocks, ChunkData},
+    WORLD_LOWEST_Y,
     coordinates::{ChunkRelativeBlockCoordinates, ChunkRelativeXZBlockCoordinates},
+    storage::{ChunkBlocks, ChunkData},
 };
 
 use super::{
@@ -52,7 +53,6 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
                 );
 
                 // Iterate from the highest block to the lowest, in order to minimize the heightmap updates
-                const WORLD_LOWEST_Y: i16 = -64; // TODO
                 for y in (WORLD_LOWEST_Y..chunk_height).rev() {
                     let coordinates = ChunkRelativeBlockCoordinates {
                         x: x.into(),
@@ -76,10 +76,9 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             blocks,
             heightmap: Default::default(),
             position: at,
-            // This chunk was just created! We want to say its been changed
+            entities: vec![], // TODO: chunks do have inital entities
+            // We just generated this chunk! Mark it as dirty
             dirty: true,
-            block_ticks: vec![],
-            fluid_ticks: vec![],
         }
     }
 }

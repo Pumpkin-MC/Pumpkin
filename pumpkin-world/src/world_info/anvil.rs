@@ -137,6 +137,7 @@ mod test {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
+            entities_folder: temp_dir.path().join("entities"),
             region_folder: temp_dir.path().join("region"),
         };
 
@@ -220,6 +221,7 @@ mod test {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
+            entities_folder: temp_dir.path().join("entities"),
             region_folder: temp_dir.path().join("region"),
         };
 

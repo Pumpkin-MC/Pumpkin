@@ -4,9 +4,9 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::block::state::ChunkBlockState;
-use crate::chunk::{ChunkBlocks, ChunkData};
 use crate::coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates, XZBlockCoordinates};
 use crate::generation::Seed;
+use crate::storage::{ChunkBlocks, ChunkData};
 
 pub trait GeneratorInit {
     fn new(seed: Seed) -> Self;

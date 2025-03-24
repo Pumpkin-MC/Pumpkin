@@ -4,21 +4,23 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    sync::{Mutex, Notify, RwLock, mpsc},
-    task::{JoinHandle, JoinSet},
+    sync::{RwLock, mpsc},
+    task::JoinSet,
 };
-use tokio_util::task::TaskTracker;
 
 use crate::{
-    chunk::{
-        ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
-    },
     generation::{Seed, WorldGenerator, get_world_gen},
     lock::{LevelLocker, anvil::AnvilLevelLocker},
+    storage::{
+        ChunkData, ChunkParsingError, ChunkReadingError,
+        format::{
+            anvil::{chunk::AnvilChunkFormat, entity::AnvilEntityFormat},
+            linear::LinearFile,
+        },
+        io::{ChunkIO, LoadedData, file_manager::FileManager},
+    },
     world_info::{
         LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
         anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
@@ -47,24 +49,25 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
+    chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>>,
+
+    // TODO: Do we want to make the entity IO generic like for the ChunkIO? The idea is to have
+    // abstractions for, like, databases right?
+    entity_io: FileManager<AnvilEntityFormat>,
+
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
-    block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
-    /// Tracks tasks associated with this world instance
-    tasks: TaskTracker,
-    /// Notification that interrupts tasks for shutdown
-    pub shutdown_notifier: Notify,
 }
 
 #[derive(Clone)]
 pub struct LevelFolder {
     pub root_folder: PathBuf,
+    pub entities_folder: PathBuf,
     pub region_folder: PathBuf,
 }
 
@@ -73,10 +76,15 @@ impl Level {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
         if !region_folder.exists() {
-            std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
+            std::fs::create_dir_all(&region_folder).expect("Failed to create region folder");
+        }
+        let entities_folder = root_folder.join("entities");
+        if !entities_folder.exists() {
+            std::fs::create_dir_all(&region_folder).expect("Failed to create entities folder");
         }
         let level_folder = LevelFolder {
             root_folder,
+            entities_folder,
             region_folder,
         };
 
@@ -116,50 +124,32 @@ impl Level {
         let seed = Seed(level_info.world_gen_settings.seed as u64);
         let world_gen = get_world_gen(seed).into();
 
-        let chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
-            //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
-            ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile>::default()),
-            ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFile>::default()),
+        let chunk_io: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
+            ChunkFormat::Linear => Arc::new(FileManager::<LinearFile>::default()),
+            ChunkFormat::Anvil => Arc::new(FileManager::<AnvilChunkFormat>::default()),
         };
+        let entity_io = FileManager::<AnvilEntityFormat>::default();
 
         Self {
             seed,
             world_gen,
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
-            chunk_saver,
+            chunk_io,
+            entity_io,
             spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             level_info,
             _locker: Arc::new(locker),
-            tasks: TaskTracker::new(),
-            shutdown_notifier: Notify::new(),
-            block_ticks: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    /// Spawns a task associated with this world. All tasks spawned with this method are awaited
-    /// when the client. This means tasks should complete in a reasonable (no looping) amount of time.
-    pub fn spawn_task<F>(&self, task: F) -> JoinHandle<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        self.tasks.spawn(task)
-    }
-
-    pub async fn shutdown(&self) {
+    pub async fn save(&self) {
         log::info!("Saving level...");
 
-        self.shutdown_notifier.notify_waiters();
-        self.tasks.close();
-        log::debug!("Awaiting level tasks");
-        self.tasks.wait().await;
-        log::debug!("Done awaiting level tasks");
-
         // wait for chunks currently saving in other threads
-        self.chunk_saver.block_and_await_ongoing_tasks().await;
+        self.chunk_io.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
         let chunks_to_write = self
@@ -170,7 +160,7 @@ impl Level {
         self.loaded_chunks.clear();
 
         // TODO: I think the chunk_saver should be at the server level
-        self.chunk_saver.clear_watched_chunks().await;
+        self.chunk_io.clear_watched_chunks().await;
         self.write_chunks(chunks_to_write).await;
 
         // then lets save the world info
@@ -184,12 +174,14 @@ impl Level {
         }
     }
 
+    pub fn get_block() {}
+
     pub fn loaded_chunk_count(&self) -> usize {
         self.loaded_chunks.len()
     }
 
     pub async fn clean_up_log(&self) {
-        self.chunk_saver.clean_up_log().await;
+        self.chunk_io.clean_up_log().await;
     }
 
     pub fn list_cached(&self) {
@@ -220,9 +212,7 @@ impl Level {
             }
         }
 
-        self.chunk_saver
-            .watch_chunks(&self.level_folder, chunks)
-            .await;
+        self.chunk_io.watch_chunks(&self.level_folder, chunks).await;
     }
 
     #[inline]
@@ -256,7 +246,7 @@ impl Level {
             }
         }
 
-        self.chunk_saver
+        self.chunk_io
             .unwatch_chunks(&self.level_folder, chunks)
             .await;
         chunks_to_clean
@@ -295,7 +285,7 @@ impl Level {
             .collect::<Vec<_>>();
 
         let level = self.clone();
-        self.spawn_task(async move {
+        tokio::spawn(async move {
             let chunks_to_remove = chunks_with_no_watchers.clone();
             level.write_chunks(chunks_with_no_watchers).await;
             // Only after we have written the chunks to the serializer do we remove them from the
@@ -342,26 +332,8 @@ impl Level {
         if chunks_to_write.is_empty() {
             return;
         }
-        let mut block_ticks = self.block_ticks.lock().await;
 
-        for (coord, chunk) in &chunks_to_write {
-            let mut chunk_data = chunk.write().await;
-            chunk_data.block_ticks.clear();
-            // Only keep ticks that are not saved in the chunk
-            block_ticks.retain(|tick| {
-                let (chunk_coord, _relative_coord) =
-                    tick.block_pos.chunk_and_chunk_relative_position();
-                if chunk_coord == *coord {
-                    chunk_data.block_ticks.push(tick.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-        }
-        drop(block_ticks);
-
-        let chunk_saver = self.chunk_saver.clone();
+        let chunk_saver = self.chunk_io.clone();
         let level_folder = self.level_folder.clone();
 
         trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
@@ -369,7 +341,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {}", error);
+            log::error!("Failed writing Chunk to disk {}", error.to_string());
         }
     }
 
@@ -437,19 +409,11 @@ impl Level {
 
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
-        let level_block_ticks = self.block_ticks.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
                 match data {
                     LoadedData::Loaded(chunk) => {
                         let position = chunk.read().await.position;
-
-                        // Load the block ticks from the chunk
-                        let block_ticks = chunk.read().await.block_ticks.clone();
-                        let mut level_block_ticks = level_block_ticks.lock().await;
-                        level_block_ticks.extend(block_ticks);
-                        drop(level_block_ticks);
-
                         let value = loaded_chunks
                             .entry(position)
                             .or_insert(chunk)
@@ -514,57 +478,9 @@ impl Level {
         set.spawn(handle_load);
         set.spawn(handle_generate);
 
-        self.chunk_saver
+        self.chunk_io
             .fetch_chunks(&self.level_folder, &remaining_chunks, load_bridge_send)
             .await;
         let _ = set.join_all().await;
-    }
-
-    pub fn try_get_chunk(
-        &self,
-        coordinates: Vector2<i32>,
-    ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkData>>>> {
-        self.loaded_chunks.try_get(&coordinates).try_unwrap()
-    }
-
-    pub async fn get_and_tick_block_ticks(&self) -> Vec<ScheduledTick> {
-        let mut block_ticks = self.block_ticks.lock().await;
-        let mut ticks = Vec::new();
-        let mut remaining_ticks = Vec::new();
-        for mut tick in block_ticks.drain(..) {
-            tick.delay = tick.delay.saturating_sub(1);
-            if tick.delay == 0 {
-                ticks.push(tick);
-            } else {
-                remaining_ticks.push(tick);
-            }
-        }
-
-        *block_ticks = remaining_ticks;
-        ticks.sort_by_key(|tick| tick.priority);
-        ticks
-    }
-
-    pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
-        let block_ticks = self.block_ticks.lock().await;
-        block_ticks
-            .iter()
-            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
-    }
-
-    pub async fn schedule_block_tick(
-        &self,
-        block_id: u16,
-        block_pos: BlockPos,
-        delay: u16,
-        priority: TickPriority,
-    ) {
-        let mut block_ticks = self.block_ticks.lock().await;
-        block_ticks.push(ScheduledTick {
-            block_pos,
-            delay,
-            priority,
-            target_block_id: block_id,
-        });
     }
 }
