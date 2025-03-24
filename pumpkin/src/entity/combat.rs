@@ -67,12 +67,12 @@ pub async fn handle_knockback(attacker: &Entity, world: &World, victim: &Entity,
     let entity_id = VarInt(victim.entity_id);
     let victim_velocity = victim.velocity.load();
 
-    let packet = &CEntityVelocity::new(entity_id, victim_velocity);
+    let packet = CEntityVelocity::new(entity_id, victim_velocity);
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 
     victim.velocity.store(saved_velo);
-    world.broadcast_packet_all(packet).await;
+    world.broadcast_packet_all(&packet).await;
 }
 
 pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {

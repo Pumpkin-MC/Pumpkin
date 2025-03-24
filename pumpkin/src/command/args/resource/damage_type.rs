@@ -31,7 +31,7 @@ impl GetClientSideArgParser for DamageTypeArgumentConsumer {
 impl ArgumentConsumer for DamageTypeArgumentConsumer {
     async fn consume<'a>(
         &'a self,
-        _sender: &CommandSender<'a>,
+        _sender: &CommandSender,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
@@ -45,7 +45,7 @@ impl ArgumentConsumer for DamageTypeArgumentConsumer {
 
     async fn suggest<'a>(
         &'a self,
-        _sender: &CommandSender<'a>,
+        _sender: &CommandSender,
         _server: &'a Server,
         _input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {

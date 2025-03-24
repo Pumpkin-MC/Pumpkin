@@ -4,7 +4,7 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockProperties, BlockState, Boolean, JukeboxLikeProperties};
 use pumpkin_data::item::Item;
@@ -34,7 +34,7 @@ impl JukeboxBlock {
             },
         };
         world
-            .set_block_state(&location, new_state.to_state_id(block))
+            .set_block_state(&location, new_state.to_state_id(block), BlockFlags::empty())
             .await;
     }
 

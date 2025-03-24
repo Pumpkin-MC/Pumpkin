@@ -1,8 +1,23 @@
+use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::register_door_blocks;
+use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::register_fence_gate_blocks;
 use blocks::fences::register_fence_blocks;
 use blocks::logs::register_log_blocks;
-use blocks::{chest::ChestBlock, furnace::FurnaceBlock, lever::LeverBlock, tnt::TNTBlock};
+use blocks::redstone::buttons::register_button_blocks;
+use blocks::redstone::observer::ObserverBlock;
+use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::redstone_block::RedstoneBlock;
+use blocks::redstone::redstone_lamp::RedstoneLamp;
+use blocks::redstone::redstone_torch::register_redstone_torch_blocks;
+use blocks::redstone::redstone_wire::RedstoneWireBlock;
+use blocks::redstone::repeater::RepeaterBlock;
+use blocks::redstone::target_block::TargetBlock;
+use blocks::sugar_cane::SugarCaneBlock;
+use blocks::torches::register_torch_blocks;
+use blocks::{
+    chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
+};
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -30,16 +45,29 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
     manager.register(JukeboxBlock);
+    manager.register(SugarCaneBlock);
     manager.register(CraftingTableBlock);
     manager.register(FurnaceBlock);
     manager.register(ChestBlock);
     manager.register(TNTBlock);
     manager.register(LeverBlock);
+    manager.register(DirtPathBlock);
+    manager.register(FarmLandBlock);
+    manager.register(RedstoneWireBlock);
+    manager.register(RedstoneBlock);
+    manager.register(RedstoneLamp);
+    manager.register(RepeaterBlock);
+    manager.register(ObserverBlock);
+    manager.register(PistonBlock);
+    manager.register(TargetBlock);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
     register_fence_gate_blocks(&mut manager);
     register_log_blocks(&mut manager);
+    register_button_blocks(&mut manager);
+    register_torch_blocks(&mut manager);
+    register_redstone_torch_blocks(&mut manager);
 
     Arc::new(manager)
 }

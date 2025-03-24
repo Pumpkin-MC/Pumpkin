@@ -1,6 +1,6 @@
 use crate::server::Server;
 use async_trait::async_trait;
-use bytes::{BufMut, BytesMut};
+use bytes::BufMut;
 use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -12,12 +12,12 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
-    bytebuf::serializer::Serializer,
     client::play::{
         CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
         CUpdateEntityRot, MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
+    ser::serializer::Serializer,
 };
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
@@ -30,7 +30,7 @@ use pumpkin_util::math::{
 use serde::Serialize;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicI32},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 use tokio::sync::RwLock;
 
@@ -152,7 +152,6 @@ impl Entity {
             chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
-            // TODO: Load this from previous instance
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
@@ -403,10 +402,10 @@ impl Entity {
     {
         let mut buf = Vec::new();
         for meta in meta {
-            let serializer_buf = BytesMut::new();
-            let mut serializer = Serializer::new(serializer_buf);
+            let mut serializer_buf = Vec::new();
+            let mut serializer = Serializer::new(&mut serializer_buf);
             meta.serialize(&mut serializer).unwrap();
-            buf.put(serializer.output);
+            buf.extend(serializer_buf);
         }
         buf.put_u8(255);
         self.world
@@ -428,10 +427,12 @@ impl Entity {
             || self.damage_immunities.contains(damage_type)
     }
 
-    async fn velocity_multiplier(&self, _pos: Vector3<f64>) -> f32 {
-        let world = self.world.read().await;
-        let block = world.get_block(&self.block_pos.load()).await.unwrap();
-        block.velocity_multiplier
+    fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {
+        // let world = self.world.read().await;
+        // TODO: handle when player is outside world
+        // let block = world.get_block(&self.block_pos.load()).await;
+        // block.velocity_multiplier
+        0.0
         // if velo_multiplier == 1.0 {
         //     const VELOCITY_OFFSET: f64 = 0.500001; // Vanilla
         //     let pos_with_y_offset = BlockPos(Vector3::new(
@@ -445,12 +446,12 @@ impl Entity {
         // }
     }
 
-    async fn tick_move(&self) {
+    fn tick_move(&self) {
         let velo = self.velocity.load();
         let pos = self.pos.load();
         self.pos
             .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
-        let multiplier = f64::from(self.velocity_multiplier(pos).await);
+        let multiplier = f64::from(Self::velocity_multiplier(pos));
         self.velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
     }
@@ -463,7 +464,7 @@ impl EntityBase for Entity {
     }
 
     async fn tick(&self, _: &Server) {
-        self.tick_move().await;
+        self.tick_move();
     }
 
     fn get_entity(&self) -> &Entity {
@@ -497,6 +498,7 @@ impl NBTStorage for Entity {
             "Rotation",
             vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice(),
         );
+        nbt.put_bool("OnGround", self.on_ground.load(Ordering::Relaxed));
 
         // todo more...
     }
@@ -506,7 +508,8 @@ impl NBTStorage for Entity {
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        self.pos.store(Vector3::new(x, y, z));
+        dbg!(y);
+        self.set_pos(Vector3::new(x, y, z));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
         let y = velocity[1].extract_double().unwrap_or(0.0);
@@ -515,9 +518,9 @@ impl NBTStorage for Entity {
         let rotation = nbt.get_list("Rotation").unwrap();
         let yaw = rotation[0].extract_float().unwrap_or(0.0);
         let pitch = rotation[1].extract_float().unwrap_or(0.0);
-        self.yaw.store(yaw);
-        self.pitch.store(pitch);
-
+        self.set_rotation(yaw, pitch);
+        self.on_ground
+            .store(nbt.get_bool("OnGround").unwrap_or(false), Ordering::Relaxed);
         // todo more...
     }
 }

@@ -1,10 +1,11 @@
-use bytes::Buf;
+use std::io::Read;
+
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
 use pumpkin_macros::packet;
 
 use crate::{
     ServerPacket, VarInt,
-    bytebuf::{ByteBuf, ReadingError},
+    ser::{NetworkReadExt, ReadingError},
 };
 
 #[packet(PLAY_PLAYER_COMMAND)]
@@ -48,11 +49,13 @@ impl TryFrom<i32> for Action {
 }
 
 impl ServerPacket for SPlayerCommand {
-    fn read(bytebuf: &mut impl Buf) -> Result<Self, ReadingError> {
+    fn read(read: impl Read) -> Result<Self, ReadingError> {
+        let mut read = read;
+
         Ok(Self {
-            entity_id: bytebuf.try_get_var_int()?,
-            action: bytebuf.try_get_var_int()?,
-            jump_boost: bytebuf.try_get_var_int()?,
+            entity_id: read.get_var_int()?,
+            action: read.get_var_int()?,
+            jump_boost: read.get_var_int()?,
         })
     }
 }

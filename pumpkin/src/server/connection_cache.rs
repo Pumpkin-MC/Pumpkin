@@ -63,9 +63,10 @@ impl CachedBranding {
     }
     const BRAND: &str = "Pumpkin";
     const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
+
     fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
-        VarInt(Self::BRAND.len() as i32).encode(&mut buf);
+        VarInt(Self::BRAND.len() as i32).encode(&mut buf).unwrap();
         buf.extend_from_slice(Self::BRAND_BYTES);
         buf.into_boxed_slice()
     }
@@ -112,30 +113,26 @@ impl CachedStatus {
     pub fn build_response(config: &BasicConfiguration) -> StatusResponse {
         let favicon = if config.use_favicon {
             let icon_path = &config.favicon_path;
-            log::debug!("Loading server favicon from '{}'", icon_path);
+            log::debug!("Loading server favicon from '{icon_path}'");
             match load_icon_from_file(icon_path).or_else(|err| {
                 if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
                     if io_err.kind() == std::io::ErrorKind::NotFound {
-                        log::info!("Favicon '{}' not found; using default icon.", icon_path);
+                        log::info!("Favicon '{icon_path}' not found; using default icon.");
                     } else {
                         log::error!(
-                            "Unable to load favicon at '{}': I/O error - {}; using default icon.",
-                            icon_path,
-                            io_err
+                            "Unable to load favicon at '{icon_path}': I/O error - {io_err}; using default icon.",
                         );
                     }
                 } else {
                     log::error!(
-                        "Unable to load favicon at '{}': other error - {}; using default icon.",
-                        icon_path,
-                        err
+                        "Unable to load favicon at '{icon_path}': other error - {err}; using default icon.",
                     );
                 }
                 load_icon_from_bytes(DEFAULT_ICON)
             }) {
                 Ok(result) => Some(result),
                 Err(err) => {
-                    log::warn!("Failed to load default icon: {}", err);
+                    log::warn!("Failed to load default icon: {err}");
                     None
                 }
             }

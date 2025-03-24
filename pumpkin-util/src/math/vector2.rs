@@ -115,3 +115,7 @@ impl Math for f32 {}
 impl Math for i32 {}
 impl Math for i64 {}
 impl Math for i8 {}
+
+pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
+    Vector2::new(vec.x >> 4, vec.z >> 4)
+}

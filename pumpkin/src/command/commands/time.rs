@@ -50,7 +50,7 @@ struct QueryExecutor(QueryMode);
 impl CommandExecutor for QueryExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -97,7 +97,7 @@ struct ChangeExecutor(Mode);
 impl CommandExecutor for ChangeExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

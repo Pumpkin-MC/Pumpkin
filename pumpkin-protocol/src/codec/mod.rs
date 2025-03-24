@@ -1,7 +1,9 @@
-use std::num::NonZeroUsize;
+use std::{
+    io::{Read, Write},
+    num::NonZeroUsize,
+};
 
-use bytes::{Buf, BufMut};
-use thiserror::Error;
+use crate::ser::{ReadingError, WritingError};
 
 pub mod bit_set;
 pub mod identifier;
@@ -14,15 +16,7 @@ pub trait Codec<T> {
 
     fn written_size(&self) -> usize;
 
-    fn encode(&self, write: &mut impl BufMut);
+    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError>;
 
-    fn decode(read: &mut impl Buf) -> Result<T, DecodeError>;
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Error)]
-pub enum DecodeError {
-    #[error("Incomplete VarInt decode")]
-    Incomplete,
-    #[error("VarInt is too large")]
-    TooLarge,
+    fn decode(read: &mut impl Read) -> Result<T, ReadingError>;
 }

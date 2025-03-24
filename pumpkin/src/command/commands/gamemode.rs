@@ -29,7 +29,7 @@ struct TargetSelfExecutor;
 impl CommandExecutor for TargetSelfExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -62,7 +62,7 @@ struct TargetPlayerExecutor;
 impl CommandExecutor for TargetPlayerExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

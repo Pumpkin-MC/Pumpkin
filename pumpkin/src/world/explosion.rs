@@ -5,7 +5,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{block::drop_loot, server::Server};
 
-use super::World;
+use super::{BlockFlags, World};
 
 pub struct Explosion {
     power: f32,
@@ -81,7 +81,7 @@ impl Explosion {
             let block = world.get_block(&pos).await.unwrap();
             let pumpkin_block = server.block_registry.get_pumpkin_block(&block);
 
-            world.set_block_state(&pos, 0).await;
+            world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
                 drop_loot(world, &block, &pos, false, block_state.id).await;

@@ -30,7 +30,7 @@ struct GiveExecutor;
 impl CommandExecutor for GiveExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

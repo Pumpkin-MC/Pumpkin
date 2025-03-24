@@ -8,13 +8,13 @@ use crate::VarInt;
 
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_UPDATE)]
-pub struct CBlockUpdate<'a> {
-    location: &'a BlockPos,
+pub struct CBlockUpdate {
+    location: BlockPos,
     block_id: VarInt,
 }
 
-impl<'a> CBlockUpdate<'a> {
-    pub fn new(location: &'a BlockPos, block_id: VarInt) -> Self {
+impl CBlockUpdate {
+    pub fn new(location: BlockPos, block_id: VarInt) -> Self {
         Self { location, block_id }
     }
 }

@@ -6,17 +6,17 @@ use serde::{Deserialize, forward_to_deserialize_any};
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
-pub struct ReadAdaptor<R: Read> {
+pub struct NbtReadHelper<R: Read> {
     reader: R,
 }
 
-impl<R: Read> ReadAdaptor<R> {
+impl<R: Read> NbtReadHelper<R> {
     pub fn new(r: R) -> Self {
         Self { reader: r }
     }
 }
 
-impl<R: Read> ReadAdaptor<R> {
+impl<R: Read> NbtReadHelper<R> {
     pub fn skip_bytes(&mut self, count: u64) -> Result<()> {
         let _ = io::copy(&mut self.reader.by_ref().take(count), &mut io::sink())
             .map_err(Error::Incomplete)?;
@@ -108,7 +108,7 @@ impl<R: Read> ReadAdaptor<R> {
 
 #[derive(Debug)]
 pub struct Deserializer<R: Read> {
-    input: ReadAdaptor<R>,
+    input: NbtReadHelper<R>,
     tag_to_deserialize_stack: Vec<u8>,
     // Yes, this breaks with recursion. Just an attempt at a sanity check
     in_list: bool,
@@ -118,7 +118,7 @@ pub struct Deserializer<R: Read> {
 impl<R: Read> Deserializer<R> {
     pub fn new(input: R, is_named: bool) -> Self {
         Deserializer {
-            input: ReadAdaptor { reader: input },
+            input: NbtReadHelper { reader: input },
             tag_to_deserialize_stack: Vec::new(),
             in_list: false,
             is_named,

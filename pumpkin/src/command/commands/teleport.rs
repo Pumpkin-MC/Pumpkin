@@ -55,7 +55,7 @@ struct EntitiesToEntityExecutor;
 impl CommandExecutor for EntitiesToEntityExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender<'a>,
+        _sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -80,7 +80,7 @@ struct EntitiesToPosFacingPosExecutor;
 impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender<'a>,
+        _sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -105,7 +105,7 @@ struct EntitiesToPosFacingEntityExecutor;
 impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender<'a>,
+        _sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -132,7 +132,7 @@ struct EntitiesToPosWithRotationExecutor;
 impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender<'a>,
+        _sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -156,7 +156,7 @@ struct EntitiesToPosExecutor;
 impl CommandExecutor for EntitiesToPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender<'a>,
+        _sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -180,7 +180,7 @@ struct SelfToEntityExecutor;
 impl CommandExecutor for SelfToEntityExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -210,7 +210,7 @@ struct SelfToPosExecutor;
 impl CommandExecutor for SelfToPosExecutor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {

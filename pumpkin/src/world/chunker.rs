@@ -2,7 +2,6 @@ use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
-use pumpkin_util::math::{get_section_cord, position::BlockPos, vector3::Vector3};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;
@@ -20,7 +19,7 @@ pub async fn player_join(player: &Arc<Player>) {
     log::debug!("Sending center chunk to {}", player.gameprofile.name);
     player
         .client
-        .send_packet(&CCenterChunk {
+        .send_packet_now(&CCenterChunk {
             chunk_x: chunk_pos.x.into(),
             chunk_z: chunk_pos.z.into(),
         })
@@ -48,7 +47,7 @@ pub async fn update_position(player: &Arc<Player>) {
     if old_cylindrical != new_cylindrical {
         player
             .client
-            .send_packet(&CCenterChunk {
+            .send_packet_now(&CCenterChunk {
                 chunk_x: new_chunk_center.x.into(),
                 chunk_z: new_chunk_center.z.into(),
             })
@@ -84,20 +83,12 @@ pub async fn update_position(player: &Arc<Player>) {
 
         if !chunks_to_clean.is_empty() {
             level.clean_chunks(&chunks_to_clean).await;
-
-            // This can take a little if we are sending a bunch of packets; queue it up :p
-            let client = player.client.clone();
-            tokio::spawn(async move {
-                for chunk in unloading_chunks {
-                    if client.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                        // We will never un-close a connection
-                        break;
-                    }
-                    client
-                        .send_packet(&CUnloadChunk::new(chunk.x, chunk.z))
-                        .await;
-                }
-            });
+            for chunk in unloading_chunks {
+                player
+                    .client
+                    .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                    .await;
+            }
         }
 
         if !loading_chunks.is_empty() {
@@ -108,14 +99,4 @@ pub async fn update_position(player: &Arc<Player>) {
             );
         }
     }
-}
-
-#[must_use]
-pub const fn chunk_section_from_pos(block_pos: &BlockPos) -> Vector3<i32> {
-    let block_pos = block_pos.0;
-    Vector3::new(
-        get_section_cord(block_pos.x),
-        get_section_cord(block_pos.y),
-        get_section_cord(block_pos.z),
-    )
 }

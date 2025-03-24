@@ -13,7 +13,10 @@ use pumpkin_protocol::query::{
 use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
-use crate::server::{CURRENT_MC_VERSION, Server};
+use crate::{
+    SHOULD_STOP,
+    server::{CURRENT_MC_VERSION, Server},
+};
 
 pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
     let mut query_addr = bound_addr;
@@ -47,7 +50,7 @@ pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
             .expect("Unable to find running address!")
     );
 
-    loop {
+    while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
         let socket = socket.clone();
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();

@@ -8,16 +8,16 @@ use crate::VarInt;
 
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_EVENT)]
-pub struct CBlockAction<'a> {
-    location: &'a BlockPos,
+pub struct CBlockAction {
+    location: BlockPos,
     action_id: u8,
     action_parameter: u8,
     block_type: VarInt,
 }
 
-impl<'a> CBlockAction<'a> {
+impl CBlockAction {
     pub fn new(
-        location: &'a BlockPos,
+        location: BlockPos,
         action_id: u8,
         action_parameter: u8,
         block_type: VarInt,

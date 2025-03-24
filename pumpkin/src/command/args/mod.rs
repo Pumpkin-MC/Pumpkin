@@ -51,7 +51,7 @@ pub mod time;
 pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
     async fn consume<'a>(
         &'a self,
-        sender: &CommandSender<'a>,
+        sender: &CommandSender,
         server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg>;
@@ -61,7 +61,7 @@ pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
     /// NOTE: This is called after this consumer's [`ArgumentConsumer::consume`] method returned None, so if args is used here, make sure [`ArgumentConsumer::consume`] never returns None after mutating args.
     async fn suggest<'a>(
         &'a self,
-        sender: &CommandSender<'a>,
+        sender: &CommandSender,
         server: &'a Server,
         input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError>;

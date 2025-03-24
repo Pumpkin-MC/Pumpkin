@@ -1,9 +1,13 @@
-use bytes::BufMut;
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::PLAY_TELEPORT_ENTITY;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::{ClientPacket, PositionFlag, VarInt, bytebuf::ByteBufMut};
+use crate::{
+    ClientPacket, PositionFlag, VarInt,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 #[packet(PLAY_TELEPORT_ENTITY)]
 pub struct CTeleportEntity<'a> {
@@ -12,7 +16,7 @@ pub struct CTeleportEntity<'a> {
     delta: Vector3<f64>,
     yaw: f32,
     pitch: f32,
-    releatives: &'a [PositionFlag],
+    relatives: &'a [PositionFlag],
     on_ground: bool,
 }
 
@@ -23,7 +27,7 @@ impl<'a> CTeleportEntity<'a> {
         delta: Vector3<f64>,
         yaw: f32,
         pitch: f32,
-        releatives: &'a [PositionFlag],
+        relatives: &'a [PositionFlag],
         on_ground: bool,
     ) -> Self {
         Self {
@@ -32,25 +36,27 @@ impl<'a> CTeleportEntity<'a> {
             delta,
             yaw,
             pitch,
-            releatives,
+            relatives,
             on_ground,
         }
     }
 }
 
 impl ClientPacket for CTeleportEntity<'_> {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_var_int(&self.entity_id);
-        bytebuf.put_f64(self.position.x);
-        bytebuf.put_f64(self.position.y);
-        bytebuf.put_f64(self.position.z);
-        bytebuf.put_f64(self.delta.x);
-        bytebuf.put_f64(self.delta.y);
-        bytebuf.put_f64(self.delta.z);
-        bytebuf.put_f32(self.yaw);
-        bytebuf.put_f32(self.pitch);
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_var_int(&self.entity_id)?;
+        write.write_f64_be(self.position.x)?;
+        write.write_f64_be(self.position.y)?;
+        write.write_f64_be(self.position.z)?;
+        write.write_f64_be(self.delta.x)?;
+        write.write_f64_be(self.delta.y)?;
+        write.write_f64_be(self.delta.z)?;
+        write.write_f32_be(self.yaw)?;
+        write.write_f32_be(self.pitch)?;
         // not sure about that
-        bytebuf.put_i32(PositionFlag::get_bitfield(self.releatives));
-        bytebuf.put_bool(self.on_ground);
+        write.write_i32_be(PositionFlag::get_bitfield(self.relatives))?;
+        write.write_bool(self.on_ground)
     }
 }

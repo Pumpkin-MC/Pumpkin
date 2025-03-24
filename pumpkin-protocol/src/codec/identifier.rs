@@ -1,11 +1,13 @@
-use std::num::NonZeroUsize;
+use std::{
+    io::{Read, Write},
+    num::NonZeroUsize,
+};
 
-use bytes::{Buf, BufMut};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
-use crate::bytebuf::{ByteBuf, ByteBufMut};
+use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-use super::{Codec, DecodeError};
+use super::Codec;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
@@ -29,20 +31,18 @@ impl Codec<Self> for Identifier {
         todo!()
     }
 
-    fn encode(&self, write: &mut impl BufMut) {
-        write.put_string_len(&self.to_string(), Self::MAX_SIZE.get());
+    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
+        write.write_string_bounded(&self.to_string(), Self::MAX_SIZE.get())
     }
 
-    fn decode(read: &mut impl Buf) -> Result<Self, DecodeError> {
-        let identifier = read
-            .try_get_string_len(Self::MAX_SIZE.get())
-            .map_err(|_| DecodeError::Incomplete)?;
+    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
+        let identifier = read.get_string_bounded(Self::MAX_SIZE.get())?;
         match identifier.split_once(":") {
             Some((namespace, path)) => Ok(Identifier {
                 namespace: namespace.to_string(),
                 path: path.to_string(),
             }),
-            None => Err(DecodeError::Incomplete),
+            None => Err(ReadingError::Incomplete("Identifier".to_string())),
         }
     }
 }

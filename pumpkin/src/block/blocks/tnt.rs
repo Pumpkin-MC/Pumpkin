@@ -5,7 +5,7 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::entity::tnt::TNTEntity;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::entity::EntityType;
@@ -37,7 +37,9 @@ impl PumpkinBlock for TNTBlock {
             return BlockActionResult::Continue;
         }
         let world = player.world().await;
-        world.set_block_state(&location, 0).await;
+        world
+            .set_block_state(&location, 0, BlockFlags::NOTIFY_ALL)
+            .await;
         let entity = world.create_entity(location.to_f64(), EntityType::TNT);
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));

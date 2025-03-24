@@ -6,7 +6,7 @@ use std::{
 
 use bytes::Bytes;
 use compound::NbtCompound;
-use deserializer::ReadAdaptor;
+use deserializer::NbtReadHelper;
 use serde::{de, ser};
 use serializer::WriteAdaptor;
 use tag::NbtTag;
@@ -14,6 +14,7 @@ use thiserror::Error;
 
 pub mod compound;
 pub mod deserializer;
+pub mod nbt_compress;
 pub mod serializer;
 pub mod tag;
 
@@ -82,7 +83,7 @@ impl Nbt {
         }
     }
 
-    pub fn read<R>(reader: &mut ReadAdaptor<R>) -> Result<Nbt, Error>
+    pub fn read<R>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error>
     where
         R: Read,
     {
@@ -99,7 +100,7 @@ impl Nbt {
     }
 
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R>(reader: &mut ReadAdaptor<R>) -> Result<Nbt, Error>
+    pub fn read_unnamed<R>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error>
     where
         R: Read,
     {
@@ -179,7 +180,7 @@ impl AsMut<NbtCompound> for Nbt {
     }
 }
 
-pub fn get_nbt_string<R: Read>(bytes: &mut ReadAdaptor<R>) -> Result<String, Error> {
+pub fn get_nbt_string<R: Read>(bytes: &mut NbtReadHelper<R>) -> Result<String, Error> {
     let len = bytes.get_u16_be()? as usize;
     let string_bytes = bytes.read_boxed_slice(len)?;
     let string = cesu8::from_java_cesu8(&string_bytes).map_err(|_| Error::Cesu8DecodingError)?;

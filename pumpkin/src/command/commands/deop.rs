@@ -21,7 +21,7 @@ struct Executor;
 impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
-        sender: &mut CommandSender<'a>,
+        sender: &mut CommandSender,
         server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -41,12 +41,12 @@ impl CommandExecutor for Executor {
             }
             config.save();
 
-            player
-                .set_permission_lvl(
-                    pumpkin_util::PermissionLvl::Zero,
-                    &server.command_dispatcher,
-                )
-                .await;
+            {
+                let command_dispatcher = server.command_dispatcher.read().await;
+                player
+                    .set_permission_lvl(pumpkin_util::PermissionLvl::Zero, &command_dispatcher)
+                    .await;
+            };
 
             let player_name = &player.gameprofile.name;
             let msg = TextComponent::translate(

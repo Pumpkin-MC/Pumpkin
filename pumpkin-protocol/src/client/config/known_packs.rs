@@ -1,8 +1,12 @@
-use bytes::BufMut;
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::CONFIG_SELECT_KNOWN_PACKS;
 use pumpkin_macros::packet;
 
-use crate::{ClientPacket, KnownPack, bytebuf::ByteBufMut};
+use crate::{
+    ClientPacket, KnownPack,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 #[packet(CONFIG_SELECT_KNOWN_PACKS)]
 pub struct CKnownPacks<'a> {
@@ -16,11 +20,12 @@ impl<'a> CKnownPacks<'a> {
 }
 
 impl ClientPacket for CKnownPacks<'_> {
-    fn write(&self, bytebuf: &mut impl BufMut) {
-        bytebuf.put_list::<KnownPack>(self.known_packs, |p, v| {
-            p.put_string(v.namespace);
-            p.put_string(v.id);
-            p.put_string(v.version);
-        });
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_list::<KnownPack>(self.known_packs, |p, v| {
+            p.write_string(v.namespace)?;
+            p.write_string(v.id)?;
+            p.write_string(v.version)
+        })
     }
 }

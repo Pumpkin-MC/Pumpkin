@@ -8,13 +8,13 @@ use crate::VarInt;
 
 #[derive(Serialize)]
 #[packet(PLAY_SET_DISPLAY_OBJECTIVE)]
-pub struct CDisplayObjective<'a> {
+pub struct CDisplayObjective {
     position: VarInt,
-    score_name: &'a str,
+    score_name: String,
 }
 
-impl<'a> CDisplayObjective<'a> {
-    pub fn new(position: ScoreboardDisplaySlot, score_name: &'a str) -> Self {
+impl CDisplayObjective {
+    pub fn new(position: ScoreboardDisplaySlot, score_name: String) -> Self {
         Self {
             position: VarInt(position as i32),
             score_name,

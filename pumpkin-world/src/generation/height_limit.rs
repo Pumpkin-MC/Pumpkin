@@ -1,14 +1,8 @@
-use enum_dispatch::enum_dispatch;
+use crate::ProtoChunk;
 
 use super::section_coords;
 
-#[enum_dispatch]
-pub enum HeightLimitView {
-    Standard(StandardHeightLimitView),
-}
-
-#[enum_dispatch(HeightLimitView)]
-pub trait HeightLimitViewImpl {
+pub trait HeightLimitView {
     fn height(&self) -> u16;
 
     fn bottom_y(&self) -> i8;
@@ -55,23 +49,12 @@ pub trait HeightLimitViewImpl {
     }
 }
 
-pub struct StandardHeightLimitView {
-    height: u16,
-    bottom_y: i8,
-}
-
-impl StandardHeightLimitView {
-    pub fn new(height: u16, bottom_y: i8) -> Self {
-        Self { height, bottom_y }
-    }
-}
-
-impl HeightLimitViewImpl for StandardHeightLimitView {
+impl HeightLimitView for ProtoChunk<'_> {
     fn height(&self) -> u16 {
-        self.height
+        self.noise_sampler.height()
     }
 
     fn bottom_y(&self) -> i8 {
-        self.bottom_y
+        self.noise_sampler.min_y()
     }
 }

@@ -5,13 +5,9 @@ use super::{
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange, NoisePos},
 };
 use enum_dispatch::enum_dispatch;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{lerp, lerp3, vector2::Vector2};
 
-use crate::generation::{
-    biome_coords,
-    noise::{lerp, lerp3},
-    positions::chunk_pos,
-};
+use crate::generation::{biome_coords, positions::chunk_pos};
 
 pub struct WrapperData {
     // Our relative position within the cell
