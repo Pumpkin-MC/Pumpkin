@@ -405,9 +405,13 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level.level_info;
-            let position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+            let position = Vector3::new(
+                f64::from(info.spawn_x),
+                f64::from(info.spawn_y) + 1.0,
+                f64::from(info.spawn_z),
+            );
             let yaw = info.spawn_angle;
-            let pitch = 10.0;
+            let pitch = 0.0;
 
             (position, yaw, pitch)
         };
@@ -686,9 +690,13 @@ impl World {
 
         // Teleport
         let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+        let mut position = Vector3::new(
+            f64::from(info.spawn_x),
+            f64::from(info.spawn_y),
+            f64::from(info.spawn_z),
+        );
         let yaw = info.spawn_angle;
-        let pitch = 10.0;
+        let pitch = 0.0;
 
         let top = self
             .get_top_block(Vector2::new(position.x as i32, position.z as i32))
