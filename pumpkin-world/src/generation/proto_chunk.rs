@@ -410,6 +410,12 @@ impl<'a> ProtoChunk<'a> {
                                     &Vector3::new(block_x, block_y, block_z),
                                     block_state,
                                 );
+                                if ChunkFluidState::new_by_id(block_state.block_id).is_some() {
+                                    self.set_fluid_state(
+                                        &Vector3::new(block_x, block_y, block_z),
+                                        ChunkFluidState::new_by_id(block_state.block_id).unwrap(),
+                                    );
+                                }
                             }
                         }
                     }

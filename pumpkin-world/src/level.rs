@@ -56,6 +56,7 @@ pub struct Level {
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
+    fluid_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
@@ -136,6 +137,7 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             block_ticks: Arc::new(Mutex::new(Vec::new())),
+            fluid_ticks: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -343,10 +345,12 @@ impl Level {
             return;
         }
         let mut block_ticks = self.block_ticks.lock().await;
+        let mut fluid_ticks = self.fluid_ticks.lock().await;
 
         for (coord, chunk) in &chunks_to_write {
             let mut chunk_data = chunk.write().await;
             chunk_data.block_ticks.clear();
+            chunk_data.fluid_ticks.clear();
             // Only keep ticks that are not saved in the chunk
             block_ticks.retain(|tick| {
                 let (chunk_coord, _relative_coord) =
@@ -358,8 +362,19 @@ impl Level {
                     true
                 }
             });
+            fluid_ticks.retain(|tick| {
+                let (chunk_coord, _relative_coord) =
+                    tick.block_pos.chunk_and_chunk_relative_position();
+                if chunk_coord == *coord {
+                    chunk_data.fluid_ticks.push(tick.clone());
+                    false
+                } else {
+                    true
+                }
+            });
         }
         drop(block_ticks);
+        drop(fluid_ticks);
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
@@ -438,6 +453,7 @@ impl Level {
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
         let level_block_ticks = self.block_ticks.clone();
+        let level_fluid_ticks = self.fluid_ticks.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
                 match data {
@@ -449,6 +465,12 @@ impl Level {
                         let mut level_block_ticks = level_block_ticks.lock().await;
                         level_block_ticks.extend(block_ticks);
                         drop(level_block_ticks);
+
+                        // Load the fluid ticks from the chunk
+                        let fluid_ticks = chunk.read().await.fluid_ticks.clone();
+                        let mut level_fluid_ticks = level_fluid_ticks.lock().await;
+                        level_fluid_ticks.extend(fluid_ticks);
+                        drop(level_fluid_ticks);
 
                         let value = loaded_chunks
                             .entry(position)
@@ -545,11 +567,31 @@ impl Level {
         ticks
     }
 
+    pub async fn get_and_tick_fluid_ticks(&self) -> Vec<ScheduledTick> {
+        let mut fluid_ticks = self.fluid_ticks.lock().await;
+        let mut ticks = Vec::new();
+        fluid_ticks.retain_mut(|tick| {
+            tick.delay = tick.delay.saturating_sub(1);
+            if tick.delay == 0 {
+                ticks.push(tick.clone());
+                false
+            } else {
+                true
+            }
+        });
+        ticks
+    }
+
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
         let block_ticks = self.block_ticks.lock().await;
         block_ticks
             .iter()
             .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
+    }
+
+    pub async fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos) -> bool {
+        let fluid_ticks = self.fluid_ticks.lock().await;
+        fluid_ticks.iter().any(|tick| tick.block_pos == *block_pos)
     }
 
     pub async fn schedule_block_tick(
@@ -564,6 +606,16 @@ impl Level {
             block_pos,
             delay,
             priority,
+            target_block_id: block_id,
+        });
+    }
+
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: &BlockPos, delay: u16) {
+        let mut fluid_ticks = self.fluid_ticks.lock().await;
+        fluid_ticks.push(ScheduledTick {
+            block_pos: *block_pos,
+            delay,
+            priority: TickPriority::Normal,
             target_block_id: block_id,
         });
     }

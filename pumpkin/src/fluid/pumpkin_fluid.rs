@@ -1,0 +1,82 @@
+use async_trait::async_trait;
+use pumpkin_data::{fluid::Fluid, item::Item};
+use crate::entity::player::Player;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
+use pumpkin_data::block::Block;
+
+use crate::{server::Server, world::World};
+
+use super::registry::FluidActionResult;
+
+pub trait FluidMetadata {
+    fn namespace(&self) -> &'static str;
+    fn id(&self) -> &'static str;
+    fn name(&self) -> String {
+        format!("{}:{}", self.namespace(), self.id())
+    }
+}
+
+#[async_trait]
+pub trait PumpkinFluid: Send + Sync {
+    async fn normal_use(
+        &self,
+        _fluid: &Fluid,
+        _player: &Player,
+        _location: BlockPos,
+        _server: &Server,
+        _world: &World,
+    ) {
+    }
+    async fn use_with_item(
+        &self,
+        _fluid: &Fluid,
+        _player: &Player,
+        _location: BlockPos,
+        _item: &Item,
+        _server: &Server,
+        _world: &World,
+    ) -> FluidActionResult {
+        FluidActionResult::Continue
+    }
+
+    async fn placed(
+        &self,
+        _world: &World,
+        _fluid: &Fluid,
+        _state_id: u16,
+        _block_pos: &BlockPos,
+        _old_state_id: u16,
+        _notify: bool,
+    ) {
+    }
+
+    async fn on_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        fluid: &Fluid,
+        _face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        _other: bool,
+    ) -> u16 {
+        fluid.default_state_index
+    }
+
+    async fn get_state_for_neighbour_update(
+        &self,
+        _world: &World,
+        _fluid: &Fluid,
+        _block_pos: &BlockPos,
+        _notify: bool,
+    ) -> u16 {
+        0
+    }
+
+    async fn on_scheduled_tick(&self, _world: &World, _fluid: &Fluid, _block_pos: &BlockPos) {}
+
+    async fn create_legacy_block(&self, world: &World, block_pos: &BlockPos) {
+    }
+}
