@@ -254,7 +254,7 @@ impl Server {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
-                        log::debug!("Found container id: {}", id);
+                        log::debug!("Found container id: {id}");
                         return Some(*id as u32);
                     }
                 }
@@ -278,7 +278,7 @@ impl Server {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
-                        log::debug!("Found matching container id: {}", id);
+                        log::debug!("Found matching container id: {id}");
                         matching_container_ids.push(*id as u32);
                     }
                 }

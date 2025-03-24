@@ -7,7 +7,7 @@ pub trait PumpkinError: Send + std::error::Error + Display {
     fn is_kick(&self) -> bool;
 
     fn log(&self) {
-        log!(self.severity(), "{}", self.to_string());
+        log!(self.severity(), "{self}");
     }
 
     fn severity(&self) -> log::Level;
