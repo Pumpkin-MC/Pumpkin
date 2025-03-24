@@ -1,8 +1,10 @@
+use std::borrow::Cow;
+
 use crate::{Property, VarInt};
 
 pub enum PlayerAction<'a> {
     AddPlayer {
-        name: &'a str,
+        name: Cow<'a, str>,
         properties: &'a [Property],
     },
     InitializeChat(u8),

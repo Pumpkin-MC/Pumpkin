@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -18,7 +20,7 @@ pub struct BlockArgumentConsumer;
 impl GetClientSideArgParser for BlockArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "block",
+            identifier: Cow::Borrowed("block"),
         }
     }
 

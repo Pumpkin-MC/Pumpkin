@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use pumpkin_protocol::client::play::{CCommands, ProtoNode, ProtoNodeType};
 
@@ -32,7 +32,7 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &CommandDi
         let proto_node = ProtoNodeBuilder {
             child_nodes,
             node_type: ProtoNodeType::Literal {
-                name: key,
+                name: Cow::Borrowed(key),
                 is_executable,
             },
         };
@@ -92,7 +92,7 @@ fn nodes_to_proto_node_builders<'a>(
                 child_nodes.push(ProtoNodeBuilder {
                     child_nodes: node_children,
                     node_type: ProtoNodeType::Argument {
-                        name,
+                        name: Cow::Borrowed(name),
                         is_executable: node_is_executable,
                         parser: consumer.get_client_side_parser(),
                         override_suggestion_type: consumer
@@ -107,7 +107,7 @@ fn nodes_to_proto_node_builders<'a>(
                 child_nodes.push(ProtoNodeBuilder {
                     child_nodes: node_children,
                     node_type: ProtoNodeType::Literal {
-                        name: string,
+                        name: Cow::Borrowed(string),
                         is_executable: node_is_executable,
                     },
                 });

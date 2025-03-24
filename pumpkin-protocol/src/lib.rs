@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io::{Read, Write},
     marker::PhantomData,
     num::NonZeroU16,
@@ -391,9 +392,9 @@ pub struct Property {
 }
 
 pub struct KnownPack<'a> {
-    pub namespace: &'a str,
-    pub id: &'a str,
-    pub version: &'a str,
+    pub namespace: Cow<'a, str>,
+    pub id: Cow<'a, str>,
+    pub version: Cow<'a, str>,
 }
 
 #[derive(Serialize, Deserialize)]

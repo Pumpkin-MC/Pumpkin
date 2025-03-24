@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{borrow::Cow, sync::LazyLock};
 
 use banner_pattern::BannerPattern;
 use biome::Biome;
@@ -90,7 +90,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .biome
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let biome = Registry {
             registry_id: Identifier::vanilla("worldgen/biome"),
@@ -100,7 +100,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .chat_type
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
 
         let chat_type = Registry {
@@ -137,7 +137,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .wolf_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let wolf_variant = Registry {
             registry_id: Identifier::vanilla("wolf_variant"),
@@ -147,7 +147,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .painting_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let painting_variant = Registry {
             registry_id: Identifier::vanilla("painting_variant"),
@@ -157,7 +157,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .dimension_type
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let dimension_type = Registry {
             registry_id: Identifier::vanilla("dimension_type"),
@@ -167,7 +167,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .damage_type
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let damage_type = Registry {
             registry_id: Identifier::vanilla("damage_type"),
@@ -177,7 +177,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .banner_pattern
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let banner_pattern = Registry {
             registry_id: Identifier::vanilla("banner_pattern"),
@@ -201,7 +201,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .jukebox_song
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let jukebox_song = Registry {
             registry_id: Identifier::vanilla("jukebox_song"),

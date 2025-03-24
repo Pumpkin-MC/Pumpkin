@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::CTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -62,7 +64,7 @@ impl CommandExecutor for TargetSelfExecutor {
             log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
             player
                 .client
-                .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
+                .enqueue_packet(&CTransfer::new(Cow::Borrowed(hostname), VarInt(port)))
                 .await;
             Ok(())
         } else {
@@ -105,7 +107,7 @@ impl CommandExecutor for TargetPlayerExecutor {
 
         for p in players {
             p.client
-                .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
+                .enqueue_packet(&CTransfer::new(Cow::Borrowed(hostname), VarInt(port)))
                 .await;
             log::info!(
                 "[{sender}: Transferring {} to {hostname}:{port}]",

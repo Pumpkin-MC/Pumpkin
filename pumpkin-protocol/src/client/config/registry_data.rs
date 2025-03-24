@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
@@ -31,7 +31,7 @@ pub struct RegistryEntry<'a> {
 }
 
 impl<'a> RegistryEntry<'a> {
-    pub fn from_nbt(name: &'a str, nbt: &impl Serialize) -> Self {
+    pub fn from_nbt(name: Cow<'a, str>, nbt: &impl Serialize) -> Self {
         let mut data_buf = Vec::new();
         pumpkin_nbt::serializer::to_bytes_unnamed(nbt, &mut data_buf).unwrap();
         RegistryEntry {

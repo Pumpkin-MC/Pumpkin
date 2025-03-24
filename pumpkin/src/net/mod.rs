@@ -631,13 +631,13 @@ impl Client {
         match self.connection_state.load() {
             ConnectionState::Login => {
                 // TextComponent implements Serialze and writes in bytes instead of String, thats the reasib we only use content
-                self.send_packet_now(&CLoginDisconnect::new(
-                    &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                ))
+                self.send_packet_now(&CLoginDisconnect::new(Cow::Owned(
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                )))
                 .await;
             }
             ConnectionState::Config => {
-                self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
+                self.send_packet_now(&CConfigDisconnect::new(Cow::Owned(reason.get_text())))
                     .await;
             }
             // This way players get kicked when players using client functions (e.g. poll, send_packet)

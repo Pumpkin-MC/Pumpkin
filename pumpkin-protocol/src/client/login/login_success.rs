@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use pumpkin_data::packet::clientbound::LOGIN_LOGIN_FINISHED;
 use pumpkin_macros::packet;
@@ -11,12 +11,12 @@ use crate::{
 #[packet(LOGIN_LOGIN_FINISHED)]
 pub struct CLoginSuccess<'a> {
     pub uuid: &'a uuid::Uuid,
-    pub username: &'a str, // 16
+    pub username: Cow<'a, str>, // 16
     pub properties: &'a [Property],
 }
 
 impl<'a> CLoginSuccess<'a> {
-    pub fn new(uuid: &'a uuid::Uuid, username: &'a str, properties: &'a [Property]) -> Self {
+    pub fn new(uuid: &'a uuid::Uuid, username: Cow<'a, str>, properties: &'a [Property]) -> Self {
         Self {
             uuid,
             username,
@@ -29,7 +29,7 @@ impl ClientPacket for CLoginSuccess<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_uuid(self.uuid)?;
-        write.write_string(self.username)?;
+        write.write_string(&self.username)?;
         write.write_list::<Property>(self.properties, |p, v| {
             p.write_string(&v.name)?;
             p.write_string(&v.value)?;

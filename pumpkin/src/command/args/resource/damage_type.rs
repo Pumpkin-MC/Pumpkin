@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -18,7 +20,7 @@ pub struct DamageTypeArgumentConsumer;
 impl GetClientSideArgParser for DamageTypeArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "damage_type",
+            identifier: Cow::Borrowed("damage_type"),
         }
     }
 

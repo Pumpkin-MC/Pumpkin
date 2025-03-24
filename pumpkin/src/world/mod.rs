@@ -507,7 +507,7 @@ impl World {
                 uuid: gameprofile.id,
                 actions: &[
                     PlayerAction::AddPlayer {
-                        name: &gameprofile.name,
+                        name: Cow::Borrowed(&gameprofile.name),
                         properties: &gameprofile.properties,
                     },
                     PlayerAction::UpdateListed(true),
@@ -529,7 +529,7 @@ impl World {
                         &player.gameprofile.id,
                         [
                             PlayerAction::AddPlayer {
-                                name: &player.gameprofile.name,
+                                name: Cow::Borrowed(&player.gameprofile.name),
                                 properties: &player.gameprofile.properties,
                             },
                             PlayerAction::UpdateListed(true),

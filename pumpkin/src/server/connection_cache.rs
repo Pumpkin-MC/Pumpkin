@@ -1,5 +1,6 @@
 use core::error;
 use std::{
+    borrow::Cow,
     fs::File,
     io::{Cursor, Read},
     num::NonZeroU32,
@@ -59,7 +60,7 @@ impl CachedBranding {
         }
     }
     pub fn get_branding(&self) -> CPluginMessage {
-        CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
+        CPluginMessage::new(Cow::Borrowed("minecraft:brand"), &self.cached_server_brand)
     }
     const BRAND: &str = "Pumpkin";
     const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
@@ -86,7 +87,7 @@ impl CachedStatus {
     }
 
     pub fn get_status(&self) -> CStatusResponse<'_> {
-        CStatusResponse::new(&self.status_response_json)
+        CStatusResponse::new(Cow::Borrowed(&self.status_response_json))
     }
 
     // TODO: Player samples

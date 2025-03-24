@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::CONFIG_DISCONNECT;
 use pumpkin_macros::packet;
 use serde::{Deserialize, Serialize};
@@ -5,11 +7,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(CONFIG_DISCONNECT)]
 pub struct CConfigDisconnect<'a> {
-    pub reason: &'a str,
+    pub reason: Cow<'a, str>,
 }
 
 impl<'a> CConfigDisconnect<'a> {
-    pub fn new(reason: &'a str) -> Self {
+    pub fn new(reason: Cow<'a, str>) -> Self {
         Self { reason }
     }
 }

@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{borrow::Cow, sync::LazyLock};
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
@@ -253,7 +253,11 @@ impl Client {
     }
 
     async fn finish_login(&self, profile: &GameProfile) {
-        let packet = CLoginSuccess::new(&profile.id, &profile.name, &profile.properties);
+        let packet = CLoginSuccess::new(
+            &profile.id,
+            Cow::Borrowed(&profile.name),
+            &profile.properties,
+        );
         self.send_packet_now(&packet).await;
     }
 
@@ -361,8 +365,8 @@ impl Client {
             let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
             let resource_pack = CConfigAddResourcePack::new(
                 &uuid,
-                &resource_config.url,
-                &resource_config.sha1,
+                Cow::Borrowed(&resource_config.url),
+                Cow::Borrowed(&resource_config.sha1),
                 resource_config.force,
                 if resource_config.prompt_message.is_empty() {
                     None
@@ -382,9 +386,9 @@ impl Client {
     /// Send the known data packs to the client.
     pub async fn send_known_packs(&self) {
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
-            namespace: "minecraft",
-            id: "core",
-            version: "1.21",
+            namespace: Cow::Borrowed("minecraft"),
+            id: Cow::Borrowed("core"),
+            version: Cow::Borrowed("1.21"),
         }]))
         .await;
     }

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_data::entity::EffectType;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -18,7 +20,7 @@ pub struct EffectTypeArgumentConsumer;
 impl GetClientSideArgParser for EffectTypeArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "mob_effect",
+            identifier: Cow::Borrowed("mob_effect"),
         }
     }
 

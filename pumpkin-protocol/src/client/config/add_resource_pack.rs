@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::packet;
@@ -10,8 +12,8 @@ use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
 pub struct CConfigAddResourcePack<'a> {
     #[serde(with = "uuid::serde::compact")]
     uuid: &'a uuid::Uuid,
-    url: &'a str,
-    hash: &'a str, // max 40
+    url: Cow<'a, str>,
+    hash: Cow<'a, str>, // max 40
     forced: bool,
     prompt_message: Option<TextComponent>,
 }
@@ -19,8 +21,8 @@ pub struct CConfigAddResourcePack<'a> {
 impl<'a> CConfigAddResourcePack<'a> {
     pub fn new(
         uuid: &'a uuid::Uuid,
-        url: &'a str,
-        hash: &'a str,
+        url: Cow<'a, str>,
+        hash: Cow<'a, str>,
         forced: bool,
         prompt_message: Option<TextComponent>,
     ) -> Self {
