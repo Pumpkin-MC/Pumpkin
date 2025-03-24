@@ -136,9 +136,6 @@ impl<R: AsyncRead + Unpin> NetworkDecoder<R> {
             DecompressionReader::None(bounded_reader)
         };
 
-        // TODO: Serde is sync so we need to write to a buffer here :(
-        // Is there a way to deserialize in an asynchronous manner?
-
         let packet_id = VarInt::decode_async(&mut reader)
             .await
             .map_err(|_| PacketDecodeError::DecodeID)?
