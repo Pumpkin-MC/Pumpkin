@@ -13,6 +13,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::world::BlockFlags;
 use crate::world::World;
 use pumpkin_data::item::Item;
 
@@ -24,7 +25,11 @@ pub async fn toggle_fence_gate(world: &World, block_pos: &BlockPos) -> u16 {
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
     fence_gate_props.open = fence_gate_props.open.flip();
     world
-        .set_block_state(block_pos, fence_gate_props.to_state_id(&block))
+        .set_block_state(
+            block_pos,
+            fence_gate_props.to_state_id(&block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
         .await;
 
     fence_gate_props.to_state_id(&block)

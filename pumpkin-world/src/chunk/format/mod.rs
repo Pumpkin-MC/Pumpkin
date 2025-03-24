@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::{from_bytes, nbt_long_array};
 
-use pumpkin_util::math::{ceil_log2, vector2::Vector2};
+use pumpkin_util::math::{ceil_log2, position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
 
 use super::{
     CHUNK_AREA, ChunkBlocks, ChunkData, ChunkHeightmaps, ChunkParsingError, SUBCHUNK_VOLUME,
+    ScheduledTick, TickPriority,
 };
 
 pub mod anvil;
@@ -119,6 +120,34 @@ impl ChunkData {
             position,
             // This chunk is read from disk, so it has not been modified
             dirty: false,
+            block_ticks: chunk_data
+                .block_ticks
+                .iter()
+                .map(|tick| ScheduledTick {
+                    block_pos: BlockPos::new(tick.x, tick.y, tick.z),
+                    delay: tick.delay as u16,
+                    priority: TickPriority::from(tick.priority),
+                    target_block_id: Block::from_registry_key(
+                        &tick.target_block.replace("minecraft:", ""),
+                    )
+                    .unwrap_or(Block::AIR)
+                    .id,
+                })
+                .collect(),
+            fluid_ticks: chunk_data
+                .fluid_ticks
+                .iter()
+                .map(|tick| ScheduledTick {
+                    block_pos: BlockPos::new(tick.x, tick.y, tick.z),
+                    delay: tick.delay as u16,
+                    priority: TickPriority::from(tick.priority),
+                    target_block_id: Block::from_registry_key(
+                        &tick.target_block.replace("minecraft:", ""),
+                    )
+                    .unwrap_or(Block::AIR)
+                    .id,
+                })
+                .collect(),
         })
     }
 }
@@ -151,6 +180,22 @@ struct ChunkSectionBlockStates {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct SerializedScheduledTick {
+    #[serde(rename = "x")]
+    x: i32,
+    #[serde(rename = "y")]
+    y: i32,
+    #[serde(rename = "z")]
+    z: i32,
+    #[serde(rename = "t")]
+    delay: i32,
+    #[serde(rename = "p")]
+    priority: i32,
+    #[serde(rename = "i")]
+    target_block: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 struct ChunkNbt {
     data_version: i32,
@@ -164,4 +209,8 @@ struct ChunkNbt {
     #[serde(rename = "sections")]
     sections: Vec<ChunkSection>,
     heightmaps: ChunkHeightmaps,
+    #[serde(rename = "block_ticks")]
+    block_ticks: Vec<SerializedScheduledTick>,
+    #[serde(rename = "fluid_ticks")]
+    fluid_ticks: Vec<SerializedScheduledTick>,
 }

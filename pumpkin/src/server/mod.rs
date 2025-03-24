@@ -101,9 +101,12 @@ impl Server {
         let command_dispatcher = RwLock::new(default_dispatcher());
         let world_path = BASIC_CONFIG.get_world_path();
 
+        let block_registry = super::block::default_registry();
+
         let world = World::load(
             Dimension::Overworld.into_level(world_path.clone()),
             DimensionType::Overworld,
+            block_registry.clone(),
         );
 
         let world_name = world_path.to_str().unwrap();
@@ -121,7 +124,7 @@ impl Server {
                 DimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_registry: super::block::default_registry(),
+            block_registry,
             item_registry: super::item::items::default_registry(),
             auth_client,
             key_store: KeyStore::new(),
@@ -269,7 +272,7 @@ impl Server {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
-                        log::debug!("Found container id: {}", id);
+                        log::debug!("Found container id: {id}");
                         return Some(*id as u32);
                     }
                 }
@@ -293,7 +296,7 @@ impl Server {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
-                        log::debug!("Found matching container id: {}", id);
+                        log::debug!("Found matching container id: {id}");
                         matching_container_ids.push(*id as u32);
                     }
                 }

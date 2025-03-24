@@ -239,7 +239,7 @@ impl PumpkinServer {
         let mut loader_lock = PLUGIN_MANAGER.lock().await;
         loader_lock.set_server(self.server.clone());
         if let Err(err) = loader_lock.load_plugins().await {
-            log::error!("{}", err.to_string());
+            log::error!("{}", err);
         };
     }
 

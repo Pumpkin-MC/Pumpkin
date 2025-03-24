@@ -218,11 +218,7 @@ impl Client {
                 if let Err(err) = writer.lock().await.write_packet(packet_data).await {
                     // It is expected that the packet will fail if we are closed
                     if !closed.load(std::sync::atomic::Ordering::Relaxed) {
-                        log::warn!(
-                            "Failed to send packet to client {}: {}",
-                            id,
-                            err.to_string()
-                        );
+                        log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
                         Self::thread_safe_close(&close_interrupt, &closed);
@@ -370,7 +366,7 @@ impl Client {
                 log::error!(
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id,
-                    err.to_string()
+                    err
                 );
             }
         }
@@ -407,11 +403,7 @@ impl Client {
         {
             // It is expected that the packet will fail if we are closed
             if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                log::warn!(
-                    "Failed to send packet to client {}: {}",
-                    self.id,
-                    err.to_string()
-                );
+                log::warn!("Failed to send packet to client {}: {}", self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
                 self.close();

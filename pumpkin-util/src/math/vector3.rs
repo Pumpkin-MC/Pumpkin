@@ -308,3 +308,21 @@ impl serde::Serialize for Vector3<i32> {
         serializer.serialize_bytes(&buf)
     }
 }
+
+#[inline]
+pub const fn packed_chunk_pos(vec: &Vector3<i32>) -> i64 {
+    let mut result = 0i64;
+    // Need to go to i64 first to conserve sign
+    result |= (vec.x as i64 & 0x3FFFFF) << 42;
+    result |= (vec.z as i64 & 0x3FFFFF) << 20;
+    result |= vec.y as i64 & 0xFFFFF;
+    result
+}
+
+#[inline]
+pub const fn packed_local(vec: &Vector3<i32>) -> i16 {
+    let x = vec.x as i16;
+    let y = vec.y as i16;
+    let z = vec.z as i16;
+    (x << 8) | (z << 4) | y
+}

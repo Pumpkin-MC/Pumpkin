@@ -181,7 +181,7 @@ impl PluginManager {
             }
             let name = entry.file_name().into_string().unwrap();
             if let Err(err) = self.try_load_plugin(&entry.path()).await {
-                log::error!("Plugin {}: {}", name, err.to_string());
+                log::error!("Plugin {name}: {err}");
             }
         }
 
@@ -222,7 +222,7 @@ impl PluginManager {
         let res = plugin_box.on_load(&context).await;
         let mut loaded = true;
         if let Err(e) = res {
-            log::error!("Error loading plugin: {}", e);
+            log::error!("Error loading plugin: {e}");
             loaded = false;
         }
 
