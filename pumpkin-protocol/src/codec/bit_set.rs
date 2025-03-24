@@ -101,3 +101,54 @@ impl<'de> Deserialize<'de> for BitSet {
         deserializer.deserialize_seq(BitSetVisitor)
     }
 }
+
+#[cfg(test)]
+mod bitset_tests {
+    use super::BitSet;
+    use crate::codec::Codec;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_bitset_encode_decode() {
+        let test_data = BitSet(vec![0x1234_5678_9ABC_DEFF, -123456789].into_boxed_slice());
+        let mut buffer = Vec::new();
+        test_data.encode(&mut buffer).unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = BitSet::decode(&mut reader).unwrap();
+
+        assert_eq!(decoded.0.as_ref(), test_data.0.as_ref());
+    }
+
+    #[test]
+    fn test_bitset_empty() {
+        let empty = BitSet(Vec::new().into_boxed_slice());
+        let mut buffer = Vec::new();
+        empty.encode(&mut buffer).unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = BitSet::decode(&mut reader).unwrap();
+
+        assert!(decoded.0.is_empty());
+    }
+
+    #[test]
+    fn test_bitset_large() {
+        let large_data: Vec<_> = (0..1000).map(|i| i * 123456).collect();
+        let bitset = BitSet(large_data.into_boxed_slice());
+        let mut buffer = Vec::new();
+        bitset.encode(&mut buffer).unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = BitSet::decode(&mut reader).unwrap();
+
+        assert_eq!(decoded.0.len(), 1000);
+        assert!(
+            decoded
+                .0
+                .iter()
+                .enumerate()
+                .all(|(i, &v)| v == (i * 123456) as i64)
+        );
+    }
+}
