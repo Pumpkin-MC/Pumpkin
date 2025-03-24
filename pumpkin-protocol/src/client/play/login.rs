@@ -24,6 +24,7 @@ pub struct CLogin<'a> {
     // Spawn info
     dimension_type: VarInt,
     dimension_name: Identifier<'a>,
+    /// First 8 bytes of the SHA-256 hash of the world's seed. Used client side for biome noise
     hashed_seed: i64,
     game_mode: u8,
     previous_gamemode: i8,

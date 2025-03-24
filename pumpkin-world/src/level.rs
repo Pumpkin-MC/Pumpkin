@@ -47,7 +47,7 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
@@ -530,15 +530,17 @@ impl Level {
     pub async fn get_and_tick_block_ticks(&self) -> Vec<ScheduledTick> {
         let mut block_ticks = self.block_ticks.lock().await;
         let mut ticks = Vec::new();
-        block_ticks.retain_mut(|tick| {
+        let mut remaining_ticks = Vec::new();
+        for mut tick in block_ticks.drain(..) {
             tick.delay = tick.delay.saturating_sub(1);
             if tick.delay == 0 {
-                ticks.push(tick.clone());
-                false
+                ticks.push(tick);
             } else {
-                true
+                remaining_ticks.push(tick);
             }
-        });
+        }
+
+        *block_ticks = remaining_ticks;
         ticks.sort_by_key(|tick| tick.priority);
         ticks
     }
@@ -553,13 +555,13 @@ impl Level {
     pub async fn schedule_block_tick(
         &self,
         block_id: u16,
-        block_pos: &BlockPos,
+        block_pos: BlockPos,
         delay: u16,
         priority: TickPriority,
     ) {
         let mut block_ticks = self.block_ticks.lock().await;
         block_ticks.push(ScheduledTick {
-            block_pos: *block_pos,
+            block_pos,
             delay,
             priority,
             target_block_id: block_id,

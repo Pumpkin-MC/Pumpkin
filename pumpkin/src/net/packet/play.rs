@@ -1197,6 +1197,11 @@ impl Player {
             return Ok(());
         };
         if !sneaking {
+            server
+                .item_registry
+                .use_on_block(&stack.item, self, location, &face, &block, server)
+                .await;
+
             let action_result = server
                 .block_registry
                 .use_with_item(&block, self, location, &stack.item, server, world)
