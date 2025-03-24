@@ -1,3 +1,4 @@
+
 use async_trait::async_trait;
 use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
 use pumpkin_macros::pumpkin_fluid;
@@ -8,15 +9,15 @@ use crate::{
     world::{BlockFlags, World},
 };
 
-#[pumpkin_fluid("minecraft:flowing_water")]
-pub struct FlowingWater;
+#[pumpkin_fluid("minecraft:flowing_lava")]
+pub struct FlowingLava;
 
-const WATER_FLOW_SPEED: u16 = 5;
+const LAVA_FLOW_SPEED: u16 = 30;
 
-type FlowingWaterProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
+type FlowingLavaProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 #[async_trait]
-impl PumpkinFluid for FlowingWater {
+impl PumpkinFluid for FlowingLava {
     async fn placed(
         &self,
         world: &World,
@@ -27,7 +28,7 @@ impl PumpkinFluid for FlowingWater {
         _notify: bool,
     ) {
         world
-            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+            .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
             .await;
     }
 
@@ -37,7 +38,7 @@ impl PumpkinFluid for FlowingWater {
         let block = world.get_block(&block_under).await.unwrap();
 
         if block.id == 0 {
-            let mut block_props = FlowingWaterProperties::from_state_id(fluid.id, fluid);
+            let mut block_props = FlowingLavaProperties::from_state_id(fluid.id, fluid);
             block_props.level = Level::L8;
             block_props.falling = Falling::False;
             world
