@@ -1,6 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use syn::{Ident, LitInt, LitStr};
@@ -53,17 +53,14 @@ impl ToTokens for PropertyStruct {
         let variant_count = self.values.clone().len() as u16;
         let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
 
-        let ident_values = self
-            .values
-            .iter()
-            .map(|value| {
-                let value_str = if value.chars().all(|c| c.is_numeric()) {
-                    format!("L{}", value)
-                } else {
-                    value.clone()
-                };
-                Ident::new(&value_str.to_upper_camel_case(), Span::call_site())
-            });
+        let ident_values = self.values.iter().map(|value| {
+            let value_str = if value.chars().all(|c| c.is_numeric()) {
+                format!("L{}", value)
+            } else {
+                value.clone()
+            };
+            Ident::new(&value_str.to_upper_camel_case(), Span::call_site())
+        });
 
         let values_2 = ident_values.clone();
         let values_3 = ident_values.clone();
@@ -376,8 +373,18 @@ pub(crate) fn build() -> TokenStream {
     for fluid in fluids.clone() {
         let id_name = LitStr::new(&fluid.name, proc_macro2::Span::call_site());
         let const_ident = format_ident!("{}", fluid.name.to_shouty_snake_case());
-        let state_id_start = fluid.states.iter().map(|state| state.block_state_id).min().unwrap();
-        let state_id_end = fluid.states.iter().map(|state| state.block_state_id).max().unwrap();
+        let state_id_start = fluid
+            .states
+            .iter()
+            .map(|state| state.block_state_id)
+            .min()
+            .unwrap();
+        let state_id_end = fluid
+            .states
+            .iter()
+            .map(|state| state.block_state_id)
+            .max()
+            .unwrap();
 
         let id_lit = LitInt::new(&fluid.id.to_string(), proc_macro2::Span::call_site());
         let mut properties = TokenStream::new();
@@ -407,11 +414,11 @@ pub(crate) fn build() -> TokenStream {
         for (idx, state) in fluid.states.iter().enumerate() {
             // Check if this state is already in `unique_states` by comparing key fields
             let already_exists = unique_states.iter().any(|s: &FluidState| {
-                s.height == state.height &&
-                s.level == state.level &&
-                s.is_empty == state.is_empty &&
-                s.blast_resistance == state.blast_resistance &&
-                s.is_still == state.is_still
+                s.height == state.height
+                    && s.level == state.level
+                    && s.is_empty == state.is_empty
+                    && s.blast_resistance == state.blast_resistance
+                    && s.is_still == state.is_still
             });
             if !already_exists {
                 unique_states.push(state.clone());
@@ -420,11 +427,11 @@ pub(crate) fn build() -> TokenStream {
             let state_idx = unique_states
                 .iter()
                 .position(|s| {
-                    s.height == state.height &&
-                    s.level == state.level &&
-                    s.is_empty == state.is_empty &&
-                    s.blast_resistance == state.blast_resistance &&
-                    s.is_still == state.is_still
+                    s.height == state.height
+                        && s.level == state.level
+                        && s.is_empty == state.is_empty
+                        && s.blast_resistance == state.blast_resistance
+                        && s.is_still == state.is_still
                 })
                 .unwrap() as u16;
             optimized_fluids.push((
@@ -448,7 +455,6 @@ pub(crate) fn build() -> TokenStream {
             #id_lit => Some(Self::#const_ident),
         });
 
-
         let fluid_states = fluid.states.iter().map(|state| {
             let height = state.height;
             let level = state.level;
@@ -458,7 +464,7 @@ pub(crate) fn build() -> TokenStream {
             let is_still = state.is_still;
             // Derive these values based on existing fields
             let is_source = level == 0 && is_still; // Level 0 and still means it's a source
-            let falling = false;  // Default to false - we'll handle falling in the fluid behavior code
+            let falling = false; // Default to false - we'll handle falling in the fluid behavior code
 
             quote! {
                 FluidState {
@@ -560,7 +566,6 @@ pub(crate) fn build() -> TokenStream {
             }
         }
     });
-
 
     for property_group in property_collection_map.into_values() {
         for fluid_name in &property_group.fluid_names {
@@ -776,4 +781,3 @@ pub(crate) fn build() -> TokenStream {
         #(#fluid_props)*
     }
 }
-

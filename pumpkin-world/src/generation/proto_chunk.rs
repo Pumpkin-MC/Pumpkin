@@ -2,7 +2,10 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier}, block::{registry::get_state_by_state_id, ChunkBlockState}, chunk::CHUNK_AREA, generation::{biome, positions::chunk_pos}
+    biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+    block::{ChunkBlockState, registry::get_state_by_state_id},
+    chunk::CHUNK_AREA,
+    generation::{biome, positions::chunk_pos},
 };
 
 use super::{

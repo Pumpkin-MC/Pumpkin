@@ -1,8 +1,8 @@
 use crate::block::registry::BlockRegistry;
-use crate::fluid::registry::FluidRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::entity::EntityId;
+use crate::fluid::registry::FluidRegistry;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
