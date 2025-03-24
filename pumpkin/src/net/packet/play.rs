@@ -1464,12 +1464,12 @@ impl Player {
         let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
         // Check if the block is under the world
-        if location.0.y + face.to_offset().y < Self::WORLD_LOWEST_Y.into() {
+        if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
         // Check the world's max build height
-        if location.0.y + face.to_offset().y >= Self::WORLD_MAX_Y.into() {
+        if location.0.y + face.to_offset().y >= i32::from(Self::WORLD_MAX_Y) {
             self.send_system_message_raw(
                 &TextComponent::translate(
                     "build.tooHigh",
