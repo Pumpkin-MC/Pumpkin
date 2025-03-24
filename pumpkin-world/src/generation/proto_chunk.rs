@@ -2,10 +2,7 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-    block::{ChunkBlockState, registry::get_state_by_state_id},
-    chunk::CHUNK_AREA,
-    generation::{biome, positions::chunk_pos},
+    biome::{BiomeSupplier, MultiNoiseBiomeSupplier}, block::{registry::get_state_by_state_id, ChunkBlockState}, chunk::CHUNK_AREA, fluid::state::ChunkFluidState, generation::{biome, positions::chunk_pos}
 };
 
 use super::{
@@ -93,6 +90,7 @@ pub struct ProtoChunk<'a> {
     default_block: ChunkBlockState,
     // These are local positions
     flat_block_map: Box<[ChunkBlockState]>,
+    flat_fluid_map: Box<[ChunkFluidState]>,
     flat_biome_map: Box<[Biome]>,
     // may want to use chunk status
 }
@@ -165,6 +163,8 @@ impl<'a> ProtoChunk<'a> {
             surface_height_estimate_sampler,
             flat_block_map: vec![ChunkBlockState::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
+            flat_fluid_map: vec![ChunkFluidState::EMPTY; CHUNK_AREA * height as usize]
+                .into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::Plains;
                 biome_coords::from_block(CHUNK_DIM as usize)
@@ -222,6 +222,20 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
+    pub fn get_fluid_state(&self, local_pos: &Vector3<i32>) -> ChunkFluidState {
+        let local_pos = Vector3::new(
+            local_pos.x & 15,
+            local_pos.y - self.noise_sampler.min_y() as i32,
+            local_pos.z & 15,
+        );
+        if local_pos.y < 0 || local_pos.y >= self.noise_sampler.height() as i32 {
+            ChunkFluidState::EMPTY
+        } else {
+            self.flat_fluid_map[self.local_pos_to_block_index(&local_pos)]
+        }
+    }
+
+    #[inline]
     pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: ChunkBlockState) {
         let local_pos = Vector3::new(
             local_pos.x & 15,
@@ -230,6 +244,17 @@ impl<'a> ProtoChunk<'a> {
         );
         let index = self.local_pos_to_block_index(&local_pos);
         self.flat_block_map[index] = block_state;
+    }
+
+    #[inline]
+    pub fn set_fluid_state(&mut self, local_pos: &Vector3<i32>, fluid_state: ChunkFluidState) {
+        let local_pos = Vector3::new(
+            local_pos.x & 15,
+            local_pos.y - self.noise_sampler.min_y() as i32,
+            local_pos.z & 15,
+        );
+        let index = self.local_pos_to_block_index(&local_pos);
+        self.flat_fluid_map[index] = fluid_state;
     }
 
     #[inline]
@@ -372,6 +397,12 @@ impl<'a> ProtoChunk<'a> {
                                     &Vector3::new(block_x, block_y, block_z),
                                     block_state,
                                 );
+                                if ChunkFluidState::new_by_id(block_state.block_id).is_some() {
+                                    self.set_fluid_state(
+                                        &Vector3::new(block_x, block_y, block_z),
+                                        ChunkFluidState::new_by_id(block_state.block_id).unwrap(),
+                                    );
+                                }
                             }
                         }
                     }
