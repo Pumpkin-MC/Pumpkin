@@ -2,8 +2,9 @@ use std::io::Read;
 use std::io::Write;
 use std::num::NonZeroUsize;
 
-use serde::Deserialize;
-use serde::{Serialize, Serializer};
+use serde::de::{Deserializer, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::ser::NetworkReadExt;
 use crate::ser::NetworkWriteExt;
@@ -19,7 +20,22 @@ impl Codec<BitSet> for BitSet {
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(usize::MAX) };
 
     fn written_size(&self) -> usize {
-        todo!()
+        let len = self.0.len();
+        let len_varint = len as i32;
+
+        // Calculate VarInt size using zig-zag encoding
+        let zigzag = ((len_varint << 1) ^ (len_varint >> 31)) as u32;
+        let mut varint_size = 0;
+        let mut val = zigzag;
+        loop {
+            varint_size += 1;
+            val >>= 7;
+            if val == 0 {
+                break;
+            }
+        }
+
+        varint_size + 8 * len
     }
 
     fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
@@ -44,19 +60,44 @@ impl Codec<BitSet> for BitSet {
 }
 
 impl Serialize for BitSet {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        todo!()
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for &value in self.0.iter() {
+            seq.serialize_element(&value)?;
+        }
+        seq.end()
     }
 }
 
 impl<'de> Deserialize<'de> for BitSet {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: Deserializer<'de>,
     {
-        todo!()
+        struct BitSetVisitor;
+
+        impl<'de> Visitor<'de> for BitSetVisitor {
+            type Value = BitSet;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a sequence of i64 integers")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut vec = Vec::new();
+                while let Some(value) = seq.next_element()? {
+                    vec.push(value);
+                }
+                Ok(BitSet(vec.into_boxed_slice()))
+            }
+        }
+
+        deserializer.deserialize_seq(BitSetVisitor)
     }
 }
