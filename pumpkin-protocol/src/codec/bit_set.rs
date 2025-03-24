@@ -11,6 +11,7 @@ use crate::ser::NetworkWriteExt;
 use crate::ser::ReadingError;
 use crate::ser::WritingError;
 
+use super::var_int::VarInt;
 use super::Codec;
 
 pub struct BitSet(pub Box<[i64]>);
@@ -20,22 +21,7 @@ impl Codec<BitSet> for BitSet {
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(usize::MAX) };
 
     fn written_size(&self) -> usize {
-        let len = self.0.len();
-        let len_varint = len as i32;
-
-        // Calculate VarInt size using zig-zag encoding
-        let zigzag = ((len_varint << 1) ^ (len_varint >> 31)) as u32;
-        let mut varint_size = 0;
-        let mut val = zigzag;
-        loop {
-            varint_size += 1;
-            val >>= 7;
-            if val == 0 {
-                break;
-            }
-        }
-
-        varint_size + 8 * len
+        VarInt(self.0.len() as i32).written_size()
     }
 
     fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
