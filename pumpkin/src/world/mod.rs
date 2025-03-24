@@ -42,7 +42,7 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, fluid::registry::get_fluid_by_state_id, level::SyncChunk};
+use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
     block::registry::{
@@ -1457,7 +1457,7 @@ impl World {
         position: &BlockPos,
     ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
-        get_fluid_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
