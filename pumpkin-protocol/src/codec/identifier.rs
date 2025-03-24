@@ -29,7 +29,7 @@ impl<'a> Codec<Identifier<'a>> for Identifier<'a> {
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(i16::MAX as usize) };
 
     fn written_size(&self) -> usize {
-        self.to_string().len()
+        self.namespace.len() + self.path.len()
     }
 
     fn encode(&self, writer: &mut impl Write) -> Result<(), WritingError> {
