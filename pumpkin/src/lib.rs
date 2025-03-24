@@ -22,11 +22,11 @@ use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::task::TaskTracker;
 
 pub mod block;
-pub mod fluid;
 pub mod command;
 pub mod data;
 pub mod entity;
 pub mod error;
+pub mod fluid;
 pub mod item;
 pub mod net;
 pub mod plugin;

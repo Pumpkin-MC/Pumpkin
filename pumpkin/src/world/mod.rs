@@ -8,11 +8,18 @@ pub mod explosion;
 pub mod time;
 
 use crate::{
-    block::{self, registry::BlockRegistry}, command::client_suggestions, entity::{player::Player, Entity, EntityBase, EntityId}, error::PumpkinError, fluid::registry::FluidRegistry, plugin::{
+    PLUGIN_MANAGER,
+    block::{self, registry::BlockRegistry},
+    command::client_suggestions,
+    entity::{Entity, EntityBase, EntityId, player::Player},
+    error::PumpkinError,
+    fluid::registry::FluidRegistry,
+    plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
-    }, server::Server, PLUGIN_MANAGER
+    },
+    server::Server,
 };
 use bitflags::bitflags;
 use border::Worldborder;
@@ -20,7 +27,12 @@ use bytes::Bytes;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::Block, entity::{EntityStatus, EntityType}, fluid::Fluid, particle::Particle, sound::{Sound, SoundCategory}, world::WorldEvent
+    block::Block,
+    entity::{EntityStatus, EntityType},
+    fluid::Fluid,
+    particle::Particle,
+    sound::{Sound, SoundCategory},
+    world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
@@ -416,7 +428,11 @@ impl World {
             log::info!("{:?}", scheduled_tick.target_block_id);
             let fluid = self.get_fluid(&scheduled_tick.block_pos).await.unwrap();
             if scheduled_tick.target_block_id != fluid.id {
-                log::info!("Fluid id not equal, {:?} != {:?}", scheduled_tick.target_block_id, fluid.id);
+                log::info!(
+                    "Fluid id not equal, {:?} != {:?}",
+                    scheduled_tick.target_block_id,
+                    fluid.id
+                );
                 continue;
             }
             if let Some(pumpkin_fluid) = self.fluid_registry.get_pumpkin_fluid(&fluid) {
@@ -1331,12 +1347,7 @@ impl World {
             .await;
     }
 
-    pub async fn schedule_fluid_tick(
-        &self,
-        block_id: u16,
-        block_pos: BlockPos,
-        delay: u16,
-    ) {
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
         self.level
             .schedule_fluid_tick(block_id, &block_pos, delay)
             .await;

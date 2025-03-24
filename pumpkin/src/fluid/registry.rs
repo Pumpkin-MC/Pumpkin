@@ -1,16 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
-use pumpkin_data::{fluid::Fluid, item::Item};
 use crate::entity::player::Player;
+use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{server::Server, world::World};
 
 use super::pumpkin_fluid::{FluidMetadata, PumpkinFluid};
 
-
-
-pub enum FluidActionResult{
+pub enum FluidActionResult {
     /// Allow other actions to be executed
     Continue,
     /// Block other actions
@@ -18,12 +16,12 @@ pub enum FluidActionResult{
 }
 
 #[derive(Default)]
-pub struct FluidRegistry{
+pub struct FluidRegistry {
     fluids: HashMap<String, Arc<dyn PumpkinFluid>>,
 }
 
-impl FluidRegistry{
-    pub fn register<T: PumpkinFluid + FluidMetadata + 'static>(&mut self, fluid: T){
+impl FluidRegistry {
+    pub fn register<T: PumpkinFluid + FluidMetadata + 'static>(&mut self, fluid: T) {
         self.fluids.insert(fluid.name(), Arc::new(fluid));
     }
 
@@ -34,9 +32,9 @@ impl FluidRegistry{
         location: BlockPos,
         server: &Server,
         world: &World,
-    ){
+    ) {
         let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
-        if let Some(pumpkin_fluid) = pumpkin_fluid{
+        if let Some(pumpkin_fluid) = pumpkin_fluid {
             pumpkin_fluid
                 .normal_use(fluid, player, location, server, world)
                 .await;
@@ -51,9 +49,9 @@ impl FluidRegistry{
         item: &Item,
         server: &Server,
         world: &World,
-    ) -> FluidActionResult{
+    ) -> FluidActionResult {
         let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
-        if let Some(pumpkin_fluid) = pumpkin_fluid{
+        if let Some(pumpkin_fluid) = pumpkin_fluid {
             return pumpkin_fluid
                 .use_with_item(fluid, player, location, item, server, world)
                 .await;
@@ -79,8 +77,8 @@ impl FluidRegistry{
     }
 
     #[must_use]
-    pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn PumpkinFluid>>{
-        self.fluids.get(format!("{}:{}", "minecraft", fluid.name).as_str())
+    pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn PumpkinFluid>> {
+        self.fluids
+            .get(format!("{}:{}", "minecraft", fluid.name).as_str())
     }
 }
-

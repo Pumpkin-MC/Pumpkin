@@ -3,8 +3,10 @@ use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
 use pumpkin_macros::pumpkin_fluid;
 use pumpkin_util::math::position::BlockPos;
 
-
-use crate::{fluid::pumpkin_fluid::PumpkinFluid, world::{BlockFlags, World}};
+use crate::{
+    fluid::pumpkin_fluid::PumpkinFluid,
+    world::{BlockFlags, World},
+};
 
 #[pumpkin_fluid("minecraft:flowing_water")]
 pub struct FlowingWater;
@@ -24,7 +26,9 @@ impl PumpkinFluid for FlowingWater {
         _old_state_id: u16,
         _notify: bool,
     ) {
-        world.schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED).await;
+        world
+            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+            .await;
     }
 
     async fn on_scheduled_tick(&self, world: &World, fluid: &Fluid, block_pos: &BlockPos) {
@@ -36,9 +40,14 @@ impl PumpkinFluid for FlowingWater {
             let mut block_props = FlowingWaterProperties::from_state_id(fluid.id, fluid);
             block_props.level = Level::L4;
             block_props.falling = Falling::False;
-            world.set_block_state(&block_under, block_props.to_state_id(&fluid), BlockFlags::NOTIFY_ALL).await;
+            world
+                .set_block_state(
+                    &block_under,
+                    block_props.to_state_id(&fluid),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
             return;
         }
     }
-
 }
