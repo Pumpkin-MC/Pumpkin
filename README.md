@@ -58,7 +58,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
   - [x] Chunk Saving (Vanilla, Linear)
-  - [ ] Redstone
+  - [x] Redstone
   - [ ] Liquid Physics
   - [x] Biomes
   - [ ] Vegetation

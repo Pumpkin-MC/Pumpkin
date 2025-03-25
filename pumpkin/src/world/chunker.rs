@@ -2,7 +2,6 @@ use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
-use pumpkin_util::math::{get_section_cord, position::BlockPos, vector3::Vector3};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;
@@ -100,14 +99,4 @@ pub async fn update_position(player: &Arc<Player>) {
             );
         }
     }
-}
-
-#[must_use]
-pub const fn chunk_section_from_pos(block_pos: &BlockPos) -> Vector3<i32> {
-    let block_pos = block_pos.0;
-    Vector3::new(
-        get_section_cord(block_pos.x),
-        get_section_cord(block_pos.y),
-        get_section_cord(block_pos.z),
-    )
 }

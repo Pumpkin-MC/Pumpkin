@@ -1,5 +1,5 @@
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::iter::repeat_with;
 use thiserror::Error;
@@ -56,7 +56,55 @@ pub enum CompressionError {
     ZstdError(std::io::Error),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[repr(i32)]
+pub enum TickPriority {
+    ExtremelyHigh = -3,
+    VeryHigh = -2,
+    High = -1,
+    Normal = 0,
+    Low = 1,
+    VeryLow = 2,
+    ExtremelyLow = 3,
+}
+
+impl TickPriority {
+    pub fn values() -> [TickPriority; 7] {
+        [
+            TickPriority::ExtremelyHigh,
+            TickPriority::VeryHigh,
+            TickPriority::High,
+            TickPriority::Normal,
+            TickPriority::Low,
+            TickPriority::VeryLow,
+            TickPriority::ExtremelyLow,
+        ]
+    }
+}
+
+impl From<i32> for TickPriority {
+    fn from(value: i32) -> Self {
+        match value {
+            -3 => TickPriority::ExtremelyHigh,
+            -2 => TickPriority::VeryHigh,
+            -1 => TickPriority::High,
+            0 => TickPriority::Normal,
+            1 => TickPriority::Low,
+            2 => TickPriority::VeryLow,
+            3 => TickPriority::ExtremelyLow,
+            _ => panic!("Invalid tick priority: {}", value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScheduledTick {
+    pub block_pos: BlockPos,
+    pub delay: u16,
+    pub priority: TickPriority,
+    pub target_block_id: u16,
+}
+
 pub struct ChunkData {
     /// See description in [`ChunkBlocks`]
     pub blocks: ChunkBlocks,
@@ -64,6 +112,8 @@ pub struct ChunkData {
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
     pub dirty: bool,
+    pub block_ticks: Vec<ScheduledTick>,
+    pub fluid_ticks: Vec<ScheduledTick>,
 }
 
 /// Represents pure block data for a chunk.
@@ -262,7 +312,6 @@ impl ChunkData {
         todo!()
     }
 }
-
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
     #[error("Failed reading chunk status {0}")]

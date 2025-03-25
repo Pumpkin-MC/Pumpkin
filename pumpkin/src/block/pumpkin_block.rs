@@ -1,7 +1,7 @@
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
@@ -27,7 +27,7 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) {
     }
     fn should_drop_items_on_explosion(&self) -> bool {
@@ -41,19 +41,20 @@ pub trait PumpkinBlock: Send + Sync {
         _location: BlockPos,
         _item: &Item,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         BlockActionResult::Continue
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// getPlacementState in source code
     async fn on_place(
         &self,
         _server: &Server,
         _world: &World,
         block: &Block,
         _face: &BlockDirection,
-        _block_pos: &BlockPos,
+        _pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player_direction: &HorizontalFacing,
         _other: bool,
@@ -61,25 +62,21 @@ pub trait PumpkinBlock: Send + Sync {
         block.default_state_id
     }
 
-    async fn can_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        _block: &Block,
-        _face: &BlockDirection,
-        _block_pos: &BlockPos,
-        _player_direction: &HorizontalFacing,
-    ) -> bool {
+    async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}
+
+    async fn can_place_at(&self, _world: &World, _pos: &BlockPos) -> bool {
         true
     }
 
+    /// onBlockAdded in source code
     async fn placed(
         &self,
+        _world: &Arc<World>,
         _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _server: &Server,
-        _world: &World,
+        _state_id: u16,
+        _pos: &BlockPos,
+        _old_state_id: u16,
+        _notify: bool,
     ) {
     }
 
@@ -106,12 +103,82 @@ pub trait PumpkinBlock: Send + Sync {
 
     async fn on_neighbor_update(
         &self,
-        _server: &Server,
+        _world: &Arc<World>,
+        _block: &Block,
+        _pos: &BlockPos,
+        _source_block: &Block,
+        _notify: bool,
+    ) {
+    }
+
+    /// Called if a block state is replaced or it replaces another state
+    async fn prepare(
+        &self,
+        _world: &Arc<World>,
+        _pos: &BlockPos,
+        _block: &Block,
+        _state_id: u16,
+        _flags: BlockFlags,
+    ) {
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn get_state_for_neighbor_update(
+        &self,
         _world: &World,
         _block: &Block,
-        _block_pos: &BlockPos,
-        _source_face: &BlockDirection,
-        _source_block_pos: &BlockPos,
+        state: u16,
+        _pos: &BlockPos,
+        _direction: &BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: u16,
+    ) -> u16 {
+        state
+    }
+
+    async fn on_scheduled_tick(&self, _world: &Arc<World>, _block: &Block, _pos: &BlockPos) {}
+
+    async fn on_state_replaced(
+        &self,
+        _world: &Arc<World>,
+        _block: &Block,
+        _location: BlockPos,
+        _old_state_id: u16,
+        _moved: bool,
     ) {
+    }
+
+    /// Sides where redstone connects to
+    async fn emits_redstone_power(
+        &self,
+        _block: &Block,
+        _state: &BlockState,
+        _direction: &BlockDirection,
+    ) -> bool {
+        false
+    }
+
+    /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
+    async fn get_weak_redstone_power(
+        &self,
+        _block: &Block,
+        _world: &World,
+        _pos: &BlockPos,
+        _state: &BlockState,
+        _direction: &BlockDirection,
+    ) -> u8 {
+        0
+    }
+
+    /// Strong redstone power. this can power a block that then gives power
+    async fn get_strong_redstone_power(
+        &self,
+        _block: &Block,
+        _world: &World,
+        _pos: &BlockPos,
+        _state: &BlockState,
+        _direction: &BlockDirection,
+    ) -> u8 {
+        0
     }
 }

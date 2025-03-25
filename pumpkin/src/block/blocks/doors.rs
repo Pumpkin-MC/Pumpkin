@@ -16,6 +16,7 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
+use crate::world::BlockFlags;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 
@@ -24,7 +25,7 @@ use crate::world::World;
 
 type DoorProperties = pumpkin_data::block::OakDoorLikeProperties;
 
-async fn toggle_door(world: &World, block_pos: &BlockPos) {
+async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
     let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
     door_props.open = door_props.open.flip();
@@ -40,10 +41,18 @@ async fn toggle_door(world: &World, block_pos: &BlockPos) {
     other_door_props.open = door_props.open;
 
     world
-        .set_block_state(block_pos, door_props.to_state_id(&block))
+        .set_block_state(
+            block_pos,
+            door_props.to_state_id(&block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
         .await;
     world
-        .set_block_state(&other_pos, other_door_props.to_state_id(&other_block))
+        .set_block_state(
+            &other_pos,
+            other_door_props.to_state_id(&other_block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
         .await;
 }
 
@@ -94,15 +103,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 door_props.to_state_id(block)
             }
 
-            async fn can_place(
-                &self,
-                _server: &Server,
-                world: &World,
-                _block: &Block,
-                _face: &BlockDirection,
-                block_pos: &BlockPos,
-                _player_direction: &HorizontalFacing,
-            ) -> bool {
+            async fn can_place_at(&self, world: &World, block_pos: &BlockPos) -> bool {
                 if world
                     .get_block_state(&block_pos.offset(BlockDirection::Up.to_offset()))
                     .await
@@ -115,20 +116,21 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
 
             async fn placed(
                 &self,
+                world: &Arc<World>,
                 block: &Block,
-                _player: &Player,
-                location: BlockPos,
-                _server: &Server,
-                world: &World,
+                state_id: u16,
+                block_pos: &BlockPos,
+                _old_state_id: u16,
+                _notify: bool,
             ) {
-                let state_id = world.get_block_state_id(&location).await.unwrap();
                 let mut door_props = DoorProperties::from_state_id(state_id, block);
                 door_props.half = DoubleBlockHalf::Upper;
 
                 world
                     .set_block_state(
-                        &location.offset(BlockDirection::Up.to_offset()),
+                        &block_pos.offset(BlockDirection::Up.to_offset()),
                         door_props.to_state_id(block),
+                        BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
                     )
                     .await;
             }
@@ -138,7 +140,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 block: &Block,
                 _player: &Player,
                 location: BlockPos,
-                server: &Server,
+                _server: &Server,
                 world: Arc<World>,
                 state: BlockState,
             ) {
@@ -154,7 +156,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 if let Ok(other_block) = world.get_block(&other_pos).await {
                     if other_block.id == block.id {
                         world
-                            .break_block(&other_pos, None, true, Some(server))
+                            .break_block(&other_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
                             .await;
                     }
                 }
@@ -167,7 +169,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 location: BlockPos,
                 _item: &Item,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) -> BlockActionResult {
                 if !can_open_door(block, player) {
                     return BlockActionResult::Continue;
@@ -184,7 +186,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 player: &Player,
                 location: BlockPos,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) {
                 if !can_open_door(block, player) {
                     return;

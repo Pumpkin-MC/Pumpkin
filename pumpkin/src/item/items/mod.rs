@@ -1,4 +1,5 @@
 mod egg;
+mod hoe;
 mod snowball;
 mod sword;
 mod trident;
@@ -6,6 +7,7 @@ mod trident;
 use std::sync::Arc;
 
 use egg::EggItem;
+use hoe::HoeItem;
 use snowball::SnowBallItem;
 use sword::SwordItem;
 use trident::TridentItem;
@@ -16,6 +18,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     let mut manager = ItemRegistry::default();
 
     manager.register(SnowBallItem);
+    manager.register(HoeItem);
     manager.register(EggItem);
     manager.register(SwordItem);
     manager.register(TridentItem);

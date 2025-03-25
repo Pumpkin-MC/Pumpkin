@@ -310,7 +310,7 @@ impl Client {
         // TODO: allow plugins to access this
         log::debug!(
             "Received cookie_response[login]: key: \"{}\", payload_length: \"{:?}\"",
-            packet.key.to_string(),
+            packet.key,
             packet.payload.as_ref().map(|p| p.len())
         );
     }

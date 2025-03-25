@@ -30,7 +30,7 @@ use pumpkin_util::math::{
 use serde::Serialize;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicI32},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 use tokio::sync::RwLock;
 
@@ -152,7 +152,6 @@ impl Entity {
             chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
-            // TODO: Load this from previous instance
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
@@ -498,6 +497,7 @@ impl NBTStorage for Entity {
             "Rotation",
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
         );
+        nbt.put_bool("OnGround", self.on_ground.load(Ordering::Relaxed));
 
         // todo more...
     }
@@ -507,7 +507,8 @@ impl NBTStorage for Entity {
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        self.pos.store(Vector3::new(x, y, z));
+        dbg!(y);
+        self.set_pos(Vector3::new(x, y, z));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
         let y = velocity[1].extract_double().unwrap_or(0.0);
@@ -516,9 +517,9 @@ impl NBTStorage for Entity {
         let rotation = nbt.get_list("Rotation").unwrap();
         let yaw = rotation[0].extract_float().unwrap_or(0.0);
         let pitch = rotation[1].extract_float().unwrap_or(0.0);
-        self.yaw.store(yaw);
-        self.pitch.store(pitch);
-
+        self.set_rotation(yaw, pitch);
+        self.on_ground
+            .store(nbt.get_bool("OnGround").unwrap_or(false), Ordering::Relaxed);
         // todo more...
     }
 }

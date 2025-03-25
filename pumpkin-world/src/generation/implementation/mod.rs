@@ -77,6 +77,8 @@ impl WorldGenerator for VanillaGenerator {
             heightmap: Default::default(),
             position: at,
             dirty: true,
+            block_ticks: Default::default(),
+            fluid_ticks: Default::default(),
         }
     }
 }

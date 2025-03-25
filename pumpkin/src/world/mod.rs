@@ -8,7 +8,8 @@ pub mod explosion;
 pub mod time;
 
 use crate::{
-    PLUGIN_MANAGER, block,
+    PLUGIN_MANAGER,
+    block::{self, registry::BlockRegistry},
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
@@ -19,11 +20,13 @@ use crate::{
     },
     server::Server,
 };
+use bitflags::bitflags;
 use border::Worldborder;
 use bytes::Bytes;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
+    block::Block,
     entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -33,8 +36,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-        CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
+        CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -46,11 +49,10 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::level::Level;
-use pumpkin_world::level::SyncChunk;
+use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
     block::registry::{
@@ -58,6 +60,7 @@ use pumpkin_world::{
     },
     coordinates::ChunkRelativeBlockCoordinates,
 };
+use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use thiserror::Error;
@@ -76,10 +79,25 @@ pub mod weather;
 
 use weather::Weather;
 
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct BlockFlags: u32 {
+        const NOTIFY_NEIGHBORS                      = 0b000_0000_0001;
+        const NOTIFY_LISTENERS                      = 0b000_0000_0010;
+        const NOTIFY_ALL                            = 0b000_0000_0011;
+        const FORCE_STATE                           = 0b000_0000_0100;
+        const SKIP_DROPS                            = 0b000_0000_1000;
+        const MOVED                                 = 0b000_0001_0000;
+        const SKIP_REDSTONE_WIRE_STATE_REPLACEMENT  = 0b000_0010_0000;
+        const SKIP_BLOCK_ENTITY_REPLACED_CALLBACK   = 0b000_0100_0000;
+        const SKIP_BLOCK_ADDED_CALLBACK             = 0b000_1000_0000;
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GetBlockError {
-    BlockOutOfWorldBounds,
     InvalidBlockId,
+    BlockOutOfWorldBounds,
 }
 
 impl std::fmt::Display for GetBlockError {
@@ -127,14 +145,27 @@ pub struct World {
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in.
     pub dimension_type: DimensionType,
+    pub sea_level: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
+    /// Block Behaviour
+    pub block_registry: Arc<BlockRegistry>,
+    /// A map of unsent block changes, keyed by block position.
+    unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
 }
 
 impl World {
     #[must_use]
-    pub fn load(level: Level, dimension_type: DimensionType) -> Self {
+    pub fn load(
+        level: Level,
+        dimension_type: DimensionType,
+        block_registry: Arc<BlockRegistry>,
+    ) -> Self {
+        // TODO
+        let generation_settings = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
         Self {
             level: Arc::new(level),
             players: Arc::new(RwLock::new(HashMap::new())),
@@ -144,6 +175,9 @@ impl World {
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
             weather: Mutex::new(Weather::new()),
+            block_registry,
+            sea_level: generation_settings.sea_level,
+            unsent_block_changes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -282,8 +316,10 @@ impl World {
         .await;
     }
 
-    pub async fn tick(&self, server: &Server) {
-        // World ticks
+    pub async fn tick(self: &Arc<Self>, server: &Server) {
+        self.flush_block_updates().await;
+
+        // world ticks
         {
             let mut level_time = self.level_time.lock().await;
             level_time.tick_time();
@@ -297,7 +333,9 @@ impl World {
             weather.tick_weather(self).await;
         };
 
-        // Player ticks
+        self.tick_scheduled_block_ticks().await;
+
+        // player ticks
         for player in self.players.read().await.values() {
             player.tick(server).await;
         }
@@ -325,6 +363,52 @@ impl World {
             }
             if let Some(player) = collied_player {
                 entity.on_player_collision(player).await;
+            }
+        }
+    }
+
+    pub async fn flush_block_updates(&self) {
+        let mut block_state_updates_by_chunk_section = HashMap::new();
+        for (position, block_state_id) in self.unsent_block_changes.lock().await.drain() {
+            let chunk_section = chunk_section_from_pos(&position);
+            block_state_updates_by_chunk_section
+                .entry(chunk_section)
+                .or_insert(Vec::new())
+                .push((position, block_state_id));
+        }
+
+        // TODO: only send packet to players who have the chunks loaded
+        // TODO: Send light updates to update the wire directly next to a broken block
+        for chunk_section in block_state_updates_by_chunk_section.values() {
+            if chunk_section.is_empty() {
+                continue;
+            }
+            if chunk_section.len() == 1 {
+                let (block_pos, block_state_id) = chunk_section[0];
+                self.broadcast_packet_all(&CBlockUpdate::new(
+                    block_pos,
+                    i32::from(block_state_id).into(),
+                ))
+                .await;
+            } else {
+                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
+                    .await;
+            }
+        }
+    }
+
+    pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
+        let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
+
+        for scheduled_tick in blocks_to_tick {
+            let block = self.get_block(&scheduled_tick.block_pos).await.unwrap();
+            if scheduled_tick.target_block_id != block.id {
+                continue;
+            }
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
+                pumpkin_block
+                    .on_scheduled_tick(self, &block, &scheduled_tick.block_pos)
+                    .await;
             }
         }
     }
@@ -378,14 +462,14 @@ impl World {
                 false,
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
-                0, // seed
+                biome::hash_seed(self.level.seed.0 as i64), // seed
                 gamemode as u8,
                 base_config.default_gamemode as i8,
                 false,
                 false,
                 None,
                 0.into(),
-                0.into(),
+                self.sea_level.into(),
                 false,
             ))
             .await;
@@ -395,16 +479,28 @@ impl World {
             let command_dispatcher = server.command_dispatcher.read().await;
             client_suggestions::send_c_commands_packet(&player, &command_dispatcher).await;
         };
-        // Teleport
-        let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
-        let yaw = info.spawn_angle;
-        let pitch = 10.0;
 
-        let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
-            .await;
-        position.y = f64::from(top + 1);
+        // Teleport
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
+            let pitch = player.living_entity.entity.pitch.load();
+
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level.level_info;
+            let position = Vector3::new(
+                f64::from(info.spawn_x),
+                f64::from(info.spawn_y) + 1.0,
+                f64::from(info.spawn_z),
+            );
+            let yaw = info.spawn_angle;
+            let pitch = 0.0;
+
+            (position, yaw, pitch)
+        };
+
+        let velocity = player.living_entity.entity.velocity.load();
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
@@ -470,7 +566,6 @@ impl World {
         // Spawn the player for every client.
         self.broadcast_packet_except(
             &[player.gameprofile.id],
-            // TODO: add velo
             &CSpawnEntity::new(
                 entity_id.into(),
                 gameprofile.id,
@@ -480,7 +575,7 @@ impl World {
                 yaw,
                 yaw,
                 0.into(),
-                Vector3::new(0.0, 0.0, 0.0),
+                velocity,
             ),
         )
         .await;
@@ -504,7 +599,7 @@ impl World {
                     entity.pitch.load(),
                     entity.head_yaw.load(),
                     0.into(),
-                    Vector3::new(0.0, 0.0, 0.0),
+                    entity.velocity.load(),
                 ))
                 .await;
         }
@@ -579,7 +674,9 @@ impl World {
         //     }
         // }
 
+        player.has_played_before.store(true, Ordering::Relaxed);
         player.send_mobs(self).await;
+        player.send_inventory().await;
     }
 
     pub async fn send_world_info(
@@ -671,14 +768,14 @@ impl World {
             .enqueue_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
-                0, // seed
+                biome::hash_seed(self.level.seed.0 as i64), // seed
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,
                 false,
                 Some((death_dimension, death_location)),
                 0.into(),
-                0.into(),
+                self.sea_level.into(),
                 data_kept,
             ))
             .await;
@@ -690,9 +787,13 @@ impl World {
 
         // Teleport
         let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+        let mut position = Vector3::new(
+            f64::from(info.spawn_x),
+            f64::from(info.spawn_y),
+            f64::from(info.spawn_z),
+        );
         let yaw = info.spawn_angle;
-        let pitch = 10.0;
+        let pitch = 0.0;
 
         let top = self
             .get_top_block(Vector2::new(position.x as i32, position.z as i32))
@@ -1086,29 +1187,132 @@ impl World {
         .await;
     }
 
-    /// Sets a block.
-    pub async fn set_block_state(&self, position: &BlockPos, block_state_id: u16) -> u16 {
-        let (chunk_coordinate, relative_coordinates) = position.chunk_and_chunk_relative_position();
-
-        // Since we divide by 16, remnant can never exceed `u8::MAX`
-        let relative = ChunkRelativeBlockCoordinates::from(relative_coordinates);
-
-        let chunk = self.receive_chunk(chunk_coordinate).await.0;
+    /// Sets a block
+    pub async fn set_block_state(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        block_state_id: u16,
+        flags: BlockFlags,
+    ) -> u16 {
+        let chunk = self.get_chunk(position).await;
+        let (_, relative) = position.chunk_and_chunk_relative_position();
+        let relative = ChunkRelativeBlockCoordinates::from(relative);
         let mut chunk = chunk.write().await;
+        let replaced_block_state_id = chunk
+            .blocks
+            .get_block(relative)
+            .unwrap_or(Block::AIR.default_state_id);
+        if replaced_block_state_id == block_state_id {
+            return block_state_id;
+        }
         chunk.dirty = true;
-        let replaced_block_state_id = chunk.blocks.get_block(relative).unwrap();
+
         chunk.blocks.set_block(relative, block_state_id);
+        self.unsent_block_changes
+            .lock()
+            .await
+            .insert(*position, block_state_id);
         drop(chunk);
 
-        self.broadcast_packet_all(&CBlockUpdate::new(
-            *position,
-            i32::from(block_state_id).into(),
-        ))
-        .await;
+        let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
+        let new_block = Block::from_state_id(block_state_id).unwrap();
+
+        let block_moved = flags.contains(BlockFlags::MOVED);
+
+        // WorldChunk.java line 310
+        if old_block != new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
+            self.block_registry
+                .on_state_replaced(
+                    self,
+                    &old_block,
+                    *position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
+                .await;
+        }
+
+        let block_state = self.get_block_state(position).await.unwrap();
+        let new_block = Block::from_state_id(block_state_id).unwrap();
+
+        // WorldChunk.java line 318
+        if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
+            self.block_registry
+                .on_placed(
+                    self,
+                    &new_block,
+                    block_state_id,
+                    position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
+                .await;
+        }
+
+        // Ig they do this cause it could be modified in chunkPos.setBlockState?
+        if block_state.id == block_state_id {
+            if flags.contains(BlockFlags::NOTIFY_LISTENERS) {
+                // Mob AI update
+            }
+
+            if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
+                self.update_neighbors(position, None).await;
+                // TODO: updateComparators
+            }
+
+            if !flags.contains(BlockFlags::FORCE_STATE) {
+                let mut new_flags = flags;
+                new_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
+                new_flags.remove(BlockFlags::NOTIFY_LISTENERS);
+                self.block_registry
+                    .prepare(
+                        self,
+                        position,
+                        &Block::from_state_id(replaced_block_state_id).unwrap(),
+                        replaced_block_state_id,
+                        new_flags,
+                    )
+                    .await;
+                self.block_registry
+                    .update_neighbors(
+                        self,
+                        position,
+                        &Block::from_state_id(block_state_id).unwrap(),
+                        new_flags,
+                    )
+                    .await;
+                self.block_registry
+                    .prepare(
+                        self,
+                        position,
+                        &Block::from_state_id(block_state_id).unwrap(),
+                        block_state_id,
+                        new_flags,
+                    )
+                    .await;
+            }
+        }
 
         replaced_block_state_id
     }
 
+    pub async fn schedule_block_tick(
+        &self,
+        block: &Block,
+        block_pos: BlockPos,
+        delay: u16,
+        priority: TickPriority,
+    ) {
+        self.level
+            .schedule_block_tick(block.id, block_pos, delay, priority)
+            .await;
+    }
+
+    pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        self.level
+            .is_block_tick_scheduled(block_pos, block.id)
+            .await
+    }
     // Stream the chunks (don't collect them and then do stuff with them)
     /// Spawns a tokio task to stream chunks.
     /// Important: must be called from an async function (or changed to accept a tokio runtime
@@ -1143,13 +1347,11 @@ impl World {
             .expect("Channel closed for unknown reason")
     }
 
-    /// If `server` is sent, it will do a block update.
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
         cause: Option<Arc<Player>>,
-        drop: bool,
-        server: Option<&Server>,
+        flags: BlockFlags,
     ) {
         let block = self.get_block(position).await.unwrap();
         let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
@@ -1161,7 +1363,7 @@ impl World {
             .await;
 
         if !event.cancelled {
-            let broken_block_state_id = self.set_block_state(position, 0).await;
+            let broken_block_state_id = self.set_block_state(position, 0, flags).await;
 
             let particles_packet = CWorldEvent::new(
                 WorldEvent::BlockBroken as i32,
@@ -1170,7 +1372,7 @@ impl World {
                 false,
             );
 
-            if drop {
+            if !flags.contains(BlockFlags::SKIP_DROPS) {
                 block::drop_loot(self, &block, position, true, broken_block_state_id).await;
             }
 
@@ -1181,17 +1383,23 @@ impl World {
                 }
                 None => self.broadcast_packet_all(&particles_packet).await,
             }
-
-            if let Some(server) = server {
-                self.update_neighbors(server, position, None).await;
-            }
         }
     }
 
+    pub async fn get_chunk(&self, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
+        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
+        let chunk = match self.level.try_get_chunk(chunk_coordinate) {
+            Some(chunk) => chunk.clone(),
+            None => self.receive_chunk(chunk_coordinate).await.0,
+        };
+        chunk
+    }
+
     pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
-        let (chunk, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(position).await;
+        let (_, relative) = position.chunk_and_chunk_relative_position();
         let relative = ChunkRelativeBlockCoordinates::from(relative);
-        let chunk = self.receive_chunk(chunk).await.0;
+
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         let Some(id) = chunk.blocks.get_block(relative) else {
@@ -1219,7 +1427,14 @@ impl World {
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    /// Gets a `Block` + `BlockState` from the block registry. Returns `None` if the block state has not been found.
+    pub fn get_state_by_id(
+        &self,
+        id: u16,
+    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
+        get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
@@ -1228,13 +1443,13 @@ impl World {
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    /// Updates neighboring blocks of a block.
+    /// Updates neighboring blocks of a block
     pub async fn update_neighbors(
-        &self,
-        server: &Server,
+        self: &Arc<Self>,
         block_pos: &BlockPos,
         except: Option<&BlockDirection>,
     ) {
+        let source_block = self.get_block(block_pos).await.unwrap();
         for direction in BlockDirection::update_order() {
             if Some(&direction) == except {
                 continue;
@@ -1243,20 +1458,81 @@ impl World {
             let neighbor_block = self.get_block(&neighbor_pos).await;
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
-                    server.block_registry.get_pumpkin_block(&neighbor_block)
+                    self.block_registry.get_pumpkin_block(&neighbor_block)
                 {
                     neighbor_pumpkin_block
                         .on_neighbor_update(
-                            server,
                             self,
                             &neighbor_block,
                             &neighbor_pos,
-                            &direction,
-                            block_pos,
+                            &source_block,
+                            false,
                         )
                         .await;
                 }
             }
+        }
+    }
+
+    pub async fn update_neighbor(
+        self: &Arc<Self>,
+        neighbor_block_pos: &BlockPos,
+        source_block: &Block,
+    ) {
+        let neighbor_block = self.get_block(neighbor_block_pos).await.unwrap();
+
+        if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(&neighbor_block)
+        {
+            neighbor_pumpkin_block
+                .on_neighbor_update(
+                    self,
+                    &neighbor_block,
+                    neighbor_block_pos,
+                    source_block,
+                    false,
+                )
+                .await;
+        }
+    }
+
+    pub async fn replace_with_state_for_neighbor_update(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        direction: &BlockDirection,
+        flags: BlockFlags,
+    ) {
+        let (block, block_state) = match self.get_block_and_block_state(block_pos).await {
+            Ok(block) => block,
+            Err(_error) => {
+                // Neighbor is outside the world. Don't try to update it
+                return;
+            }
+        };
+
+        if flags.contains(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT)
+            && block.id == Block::REDSTONE_WIRE.id
+        {
+            return;
+        }
+
+        let neighbor_pos = block_pos.offset(direction.to_offset());
+        let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await.unwrap();
+
+        let new_state_id = self
+            .block_registry
+            .get_state_for_neighbor_update(
+                self,
+                &block,
+                block_state.id,
+                block_pos,
+                direction,
+                &neighbor_pos,
+                neighbor_state_id,
+            )
+            .await;
+
+        if new_state_id != block_state.id {
+            self.set_block_state(block_pos, new_state_id, flags).await;
         }
     }
 }
