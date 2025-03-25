@@ -1,3 +1,4 @@
+use blocks::cactus::CactusBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::register_door_blocks;
 use blocks::farmland::FarmLandBlock;
@@ -46,6 +47,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     manager.register(JukeboxBlock);
     manager.register(SugarCaneBlock);
+    manager.register(CactusBlock);
     manager.register(CraftingTableBlock);
     manager.register(FurnaceBlock);
     manager.register(ChestBlock);
