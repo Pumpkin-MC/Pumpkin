@@ -1,10 +1,13 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::{
+    block_entity::BlockEntity,
+    math::{position::BlockPos, vector2::Vector2},
+};
 use tokio::{
     sync::{Mutex, Notify, RwLock, mpsc},
     task::{JoinHandle, JoinSet},
@@ -56,6 +59,7 @@ pub struct Level {
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
+    block_entities: Arc<Mutex<HashMap<BlockPos, Arc<dyn BlockEntity + Send + Sync + 'static>>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
@@ -136,6 +140,7 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             block_ticks: Arc::new(Mutex::new(Vec::new())),
+            block_entities: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -566,5 +571,22 @@ impl Level {
             priority,
             target_block_id: block_id,
         });
+    }
+
+    pub async fn get_block_entity(
+        &self,
+        block_pos: BlockPos,
+    ) -> Option<Arc<dyn BlockEntity + Send + Sync + 'static>> {
+        let block_entities = self.block_entities.lock().await;
+        block_entities.get(&block_pos).cloned()
+    }
+
+    pub async fn set_block_entity(
+        &self,
+        block_pos: BlockPos,
+        block_entity: Arc<dyn BlockEntity + Send + Sync + 'static>,
+    ) {
+        let mut block_entities = self.block_entities.lock().await;
+        block_entities.insert(block_pos, block_entity);
     }
 }

@@ -22,6 +22,7 @@ use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::task::TaskTracker;
 
 pub mod block;
+pub mod block_entities;
 pub mod command;
 pub mod data;
 pub mod entity;
@@ -31,7 +32,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-pub mod block_entities;
 
 const GIT_VERSION: &str = env!("GIT_VERSION");
 
