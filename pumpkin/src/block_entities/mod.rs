@@ -1,16 +1,15 @@
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::position::BlockPos;
+use std::sync::Arc;
 
-pub trait BlockEntity {
-    fn write_nbt(&self, nbt: &mut NbtCompound);
-    fn read_nbt(&mut self, nbt: &NbtCompound);
-    fn identifier(&self) -> &'static str;
-    fn get_position(&self) -> BlockPos;
-    fn write_identifier_and_position(&self, nbt: &mut NbtCompound) {
-        nbt.put_string("id", self.identifier().to_string());
-        let position = self.get_position();
-        nbt.put_int("x", position.0.x);
-        nbt.put_int("y", position.0.y);
-        nbt.put_int("z", position.0.z);
+use chest::Chest;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::block_entity::{BlockEntity, block_entity_from_generic};
+
+pub mod chest;
+
+pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Arc<dyn BlockEntity> {
+    let id = nbt.get_string("id").unwrap();
+    match id.as_str() {
+        "chest" => Arc::new(block_entity_from_generic::<Chest>(nbt)),
+        _ => unreachable!(),
     }
 }

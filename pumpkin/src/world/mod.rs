@@ -10,6 +10,7 @@ pub mod time;
 use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
+    block_entities::block_entity_from_nbt,
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
@@ -317,6 +318,11 @@ impl World {
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
+        for block_entity in self.level.drain_unhandled_block_entities().await {
+            let block_entity = block_entity_from_nbt(&block_entity);
+            self.level.add_block_entity(block_entity).await;
+        }
+
         self.flush_block_updates().await;
 
         // world ticks

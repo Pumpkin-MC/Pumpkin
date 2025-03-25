@@ -79,6 +79,7 @@ impl WorldGenerator for VanillaGenerator {
             dirty: true,
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
+            block_entities: Default::default(),
         }
     }
 }

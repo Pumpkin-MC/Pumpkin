@@ -920,6 +920,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 })
                 .collect()
         },
+        block_entities: chunk_data.block_entities.clone(),
     };
 
     let mut result = Vec::new();

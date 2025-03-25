@@ -80,6 +80,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             dirty: true,
             block_ticks: vec![],
             fluid_ticks: vec![],
+            block_entities: vec![],
         }
     }
 }

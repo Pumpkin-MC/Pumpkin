@@ -1,11 +1,12 @@
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use io::Read;
+use serde::{Deserialize, Serialize};
 use serializer::WriteAdaptor;
 
 use crate::*;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum NbtTag {
     End = END_ID,

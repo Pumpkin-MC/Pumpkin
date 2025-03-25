@@ -1,4 +1,4 @@
-use pumpkin_nbt::nbt_long_array;
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::iter::repeat_with;
@@ -114,6 +114,7 @@ pub struct ChunkData {
     pub dirty: bool,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
+    pub block_entities: Vec<NbtCompound>,
 }
 
 /// Represents pure block data for a chunk.

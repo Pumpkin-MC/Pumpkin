@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::{from_bytes, nbt_long_array};
+use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 
 use pumpkin_util::math::{ceil_log2, position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
@@ -148,6 +148,7 @@ impl ChunkData {
                     .id,
                 })
                 .collect(),
+            block_entities: chunk_data.block_entities,
         })
     }
 }
@@ -213,4 +214,6 @@ struct ChunkNbt {
     block_ticks: Vec<SerializedScheduledTick>,
     #[serde(rename = "fluid_ticks")]
     fluid_ticks: Vec<SerializedScheduledTick>,
+    #[serde(rename = "block_entities")]
+    block_entities: Vec<NbtCompound>,
 }

@@ -4,6 +4,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     block_entity::BlockEntity,
     math::{position::BlockPos, vector2::Vector2},
@@ -50,7 +51,7 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
@@ -59,7 +60,8 @@ pub struct Level {
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
-    block_entities: Arc<Mutex<HashMap<BlockPos, Arc<dyn BlockEntity + Send + Sync + 'static>>>>,
+    block_entities: Mutex<HashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    unhandled_block_entities: Arc<Mutex<Vec<NbtCompound>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
@@ -140,7 +142,8 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             block_ticks: Arc::new(Mutex::new(Vec::new())),
-            block_entities: Arc::new(Mutex::new(HashMap::new())),
+            block_entities: Mutex::new(HashMap::new()),
+            unhandled_block_entities: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -348,6 +351,7 @@ impl Level {
             return;
         }
         let mut block_ticks = self.block_ticks.lock().await;
+        let mut block_entities = self.block_entities.lock().await;
 
         for (coord, chunk) in &chunks_to_write {
             let mut chunk_data = chunk.write().await;
@@ -363,8 +367,21 @@ impl Level {
                     true
                 }
             });
+            chunk_data.block_entities.clear();
+            block_entities.retain(|pos, block_entity| {
+                let (chunk_coord, _relative_coord) = pos.chunk_and_chunk_relative_position();
+                if chunk_coord == *coord {
+                    let mut nbt = NbtCompound::new();
+                    block_entity.write_internal(&mut nbt);
+                    chunk_data.block_entities.push(nbt);
+                    false
+                } else {
+                    true
+                }
+            });
         }
         drop(block_ticks);
+        drop(block_entities);
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
@@ -443,6 +460,7 @@ impl Level {
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
         let level_block_ticks = self.block_ticks.clone();
+        let unhandled_block_entities = self.unhandled_block_entities.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
                 match data {
@@ -454,6 +472,11 @@ impl Level {
                         let mut level_block_ticks = level_block_ticks.lock().await;
                         level_block_ticks.extend(block_ticks);
                         drop(level_block_ticks);
+
+                        let block_entities = chunk.read().await.block_entities.clone();
+                        let mut unhandled_block_entities = unhandled_block_entities.lock().await;
+                        unhandled_block_entities.extend(block_entities);
+                        drop(unhandled_block_entities);
 
                         let value = loaded_chunks
                             .entry(position)
@@ -573,20 +596,19 @@ impl Level {
         });
     }
 
-    pub async fn get_block_entity(
-        &self,
-        block_pos: BlockPos,
-    ) -> Option<Arc<dyn BlockEntity + Send + Sync + 'static>> {
+    pub async fn get_block_entity(&self, block_pos: BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let block_entities = self.block_entities.lock().await;
         block_entities.get(&block_pos).cloned()
     }
 
-    pub async fn set_block_entity(
-        &self,
-        block_pos: BlockPos,
-        block_entity: Arc<dyn BlockEntity + Send + Sync + 'static>,
-    ) {
+    pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let mut block_entities = self.block_entities.lock().await;
-        block_entities.insert(block_pos, block_entity);
+        block_entities.insert(block_entity.get_position(), block_entity);
+    }
+
+    pub async fn drain_unhandled_block_entities(&self) -> Vec<NbtCompound> {
+        let mut unhandled_block_entities = self.unhandled_block_entities.lock().await;
+        let block_entities = unhandled_block_entities.drain(..).collect();
+        block_entities
     }
 }

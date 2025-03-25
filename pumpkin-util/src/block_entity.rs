@@ -1,9 +1,9 @@
 use crate::math::position::BlockPos;
 use pumpkin_nbt::compound::NbtCompound;
 
-pub trait BlockEntity {
+pub trait BlockEntity: Send + Sync {
     fn write_nbt(&self, nbt: &mut NbtCompound);
-    fn read_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
     fn identifier(&self) -> &'static str;
@@ -18,9 +18,9 @@ pub trait BlockEntity {
     }
 }
 
-pub fn block_entity_from_nbt<T: BlockEntity>(nbt: &NbtCompound) -> T {
+pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     let x = nbt.get_int("x").unwrap();
     let y = nbt.get_int("y").unwrap();
     let z = nbt.get_int("z").unwrap();
-    T::read_nbt(nbt, BlockPos::new(x, y, z))
+    T::from_nbt(nbt, BlockPos::new(x, y, z))
 }

@@ -7,7 +7,7 @@ use pumpkin_data::{
     screen::WindowType,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_inventory::{Chest, OpenContainer};
+use pumpkin_inventory::{ChestContainer, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
@@ -92,7 +92,7 @@ impl ChestBlock {
         server: &Server,
     ) {
         // TODO: shouldn't Chest and window type be constrained together to avoid errors?
-        super::standard_open_container::<Chest>(
+        super::standard_open_container::<ChestContainer>(
             block,
             player,
             location,
