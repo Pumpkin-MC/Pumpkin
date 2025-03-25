@@ -16,7 +16,7 @@ use crate::{
     server::Server,
     world::chunker,
 };
-use pumpkin_config::advanced_config;
+use pumpkin_config::{advanced_config, BASIC_CONFIG};
 use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
@@ -27,10 +27,7 @@ use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
-use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, CSystemChatMessage, EquipmentSlot,
-};
+use pumpkin_protocol::client::play::{CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerChatMessage, CPlayerPosition, CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, FilterType};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
@@ -63,6 +60,7 @@ use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
+use pumpkin_data::world::CHAT;
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -668,7 +666,6 @@ impl Player {
             self.kick(TextComponent::text("Oversized message")).await;
             return;
         }
-
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.illegal_characters",
@@ -678,40 +675,8 @@ impl Player {
             return;
         }
 
+        let chat_session = &self.chat_session.lock().await;
         let gameprofile = &self.gameprofile;
-        send_cancellable! {{
-            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
-
-            'after: {
-                log::info!("<chat>{}: {}", gameprofile.name, event.message);
-
-                let config = advanced_config();
-
-                let message = &TextComponent::chat_decorated(
-                    config.chat.format.clone(),
-                    gameprofile.name.clone(),
-                    event.message,
-                );
-
-                let packet = CSystemChatMessage::new(
-                        message,
-                        false,
-                    );
-
-                let entity = &self.living_entity.entity;
-                if event.recipients.is_empty() {
-                    let world = &entity.world.read().await;
-                    world
-                        .broadcast_packet_all(&packet)
-                        .await;
-                } else {
-                    for recipient in event.recipients {
-                        recipient.client.enqueue_packet(&packet).await;
-                    }
-                }
-            }
-        }}
-
         /* server.broadcast_packet(
             self,
             &CDisguisedChatMessage::new(
@@ -721,10 +686,68 @@ impl Player {
                 None,
             ),
         ) */
+
+        send_cancellable! {{
+            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
+
+            'after: {
+                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+
+                let config = advanced_config();
+
+                let raw_message = event.message.clone();
+                let decorated_message = &TextComponent::chat_decorated(
+                    config.chat.format.clone(),
+                    gameprofile.name.clone(),
+                    event.message,
+                );
+
+                let entity = &self.living_entity.entity;
+
+                let no_reports_packet = CSystemChatMessage::new(
+                    decorated_message,
+                    false,
+                );
+
+                let reportable_packet = CPlayerChatMessage::new(
+                                gameprofile.id,
+                                1.into(),
+                                chat_message.signature,
+                                raw_message.clone(),
+                                chat_message.timestamp,
+                                chat_message.salt,
+                                // TODO: Previous messages
+                                Box::new([]),
+                                Some(TextComponent::text(raw_message.clone())),
+                                FilterType::PassThrough,
+                                (CHAT + 1).into(),
+                                TextComponent::text(gameprofile.name.clone()),
+                                None,
+                            );
+
+                // There is almost definitely a better way to handle this logic but I
+                // cannot get anything clean looking to work
+                if event.recipients.is_empty() {
+                    let world = &entity.world.read().await;
+                    match BASIC_CONFIG.allow_chat_reports {
+                        true => world.broadcast_packet_all(&reportable_packet).await,
+                        false => world.broadcast_packet_all(&no_reports_packet).await,
+                    }
+                } else {
+                    for recipient in event.recipients {
+                        match BASIC_CONFIG.allow_chat_reports {
+                            true => recipient.client.enqueue_packet(&reportable_packet).await,
+                            false => recipient.client.enqueue_packet(&no_reports_packet).await,
+                        }
+                    }
+                }
+
+            }
+        }}
     }
 
-    pub async fn handle_chat_session_update(&self, _packet: SPlayerSession) {
-        // TODO
+    pub async fn handle_chat_session_update(&self, packet: SPlayerSession) {
+        *self.chat_session.lock().await = packet.session_id;
     }
 
     pub async fn handle_client_information(

@@ -5,10 +5,17 @@ pub enum PlayerAction<'a> {
         name: &'a str,
         properties: &'a [Property],
     },
-    InitializeChat(u8),
+    InitializeChat(Option<InitChat<'a>>),
     UpdateGameMode(VarInt),
     UpdateListed(bool),
     UpdateLatency(u8),
     UpdateDisplayName(u8),
     UpdateListOrder,
+}
+
+pub struct InitChat<'a> {
+    pub session_id: uuid::Uuid,
+    pub expires_at: i64,
+    pub public_key: &'a [u8],
+    pub signature: &'a [u8],
 }

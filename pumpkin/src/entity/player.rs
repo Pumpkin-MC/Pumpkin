@@ -64,7 +64,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
-
+use uuid::Uuid;
 use super::{
     Entity, EntityBase, EntityId, NBTStorage,
     combat::{self, AttackType, player_attack_sound},
@@ -224,6 +224,8 @@ pub struct Player {
     pub experience_points: AtomicI32,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
+    /// The player's current chat session UUID
+    pub chat_session: Mutex<Uuid>,
 }
 
 impl Player {
@@ -302,6 +304,7 @@ impl Player {
             experience_points: AtomicI32::new(0),
             // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(16)),
+            chat_session: Mutex::new(Uuid::nil()),
         }
     }
 
