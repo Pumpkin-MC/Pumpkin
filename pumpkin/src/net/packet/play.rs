@@ -430,14 +430,14 @@ impl Player {
     pub async fn handle_chat_command(
         self: &Arc<Self>,
         server: &Arc<Server>,
-        command: &SChatCommand,
+        command: &SChatCommand<'_>,
     ) {
         let player_clone = self.clone();
         let server_clone = server.clone();
         send_cancellable! {{
             PlayerCommandSendEvent {
                 player: self.clone(),
-                command: command.command.clone(),
+                command: command.command.to_string(),
                 cancelled: false
             };
 
@@ -664,7 +664,7 @@ impl Player {
             .await;
     }
 
-    pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
+    pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage<'_>) {
         let message = chat_message.message;
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
@@ -682,7 +682,7 @@ impl Player {
 
         let gameprofile = &self.gameprofile;
         send_cancellable! {{
-            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
+            PlayerChatEvent::new(self.clone(), message.to_string(), vec![]);
 
             'after: {
                 log::info!("<chat>{}: {}", gameprofile.name, event.message);
@@ -695,7 +695,7 @@ impl Player {
                             gameprofile.id,
                             1.into(),
                             chat_message.signature,
-                            event.message.clone(),
+                            Cow::Owned(event.message.clone()),
                             chat_message.timestamp,
                             chat_message.salt,
                             // TODO: Previous messages
@@ -713,7 +713,7 @@ impl Player {
                             gameprofile.id,
                             1.into(),
                             chat_message.signature,
-                            event.message.clone(),
+                            Cow::Owned(event.message.clone()),
                             chat_message.timestamp,
                             chat_message.salt,
                             Box::new([]),
@@ -744,7 +744,7 @@ impl Player {
 
     pub async fn handle_client_information(
         self: &Arc<Self>,
-        client_information: SClientInformationPlay,
+        client_information: SClientInformationPlay<'_>,
     ) {
         if let (Ok(main_hand), Ok(chat_mode)) = (
             Hand::try_from(client_information.main_hand.0),
@@ -781,7 +781,7 @@ impl Player {
                     };
 
                 *config = PlayerConfig {
-                    locale: client_information.locale,
+                    locale: client_information.locale.to_string(),
                     // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it signed :D
                     view_distance: unsafe {
                         NonZeroU8::new_unchecked(client_information.view_distance as u8)
@@ -1249,16 +1249,16 @@ impl Player {
         Ok(())
     }
 
-    pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
+    pub async fn handle_sign_update(&self, sign_data: SUpdateSign<'_>) {
         let world = &self.living_entity.entity.world.read().await;
         let updated_sign = Sign::new(
             sign_data.location,
             sign_data.is_front_text,
             [
-                sign_data.line_1,
-                sign_data.line_2,
-                sign_data.line_3,
-                sign_data.line_4,
+                sign_data.line_1.to_string(),
+                sign_data.line_2.to_string(),
+                sign_data.line_3.to_string(),
+                sign_data.line_4.to_string(),
             ],
         );
 
@@ -1369,7 +1369,7 @@ impl Player {
 
     pub async fn handle_command_suggestion(
         self: &Arc<Self>,
-        packet: SCommandSuggestion,
+        packet: SCommandSuggestion<'_>,
         server: &Arc<Server>,
     ) {
         let mut src = CommandSender::Player(self.clone());

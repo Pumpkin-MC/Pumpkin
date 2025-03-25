@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use pumpkin_data::packet::clientbound::PLAY_COMMAND_SUGGESTIONS;
 use pumpkin_macros::packet;
@@ -10,15 +10,20 @@ use crate::{
 };
 
 #[packet(PLAY_COMMAND_SUGGESTIONS)]
-pub struct CCommandSuggestions {
+pub struct CCommandSuggestions<'a> {
     id: VarInt,
     start: VarInt,
     length: VarInt,
-    matches: Vec<CommandSuggestion>,
+    matches: Vec<CommandSuggestion<'a>>,
 }
 
-impl CCommandSuggestions {
-    pub fn new(id: VarInt, start: VarInt, length: VarInt, matches: Vec<CommandSuggestion>) -> Self {
+impl<'a> CCommandSuggestions<'a> {
+    pub fn new(
+        id: VarInt,
+        start: VarInt,
+        length: VarInt,
+        matches: Vec<CommandSuggestion<'a>>,
+    ) -> Self {
         Self {
             id,
             start,
@@ -28,7 +33,7 @@ impl CCommandSuggestions {
     }
 }
 
-impl ClientPacket for CCommandSuggestions {
+impl ClientPacket for CCommandSuggestions<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_var_int(&self.id)?;
@@ -50,13 +55,13 @@ impl ClientPacket for CCommandSuggestions {
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]
-pub struct CommandSuggestion {
-    pub suggestion: String,
+pub struct CommandSuggestion<'a> {
+    pub suggestion: Cow<'a, str>,
     pub tooltip: Option<TextComponent>,
 }
 
-impl CommandSuggestion {
-    pub fn new(suggestion: String, tooltip: Option<TextComponent>) -> Self {
+impl<'a> CommandSuggestion<'a> {
+    pub fn new(suggestion: Cow<'a, str>, tooltip: Option<TextComponent>) -> Self {
         Self {
             suggestion,
             tooltip,

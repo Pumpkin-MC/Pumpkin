@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{borrow::Cow, io::Read};
 
 use pumpkin_data::packet::serverbound::PLAY_CHAT;
 use pumpkin_macros::packet;
@@ -11,8 +11,8 @@ use crate::{
 
 #[derive(Serialize)]
 #[packet(PLAY_CHAT)]
-pub struct SChatMessage {
-    pub message: String,
+pub struct SChatMessage<'a> {
+    pub message: Cow<'a, str>,
     pub timestamp: i64,
     pub salt: i64,
     pub signature: Option<Box<[u8]>>,
@@ -21,12 +21,12 @@ pub struct SChatMessage {
 }
 
 // TODO
-impl ServerPacket for SChatMessage {
+impl ServerPacket for SChatMessage<'_> {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 
         Ok(Self {
-            message: read.get_string_bounded(256)?,
+            message: Cow::Owned(read.get_string_bounded(256)?),
             timestamp: read.get_i64_be()?,
             salt: read.get_i64_be()?,
             signature: read.get_option(|v| v.read_boxed_slice(256))?,

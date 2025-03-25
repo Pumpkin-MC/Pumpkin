@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_util::text::TextComponent;
 
@@ -8,12 +10,12 @@ use crate::{VarInt, codec::bit_set::BitSet};
 
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_PLAYER_CHAT)]
-pub struct CPlayerChatMessage {
+pub struct CPlayerChatMessage<'a> {
     #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
     index: VarInt,
     message_signature: Option<Box<[u8]>>, // always 256
-    message: String,
+    message: Cow<'a, str>,
     timestamp: i64,
     salt: i64,
     previous_messages_count: VarInt,
@@ -26,13 +28,13 @@ pub struct CPlayerChatMessage {
     target_name: Option<TextComponent>,
 }
 
-impl CPlayerChatMessage {
+impl<'a> CPlayerChatMessage<'a> {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         sender: uuid::Uuid,
         index: VarInt,
         message_signature: Option<Box<[u8]>>,
-        message: String,
+        message: Cow<'a, str>,
         timestamp: i64,
         salt: i64,
         previous_messages: Box<[PreviousMessage]>,

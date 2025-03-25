@@ -85,7 +85,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
 });
 
 impl Client {
-    pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
+    pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart<'_>) {
         log::debug!("login start");
 
         // Don't allow new logons when the server is full.
@@ -117,7 +117,7 @@ impl Client {
                 match bungeecord::bungeecord_login(
                     &self.address,
                     &self.server_address.lock().await,
-                    login_start.name,
+                    login_start.name.to_string(),
                 )
                 .await
                 {
@@ -138,7 +138,7 @@ impl Client {
 
             let profile = GameProfile {
                 id,
-                name: login_start.name,
+                name: login_start.name.to_string(),
                 properties: vec![],
                 profile_actions: None,
             };

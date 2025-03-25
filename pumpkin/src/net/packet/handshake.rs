@@ -6,11 +6,11 @@ use pumpkin_util::text::TextComponent;
 use crate::{net::Client, server::CURRENT_MC_VERSION};
 
 impl Client {
-    pub async fn handle_handshake(&self, handshake: SHandShake) {
+    pub async fn handle_handshake(&self, handshake: SHandShake<'_>) {
         let version = handshake.protocol_version.0;
         self.protocol_version
             .store(version, std::sync::atomic::Ordering::Relaxed);
-        *self.server_address.lock().await = handshake.server_address;
+        *self.server_address.lock().await = handshake.server_address.to_string();
 
         log::debug!("Handshake: next state is {:?}", &handshake.next_state);
         self.connection_state.store(handshake.next_state);

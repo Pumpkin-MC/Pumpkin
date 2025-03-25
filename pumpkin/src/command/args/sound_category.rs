@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::command::CommandSender;
 use crate::command::args::{
     Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
@@ -66,7 +68,7 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
         ];
         let suggestions: Vec<CommandSuggestion> = categories
             .iter()
-            .map(|cat| CommandSuggestion::new((*cat).to_string(), None))
+            .map(|cat| CommandSuggestion::new(Cow::Borrowed(cat), None))
             .collect();
         Ok(Some(suggestions))
     }

@@ -98,7 +98,7 @@ impl CommandDispatcher {
         src: &mut CommandSender,
         server: &'a Server,
         cmd: &'a str,
-    ) -> Vec<CommandSuggestion> {
+    ) -> Vec<CommandSuggestion<'a>> {
         let mut parts = cmd.split_whitespace();
         let Some(key) = parts.next() else {
             return Vec::new();
@@ -270,7 +270,7 @@ impl CommandDispatcher {
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+    ) -> Result<Option<Vec<CommandSuggestion<'a>>>, CommandError> {
         let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {

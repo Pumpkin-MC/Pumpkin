@@ -20,7 +20,7 @@ use pumpkin_util::text::TextComponent;
 impl Client {
     pub async fn handle_client_information_config(
         &self,
-        client_information: SClientInformationConfig,
+        client_information: SClientInformationConfig<'_>,
     ) {
         log::debug!("Handling client settings");
         if client_information.view_distance <= 0 {
@@ -36,7 +36,7 @@ impl Client {
             ChatMode::try_from(client_information.chat_mode.0),
         ) {
             *self.config.lock().await = Some(PlayerConfig {
-                locale: client_information.locale,
+                locale: client_information.locale.to_string(),
                 view_distance: unsafe {
                     NonZeroU8::new_unchecked(client_information.view_distance as u8)
                 },
