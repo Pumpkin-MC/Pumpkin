@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::server::Server;
 use crate::world::BlockFlags;
@@ -16,7 +18,7 @@ pub struct FarmLandBlock;
 
 #[async_trait]
 impl PumpkinBlock for FarmLandBlock {
-    async fn on_scheduled_tick(&self, world: &World, _block: &Block, pos: &BlockPos) {
+    async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
         // TODO: push up entities
         world
             .set_block_state(pos, Block::DIRT.default_state_id, BlockFlags::NOTIFY_ALL)

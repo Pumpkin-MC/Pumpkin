@@ -316,7 +316,7 @@ impl World {
         .await;
     }
 
-    pub async fn tick(&self, server: &Server) {
+    pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.flush_block_updates().await;
 
         // world ticks
@@ -397,7 +397,7 @@ impl World {
         }
     }
 
-    pub async fn tick_scheduled_block_ticks(&self) {
+    pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
@@ -479,16 +479,28 @@ impl World {
             let command_dispatcher = server.command_dispatcher.read().await;
             client_suggestions::send_c_commands_packet(&player, &command_dispatcher).await;
         };
-        // Teleport
-        let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
-        let yaw = info.spawn_angle;
-        let pitch = 10.0;
 
-        let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
-            .await;
-        position.y = f64::from(top + 1);
+        // Teleport
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
+            let pitch = player.living_entity.entity.pitch.load();
+
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level.level_info;
+            let position = Vector3::new(
+                f64::from(info.spawn_x),
+                f64::from(info.spawn_y) + 1.0,
+                f64::from(info.spawn_z),
+            );
+            let yaw = info.spawn_angle;
+            let pitch = 0.0;
+
+            (position, yaw, pitch)
+        };
+
+        let velocity = player.living_entity.entity.velocity.load();
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
@@ -558,7 +570,6 @@ impl World {
         // Spawn the player for every client.
         self.broadcast_packet_except(
             &[player.gameprofile.id],
-            // TODO: add velo
             &CSpawnEntity::new(
                 entity_id.into(),
                 gameprofile.id,
@@ -568,7 +579,7 @@ impl World {
                 yaw,
                 yaw,
                 0.into(),
-                Vector3::new(0.0, 0.0, 0.0),
+                velocity,
             ),
         )
         .await;
@@ -591,7 +602,7 @@ impl World {
                     entity.pitch.load(),
                     entity.head_yaw.load(),
                     0.into(),
-                    Vector3::new(0.0, 0.0, 0.0),
+                    entity.velocity.load(),
                 ))
                 .await;
         }
@@ -650,7 +661,9 @@ impl World {
         //     }
         // }
 
+        player.has_played_before.store(true, Ordering::Relaxed);
         player.send_mobs(self).await;
+        player.send_inventory().await;
     }
 
     pub async fn send_world_info(
@@ -761,9 +774,13 @@ impl World {
 
         // Teleport
         let info = &self.level.level_info;
-        let mut position = Vector3::new(f64::from(info.spawn_x), 120.0, f64::from(info.spawn_z));
+        let mut position = Vector3::new(
+            f64::from(info.spawn_x),
+            f64::from(info.spawn_y),
+            f64::from(info.spawn_z),
+        );
         let yaw = info.spawn_angle;
-        let pitch = 10.0;
+        let pitch = 0.0;
 
         let top = self
             .get_top_block(Vector2::new(position.x as i32, position.z as i32))
@@ -1159,7 +1176,7 @@ impl World {
 
     /// Sets a block
     pub async fn set_block_state(
-        &self,
+        self: &Arc<Self>,
         position: &BlockPos,
         block_state_id: u16,
         flags: BlockFlags,
@@ -1414,7 +1431,11 @@ impl World {
     }
 
     /// Updates neighboring blocks of a block
-    pub async fn update_neighbors(&self, block_pos: &BlockPos, except: Option<&BlockDirection>) {
+    pub async fn update_neighbors(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        except: Option<&BlockDirection>,
+    ) {
         let source_block = self.get_block(block_pos).await.unwrap();
         for direction in BlockDirection::update_order() {
             if Some(&direction) == except {
@@ -1440,7 +1461,11 @@ impl World {
         }
     }
 
-    pub async fn update_neighbor(&self, neighbor_block_pos: &BlockPos, source_block: &Block) {
+    pub async fn update_neighbor(
+        self: &Arc<Self>,
+        neighbor_block_pos: &BlockPos,
+        source_block: &Block,
+    ) {
         let neighbor_block = self.get_block(neighbor_block_pos).await.unwrap();
 
         if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1458,7 +1483,7 @@ impl World {
     }
 
     pub async fn replace_with_state_for_neighbor_update(
-        &self,
+        self: &Arc<Self>,
         block_pos: &BlockPos,
         direction: &BlockDirection,
         flags: BlockFlags,

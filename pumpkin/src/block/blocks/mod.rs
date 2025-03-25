@@ -55,7 +55,7 @@ pub async fn standard_open_container<C: Container + Default + 'static>(
     // If container exists, add player to container, otherwise create new container
     if let Some(container_id) = server.get_container_id(location, block.clone()).await {
         let mut open_containers = server.open_containers.write().await;
-        log::debug!("Using previous standard container id: {}", container_id);
+        log::debug!("Using previous standard container id: {container_id}");
         if let Some(container) = open_containers.get_mut(&u64::from(container_id)) {
             container.add_player(entity_id);
             player.open_container.store(Some(container_id.into()));
@@ -63,7 +63,7 @@ pub async fn standard_open_container<C: Container + Default + 'static>(
     } else {
         let mut open_containers = server.open_containers.write().await;
         let new_id = server.new_container_id();
-        log::debug!("Creating new standard container id: {}", new_id);
+        log::debug!("Creating new standard container id: {new_id}");
         let open_container =
             OpenContainer::new_empty_container::<C>(entity_id, Some(location), Some(block.clone()));
         open_containers.insert(new_id.into(), open_container);
@@ -95,7 +95,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
         if id_to_use == -1 {
             let new_id = server.new_container_id();
-            log::debug!("Creating new unique container id: {}", new_id);
+            log::debug!("Creating new unique container id: {new_id}");
             let open_container = OpenContainer::new_empty_container::<C>(
                 entity_id,
                 Some(location),
@@ -106,7 +106,7 @@ pub async fn standard_open_container_unique<C: Container + Default + 'static>(
 
             player.open_container.store(Some(new_id.into()));
         } else {
-            log::debug!("Using previous unique container id: {}", id_to_use);
+            log::debug!("Using previous unique container id: {id_to_use}");
             if let Some(unique_container) = open_containers.get_mut(&(id_to_use as u64)) {
                 unique_container.set_location(Some(location)).await;
                 unique_container.add_player(entity_id);

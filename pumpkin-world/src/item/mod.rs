@@ -1,5 +1,6 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_nbt::compound::NbtCompound;
 
 mod categories;
 
@@ -99,5 +100,42 @@ impl ItemStack {
             }
         }
         false
+    }
+
+    pub fn write_item_stack(&self, compound: &mut NbtCompound) {
+        // Minecraft 1.21.4 uses "id" as string with namespaced ID (minecraft:diamond_sword)
+        compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
+        compound.put_int("count", self.item_count as i32);
+
+        // Create a tag compound for additional data
+        let tag = NbtCompound::new();
+
+        // TODO: Store custom data like enchantments, display name, etc. would go here
+
+        // Store custom data like enchantments, display name, etc. would go here
+        compound.put_component("components", tag);
+    }
+
+    pub fn read_item_stack(compound: &NbtCompound) -> Option<Self> {
+        // Get ID, which is a string like "minecraft:diamond_sword"
+        let full_id = compound.get_string("id")?;
+
+        // Remove the "minecraft:" prefix if present
+        let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
+
+        // Try to get item by registry key
+        let item = Item::from_registry_key(registry_key)?;
+
+        let count = compound.get_int("count")? as u8;
+
+        // Create the item stack
+        let item_stack = Self::new(count, item);
+
+        // Process any additional data in the components compound
+        if let Some(_tag) = compound.get_compound("components") {
+            // TODO: Process additional components like damage, enchantments, etc.
+        }
+
+        Some(item_stack)
     }
 }

@@ -483,7 +483,7 @@ impl Player {
         inventory.increment_state_id();
         let slot_data = Slot::from(&stack);
         if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
-            log::error!("Pick item set slot error: {}", err);
+            log::error!("Pick item set slot error: {err}");
         } else {
             let dest_packet = CSetContainerSlot::new(
                 PlayerInventory::CONTAINER_ID,
@@ -1398,7 +1398,7 @@ impl Player {
         // TODO: allow plugins to access this
         log::debug!(
             "Received cookie_response[play]: key: \"{}\", payload_length: \"{:?}\"",
-            packet.key.to_string(),
+            packet.key,
             packet.payload.as_ref().map(|p| p.len())
         );
     }
@@ -1464,12 +1464,12 @@ impl Player {
         let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
         // Check if the block is under the world
-        if location.0.y + face.to_offset().y < Self::WORLD_LOWEST_Y.into() {
+        if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
         // Check the world's max build height
-        if location.0.y + face.to_offset().y >= Self::WORLD_MAX_Y.into() {
+        if location.0.y + face.to_offset().y >= i32::from(Self::WORLD_MAX_Y) {
             self.send_system_message_raw(
                 &TextComponent::translate(
                     "build.tooHigh",

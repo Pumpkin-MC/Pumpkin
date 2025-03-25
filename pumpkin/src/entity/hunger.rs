@@ -1,15 +1,16 @@
+use super::{EntityBase, NBTStorage, player::Player};
+use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
-
-use super::{EntityBase, player::Player};
+use pumpkin_nbt::compound::NbtCompound;
 
 pub struct HungerManager {
     /// The current hunger level.
     pub level: AtomicCell<u32>,
     /// The food saturation level.
     pub saturation: AtomicCell<f32>,
-    exhaustion: AtomicCell<f32>,
-    tick_timer: AtomicCell<u32>,
+    pub exhaustion: AtomicCell<f32>,
+    pub tick_timer: AtomicCell<u32>,
 }
 
 impl Default for HungerManager {
@@ -61,5 +62,26 @@ impl HungerManager {
     pub fn add_exhausten(&self, exhaustion: f32) {
         self.exhaustion
             .store((self.exhaustion.load() + exhaustion).min(40.0));
+    }
+}
+
+#[async_trait]
+impl NBTStorage for HungerManager {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("foodLevel", self.level.load() as i32);
+        nbt.put_float("foodSaturationLevel", self.saturation.load());
+        nbt.put_float("foodExhaustionLevel", self.exhaustion.load());
+        nbt.put_int("foodTickTimer", self.tick_timer.load() as i32);
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+        self.level
+            .store(nbt.get_int("foodLevel").unwrap_or(20) as u32);
+        self.saturation
+            .store(nbt.get_float("foodSaturationLevel").unwrap_or(5.0));
+        self.exhaustion
+            .store(nbt.get_float("foodExhaustionLevel").unwrap_or(0.0));
+        self.tick_timer
+            .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
     }
 }

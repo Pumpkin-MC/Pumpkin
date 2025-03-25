@@ -27,7 +27,7 @@ pub trait PumpkinBlock: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) {
     }
     fn should_drop_items_on_explosion(&self) -> bool {
@@ -41,7 +41,7 @@ pub trait PumpkinBlock: Send + Sync {
         _location: BlockPos,
         _item: &Item,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         BlockActionResult::Continue
     }
@@ -62,7 +62,7 @@ pub trait PumpkinBlock: Send + Sync {
         block.default_state_id
     }
 
-    async fn random_tick(&self, _block: &Block, _world: &World, _pos: &BlockPos) {}
+    async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}
 
     async fn can_place_at(&self, _world: &World, _pos: &BlockPos) -> bool {
         true
@@ -71,7 +71,7 @@ pub trait PumpkinBlock: Send + Sync {
     /// onBlockAdded in source code
     async fn placed(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _block: &Block,
         _state_id: u16,
         _pos: &BlockPos,
@@ -103,7 +103,7 @@ pub trait PumpkinBlock: Send + Sync {
 
     async fn on_neighbor_update(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _block: &Block,
         _pos: &BlockPos,
         _source_block: &Block,
@@ -114,7 +114,7 @@ pub trait PumpkinBlock: Send + Sync {
     /// Called if a block state is replaced or it replaces another state
     async fn prepare(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _pos: &BlockPos,
         _block: &Block,
         _state_id: u16,
@@ -136,11 +136,11 @@ pub trait PumpkinBlock: Send + Sync {
         state
     }
 
-    async fn on_scheduled_tick(&self, _world: &World, _block: &Block, _pos: &BlockPos) {}
+    async fn on_scheduled_tick(&self, _world: &Arc<World>, _block: &Block, _pos: &BlockPos) {}
 
     async fn on_state_replaced(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _block: &Block,
         _location: BlockPos,
         _old_state_id: u16,

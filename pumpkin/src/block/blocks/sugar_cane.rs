@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::block::{
     Block, BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
@@ -16,14 +18,13 @@ pub struct SugarCaneBlock;
 
 #[async_trait]
 impl PumpkinBlock for SugarCaneBlock {
-    async fn on_scheduled_tick(&self, world: &World, _block: &Block, pos: &BlockPos) {
+    async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
         if !self.can_place_at(world, pos).await {
-            // TODO: break the block so it drops loot, but for this an &Arc<World> is required
-            world.set_block_state(pos, 0, BlockFlags::empty()).await;
+            world.break_block(pos, None, BlockFlags::empty()).await;
         }
     }
 
-    async fn random_tick(&self, block: &Block, world: &World, pos: &BlockPos) {
+    async fn random_tick(&self, block: &Block, world: &Arc<World>, pos: &BlockPos) {
         if world.get_block_state(&pos.up()).await.unwrap().air {
             let state_id = world
                 .get_block_state(pos)
