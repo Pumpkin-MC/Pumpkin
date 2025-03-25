@@ -64,8 +64,8 @@ use pumpkin_protocol::{
         SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
         SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
         SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-        SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
+        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
     },
 };
 use pumpkin_protocol::{
@@ -90,6 +90,29 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
+use uuid::Uuid;
+use super::{
+    Entity, EntityBase, EntityId, NBTStorage,
+    combat::{self, AttackType, player_attack_sound},
+    effect::Effect,
+    hunger::HungerManager,
+    item::ItemEntity,
+};
+use crate::{
+    block,
+    command::{client_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    net::{Client, PlayerConfig},
+    plugin::player::{
+        player_change_world::PlayerChangeWorldEvent,
+        player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
+    },
+    server::Server,
+    world::World,
+};
+use crate::{error::PumpkinError, net::GameProfile};
+
+use super::living::LivingEntity;
 
 enum BatchState {
     Initial,
@@ -233,6 +256,8 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
+    /// The player's current chat session UUID
+    pub chat_session: Mutex<Uuid>,
 }
 
 impl Player {
@@ -316,6 +341,7 @@ impl Player {
             last_sent_food: AtomicU32::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
+            chat_session: Mutex::new(Uuid::nil()),
         }
     }
 
@@ -1694,6 +1720,10 @@ impl Player {
             }
             SChunkBatch::PACKET_ID => {
                 self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
+            }
+            SPlayerSession::PACKET_ID => {
+                self.handle_chat_session_update(SPlayerSession::read(payload)?)
+                    .await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
