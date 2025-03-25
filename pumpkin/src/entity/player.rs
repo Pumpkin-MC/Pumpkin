@@ -3,19 +3,19 @@ use std::{
     num::NonZeroU8,
     ops::AddAssign,
     sync::{
-        Arc,
         atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
+        Arc,
     },
     time::{Duration, Instant},
 };
 
 use super::living::LivingEntity;
 use super::{
-    Entity, EntityBase, EntityId, NBTStorage,
-    combat::{self, AttackType, player_attack_sound},
-    effect::Effect,
-    hunger::HungerManager,
-    item::ItemEntity,
+    combat::{self, player_attack_sound, AttackType}, effect::Effect, hunger::HungerManager, item::ItemEntity,
+    Entity,
+    EntityBase,
+    EntityId,
+    NBTStorage,
 };
 use crate::{
     block,
@@ -32,7 +32,7 @@ use crate::{
 use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_config::{advanced_config, BASIC_CONFIG};
 use pumpkin_data::{
     block::BlockState,
     damage::DamageType,
@@ -50,25 +50,6 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::CSetHeldItem;
 use pumpkin_protocol::{
-    IdOr, RawPacket, ServerPacket,
-    client::play::{
-        CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
-        CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
-        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
-        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
-    },
-    codec::identifier::Identifier,
-    ser::packet::Packet,
-    server::play::{
-        SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
-        SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
-        SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
-        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-    },
-};
-use pumpkin_protocol::{
     client::play::CSoundEffect,
     server::play::{
         SCloseContainer, SCookieResponse as SPCookieResponse, SPlayPingRequest, SPlayerLoaded,
@@ -79,40 +60,37 @@ use pumpkin_protocol::{
     client::play::Metadata,
     server::play::{SClickContainer, SKeepAlive},
 };
+use pumpkin_protocol::{
+    client::play::{
+        CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
+        CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
+        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
+        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
+        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+    }, codec::identifier::Identifier, ser::packet::Packet,
+    server::play::{
+        SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
+        SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
+        SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
+        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
+        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    },
+    IdOr,
+    RawPacket,
+    ServerPacket,
+};
 use pumpkin_util::{
-    GameMode,
     math::{
         boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2,
         vector3::Vector3,
     },
     permission::PermissionLvl,
     text::TextComponent,
+    GameMode,
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
-use super::{
-    Entity, EntityBase, EntityId, NBTStorage,
-    combat::{self, AttackType, player_attack_sound},
-    effect::Effect,
-    hunger::HungerManager,
-    item::ItemEntity,
-};
-use crate::{
-    block,
-    command::{client_suggestions, dispatcher::CommandDispatcher},
-    data::op_data::OPERATOR_CONFIG,
-    net::{Client, PlayerConfig},
-    plugin::player::{
-        player_change_world::PlayerChangeWorldEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
-    },
-    server::Server,
-    world::World,
-};
-use crate::{error::PumpkinError, net::GameProfile};
-
-use super::living::LivingEntity;
 
 enum BatchState {
     Initial,
