@@ -12,6 +12,7 @@ pub mod player_teleport;
 pub mod player_respawn;
 pub mod player_toggle_sneak;
 pub mod player_toggle_sprint;
+pub mod player_death;
 
 use std::sync::Arc;
 
