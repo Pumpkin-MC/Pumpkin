@@ -23,8 +23,7 @@ use crate::{
     data::op_data::OPERATOR_CONFIG,
     net::{Client, PlayerConfig},
     plugin::player::{
-        player_change_world::PlayerChangeWorldEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
+        player_change_world::PlayerChangeWorldEvent, player_drop_item::PlayerDropItemEvent, player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent
     },
     server::Server,
     world::World,
@@ -1251,13 +1250,26 @@ impl Player {
         item_entity.send_meta_packet().await;
     }
 
-    pub async fn drop_held_item(&self, drop_stack: bool) {
+    pub async fn drop_held_item(self: &Arc<Self>, drop_stack: bool) {
         let mut inv = self.inventory.lock().await;
         if let Some(item_stack) = inv.held_item_mut() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.item.id, u32::from(drop_amount))
-                .await;
-            inv.decrease_current_stack(drop_amount);
+
+            // Create an item stack clone for the event
+            let event_stack = ItemStack::new(drop_amount, item_stack.item.clone());
+
+            send_cancellable! {{
+                PlayerDropItemEvent::new(
+                    self.clone(),
+                    event_stack
+                );
+                
+                'after: {
+                    self.drop_item(item_stack.item.id, u32::from(drop_amount))
+                        .await;
+                    inv.decrease_current_stack(drop_amount);
+                }
+            }}
         }
     }
 

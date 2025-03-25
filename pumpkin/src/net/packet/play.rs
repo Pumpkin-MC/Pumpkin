@@ -8,6 +8,8 @@ use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::plugin::player::player_toggle_sneak::PlayerToggleSneakEvent;
+use crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent;
 use crate::world::BlockFlags;
 use crate::{
     command::CommandSender,
@@ -580,7 +582,7 @@ impl Player {
     //     // TODO: Implement and merge any redundant code with pick_item_from_block
     // }
 
-    pub async fn handle_player_command(&self, command: SPlayerCommand) {
+    pub async fn handle_player_command(self: &Arc<Self>, command: SPlayerCommand) {
         if command.entity_id != self.entity_id().into() {
             return;
         }
@@ -593,22 +595,58 @@ impl Player {
             match action {
                 pumpkin_protocol::server::play::Action::StartSneaking => {
                     if !entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
-                        entity.set_sneaking(true).await;
+                        send_cancellable! {{
+                            PlayerToggleSneakEvent::new(
+                                self.clone(),
+                                true
+                            );
+                            
+                            'after: {
+                                entity.set_sneaking(true).await;
+                            }
+                        }}
                     }
                 }
                 pumpkin_protocol::server::play::Action::StopSneaking => {
                     if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
-                        entity.set_sneaking(false).await;
+                        send_cancellable! {{
+                            PlayerToggleSneakEvent::new(
+                                self.clone(),
+                                false
+                            );
+                            
+                            'after: {
+                                entity.set_sneaking(false).await;
+                            }
+                        }}
                     }
                 }
                 pumpkin_protocol::server::play::Action::StartSprinting => {
                     if !entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
-                        entity.set_sprinting(true).await;
+                        send_cancellable! {{
+                            PlayerToggleSprintEvent::new(
+                                self.clone(),
+                                true
+                            );
+                            
+                            'after: {
+                                entity.set_sprinting(true).await;
+                            }
+                        }}
                     }
                 }
                 pumpkin_protocol::server::play::Action::StopSprinting => {
                     if entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
-                        entity.set_sprinting(false).await;
+                        send_cancellable! {{
+                            PlayerToggleSprintEvent::new(
+                                self.clone(),
+                                false // is_sprinting
+                            );
+                            
+                            'after: {
+                                entity.set_sprinting(false).await;
+                            }
+                        }}
                     }
                 }
                 pumpkin_protocol::server::play::Action::LeaveBed

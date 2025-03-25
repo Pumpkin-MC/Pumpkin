@@ -12,6 +12,9 @@ use tokio::sync::Mutex;
 
 use crate::server::Server;
 
+use crate::plugin::player::player_pickup_item::PlayerPickupItemEvent;
+use pumpkin_macros::send_cancellable;
+
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
@@ -82,77 +85,95 @@ impl EntityBase for ItemEntity {
             let mut slot_updates = Vec::new();
             let remove_entity = {
                 let mut stack_size = self.item_count.lock().await;
-                let max_stack = self.item.components.max_stack_size;
-                while *stack_size > 0 {
-                    if let Some(slot) = inv.get_pickup_item_slot(self.item.id) {
-                        // Fill the inventory while there are items in the stack and space in the inventory
-                        let maybe_stack = inv
-                            .get_slot(slot)
-                            .expect("collect item slot returned an invalid slot");
 
-                        if let Some(existing_stack) = maybe_stack {
-                            // We have the item in this stack already
 
-                            // This is bounded to `u8::MAX`
-                            let amount_to_fill = u32::from(max_stack - existing_stack.item_count);
-                            // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
-                            let amount_to_add = amount_to_fill.min(*stack_size);
-                            // Therefore this is safe
+                send_cancellable! {{
+                    PlayerPickupItemEvent::new(
+                        player.clone(),
+                        self.item.clone(),
+                        *stack_size,
+                    );
+                    
+                    'after: {
+                        let max_stack = self.item.components.max_stack_size;
+                        while *stack_size > 0 {
+                            if let Some(slot) = inv.get_pickup_item_slot(self.item.id) {
+                                // Fill the inventory while there are items in the stack and space in the inventory
+                                let maybe_stack = inv
+                                    .get_slot(slot)
+                                    .expect("collect item slot returned an invalid slot");
 
-                            // Update referenced stack so next call to `get_pickup_item_slot` is
-                            // correct
-                            existing_stack.item_count += amount_to_add as u8;
-                            total_pick_up += amount_to_add;
+                                if let Some(existing_stack) = maybe_stack {
+                                    // We have the item in this stack already
 
-                            debug_assert!(amount_to_add > 0);
-                            *stack_size -= amount_to_add;
+                                    // This is bounded to `u8::MAX`
+                                    let amount_to_fill = u32::from(max_stack - existing_stack.item_count);
+                                    // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
+                                    let amount_to_add = amount_to_fill.min(*stack_size);
+                                    // Therefore this is safe
 
-                            slot_updates.push((slot, existing_stack.clone()));
-                        } else {
-                            // A new stack
+                                    // Update referenced stack so next call to `get_pickup_item_slot` is
+                                    // correct
+                                    existing_stack.item_count += amount_to_add as u8;
+                                    total_pick_up += amount_to_add;
 
-                            // This is bounded to `u8::MAX`
-                            let amount_to_fill = u32::from(max_stack);
-                            // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
-                            let amount_to_add = amount_to_fill.min(*stack_size);
-                            total_pick_up += amount_to_add;
+                                    debug_assert!(amount_to_add > 0);
+                                    *stack_size -= amount_to_add;
 
-                            debug_assert!(amount_to_add > 0);
-                            *stack_size -= amount_to_add;
+                                    slot_updates.push((slot, existing_stack.clone()));
+                                } else {
+                                    // A new stack
 
-                            // Therefore this is safe
-                            let item_stack = ItemStack::new(amount_to_add as u8, self.item.clone());
+                                    // This is bounded to `u8::MAX`
+                                    let amount_to_fill = u32::from(max_stack);
+                                    // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
+                                    let amount_to_add = amount_to_fill.min(*stack_size);
+                                    total_pick_up += amount_to_add;
 
-                            // Update referenced stack so next call to `get_pickup_item_slot` is
-                            // correct
-                            *maybe_stack = Some(item_stack.clone());
+                                    debug_assert!(amount_to_add > 0);
+                                    *stack_size -= amount_to_add;
 
-                            slot_updates.push((slot, item_stack));
+                                    // Therefore this is safe
+                                    let item_stack = ItemStack::new(amount_to_add as u8, self.item.clone());
+
+                                    // Update referenced stack so next call to `get_pickup_item_slot` is
+                                    // correct
+                                    *maybe_stack = Some(item_stack.clone());
+
+                                    slot_updates.push((slot, item_stack));
+                                }
+                            } else {
+                                // We can't pick anything else up
+                                break;
+                            }
                         }
-                    } else {
-                        // We can't pick anything else up
-                        break;
+
+                        if total_pick_up > 0 {
+                            player
+                                .client
+                                .enqueue_packet(&CTakeItemEntity::new(
+                                    self.entity.entity_id.into(),
+                                    player.entity_id().into(),
+                                    total_pick_up.into(),
+                                ))
+                                .await;
+                        }
+
+                        // TODO: Can we batch slot updates?
+                        for (slot, stack) in slot_updates {
+                            player.update_single_slot(&mut inv, slot, stack).await;
+                        }
+
+                        // This indicates whether the entity should be removed
+                        *stack_size == 0
                     }
-                }
-
-                *stack_size == 0
+                    
+                    'cancelled: {
+                        // Don't pick up the item if the event is cancelled
+                        false
+                    }
+                }}
             };
-
-            if total_pick_up > 0 {
-                player
-                    .client
-                    .enqueue_packet(&CTakeItemEntity::new(
-                        self.entity.entity_id.into(),
-                        player.entity_id().into(),
-                        total_pick_up.into(),
-                    ))
-                    .await;
-            }
-
-            // TODO: Can we batch slot updates?
-            for (slot, stack) in slot_updates {
-                player.update_single_slot(&mut inv, slot, stack).await;
-            }
 
             if remove_entity {
                 self.entity.remove().await;

@@ -6,7 +6,12 @@ pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
+pub mod player_drop_item;
+pub mod player_pickup_item;
 pub mod player_teleport;
+pub mod player_respawn;
+pub mod player_toggle_sneak;
+pub mod player_toggle_sprint;
 
 use std::sync::Arc;
 

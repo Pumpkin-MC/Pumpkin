@@ -8,17 +8,11 @@ pub mod explosion;
 pub mod time;
 
 use crate::{
-    PLUGIN_MANAGER,
-    block::{self, registry::BlockRegistry},
-    command::client_suggestions,
-    entity::{Entity, EntityBase, EntityId, player::Player},
-    error::PumpkinError,
-    plugin::{
+    block::{self, registry::BlockRegistry}, command::client_suggestions, entity::{player::Player, Entity, EntityBase, EntityId}, error::PumpkinError, plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent},
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
-    },
-    server::Server,
+    }, server::Server, PLUGIN_MANAGER
 };
 use bitflags::bitflags;
 use border::Worldborder;
@@ -786,6 +780,20 @@ impl World {
             .get_top_block(Vector2::new(position.x as i32, position.z as i32))
             .await;
         position.y = f64::from(top + 1);
+
+        // Fire the respawn event (not cancellable)
+        let mut event = PlayerRespawnEvent::new(
+            player.clone(),
+            position,
+            yaw,
+            pitch,
+        );
+
+        event = PLUGIN_MANAGER.lock().await.fire(event).await;
+
+        let position = event.respawn_position;
+        let yaw = event.yaw;
+        let pitch = event.pitch;
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.clone().request_teleport(position, yaw, pitch).await;
