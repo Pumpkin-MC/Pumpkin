@@ -34,7 +34,7 @@ impl BlockRegistry {
         player: &Player,
         location: BlockPos,
         server: &Server,
-        world: &World,
+        world: &Arc<World>,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -58,7 +58,7 @@ impl BlockRegistry {
         location: BlockPos,
         item: &Item,
         server: &Server,
-        world: &World,
+        world: &Arc<World>,
     ) -> BlockActionResult {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -109,7 +109,7 @@ impl BlockRegistry {
 
     pub async fn on_placed(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state_id: u16,
         block_pos: &BlockPos,
@@ -159,7 +159,7 @@ impl BlockRegistry {
 
     pub async fn on_state_replaced(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         location: BlockPos,
         old_state_id: u16,
@@ -176,7 +176,7 @@ impl BlockRegistry {
     /// Updates state of all neighbors of the block
     pub async fn post_process_state(
         &self,
-        world: &World,
+        world: &Arc<World>,
         location: &BlockPos,
         block: &Block,
         flags: BlockFlags,
@@ -205,7 +205,7 @@ impl BlockRegistry {
 
     pub async fn prepare(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block_pos: &BlockPos,
         block: &Block,
         state_id: u16,
@@ -249,7 +249,7 @@ impl BlockRegistry {
 
     pub async fn update_neighbors(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block_pos: &BlockPos,
         _block: &Block,
         flags: BlockFlags,
@@ -268,7 +268,7 @@ impl BlockRegistry {
 
     pub async fn on_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         block_pos: &BlockPos,
         source_block: &Block,

@@ -6,19 +6,6 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use syn::{Ident, LitBool, LitInt, LitStr};
 
-fn is_state_solid(state: &BlockState, all_shapes: &[CollisionShape]) -> bool {
-    // Needs min xyz to be 0,0,0 and max xyz to be 1,1,1
-    state.collision_shapes.iter().any(|shape| {
-        let shape = all_shapes.get(*shape as usize).unwrap();
-        shape.min[0] == 0.0
-            && shape.min[1] == 0.0
-            && shape.min[2] == 0.0
-            && shape.max[0] == 1.0
-            && shape.max[1] == 1.0
-            && shape.max[2] == 1.0
-    })
-}
-
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
 }
@@ -331,6 +318,8 @@ pub struct BlockState {
     pub collision_shapes: Vec<u16>,
     pub opacity: Option<u32>,
     pub block_entity_type: Option<u32>,
+    // pub instrument: String, // TODO: make this an enum
+    pub is_solid: bool,
     pub is_liquid: bool,
 }
 
@@ -341,7 +330,7 @@ pub struct BlockStateRef {
 }
 
 impl BlockState {
-    fn to_tokens(&self, all_shapes: &[CollisionShape]) -> TokenStream {
+    fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         //let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let air = LitBool::new(self.air, Span::call_site());
@@ -373,7 +362,7 @@ impl BlockState {
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
 
-        let is_solid = is_state_solid(self, all_shapes);
+        let is_solid = LitBool::new(self.is_solid, Span::call_site());
 
         tokens.extend(quote! {
             PartialBlockState {
@@ -1019,9 +1008,7 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let unique_states = unique_states
-        .iter()
-        .map(|state| state.to_tokens(&blocks_assets.shapes));
+    let unique_states = unique_states.iter().map(|state| state.to_tokens());
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
