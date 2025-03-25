@@ -25,7 +25,13 @@ impl JukeboxBlock {
         JukeboxLikeProperties::from_state_id(state_id, block).has_record == Boolean::True
     }
 
-    async fn set_record(&self, has_record: bool, block: &Block, location: BlockPos, world: &World) {
+    async fn set_record(
+        &self,
+        has_record: bool,
+        block: &Block,
+        location: BlockPos,
+        world: &Arc<World>,
+    ) {
         let new_state = JukeboxLikeProperties {
             has_record: if has_record {
                 Boolean::True
@@ -38,7 +44,7 @@ impl JukeboxBlock {
             .await;
     }
 
-    async fn stop_music(&self, block: &Block, location: BlockPos, world: &World) {
+    async fn stop_music(&self, block: &Block, location: BlockPos, world: &Arc<World>) {
         self.set_record(false, block, location, world).await;
         world.stop_record(location).await;
     }
@@ -52,7 +58,7 @@ impl PumpkinBlock for JukeboxBlock {
         player: &Player,
         location: BlockPos,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) {
         // For now just stop the music at this position
         let world = &player.living_entity.entity.world.read().await;
@@ -66,7 +72,7 @@ impl PumpkinBlock for JukeboxBlock {
         location: BlockPos,
         item: &Item,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         let world = &player.living_entity.entity.world.read().await;
 
