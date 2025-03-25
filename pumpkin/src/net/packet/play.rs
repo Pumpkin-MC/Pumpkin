@@ -1563,10 +1563,15 @@ impl Player {
             state.get_state().block_entity_type == Some(block_entity!("sign"))
                 || state.get_state().block_entity_type == Some(block_entity!("hanging_sign"))
         }) {
+            let is_front_text = if selected_face.is_horizontal() {
+                true
+            } else {
+                selected_face.to_offset().z == 1
+            };
             self.client
                 .enqueue_packet(&COpenSignEditor::new(
                     block_position,
-                    selected_face.to_offset().z == 1,
+                    is_front_text
                 ))
                 .await;
         }
