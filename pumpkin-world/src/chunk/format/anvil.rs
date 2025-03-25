@@ -42,8 +42,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 1.21.4
-const WORLD_DATA_VERSION: i32 = 4189;
+// 1.21.5
+const WORLD_DATA_VERSION: i32 = 4325;
 
 #[derive(Clone, Default)]
 pub struct AnvilChunkFormat;

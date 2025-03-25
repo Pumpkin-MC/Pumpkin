@@ -136,7 +136,7 @@ impl ClientPacket for CChunkData<'_> {
         }
 
         // Size
-        write.write_var_int(&VarInt(data_buf.len() as i32))?;
+     //   write.write_var_int(&VarInt(data_buf.len() as i32))?;
         // Data
         write.write_slice(&data_buf)?;
 

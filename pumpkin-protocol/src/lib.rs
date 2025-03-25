@@ -29,7 +29,7 @@ pub mod server;
 
 /// The current Minecraft protocol number.
 /// Don't forget to change this when porting.
-pub const CURRENT_MC_PROTOCOL: NonZeroU16 = unsafe { NonZeroU16::new_unchecked(769) };
+pub const CURRENT_MC_PROTOCOL: NonZeroU16 = unsafe { NonZeroU16::new_unchecked(770) };
 
 pub const MAX_PACKET_SIZE: u64 = 2097152;
 pub const MAX_PACKET_DATA_SIZE: usize = 8388608;
