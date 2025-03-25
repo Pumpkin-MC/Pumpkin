@@ -37,8 +37,10 @@ impl Codec<Self> for VarInt {
 
     fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let (simd, bytes_needed) = self.encode_simd();
+        let bytes = simd.to_le_bytes();
+
         write
-            .write_all(&simd.to_le_bytes()[..bytes_needed as usize])
+            .write_all(&bytes[..bytes_needed as usize])
             .map_err(WritingError::IoError)?;
         Ok(())
     }
@@ -60,13 +62,12 @@ impl VarInt {
     // Adapted from VarInt-Simd encode
     // https://github.com/as-com/varint-simd/blob/0f468783da8e181929b01b9c6e9f741c1fe09825/src/encode/mod.rs#L71
     pub fn encode_simd(&self) -> (u64, u32) {
-        let simd = self.0 as u64;
-
-        let stage1 = (simd & 0x000000000000007f)
-            | ((simd & 0x0000000000003f80) << 1)
-            | ((simd & 0x00000000001fc000) << 2)
-            | ((simd & 0x000000000fe00000) << 3)
-            | ((simd & 0x00000000f0000000) << 4);
+        let x = self.0 as u64;
+        let stage1 = (x & 0x000000000000007f)
+            | ((x & 0x0000000000003f80) << 1)
+            | ((x & 0x00000000001fc000) << 2)
+            | ((x & 0x000000000fe00000) << 3)
+            | ((x & 0x00000000f0000000) << 4);
 
         let leading = stage1.leading_zeros();
 
@@ -77,7 +78,7 @@ impl VarInt {
         let msbs = 0x8080808080808080;
         let msbmask = 0xffffffffffffffff >> (((8 - bytes_needed + 1) << 3) - 1);
 
-        (stage1 | (msbs & msbmask), unused_bytes)
+        (stage1 | (msbs & msbmask), bytes_needed)
     }
 
     pub async fn decode_async(read: &mut (impl AsyncRead + Unpin)) -> Result<Self, ReadingError> {
@@ -103,8 +104,10 @@ impl VarInt {
         write: &mut (impl AsyncWrite + Unpin),
     ) -> Result<(), WritingError> {
         let (simd, bytes_needed) = self.encode_simd();
+        let bytes = simd.to_le_bytes();
+
         write
-            .write_all(&simd.to_le_bytes()[..bytes_needed as usize])
+            .write_all(&bytes[..bytes_needed as usize])
             .await
             .map_err(WritingError::IoError)?;
         Ok(())
