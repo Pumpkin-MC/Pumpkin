@@ -611,10 +611,7 @@ impl World {
 
             //Update tablist
             //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
-            player
-                .world()
-                .await
-                .broadcast_packet_all(&CPlayerInfoUpdate::new(
+            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
                     0x08,
                     &[pumpkin_protocol::client::play::Player {
                         uuid: player.gameprofile.id,
