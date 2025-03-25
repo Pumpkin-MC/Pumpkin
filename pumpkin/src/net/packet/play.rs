@@ -16,7 +16,7 @@ use crate::{
     server::Server,
     world::chunker,
 };
-use pumpkin_config::{advanced_config, BASIC_CONFIG};
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
@@ -27,7 +27,10 @@ use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
-use pumpkin_protocol::client::play::{CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerChatMessage, CPlayerPosition, CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, FilterType};
+use pumpkin_protocol::client::play::{
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerChatMessage, CPlayerPosition,
+    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, FilterType,
+};
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
@@ -59,8 +62,8 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use thiserror::Error;
 use pumpkin_data::world::CHAT;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
