@@ -612,13 +612,13 @@ impl World {
             //Update tablist
             //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
             self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-                    0x08,
-                    &[pumpkin_protocol::client::play::Player {
-                        uuid: player.gameprofile.id,
-                        actions: &[PlayerAction::UpdateListed(true)],
-                    }],
-                ))
-                .await;
+                0x08,
+                &[pumpkin_protocol::client::play::Player {
+                    uuid: player.gameprofile.id,
+                    actions: &[PlayerAction::UpdateListed(true)],
+                }],
+            ))
+            .await;
         }
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
