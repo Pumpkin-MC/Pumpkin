@@ -2,6 +2,8 @@
 //! the accelerator created by theosib. For more information, see:
 //! <https://bugs.mojang.com/browse/MC-81098>.
 
+use std::sync::Arc;
+
 use pumpkin_data::block::{
     Block, BlockProperties, BlockState, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
 };
@@ -241,7 +243,7 @@ impl RedstoneWireTurbo {
     }
 
     /// This is the start of a great adventure
-    pub async fn update_surrounding_neighbors(world: &World, pos: BlockPos) {
+    pub async fn update_surrounding_neighbors(world: &Arc<World>, pos: BlockPos) {
         let mut turbo = Self::new();
         let mut root_node = UpdateNode::new(world, pos).await;
         root_node.visited = true;
@@ -282,14 +284,14 @@ impl RedstoneWireTurbo {
         }
     }
 
-    async fn breadth_first_walk(&mut self, world: &World) {
+    async fn breadth_first_walk(&mut self, world: &Arc<World>) {
         self.shift_queue();
         self.current_walk_layer = 1;
 
         while !self.update_queue[0].is_empty() || !self.update_queue[1].is_empty() {
             for node_id in self.update_queue[0].clone() {
                 let block = &Block::from_state_id(self.nodes[node_id.index].state.id).unwrap();
-                if *block == Block::REDSTONE_WIRE {
+                if block == &Block::REDSTONE_WIRE {
                     self.update_node(world, node_id, self.current_walk_layer)
                         .await;
                 } else {
@@ -315,7 +317,7 @@ impl RedstoneWireTurbo {
         self.update_queue.push(t);
     }
 
-    async fn update_node(&mut self, world: &World, upd1: NodeId, layer: u32) {
+    async fn update_node(&mut self, world: &Arc<World>, upd1: NodeId, layer: u32) {
         let old_wire = {
             let node = &mut self.nodes[upd1.index];
             node.visited = true;
@@ -339,7 +341,11 @@ impl RedstoneWireTurbo {
     const RS_NEIGHBORS_UP: [usize; 4] = [9, 11, 13, 15];
     const RS_NEIGHBORS_DN: [usize; 4] = [8, 10, 12, 14];
 
-    async fn calculate_current_changes(&mut self, world: &World, upd: NodeId) -> RedstoneWireProps {
+    async fn calculate_current_changes(
+        &mut self,
+        world: &Arc<World>,
+        upd: NodeId,
+    ) -> RedstoneWireProps {
         let mut wire = unwrap_wire(&self.nodes[upd.index].state);
         let i = wire.power;
         let mut block_power = 0;
@@ -360,7 +366,7 @@ impl RedstoneWireTurbo {
                     neighbor,
                     world,
                     neighbor_pos,
-                    *side,
+                    side,
                 )
                 .await,
             );

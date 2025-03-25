@@ -310,7 +310,7 @@ impl World {
         .await;
     }
 
-    pub async fn tick(&self, server: &Server) {
+    pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.flush_block_updates().await;
 
         // world ticks
@@ -391,7 +391,7 @@ impl World {
         }
     }
 
-    pub async fn tick_scheduled_block_ticks(&self) {
+    pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
@@ -1184,7 +1184,7 @@ impl World {
 
     /// Sets a block
     pub async fn set_block_state(
-        &self,
+        self: &Arc<Self>,
         position: &BlockPos,
         block_state_id: u16,
         flags: BlockFlags,
@@ -1439,7 +1439,11 @@ impl World {
     }
 
     /// Updates neighboring blocks of a block
-    pub async fn update_neighbors(&self, block_pos: &BlockPos, except: Option<&BlockDirection>) {
+    pub async fn update_neighbors(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        except: Option<&BlockDirection>,
+    ) {
         let source_block = self.get_block(block_pos).await.unwrap();
         for direction in BlockDirection::update_order() {
             if Some(&direction) == except {
@@ -1465,7 +1469,11 @@ impl World {
         }
     }
 
-    pub async fn update_neighbor(&self, neighbor_block_pos: &BlockPos, source_block: &Block) {
+    pub async fn update_neighbor(
+        self: &Arc<Self>,
+        neighbor_block_pos: &BlockPos,
+        source_block: &Block,
+    ) {
         let neighbor_block = self.get_block(neighbor_block_pos).await.unwrap();
 
         if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1483,7 +1491,7 @@ impl World {
     }
 
     pub async fn replace_with_state_for_neighbor_update(
-        &self,
+        self: &Arc<Self>,
         block_pos: &BlockPos,
         direction: &BlockDirection,
         flags: BlockFlags,

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
@@ -19,7 +21,7 @@ use pumpkin_data::item::Item;
 
 type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
 
-pub async fn toggle_fence_gate(world: &World, block_pos: &BlockPos) -> u16 {
+pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> u16 {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
@@ -78,7 +80,7 @@ pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
                 location: BlockPos,
                 _item: &Item,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) -> BlockActionResult {
                 toggle_fence_gate(world, &location).await;
                 BlockActionResult::Consume
@@ -90,7 +92,7 @@ pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
                 _player: &Player,
                 location: BlockPos,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) {
                 toggle_fence_gate(world, &location).await;
             }
