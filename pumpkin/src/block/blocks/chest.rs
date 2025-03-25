@@ -13,6 +13,7 @@ use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::get_block;
 
+use crate::block_entities::chest::Chest;
 use crate::world::World;
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -41,6 +42,19 @@ impl PumpkinBlock for ChestBlock {
     ) {
         self.open_chest_block(block, player, _location, server)
             .await;
+    }
+
+    async fn placed(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        _state_id: u16,
+        pos: &BlockPos,
+        _old_state_id: u16,
+        _notify: bool,
+    ) {
+        let chest = Chest::new(pos.clone());
+        world.add_block_entity(Arc::new(chest)).await;
     }
 
     async fn use_with_item(

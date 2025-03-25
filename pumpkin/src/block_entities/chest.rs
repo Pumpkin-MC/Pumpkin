@@ -1,9 +1,8 @@
-use pumpkin_inventory::ChestContainer;
 use pumpkin_util::{block_entity::BlockEntity, math::position::BlockPos};
 
 pub struct Chest {
     pub position: BlockPos,
-    pub items: ChestContainer,
+    //pub items: [Item; 27],
 }
 
 impl BlockEntity for Chest {
@@ -19,11 +18,16 @@ impl BlockEntity for Chest {
     where
         Self: Sized,
     {
-        Self {
-            position,
-            items: ChestContainer::new(),
-        }
+        println!("Chest created from NBT at {:?}", position);
+        Self { position }
     }
 
     fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+}
+
+impl Chest {
+    pub fn new(position: BlockPos) -> Self {
+        println!("Chest created at {:?}", position);
+        Self { position }
+    }
 }

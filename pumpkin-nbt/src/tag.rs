@@ -6,7 +6,7 @@ use serializer::WriteAdaptor;
 
 use crate::*;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[repr(u8)]
 pub enum NbtTag {
     End = END_ID,

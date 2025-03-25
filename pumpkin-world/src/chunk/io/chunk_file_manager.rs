@@ -321,7 +321,9 @@ where
 
         //TODO: we need to handle the errors and return the result
         // files to save
-        let _: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
+        let test: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
+        println!("test: {:?}", test);
+        
 
         Ok(())
     }

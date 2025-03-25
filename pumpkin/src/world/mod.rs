@@ -50,7 +50,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::{block_entity::BlockEntity, math::{position::BlockPos, vector3::Vector3}};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
@@ -1527,5 +1527,13 @@ impl World {
         if new_state_id != block_state.id {
             self.set_block_state(block_pos, new_state_id, flags).await;
         }
+    }
+
+    pub async fn get_block_entity(&self, block_pos: BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        self.level.get_block_entity(block_pos).await
+    }
+
+    pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+        self.level.add_block_entity(block_entity).await;
     }
 }

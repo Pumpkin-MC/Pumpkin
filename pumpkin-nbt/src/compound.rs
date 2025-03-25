@@ -7,7 +7,7 @@ use crate::{END_ID, Error, Nbt, get_nbt_string};
 use std::io::{ErrorKind, Read, Write};
 use std::vec::IntoIter;
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct NbtCompound {
     pub child_tags: Vec<(String, NbtTag)>,
 }
