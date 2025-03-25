@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::entity::player::Player;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
@@ -17,7 +19,7 @@ use crate::{
     world::World,
 };
 
-async fn toggle_lever(world: &World, block_pos: &BlockPos) {
+async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
     let mut lever_props = LeverLikeProperties::from_state_id(state.id, &block);
@@ -73,7 +75,7 @@ impl PumpkinBlock for LeverBlock {
         location: BlockPos,
         _item: &Item,
         _server: &Server,
-        world: &World,
+        world: &Arc<World>,
     ) -> BlockActionResult {
         toggle_lever(world, &location).await;
         BlockActionResult::Consume
@@ -85,7 +87,7 @@ impl PumpkinBlock for LeverBlock {
         _player: &Player,
         location: BlockPos,
         _server: &Server,
-        world: &World,
+        world: &Arc<World>,
     ) {
         toggle_lever(world, &location).await;
     }
@@ -120,7 +122,7 @@ impl PumpkinBlock for LeverBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let lever_props = LeverLikeProperties::from_state_id(state.id, block);
-        if lever_props.powered.to_bool() && lever_props.get_direction() == *direction {
+        if lever_props.powered.to_bool() && &lever_props.get_direction() == direction {
             15
         } else {
             0
@@ -129,7 +131,7 @@ impl PumpkinBlock for LeverBlock {
 
     async fn on_state_replaced(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         location: BlockPos,
         old_state_id: u16,
@@ -146,7 +148,7 @@ impl PumpkinBlock for LeverBlock {
 
 impl LeverBlock {
     async fn update_neighbors(
-        world: &World,
+        world: &Arc<World>,
         block_pos: &BlockPos,
         lever_props: &LeverLikeProperties,
     ) {

@@ -25,7 +25,7 @@ use crate::world::World;
 
 type DoorProperties = pumpkin_data::block::OakDoorLikeProperties;
 
-async fn toggle_door(world: &World, block_pos: &BlockPos) {
+async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
     let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
     door_props.open = door_props.open.flip();
@@ -116,7 +116,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
 
             async fn placed(
                 &self,
-                world: &World,
+                world: &Arc<World>,
                 block: &Block,
                 state_id: u16,
                 block_pos: &BlockPos,
@@ -169,7 +169,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 location: BlockPos,
                 _item: &Item,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) -> BlockActionResult {
                 if !can_open_door(block, player) {
                     return BlockActionResult::Continue;
@@ -186,7 +186,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 player: &Player,
                 location: BlockPos,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) {
                 if !can_open_door(block, player) {
                     return;
