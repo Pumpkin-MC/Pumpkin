@@ -1544,7 +1544,7 @@ impl Player {
                 .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
                 .await;
 
-            self.send_sign_packet(block, final_block_pos, face).await;
+            self.send_sign_packet(block, final_block_pos).await;
             // The block was placed successfully, so decrement their inventory
             return Ok(true);
         }
@@ -1553,23 +1553,13 @@ impl Player {
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.
-    async fn send_sign_packet(
-        &self,
-        block: Block,
-        block_position: BlockPos,
-        selected_face: &BlockDirection,
-    ) {
+    async fn send_sign_packet(&self, block: Block, block_position: BlockPos) {
         if block.states.iter().any(|state| {
             state.get_state().block_entity_type == Some(block_entity!("sign"))
                 || state.get_state().block_entity_type == Some(block_entity!("hanging_sign"))
         }) {
-            let is_front_text = if selected_face.is_horizontal() {
-                true
-            } else {
-                selected_face.to_offset().z == 1
-            };
             self.client
-                .enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
+                .enqueue_packet(&COpenSignEditor::new(block_position, true))
                 .await;
         }
     }
