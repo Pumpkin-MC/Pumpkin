@@ -5,6 +5,7 @@ mod sword;
 mod trident;
 mod shovel;
 mod axe;
+mod honeycomb;
 
 use std::sync::Arc;
 use egg::EggItem;
@@ -14,6 +15,7 @@ use snowball::SnowBallItem;
 use sword::SwordItem;
 use trident::TridentItem;
 use axe::AxeItem;
+use honeycomb::HoneyCombItem;
 
 use super::registry::ItemRegistry;
 #[must_use]
@@ -27,5 +29,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(TridentItem);
     manager.register(ShovelItem);
     manager.register(AxeItem);
+    manager.register(HoneyCombItem);
+
     Arc::new(manager)
 }
