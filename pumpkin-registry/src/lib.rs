@@ -25,17 +25,17 @@ use wolf::{WolfSoundVariant, WolfVariant};
 mod banner_pattern;
 mod biome;
 mod cat;
+mod chat_type;
 mod chicken;
 mod cow;
-mod frog;
-mod pig;
-mod chat_type;
 mod damage_type;
 mod dimension;
 mod enchantment;
+mod frog;
 mod instrument;
 mod jukebox_song;
 mod paint;
+mod pig;
 mod recipe;
 mod trim_material;
 mod trim_pattern;
@@ -131,7 +131,7 @@ impl Registry {
             registry_id: Identifier::vanilla("wolf_variant"),
             registry_entries,
         };
-        
+
         let registry_entries = SYNCED_REGISTRIES
             .cat_variant
             .iter()
@@ -216,8 +216,6 @@ impl Registry {
             registry_id: Identifier::vanilla("damage_type"),
             registry_entries,
         };
-        
-        
 
         let registry_entries = SYNCED_REGISTRIES
             .banner_pattern
@@ -238,7 +236,6 @@ impl Registry {
             registry_id: Identifier::vanilla("jukebox_song"),
             registry_entries,
         };
-
 
         vec![
             cat_variant,

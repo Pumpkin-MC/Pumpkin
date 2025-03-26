@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WolfVariant {
-    assets: WolfAssetInfo
+    assets: WolfAssetInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,5 +18,5 @@ pub struct WolfSoundVariant {
     whine_sound: String,
     ambient_sound: String,
     death_sound: String,
-    growl_sound: String
+    growl_sound: String,
 }
