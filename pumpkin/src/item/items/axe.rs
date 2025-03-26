@@ -27,6 +27,8 @@ impl ItemMetadata for AxeItem {
 
 #[async_trait]
 impl PumpkinItem for AxeItem {
+
+    #[allow(clippy::too_many_lines)]
     async fn use_on_block(
         &self,
         _item: &Item,
