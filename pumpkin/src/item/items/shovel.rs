@@ -58,9 +58,7 @@ impl PumpkinItem for ShovelItem {
                     .await;
             }
         }
-        if block == &Block::CAMPFIRE
-            || block == &Block::SOUL_CAMPFIRE
-        {
+        if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
             // TODO Implements campfire
             todo!();
         }

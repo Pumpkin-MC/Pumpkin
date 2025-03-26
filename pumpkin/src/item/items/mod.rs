@@ -1,21 +1,21 @@
+mod axe;
 mod egg;
 mod hoe;
+mod honeycomb;
+mod shovel;
 mod snowball;
 mod sword;
 mod trident;
-mod shovel;
-mod axe;
-mod honeycomb;
 
-use std::sync::Arc;
+use axe::AxeItem;
 use egg::EggItem;
 use hoe::HoeItem;
+use honeycomb::HoneyCombItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
+use std::sync::Arc;
 use sword::SwordItem;
 use trident::TridentItem;
-use axe::AxeItem;
-use honeycomb::HoneyCombItem;
 
 use super::registry::ItemRegistry;
 #[must_use]
