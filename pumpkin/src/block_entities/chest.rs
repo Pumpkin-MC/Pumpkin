@@ -7,18 +7,18 @@ pub struct Chest {
 
 impl BlockEntity for Chest {
     fn identifier(&self) -> &'static str {
-        "chest"
+        Self::ID
     }
 
     fn get_position(&self) -> BlockPos {
         self.position
     }
 
-    fn from_nbt(_nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        println!("Chest created from NBT at {:?}", position);
+        println!("Chest created from NBT at {:?}, nbt: {:?}", position, nbt);
         Self { position }
     }
 
@@ -26,6 +26,7 @@ impl BlockEntity for Chest {
 }
 
 impl Chest {
+    pub const ID: &'static str = "minecraft:chest";
     pub fn new(position: BlockPos) -> Self {
         println!("Chest created at {:?}", position);
         Self { position }

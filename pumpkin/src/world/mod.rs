@@ -50,9 +50,12 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::{block_entity::BlockEntity, math::{position::BlockPos, vector3::Vector3}};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::{
+    block_entity::BlockEntity,
+    math::{position::BlockPos, vector3::Vector3},
+};
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
