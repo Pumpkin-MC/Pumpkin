@@ -352,6 +352,7 @@ mod tests {
         assert_eq!(read_struct, test_struct);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_direct_file_io() {
         use tempfile::tempdir;

@@ -39,8 +39,6 @@ async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-tempfile.workspace = true
-
 bytes.workspace = true
 
 rand = "0.8"
@@ -97,3 +95,6 @@ git-version = "0.3"
 # This makes it so the entire project doesn't recompile on each build on linux.
 [target.'cfg(target_os = "windows")'.build-dependencies]
 tauri-winres = "0.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tempfile = "3.19"
