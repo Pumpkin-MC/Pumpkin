@@ -26,8 +26,24 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         write.write_i32_be(self.0.position.z)?;
 
-        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap, &mut write)
-            .map_err(|err| WritingError::Serde(err.to_string()))?;
+        let heightmaps = &self.0.heightmap;
+        // the heighmap is a map, we put 2 values in so the size is 2
+        write.write_var_int(&VarInt(2))?;
+
+        // heighmap index
+        write.write_var_int(&VarInt(1))?;
+        // write long array
+        write.write_var_int(&VarInt(heightmaps.world_surface.len() as i32))?;
+        for mb in &heightmaps.world_surface {
+            write.write_i64_be(*mb)?;
+        }
+        // heighmap index
+        write.write_var_int(&VarInt(4))?;
+        // write long array
+        write.write_var_int(&VarInt(heightmaps.motion_blocking.len() as i32))?;
+        for mb in &heightmaps.motion_blocking {
+            write.write_i64_be(*mb)?;
+        }
 
         let mut data_buf = Vec::new();
         let mut light_buf = Vec::new();
@@ -43,7 +59,7 @@ impl ClientPacket for CChunkData<'_> {
                 chunk_light[index] |= mask;
             }
 
-            light_buf.write_var_int(&VarInt(chunk_light.len() as i32))?;
+            // light_buf.write_var_int(&VarInt(chunk_light.len() as i32))?;
             light_buf.write_slice(&chunk_light)?;
 
             let non_empty_block_count = subchunk.len() as i16;
@@ -79,7 +95,6 @@ impl ClientPacket for CChunkData<'_> {
 
             match palette_type {
                 PaletteType::Single => {
-                    panic!();
                     data_buf.write_u8_be(0)?;
                     data_buf.write_var_int(&VarInt(*palette.first().unwrap() as i32))?;
                     data_buf.write_var_int(&VarInt(0))?;
@@ -97,7 +112,7 @@ impl ClientPacket for CChunkData<'_> {
 
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / block_size as usize);
-                    // data_buf.write_var_int(&VarInt(data_array_len as i32))?;
+                    data_buf.write_var_int(&VarInt(data_array_len as i32))?;
 
                     // data_buf.reserve(data_array_len * 8);
                     for block_clump in subchunk.chunks(64 / block_size as usize) {
@@ -117,6 +132,7 @@ impl ClientPacket for CChunkData<'_> {
                     data_buf.write_u8_be(DIRECT_PALETTE_BITS as u8)?;
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / DIRECT_PALETTE_BITS as usize);
+                    dbg!(data_array_len);
                     //data_buf.write_var_int(&VarInt(data_array_len as i32))?;
 
                     //  data_buf.reserve(data_array_len * 8);
@@ -139,7 +155,7 @@ impl ClientPacket for CChunkData<'_> {
         }
 
         // Size
-        write.write_var_int(&VarInt(data_buf.len() as i32))?;
+        write.write_var_int(&VarInt(data_buf.len() as i32 / 8))?;
         // Data
         write.write_slice(&data_buf)?;
 
@@ -159,7 +175,7 @@ impl ClientPacket for CChunkData<'_> {
 
         // Sky light
         write.write_var_int(&VarInt(SUBCHUNKS_COUNT as i32))?;
-        write.write_slice(&light_buf)?;
+        dbg!(light_buf.len());
 
         // Block Lighting
         write.write_var_int(&VarInt(0))

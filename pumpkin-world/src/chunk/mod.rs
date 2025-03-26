@@ -146,9 +146,9 @@ pub enum SubchunkBlocks {
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
     #[serde(serialize_with = "nbt_long_array")]
-    motion_blocking: Box<[i64]>,
+    pub world_surface: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
-    world_surface: Box<[i64]>,
+    pub motion_blocking: Box<[i64]>,
 }
 
 /// The Heightmap for a completely empty chunk
