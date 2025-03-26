@@ -39,6 +39,8 @@ async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+tempfile.workspace = true
+
 bytes.workspace = true
 
 rand = "0.8"

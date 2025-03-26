@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockFace;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
+use pumpkin_data::item::Item;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -15,6 +18,7 @@ type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
 
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::registry::BlockActionResult;
 use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -27,7 +31,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
         get_tag_values(RegistryKey::Block, "minecraft:buttons").unwrap();
 
     for block in tag_values {
-        async fn click_button(world: &World, block_pos: &BlockPos) {
+        async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
             let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
             let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
@@ -97,12 +101,30 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 _player: &Player,
                 location: BlockPos,
                 _server: &Server,
-                world: &World,
+                world: &Arc<World>,
             ) {
                 click_button(world, &location).await;
             }
 
-            async fn on_scheduled_tick(&self, world: &World, block: &Block, block_pos: &BlockPos) {
+            async fn use_with_item(
+                &self,
+                _block: &Block,
+                _player: &Player,
+                location: BlockPos,
+                _item: &Item,
+                _server: &Server,
+                world: &Arc<World>,
+            ) -> BlockActionResult {
+                click_button(world, &location).await;
+                BlockActionResult::Consume
+            }
+
+            async fn on_scheduled_tick(
+                &self,
+                world: &Arc<World>,
+                block: &Block,
+                block_pos: &BlockPos,
+            ) {
                 let state = world.get_block_state(block_pos).await.unwrap();
                 let mut props = ButtonLikeProperties::from_state_id(state.id, block);
                 props.powered = Boolean::False;
@@ -155,7 +177,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
 
             async fn on_state_replaced(
                 &self,
-                world: &World,
+                world: &Arc<World>,
                 block: &Block,
                 location: BlockPos,
                 old_state_id: u16,
@@ -172,7 +194,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
 
         impl ButtonBlock {
             async fn update_neighbors(
-                world: &World,
+                world: &Arc<World>,
                 block_pos: &BlockPos,
                 props: &ButtonLikeProperties,
             ) {

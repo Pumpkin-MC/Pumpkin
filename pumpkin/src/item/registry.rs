@@ -3,6 +3,7 @@ use crate::server::Server;
 use pumpkin_data::block::Block;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -30,13 +31,14 @@ impl ItemRegistry {
         item: &Item,
         player: &Player,
         location: BlockPos,
+        face: &BlockDirection,
         block: &Block,
         server: &Server,
     ) {
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
             return pumpkin_item
-                .use_on_block(item, player, location, block, server)
+                .use_on_block(item, player, location, face, block, server)
                 .await;
         }
     }

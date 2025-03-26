@@ -20,12 +20,14 @@ bytes.workspace = true
 tokio.workspace = true
 rayon.workspace = true
 derive_more.workspace = true
+uuid.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 
 num-derive = "0.4"
+sha2 = "0.10"
 
 dashmap = "6.1"
 
