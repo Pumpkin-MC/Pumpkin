@@ -55,7 +55,6 @@ use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
 pub mod block;
-pub mod block_entities;
 pub mod command;
 pub mod data;
 pub mod entity;

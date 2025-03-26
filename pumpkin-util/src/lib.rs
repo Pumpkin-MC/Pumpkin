@@ -1,4 +1,3 @@
-pub mod block_entity;
 pub mod gamemode;
 pub mod loot_table;
 pub mod math;

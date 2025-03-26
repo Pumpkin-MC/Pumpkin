@@ -12,8 +12,8 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::registry::get_block;
+use pumpkin_world::block_entities::chest::ChestBlockEntity;
 
-use crate::block_entities::chest::Chest;
 use crate::world::World;
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -53,7 +53,7 @@ impl PumpkinBlock for ChestBlock {
         _old_state_id: u16,
         _notify: bool,
     ) {
-        let chest = Chest::new(pos.clone());
+        let chest = ChestBlockEntity::new(pos.clone());
         world.add_block_entity(Arc::new(chest)).await;
     }
 

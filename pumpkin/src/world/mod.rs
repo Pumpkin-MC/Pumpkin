@@ -10,7 +10,6 @@ pub mod time;
 use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
-    block_entities::block_entity_from_nbt,
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
@@ -34,11 +33,12 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
+use pumpkin_nbt::{compound::NbtCompound, serializer::WriteAdaptor};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
+        CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate,
+        CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -50,13 +50,12 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_util::{
-    block_entity::BlockEntity,
-    math::{position::BlockPos, vector3::Vector3},
+use pumpkin_world::{
+    GENERATION_SETTINGS, GeneratorSetting, biome, block_entities::BlockEntity, level::SyncChunk,
 };
-use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{
     block::registry::{
@@ -321,13 +320,6 @@ impl World {
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
-        for block_entity in self.level.drain_unhandled_block_entities().await {
-            let block_entity = block_entity_from_nbt(&block_entity);
-            if let Some(block_entity) = block_entity {
-                self.level.add_block_entity(block_entity).await;
-            }
-        }
-
         self.flush_block_updates().await;
 
         // world ticks
@@ -1534,11 +1526,30 @@ impl World {
         }
     }
 
-    pub async fn get_block_entity(&self, block_pos: BlockPos) -> Option<Arc<dyn BlockEntity>> {
-        self.level.get_block_entity(block_pos).await
+    pub async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        let chunk = self.get_chunk(block_pos).await;
+        let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
+
+        chunk.block_entities.get(block_pos).cloned()
     }
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
-        self.level.add_block_entity(block_entity).await;
+        let block_pos = block_entity.get_position();
+        let chunk = self.get_chunk(&block_pos).await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+
+        let mut nbt = NbtCompound::new();
+        block_entity.chunk_data_nbt(&mut nbt);
+        let mut bytes = Vec::new();
+        let mut writer = WriteAdaptor::new(&mut bytes);
+        nbt.serialize_content(&mut writer).unwrap();
+        self.broadcast_packet_all(&CBlockEntityData::new(
+            block_entity.get_position(),
+            VarInt(block_entity.get_id() as i32),
+            bytes.into_boxed_slice(),
+        ))
+        .await;
+
+        chunk.block_entities.insert(block_pos, block_entity);
     }
 }

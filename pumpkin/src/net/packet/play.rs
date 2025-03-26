@@ -29,8 +29,7 @@ use pumpkin_inventory::player::{
 };
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, EquipmentSlot,
+    CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -58,9 +57,9 @@ use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
 };
-use pumpkin_world::block::interactive::sign::Sign;
 use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
+use pumpkin_world::block_entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
@@ -1250,7 +1249,7 @@ impl Player {
 
     pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
         let world = &self.living_entity.entity.world.read().await;
-        let updated_sign = Sign::new(
+        let updated_sign = SignBlockEntity::new(
             sign_data.location,
             sign_data.is_front_text,
             [
@@ -1261,15 +1260,7 @@ impl Player {
             ],
         );
 
-        let mut sign_buf = Vec::new();
-        pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign, &mut sign_buf).unwrap();
-        world
-            .broadcast_packet_all(&CBlockEntityData::new(
-                sign_data.location,
-                VarInt(block_entity!("sign") as i32),
-                sign_buf.into_boxed_slice(),
-            ))
-            .await;
+        world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
     pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::ChunkBlockState,
+    block_entities::block_entity_from_nbt,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
 };
 
@@ -148,7 +149,16 @@ impl ChunkData {
                     .id,
                 })
                 .collect(),
-            block_entities: chunk_data.block_entities,
+            block_entities: {
+                let mut block_entities = HashMap::new();
+                for nbt in chunk_data.block_entities {
+                    let block_entity = block_entity_from_nbt(&nbt);
+                    if let Some(block_entity) = block_entity {
+                        block_entities.insert(block_entity.get_position(), block_entity);
+                    }
+                }
+                block_entities
+            },
         })
     }
 }

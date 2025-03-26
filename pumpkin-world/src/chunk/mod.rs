@@ -1,10 +1,10 @@
-use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
+use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::iter::repeat_with;
+use std::{collections::HashMap, iter::repeat_with, sync::Arc};
 use thiserror::Error;
 
-use crate::coordinates::ChunkRelativeBlockCoordinates;
+use crate::{block_entities::BlockEntity, coordinates::ChunkRelativeBlockCoordinates};
 
 pub mod format;
 pub mod io;
@@ -114,7 +114,7 @@ pub struct ChunkData {
     pub dirty: bool,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
-    pub block_entities: Vec<NbtCompound>,
+    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
 }
 
 /// Represents pure block data for a chunk.

@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::serializer::to_bytes;
+use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
@@ -920,7 +920,15 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 })
                 .collect()
         },
-        block_entities: chunk_data.block_entities.clone(),
+        block_entities: chunk_data
+            .block_entities
+            .iter()
+            .map(|(_, block_entity)| {
+                let mut nbt = NbtCompound::new();
+                block_entity.write_internal(&mut nbt);
+                nbt
+            })
+            .collect(),
     };
 
     let mut result = Vec::new();

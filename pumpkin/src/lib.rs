@@ -22,7 +22,6 @@ use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::task::TaskTracker;
 
 pub mod block;
-pub mod block_entities;
 pub mod command;
 pub mod data;
 pub mod entity;
