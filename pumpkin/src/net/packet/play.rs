@@ -1569,10 +1569,7 @@ impl Player {
                 selected_face.to_offset().z == 1
             };
             self.client
-                .enqueue_packet(&COpenSignEditor::new(
-                    block_position,
-                    is_front_text
-                ))
+                .enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
                 .await;
         }
     }

@@ -1,13 +1,22 @@
 use async_trait::async_trait;
-use pumpkin_data::{block::{Block, BlockProperties, HorizontalFacing}, tag::{get_tag_values, RegistryKey}};
+use pumpkin_data::{
+    block::{Block, BlockProperties, HorizontalFacing},
+    tag::{RegistryKey, get_tag_values},
+};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
-use crate::{block::{pumpkin_block::{BlockMetadata, PumpkinBlock}, registry::BlockRegistry}, server::Server, world::World};
+use crate::{
+    block::{
+        pumpkin_block::{BlockMetadata, PumpkinBlock},
+        registry::BlockRegistry,
+    },
+    server::Server,
+    world::World,
+};
 
 type WallSignProps = pumpkin_data::block::LadderLikeProperties;
-
 
 pub fn register_sign_blocks(manager: &mut BlockRegistry) {
     let tag_values: &'static [&'static str] =
@@ -25,7 +34,6 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
             log::error!("Couldn't get tags for minecraft:wall_signs");
             return;
         };
-
 
     for (index, block) in tag_values.iter().enumerate() {
         pub struct SignBlock {
@@ -57,17 +65,20 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
                 _other: bool,
             ) -> u16 {
                 if face.is_horizontal() {
-                    let wall_block = Block::from_registry_key(self.wall_block).map_or_else(|| {
-                        log::error!("Failed to the block {}", block.id);
-                        Block::OAK_WALL_SIGN
-                    }, |block| block);
-                    
+                    let wall_block = Block::from_registry_key(self.wall_block).map_or_else(
+                        || {
+                            log::error!("Failed to the block {}", block.id);
+                            Block::OAK_WALL_SIGN
+                        },
+                        |block| block,
+                    );
+
                     let mut props = WallSignProps::default(&wall_block);
-                    if let Some (facing) = face.to_horizontal_facing() {
+                    if let Some(facing) = face.to_horizontal_facing() {
                         props.facing = facing;
                     } else {
-                            log::error!("Failed to get horizontal facing for sign");
-                            return wall_block.default_state_id;
+                        log::error!("Failed to get horizontal facing for sign");
+                        return wall_block.default_state_id;
                     }
                     return props.to_state_id(&wall_block);
                 }
@@ -76,7 +87,9 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
             }
         }
 
-
-        manager.register(SignBlock { id: block, wall_block: wall_tag_values[index] });
+        manager.register(SignBlock {
+            id: block,
+            wall_block: wall_tag_values[index],
+        });
     }
 }
