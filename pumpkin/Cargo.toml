@@ -87,6 +87,7 @@ bitflags = "2.9.0"
 rustc-hash = "2.1"
 wasmtime = "31.0"
 wasmtime-wasi = "31.0"
+bincode = "2.0.1"
 
 # Task handling
 tokio-util = { version = "0.7.14", features = ["rt"] }

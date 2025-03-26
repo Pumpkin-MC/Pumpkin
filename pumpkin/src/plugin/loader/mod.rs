@@ -4,6 +4,7 @@ use std::{any::Any, path::Path};
 use thiserror::Error;
 
 pub mod native;
+pub mod wasm;
 
 /// Common trait for all plugin loaders
 #[async_trait]
