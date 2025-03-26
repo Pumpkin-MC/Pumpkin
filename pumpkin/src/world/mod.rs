@@ -1538,17 +1538,18 @@ impl World {
         let chunk = self.get_chunk(&block_pos).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
 
-        let mut nbt = NbtCompound::new();
-        block_entity.chunk_data_nbt(&mut nbt);
-        let mut bytes = Vec::new();
-        let mut writer = WriteAdaptor::new(&mut bytes);
-        nbt.serialize_content(&mut writer).unwrap();
-        self.broadcast_packet_all(&CBlockEntityData::new(
-            block_entity.get_position(),
-            VarInt(block_entity.get_id() as i32),
-            bytes.into_boxed_slice(),
-        ))
-        .await;
+        if block_entity.trigger_update_packet() {
+            let nbt = block_entity.chunk_data_nbt();
+            let mut bytes = Vec::new();
+            let mut writer = WriteAdaptor::new(&mut bytes);
+            nbt.serialize_content(&mut writer).unwrap();
+            self.broadcast_packet_all(&CBlockEntityData::new(
+                block_entity.get_position(),
+                VarInt(block_entity.get_id() as i32),
+                bytes.into_boxed_slice(),
+            ))
+            .await;
+        }
 
         chunk.block_entities.insert(block_pos, block_entity);
     }

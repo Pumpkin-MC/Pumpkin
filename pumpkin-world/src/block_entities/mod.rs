@@ -30,7 +30,12 @@ pub trait BlockEntity: Send + Sync {
             })
             .unwrap() as u32
     }
-    fn chunk_data_nbt(&self, _nbt: &mut NbtCompound) {}
+    fn chunk_data_nbt(&self) -> NbtCompound {
+        NbtCompound::new()
+    }
+    fn trigger_update_packet(&self) -> bool {
+        false
+    }
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {

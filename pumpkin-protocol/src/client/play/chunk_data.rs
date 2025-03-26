@@ -8,11 +8,12 @@ use crate::{
 
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
-use pumpkin_util::math::ceil_log2;
+use pumpkin_util::math::{ceil_log2, position::get_local_cord};
 use pumpkin_world::{
     DIRECT_PALETTE_BITS,
     chunk::{ChunkData, SUBCHUNKS_COUNT},
 };
+use serde::Serialize;
 
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
@@ -141,7 +142,18 @@ impl ClientPacket for CChunkData<'_> {
         write.write_slice(&data_buf)?;
 
         // TODO: block entities
-        write.write_var_int(&VarInt(0))?;
+        write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
+        for block_entity in self.0.block_entities.values() {
+            let chunk_data_nbt = block_entity.chunk_data_nbt();
+            let pos = block_entity.get_position();
+            let block_entity_id = block_entity.get_id();
+            let local_xz = get_local_cord(pos.0.x << 4 | get_local_cord(pos.0.z)) as u8;
+            write.write_u8_be(local_xz)?;
+            write.write_i16_be(pos.0.y as i16)?;
+            write.write_u8_be(block_entity_id as u8)?;
+            write.write_u8_be(0)?; // replace this with below
+            //TODO: chunk_data_nbt.serialize_content(&mut write)?;
+        }
 
         // Sky Light Mask
         // All of the chunks, this is not optimal and uses way more data than needed but will be
