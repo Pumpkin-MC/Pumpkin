@@ -44,7 +44,7 @@ impl CommandExecutor for Executor {
                 "Version: {}\nAuthors: {}\nDescription: {}",
                 metadata.version, metadata.authors, metadata.description
             );
-            let component = if *loaded {
+            let component = if loaded {
                 TextComponent::text(fmt)
                     .color_named(NamedColor::Green)
                     .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))

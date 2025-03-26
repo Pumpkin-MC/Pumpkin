@@ -84,7 +84,9 @@ chrono = { version = "0.4", features = ["serde"] }
 # plugins
 libloading = "0.8"
 bitflags = "2.9.0"
-rustc-hash = "2.1.1"
+rustc-hash = "2.1"
+wasmtime = "31.0"
+wasmtime-wasi = "31.0"
 
 # Task handling
 tokio-util = { version = "0.7.14", features = ["rt"] }
