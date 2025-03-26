@@ -11,7 +11,9 @@ use pumpkin_data::sound::Sound;
 pub struct SnowBallItem;
 
 impl ItemMetadata for SnowBallItem {
-    const IDS: &'static [u16] = &[Item::SNOWBALL.id];
+    fn ids() -> Box<[u16]> {
+        [Item::SNOWBALL.id].into()
+    }
 }
 
 const POWER: f32 = 1.5;

@@ -7,12 +7,13 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
 pub trait ItemMetadata {
-    const IDS: &'static [u16];
+    fn ids() -> Box<[u16]>;
 }
 
 #[async_trait]
 pub trait PumpkinItem: Send + Sync {
     async fn normal_use(&self, _block: &Item, _player: &Player) {}
+
     async fn use_on_block(
         &self,
         _item: &Item,
