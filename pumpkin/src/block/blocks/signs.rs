@@ -75,7 +75,7 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
 
                     let mut props = WallSignProps::default(&wall_block);
                     if let Some(facing) = face.to_horizontal_facing() {
-                        props.facing = facing;
+                        props.facing = facing.opposite();
                     } else {
                         log::error!("Failed to get horizontal facing for sign");
                         return wall_block.default_state_id;
