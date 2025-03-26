@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, HorizontalFacing};
+use pumpkin_data::{block::{Block, BlockProperties, HorizontalFacing}, tag::{get_tag_values, RegistryKey}};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -7,13 +7,32 @@ use pumpkin_world::block::BlockDirection;
 use crate::{block::{pumpkin_block::{BlockMetadata, PumpkinBlock}, registry::BlockRegistry}, server::Server, world::World};
 
 type WallSignProps = pumpkin_data::block::LadderLikeProperties;
-type SignProps = pumpkin_data::block::OakSignLikeProperties;
 
 
 pub fn register_sign_blocks(manager: &mut BlockRegistry) {
-    for block in ["oak_sign"] {
+    let tag_values: &'static [&'static str] =
+        match get_tag_values(RegistryKey::Block, "minecraft:standing_signs") {
+            Some(value) => value,
+            None => {
+                log::error!("Couldn't get tags for minecraft:standing_signs");
+                return;
+            }
+        };
+
+    let wall_tag_values: &'static [&'static str] =
+        match get_tag_values(RegistryKey::Block, "minecraft:wall_signs") {
+            Some(value) => value,
+            None => {
+                log::error!("Couldn't get tags for minecraft:wall_signs");
+                return;
+            }
+        };
+    
+
+    for (index, block) in tag_values.iter().enumerate() {
         pub struct SignBlock {
             id: &'static str,
+            wall_block: &'static str,
         }
 
         impl BlockMetadata for SignBlock {
@@ -40,7 +59,14 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
                 _other: bool,
             ) -> u16 {
                 if face.is_horizontal() {
-                    let wall_block = Block::OAK_WALL_SIGN;
+                    let wall_block = match Block::from_registry_key(self.wall_block) {
+                        Some(b) => b,
+                        None => {
+                            log::error!("Failed to the block {}", block.id);
+                            Block::OAK_WALL_SIGN
+                        }
+                    };
+                    
                     let mut props = WallSignProps::default(&wall_block);
                     props.facing = match face.to_horizontal_facing() {
                         Some (f) => f.opposite(),
@@ -56,6 +82,7 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
             }
         }
 
-        manager.register(SignBlock { id: block });
+
+        manager.register(SignBlock { id: block, wall_block: wall_tag_values[index] });
     }
 }
