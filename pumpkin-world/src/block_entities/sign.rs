@@ -86,26 +86,11 @@ pub struct SignBlockEntity {
     position: BlockPos,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct Text {
     has_glowing_text: bool,
     color: DyeColor,
     messages: [String; 4],
-}
-
-impl Default for Text {
-    fn default() -> Self {
-        Self {
-            has_glowing_text: false,
-            color: DyeColor::Black,
-            messages: [
-                "\"\"".to_string(),
-                "\"\"".to_string(),
-                "\"\"".to_string(),
-                "\"\"".to_string(),
-            ],
-        }
-    }
 }
 
 impl From<Text> for NbtTag {
@@ -195,23 +180,16 @@ impl BlockEntity for SignBlockEntity {
 impl SignBlockEntity {
     pub const ID: &'static str = "minecraft:sign";
     pub fn new(position: BlockPos, is_front: bool, messages: [String; 4]) -> Self {
-        let formatted_messages = [
-            format!("\"{}\"", messages[0]),
-            format!("\"{}\"", messages[1]),
-            format!("\"{}\"", messages[2]),
-            format!("\"{}\"", messages[3]),
-        ];
-
         Self {
             position,
             is_waxed: false,
             front_text: if is_front {
-                Text::new(formatted_messages.clone())
+                Text::new(messages.clone())
             } else {
                 Text::default()
             },
             back_text: if !is_front {
-                Text::new(formatted_messages.clone())
+                Text::new(messages.clone())
             } else {
                 Text::default()
             },
