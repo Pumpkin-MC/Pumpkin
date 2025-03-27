@@ -183,7 +183,7 @@ mod test {
             spawn_angle: 0.0,
             nbt_version: 19133,
             version: WorldVersion {
-                name: "1.21.5".to_string(),
+                name: "1.21.4".to_string(),
                 id: 4189,
                 snapshot: false,
                 series: "main".to_string(),
