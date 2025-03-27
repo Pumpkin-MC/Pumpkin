@@ -22,9 +22,9 @@ use crate::{
     command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
     net::{Client, PlayerConfig},
-    plugin::player::{
+    plugin::{entity::{entity_damage::EntityDamageEvent, entity_damage_by_entity::EntityDamageByEntityEvent}, player::{
         player_change_world::PlayerChangeWorldEvent, player_death::PlayerDeathEvent, player_drop_item::PlayerDropItemEvent, player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent
-    },
+    }},
     server::Server,
     world::World, PLUGIN_MANAGER,
 };
@@ -432,43 +432,73 @@ impl Player {
             damage *= 1.5;
         }
 
-        if !victim
-            .damage(damage as f32, DamageType::PLAYER_ATTACK)
-            .await
-        {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &self.living_entity.entity.pos.load(),
-                )
-                .await;
-            return;
-        }
-
-        if victim.get_living_entity().is_some() {
-            let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, &world, attack_type).await;
-            match attack_type {
-                AttackType::Knockback => knockback_strength += 1.0,
-                AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
-                }
-                _ => {}
+        let event_entity = world.get_player_by_id(self.entity_id()).await.unwrap();
+        // Fire the EntityDamageByEntityEvent
+        send_cancellable! {{
+            EntityDamageByEntityEvent {
+                base_event: EntityDamageEvent {
+                    entity: victim.clone(),
+                    damage: damage as f32, 
+                    damage_type: DamageType::PLAYER_ATTACK,
+                    cancelled: false,
+                },
+                attacker: event_entity,
+                cancelled: false,
             };
-            if config.knockback {
-                combat::handle_knockback(
-                    attacker_entity,
-                    &world,
-                    victim_entity,
-                    knockback_strength,
-                )
-                .await;
-            }
-        }
+            
+            'after: {
+                // Continue with the attack if the event wasn't cancelled
+                if !victim
+                    .damage(event.get_base_event().get_damage(), event.get_base_event().get_damage_type())
+                    .await
+                {
+                    world
+                        .play_sound(
+                            Sound::EntityPlayerAttackNodamage,
+                            SoundCategory::Players,
+                            &self.living_entity.entity.pos.load(),
+                        )
+                        .await;
+                    return;
+                }
 
-        if config.swing {}
+                if victim.get_living_entity().is_some() {
+                    let mut knockback_strength = 1.0;
+                    player_attack_sound(&pos, &world, attack_type).await;
+                    match attack_type {
+                        AttackType::Knockback => knockback_strength += 1.0,
+                        AttackType::Sweeping => {
+                            combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                        }
+                        _ => {}
+                    };
+                    if config.knockback {
+                        combat::handle_knockback(
+                            attacker_entity,
+                            &world,
+                            victim_entity,
+                            knockback_strength,
+                        )
+                        .await;
+                    }
+                }
+
+                if config.swing {}
+            }
+            
+            'cancelled: {
+                // Play the "no damage" sound if the attack was cancelled
+                world
+                    .play_sound(
+                        Sound::EntityPlayerAttackNodamage,
+                        SoundCategory::Players,
+                        &self.living_entity.entity.pos.load(),
+                    )
+                    .await;
+            }
+        }}
     }
+
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
         match mode {
@@ -1281,7 +1311,7 @@ impl Player {
                 );
                 
                 'after: {
-                    self.drop_item(item_stack.item.id, u32::from(drop_amount))
+                    self.drop_item(event.item_stack.item.id, u32::from(event.item_stack.item_count))
                         .await;
                     inv.decrease_current_stack(drop_amount);
                 }

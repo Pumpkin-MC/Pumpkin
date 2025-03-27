@@ -4,6 +4,7 @@ pub mod block;
 pub mod player;
 pub mod server;
 pub mod world;
+pub mod entity;
 
 /// A trait representing an event in the system.
 ///

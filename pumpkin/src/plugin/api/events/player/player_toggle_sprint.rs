@@ -36,6 +36,10 @@ impl PlayerToggleSprintEvent {
             cancelled: false,
         }
     }
+
+    pub fn is_sprinting(&self) -> bool {
+        self.is_sprinting
+    }
 }
 
 impl PlayerEvent for PlayerToggleSprintEvent {

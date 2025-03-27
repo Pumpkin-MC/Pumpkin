@@ -44,7 +44,24 @@ impl PlayerDeathEvent {
             damage_type,
         }
     }
+
+    pub fn set_death_type(&mut self, damage_type: DamageType) {
+        self.damage_type = damage_type;
+    }
+
+    pub fn get_death_type(&self) -> DamageType {
+        self.damage_type
+    }
+
+    pub fn set_death_message(&mut self, death_message: TextComponent) {
+        self.death_message = death_message;
+    }
+
+    pub fn get_death_message(&self) -> TextComponent {
+        self.death_message.clone()
+    }
 }
+
 
 impl PlayerEvent for PlayerDeathEvent {
     

@@ -36,6 +36,10 @@ impl PlayerToggleSneakEvent {
             cancelled: false,
         }
     }
+
+    pub fn is_sneaking(&self) -> bool {
+        self.is_sneaking
+    }
 }
 
 impl PlayerEvent for PlayerToggleSneakEvent {

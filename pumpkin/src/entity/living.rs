@@ -1,12 +1,14 @@
 use std::sync::atomic::AtomicU8;
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
+use crate::plugin::entity::entity_damage::EntityDamageEvent;
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
+use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -270,26 +272,51 @@ impl EntityBase for LivingEntity {
         }
     }
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        let world = self.entity.world.read().await;
-        if !self.check_damage(amount) {
-            return false;
-        }
-        let config = &advanced_config().pvp;
 
-        if !self
-            .damage_with_context(amount, damage_type, None, None, None)
-            .await
-        {
-            return false;
-        }
+        let world = self.entity.world.read().await.clone();
 
-        if config.hurt_animation {
-            let entity_id = VarInt(self.entity.entity_id);
-            world
-                .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
-                .await;
-        }
-        true
+        let entity_id = self.entity_id();
+        let event_entity = match world.get_entity_by_id(entity_id).await {
+            Some(entity) => entity,
+            None => {
+                return self.damage_with_context(amount, damage_type, None, None, None).await;
+            }
+        };
+        send_cancellable! {{
+            EntityDamageEvent::new(event_entity, amount, damage_type);
+            
+            'after: {
+                // Check if entity is invulnerable to this damage type
+                if self.entity.is_invulnerable_to(&damage_type) {
+                    return false;
+                }
+                
+                // Process the damage (this code depends on your implementation)
+                let world = &self.entity.world.read().await;
+                
+                if !self.check_damage(event.damage) {
+                    return false;
+                }
+                
+                let config = &advanced_config().pvp;
+                
+                if !self.damage_with_context(event.damage, event.damage_type, None, None, None).await {
+                    return false;
+                }
+                
+                if config.hurt_animation {
+                    let entity_id = VarInt(self.entity.entity_id);
+                    world
+                        .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
+                        .await;
+                }
+                true
+            }
+            
+            'cancelled: {
+                false
+            }
+        }}
     }
     fn get_entity(&self) -> &Entity {
         &self.entity
