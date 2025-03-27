@@ -922,8 +922,8 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         },
         block_entities: chunk_data
             .block_entities
-            .iter()
-            .map(|(_, block_entity)| {
+            .values()
+            .map(|block_entity| {
                 let mut nbt = NbtCompound::new();
                 block_entity.write_internal(&mut nbt);
                 nbt

@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub mod deserializer;
-use pumpkin_nbt::{compound::NbtCompound, serializer::WriteAdaptor, tag::NbtTag};
+use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
 use thiserror::Error;
 pub mod packet;
 pub mod serializer;

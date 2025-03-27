@@ -33,7 +33,7 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
-use pumpkin_nbt::{compound::NbtCompound, serializer::WriteAdaptor, tag::NbtTag, to_bytes_unnamed};
+use pumpkin_nbt::to_bytes_unnamed;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
@@ -1551,11 +1551,13 @@ impl World {
         }
 
         chunk.block_entities.insert(block_pos, block_entity);
+        chunk.dirty = true;
     }
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk = self.get_chunk(block_pos).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         chunk.block_entities.remove(block_pos);
+        chunk.dirty = true;
     }
 }

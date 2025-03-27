@@ -288,8 +288,8 @@ impl<'de> Deserialize<'de> for NbtCompound {
     }
 }
 
-impl Into<NbtTag> for NbtCompound {
-    fn into(self) -> NbtTag {
-        NbtTag::Compound(self)
+impl From<NbtCompound> for NbtTag {
+    fn from(value: NbtCompound) -> Self {
+        NbtTag::Compound(value)
     }
 }

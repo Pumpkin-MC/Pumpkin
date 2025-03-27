@@ -53,7 +53,7 @@ impl PumpkinBlock for ChestBlock {
         _old_state_id: u16,
         _notify: bool,
     ) {
-        let chest = ChestBlockEntity::new(pos.clone());
+        let chest = ChestBlockEntity::new(*pos);
         world.add_block_entity(Arc::new(chest)).await;
     }
 

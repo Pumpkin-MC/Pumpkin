@@ -1,6 +1,5 @@
 use super::BlockEntity;
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 
@@ -26,9 +25,9 @@ pub enum DyeColor {
     Black = 15,
 }
 
-impl Into<String> for DyeColor {
-    fn into(self) -> String {
-        match self {
+impl From<DyeColor> for String {
+    fn from(value: DyeColor) -> Self {
+        match value {
             DyeColor::White => "white".to_string(),
             DyeColor::Orange => "orange".to_string(),
             DyeColor::Magenta => "magenta".to_string(),
@@ -73,9 +72,9 @@ impl From<String> for DyeColor {
     }
 }
 
-impl Into<NbtTag> for DyeColor {
-    fn into(self) -> NbtTag {
-        NbtTag::Byte(self as i8)
+impl From<DyeColor> for NbtTag {
+    fn from(value: DyeColor) -> Self {
+        NbtTag::Byte(value as i8)
     }
 }
 
@@ -109,17 +108,14 @@ impl Default for Text {
     }
 }
 
-impl Into<NbtTag> for Text {
-    fn into(self) -> NbtTag {
+impl From<Text> for NbtTag {
+    fn from(value: Text) -> Self {
         let mut nbt = NbtCompound::new();
-        nbt.put_bool("has_glowing_text", self.has_glowing_text);
-        nbt.put_string("color", self.color.into());
+        nbt.put_bool("has_glowing_text", value.has_glowing_text);
+        nbt.put_string("color", value.color.into());
         nbt.put_list(
             "messages",
-            self.messages
-                .into_iter()
-                .map(|s| NbtTag::String(s))
-                .collect(),
+            value.messages.into_iter().map(NbtTag::String).collect(),
         );
         NbtTag::Compound(nbt)
     }

@@ -8,14 +8,12 @@ use crate::{
 
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
-use pumpkin_nbt::{END_ID, compound::NbtCompound};
+use pumpkin_nbt::END_ID;
 use pumpkin_util::math::{ceil_log2, position::get_local_cord};
 use pumpkin_world::{
     DIRECT_PALETTE_BITS,
-    block_entities::BlockEntity,
     chunk::{ChunkData, SUBCHUNKS_COUNT},
 };
-use serde::Serialize;
 
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
@@ -149,7 +147,7 @@ impl ClientPacket for CChunkData<'_> {
             let chunk_data_nbt = block_entity.chunk_data_nbt();
             let pos = block_entity.get_position();
             let block_entity_id = block_entity.get_id();
-            let local_xz = get_local_cord(pos.0.x) << 4 | get_local_cord(pos.0.z);
+            let local_xz = (get_local_cord(pos.0.x) << 4) | get_local_cord(pos.0.z);
             write.write_u8_be(local_xz as u8)?;
             write.write_i16_be(pos.0.y as i16)?;
             write.write_var_int(&VarInt(block_entity_id as i32))?;

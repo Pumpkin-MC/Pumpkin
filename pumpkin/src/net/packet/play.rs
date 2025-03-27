@@ -27,7 +27,7 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
-use pumpkin_macros::{block_entity, send_cancellable};
+use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
     CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot, CSetHeldItem, EquipmentSlot,
 };
