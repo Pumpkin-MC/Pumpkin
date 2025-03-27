@@ -2692,9 +2692,8 @@
                 {
                   "predicate": {
                     "source_entity": {
-                      "type_specific": {
-                        "variant": "minecraft:warm",
-                        "type": "minecraft:frog"
+                      "components": {
+                        "minecraft:frog/variant": "minecraft:warm"
                       },
                       "type": "minecraft:frog"
                     }
@@ -2717,9 +2716,8 @@
                 {
                   "predicate": {
                     "source_entity": {
-                      "type_specific": {
-                        "variant": "minecraft:cold",
-                        "type": "minecraft:frog"
+                      "components": {
+                        "minecraft:frog/variant": "minecraft:cold"
                       },
                       "type": "minecraft:frog"
                     }
@@ -2742,9 +2740,8 @@
                 {
                   "predicate": {
                     "source_entity": {
-                      "type_specific": {
-                        "variant": "minecraft:temperate",
-                        "type": "minecraft:frog"
+                      "components": {
+                        "minecraft:frog/variant": "minecraft:temperate"
                       },
                       "type": "minecraft:frog"
                     }
@@ -3507,7 +3504,7 @@
       ]
     }
   },
-  "potion": {
+  "splash_potion": {
     "id": 99,
     "attackable": true,
     "summonable": true,
@@ -3518,8 +3515,19 @@
     ],
     "eye_height": 0.2125
   },
-  "pufferfish": {
+  "lingering_potion": {
     "id": 100,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      0.25,
+      0.25
+    ],
+    "eye_height": 0.2125
+  },
+  "pufferfish": {
+    "id": 101,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3570,7 +3578,7 @@
     }
   },
   "rabbit": {
-    "id": 101,
+    "id": 102,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3705,7 +3713,7 @@
     }
   },
   "ravager": {
-    "id": 102,
+    "id": 103,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -3740,7 +3748,7 @@
     }
   },
   "salmon": {
-    "id": 103,
+    "id": 104,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3822,7 +3830,7 @@
     }
   },
   "sheep": {
-    "id": 104,
+    "id": 105,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -3912,9 +3920,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "white"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "white",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -3929,9 +3939,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "orange"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "orange",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -3946,9 +3958,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "magenta"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "magenta",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -3963,9 +3977,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "light_blue"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "light_blue",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -3980,9 +3996,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "yellow"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "yellow",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -3997,9 +4015,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "lime"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "lime",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4014,9 +4034,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "pink"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "pink",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4031,9 +4053,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "gray"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "gray",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4048,9 +4072,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "light_gray"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "light_gray",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4065,9 +4091,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "cyan"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "cyan",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4082,9 +4110,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "purple"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "purple",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4099,9 +4129,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "blue"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "blue",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4116,9 +4148,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "brown"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "brown",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4133,9 +4167,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "green"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "green",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4150,9 +4186,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "red"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "red",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4167,9 +4205,11 @@
                   "conditions": [
                     {
                       "predicate": {
+                        "components": {
+                          "minecraft:sheep/color": "black"
+                        },
                         "type_specific": {
                           "sheared": false,
-                          "color": "black",
                           "type": "minecraft:sheep"
                         }
                       },
@@ -4189,7 +4229,7 @@
     }
   },
   "shulker": {
-    "id": 105,
+    "id": 106,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -4229,7 +4269,7 @@
     }
   },
   "shulker_bullet": {
-    "id": 106,
+    "id": 107,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4240,7 +4280,7 @@
     "eye_height": 0.265625
   },
   "silverfish": {
-    "id": 107,
+    "id": 108,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -4256,7 +4296,7 @@
     }
   },
   "skeleton": {
-    "id": 108,
+    "id": 109,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4334,7 +4374,7 @@
     }
   },
   "skeleton_horse": {
-    "id": 109,
+    "id": 110,
     "max_health": 15.0,
     "attackable": true,
     "summonable": true,
@@ -4382,7 +4422,7 @@
     }
   },
   "slime": {
-    "id": 110,
+    "id": 111,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4476,7 +4516,7 @@
     }
   },
   "small_fireball": {
-    "id": 111,
+    "id": 112,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4487,7 +4527,7 @@
     "eye_height": 0.265625
   },
   "sniffer": {
-    "id": 112,
+    "id": 113,
     "max_health": 14.0,
     "attackable": true,
     "summonable": true,
@@ -4503,7 +4543,7 @@
     }
   },
   "snowball": {
-    "id": 113,
+    "id": 114,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4514,7 +4554,7 @@
     "eye_height": 0.2125
   },
   "snow_golem": {
-    "id": 114,
+    "id": 115,
     "max_health": 4.0,
     "attackable": true,
     "summonable": true,
@@ -4553,7 +4593,7 @@
     }
   },
   "spawner_minecart": {
-    "id": 115,
+    "id": 116,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4564,7 +4604,7 @@
     "eye_height": 0.595
   },
   "spectral_arrow": {
-    "id": 116,
+    "id": 117,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -4575,7 +4615,7 @@
     "eye_height": 0.13
   },
   "spider": {
-    "id": 117,
+    "id": 118,
     "max_health": 16.0,
     "attackable": true,
     "summonable": true,
@@ -4658,17 +4698,6 @@
     }
   },
   "spruce_boat": {
-    "id": 118,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625
-  },
-  "spruce_chest_boat": {
     "id": 119,
     "attackable": true,
     "summonable": true,
@@ -4679,8 +4708,19 @@
     ],
     "eye_height": 0.5625
   },
-  "squid": {
+  "spruce_chest_boat": {
     "id": 120,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625
+  },
+  "squid": {
+    "id": 121,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -4728,7 +4768,7 @@
     }
   },
   "stray": {
-    "id": 121,
+    "id": 122,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4846,7 +4886,7 @@
     }
   },
   "strider": {
-    "id": 122,
+    "id": 123,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4894,7 +4934,7 @@
     }
   },
   "tadpole": {
-    "id": 123,
+    "id": 124,
     "max_health": 6.0,
     "attackable": true,
     "summonable": true,
@@ -4910,7 +4950,7 @@
     }
   },
   "text_display": {
-    "id": 124,
+    "id": 125,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4921,7 +4961,7 @@
     "eye_height": 0.0
   },
   "tnt": {
-    "id": 125,
+    "id": 126,
     "attackable": true,
     "summonable": true,
     "fire_immune": true,
@@ -4932,7 +4972,7 @@
     "eye_height": 0.15
   },
   "tnt_minecart": {
-    "id": 126,
+    "id": 127,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4943,7 +4983,7 @@
     "eye_height": 0.595
   },
   "trader_llama": {
-    "id": 127,
+    "id": 128,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -4991,7 +5031,7 @@
     }
   },
   "trident": {
-    "id": 128,
+    "id": 129,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -5002,7 +5042,7 @@
     "eye_height": 0.13
   },
   "tropical_fish": {
-    "id": 129,
+    "id": 130,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -5053,7 +5093,7 @@
     }
   },
   "turtle": {
-    "id": 130,
+    "id": 131,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -5125,7 +5165,7 @@
     }
   },
   "vex": {
-    "id": 131,
+    "id": 132,
     "max_health": 14.0,
     "attackable": true,
     "summonable": true,
@@ -5141,7 +5181,7 @@
     }
   },
   "villager": {
-    "id": 132,
+    "id": 133,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5157,7 +5197,7 @@
     }
   },
   "vindicator": {
-    "id": 133,
+    "id": 134,
     "max_health": 24.0,
     "attackable": true,
     "summonable": true,
@@ -5210,7 +5250,7 @@
     }
   },
   "wandering_trader": {
-    "id": 134,
+    "id": 135,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5226,7 +5266,7 @@
     }
   },
   "warden": {
-    "id": 135,
+    "id": 136,
     "max_health": 500.0,
     "attackable": true,
     "summonable": true,
@@ -5254,7 +5294,7 @@
     }
   },
   "wind_charge": {
-    "id": 136,
+    "id": 137,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5265,7 +5305,7 @@
     "eye_height": 0.0
   },
   "witch": {
-    "id": 137,
+    "id": 138,
     "max_health": 26.0,
     "attackable": true,
     "summonable": true,
@@ -5468,7 +5508,7 @@
     }
   },
   "wither": {
-    "id": 138,
+    "id": 139,
     "max_health": 300.0,
     "attackable": true,
     "summonable": true,
@@ -5484,7 +5524,7 @@
     }
   },
   "wither_skeleton": {
-    "id": 139,
+    "id": 140,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5587,7 +5627,7 @@
     }
   },
   "wither_skull": {
-    "id": 140,
+    "id": 141,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5598,7 +5638,7 @@
     "eye_height": 0.265625
   },
   "wolf": {
-    "id": 141,
+    "id": 142,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -5614,7 +5654,7 @@
     }
   },
   "zoglin": {
-    "id": 142,
+    "id": 143,
     "max_health": 40.0,
     "attackable": true,
     "summonable": true,
@@ -5662,7 +5702,7 @@
     }
   },
   "zombie": {
-    "id": 143,
+    "id": 144,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5781,7 +5821,7 @@
     }
   },
   "zombie_horse": {
-    "id": 144,
+    "id": 145,
     "max_health": 15.0,
     "attackable": true,
     "summonable": true,
@@ -5829,7 +5869,7 @@
     }
   },
   "zombie_villager": {
-    "id": 145,
+    "id": 146,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5948,7 +5988,7 @@
     }
   },
   "zombified_piglin": {
-    "id": 146,
+    "id": 147,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -6051,7 +6091,7 @@
     }
   },
   "player": {
-    "id": 147,
+    "id": 148,
     "summonable": false,
     "fire_immune": false,
     "dimension": [
@@ -6065,7 +6105,7 @@
     }
   },
   "fishing_bobber": {
-    "id": 148,
+    "id": 149,
     "attackable": true,
     "summonable": false,
     "fire_immune": false,

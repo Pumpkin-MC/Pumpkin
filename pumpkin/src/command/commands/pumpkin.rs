@@ -36,9 +36,9 @@ impl CommandExecutor for Executor {
                     .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                         "Click to Copy Version",
                     ))))
-                    .click_event(ClickEvent::CopyToClipboard(Cow::from(format!(
-                        "Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})"
-                    ))))
+                    .click_event(ClickEvent::CopyToClipboard {
+                        value: Cow::from(format!("Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})")),
+                    })
                     .color_named(NamedColor::Green)
                     .add_child(
                         TextComponent::text(format!(
@@ -46,9 +46,9 @@ impl CommandExecutor for Executor {
                             &CARGO_PKG_DESCRIPTION[0..35],
                             &CARGO_PKG_DESCRIPTION[37..]
                         ))
-                        .click_event(ClickEvent::CopyToClipboard(Cow::from(
-                            CARGO_PKG_DESCRIPTION,
-                        )))
+                        .click_event(ClickEvent::CopyToClipboard {
+                            value: Cow::from(CARGO_PKG_DESCRIPTION),
+                        })
                         .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                             "Click to Copy Description",
                         ))))
@@ -58,9 +58,11 @@ impl CommandExecutor for Executor {
                         TextComponent::text(format!(
                             "(Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})\n"
                         ))
-                        .click_event(ClickEvent::CopyToClipboard(Cow::from(format!(
-                            "(Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})"
-                        ))))
+                        .click_event(ClickEvent::CopyToClipboard {
+                            value: Cow::from(format!(
+                                "(Minecraft {CURRENT_MC_VERSION}, Protocol {CURRENT_MC_PROTOCOL})"
+                            )),
+                        })
                         .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                             "Click to Copy Minecraft Version",
                         ))))
@@ -69,9 +71,9 @@ impl CommandExecutor for Executor {
                     // https://pumpkinmc.org/
                     .add_child(
                         TextComponent::text("[Github Repository]")
-                            .click_event(ClickEvent::OpenUrl(Cow::from(
-                                "https://github.com/Pumpkin-MC/Pumpkin",
-                            )))
+                            .click_event(ClickEvent::OpenUrl {
+                                url: Cow::from("https://github.com/Pumpkin-MC/Pumpkin"),
+                            })
                             .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                                 "Click to open repository.",
                             ))))
@@ -83,7 +85,9 @@ impl CommandExecutor for Executor {
                     .add_child(TextComponent::text("  "))
                     .add_child(
                         TextComponent::text("[Website]")
-                            .click_event(ClickEvent::OpenUrl(Cow::from("https://pumpkinmc.org/")))
+                            .click_event(ClickEvent::OpenUrl {
+                                url: Cow::from("https://pumpkinmc.org/"),
+                            })
                             .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                                 "Click to open website.",
                             ))))
