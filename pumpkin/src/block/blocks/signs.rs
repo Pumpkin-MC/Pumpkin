@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use pumpkin_data::{
-    block::{Block, BlockProperties, HorizontalFacing},
+    block::{Block, BlockProperties},
     tag::{RegistryKey, get_tag_values},
 };
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::{BlockDirection, precise_direction::PreciseDirection};
 
 use crate::{
     block::{
@@ -17,6 +17,7 @@ use crate::{
 };
 
 type WallSignProps = pumpkin_data::block::LadderLikeProperties;
+type SignProps = pumpkin_data::block::OakSignLikeProperties;
 
 pub fn register_sign_blocks(manager: &mut BlockRegistry) {
     let tag_values: &'static [&'static str] =
@@ -61,7 +62,7 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
                 face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                _player_direction: &HorizontalFacing,
+                player_direction: &f32,
                 _other: bool,
             ) -> u16 {
                 if face.is_horizontal() {
@@ -83,7 +84,12 @@ pub fn register_sign_blocks(manager: &mut BlockRegistry) {
                     return props.to_state_id(&wall_block);
                 }
 
-                block.default_state_id
+                let direction = PreciseDirection::from(*player_direction).opposite();
+
+                let mut props = SignProps::default(block);
+                props.rotation = direction.to_integer_0_to_15();
+
+                props.to_state_id(block)
             }
         }
 

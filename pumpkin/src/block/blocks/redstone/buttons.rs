@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockFace;
 use pumpkin_data::block::BlockState;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::RegistryKey;
@@ -12,6 +11,7 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use pumpkin_world::chunk::TickPriority;
 
 type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
@@ -75,7 +75,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                player_direction: &HorizontalFacing,
+                player_direction: &f32,
                 _other: bool,
             ) -> u16 {
                 let mut props = ButtonLikeProperties::default(block);
@@ -87,7 +87,9 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 }
 
                 if face == &BlockDirection::Up || face == &BlockDirection::Down {
-                    props.facing = *player_direction;
+                    let horizontal_direction =
+                        PreciseDirection::from(*player_direction).to_horizontal_direction();
+                    props.facing = horizontal_direction;
                 } else {
                     props.facing = face.opposite().to_cardinal_direction();
                 };

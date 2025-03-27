@@ -17,7 +17,7 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::advanced_config;
-use pumpkin_data::block::{Block, HorizontalFacing};
+use pumpkin_data::block::Block;
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
@@ -1432,16 +1432,8 @@ impl Player {
         // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
-    fn get_player_direction(&self) -> HorizontalFacing {
-        let adjusted_yaw = (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
-
-        match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
-            45.0..=135.0 => HorizontalFacing::West,
-            135.0..=225.0 => HorizontalFacing::North,
-            225.0..=315.0 => HorizontalFacing::East,
-            _ => HorizontalFacing::South, // Default case, should not occur
-        }
+    fn get_player_direction(&self) -> f32 {
+        (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0 // Normalize yaw to [0, 360)
     }
 
     const WORLD_LOWEST_Y: i8 = -64;
