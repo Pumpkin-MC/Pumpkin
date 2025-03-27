@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub mod deserializer;
+use pumpkin_nbt::{compound::NbtCompound, serializer::WriteAdaptor, tag::NbtTag};
 use thiserror::Error;
 pub mod packet;
 pub mod serializer;
@@ -282,6 +283,8 @@ pub trait NetworkWriteExt {
         data: &[G],
         write: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError>;
+
+    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError>;
 }
 
 impl<W: Write> NetworkWriteExt for W {
@@ -402,6 +405,14 @@ impl<W: Write> NetworkWriteExt for W {
         for data in list {
             writer(self, data)?;
         }
+
+        Ok(())
+    }
+
+    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError> {
+        let mut write_adaptor = WriteAdaptor::new(self);
+        data.serialize(&mut write_adaptor)
+            .map_err(|e| WritingError::Message(e.to_string()))?;
 
         Ok(())
     }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use chest::ChestBlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use sign::SignBlockEntity;
 
 pub mod chest;
 pub mod sign;
@@ -30,11 +31,8 @@ pub trait BlockEntity: Send + Sync {
             })
             .unwrap() as u32
     }
-    fn chunk_data_nbt(&self) -> NbtCompound {
-        NbtCompound::new()
-    }
-    fn trigger_update_packet(&self) -> bool {
-        false
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        None
     }
 }
 
@@ -49,6 +47,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
     let id = nbt.get_string("id").unwrap();
     match id.as_str() {
         ChestBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt))),
+        SignBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt))),
         _ => None,
     }
 }

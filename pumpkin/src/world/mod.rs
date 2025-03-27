@@ -33,7 +33,7 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_macros::send_cancellable;
-use pumpkin_nbt::{compound::NbtCompound, serializer::WriteAdaptor};
+use pumpkin_nbt::{compound::NbtCompound, serializer::WriteAdaptor, tag::NbtTag, to_bytes_unnamed};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
@@ -1537,12 +1537,11 @@ impl World {
         let block_pos = block_entity.get_position();
         let chunk = self.get_chunk(&block_pos).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        let block_entity_nbt = block_entity.chunk_data_nbt();
 
-        if block_entity.trigger_update_packet() {
-            let nbt = block_entity.chunk_data_nbt();
+        if let Some(nbt) = block_entity_nbt {
             let mut bytes = Vec::new();
-            let mut writer = WriteAdaptor::new(&mut bytes);
-            nbt.serialize_content(&mut writer).unwrap();
+            to_bytes_unnamed(&nbt, &mut bytes).unwrap();
             self.broadcast_packet_all(&CBlockEntityData::new(
                 block_entity.get_position(),
                 VarInt(block_entity.get_id() as i32),

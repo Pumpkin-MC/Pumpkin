@@ -26,6 +26,53 @@ pub enum DyeColor {
     Black = 15,
 }
 
+impl Into<String> for DyeColor {
+    fn into(self) -> String {
+        match self {
+            DyeColor::White => "white".to_string(),
+            DyeColor::Orange => "orange".to_string(),
+            DyeColor::Magenta => "magenta".to_string(),
+            DyeColor::LightBlue => "light_blue".to_string(),
+            DyeColor::Yellow => "yellow".to_string(),
+            DyeColor::Lime => "lime".to_string(),
+            DyeColor::Pink => "pink".to_string(),
+            DyeColor::Gray => "gray".to_string(),
+            DyeColor::LightGray => "light_gray".to_string(),
+            DyeColor::Cyan => "cyan".to_string(),
+            DyeColor::Purple => "purple".to_string(),
+            DyeColor::Blue => "blue".to_string(),
+            DyeColor::Brown => "brown".to_string(),
+            DyeColor::Green => "green".to_string(),
+            DyeColor::Red => "red".to_string(),
+            DyeColor::Black => "black".to_string(),
+        }
+    }
+}
+
+impl From<String> for DyeColor {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "white" => DyeColor::White,
+            "orange" => DyeColor::Orange,
+            "magenta" => DyeColor::Magenta,
+            "light_blue" => DyeColor::LightBlue,
+            "yellow" => DyeColor::Yellow,
+            "lime" => DyeColor::Lime,
+            "pink" => DyeColor::Pink,
+            "gray" => DyeColor::Gray,
+            "light_gray" => DyeColor::LightGray,
+            "cyan" => DyeColor::Cyan,
+            "purple" => DyeColor::Purple,
+            "blue" => DyeColor::Blue,
+            "brown" => DyeColor::Brown,
+            "green" => DyeColor::Green,
+            "red" => DyeColor::Red,
+            "black" => DyeColor::Black,
+            _ => DyeColor::Black,
+        }
+    }
+}
+
 impl Into<NbtTag> for DyeColor {
     fn into(self) -> NbtTag {
         NbtTag::Byte(self as i8)
@@ -50,8 +97,8 @@ struct Text {
 impl Into<NbtTag> for Text {
     fn into(self) -> NbtTag {
         let mut nbt = NbtCompound::new();
-        nbt.put("has_glowing_text", self.has_glowing_text);
-        nbt.put("color", self.color);
+        nbt.put_bool("has_glowing_text", self.has_glowing_text);
+        nbt.put_string("color", self.color.into());
         nbt.put_list(
             "messages",
             self.messages
@@ -67,7 +114,7 @@ impl From<NbtTag> for Text {
     fn from(tag: NbtTag) -> Self {
         let nbt = tag.extract_compound().unwrap();
         let has_glowing_text = nbt.get_bool("has_glowing_text").unwrap_or(false);
-        let color = nbt.get_byte("color").unwrap_or(0);
+        let color = nbt.get_string("color").unwrap();
         let messages: Vec<String> = nbt
             .get_list("messages")
             .unwrap()
@@ -76,7 +123,7 @@ impl From<NbtTag> for Text {
             .collect();
         Self {
             has_glowing_text,
-            color: DyeColor::from_i8(color).unwrap_or(DyeColor::Black),
+            color: DyeColor::from(color.clone()),
             messages: [
                 messages[0].clone(),
                 messages[1].clone(),
@@ -126,10 +173,16 @@ impl BlockEntity for SignBlockEntity {
         nbt.put("back_text", self.back_text.clone());
         nbt.put_bool("is_waxed", self.is_waxed);
     }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        self.write_nbt(&mut nbt);
+        Some(nbt)
+    }
 }
 
 impl SignBlockEntity {
-    const ID: &'static str = "minecraft:sign";
+    pub const ID: &'static str = "minecraft:sign";
     pub fn new(position: BlockPos, is_front: bool, messages: [String; 4]) -> Self {
         let formatted_messages = [
             format!("\"{}\"", messages[0]),

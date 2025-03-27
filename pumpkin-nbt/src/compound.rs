@@ -287,3 +287,9 @@ impl<'de> Deserialize<'de> for NbtCompound {
         deserializer.deserialize_map(CompoundVisitor)
     }
 }
+
+impl Into<NbtTag> for NbtCompound {
+    fn into(self) -> NbtTag {
+        NbtTag::Compound(self)
+    }
+}
