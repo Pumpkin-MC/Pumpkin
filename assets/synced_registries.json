@@ -1701,6 +1701,21 @@
           "content"
         ]
       }
+    },
+    "pumpkin_raw": {
+      "chat": {
+        "translation_key": "%s",
+        "parameters": [
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
     }
   },
   "trim_pattern": {

@@ -141,5 +141,23 @@
         ]
       }
     }
+  },
+  "pumpkin_raw": {
+    "id": 7,
+    "components": {
+      "chat": {
+        "translation_key": "%s",
+        "parameters": [
+          "content"
+        ]
+      },
+      "narration": {
+        "translation_key": "chat.type.text.narrate",
+        "parameters": [
+          "sender",
+          "content"
+        ]
+      }
+    }
   }
 }
