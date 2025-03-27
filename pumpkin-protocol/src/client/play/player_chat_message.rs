@@ -1,5 +1,3 @@
-use core::time;
-
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_util::text::TextComponent;
 

@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
@@ -55,8 +54,6 @@ use pumpkin_protocol::{
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_util::text::style::Style;
-use pumpkin_util::text::{TextComponentBase, TextContent};
 use pumpkin_util::{
     GameMode,
     math::{vector3::Vector3, wrap_degrees},
@@ -702,35 +699,22 @@ impl Player {
 
                 let config = advanced_config();
 
+                let mut chat_session = self.chat_session.lock().await;
+
                 let raw_message = event.message.clone();
-                let decorated_message = &TextComponent::chat_decorated(
-                    config.chat.format.clone(),
-                    gameprofile.name.clone(),
-                    event.message,
-                );
 
                 let entity = &self.living_entity.entity;
 
-                let no_reports_packet = CSystemChatMessage::new(
-                    decorated_message,
-                    false,
+                let chat_decorated_message = &TextComponent::chat_decorated(
+                    config.chat.format.clone(),
+                    gameprofile.name.clone(),
+                    raw_message.clone(),
                 );
 
-                let test_name = TextComponent {
-                    0: TextComponentBase {
-                        content: TextContent::Text { text: Cow::Borrowed("") },
-                        style: Style::default(),
-                        extra: vec![
-                            TextComponentBase {
-                                content: TextContent::Text { text: Cow::Borrowed("HELLO") },
-                                style: Style::default().color_named(NamedColor::Blue),
-                                extra: vec![]
-                            }
-                        ]
-                    }
-                };
-
-                let mut chat_session = self.chat_session.lock().await;
+                let no_reports_packet = CSystemChatMessage::new(
+                    chat_decorated_message,
+                    false,
+                );
 
                 let reportable_packet = CPlayerChatMessage::new(
                                 gameprofile.id,
@@ -740,33 +724,34 @@ impl Player {
                                 chat_message.timestamp,
                                 chat_message.salt,
                                 chat_session.previous_messages.clone(),
-                                Some(TextComponent::text(raw_message.clone())),
+                                Some(chat_decorated_message.clone()),
                                 FilterType::PassThrough,
-                                (5).into(),
-                                test_name,
+                                (CHAT + 8).into(), // Custom registry chat_type with no sender name
+                                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
                                 None,
                             );
 
-                log::info!("Index: {:?}", chat_session);
-
-                chat_session.append_previous_message(chat_message.signature.clone());
 
                 // There is almost definitely a better way to handle this logic but I
                 // cannot get anything clean looking to work
                 if event.recipients.is_empty() {
                     let world = &entity.world.read().await;
-                    match BASIC_CONFIG.allow_chat_reports {
-                        true => world.broadcast_packet_all(&reportable_packet).await,
-                        false => world.broadcast_packet_all(&no_reports_packet).await,
+                    if BASIC_CONFIG.allow_chat_reports {
+                        world.broadcast_packet_all(&reportable_packet).await;
+                    } else {
+                        world.broadcast_packet_all(&no_reports_packet).await;
                     }
                 } else {
                     for recipient in event.recipients {
-                        match BASIC_CONFIG.allow_chat_reports {
-                            true => recipient.client.enqueue_packet(&reportable_packet).await,
-                            false => recipient.client.enqueue_packet(&no_reports_packet).await,
+                        if BASIC_CONFIG.allow_chat_reports {
+                            recipient.client.enqueue_packet(&reportable_packet).await;
+                        } else {
+                            recipient.client.enqueue_packet(&no_reports_packet).await;
                         }
                     }
                 }
+
+                chat_session.append_previous_message(chat_message.signature.clone());
 
             }
         }}

@@ -45,13 +45,13 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                         })?;
                     }
                     PlayerAction::InitializeChat(init_chat) => {
-                        p.write_option(&init_chat, |p, v| {
+                        p.write_option(init_chat, |p, v| {
                             p.write_uuid(&v.session_id)?;
                             p.write_i64_be(v.expires_at)?;
                             p.write_var_int(&v.public_key.len().into())?;
-                            p.write_slice(&v.public_key)?;
+                            p.write_slice(v.public_key)?;
                             p.write_var_int(&v.signature.len().into())?;
-                            p.write_slice(&v.signature)
+                            p.write_slice(v.signature)
                         })?;
                     }
                     PlayerAction::UpdateGameMode(gamemode) => p.write_var_int(gamemode)?,

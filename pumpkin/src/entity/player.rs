@@ -88,10 +88,7 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::{
-    block::interactive::sign, cylindrical_chunk_iterator::Cylindrical, item::ItemStack,
-    level::SyncChunk,
-};
+use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
 
@@ -1867,6 +1864,7 @@ pub struct ChatSession {
 }
 
 impl ChatSession {
+    #[must_use]
     pub fn new(session_id: Uuid) -> Self {
         Self {
             session_id,

@@ -153,6 +153,7 @@ impl TextComponent {
             .replace("{DISPLAYNAME}", player_name.as_str())
             .replace("{MESSAGE}", content.as_str())
             .replace("&", "§");
+
         Self(TextComponentBase {
             content: TextContent::Text {
                 text: Cow::Owned(with_resolved_fields),
