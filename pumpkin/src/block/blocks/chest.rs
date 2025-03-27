@@ -57,6 +57,17 @@ impl PumpkinBlock for ChestBlock {
         world.add_block_entity(Arc::new(chest)).await;
     }
 
+    async fn on_state_replaced(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        location: BlockPos,
+        _old_state_id: u16,
+        _moved: bool,
+    ) {
+        world.remove_block_entity(&location).await;
+    }
+
     async fn use_with_item(
         &self,
         block: &Block,
