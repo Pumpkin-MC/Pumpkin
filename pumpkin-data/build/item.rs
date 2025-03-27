@@ -37,7 +37,7 @@ impl ToTokens for ItemComponents {
         let max_stack_size = LitInt::new(&self.max_stack_size.to_string(), Span::call_site());
         let jukebox_playable = match &self.jukebox_playable {
             Some(playable) => {
-                let song = LitStr::new(&playable, Span::call_site());
+                let song = LitStr::new(playable, Span::call_site());
                 quote! { Some(#song) }
             }
             None => quote! { None },

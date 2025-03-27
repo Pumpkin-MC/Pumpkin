@@ -59,7 +59,7 @@ impl ClientPacket for CChunkData<'_> {
                 chunk_light[index] |= mask;
             }
 
-            // light_buf.write_var_int(&VarInt(chunk_light.len() as i32))?;
+            light_buf.write_var_int(&VarInt(chunk_light.len() as i32))?;
             light_buf.write_slice(&chunk_light)?;
 
             let non_empty_block_count = subchunk.len() as i16;
@@ -75,6 +75,7 @@ impl ClientPacket for CChunkData<'_> {
             enum PaletteType {
                 Single,
                 Indirect(u32),
+                // aka IdListPalette
                 Direct,
             }
             let palette_type = {
@@ -112,9 +113,8 @@ impl ClientPacket for CChunkData<'_> {
 
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / block_size as usize);
-                    data_buf.write_var_int(&VarInt(data_array_len as i32))?;
 
-                    // data_buf.reserve(data_array_len * 8);
+                    data_buf.reserve(data_array_len * 8);
                     for block_clump in subchunk.chunks(64 / block_size as usize) {
                         let mut out_long: i64 = 0;
                         for block in block_clump.iter().rev() {
@@ -132,10 +132,7 @@ impl ClientPacket for CChunkData<'_> {
                     data_buf.write_u8_be(DIRECT_PALETTE_BITS as u8)?;
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / DIRECT_PALETTE_BITS as usize);
-                    dbg!(data_array_len);
-                    //data_buf.write_var_int(&VarInt(data_array_len as i32))?;
-
-                    //  data_buf.reserve(data_array_len * 8);
+                    data_buf.reserve(data_array_len * 8);
                     for block_clump in subchunk.chunks(64 / DIRECT_PALETTE_BITS as usize) {
                         let mut out_long: i64 = 0;
                         for (i, &block) in block_clump.iter().enumerate() {
@@ -148,15 +145,13 @@ impl ClientPacket for CChunkData<'_> {
 
             //// Biomes
             // TODO: make biomes work
+            // bits
             data_buf.write_u8_be(0)?;
-            // This seems to be the biome
-            //data_buf.write_var_int(&VarInt(0))?;
             data_buf.write_var_int(&VarInt(0))?;
         }
 
         // Size
-        write.write_var_int(&VarInt(data_buf.len() as i32 / 8))?;
-        // Data
+        write.write_var_int(&VarInt(data_buf.len() as i32))?;
         write.write_slice(&data_buf)?;
 
         // TODO: block entities
@@ -175,7 +170,7 @@ impl ClientPacket for CChunkData<'_> {
 
         // Sky light
         write.write_var_int(&VarInt(SUBCHUNKS_COUNT as i32))?;
-        dbg!(light_buf.len());
+        write.write_slice(&light_buf)?;
 
         // Block Lighting
         write.write_var_int(&VarInt(0))
