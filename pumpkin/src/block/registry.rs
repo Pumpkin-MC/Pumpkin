@@ -124,6 +124,23 @@ impl BlockRegistry {
         }
     }
 
+    pub async fn player_placed(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        state_id: u16,
+        pos: &BlockPos,
+        face: &BlockDirection,
+        player: &Player,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .player_placed(world, block, state_id, pos, face, player)
+                .await;
+        }
+    }
+
     pub async fn broken(
         &self,
         world: Arc<World>,

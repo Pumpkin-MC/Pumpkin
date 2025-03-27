@@ -87,11 +87,26 @@ pub struct SignBlockEntity {
     position: BlockPos,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct Text {
     has_glowing_text: bool,
     color: DyeColor,
     messages: [String; 4],
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            has_glowing_text: false,
+            color: DyeColor::Black,
+            messages: [
+                "\"\"".to_string(),
+                "\"\"".to_string(),
+                "\"\"".to_string(),
+                "\"\"".to_string(),
+            ],
+        }
+    }
 }
 
 impl Into<NbtTag> for Text {
@@ -204,6 +219,14 @@ impl SignBlockEntity {
             } else {
                 Text::default()
             },
+        }
+    }
+    pub fn empty(position: BlockPos) -> Self {
+        Self {
+            position,
+            is_waxed: false,
+            front_text: Text::default(),
+            back_text: Text::default(),
         }
     }
 }

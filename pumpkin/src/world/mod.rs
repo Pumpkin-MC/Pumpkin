@@ -1552,4 +1552,10 @@ impl World {
 
         chunk.block_entities.insert(block_pos, block_entity);
     }
+
+    pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
+        let chunk = self.get_chunk(block_pos).await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        chunk.block_entities.remove(block_pos);
+    }
 }
