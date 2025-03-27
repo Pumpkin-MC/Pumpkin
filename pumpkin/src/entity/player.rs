@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CSetHeldItem;
+use pumpkin_protocol::client::play::{CSetHeldItem, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -88,7 +88,10 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
+use pumpkin_world::{
+    block::interactive::sign, cylindrical_chunk_iterator::Cylindrical, item::ItemStack,
+    level::SyncChunk,
+};
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
 
@@ -235,7 +238,7 @@ pub struct Player {
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
     /// The player's current chat session UUID
-    pub chat_session: Mutex<Uuid>,
+    pub chat_session: Mutex<ChatSession>,
 }
 
 impl Player {
@@ -319,7 +322,7 @@ impl Player {
             last_sent_food: AtomicU32::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
-            chat_session: Mutex::new(Uuid::nil()),
+            chat_session: Mutex::new(ChatSession::new(Uuid::nil())), // Placeholder value until the player actually sets their session id
         }
     }
 
@@ -1700,7 +1703,7 @@ impl Player {
                 self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
             SPlayerSession::PACKET_ID => {
-                self.handle_chat_session_update(SPlayerSession::read(payload)?)
+                self.handle_chat_session_update(server, SPlayerSession::read(payload)?)
                     .await;
             }
             _ => {
@@ -1852,5 +1855,43 @@ impl TryFrom<i32> for ChatMode {
             2 => Ok(Self::Hidden),
             _ => Err(InvalidChatMode),
         }
+    }
+}
+
+/// Player's current chat session
+#[derive(Debug)]
+pub struct ChatSession {
+    pub session_id: uuid::Uuid,
+    pub previous_messages: Box<[PreviousMessage]>,
+    pub message_index: i32,
+}
+
+impl ChatSession {
+    pub fn new(session_id: Uuid) -> Self {
+        Self {
+            session_id,
+            previous_messages: Box::new([]),
+            message_index: 0,
+        }
+    }
+
+    pub fn append_previous_message(&mut self, signature: Option<Box<[u8]>>) {
+        let new_message = PreviousMessage {
+            // Packet cannot be deserialized by the client unless this is 0. I do not know why. It doesn't seem to affect anything
+            id: VarInt(0),
+            signature: signature.unwrap_or(Box::new([])),
+        };
+
+        let mut messages = Vec::from(self.previous_messages.as_ref());
+
+        if messages.len() >= 20 {
+            messages.remove(0);
+        }
+
+        messages.push(new_message);
+
+        self.previous_messages = messages.into_boxed_slice();
+
+        self.message_index += 1;
     }
 }

@@ -1,9 +1,11 @@
+use std::borrow::Cow;
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
 use crate::block;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
+use crate::entity::player::ChatSession;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
@@ -28,8 +30,9 @@ use pumpkin_inventory::player::{
 };
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerChatMessage, CPlayerPosition,
-    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, FilterType,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerChatMessage, CPlayerInfoUpdate,
+    CPlayerPosition, CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot,
+    FilterType, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -52,6 +55,8 @@ use pumpkin_protocol::{
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::style::Style;
+use pumpkin_util::text::{TextComponentBase, TextContent};
 use pumpkin_util::{
     GameMode,
     math::{vector3::Vector3, wrap_degrees},
@@ -678,7 +683,6 @@ impl Player {
             return;
         }
 
-        let chat_session = &self.chat_session.lock().await;
         let gameprofile = &self.gameprofile;
         /* server.broadcast_packet(
             self,
@@ -712,21 +716,40 @@ impl Player {
                     false,
                 );
 
+                let test_name = TextComponent {
+                    0: TextComponentBase {
+                        content: TextContent::Text { text: Cow::Borrowed("") },
+                        style: Style::default(),
+                        extra: vec![
+                            TextComponentBase {
+                                content: TextContent::Text { text: Cow::Borrowed("HELLO") },
+                                style: Style::default().color_named(NamedColor::Blue),
+                                extra: vec![]
+                            }
+                        ]
+                    }
+                };
+
+                let mut chat_session = self.chat_session.lock().await;
+
                 let reportable_packet = CPlayerChatMessage::new(
                                 gameprofile.id,
-                                1.into(),
-                                chat_message.signature,
+                                VarInt(chat_session.message_index),
+                                chat_message.signature.clone(),
                                 raw_message.clone(),
                                 chat_message.timestamp,
                                 chat_message.salt,
-                                // TODO: Previous messages
-                                Box::new([]),
+                                chat_session.previous_messages.clone(),
                                 Some(TextComponent::text(raw_message.clone())),
                                 FilterType::PassThrough,
-                                (CHAT + 1).into(),
-                                TextComponent::text(gameprofile.name.clone()),
+                                (5).into(),
+                                test_name,
                                 None,
                             );
+
+                log::info!("Index: {:?}", chat_session);
+
+                chat_session.append_previous_message(chat_message.signature.clone());
 
                 // There is almost definitely a better way to handle this logic but I
                 // cannot get anything clean looking to work
@@ -749,8 +772,31 @@ impl Player {
         }}
     }
 
-    pub async fn handle_chat_session_update(&self, packet: SPlayerSession) {
-        *self.chat_session.lock().await = packet.session_id;
+    pub async fn handle_chat_session_update(
+        self: &Arc<Self>,
+        server: &Server,
+        session: SPlayerSession,
+    ) {
+        // Update the chat session fields
+        let mut chat_session = self.chat_session.lock().await; // Await the lock
+
+        // Update the chat session fields
+        *chat_session = ChatSession::new(session.session_id);
+
+        server
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                0x02,
+                &[pumpkin_protocol::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: session.session_id,
+                        expires_at: session.expires_at,
+                        public_key: &session.public_key,
+                        signature: &session.key_signature,
+                    }))],
+                }],
+            ))
+            .await;
     }
 
     pub async fn handle_client_information(

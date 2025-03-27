@@ -1,3 +1,5 @@
+use core::time;
+
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_util::text::TextComponent;
 
@@ -60,10 +62,10 @@ impl CPlayerChatMessage {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct PreviousMessage {
-    message_id: VarInt,
-    signature: Option<Box<[u8]>>, // Always 256
+    pub id: VarInt,
+    pub signature: Box<[u8]>, // Always 256
 }
 
 #[derive(Serialize)]
