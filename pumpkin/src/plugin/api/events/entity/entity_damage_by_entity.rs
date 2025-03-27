@@ -48,16 +48,17 @@ impl EntityDamageByEntityEvent {
     ///
     /// # Returns
     /// A reference to the entity that caused the damage.
+    #[must_use]
     pub fn get_attacker(&self) -> &Entity {
         self.attacker.get_entity()
     }
-    
-    /// Returns the base EntityDamageEvent
+
+    /// Returns the base `EntityDamageEvent`
     ///
     /// # Returns
-    /// The base EntityDamageEvent
+    /// The base `EntityDamageEvent`
+    #[must_use]
     pub fn get_base_event(&self) -> &EntityDamageEvent {
         &self.base_event
     }
-    
 }

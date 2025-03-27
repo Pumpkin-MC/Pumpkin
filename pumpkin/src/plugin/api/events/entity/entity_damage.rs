@@ -30,11 +30,7 @@ impl EntityDamageEvent {
     ///
     /// # Returns
     /// A new instance of `EntityDamageEvent`.
-    pub fn new(
-        entity: Arc<dyn EntityBase>,
-        damage: f32,
-        damage_type: DamageType,
-    ) -> Self {
+    pub fn new(entity: Arc<dyn EntityBase>, damage: f32, damage_type: DamageType) -> Self {
         Self {
             entity,
             damage,
@@ -42,11 +38,12 @@ impl EntityDamageEvent {
             cancelled: false,
         }
     }
-    
+
     /// Gets a reference of the Entity that was Damaged
     ///
     /// # Returns
     // Reference of the Entity
+    #[must_use]
     pub fn get_entity(&self) -> &Entity {
         self.entity.get_entity()
     }
@@ -55,10 +52,11 @@ impl EntityDamageEvent {
     ///
     /// # Returns
     /// The amount of damage dealt.
+    #[must_use]
     pub fn get_damage(&self) -> f32 {
         self.damage
     }
-    
+
     /// Sets the amount of damage to be dealt.
     ///
     /// # Arguments
@@ -66,11 +64,12 @@ impl EntityDamageEvent {
     pub fn set_damage(&mut self, damage: f32) {
         self.damage = damage;
     }
-    
+
     /// Gets the type of damage dealt.
     ///
     /// # Returns
     /// The type of damage dealt.
+    #[must_use]
     pub fn get_damage_type(&self) -> DamageType {
         self.damage_type
     }

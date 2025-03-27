@@ -1,10 +1,10 @@
 use std::any::Any;
 
 pub mod block;
+pub mod entity;
 pub mod player;
 pub mod server;
 pub mod world;
-pub mod entity;
 
 /// A trait representing an event in the system.
 ///

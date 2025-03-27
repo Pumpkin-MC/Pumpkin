@@ -272,38 +272,36 @@ impl EntityBase for LivingEntity {
         }
     }
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-
         let world = self.entity.world.read().await.clone();
 
         let entity_id = self.entity_id();
-        let event_entity = match world.get_entity_by_id(entity_id).await {
-            Some(entity) => entity,
-            None => {
-                return self.damage_with_context(amount, damage_type, None, None, None).await;
-            }
+        let Some(event_entity) = world.get_entity_by_id(entity_id).await else {
+            return self
+                .damage_with_context(amount, damage_type, None, None, None)
+                .await;
         };
         send_cancellable! {{
             EntityDamageEvent::new(event_entity, amount, damage_type);
-            
+
             'after: {
                 // Check if entity is invulnerable to this damage type
                 if self.entity.is_invulnerable_to(&damage_type) {
                     return false;
                 }
-                
-                // Process the damage (this code depends on your implementation)
+
+                // Process the damage
                 let world = &self.entity.world.read().await;
-                
+
                 if !self.check_damage(event.damage) {
                     return false;
                 }
-                
+
                 let config = &advanced_config().pvp;
-                
+
                 if !self.damage_with_context(event.damage, event.damage_type, None, None, None).await {
                     return false;
                 }
-                
+
                 if config.hurt_animation {
                     let entity_id = VarInt(self.entity.entity_id);
                     world
@@ -312,7 +310,7 @@ impl EntityBase for LivingEntity {
                 }
                 true
             }
-            
+
             'cancelled: {
                 false
             }

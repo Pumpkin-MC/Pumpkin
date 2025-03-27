@@ -27,33 +27,32 @@ impl PlayerDropItemEvent {
     ///
     /// # Arguments
     /// - `player`: A reference to the player who is dropping the item.
-    /// - `item_stack`: The ItemStack being dropped.
+    /// - `item_stack`: The `ItemStack` being dropped.
     ///
     /// # Returns
     /// A new instance of `PlayerDropItemEvent`.
-    pub fn new(
-        player: Arc<Player>, 
-        item_stack: ItemStack,
-    ) -> Self {
+    pub fn new(player: Arc<Player>, item_stack: ItemStack) -> Self {
         Self {
             player,
             item_stack,
             cancelled: false,
         }
     }
-    
+
     /// Gets the item being dropped.
     ///
     /// # Returns
     /// A reference to the `Item` being dropped.
+    #[must_use]
     pub fn get_item(&self) -> &Item {
         &self.item_stack.item
     }
-    
+
     /// Gets the count of items being dropped.
     ///
     /// # Returns
     /// The number of items being dropped.
+    #[must_use]
     pub fn get_count(&self) -> u8 {
         self.item_stack.item_count
     }

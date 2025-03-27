@@ -33,11 +33,7 @@ impl PlayerDeathEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerDeathEvent`.
-    pub fn new(
-        player: Arc<Player>,
-        death_message: TextComponent,
-        damage_type: DamageType,
-    ) -> Self {
+    pub fn new(player: Arc<Player>, death_message: TextComponent, damage_type: DamageType) -> Self {
         Self {
             player,
             death_message,
@@ -49,6 +45,7 @@ impl PlayerDeathEvent {
         self.damage_type = damage_type;
     }
 
+    #[must_use]
     pub fn get_death_type(&self) -> DamageType {
         self.damage_type
     }
@@ -57,14 +54,13 @@ impl PlayerDeathEvent {
         self.death_message = death_message;
     }
 
+    #[must_use]
     pub fn get_death_message(&self) -> TextComponent {
         self.death_message.clone()
     }
 }
 
-
 impl PlayerEvent for PlayerDeathEvent {
-    
     fn get_player(&self) -> &Arc<Player> {
         &self.player
     }

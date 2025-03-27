@@ -18,15 +18,23 @@ use super::{
     item::ItemEntity,
 };
 use crate::{
-    block,
+    PLUGIN_MANAGER, block,
     command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
     net::{Client, PlayerConfig},
-    plugin::{entity::{entity_damage::EntityDamageEvent, entity_damage_by_entity::EntityDamageByEntityEvent}, player::{
-        player_change_world::PlayerChangeWorldEvent, player_death::PlayerDeathEvent, player_drop_item::PlayerDropItemEvent, player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent
-    }},
+    plugin::{
+        entity::{
+            entity_damage::EntityDamageEvent, entity_damage_by_entity::EntityDamageByEntityEvent,
+        },
+        player::{
+            player_change_world::PlayerChangeWorldEvent, player_death::PlayerDeathEvent,
+            player_drop_item::PlayerDropItemEvent,
+            player_gamemode_change::PlayerGamemodeChangeEvent,
+            player_teleport::PlayerTeleportEvent,
+        },
+    },
     server::Server,
-    world::World, PLUGIN_MANAGER,
+    world::World,
 };
 use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
@@ -438,14 +446,14 @@ impl Player {
             EntityDamageByEntityEvent {
                 base_event: EntityDamageEvent {
                     entity: victim.clone(),
-                    damage: damage as f32, 
+                    damage: damage as f32,
                     damage_type: DamageType::PLAYER_ATTACK,
                     cancelled: false,
                 },
                 attacker: event_entity,
                 cancelled: false,
             };
-            
+
             'after: {
                 // Continue with the attack if the event wasn't cancelled
                 if !victim
@@ -485,7 +493,7 @@ impl Player {
 
                 if config.swing {}
             }
-            
+
             'cancelled: {
                 // Play the "no damage" sound if the attack was cancelled
                 world
@@ -498,7 +506,6 @@ impl Player {
             }
         }}
     }
-
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
         match mode {
@@ -1110,20 +1117,23 @@ impl Player {
 
     pub async fn kill(self: &Arc<Self>) {
         self.living_entity.kill().await;
-        
+
         // Create a default death message for generic kills
         let player_name = self.gameprofile.name.clone();
-        let default_message = TextComponent::translate("death.attack.generic", vec![TextComponent::text(player_name)]);
-        
+        let default_message = TextComponent::translate(
+            "death.attack.generic",
+            vec![TextComponent::text(player_name)],
+        );
+
         // Fire the death event
         let mut event = PlayerDeathEvent::new(
             self.clone(),
             default_message,
             DamageType::GENERIC, // Use a generic damage type
         );
-        
+
         event = PLUGIN_MANAGER.lock().await.fire(event).await;
-        
+
         // Pass the possibly modified death message to handle_killed
         self.handle_killed(event.death_message).await;
     }
@@ -1132,10 +1142,7 @@ impl Player {
         self.set_client_loaded(false);
 
         self.client
-            .send_packet_now(&CCombatDeath::new(
-                self.entity_id().into(),
-                &death_message,
-            ))
+            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_message))
             .await;
     }
 
@@ -1309,7 +1316,7 @@ impl Player {
                     self.clone(),
                     event_stack
                 );
-                
+
                 'after: {
                     self.drop_item(event.item_stack.item.id, u32::from(event.item_stack.item_count))
                         .await;
@@ -1591,16 +1598,18 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                if let Some(player_arc) = self.world().await.get_player_by_uuid(self.gameprofile.id).await {
+                if let Some(player_arc) = self
+                    .world()
+                    .await
+                    .get_player_by_uuid(self.gameprofile.id)
+                    .await
+                {
                     // Fire the death event
-                    let mut event = PlayerDeathEvent::new(
-                        player_arc,
-                        TextComponent::text("noob"),
-                        damage_type,
-                    );
+                    let mut event =
+                        PlayerDeathEvent::new(player_arc, TextComponent::text("noob"), damage_type);
 
                     event = PLUGIN_MANAGER.lock().await.fire(event).await;
-                    
+
                     self.handle_killed(event.death_message).await;
                 }
             }

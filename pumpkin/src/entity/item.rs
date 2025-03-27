@@ -86,14 +86,13 @@ impl EntityBase for ItemEntity {
             let remove_entity = {
                 let mut stack_size = self.item_count.lock().await;
 
-
                 send_cancellable! {{
                     PlayerPickupItemEvent::new(
                         player.clone(),
                         self.item.clone(),
                         *stack_size,
                     );
-                    
+
                     'after: {
                         let max_stack = self.item.components.max_stack_size;
                         while *stack_size > 0 {
@@ -167,7 +166,7 @@ impl EntityBase for ItemEntity {
                         // This indicates whether the entity should be removed
                         *stack_size == 0
                     }
-                    
+
                     'cancelled: {
                         // Don't pick up the item if the event is cancelled
                         false

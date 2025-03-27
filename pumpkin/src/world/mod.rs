@@ -8,11 +8,20 @@ pub mod explosion;
 pub mod time;
 
 use crate::{
-    block::{self, registry::BlockRegistry}, command::client_suggestions, entity::{player::Player, Entity, EntityBase, EntityId}, error::PumpkinError, plugin::{
+    PLUGIN_MANAGER,
+    block::{self, registry::BlockRegistry},
+    command::client_suggestions,
+    entity::{Entity, EntityBase, EntityId, player::Player},
+    error::PumpkinError,
+    plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent},
+        player::{
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent,
+        },
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
-    }, server::Server, PLUGIN_MANAGER
+    },
+    server::Server,
 };
 use bitflags::bitflags;
 use border::Worldborder;
@@ -782,12 +791,7 @@ impl World {
         position.y = f64::from(top + 1);
 
         // Fire the respawn event (not cancellable)
-        let mut event = PlayerRespawnEvent::new(
-            player.clone(),
-            position,
-            yaw,
-            pitch,
-        );
+        let mut event = PlayerRespawnEvent::new(player.clone(), position, yaw, pitch);
 
         event = PLUGIN_MANAGER.lock().await.fire(event).await;
 

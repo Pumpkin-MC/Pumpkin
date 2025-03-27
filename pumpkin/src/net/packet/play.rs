@@ -600,7 +600,7 @@ impl Player {
                                 self.clone(),
                                 true
                             );
-                            
+
                             'after: {
                                 entity.set_sneaking(true).await;
                             }
@@ -614,7 +614,7 @@ impl Player {
                                 self.clone(),
                                 false
                             );
-                            
+
                             'after: {
                                 entity.set_sneaking(false).await;
                             }
@@ -628,7 +628,7 @@ impl Player {
                                 self.clone(),
                                 true
                             );
-                            
+
                             'after: {
                                 entity.set_sprinting(true).await;
                             }
@@ -642,7 +642,7 @@ impl Player {
                                 self.clone(),
                                 false // is_sprinting
                             );
-                            
+
                             'after: {
                                 entity.set_sprinting(false).await;
                             }

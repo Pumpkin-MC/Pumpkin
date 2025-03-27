@@ -29,6 +29,7 @@ impl PlayerToggleSneakEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerToggleSneakEvent`.
+    #[must_use]
     pub fn new(player: Arc<Player>, is_sneaking: bool) -> Self {
         Self {
             player,
@@ -37,6 +38,7 @@ impl PlayerToggleSneakEvent {
         }
     }
 
+    #[must_use]
     pub fn is_sneaking(&self) -> bool {
         self.is_sneaking
     }

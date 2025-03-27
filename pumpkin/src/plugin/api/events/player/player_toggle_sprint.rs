@@ -29,6 +29,7 @@ impl PlayerToggleSprintEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerToggleSprintEvent`.
+    #[must_use]
     pub fn new(player: Arc<Player>, is_sprinting: bool) -> Self {
         Self {
             player,
@@ -37,6 +38,7 @@ impl PlayerToggleSprintEvent {
         }
     }
 
+    #[must_use]
     pub fn is_sprinting(&self) -> bool {
         self.is_sprinting
     }

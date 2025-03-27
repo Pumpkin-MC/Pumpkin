@@ -19,7 +19,7 @@ pub struct PlayerPickupItemEvent {
 
     /// The item being picked up.
     pub item: Item,
-    
+
     /// The amount of the item that was picked up.
     pub amount: u32,
 }
@@ -34,11 +34,7 @@ impl PlayerPickupItemEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerPickupItemEvent`.
-    pub fn new(
-        player: Arc<Player>, 
-        item: Item, 
-        amount: u32, 
-    ) -> Self {
+    pub fn new(player: Arc<Player>, item: Item, amount: u32) -> Self {
         Self {
             player,
             item,

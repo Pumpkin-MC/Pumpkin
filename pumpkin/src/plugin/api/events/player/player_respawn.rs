@@ -8,7 +8,7 @@ use super::PlayerEvent;
 
 /// An event that occurs when a player respawns after death.
 ///
-/// This event cannot be cancelled, but you can modify the respawn position 
+/// This event cannot be cancelled, but you can modify the respawn position
 /// and other properties through this event.
 ///
 /// This event contains information about the player respawning and their respawn location.
@@ -27,7 +27,7 @@ pub struct PlayerRespawnEvent {
     pub pitch: f32,
 }
 
-impl PlayerRespawnEvent { 
+impl PlayerRespawnEvent {
     /// Creates a new instance of `PlayerRespawnEvent`.
     ///
     /// # Arguments
@@ -38,12 +38,7 @@ impl PlayerRespawnEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerRespawnEvent`.
-    pub fn new(
-        player: Arc<Player>,
-        respawn_position: Vector3<f64>,
-        yaw: f32,
-        pitch: f32, 
-    ) -> Self {
+    pub fn new(player: Arc<Player>, respawn_position: Vector3<f64>, yaw: f32, pitch: f32) -> Self {
         Self {
             player,
             respawn_position,
