@@ -93,7 +93,6 @@ pub use center_chunk::*;
 pub use change_difficulty::*;
 pub use chunk_batch_end::*;
 pub use chunk_batch_start::*;
-#[cfg(not(target_family = "wasm"))]
 pub use chunk_data::*;
 pub use clear_title::*;
 pub use close_container::*;

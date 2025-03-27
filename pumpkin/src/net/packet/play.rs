@@ -142,6 +142,7 @@ impl Player {
         self.set_client_loaded(true);
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn handle_position(self: &Arc<Self>, packet: SPlayerPosition) {
         if !self.has_client_loaded() {
             return;
@@ -741,6 +742,7 @@ impl Player {
         ) */
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn handle_client_information(
         self: &Arc<Self>,
         client_information: SClientInformationPlay,

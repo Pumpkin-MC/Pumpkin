@@ -1,5 +1,6 @@
 use std::any::Any;
 
+#[cfg(not(target_family = "wasm"))]
 use libloading::Library;
 
 use super::*;
@@ -9,6 +10,7 @@ pub struct NativePluginLoader;
 
 #[async_trait]
 impl PluginLoader for NativePluginLoader {
+    #[cfg(not(target_family = "wasm"))]
     async fn load(
         &self,
         path: &Path,
@@ -45,6 +47,21 @@ impl PluginLoader for NativePluginLoader {
         ))
     }
 
+    #[cfg(target_family = "wasm")]
+    async fn load(
+        &self,
+        path: &Path,
+    ) -> Result<
+        (
+            Box<dyn Plugin>,
+            PluginMetadata<'static>,
+            Box<dyn Any + Send + Sync>,
+        ),
+        LoaderError,
+    > {
+        todo!()
+    }
+
     fn can_load(&self, path: &Path) -> bool {
         let ext = path
             .extension()
@@ -57,10 +74,16 @@ impl PluginLoader for NativePluginLoader {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     async fn unload(&self, data: Box<dyn Any + Send + Sync>) -> Result<(), LoaderError> {
         match data.downcast::<Library>() {
             Ok(_) => Ok(()),
             Err(_) => Err(LoaderError::InvalidLoaderData),
         }
+    }
+
+    #[cfg(target_family = "wasm")]
+    async fn unload(&self, data: Box<dyn Any + Send + Sync>) -> Result<(), LoaderError> {
+        todo!()
     }
 }

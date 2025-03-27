@@ -14,16 +14,17 @@ use tokio_util::task::TaskTracker;
 use crate::{
     chunk::{
         ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
     generation::{Seed, WorldGenerator, get_world_gen},
-    lock::{LevelLocker, anvil::AnvilLevelLocker},
     world_info::{
-        LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
-        anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
-    },
+        LevelData}
 };
+
+#[cfg(not(target_family = "wasm"))]
+use crate::{lock::{LevelLocker, anvil::AnvilLevelLocker}, chunk::{        format::{anvil::AnvilChunkFile, linear::LinearFile},
+io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},},     world_info::{WorldInfoError, WorldInfoReader, WorldInfoWriter,
+    anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
+},};
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 
@@ -39,6 +40,7 @@ pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub struct Level {
     pub seed: Seed,
     pub level_info: LevelData,
+    #[cfg(not(target_family = "wasm"))]
     world_info_writer: Arc<dyn WorldInfoWriter>,
     level_folder: LevelFolder,
 
@@ -50,10 +52,12 @@ pub struct Level {
     pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
+    #[cfg(not(target_family = "wasm"))]
     chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
     world_gen: Arc<dyn WorldGenerator>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
+    #[cfg(not(target_family = "wasm"))]
     _locker: Arc<AnvilLevelLocker>,
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     /// Tracks tasks associated with this world instance
@@ -69,6 +73,7 @@ pub struct LevelFolder {
 }
 
 impl Level {
+    #[cfg(not(target_family = "wasm"))]
     pub fn from_root_folder(root_folder: PathBuf) -> Self {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
@@ -149,6 +154,7 @@ impl Level {
         self.tasks.spawn(task)
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn shutdown(&self) {
         log::info!("Saving level...");
 
@@ -188,6 +194,7 @@ impl Level {
         self.loaded_chunks.len()
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn clean_up_log(&self) {
         self.chunk_saver.clean_up_log().await;
     }
@@ -201,6 +208,7 @@ impl Level {
     /// Marks chunks as "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was not watching
     /// before
+    #[cfg(not(target_family = "wasm"))]
     pub async fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
         for chunk in chunks {
             log::trace!("{:?} marked as newly watched", chunk);
@@ -226,12 +234,14 @@ impl Level {
     }
 
     #[inline]
+    #[cfg(not(target_family = "wasm"))]
     pub async fn mark_chunk_as_newly_watched(&self, chunk: Vector2<i32>) {
         self.mark_chunks_as_newly_watched(&[chunk]).await;
     }
 
     /// Marks chunks no longer "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was watching before
+    #[cfg(not(target_family = "wasm"))]
     pub async fn mark_chunks_as_not_watched(&self, chunks: &[Vector2<i32>]) -> Vec<Vector2<i32>> {
         let mut chunks_to_clean = Vec::new();
 
@@ -264,10 +274,12 @@ impl Level {
 
     /// Returns whether the chunk should be removed from memory
     #[inline]
+    #[cfg(not(target_family = "wasm"))]
     pub async fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
         !self.mark_chunks_as_not_watched(&[chunk]).await.is_empty()
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
         // Care needs to be take here because of interweaving case:
         // 1) Remove chunk from cache
@@ -312,6 +324,7 @@ impl Level {
         });
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
         self.clean_chunks(&[*chunk]).await;
     }
@@ -338,6 +351,7 @@ impl Level {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
         if chunks_to_write.is_empty() {
             return;
@@ -374,6 +388,7 @@ impl Level {
     }
 
     /// Initializes the spawn chunks to these chunks
+    #[cfg(not(target_family = "wasm"))]
     pub async fn read_spawn_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
         let (send, mut recv) = mpsc::unbounded_channel();
 
@@ -391,6 +406,7 @@ impl Level {
 
     /// Reads/Generates many chunks in a world
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
+    #[cfg(not(target_family = "wasm"))]
     pub async fn fetch_chunks(
         self: &Arc<Self>,
         chunks: &[Vector2<i32>],

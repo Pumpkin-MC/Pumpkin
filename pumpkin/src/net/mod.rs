@@ -41,27 +41,29 @@ use sha1::Digest;
 use sha2::Sha256;
 use tokio::{
     io::{BufReader, BufWriter},
-    net::tcp::OwnedWriteHalf,
     sync::{
         Notify,
+        Mutex,
         mpsc::{Receiver, Sender},
     },
     task::JoinHandle,
 };
-use tokio::{
-    net::{TcpStream, tcp::OwnedReadHalf},
-    sync::Mutex,
-};
+
+#[cfg(not(target_family = "wasm"))]
+use tokio::net::{TcpStream, tcp::{OwnedReadHalf, OwnedWriteHalf}};
 
 use thiserror::Error;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 mod authentication;
 mod container;
+#[cfg(not(target_family = "wasm"))]
 pub mod lan_broadcast;
 mod packet;
 mod proxy;
+#[cfg(not(target_family = "wasm"))]
 pub mod query;
+#[cfg(not(target_family = "wasm"))]
 pub mod rcon;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -147,8 +149,10 @@ pub struct Client {
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
     /// The packet encoder for outgoing packets.
+    #[cfg(not(target_family = "wasm"))]
     network_writer: Arc<Mutex<NetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
+    #[cfg(not(target_family = "wasm"))]
     network_reader: Mutex<NetworkDecoder<BufReader<OwnedReadHalf>>>,
     /// Indicates whether the client should be converted into a player.
     pub make_player: AtomicBool,
@@ -164,6 +168,7 @@ pub struct Client {
 
 impl Client {
     #[must_use]
+    #[cfg(not(target_family = "wasm"))]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: usize) -> Self {
         let (read, write) = tcp_stream.into_split();
         let (send, recv) = tokio::sync::mpsc::channel(128);
@@ -187,10 +192,12 @@ impl Client {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub fn init(&mut self) {
         self.start_outgoing_packet_task();
     }
 
+    #[cfg(not(target_family = "wasm"))]
     fn start_outgoing_packet_task(&mut self) {
         let mut packet_receiver = self
             .outgoing_packet_queue_recv
@@ -281,6 +288,7 @@ impl Client {
     ///       return;
     ///  }
     /// ```
+    #[cfg(not(target_family = "wasm"))]
     pub async fn set_encryption(
         &self,
         shared_secret: &[u8], // decrypted
@@ -301,6 +309,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `compression`: A `CompressionInfo` struct containing the compression threshold and compression level.
+    #[cfg(not(target_family = "wasm"))]
     pub async fn set_compression(&self, compression: CompressionInfo) {
         if compression.level > 9 {
             log::error!("Invalid compression level! Clients will not be able to read this!");
@@ -318,6 +327,7 @@ impl Client {
     }
 
     /// Gets the next packet from the network or `None` if the connection has closed
+    #[cfg(not(target_family = "wasm"))]
     pub async fn get_packet(&self) -> Option<RawPacket> {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {
@@ -387,6 +397,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns an `PacketError` if the packet could not be Send.
+    #[cfg(not(target_family = "wasm"))]
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         if let Err(err) = packet.write(&mut packet_buf) {

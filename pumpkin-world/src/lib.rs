@@ -10,12 +10,10 @@ pub mod data;
 pub mod dimension;
 mod generation;
 pub mod item;
-#[cfg(not(target_family = "wasm"))]
 pub mod level;
 #[cfg(not(target_family = "wasm"))]
 mod lock;
 mod noise_router;
-#[cfg(not(target_family = "wasm"))]
 pub mod world_info;
 pub const DIRECT_PALETTE_BITS: u32 = 15;
 
