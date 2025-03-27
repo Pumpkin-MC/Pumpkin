@@ -16,7 +16,9 @@ use super::{
     ScheduledTick, TickPriority,
 };
 
+#[cfg(not(target_family = "wasm"))]
 pub mod anvil;
+#[cfg(not(target_family = "wasm"))]
 pub mod linear;
 
 // I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"

@@ -188,7 +188,7 @@ impl ServerPlayerData {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 #[cfg(test)]
 mod test {
     use crate::data::player_server_data::ServerPlayerData;

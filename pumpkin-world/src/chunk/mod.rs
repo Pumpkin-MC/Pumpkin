@@ -7,6 +7,7 @@ use thiserror::Error;
 use crate::coordinates::ChunkRelativeBlockCoordinates;
 
 pub mod format;
+#[cfg(not(target_family = "wasm"))]
 pub mod io;
 
 // TODO

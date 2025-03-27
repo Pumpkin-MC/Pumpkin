@@ -1,5 +1,5 @@
-use pumpkin_api_macros::{plugin_impl, plugin_method}; 
 use pumpkin::plugin::Context;
+use pumpkin_api_macros::{plugin_impl, plugin_method};
 
 #[plugin_impl]
 pub struct MyPlugin {}
@@ -16,7 +16,7 @@ impl Default for MyPlugin {
     }
 }
 
-#[plugin_method] 
+#[plugin_method]
 async fn on_load(&mut self, server: &Context) -> Result<(), String> {
     Ok(())
 }

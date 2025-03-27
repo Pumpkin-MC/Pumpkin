@@ -16,8 +16,6 @@ futures.workspace = true
 
 bytes.workspace = true
 
-
-tokio.workspace = true
 rayon.workspace = true
 derive_more.workspace = true
 uuid.workspace = true
@@ -39,7 +37,6 @@ lz4 = "1.28"
 zstd = "0.13.3"
 
 itertools = "0.14.0"
-file-guard = "0.2"
 indexmap = "2.8"
 enum_dispatch = "0.3"
 noise = "0.9"
@@ -55,6 +52,26 @@ temp-dir = "0.1.14"
 env_logger = "0.11.7"
 # Allows us to modify the config
 pumpkin-config = { path = "../pumpkin-config", features = ["test_helper"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+file-guard = "0.2"
+tokio = { version = "1.44", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { version = "1.44", features = [
+    "macros",
+    "rt",
+    "sync",
+    "io-util",
+] }
 
 [[bench]]
 name = "chunk_noise_populate"

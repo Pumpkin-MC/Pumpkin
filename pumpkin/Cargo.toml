@@ -30,7 +30,6 @@ pumpkin-macros = { path = "../pumpkin-macros" }
 log.workspace = true
 crossbeam.workspace = true
 uuid.workspace = true
-tokio.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
@@ -44,9 +43,6 @@ bytes.workspace = true
 rand = "0.8"
 
 num-bigint = "0.4"
-
-# Console line reading
-rustyline-async = "0.4.5"
 
 # encryption
 rsa = "0.9"
@@ -83,8 +79,6 @@ chrono = { version = "0.4", features = ["serde"] }
 libloading = "0.8"
 bitflags = "2.9.0"
 rustc-hash = "2.1"
-wasmtime = "31.0"
-wasmtime-wasi = "31.0"
 bincode = "2.0.1"
 
 # Task handling
@@ -96,5 +90,25 @@ git-version = "0.3"
 [target.'cfg(target_os = "windows")'.build-dependencies]
 tauri-winres = "0.3"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+wasmtime = "31.0"
+wasmtime-wasi = "31.0"
+tokio = { version = "1.44", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+] }
 tempfile = "3.19"
+rustyline-async = "0.4"
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { version = "1.44", features = [
+    "macros",
+    "rt",
+    "sync",
+    "io-util",
+] }
