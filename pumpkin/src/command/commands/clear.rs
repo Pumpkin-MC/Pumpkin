@@ -48,9 +48,9 @@ fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> Text
             [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(target.gameprofile.name.clone())
-                    .click_event(ClickEvent::SuggestCommand(
-                        format!("/tell {} ", target.gameprofile.name.clone()).into(),
-                    ))
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: format!("/tell {} ", target.gameprofile.name.clone()).into(),
+                    })
                     .hover_event(HoverEvent::show_entity(
                         target.living_entity.entity.entity_uuid.to_string(),
                         target.living_entity.entity.entity_type.resource_name.into(),
