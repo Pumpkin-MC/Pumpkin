@@ -86,7 +86,7 @@ impl PumpkinBlock for JukeboxBlock {
             return BlockActionResult::Continue;
         };
 
-        let Some(song) = jukebox_playable.song.split(':').nth(1) else {
+        let Some(song) = jukebox_playable.split(':').nth(1) else {
             return BlockActionResult::Continue;
         };
 

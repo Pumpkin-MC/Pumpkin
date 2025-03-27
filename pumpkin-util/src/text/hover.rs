@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 use super::{TextComponent, TextComponentBase};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(tag = "action", content = "contents", rename_all = "snake_case")]
+#[serde(tag = "action", rename_all = "snake_case")]
 pub enum HoverEvent {
     /// Displays a tooltip with the given text.
-    ShowText(Vec<TextComponentBase>),
+    ShowText { value: Vec<TextComponentBase> },
     /// Shows an item.
     ShowItem {
         /// Resource identifier of the item
@@ -36,7 +36,9 @@ pub enum HoverEvent {
 
 impl HoverEvent {
     pub fn show_text(text: TextComponent) -> Self {
-        Self::ShowText(vec![text.0])
+        Self::ShowText {
+            value: vec![text.0],
+        }
     }
     pub fn show_entity<P>(id: P, kind: P, name: Option<TextComponent>) -> Self
     where

@@ -1015,7 +1015,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:black_dye",
-    "result": "minecraft:black_bundle",
+    "result": {
+      "id": "minecraft:black_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -1105,7 +1107,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:black_dye",
-    "result": "minecraft:black_shulker_box",
+    "result": {
+      "id": "minecraft:black_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -1316,7 +1320,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:blue_dye",
-    "result": "minecraft:blue_bundle",
+    "result": {
+      "id": "minecraft:blue_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -1425,7 +1431,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:blue_dye",
-    "result": "minecraft:blue_shulker_box",
+    "result": {
+      "id": "minecraft:blue_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -1525,6 +1533,7 @@
     "template": "minecraft:bolt_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:bolt",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -1808,7 +1817,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:brown_dye",
-    "result": "minecraft:brown_bundle",
+    "result": {
+      "id": "minecraft:brown_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -1886,7 +1897,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:brown_dye",
-    "result": "minecraft:brown_shulker_box",
+    "result": {
+      "id": "minecraft:brown_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -2015,7 +2028,7 @@
       "A": "minecraft:milk_bucket",
       "B": "minecraft:sugar",
       "C": "minecraft:wheat",
-      "E": "minecraft:egg"
+      "E": "#minecraft:eggs"
     },
     "pattern": [
       "AAA",
@@ -2853,6 +2866,7 @@
     "template": "minecraft:coast_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:coast",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -4017,7 +4031,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:cyan_dye",
-    "result": "minecraft:cyan_bundle",
+    "result": {
+      "id": "minecraft:cyan_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -4108,7 +4124,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:cyan_dye",
-    "result": "minecraft:cyan_shulker_box",
+    "result": {
+      "id": "minecraft:cyan_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -5291,6 +5309,7 @@
     "template": "minecraft:dune_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:dune",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -7133,6 +7152,7 @@
     "template": "minecraft:eye_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:eye",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -7268,6 +7288,7 @@
     "template": "minecraft:flow_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:flow",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -7895,7 +7916,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:gray_dye",
-    "result": "minecraft:gray_bundle",
+    "result": {
+      "id": "minecraft:gray_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -7949,6 +7972,7 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
+    "group": "gray_dye",
     "category": "misc",
     "result": {
       "id": "minecraft:gray_dye",
@@ -7985,7 +8009,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:gray_dye",
-    "result": "minecraft:gray_shulker_box",
+    "result": {
+      "id": "minecraft:gray_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -8098,7 +8124,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:green_dye",
-    "result": "minecraft:green_bundle",
+    "result": {
+      "id": "minecraft:green_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -8174,7 +8202,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:green_dye",
-    "result": "minecraft:green_shulker_box",
+    "result": {
+      "id": "minecraft:green_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -8395,6 +8425,7 @@
     "template": "minecraft:host_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:host",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -9153,6 +9184,16 @@
     "type": "minecraft:crafting_shaped"
   },
   {
+    "result": {
+      "id": "minecraft:leaf_litter"
+    },
+    "experience": 0.1,
+    "cookingtime": 200,
+    "category": "blocks",
+    "ingredient": "#minecraft:leaves",
+    "type": "minecraft:smelting"
+  },
+  {
     "key": {
       "#": "minecraft:rabbit_hide"
     },
@@ -9316,7 +9357,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:light_blue_dye",
-    "result": "minecraft:light_blue_bundle",
+    "result": {
+      "id": "minecraft:light_blue_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -9407,7 +9450,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:light_blue_dye",
-    "result": "minecraft:light_blue_shulker_box",
+    "result": {
+      "id": "minecraft:light_blue_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -9520,7 +9565,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:light_gray_dye",
-    "result": "minecraft:light_gray_bundle",
+    "result": {
+      "id": "minecraft:light_gray_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -9649,7 +9696,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:light_gray_dye",
-    "result": "minecraft:light_gray_shulker_box",
+    "result": {
+      "id": "minecraft:light_gray_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -9792,7 +9841,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:lime_dye",
-    "result": "minecraft:lime_bundle",
+    "result": {
+      "id": "minecraft:lime_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -9880,7 +9931,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:lime_dye",
-    "result": "minecraft:lime_shulker_box",
+    "result": {
+      "id": "minecraft:lime_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -9957,7 +10010,7 @@
   },
   {
     "key": {
-      "#": "minecraft:netherite_ingot",
+      "#": "minecraft:iron_ingot",
       "S": "minecraft:chiseled_stone_bricks"
     },
     "pattern": [
@@ -10042,7 +10095,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:magenta_dye",
-    "result": "minecraft:magenta_bundle",
+    "result": {
+      "id": "minecraft:magenta_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -10174,7 +10229,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:magenta_dye",
-    "result": "minecraft:magenta_shulker_box",
+    "result": {
+      "id": "minecraft:magenta_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -11044,8 +11101,7 @@
     "base": "minecraft:diamond_axe",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_axe",
-      "count": 1
+      "id": "minecraft:netherite_axe"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11070,8 +11126,7 @@
     "base": "minecraft:diamond_boots",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_boots",
-      "count": 1
+      "id": "minecraft:netherite_boots"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11080,8 +11135,7 @@
     "base": "minecraft:diamond_chestplate",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_chestplate",
-      "count": 1
+      "id": "minecraft:netherite_chestplate"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11090,8 +11144,7 @@
     "base": "minecraft:diamond_helmet",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_helmet",
-      "count": 1
+      "id": "minecraft:netherite_helmet"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11100,8 +11153,7 @@
     "base": "minecraft:diamond_hoe",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_hoe",
-      "count": 1
+      "id": "minecraft:netherite_hoe"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11141,8 +11193,7 @@
     "base": "minecraft:diamond_leggings",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_leggings",
-      "count": 1
+      "id": "minecraft:netherite_leggings"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11151,8 +11202,7 @@
     "base": "minecraft:diamond_pickaxe",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_pickaxe",
-      "count": 1
+      "id": "minecraft:netherite_pickaxe"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11181,8 +11231,7 @@
     "base": "minecraft:diamond_shovel",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_shovel",
-      "count": 1
+      "id": "minecraft:netherite_shovel"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11191,8 +11240,7 @@
     "base": "minecraft:diamond_sword",
     "addition": "#minecraft:netherite_tool_materials",
     "result": {
-      "id": "minecraft:netherite_sword",
-      "count": 1
+      "id": "minecraft:netherite_sword"
     },
     "type": "minecraft:smithing_transform"
   },
@@ -11506,7 +11554,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:orange_dye",
-    "result": "minecraft:orange_bundle",
+    "result": {
+      "id": "minecraft:orange_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -11621,7 +11671,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:orange_dye",
-    "result": "minecraft:orange_shulker_box",
+    "result": {
+      "id": "minecraft:orange_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -12188,7 +12240,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:pink_dye",
-    "result": "minecraft:pink_bundle",
+    "result": {
+      "id": "minecraft:pink_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -12238,6 +12292,18 @@
       "minecraft:gravel",
       "minecraft:gravel",
       "minecraft:gravel"
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "pink_dye",
+    "category": "misc",
+    "result": {
+      "id": "minecraft:pink_dye",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:cactus_flower"
     ],
     "type": "minecraft:crafting_shapeless"
   },
@@ -12303,7 +12369,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:pink_dye",
-    "result": "minecraft:pink_shulker_box",
+    "result": {
+      "id": "minecraft:pink_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -13382,7 +13450,7 @@
     "ingredients": [
       "minecraft:pumpkin",
       "minecraft:sugar",
-      "minecraft:egg"
+      "#minecraft:eggs"
     ],
     "type": "minecraft:crafting_shapeless"
   },
@@ -13435,7 +13503,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:purple_dye",
-    "result": "minecraft:purple_bundle",
+    "result": {
+      "id": "minecraft:purple_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -13513,7 +13583,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:purple_dye",
-    "result": "minecraft:purple_shulker_box",
+    "result": {
+      "id": "minecraft:purple_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -13884,6 +13956,7 @@
     "template": "minecraft:raiser_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:raiser",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -14022,7 +14095,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:red_dye",
-    "result": "minecraft:red_bundle",
+    "result": {
+      "id": "minecraft:red_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -14312,7 +14387,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:red_dye",
-    "result": "minecraft:red_shulker_box",
+    "result": {
+      "id": "minecraft:red_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -14672,6 +14749,7 @@
     "template": "minecraft:rib_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:rib",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -14821,6 +14899,7 @@
     "template": "minecraft:sentry_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:sentry",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -14845,6 +14924,7 @@
     "template": "minecraft:shaper_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:shaper",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -14922,6 +15002,7 @@
     "template": "minecraft:silence_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:silence",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -15229,6 +15310,7 @@
     "template": "minecraft:snout_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:snout",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -15355,6 +15437,7 @@
     "template": "minecraft:spire_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:spire",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -16566,6 +16649,7 @@
     "template": "minecraft:tide_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:tide",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -16924,6 +17008,7 @@
     "template": "minecraft:vex_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:vex",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -16948,6 +17033,7 @@
     "template": "minecraft:ward_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:ward",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -18294,6 +18380,7 @@
     "template": "minecraft:wayfinder_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:wayfinder",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -18503,7 +18590,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:white_dye",
-    "result": "minecraft:white_bundle",
+    "result": {
+      "id": "minecraft:white_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -18593,7 +18682,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:white_dye",
-    "result": "minecraft:white_shulker_box",
+    "result": {
+      "id": "minecraft:white_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
@@ -18705,6 +18796,7 @@
     "template": "minecraft:wild_armor_trim_smithing_template",
     "base": "#minecraft:trimmable_armor",
     "addition": "#minecraft:trim_materials",
+    "pattern": "minecraft:wild",
     "type": "minecraft:smithing_trim"
   },
   {
@@ -18870,7 +18962,9 @@
   {
     "input": "#minecraft:bundles",
     "material": "minecraft:yellow_dye",
-    "result": "minecraft:yellow_bundle",
+    "result": {
+      "id": "minecraft:yellow_bundle"
+    },
     "group": "bundle_dye",
     "category": "equipment",
     "type": "minecraft:crafting_transmute"
@@ -18948,6 +19042,18 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
+    "group": "yellow_dye",
+    "category": "misc",
+    "result": {
+      "id": "minecraft:yellow_dye",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:wildflowers"
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
     "result": {
       "id": "minecraft:yellow_glazed_terracotta"
     },
@@ -18960,7 +19066,9 @@
   {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:yellow_dye",
-    "result": "minecraft:yellow_shulker_box",
+    "result": {
+      "id": "minecraft:yellow_shulker_box"
+    },
     "group": "shulker_box_dye",
     "category": "misc",
     "type": "minecraft:crafting_transmute"
