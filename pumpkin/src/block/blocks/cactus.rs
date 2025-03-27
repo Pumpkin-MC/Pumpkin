@@ -13,11 +13,11 @@ use crate::world::BlockFlags;
 use crate::world::World;
 use pumpkin_util::math::position::BlockPos;
 
-#[pumpkin_block("minecraft:sugar_cane")]
-pub struct SugarCaneBlock;
+#[pumpkin_block("minecraft:cactus")]
+pub struct CactusBlock;
 
 #[async_trait]
-impl PumpkinBlock for SugarCaneBlock {
+impl PumpkinBlock for CactusBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
         if !self.can_place_at(world, pos).await {
             world.break_block(pos, None, BlockFlags::empty()).await;
@@ -29,7 +29,7 @@ impl PumpkinBlock for SugarCaneBlock {
             let state_id = world
                 .get_block_state(pos)
                 .await
-                .expect("`location` should be a sugar cane")
+                .expect("`location` should be a cactus")
                 .id;
             let age = CactusLikeProperties::from_state_id(state_id, block).age;
             if age == Integer0To15::L15 {
@@ -72,24 +72,20 @@ impl PumpkinBlock for SugarCaneBlock {
     }
 
     async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
-        let block = world.get_block(&pos.down()).await.unwrap();
-
-        if block == Block::SUGAR_CANE {
-            return true;
-        }
-
         // TODO: use tags
-        if block == Block::DIRT || block == Block::SAND {
-            for direction in BlockDirection::horizontal() {
-                let block = world
-                    .get_block(&pos.down().offset(direction.to_offset()))
-                    .await
-                    .unwrap();
-                if block == Block::WATER || block == Block::FROSTED_ICE {
-                    return true;
-                }
+        // Disallow to place any blocks nearby a cactus
+        for direction in BlockDirection::horizontal() {
+            let (block, state) = world
+                .get_block_and_block_state(&pos.offset(direction.to_offset()))
+                .await
+                .unwrap();
+            if state.is_solid || block == Block::LAVA {
+                return false;
             }
         }
-        false
+        let block = world.get_block(&pos.down()).await.unwrap();
+        // TODO: use tags
+        (block == Block::CACTUS || block == Block::SAND)
+            && !world.get_block_state(&pos.up()).await.unwrap().is_liquid
     }
 }

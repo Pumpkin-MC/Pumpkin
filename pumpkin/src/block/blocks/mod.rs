@@ -5,6 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{entity::player::Player, server::Server};
 
+pub(crate) mod cactus;
 pub(crate) mod chest;
 pub(crate) mod crafting_table;
 pub(crate) mod dirt_path;

@@ -507,7 +507,6 @@ impl NBTStorage for Entity {
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        dbg!(y);
         self.set_pos(Vector3::new(x, y, z));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
@@ -518,6 +517,7 @@ impl NBTStorage for Entity {
         let yaw = rotation[0].extract_float().unwrap_or(0.0);
         let pitch = rotation[1].extract_float().unwrap_or(0.0);
         self.set_rotation(yaw, pitch);
+        self.head_yaw.store(yaw);
         self.on_ground
             .store(nbt.get_bool("OnGround").unwrap_or(false), Ordering::Relaxed);
         // todo more...
