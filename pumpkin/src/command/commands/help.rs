@@ -66,9 +66,9 @@ impl CommandExecutor for Executor {
                             .bold(),
                     )
                     .add_child(TextComponent::text("\n").color_named(NamedColor::White))
-                    .click_event(ClickEvent::SuggestCommand(
-                        format!("/{}", tree.names[0]).into(),
-                    )),
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: format!("/{}", tree.names[0]).into(),
+                    }),
             )
             .add_child(
                 TextComponent::text("Description: ")
@@ -84,7 +84,9 @@ impl CommandExecutor for Executor {
                     .add_child(
                         TextComponent::text(format!("{usage}\n")).color_named(NamedColor::White),
                     )
-                    .click_event(ClickEvent::SuggestCommand(format!("{tree}").into())),
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: format!("{tree}").into(),
+                    }),
             );
 
         message =
@@ -100,6 +102,7 @@ struct BaseHelpExecutor;
 
 #[async_trait]
 impl CommandExecutor for BaseHelpExecutor {
+    #[expect(clippy::too_many_lines)]
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender,
@@ -149,7 +152,9 @@ impl CommandExecutor for BaseHelpExecutor {
             let cmd = format!("/help {}", page - 1);
             TextComponent::text("<<<")
                 .color(Color::Named(NamedColor::Aqua))
-                .click_event(ClickEvent::RunCommand(cmd.into()))
+                .click_event(ClickEvent::RunCommand {
+                    command: cmd.into(),
+                })
         } else {
             TextComponent::text("<<<").color(Color::Named(NamedColor::Gray))
         };
@@ -158,7 +163,9 @@ impl CommandExecutor for BaseHelpExecutor {
             let cmd = format!("/help {}", page + 1);
             TextComponent::text(">>>")
                 .color(Color::Named(NamedColor::Aqua))
-                .click_event(ClickEvent::RunCommand(cmd.into()))
+                .click_event(ClickEvent::RunCommand {
+                    command: cmd.into(),
+                })
         } else {
             TextComponent::text(">>>").color(Color::Named(NamedColor::Gray))
         };
@@ -194,9 +201,9 @@ impl CommandExecutor for BaseHelpExecutor {
                         TextComponent::text(format!("{tree}")).color_named(NamedColor::White),
                     )
                     .add_child(TextComponent::text("\n").color_named(NamedColor::White))
-                    .click_event(ClickEvent::SuggestCommand(
-                        format!("/{}", tree.names[0]).into(),
-                    )),
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: format!("/{}", tree.names[0]).into(),
+                    }),
             );
         }
 

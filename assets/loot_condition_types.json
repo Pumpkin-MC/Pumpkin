@@ -1,0 +1,21 @@
+[
+  "inverted",
+  "any_of",
+  "all_of",
+  "random_chance",
+  "random_chance_with_enchanted_bonus",
+  "entity_properties",
+  "killed_by_player",
+  "entity_scores",
+  "block_state_property",
+  "match_tool",
+  "table_bonus",
+  "survives_explosion",
+  "damage_source_properties",
+  "location_check",
+  "weather_check",
+  "reference",
+  "time_check",
+  "value_check",
+  "enchantment_active_check"
+]

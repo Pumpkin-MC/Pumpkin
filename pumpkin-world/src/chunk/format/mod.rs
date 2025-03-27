@@ -116,7 +116,7 @@ impl ChunkData {
         }
 
         Ok(ChunkData {
-            blocks,
+            sections: blocks,
             heightmap: chunk_data.heightmaps,
             position,
             // This chunk is read from disk, so it has not been modified

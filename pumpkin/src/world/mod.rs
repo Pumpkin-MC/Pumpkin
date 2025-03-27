@@ -1189,7 +1189,7 @@ impl World {
         let relative = ChunkRelativeBlockCoordinates::from(relative);
         let mut chunk = chunk.write().await;
         let replaced_block_state_id = chunk
-            .blocks
+            .sections
             .get_block(relative)
             .unwrap_or(Block::AIR.default_state_id);
         if replaced_block_state_id == block_state_id {
@@ -1197,7 +1197,7 @@ impl World {
         }
         chunk.dirty = true;
 
-        chunk.blocks.set_block(relative, block_state_id);
+        chunk.sections.set_block(relative, block_state_id);
         self.unsent_block_changes
             .lock()
             .await
@@ -1392,7 +1392,7 @@ impl World {
 
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
-        let Some(id) = chunk.blocks.get_block(relative) else {
+        let Some(id) = chunk.sections.get_block(relative) else {
             return Err(GetBlockError::BlockOutOfWorldBounds);
         };
 
