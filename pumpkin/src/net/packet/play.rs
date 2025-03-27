@@ -686,7 +686,7 @@ impl Player {
             &CDisguisedChatMessage::new(
                 TextComponent::from(message.clone()),
                 VarInt(0),
-               gameprofile.name.clone().into(),
+                gameprofile.name.clone().into(),
                 None,
             ),
         ) */
@@ -705,6 +705,7 @@ impl Player {
 
                 let entity = &self.living_entity.entity;
 
+                // Todo: check chat permissions for chat formatting with &
                 let chat_decorated_message = &TextComponent::chat_decorated(
                     config.chat.format.clone(),
                     gameprofile.name.clone(),
@@ -762,6 +763,11 @@ impl Player {
         server: &Server,
         session: SPlayerSession,
     ) {
+        // Keep the chat session default if we don't want reports
+        if !BASIC_CONFIG.allow_chat_reports {
+            return;
+        }
+
         // Update the chat session fields
         let mut chat_session = self.chat_session.lock().await; // Await the lock
 
