@@ -6,6 +6,7 @@ use crate::entity::mob;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_interact::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::world::BlockFlags;
 use crate::{PLUGIN_MANAGER, block};
@@ -63,7 +64,6 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use crate::plugin::player::player_interact::PlayerInteractEvent;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -947,7 +947,7 @@ impl Player {
 
                         let event = PlayerInteractEvent::new(
                             self.clone(),
-                            sneaking,
+                            InteractAction::LeftClick { sneaking },
                             block.clone(),
                             face,
                             held_item.clone(),
@@ -1226,7 +1226,7 @@ impl Player {
 
         let event = PlayerInteractEvent::new(
             self.clone(),
-            sneaking,
+            InteractAction::LeftClick { sneaking },
             block.clone(),
             Ok(face),
             held_item.clone(),

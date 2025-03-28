@@ -8,21 +8,38 @@ use pumpkin_world::block::{BlockDirection, InvalidBlockFace};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
+/// Represents the type of interaction performed by the player.
+#[derive(Clone, Debug)]
+pub enum InteractAction {
+    LeftClick { sneaking: bool },
+    RightClick { sneaking: bool },
+}
+
+impl InteractAction {
+    /// Returns whether the player was sneaking during the interaction.
+    #[must_use]
+    pub fn is_sneaking(&self) -> bool {
+        match self {
+            Self::RightClick { sneaking } | Self::LeftClick { sneaking } => *sneaking,
+        }
+    }
+}
+
 /// An event that occurs when a `Player` interacts with a `Block` using their hand.
 /// This event does not consider interactions through block movement, eg pressure plates, tripwire hooks, sculk sensors etc.
 ///
 /// If the event is cancelled, the interaction  will not happen.
 ///
-/// This event contains information about the player, whether the player is sneaking or not, the `Block` they are interacting with,
-/// the `ItemStack` they are interacting using, the block face (`BlockDirection`) they are interacting with, and the position of the interaction.
+/// This event contains information about the player, the type of interaction (including whether the player is sneaking or not), the `Block` they are interacting with,
+/// the `ItemStack` they are interacting using, the block face (`BlockDirection`) they are interacting with, and the `BlockPos` of the interaction.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerInteractEvent {
     /// The player who attempted to interact.
     pub player: Arc<Player>,
 
-    /// Is the player sneaking?
-    pub sneaking: bool,
+    /// The type of interaction performed.
+    pub action: InteractAction,
 
     /// The block the player is interacting with.
     pub block: Result<Block, GetBlockError>,
@@ -42,7 +59,7 @@ impl PlayerInteractEvent {
     ///
     /// # Arguments
     /// - `player`: A reference to the player who interacted.
-    /// - `sneaking`: Is the player sneaking?
+    /// - `action`: The type of interaction performed.
     /// - `block`: The block the player is interacting with.
     /// - `block_face`: The face of the block the player is interacting with.
     /// - `item`: The `ItemStack` the player is interacting using.
@@ -53,7 +70,7 @@ impl PlayerInteractEvent {
     /// A new instance of `PlayerInteractEvent`.
     pub fn new(
         player: Arc<Player>,
-        sneaking: bool,
+        action: InteractAction,
         block: Result<Block, GetBlockError>,
         block_direction: Result<BlockDirection, InvalidBlockFace>,
         item_stack: Arc<Option<ItemStack>>,
@@ -62,13 +79,19 @@ impl PlayerInteractEvent {
     ) -> Self {
         Self {
             player,
-            sneaking,
+            action,
             block,
             block_direction,
             item_stack,
             position,
             cancelled,
         }
+    }
+
+    /// Returns whether the player was sneaking during the interaction.
+    #[must_use]
+    pub fn is_sneaking(&self) -> bool {
+        self.action.is_sneaking()
     }
 }
 
