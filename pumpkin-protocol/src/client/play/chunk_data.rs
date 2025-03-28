@@ -26,13 +26,29 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         write.write_i32_be(self.0.position.z)?;
 
-        pumpkin_nbt::serializer::to_bytes_unnamed(&self.0.heightmap, &mut write)
-            .map_err(|err| WritingError::Serde(err.to_string()))?;
+        let heightmaps = &self.0.heightmap;
+        // the heighmap is a map, we put 2 values in so the size is 2
+        write.write_var_int(&VarInt(2))?;
+
+        // heighmap index
+        write.write_var_int(&VarInt(1))?;
+        // write long array
+        write.write_var_int(&VarInt(heightmaps.world_surface.len() as i32))?;
+        for mb in &heightmaps.world_surface {
+            write.write_i64_be(*mb)?;
+        }
+        // heighmap index
+        write.write_var_int(&VarInt(4))?;
+        // write long array
+        write.write_var_int(&VarInt(heightmaps.motion_blocking.len() as i32))?;
+        for mb in &heightmaps.motion_blocking {
+            write.write_i64_be(*mb)?;
+        }
 
         let mut data_buf = Vec::new();
         let mut light_buf = Vec::new();
 
-        for subchunk in self.0.blocks.array_iter_subchunks() {
+        for subchunk in self.0.sections.array_iter_subchunks() {
             let mut chunk_light = [0u8; 2048];
             for i in 0..subchunk.len() {
                 // if !block .is_air() {
@@ -46,9 +62,11 @@ impl ClientPacket for CChunkData<'_> {
             light_buf.write_var_int(&VarInt(chunk_light.len() as i32))?;
             light_buf.write_slice(&chunk_light)?;
 
-            let block_count = subchunk.len() as i16;
+            let non_empty_block_count = subchunk.len() as i16;
             // Block count
-            data_buf.write_i16_be(block_count)?;
+            // TODO: write only non empty blocks, so no air and no fluidstate
+            data_buf.write_i16_be(non_empty_block_count)?;
+
             //// Block states
 
             let palette = &subchunk;
@@ -57,6 +75,7 @@ impl ClientPacket for CChunkData<'_> {
             enum PaletteType {
                 Single,
                 Indirect(u32),
+                // aka IdListPalette
                 Direct,
             }
             let palette_type = {
@@ -94,7 +113,6 @@ impl ClientPacket for CChunkData<'_> {
 
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / block_size as usize);
-                    data_buf.write_var_int(&VarInt(data_array_len as i32))?;
 
                     data_buf.reserve(data_array_len * 8);
                     for block_clump in subchunk.chunks(64 / block_size as usize) {
@@ -114,8 +132,6 @@ impl ClientPacket for CChunkData<'_> {
                     data_buf.write_u8_be(DIRECT_PALETTE_BITS as u8)?;
                     // Data array length
                     let data_array_len = subchunk.len().div_ceil(64 / DIRECT_PALETTE_BITS as usize);
-                    data_buf.write_var_int(&VarInt(data_array_len as i32))?;
-
                     data_buf.reserve(data_array_len * 8);
                     for block_clump in subchunk.chunks(64 / DIRECT_PALETTE_BITS as usize) {
                         let mut out_long: i64 = 0;
@@ -129,15 +145,13 @@ impl ClientPacket for CChunkData<'_> {
 
             //// Biomes
             // TODO: make biomes work
+            // bits
             data_buf.write_u8_be(0)?;
-            // This seems to be the biome
-            data_buf.write_var_int(&VarInt(10))?;
             data_buf.write_var_int(&VarInt(0))?;
         }
 
         // Size
         write.write_var_int(&VarInt(data_buf.len() as i32))?;
-        // Data
         write.write_slice(&data_buf)?;
 
         // TODO: block entities

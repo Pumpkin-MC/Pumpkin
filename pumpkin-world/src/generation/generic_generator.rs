@@ -73,7 +73,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
         }
 
         ChunkData {
-            blocks,
+            sections: blocks,
             heightmap: Default::default(),
             position: at,
             // This chunk was just created! We want to say its been changed

@@ -396,8 +396,8 @@ impl Player {
         // Get the attack damage
         if let Some(item_stack) = item_slot {
             // TODO: this should be cached in memory
-            if let Some(modifiers) = &item_stack.item.components.attribute_modifiers {
-                for item_mod in modifiers.modifiers {
+            if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
+                for item_mod in modifiers {
                     if item_mod.operation == Operation::AddValue {
                         if item_mod.id == "minecraft:base_attack_damage" {
                             add_damage = item_mod.amount;
