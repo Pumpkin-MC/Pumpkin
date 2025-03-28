@@ -94,8 +94,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Error)]
-#[derive(Clone)]
+#[derive(Debug, Error, Clone)]
 pub enum GetBlockError {
     InvalidBlockId,
     BlockOutOfWorldBounds,

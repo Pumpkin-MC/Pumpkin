@@ -1,11 +1,11 @@
-use pumpkin_macros::{Event, cancellable};
-use pumpkin_data::block::Block;
-use std::sync::Arc;
-use pumpkin_world::block::BlockDirection;
-use pumpkin_world::item::ItemStack;
+use super::PlayerEvent;
 use crate::entity::player::Player;
 use crate::world::GetBlockError;
-use super::PlayerEvent;
+use pumpkin_data::block::Block;
+use pumpkin_macros::{Event, cancellable};
+use pumpkin_world::block::BlockDirection;
+use pumpkin_world::item::ItemStack;
+use std::sync::Arc;
 
 /// An event that occurs when a `Player` interacts with a `Block` using their hand.
 /// This event does not consider interactions through block movement, eg pressure plates, tripwire hooks, sculk sensors etc.
@@ -30,7 +30,7 @@ pub struct PlayerInteractEvent {
     pub block_direction: BlockDirection,
 
     /// The ItemStack the player is interacting using
-    pub item_stack: Arc<Option<ItemStack>>
+    pub item_stack: Arc<Option<ItemStack>>,
 }
 
 impl PlayerInteractEvent {
@@ -46,8 +46,14 @@ impl PlayerInteractEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerInteractEvent`.
-    pub fn new(player: Arc<Player>, sneaking: bool, block: Result<Block, GetBlockError>, block_direction: BlockDirection, item_stack: Arc<Option<ItemStack>>, cancelled: bool) -> Self {
-        log::info!("Got interaction");
+    pub fn new(
+        player: Arc<Player>,
+        sneaking: bool,
+        block: Result<Block, GetBlockError>,
+        block_direction: BlockDirection,
+        item_stack: Arc<Option<ItemStack>>,
+        cancelled: bool,
+    ) -> Self {
         Self {
             player,
             sneaking,

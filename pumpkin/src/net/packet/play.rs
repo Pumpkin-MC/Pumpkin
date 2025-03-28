@@ -1,7 +1,6 @@
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
-use crate::{block, PLUGIN_MANAGER};
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
@@ -9,6 +8,7 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::world::BlockFlags;
+use crate::{PLUGIN_MANAGER, block};
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -63,8 +63,8 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use thiserror::Error;
 use crate::plugin::player::player_interact::PlayerInteractEvent;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -1149,6 +1149,7 @@ impl Player {
             .await;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         self: &Arc<Self>,
         use_item_on: SUseItemOn,
@@ -1186,28 +1187,33 @@ impl Player {
             block.clone(),
             face,
             held_item.clone(),
-            !self.can_interact_with_block_at(&location, 1.0) // Default cancel condition
+            !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
         );
         let event = PLUGIN_MANAGER
             .lock()
             .await
             .fire::<PlayerInteractEvent>(event)
             .await;
-
         if event.cancelled {
             // Block out of reach seems to be the most sensible error as it is a. somewhat generic, b. doesn't kick and c. is the correct type for the default cancel condition
-            return Err(BlockPlacingError::BlockOutOfReach.into())
+            return Err(BlockPlacingError::BlockOutOfReach.into());
         }
-
-        let Ok(block) = event.block else { return Err(BlockPlacingError::NoBaseBlock.into()) };
-
+        let Ok(block) = event.block else {
+            return Err(BlockPlacingError::NoBaseBlock.into());
+        };
         if let Some(stack) = event.item_stack.as_ref().as_ref() {
             if !sneaking {
                 server
                     .item_registry
-                    .use_on_block(&stack.item, self, location, &event.block_direction, &block, server)
+                    .use_on_block(
+                        &stack.item,
+                        self,
+                        location,
+                        &event.block_direction,
+                        &block,
+                        server,
+                    )
                     .await;
-
                 let action_result = server
                     .block_registry
                     .use_with_item(&block, self, location, &stack.item, server, world)
