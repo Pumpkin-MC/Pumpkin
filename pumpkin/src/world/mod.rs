@@ -36,8 +36,9 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
+        CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
+        GameEvent, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -217,6 +218,17 @@ impl World {
             target_name,
         ))
         .await;
+    }
+
+    pub async fn broadcast_secure_player_chat(&self, packet: &mut CPlayerChatMessage) {
+        let current_players = self.players.read().await;
+
+        for (_, player) in current_players.iter() {
+            let mut chat_session = player.chat_session.lock().await;
+            packet.global_index = VarInt(chat_session.messages_received);
+            player.client.enqueue_packet(packet).await;
+            chat_session.messages_received += 1;
+        }
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.

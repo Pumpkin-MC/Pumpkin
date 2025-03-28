@@ -699,61 +699,43 @@ impl Player {
 
                 let config = advanced_config();
 
-                let mut chat_session = self.chat_session.lock().await;
-
-                let raw_message = event.message.clone();
-
-                let entity = &self.living_entity.entity;
-
                 // Todo: check chat permissions for chat formatting with &
-                let chat_decorated_message = &TextComponent::chat_decorated(
+                let decorated_message = &TextComponent::chat_decorated(
                     config.chat.format.clone(),
                     gameprofile.name.clone(),
-                    raw_message.clone(),
+                    event.message.clone(),
                 );
 
-                let no_reports_packet = CSystemChatMessage::new(
-                    chat_decorated_message,
-                    false,
-                );
-
-                let reportable_packet = CPlayerChatMessage::new(
-                                gameprofile.id,
-                                VarInt(chat_session.message_index),
-                                chat_message.signature.clone(),
-                                raw_message.clone(),
-                                chat_message.timestamp,
-                                chat_message.salt,
-                                chat_session.previous_messages.clone(),
-                                Some(chat_decorated_message.clone()),
-                                FilterType::PassThrough,
-                                (CHAT + 8).into(), // Custom registry chat_type with no sender name
-                                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
-                                None,
-                            );
-
-
-                // There is almost definitely a better way to handle this logic but I
-                // cannot get anything clean looking to work
-                if event.recipients.is_empty() {
-                    let world = &entity.world.read().await;
-                    if BASIC_CONFIG.allow_chat_reports {
-                        world.broadcast_packet_all(&reportable_packet).await;
-                    } else {
-                        world.broadcast_packet_all(&no_reports_packet).await;
-                    }
+                let entity = &self.living_entity.entity;
+                let world = &entity.world.read().await;
+                if BASIC_CONFIG.allow_chat_reports {
+                    let chat_session = self.chat_session.lock().await;
+                    let reportable_packet = &mut CPlayerChatMessage::new(
+                        VarInt(0), // This will get modified later
+                        gameprofile.id,
+                        VarInt(chat_session.messages_sent),
+                        chat_message.signature.clone(),
+                        event.message.clone(),
+                        chat_message.timestamp,
+                        chat_message.salt,
+                        chat_session.previous_messages.clone(),
+                        Some(decorated_message.clone()),
+                        FilterType::PassThrough,
+                        (CHAT + 1).into(), // Custom registry chat_type with no sender name
+                        TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                        None,
+                    );
+                    drop(chat_session);
+                    world.broadcast_secure_player_chat(reportable_packet).await;
+                    let mut chat_session = self.chat_session.lock().await;
+                    chat_session.append_previous_message(chat_message.signature.clone());
                 } else {
-                    for recipient in event.recipients {
-                        if BASIC_CONFIG.allow_chat_reports {
-                            recipient.client.enqueue_packet(&reportable_packet).await;
-                        } else {
-                            recipient.client.enqueue_packet(&no_reports_packet).await;
-                        }
-                    }
+                    let no_reports_packet = &CSystemChatMessage::new(
+                        decorated_message,
+                        false,
+                    );
+                    world.broadcast_packet_all(no_reports_packet).await;
                 }
-
-                chat_session.append_previous_message(chat_message.signature.clone());
-
             }
         }}
     }

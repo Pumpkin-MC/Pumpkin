@@ -1860,7 +1860,8 @@ impl TryFrom<i32> for ChatMode {
 pub struct ChatSession {
     pub session_id: uuid::Uuid,
     pub previous_messages: Box<[PreviousMessage]>,
-    pub message_index: i32,
+    pub messages_sent: i32,
+    pub messages_received: i32,
 }
 
 impl ChatSession {
@@ -1869,7 +1870,8 @@ impl ChatSession {
         Self {
             session_id,
             previous_messages: Box::new([]),
-            message_index: 0,
+            messages_sent: 0,
+            messages_received: 0,
         }
     }
 
@@ -1890,6 +1892,6 @@ impl ChatSession {
 
         self.previous_messages = messages.into_boxed_slice();
 
-        self.message_index += 1;
+        self.messages_sent += 1;
     }
 }
