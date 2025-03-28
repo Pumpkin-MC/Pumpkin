@@ -144,9 +144,9 @@ impl TextComponent {
 
     pub fn chat_decorated(format: String, player_name: String, content: String) -> Self {
         let with_resolved_fields = format
+            .replace("&", "§")
             .replace("{DISPLAYNAME}", player_name.as_str())
-            .replace("{MESSAGE}", content.as_str())
-            .replace("&", "§");
+            .replace("{MESSAGE}", content.as_str());
 
         Self(TextComponentBase {
             content: TextContent::Text {
