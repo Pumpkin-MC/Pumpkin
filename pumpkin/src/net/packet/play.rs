@@ -931,7 +931,9 @@ impl Player {
             Ok(status) => {
                 match status {
                     Status::StartedDigging => {
-                        let held_item = Arc::new(self.inventory.lock().await.held_item().cloned());
+                        let inv = self.inventory.lock().await;
+                        let held_item = Arc::new(inv.held_item().cloned());
+                        drop(inv); // Prevent deadlock.
 
                         let face = BlockDirection::try_from(i32::from(player_action.face));
 
@@ -1224,95 +1226,96 @@ impl Player {
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        let event = PlayerInteractEvent::new(
-            self.clone(),
-            InteractAction::LeftClick { sneaking },
-            block.clone(),
-            Ok(face),
-            held_item.clone(),
-            location,
-            !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
-        );
-        let event = PLUGIN_MANAGER
-            .lock()
-            .await
-            .fire::<PlayerInteractEvent>(event)
-            .await;
-        if event.cancelled {
-            // Block out of reach seems to be the most sensible error as it is a. somewhat generic, b. doesn't kick and c. is the correct type for the default cancel condition
-            return Err(BlockPlacingError::BlockOutOfReach.into());
-        }
-        let Ok(block) = event.block else {
-            return Err(BlockPlacingError::NoBaseBlock.into());
-        };
-        if let Some(stack) = event.item_stack.as_ref().as_ref() {
-            if !sneaking {
-                server
-                    .item_registry
-                    .use_on_block(
-                        &stack.item,
-                        self,
-                        location,
-                        &event.block_direction.unwrap(),
-                        &block,
-                        server,
-                    )
-                    .await;
-                let action_result = server
-                    .block_registry
-                    .use_with_item(&block, self, location, &stack.item, server, world)
-                    .await;
-                match action_result {
-                    BlockActionResult::Continue => {}
-                    BlockActionResult::Consume => {
-                        return Ok(());
+        send_cancellable! {{
+            PlayerInteractEvent::new(
+                self.clone(),
+                InteractAction::LeftClick { sneaking },
+                block.clone(),
+                Ok(face),
+                held_item.clone(),
+                location,
+                !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
+            );
+
+            'cancelled: {
+                // Block out of reach seems to be the most sensible error as it is a. somewhat generic, b. doesn't kick and c. is the correct type for the default cancel condition
+                Err(BlockPlacingError::BlockOutOfReach.into())
+            }
+
+            'after: {
+                let Ok(block) = event.block else {
+                    return Err(BlockPlacingError::NoBaseBlock.into());
+                };
+                if let Some(stack) = event.item_stack.as_ref().as_ref() {
+                    if !sneaking {
+                        server
+                            .item_registry
+                            .use_on_block(
+                                &stack.item,
+                                self,
+                                location,
+                                &event.block_direction.unwrap(),
+                                &block,
+                                server,
+                            )
+                            .await;
+                        let action_result = server
+                            .block_registry
+                            .use_with_item(&block, self, location, &stack.item, server, world)
+                            .await;
+                        match action_result {
+                            BlockActionResult::Continue => {}
+                            BlockActionResult::Consume => {
+                                return Ok(());
+                            }
+                        }
                     }
-                }
-            }
-            // Check if the item is a block, because not every item can be placed :D
-            if let Some(block) = get_block_by_item(stack.item.id) {
-                should_try_decrement = self
-                    .run_is_block_place(block.clone(), server, use_item_on, location, &face)
-                    .await?;
-            }
-            // Check if the item is a spawn egg
-            if let Some(entity) = entity_from_egg(stack.item.id) {
-                self.spawn_entity_from_egg(entity, location, &face).await;
-                should_try_decrement = true;
-            };
-
-            if should_try_decrement {
-                // TODO: Config
-                // Decrease block count
-                if self.gamemode.load() != GameMode::Creative {
-                    let mut inventory = self.inventory().lock().await;
-
-                    if !inventory.decrease_current_stack(1) {
-                        return Err(BlockPlacingError::InventoryInvalid.into());
+                    // Check if the item is a block, because not every item can be placed :D
+                    if let Some(block) = get_block_by_item(stack.item.id) {
+                        should_try_decrement = self
+                            .run_is_block_place(block.clone(), server, use_item_on, location, &face)
+                            .await?;
                     }
-                    // TODO: this should be by use item on not currently selected as they might be different
-                    let _ = self
-                        .handle_decrease_item(
-                            server,
-                            slot_id as i16,
-                            inventory.held_item().cloned().as_ref(),
-                            &mut inventory.state_id,
-                        )
-                        .await;
-                }
-            }
-        } else {
-            if !sneaking {
-                // Using block with empty hand
-                server
-                    .block_registry
-                    .on_use(&block, self, location, server, world)
-                    .await;
-            }
-            return Ok(());
-        }
+                    // Check if the item is a spawn egg
+                    if let Some(entity) = entity_from_egg(stack.item.id) {
+                        self.spawn_entity_from_egg(entity, location, &face).await;
+                        should_try_decrement = true;
+                    };
 
-        Ok(())
+                    if should_try_decrement {
+                        // TODO: Config
+                        // Decrease block count
+                        if self.gamemode.load() != GameMode::Creative {
+                            let mut inventory = self.inventory().lock().await;
+
+                            if !inventory.decrease_current_stack(1) {
+                                return Err(BlockPlacingError::InventoryInvalid.into());
+                            }
+                            // TODO: this should be by use item on not currently selected as they might be different
+                            let _ = self
+                                .handle_decrease_item(
+                                    server,
+                                    slot_id as i16,
+                                    inventory.held_item().cloned().as_ref(),
+                                    &mut inventory.state_id,
+                                )
+                                .await;
+                        }
+                    }
+                } else {
+                    if !sneaking {
+                        // Using block with empty hand
+                        server
+                            .block_registry
+                            .on_use(&block, self, location, server, world)
+                            .await;
+                    }
+                    return Ok(());
+                }
+
+                Ok(())
+            }
+        }}
     }
 
     pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
