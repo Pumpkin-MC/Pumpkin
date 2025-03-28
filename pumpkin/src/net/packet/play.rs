@@ -951,6 +951,7 @@ impl Player {
                             block.clone(),
                             face,
                             held_item.clone(),
+                            *location,
                             !self.can_interact_with_block_at(location, 1.0), // Default cancel condition
                         );
                         let event = PLUGIN_MANAGER
@@ -1229,6 +1230,7 @@ impl Player {
             block.clone(),
             Ok(face),
             held_item.clone(),
+            location,
             !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
         );
         let event = PLUGIN_MANAGER

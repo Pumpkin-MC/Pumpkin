@@ -3,6 +3,7 @@ use crate::entity::player::Player;
 use crate::world::GetBlockError;
 use pumpkin_data::block::Block;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::{BlockDirection, InvalidBlockFace};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
@@ -13,7 +14,7 @@ use std::sync::Arc;
 /// If the event is cancelled, the interaction  will not happen.
 ///
 /// This event contains information about the player, whether the player is sneaking or not, the `Block` they are interacting with,
-/// the `ItemStack` they are interacting using, the block face (`BlockDirection`) they are interacting with.
+/// the `ItemStack` they are interacting using, the block face (`BlockDirection`) they are interacting with, and the position of the interaction.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerInteractEvent {
@@ -31,6 +32,9 @@ pub struct PlayerInteractEvent {
 
     /// The ItemStack the player is interacting using
     pub item_stack: Arc<Option<ItemStack>>,
+
+    /// The position of the block being interacted with
+    pub position: BlockPos,
 }
 
 impl PlayerInteractEvent {
@@ -42,6 +46,7 @@ impl PlayerInteractEvent {
     /// - `block`: The block the player is interacting with.
     /// - `block_face`: The face of the block the player is interacting with.
     /// - `item`: The `ItemStack` the player is interacting using.
+    /// - `position`: The position of the block being interacted with.
     /// - `cancelled`: A boolean indicating whether the interaction should be cancelled.
     ///
     /// # Returns
@@ -52,6 +57,7 @@ impl PlayerInteractEvent {
         block: Result<Block, GetBlockError>,
         block_direction: Result<BlockDirection, InvalidBlockFace>,
         item_stack: Arc<Option<ItemStack>>,
+        position: BlockPos,
         cancelled: bool,
     ) -> Self {
         Self {
@@ -60,6 +66,7 @@ impl PlayerInteractEvent {
             block,
             block_direction,
             item_stack,
+            position,
             cancelled,
         }
     }
