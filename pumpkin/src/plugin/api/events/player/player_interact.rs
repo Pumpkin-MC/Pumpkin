@@ -8,23 +8,6 @@ use pumpkin_world::block::{BlockDirection, InvalidBlockFace};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
-/// Represents the type of interaction performed by the player.
-#[derive(Clone, Debug)]
-pub enum InteractAction {
-    LeftClick { sneaking: bool },
-    RightClick { sneaking: bool },
-}
-
-impl InteractAction {
-    /// Returns whether the player was sneaking during the interaction.
-    #[must_use]
-    pub fn is_sneaking(&self) -> bool {
-        match self {
-            Self::RightClick { sneaking } | Self::LeftClick { sneaking } => *sneaking,
-        }
-    }
-}
-
 /// An event that occurs when a `Player` interacts with a `Block` using their hand.
 /// This event does not consider interactions through block movement, eg pressure plates, tripwire hooks, sculk sensors etc.
 ///
@@ -98,5 +81,22 @@ impl PlayerInteractEvent {
 impl PlayerEvent for PlayerInteractEvent {
     fn get_player(&self) -> &Arc<Player> {
         &self.player
+    }
+}
+
+/// Represents the type of interaction performed by the player.
+#[derive(Clone, Debug)]
+pub enum InteractAction {
+    LeftClick { sneaking: bool },
+    RightClick { sneaking: bool },
+}
+
+impl InteractAction {
+    /// Returns whether the player was `sneaking` during the interaction.
+    #[must_use]
+    pub fn is_sneaking(&self) -> bool {
+        match self {
+            Self::RightClick { sneaking } | Self::LeftClick { sneaking } => *sneaking,
+        }
     }
 }
