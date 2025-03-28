@@ -23,7 +23,7 @@ impl PumpkinBlock for FurnaceBlock {
         player: &Player,
         _location: BlockPos,
         server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) {
         self.open_furnace_screen(block, player, _location, server)
             .await;
@@ -36,7 +36,7 @@ impl PumpkinBlock for FurnaceBlock {
         _location: BlockPos,
         _item: &Item,
         server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         self.open_furnace_screen(block, player, _location, server)
             .await;

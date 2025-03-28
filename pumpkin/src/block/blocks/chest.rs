@@ -37,7 +37,7 @@ impl PumpkinBlock for ChestBlock {
         player: &Player,
         _location: BlockPos,
         server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) {
         self.open_chest_block(block, player, _location, server)
             .await;
@@ -50,7 +50,7 @@ impl PumpkinBlock for ChestBlock {
         _location: BlockPos,
         _item: &Item,
         server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         self.open_chest_block(block, player, _location, server)
             .await;

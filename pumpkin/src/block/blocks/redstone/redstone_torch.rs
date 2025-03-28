@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockState;
@@ -53,19 +55,19 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                     let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
                     torch_props.facing = face.to_horizontal_facing().unwrap().opposite();
                     torch_props.lit =
-                        Boolean::from_bool(should_be_lit(world, *block_pos, *face).await);
+                        Boolean::from_bool(should_be_lit(world, block_pos, face).await);
                     return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
                 }
                 let mut torch_props = RTorchProps::default(&Block::REDSTONE_TORCH);
                 torch_props.lit = Boolean::from_bool(
-                    should_be_lit(world, *block_pos, BlockDirection::Down).await,
+                    should_be_lit(world, block_pos, &BlockDirection::Down).await,
                 );
                 return torch_props.to_state_id(&Block::REDSTONE_TORCH);
             }
 
             async fn on_neighbor_update(
                 &self,
-                world: &World,
+                world: &Arc<World>,
                 block: &Block,
                 block_pos: &BlockPos,
                 _source_block: &Block,
@@ -77,13 +79,13 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                     return;
                 }
 
-                if *block == Block::REDSTONE_WALL_TORCH {
+                if block == &Block::REDSTONE_WALL_TORCH {
                     let props = RWallTorchProps::from_state_id(state.id, block);
                     if props.lit.to_bool()
                         != should_be_lit(
                             world,
-                            *block_pos,
-                            props.facing.to_block_direction().opposite(),
+                            block_pos,
+                            &props.facing.to_block_direction().opposite(),
                         )
                         .await
                     {
@@ -91,10 +93,10 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                             .schedule_block_tick(block, *block_pos, 2, TickPriority::Normal)
                             .await;
                     }
-                } else if *block == Block::REDSTONE_TORCH {
+                } else if block == &Block::REDSTONE_TORCH {
                     let props = RTorchProps::from_state_id(state.id, block);
                     if props.lit.to_bool()
-                        != should_be_lit(world, *block_pos, BlockDirection::Down).await
+                        != should_be_lit(world, block_pos, &BlockDirection::Down).await
                     {
                         world
                             .schedule_block_tick(block, *block_pos, 2, TickPriority::Normal)
@@ -120,14 +122,14 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 state: &BlockState,
                 direction: &BlockDirection,
             ) -> u8 {
-                if *block == Block::REDSTONE_WALL_TORCH {
+                if block == &Block::REDSTONE_WALL_TORCH {
                     let props = RWallTorchProps::from_state_id(state.id, block);
-                    if props.lit.to_bool() && *direction != props.facing.to_block_direction() {
+                    if props.lit.to_bool() && direction != &props.facing.to_block_direction() {
                         return 15;
                     }
-                } else if *block == Block::REDSTONE_TORCH {
+                } else if block == &Block::REDSTONE_TORCH {
                     let props = RTorchProps::from_state_id(state.id, block);
-                    if props.lit.to_bool() && *direction != BlockDirection::Up {
+                    if props.lit.to_bool() && direction != &BlockDirection::Up {
                         return 15;
                     }
                 }
@@ -142,13 +144,13 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 state: &BlockState,
                 direction: &BlockDirection,
             ) -> u8 {
-                if *direction == BlockDirection::Down {
-                    if *block == Block::REDSTONE_WALL_TORCH {
+                if direction == &BlockDirection::Down {
+                    if block == &Block::REDSTONE_WALL_TORCH {
                         let props = RWallTorchProps::from_state_id(state.id, block);
                         if props.lit.to_bool() {
                             return 15;
                         }
-                    } else if *block == Block::REDSTONE_TORCH {
+                    } else if block == &Block::REDSTONE_TORCH {
                         let props = RTorchProps::from_state_id(state.id, block);
                         if props.lit.to_bool() {
                             return 15;
@@ -158,14 +160,19 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 0
             }
 
-            async fn on_scheduled_tick(&self, world: &World, block: &Block, block_pos: &BlockPos) {
+            async fn on_scheduled_tick(
+                &self,
+                world: &Arc<World>,
+                block: &Block,
+                block_pos: &BlockPos,
+            ) {
                 let state = world.get_block_state(block_pos).await.unwrap();
-                if *block == Block::REDSTONE_WALL_TORCH {
+                if block == &Block::REDSTONE_WALL_TORCH {
                     let mut props = RWallTorchProps::from_state_id(state.id, block);
                     let should_be_lit_now = should_be_lit(
                         world,
-                        *block_pos,
-                        props.facing.to_block_direction().opposite(),
+                        block_pos,
+                        &props.facing.to_block_direction().opposite(),
                     )
                     .await;
                     if props.lit.to_bool() != should_be_lit_now {
@@ -177,12 +184,12 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                                 BlockFlags::NOTIFY_ALL,
                             )
                             .await;
-                        update_neighbors(world, *block_pos).await;
+                        update_neighbors(world, block_pos).await;
                     }
-                } else if *block == Block::REDSTONE_TORCH {
+                } else if block == &Block::REDSTONE_TORCH {
                     let mut props = RTorchProps::from_state_id(state.id, block);
                     let should_be_lit_now =
-                        should_be_lit(world, *block_pos, BlockDirection::Down).await;
+                        should_be_lit(world, block_pos, &BlockDirection::Down).await;
                     if props.lit.to_bool() != should_be_lit_now {
                         props.lit = Boolean::from_bool(should_be_lit_now);
                         world
@@ -192,32 +199,32 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                                 BlockFlags::NOTIFY_ALL,
                             )
                             .await;
-                        update_neighbors(world, *block_pos).await;
+                        update_neighbors(world, block_pos).await;
                     }
                 }
             }
 
             async fn placed(
                 &self,
-                world: &World,
+                world: &Arc<World>,
                 _block: &Block,
                 _state_id: u16,
                 block_pos: &BlockPos,
                 _old_state_id: u16,
                 _notify: bool,
             ) {
-                update_neighbors(world, *block_pos).await;
+                update_neighbors(world, block_pos).await;
             }
 
             async fn on_state_replaced(
                 &self,
-                world: &World,
+                world: &Arc<World>,
                 _block: &Block,
                 location: BlockPos,
                 _old_state_id: u16,
                 _moved: bool,
             ) {
-                update_neighbors(world, location).await;
+                update_neighbors(world, &location).await;
             }
         }
 
@@ -225,13 +232,13 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
     }
 }
 
-pub async fn should_be_lit(world: &World, pos: BlockPos, face: BlockDirection) -> bool {
+pub async fn should_be_lit(world: &World, pos: &BlockPos, face: &BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
     let (block, state) = world.get_block_and_block_state(&other_pos).await.unwrap();
     get_redstone_power(&block, &state, world, other_pos, face).await == 0
 }
 
-pub async fn update_neighbors(world: &World, pos: BlockPos) {
+pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {
     for dir in BlockDirection::all() {
         let other_pos = pos.offset(dir.to_offset());
         world.update_neighbors(&other_pos, None).await;

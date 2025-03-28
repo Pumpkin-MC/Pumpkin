@@ -7,7 +7,6 @@ use crate::text::color::ARGBColor;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
-#[serde(rename_all = "camelCase")]
 pub struct Style {
     /// The color to render the content.
     #[serde(default, skip_serializing_if = "Option::is_none")]

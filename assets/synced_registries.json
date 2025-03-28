@@ -261,6 +261,7 @@
         "music_volume": 1.0,
         "grass_color_modifier": "dark_forest",
         "sky_color": 7972607,
+        "dry_foliage_color": 8082228,
         "fog_color": 12638463,
         "water_color": 4159204,
         "water_fog_color": 329011
@@ -813,6 +814,7 @@
         "grass_color_modifier": "swamp",
         "sky_color": 7907327,
         "foliage_color": 9285927,
+        "dry_foliage_color": 8082228,
         "fog_color": 12638463,
         "water_color": 3832426,
         "water_fog_color": 5077600
@@ -1019,6 +1021,7 @@
         "music_volume": 0.0,
         "sky_color": 12171705,
         "foliage_color": 8883574,
+        "dry_foliage_color": 10528412,
         "grass_color": 7832178,
         "fog_color": 8484720,
         "water_color": 7768221,
@@ -1358,6 +1361,7 @@
         "grass_color_modifier": "swamp",
         "sky_color": 7907327,
         "foliage_color": 6975545,
+        "dry_foliage_color": 8082228,
         "fog_color": 12638463,
         "water_color": 6388580,
         "water_fog_color": 2302743
@@ -1706,7 +1710,6 @@
   "trim_pattern": {
     "bolt": {
       "asset_id": "minecraft:bolt",
-      "template_item": "minecraft:bolt_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.bolt"
       },
@@ -1714,7 +1717,6 @@
     },
     "coast": {
       "asset_id": "minecraft:coast",
-      "template_item": "minecraft:coast_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.coast"
       },
@@ -1722,7 +1724,6 @@
     },
     "dune": {
       "asset_id": "minecraft:dune",
-      "template_item": "minecraft:dune_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.dune"
       },
@@ -1730,7 +1731,6 @@
     },
     "eye": {
       "asset_id": "minecraft:eye",
-      "template_item": "minecraft:eye_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.eye"
       },
@@ -1738,7 +1738,6 @@
     },
     "flow": {
       "asset_id": "minecraft:flow",
-      "template_item": "minecraft:flow_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.flow"
       },
@@ -1746,7 +1745,6 @@
     },
     "host": {
       "asset_id": "minecraft:host",
-      "template_item": "minecraft:host_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.host"
       },
@@ -1754,7 +1752,6 @@
     },
     "raiser": {
       "asset_id": "minecraft:raiser",
-      "template_item": "minecraft:raiser_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.raiser"
       },
@@ -1762,7 +1759,6 @@
     },
     "rib": {
       "asset_id": "minecraft:rib",
-      "template_item": "minecraft:rib_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.rib"
       },
@@ -1770,7 +1766,6 @@
     },
     "sentry": {
       "asset_id": "minecraft:sentry",
-      "template_item": "minecraft:sentry_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.sentry"
       },
@@ -1778,7 +1773,6 @@
     },
     "shaper": {
       "asset_id": "minecraft:shaper",
-      "template_item": "minecraft:shaper_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.shaper"
       },
@@ -1786,7 +1780,6 @@
     },
     "silence": {
       "asset_id": "minecraft:silence",
-      "template_item": "minecraft:silence_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.silence"
       },
@@ -1794,7 +1787,6 @@
     },
     "snout": {
       "asset_id": "minecraft:snout",
-      "template_item": "minecraft:snout_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.snout"
       },
@@ -1802,7 +1794,6 @@
     },
     "spire": {
       "asset_id": "minecraft:spire",
-      "template_item": "minecraft:spire_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.spire"
       },
@@ -1810,7 +1801,6 @@
     },
     "tide": {
       "asset_id": "minecraft:tide",
-      "template_item": "minecraft:tide_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.tide"
       },
@@ -1818,7 +1808,6 @@
     },
     "vex": {
       "asset_id": "minecraft:vex",
-      "template_item": "minecraft:vex_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.vex"
       },
@@ -1826,7 +1815,6 @@
     },
     "ward": {
       "asset_id": "minecraft:ward",
-      "template_item": "minecraft:ward_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.ward"
       },
@@ -1834,7 +1822,6 @@
     },
     "wayfinder": {
       "asset_id": "minecraft:wayfinder",
-      "template_item": "minecraft:wayfinder_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.wayfinder"
       },
@@ -1842,7 +1829,6 @@
     },
     "wild": {
       "asset_id": "minecraft:wild",
-      "template_item": "minecraft:wild_armor_trim_smithing_template",
       "description": {
         "translate": "trim_pattern.minecraft.wild"
       },
@@ -1852,7 +1838,6 @@
   "trim_material": {
     "amethyst": {
       "asset_name": "amethyst",
-      "ingredient": "minecraft:amethyst_shard",
       "description": {
         "translate": "trim_material.minecraft.amethyst",
         "color": "#9A5CC6"
@@ -1860,7 +1845,6 @@
     },
     "copper": {
       "asset_name": "copper",
-      "ingredient": "minecraft:copper_ingot",
       "description": {
         "translate": "trim_material.minecraft.copper",
         "color": "#B4684D"
@@ -1868,7 +1852,6 @@
     },
     "diamond": {
       "asset_name": "diamond",
-      "ingredient": "minecraft:diamond",
       "override_armor_assets": {
         "minecraft:diamond": "diamond_darker"
       },
@@ -1879,7 +1862,6 @@
     },
     "emerald": {
       "asset_name": "emerald",
-      "ingredient": "minecraft:emerald",
       "description": {
         "translate": "trim_material.minecraft.emerald",
         "color": "#11A036"
@@ -1887,7 +1869,6 @@
     },
     "gold": {
       "asset_name": "gold",
-      "ingredient": "minecraft:gold_ingot",
       "override_armor_assets": {
         "minecraft:gold": "gold_darker"
       },
@@ -1898,7 +1879,6 @@
     },
     "iron": {
       "asset_name": "iron",
-      "ingredient": "minecraft:iron_ingot",
       "override_armor_assets": {
         "minecraft:iron": "iron_darker"
       },
@@ -1909,7 +1889,6 @@
     },
     "lapis": {
       "asset_name": "lapis",
-      "ingredient": "minecraft:lapis_lazuli",
       "description": {
         "translate": "trim_material.minecraft.lapis",
         "color": "#416E97"
@@ -1917,7 +1896,6 @@
     },
     "netherite": {
       "asset_name": "netherite",
-      "ingredient": "minecraft:netherite_ingot",
       "override_armor_assets": {
         "minecraft:netherite": "netherite_darker"
       },
@@ -1928,7 +1906,6 @@
     },
     "quartz": {
       "asset_name": "quartz",
-      "ingredient": "minecraft:quartz",
       "description": {
         "translate": "trim_material.minecraft.quartz",
         "color": "#E3D4C4"
@@ -1936,7 +1913,6 @@
     },
     "redstone": {
       "asset_name": "redstone",
-      "ingredient": "minecraft:redstone",
       "description": {
         "translate": "trim_material.minecraft.redstone",
         "color": "#971607"
@@ -1944,7 +1920,6 @@
     },
     "resin": {
       "asset_name": "resin",
-      "ingredient": "minecraft:resin_brick",
       "description": {
         "translate": "trim_material.minecraft.resin",
         "color": "#FC7812"
@@ -1953,40 +1928,208 @@
   },
   "wolf_variant": {
     "ashen": {
-      "wild_texture": "minecraft:entity/wolf/wolf_ashen",
-      "tame_texture": "minecraft:entity/wolf/wolf_ashen_tame",
-      "angry_texture": "minecraft:entity/wolf/wolf_ashen_angry",
-      "biomes": "minecraft:snowy_taiga"
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_ashen",
+        "tame": "minecraft:entity/wolf/wolf_ashen_tame",
+        "angry": "minecraft:entity/wolf/wolf_ashen_angry"
+      }
     },
     "black": {
-      "wild_texture": "minecraft:entity/wolf/wolf_black",
-      "tame_texture": "minecraft:entity/wolf/wolf_black_tame",
-      "angry_texture": "minecraft:entity/wolf/wolf_black_angry",
-      "biomes": "minecraft:old_growth_pine_taiga"
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_black",
+        "tame": "minecraft:entity/wolf/wolf_black_tame",
+        "angry": "minecraft:entity/wolf/wolf_black_angry"
+      }
     },
     "chestnut": {
-      "wild_texture": "minecraft:entity/wolf/wolf_chestnut",
-      "tame_texture": "minecraft:entity/wolf/wolf_chestnut_tame",
-      "angry_texture": "minecraft:entity/wolf/wolf_chestnut_angry",
-      "biomes": "minecraft:old_growth_spruce_taiga"
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_chestnut",
+        "tame": "minecraft:entity/wolf/wolf_chestnut_tame",
+        "angry": "minecraft:entity/wolf/wolf_chestnut_angry"
+      }
     },
     "pale": {
-      "wild_texture": "minecraft:entity/wolf/wolf",
-      "tame_texture": "minecraft:entity/wolf/wolf_tame",
-      "angry_texture": "minecraft:entity/wolf/wolf_angry",
-      "biomes": "minecraft:taiga"
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf",
+        "tame": "minecraft:entity/wolf/wolf_tame",
+        "angry": "minecraft:entity/wolf/wolf_angry"
+      }
+    },
+    "rusty": {
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_rusty",
+        "tame": "minecraft:entity/wolf/wolf_rusty_tame",
+        "angry": "minecraft:entity/wolf/wolf_rusty_angry"
+      }
     },
     "snowy": {
-      "wild_texture": "minecraft:entity/wolf/wolf_snowy",
-      "tame_texture": "minecraft:entity/wolf/wolf_snowy_tame",
-      "angry_texture": "minecraft:entity/wolf/wolf_snowy_angry",
-      "biomes": "minecraft:grove"
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_snowy",
+        "tame": "minecraft:entity/wolf/wolf_snowy_tame",
+        "angry": "minecraft:entity/wolf/wolf_snowy_angry"
+      }
+    },
+    "spotted": {
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_spotted",
+        "tame": "minecraft:entity/wolf/wolf_spotted_tame",
+        "angry": "minecraft:entity/wolf/wolf_spotted_angry"
+      }
+    },
+    "striped": {
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_striped",
+        "tame": "minecraft:entity/wolf/wolf_striped_tame",
+        "angry": "minecraft:entity/wolf/wolf_striped_angry"
+      }
     },
     "woods": {
-      "wild_texture": "minecraft:entity/wolf/wolf_woods",
-      "tame_texture": "minecraft:entity/wolf/wolf_woods_tame",
-      "angry_texture": "minecraft:entity/wolf/wolf_woods_angry",
-      "biomes": "minecraft:forest"
+      "assets": {
+        "wild": "minecraft:entity/wolf/wolf_woods",
+        "tame": "minecraft:entity/wolf/wolf_woods_tame",
+        "angry": "minecraft:entity/wolf/wolf_woods_angry"
+      }
+    }
+  },
+  "wolf_sound_variant": {
+    "angry": {
+      "hurt_sound": "minecraft:entity.wolf_angry.hurt",
+      "pant_sound": "minecraft:entity.wolf_angry.pant",
+      "whine_sound": "minecraft:entity.wolf_angry.whine",
+      "ambient_sound": "minecraft:entity.wolf_angry.ambient",
+      "death_sound": "minecraft:entity.wolf_angry.death",
+      "growl_sound": "minecraft:entity.wolf_angry.growl"
+    },
+    "big": {
+      "hurt_sound": "minecraft:entity.wolf_big.hurt",
+      "pant_sound": "minecraft:entity.wolf_big.pant",
+      "whine_sound": "minecraft:entity.wolf_big.whine",
+      "ambient_sound": "minecraft:entity.wolf_big.ambient",
+      "death_sound": "minecraft:entity.wolf_big.death",
+      "growl_sound": "minecraft:entity.wolf_big.growl"
+    },
+    "classic": {
+      "hurt_sound": "minecraft:entity.wolf.hurt",
+      "pant_sound": "minecraft:entity.wolf.pant",
+      "whine_sound": "minecraft:entity.wolf.whine",
+      "ambient_sound": "minecraft:entity.wolf.ambient",
+      "death_sound": "minecraft:entity.wolf.death",
+      "growl_sound": "minecraft:entity.wolf.growl"
+    },
+    "cute": {
+      "hurt_sound": "minecraft:entity.wolf_cute.hurt",
+      "pant_sound": "minecraft:entity.wolf_cute.pant",
+      "whine_sound": "minecraft:entity.wolf_cute.whine",
+      "ambient_sound": "minecraft:entity.wolf_cute.ambient",
+      "death_sound": "minecraft:entity.wolf_cute.death",
+      "growl_sound": "minecraft:entity.wolf_cute.growl"
+    },
+    "grumpy": {
+      "hurt_sound": "minecraft:entity.wolf_grumpy.hurt",
+      "pant_sound": "minecraft:entity.wolf_grumpy.pant",
+      "whine_sound": "minecraft:entity.wolf_grumpy.whine",
+      "ambient_sound": "minecraft:entity.wolf_grumpy.ambient",
+      "death_sound": "minecraft:entity.wolf_grumpy.death",
+      "growl_sound": "minecraft:entity.wolf_grumpy.growl"
+    },
+    "puglin": {
+      "hurt_sound": "minecraft:entity.wolf_puglin.hurt",
+      "pant_sound": "minecraft:entity.wolf_puglin.pant",
+      "whine_sound": "minecraft:entity.wolf_puglin.whine",
+      "ambient_sound": "minecraft:entity.wolf_puglin.ambient",
+      "death_sound": "minecraft:entity.wolf_puglin.death",
+      "growl_sound": "minecraft:entity.wolf_puglin.growl"
+    },
+    "sad": {
+      "hurt_sound": "minecraft:entity.wolf_sad.hurt",
+      "pant_sound": "minecraft:entity.wolf_sad.pant",
+      "whine_sound": "minecraft:entity.wolf_sad.whine",
+      "ambient_sound": "minecraft:entity.wolf_sad.ambient",
+      "death_sound": "minecraft:entity.wolf_sad.death",
+      "growl_sound": "minecraft:entity.wolf_sad.growl"
+    }
+  },
+  "pig_variant": {
+    "cold": {
+      "model": "cold",
+      "asset_id": "minecraft:entity/pig/cold_pig"
+    },
+    "temperate": {
+      "asset_id": "minecraft:entity/pig/temperate_pig"
+    },
+    "warm": {
+      "asset_id": "minecraft:entity/pig/warm_pig"
+    }
+  },
+  "frog_variant": {
+    "cold": {
+      "asset_id": "minecraft:entity/frog/cold_frog"
+    },
+    "temperate": {
+      "asset_id": "minecraft:entity/frog/temperate_frog"
+    },
+    "warm": {
+      "asset_id": "minecraft:entity/frog/warm_frog"
+    }
+  },
+  "cat_variant": {
+    "all_black": {
+      "asset_id": "minecraft:entity/cat/all_black"
+    },
+    "black": {
+      "asset_id": "minecraft:entity/cat/black"
+    },
+    "british_shorthair": {
+      "asset_id": "minecraft:entity/cat/british_shorthair"
+    },
+    "calico": {
+      "asset_id": "minecraft:entity/cat/calico"
+    },
+    "jellie": {
+      "asset_id": "minecraft:entity/cat/jellie"
+    },
+    "persian": {
+      "asset_id": "minecraft:entity/cat/persian"
+    },
+    "ragdoll": {
+      "asset_id": "minecraft:entity/cat/ragdoll"
+    },
+    "red": {
+      "asset_id": "minecraft:entity/cat/red"
+    },
+    "siamese": {
+      "asset_id": "minecraft:entity/cat/siamese"
+    },
+    "tabby": {
+      "asset_id": "minecraft:entity/cat/tabby"
+    },
+    "white": {
+      "asset_id": "minecraft:entity/cat/white"
+    }
+  },
+  "cow_variant": {
+    "cold": {
+      "model": "cold",
+      "asset_id": "minecraft:entity/cow/cold_cow"
+    },
+    "temperate": {
+      "asset_id": "minecraft:entity/cow/temperate_cow"
+    },
+    "warm": {
+      "model": "warm",
+      "asset_id": "minecraft:entity/cow/warm_cow"
+    }
+  },
+  "chicken_variant": {
+    "cold": {
+      "model": "cold",
+      "asset_id": "minecraft:entity/chicken/cold_chicken"
+    },
+    "temperate": {
+      "asset_id": "minecraft:entity/chicken/temperate_chicken"
+    },
+    "warm": {
+      "asset_id": "minecraft:entity/chicken/warm_chicken"
     }
   },
   "painting_variant": {
@@ -4815,13 +4958,13 @@
                         },
                         {
                           "predicate": {
+                            "flags": {
+                              "is_flying": false
+                            },
                             "movement_affected_by": {
                               "block": {
                                 "blocks": "#minecraft:soul_speed_blocks"
                               }
-                            },
-                            "flags": {
-                              "is_flying": false
                             }
                           },
                           "entity": "this",
@@ -4853,13 +4996,13 @@
                 },
                 {
                   "predicate": {
+                    "flags": {
+                      "is_on_ground": true
+                    },
                     "movement_affected_by": {
                       "block": {
                         "blocks": "#minecraft:soul_speed_blocks"
                       }
-                    },
-                    "flags": {
-                      "is_on_ground": true
                     }
                   },
                   "entity": "this",
@@ -4895,11 +5038,6 @@
             "requirements": {
               "predicate": {
                 "periodic_tick": 5,
-                "movement_affected_by": {
-                  "block": {
-                    "blocks": "#minecraft:soul_speed_blocks"
-                  }
-                },
                 "flags": {
                   "is_flying": false,
                   "is_on_ground": true
@@ -4907,6 +5045,11 @@
                 "movement": {
                   "horizontal_speed": {
                     "min": 9.999999747378752E-6
+                  }
+                },
+                "movement_affected_by": {
+                  "block": {
+                    "blocks": "#minecraft:soul_speed_blocks"
                   }
                 }
               },
@@ -4934,11 +5077,6 @@
                 {
                   "predicate": {
                     "periodic_tick": 5,
-                    "movement_affected_by": {
-                      "block": {
-                        "blocks": "#minecraft:soul_speed_blocks"
-                      }
-                    },
                     "flags": {
                       "is_flying": false,
                       "is_on_ground": true
@@ -4946,6 +5084,11 @@
                     "movement": {
                       "horizontal_speed": {
                         "min": 9.999999747378752E-6
+                      }
+                    },
+                    "movement_affected_by": {
+                      "block": {
+                        "blocks": "#minecraft:soul_speed_blocks"
                       }
                     }
                   },
@@ -5475,6 +5618,23 @@
       "description": {
         "translate": "instrument.minecraft.yearn_goat_horn"
       }
+    }
+  },
+  "test_environment": {
+    "default": {
+      "definitions": [],
+      "type": "minecraft:all_of"
+    }
+  },
+  "test_instance": {
+    "always_pass": {
+      "function": "minecraft:always_pass",
+      "max_ticks": 1,
+      "setup_ticks": 1,
+      "required": false,
+      "environment": "minecraft:default",
+      "structure": "minecraft:empty",
+      "type": "minecraft:function"
     }
   }
 }

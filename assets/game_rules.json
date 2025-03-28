@@ -1,4 +1,5 @@
 {
+  "allowFireTicksAwayFromPlayer": "false",
   "announceAdvancements": "true",
   "blockExplosionDropDecay": "true",
   "commandBlockOutput": "true",
@@ -48,6 +49,7 @@
   "spawnChunkRadius": "2",
   "spawnRadius": "10",
   "spectatorsGenerateChunks": "true",
+  "tntExplodes": "true",
   "tntExplosionDropDecay": "false",
   "universalAnger": "false",
   "waterSourceConversion": "true"

@@ -47,9 +47,9 @@ impl CommandExecutor for Executor {
                 ));
 
             if entity.entity_type == entity::EntityType::PLAYER {
-                entity_display = entity_display.click_event(ClickEvent::SuggestCommand(
-                    format!("/tell {} ", name.clone()).into(),
-                ));
+                entity_display = entity_display.click_event(ClickEvent::SuggestCommand {
+                    command: format!("/tell {} ", name.clone()).into(),
+                });
             }
 
             TextComponent::translate("commands.kill.success.single", [entity_display])
@@ -91,9 +91,9 @@ impl CommandExecutor for SelfExecutor {
                         entity.entity_type.resource_name.into(),
                         Some(TextComponent::text(name.clone())),
                     ))
-                    .click_event(ClickEvent::SuggestCommand(
-                        format!("/tell {} ", name.clone()).into(),
-                    ))],
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: format!("/tell {} ", name.clone()).into(),
+                    })],
             ))
             .await;
 

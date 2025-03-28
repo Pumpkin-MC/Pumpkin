@@ -10,7 +10,9 @@ use crate::{
 pub struct TridentItem;
 
 impl ItemMetadata for TridentItem {
-    const IDS: &'static [u16] = &[Item::TRIDENT.id];
+    fn ids() -> Box<[u16]> {
+        [Item::TRIDENT.id].into()
+    }
 }
 
 #[async_trait]

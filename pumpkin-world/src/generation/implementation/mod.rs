@@ -63,7 +63,7 @@ impl WorldGenerator for VanillaGenerator {
 
                     let block = proto_chunk.get_block_state(&Vector3::new(x.into(), y, z.into()));
                     // TODO: check air
-                    if block.block_id == 0 {
+                    if block.is_air() {
                         continue;
                     }
 
@@ -73,7 +73,7 @@ impl WorldGenerator for VanillaGenerator {
         }
 
         ChunkData {
-            blocks,
+            sections: blocks,
             heightmap: Default::default(),
             position: at,
             dirty: true,

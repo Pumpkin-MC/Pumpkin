@@ -1,68 +1,4 @@
 {
-  "nether": {
-    "biomes": [
-      {
-        "parameters": {
-          "erosion": 0.0,
-          "depth": 0.0,
-          "weirdness": 0.0,
-          "offset": 0.0,
-          "temperature": 0.0,
-          "humidity": 0.0,
-          "continentalness": 0.0
-        },
-        "biome": "minecraft:nether_wastes"
-      },
-      {
-        "parameters": {
-          "erosion": 0.0,
-          "depth": 0.0,
-          "weirdness": 0.0,
-          "offset": 0.0,
-          "temperature": 0.0,
-          "humidity": -0.5,
-          "continentalness": 0.0
-        },
-        "biome": "minecraft:soul_sand_valley"
-      },
-      {
-        "parameters": {
-          "erosion": 0.0,
-          "depth": 0.0,
-          "weirdness": 0.0,
-          "offset": 0.0,
-          "temperature": 0.4,
-          "humidity": 0.0,
-          "continentalness": 0.0
-        },
-        "biome": "minecraft:crimson_forest"
-      },
-      {
-        "parameters": {
-          "erosion": 0.0,
-          "depth": 0.0,
-          "weirdness": 0.0,
-          "offset": 0.375,
-          "temperature": 0.0,
-          "humidity": 0.5,
-          "continentalness": 0.0
-        },
-        "biome": "minecraft:warped_forest"
-      },
-      {
-        "parameters": {
-          "erosion": 0.0,
-          "depth": 0.0,
-          "weirdness": 0.0,
-          "offset": 0.175,
-          "temperature": -0.5,
-          "humidity": 0.0,
-          "continentalness": 0.0
-        },
-        "biome": "minecraft:basalt_deltas"
-      }
-    ]
-  },
   "overworld": {
     "biomes": [
       {
@@ -11808,7 +11744,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -11835,7 +11771,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -11970,7 +11906,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -11997,7 +11933,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -30168,7 +30104,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -30195,7 +30131,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -30276,7 +30212,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -30303,7 +30239,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -46098,7 +46034,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -46125,7 +46061,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -46206,7 +46142,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -46233,7 +46169,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -62568,7 +62504,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -62595,7 +62531,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -62676,7 +62612,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -62703,7 +62639,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -81090,7 +81026,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -81117,7 +81053,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -81252,7 +81188,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -81279,7 +81215,7 @@
             1.0
           ]
         },
-        "biome": "minecraft:dark_forest"
+        "biome": "minecraft:pale_garden"
       },
       {
         "parameters": {
@@ -205081,6 +205017,70 @@
           ]
         },
         "biome": "minecraft:deep_dark"
+      }
+    ]
+  },
+  "nether": {
+    "biomes": [
+      {
+        "parameters": {
+          "erosion": 0.0,
+          "depth": 0.0,
+          "weirdness": 0.0,
+          "offset": 0.0,
+          "temperature": 0.0,
+          "humidity": 0.0,
+          "continentalness": 0.0
+        },
+        "biome": "minecraft:nether_wastes"
+      },
+      {
+        "parameters": {
+          "erosion": 0.0,
+          "depth": 0.0,
+          "weirdness": 0.0,
+          "offset": 0.0,
+          "temperature": 0.0,
+          "humidity": -0.5,
+          "continentalness": 0.0
+        },
+        "biome": "minecraft:soul_sand_valley"
+      },
+      {
+        "parameters": {
+          "erosion": 0.0,
+          "depth": 0.0,
+          "weirdness": 0.0,
+          "offset": 0.0,
+          "temperature": 0.4,
+          "humidity": 0.0,
+          "continentalness": 0.0
+        },
+        "biome": "minecraft:crimson_forest"
+      },
+      {
+        "parameters": {
+          "erosion": 0.0,
+          "depth": 0.0,
+          "weirdness": 0.0,
+          "offset": 0.375,
+          "temperature": 0.0,
+          "humidity": 0.5,
+          "continentalness": 0.0
+        },
+        "biome": "minecraft:warped_forest"
+      },
+      {
+        "parameters": {
+          "erosion": 0.0,
+          "depth": 0.0,
+          "weirdness": 0.0,
+          "offset": 0.175,
+          "temperature": -0.5,
+          "humidity": 0.0,
+          "continentalness": 0.0
+        },
+        "biome": "minecraft:basalt_deltas"
       }
     ]
   }

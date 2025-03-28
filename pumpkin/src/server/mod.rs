@@ -1,6 +1,7 @@
 use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
+use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::EntityId;
 use crate::fluid::registry::FluidRegistry;
 use crate::item::registry::ItemRegistry;
@@ -42,7 +43,7 @@ mod connection_cache;
 mod key_store;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.4";
+pub const CURRENT_MC_VERSION: &str = "1.21.5";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -77,7 +78,8 @@ pub struct Server {
     pub bossbars: Mutex<CustomBossbars>,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
-
+    /// Manages player data storage
+    pub player_data_storage: ServerPlayerData,
     tasks: TaskTracker,
 }
 
@@ -99,19 +101,19 @@ impl Server {
 
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher());
+        let world_path = BASIC_CONFIG.get_world_path();
 
         let block_registry = super::block::default_registry();
         let fluid_registry = super::fluid::default_registry();
 
         let world = World::load(
-            Dimension::Overworld.into_level(
-                // TODO: load form config
-                "./world".parse().unwrap(),
-            ),
+            Dimension::Overworld.into_level(world_path.clone()),
             DimensionType::Overworld,
             block_registry.clone(),
             fluid_registry.clone(),
         );
+
+        let world_name = world_path.to_str().unwrap();
 
         Self {
             cached_registry: Registry::get_synced(),
@@ -137,6 +139,10 @@ impl Server {
             defaultgamemode: Mutex::new(DefaultGamemode {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
+            player_data_storage: ServerPlayerData::new(
+                format!("{world_name}/playerdata"),
+                Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
+            ),
             tasks: TaskTracker::new(),
         }
     }
@@ -194,10 +200,22 @@ impl Server {
         // TODO: select default from config
         let world = &self.worlds.read().await[0];
 
-        let player = Arc::new(Player::new(client, world.clone(), gamemode).await);
+        let mut player = Player::new(client, world.clone(), gamemode).await;
+
+        // Load player data
+        if let Err(e) = self
+            .player_data_storage
+            .handle_player_join(&mut player)
+            .await
+        {
+            log::error!("Unexpected error loading player data: {e}");
+        }
+
+        // Wrap in Arc after data is loaded
+        let player = Arc::new(player);
+
         send_cancellable! {{
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
-
             'after: {
                 world
                     .add_player(player.gameprofile.id, player.clone())
@@ -259,7 +277,7 @@ impl Server {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
-                        log::debug!("Found container id: {}", id);
+                        log::debug!("Found container id: {id}");
                         return Some(*id as u32);
                     }
                 }
@@ -283,7 +301,7 @@ impl Server {
             if container.is_location(location) {
                 if let Some(container_block) = container.get_block() {
                     if container_block.id == block.id {
-                        log::debug!("Found matching container id: {}", id);
+                        log::debug!("Found matching container id: {id}");
                         matching_container_ids.push(*id as u32);
                     }
                 }
@@ -477,6 +495,10 @@ impl Server {
     async fn tick(&self) {
         for world in self.worlds.read().await.iter() {
             world.tick(self).await;
+        }
+
+        if let Err(e) = self.player_data_storage.tick(self).await {
+            log::error!("Error ticking player data: {e}");
         }
     }
 }

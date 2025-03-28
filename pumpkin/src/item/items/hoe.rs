@@ -5,18 +5,24 @@ use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::item::Item;
+use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 pub struct HoeItem;
 
 impl ItemMetadata for HoeItem {
-    const IDS: &'static [u16] = &[
-        Item::WOODEN_HOE.id,
-        Item::STONE_HOE.id,
-        Item::GOLDEN_HOE.id,
-        Item::DIAMOND_HOE.id,
-        Item::NETHERITE_HOE.id,
-    ];
+    fn ids() -> Box<[u16]> {
+        Item::get_tag_values("#minecraft:hoes")
+            .expect("This is a valid vanilla tag")
+            .iter()
+            .map(|key| {
+                Item::from_registry_key(key)
+                    .expect("We just got this key from the registry")
+                    .id
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice()
+    }
 }
 
 #[async_trait]

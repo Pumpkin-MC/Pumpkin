@@ -107,7 +107,7 @@ pub struct ScheduledTick {
 
 pub struct ChunkData {
     /// See description in [`ChunkBlocks`]
-    pub blocks: ChunkBlocks,
+    pub sections: ChunkBlocks,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
@@ -146,9 +146,9 @@ pub enum SubchunkBlocks {
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
     #[serde(serialize_with = "nbt_long_array")]
-    motion_blocking: Box<[i64]>,
+    pub world_surface: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
-    world_surface: Box<[i64]>,
+    pub motion_blocking: Box<[i64]>,
 }
 
 /// The Heightmap for a completely empty chunk
@@ -283,13 +283,13 @@ impl ChunkBlocks {
 impl ChunkData {
     /// Gets the given block in the chunk
     pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-        self.blocks.get_block(position)
+        self.sections.get_block(position)
     }
 
     /// Sets the given block in the chunk, returning the old block
     pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
         // TODO @LUK_ESC? update the heightmap
-        self.blocks.set_block(position, block_id);
+        self.sections.set_block(position, block_id);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -302,7 +302,7 @@ impl ChunkData {
         position: ChunkRelativeBlockCoordinates,
         block: u16,
     ) {
-        self.blocks.set_block_no_heightmap_update(position, block);
+        self.sections.set_block_no_heightmap_update(position, block);
     }
 
     #[expect(dead_code)]

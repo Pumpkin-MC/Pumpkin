@@ -9,6 +9,7 @@ pub mod op_data;
 pub mod banlist_serializer;
 pub mod banned_ip_data;
 pub mod banned_player_data;
+pub mod player_server_data;
 
 pub trait LoadJSONConfiguration {
     #[must_use]
@@ -72,21 +73,13 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
         let content = match serde_json::to_string_pretty(self) {
             Ok(content) => content,
             Err(err) => {
-                log::warn!(
-                    "Couldn't serialize operator data config to {:?}. Reason: {}",
-                    path,
-                    err
-                );
+                log::warn!("Couldn't serialize operator data config to {path:?}. Reason: {err}",);
                 return;
             }
         };
 
         if let Err(err) = std::fs::write(&path, content) {
-            log::warn!(
-                "Couldn't write operator config to {:?}. Reason: {}",
-                path,
-                err
-            );
+            log::warn!("Couldn't write operator config to {path:?}. Reason: {err}",);
         }
     }
 }

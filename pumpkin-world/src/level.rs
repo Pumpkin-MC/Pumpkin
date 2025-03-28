@@ -384,7 +384,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {}", error.to_string());
+            log::error!("Failed writing Chunk to disk {}", error);
         }
     }
 

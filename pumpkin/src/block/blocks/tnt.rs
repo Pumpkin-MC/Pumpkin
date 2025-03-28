@@ -16,8 +16,30 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::Rng;
 
+use super::redstone::block_receives_redstone_power;
+
 #[pumpkin_block("minecraft:tnt")]
 pub struct TNTBlock;
+
+impl TNTBlock {
+    pub async fn prime(world: &Arc<World>, location: &BlockPos) {
+        let entity = world.create_entity(location.to_f64(), EntityType::TNT);
+        let pos = entity.pos.load();
+        let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
+        world.spawn_entity(tnt.clone()).await;
+        tnt.send_meta_packet().await;
+        world
+            .play_sound(
+                pumpkin_data::sound::Sound::EntityTntPrimed,
+                SoundCategory::Blocks,
+                &pos,
+            )
+            .await;
+        world
+            .set_block_state(location, 0, BlockFlags::NOTIFY_ALL)
+            .await;
+    }
+}
 
 const DEFAULT_FUSE: u32 = 80;
 const DEFAULT_POWER: f32 = 4.0;
@@ -31,29 +53,44 @@ impl PumpkinBlock for TNTBlock {
         location: BlockPos,
         item: &Item,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         if *item != Item::FLINT_AND_STEEL || *item == Item::FIRE_CHARGE {
             return BlockActionResult::Continue;
         }
         let world = player.world().await;
-        world
-            .set_block_state(&location, 0, BlockFlags::NOTIFY_ALL)
-            .await;
-        let entity = world.create_entity(location.to_f64(), EntityType::TNT);
-        let pos = entity.pos.load();
-        let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
-        world.spawn_entity(tnt.clone()).await;
-        tnt.send_meta_packet().await;
-        world
-            .play_sound(
-                pumpkin_data::sound::Sound::EntityTntPrimed,
-                SoundCategory::Blocks,
-                &pos,
-            )
-            .await;
+        Self::prime(&world, &location).await;
+
         BlockActionResult::Consume
     }
+
+    async fn placed(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        _state_id: u16,
+        pos: &BlockPos,
+        _old_state_id: u16,
+        _notify: bool,
+    ) {
+        if block_receives_redstone_power(world, pos).await {
+            Self::prime(world, pos).await;
+        }
+    }
+
+    async fn on_neighbor_update(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        pos: &BlockPos,
+        _source_block: &Block,
+        _notify: bool,
+    ) {
+        if block_receives_redstone_power(world, pos).await {
+            Self::prime(world, pos).await;
+        }
+    }
+
     async fn explode(&self, _block: &Block, world: &Arc<World>, location: BlockPos) {
         let entity = world.create_entity(location.to_f64(), EntityType::TNT);
         let angle = rand::random::<f64>() * std::f64::consts::TAU;

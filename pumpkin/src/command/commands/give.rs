@@ -80,9 +80,10 @@ impl CommandExecutor for Executor {
                                 .into(),
                             Some(TextComponent::text(targets[0].gameprofile.name.clone())),
                         ))
-                        .click_event(ClickEvent::SuggestCommand(
-                            format!("/tell {} ", targets[0].gameprofile.name.clone()).into(),
-                        )),
+                        .click_event(ClickEvent::SuggestCommand {
+                            command: format!("/tell {} ", targets[0].gameprofile.name.clone())
+                                .into(),
+                        }),
                 ],
             )
         } else {
