@@ -3,7 +3,7 @@ pub mod superflat;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    chunk::{ChunkBlocks, ChunkData},
+    chunk::{ChunkData, ChunkSection},
     coordinates::ChunkRelativeBlockCoordinates,
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
@@ -35,7 +35,7 @@ impl GeneratorInit for VanillaGenerator {
 
 impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut blocks = ChunkBlocks::Homogeneous(0);
+        let mut sections = ChunkSection::new();
         // TODO: This is bad, but it works
         let generation_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
@@ -49,6 +49,22 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_biomes();
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
+
+        for x in 0..4u8 {
+            for y in 0..4u8 {
+                for z in 0..4u8 {
+                    let y = generation_settings.noise.min_y as i32 + y as i32;
+
+                    let biome = proto_chunk.get_biome(&Vector3::new(x.into(), y, z.into()));
+                    let coordinates = ChunkRelativeBlockCoordinates {
+                        x: x.into(),
+                        y: y.into(),
+                        z: z.into(),
+                    };
+                    sections.set_biome(coordinates, biome);
+                }
+            }
+        }
 
         for x in 0..16u8 {
             for z in 0..16u8 {
@@ -66,14 +82,13 @@ impl WorldGenerator for VanillaGenerator {
                     if block.is_air() {
                         continue;
                     }
-
-                    blocks.set_block(coordinates, block.state_id);
+                    sections.set_block(coordinates, block.state_id);
                 }
             }
         }
 
         ChunkData {
-            sections: blocks,
+            section: sections,
             heightmap: Default::default(),
             position: at,
             dirty: true,

@@ -17,10 +17,49 @@ pub(crate) fn build() -> TokenStream {
             #name,
         }]);
     }
+
+    let type_to_name = &biomes
+        .iter()
+        .map(|sound| {
+            let id = &sound;
+            let name = format_ident!("{}", sound.to_pascal_case());
+
+            quote! {
+                Self::#name => #id,
+            }
+        })
+        .collect::<TokenStream>();
+
+    let type_to_id = &biomes
+        .iter()
+        .enumerate()
+        .map(|(i, sound)| {
+            let name = format_ident!("{}", sound.to_pascal_case());
+
+            quote! {
+                Self::#name => #i as u8,
+            }
+        })
+        .collect::<TokenStream>();
+
     quote! {
         #[derive(Clone, Deserialize, Copy, Hash, PartialEq, Eq, Debug)]
         pub enum Biome {
             #variants
+        }
+
+        impl Biome {
+            pub const fn to_name(&self) -> &'static str {
+                match self {
+                    #type_to_name
+                }
+            }
+
+            pub const fn to_id(&self) -> u8 {
+                match self {
+                    #type_to_id
+                }
+            }
         }
     }
 }

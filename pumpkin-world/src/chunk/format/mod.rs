@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    CHUNK_AREA, ChunkBlocks, ChunkData, ChunkHeightmaps, ChunkParsingError, SUBCHUNK_VOLUME,
+    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSection, SUBCHUNK_VOLUME,
     ScheduledTick, TickPriority,
 };
 
@@ -51,7 +51,7 @@ impl ChunkData {
         }
 
         // this needs to be boxed, otherwise it will cause a stack-overflow
-        let mut blocks = ChunkBlocks::Homogeneous(0);
+        let mut final_section = ChunkSection::new();
         let mut block_index = 0; // which block we're currently at
 
         for section in chunk_data.sections.into_iter() {
@@ -94,7 +94,7 @@ impl ChunkData {
                     // TODO allow indexing blocks directly so we can just use block_index and save some time?
                     // this is fine because we initialized the heightmap of `blocks`
                     // from the cached value in the world file
-                    blocks.set_block_no_heightmap_update(
+                    final_section.set_block_no_heightmap_update(
                         ChunkRelativeBlockCoordinates {
                             z: ((block_index % CHUNK_AREA) / 16).into(),
                             y: Height::from_absolute((block_index / CHUNK_AREA) as u16),
@@ -115,7 +115,7 @@ impl ChunkData {
         }
 
         Ok(ChunkData {
-            sections: blocks,
+            section: final_section,
             heightmap: chunk_data.heightmaps,
             position,
             // This chunk is read from disk, so it has not been modified
@@ -152,21 +152,36 @@ impl ChunkData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct PaletteEntry {
-    // block name
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, String>>,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
-struct ChunkSection {
-    #[serde(rename = "Y")]
-    y: i8,
+struct ChunkSectionNBT {
     #[serde(skip_serializing_if = "Option::is_none")]
     block_states: Option<ChunkSectionBlockStates>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    biomes: Option<ChunkSectionBiomes>,
+    // TODO
+    // #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
+    // block_light: Option<Box<[u8]>>,
+    // #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
+    // sky_light: Option<Box<[u8]>>,
+    #[serde(rename = "Y")]
+    y: i8,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ChunkSectionBiomes {
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    data: Option<Box<[i64]>>,
+    palette: Vec<PaletteBiomeEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub struct PaletteBiomeEntry {
+    /// Biome name
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -176,7 +191,16 @@ struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     data: Option<Box<[i64]>>,
-    palette: Vec<PaletteEntry>,
+    palette: Vec<PaletteBlockEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub struct PaletteBlockEntry {
+    /// Block name
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -207,7 +231,7 @@ struct ChunkNbt {
     z_pos: i32,
     status: ChunkStatus,
     #[serde(rename = "sections")]
-    sections: Vec<ChunkSection>,
+    sections: Vec<ChunkSectionNBT>,
     heightmaps: ChunkHeightmaps,
     #[serde(rename = "block_ticks")]
     block_ticks: Vec<SerializedScheduledTick>,

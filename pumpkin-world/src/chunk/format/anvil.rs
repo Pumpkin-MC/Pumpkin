@@ -4,7 +4,10 @@ use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
+use pumpkin_data::{
+    block::Block,
+    chunk::{Biome, ChunkStatus},
+};
 use pumpkin_nbt::serializer::to_bytes;
 use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
@@ -25,7 +28,8 @@ use crate::chunk::{
 };
 
 use super::{
-    ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry, SerializedScheduledTick,
+    ChunkNbt, ChunkSectionBiomes, ChunkSectionBlockStates, ChunkSectionNBT, PaletteBiomeEntry,
+    PaletteBlockEntry, SerializedScheduledTick,
 };
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
@@ -799,70 +803,43 @@ impl ChunkSerializer for AnvilChunkFile {
 pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
     let mut sections = Vec::new();
 
-    for (i, blocks) in chunk_data.sections.array_iter_subchunks().enumerate() {
+    for (i, section) in chunk_data.section.sections.iter().enumerate() {
         // get unique blocks
-        let unique_blocks: HashSet<_> = blocks.iter().collect();
+        //let unique_blocks: HashSet<_> = blocks.iter().collect();
 
-        let palette: IndexMap<_, _> = unique_blocks
+        let blocks = section.block_states.clone_as_array();
+        let biomes = section.biomes.clone_as_array();
+
+        let block_palette: IndexMap<_, _> = blocks
             .into_iter()
             .enumerate()
             .map(|(i, block)| {
-                let name = Block::from_state_id(*block).unwrap().name;
+                let name = Block::from_state_id(block).unwrap_or(Block::AIR).name;
                 (block, (name, i))
             })
             .collect();
+        let biome_palette: IndexMap<_, _> = biomes
+            .into_iter()
+            .enumerate()
+            .map(|(i, biome)| {
+                let name = biome.to_name();
+                (biome, (name, i))
+            })
+            .collect();
+        let packed_blocks = pack_blocks(&blocks.as_slice(), &block_palette);
+        let packed_biomes = pack_biomes(&biomes.as_slice(), &biome_palette);
 
-        // Determine the number of bits needed to represent the largest index in the palette
-        let block_bit_size = if palette.len() < 16 {
-            4
-        } else {
-            ceil_log2(palette.len() as u32).max(4)
-        };
-
-        let mut section_longs = Vec::new();
-        let mut current_pack_long: i64 = 0;
-        let mut bits_used_in_pack: u32 = 0;
-
-        // Empty data if the palette only contains one index https://minecraft.fandom.com/wiki/Chunk_format
-        // if palette.len() > 1 {}
-        // TODO: Update to write empty data. Rn or read does not handle this elegantly
-        for block in blocks.iter() {
-            // Push if next bit does not fit
-            if bits_used_in_pack + block_bit_size as u32 > 64 {
-                section_longs.push(current_pack_long);
-                current_pack_long = 0;
-                bits_used_in_pack = 0;
-            }
-            let index = palette.get(block).expect("Just added all unique").1;
-            current_pack_long |= (index as i64) << bits_used_in_pack;
-            bits_used_in_pack += block_bit_size as u32;
-
-            assert!(bits_used_in_pack <= 64);
-
-            // If the current 64-bit integer is full, push it to the section_longs and start a new one
-            if bits_used_in_pack >= 64 {
-                section_longs.push(current_pack_long);
-                current_pack_long = 0;
-                bits_used_in_pack = 0;
-            }
-        }
-
-        // Push the last 64-bit integer if it contains any data
-        if bits_used_in_pack > 0 {
-            section_longs.push(current_pack_long);
-        }
-
-        sections.push(ChunkSection {
+        sections.push(ChunkSectionNBT {
             y: i as i8 - 4,
             block_states: Some(ChunkSectionBlockStates {
-                data: Some(section_longs.into_boxed_slice()),
-                palette: palette
+                data: Some(packed_blocks.into_boxed_slice()),
+                palette: block_palette
                     .into_iter()
-                    .map(|entry| PaletteEntry {
+                    .map(|entry| PaletteBlockEntry {
                         name: entry.1.0.to_string(),
                         properties: {
-                            let block = Block::from_state_id(*entry.0).unwrap();
-                            if let Some(properties) = block.properties(*entry.0) {
+                            let block = Block::from_state_id(entry.0).unwrap_or(Block::AIR);
+                            if let Some(properties) = block.properties(entry.0) {
                                 let props = properties.to_props();
                                 let mut props_map = HashMap::new();
                                 for prop in props {
@@ -873,6 +850,15 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                                 None
                             }
                         },
+                    })
+                    .collect(),
+            }),
+            biomes: Some(ChunkSectionBiomes {
+                data: Some(packed_biomes.into_boxed_slice()),
+                palette: biome_palette
+                    .into_iter()
+                    .map(|entry| PaletteBiomeEntry {
+                        name: entry.1.0.to_string(),
                     })
                     .collect(),
             }),
@@ -925,6 +911,93 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
     let mut result = Vec::new();
     to_bytes(&nbt, &mut result).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
     Ok(result)
+}
+
+fn pack_biomes(biomes: &[Biome], palette: &IndexMap<Biome, (&str, usize)>) -> Vec<i64> {
+    // Determine the number of bits needed to represent the largest index in the palette
+    let block_bit_size = if palette.len() < 16 {
+        // Biomes use 2 bits instead of 4 like blocks
+        2
+    } else {
+        ceil_log2(palette.len() as u32).max(2)
+    };
+
+    let mut section_longs = Vec::new();
+    let mut current_pack_long: i64 = 0;
+    let mut bits_used_in_pack: u32 = 0;
+
+    // Empty data if the palette only contains one index https://minecraft.fandom.com/wiki/Chunk_format
+    // if palette.len() > 1 {}
+    // TODO: Update to write empty data. Rn or read does not handle this elegantly
+    for biome in biomes.iter() {
+        // Push if next bit does not fit
+        if bits_used_in_pack + block_bit_size as u32 > 64 {
+            section_longs.push(current_pack_long);
+            current_pack_long = 0;
+            bits_used_in_pack = 0;
+        }
+        let index = palette.get(biome).expect("Just added all unique").1;
+        current_pack_long |= (index as i64) << bits_used_in_pack;
+        bits_used_in_pack += block_bit_size as u32;
+
+        assert!(bits_used_in_pack <= 64);
+
+        // If the current 64-bit integer is full, push it to the section_longs and start a new one
+        if bits_used_in_pack >= 64 {
+            section_longs.push(current_pack_long);
+            current_pack_long = 0;
+            bits_used_in_pack = 0;
+        }
+    }
+
+    // Push the last 64-bit integer if it contains any data
+    if bits_used_in_pack > 0 {
+        section_longs.push(current_pack_long);
+    }
+    section_longs
+}
+
+fn pack_blocks(blocks: &[u16], palette: &IndexMap<u16, (&str, usize)>) -> Vec<i64> {
+    // Determine the number of bits needed to represent the largest index in the palette
+    let block_bit_size = if palette.len() < 16 {
+        4
+    } else {
+        ceil_log2(palette.len() as u32).max(4)
+    };
+
+    let mut section_longs = Vec::new();
+    let mut current_pack_long: i64 = 0;
+    let mut bits_used_in_pack: u32 = 0;
+
+    // Empty data if the palette only contains one index https://minecraft.fandom.com/wiki/Chunk_format
+    // if palette.len() > 1 {}
+    // TODO: Update to write empty data. Rn or read does not handle this elegantly
+    for block in blocks.iter() {
+        // Push if next bit does not fit
+        if bits_used_in_pack + block_bit_size as u32 > 64 {
+            section_longs.push(current_pack_long);
+            current_pack_long = 0;
+            bits_used_in_pack = 0;
+        }
+        let index = palette.get(block).expect("Just added all unique").1;
+        current_pack_long |= (index as i64) << bits_used_in_pack;
+        bits_used_in_pack += block_bit_size as u32;
+
+        assert!(bits_used_in_pack <= 64);
+
+        // If the current 64-bit integer is full, push it to the section_longs and start a new one
+        if bits_used_in_pack >= 64 {
+            section_longs.push(current_pack_long);
+            current_pack_long = 0;
+            bits_used_in_pack = 0;
+        }
+    }
+
+    // Push the last 64-bit integer if it contains any data
+    if bits_used_in_pack > 0 {
+        section_longs.push(current_pack_long);
+    }
+    section_longs
 }
 
 #[cfg(test)]
@@ -1047,7 +1120,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    assert_eq!(chunk.section, read_chunk.section, "Chunks don't match");
                     break;
                 }
             }
@@ -1057,7 +1130,7 @@ mod tests {
 
         // Idk what blocks these are, they just have to be different
         let mut chunk = chunks.first().unwrap().1.write().await;
-        chunk.sections.set_block(
+        chunk.section.set_block(
             ChunkRelativeBlockCoordinates {
                 x: 0u32.into(),
                 y: 0.into(),
@@ -1069,7 +1142,7 @@ mod tests {
         chunk.dirty = true;
         drop(chunk);
         let mut chunk = chunks.last().unwrap().1.write().await;
-        chunk.sections.set_block(
+        chunk.section.set_block(
             ChunkRelativeBlockCoordinates {
                 x: 0u32.into(),
                 y: 0.into(),
@@ -1095,7 +1168,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    assert_eq!(chunk.section, read_chunk.section, "Chunks don't match");
                     break;
                 }
             }
@@ -1109,7 +1182,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..4 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.sections.set_block(
+                    chunk.section.set_block(
                         ChunkRelativeBlockCoordinates {
                             x: x.into(),
                             y: (y as i32).into(),
@@ -1128,7 +1201,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..4 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.sections.set_block(
+                    chunk.section.set_block(
                         ChunkRelativeBlockCoordinates {
                             x: x.into(),
                             y: (y as i32).into(),
@@ -1157,7 +1230,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    assert_eq!(chunk.section, read_chunk.section, "Chunks don't match");
                     break;
                 }
             }
@@ -1171,7 +1244,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..16 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.sections.set_block(
+                    chunk.section.set_block(
                         ChunkRelativeBlockCoordinates {
                             x: x.into(),
                             y: (y as i32).into(),
@@ -1200,7 +1273,7 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    assert_eq!(chunk.section, read_chunk.section, "Chunks don't match");
                     break;
                 }
             }
@@ -1257,7 +1330,7 @@ mod tests {
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
-                        assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                        assert_eq!(chunk.section, read_chunk.section, "Chunks don't match");
                         break;
                     }
                 }
