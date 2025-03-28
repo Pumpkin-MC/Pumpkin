@@ -18,13 +18,20 @@ use super::{
     item::ItemEntity,
 };
 use crate::{
-    block,
+    PLUGIN_MANAGER, block,
     command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
     net::{Client, PlayerConfig},
-    plugin::player::{
-        player_change_world::PlayerChangeWorldEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
+    plugin::{
+        entity::{
+            entity_damage::EntityDamageEvent, entity_damage_by_entity::EntityDamageByEntityEvent,
+        },
+        player::{
+            player_change_world::PlayerChangeWorldEvent, player_death::PlayerDeathEvent,
+            player_drop_item::PlayerDropItemEvent,
+            player_gamemode_change::PlayerGamemodeChangeEvent,
+            player_teleport::PlayerTeleportEvent,
+        },
     },
     server::Server,
     world::World,
@@ -435,42 +442,71 @@ impl Player {
             damage *= 1.5;
         }
 
-        if !victim
-            .damage(damage as f32, DamageType::PLAYER_ATTACK)
-            .await
-        {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &self.living_entity.entity.pos.load(),
-                )
-                .await;
-            return;
-        }
-
-        if victim.get_living_entity().is_some() {
-            let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, &world, attack_type).await;
-            match attack_type {
-                AttackType::Knockback => knockback_strength += 1.0,
-                AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
-                }
-                _ => {}
+        let event_entity = world.get_player_by_id(self.entity_id()).await.unwrap();
+        // Fire the EntityDamageByEntityEvent
+        send_cancellable! {{
+            EntityDamageByEntityEvent {
+                base_event: EntityDamageEvent {
+                    entity: victim.clone(),
+                    damage: damage as f32,
+                    damage_type: DamageType::PLAYER_ATTACK,
+                    cancelled: false,
+                },
+                attacker: event_entity,
+                cancelled: false,
             };
-            if config.knockback {
-                combat::handle_knockback(
-                    attacker_entity,
-                    &world,
-                    victim_entity,
-                    knockback_strength,
-                )
-                .await;
-            }
-        }
 
-        if config.swing {}
+            'after: {
+                // Continue with the attack if the event wasn't cancelled
+                if !victim
+                    .damage(event.get_base_event().get_damage(), event.get_base_event().get_damage_type())
+                    .await
+                {
+                    world
+                        .play_sound(
+                            Sound::EntityPlayerAttackNodamage,
+                            SoundCategory::Players,
+                            &self.living_entity.entity.pos.load(),
+                        )
+                        .await;
+                    return;
+                }
+
+                if victim.get_living_entity().is_some() {
+                    let mut knockback_strength = 1.0;
+                    player_attack_sound(&pos, &world, attack_type).await;
+                    match attack_type {
+                        AttackType::Knockback => knockback_strength += 1.0,
+                        AttackType::Sweeping => {
+                            combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                        }
+                        _ => {}
+                    };
+                    if config.knockback {
+                        combat::handle_knockback(
+                            attacker_entity,
+                            &world,
+                            victim_entity,
+                            knockback_strength,
+                        )
+                        .await;
+                    }
+                }
+
+                if config.swing {}
+            }
+
+            'cancelled: {
+                // Play the "no damage" sound if the attack was cancelled
+                world
+                    .play_sound(
+                        Sound::EntityPlayerAttackNodamage,
+                        SoundCategory::Players,
+                        &self.living_entity.entity.pos.load(),
+                    )
+                    .await;
+            }
+        }}
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -1081,18 +1117,34 @@ impl Player {
         }
     }
 
-    pub async fn kill(&self) {
+    pub async fn kill(self: &Arc<Self>) {
         self.living_entity.kill().await;
-        self.handle_killed().await;
+
+        // Create a default death message for generic kills
+        let player_name = self.gameprofile.name.clone();
+        let default_message = TextComponent::translate(
+            "death.attack.generic",
+            vec![TextComponent::text(player_name)],
+        );
+
+        // Fire the death event
+        let mut event = PlayerDeathEvent::new(
+            self.clone(),
+            default_message,
+            DamageType::GENERIC, // Use a generic damage type
+        );
+
+        event = PLUGIN_MANAGER.lock().await.fire(event).await;
+
+        // Pass the possibly modified death message to handle_killed
+        self.handle_killed(event.death_message).await;
     }
 
-    async fn handle_killed(&self) {
+    async fn handle_killed(&self, death_message: TextComponent) {
         self.set_client_loaded(false);
+
         self.client
-            .send_packet_now(&CCombatDeath::new(
-                self.entity_id().into(),
-                &TextComponent::text("noob"),
-            ))
+            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_message))
             .await;
     }
 
@@ -1253,14 +1305,34 @@ impl Player {
         item_entity.send_meta_packet().await;
     }
 
-    pub async fn drop_held_item(&self, drop_stack: bool) {
-        let mut inv = self.inventory.lock().await;
-        if let Some(item_stack) = inv.held_item_mut() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.item.id, u32::from(drop_amount))
-                .await;
-            inv.decrease_current_stack(drop_amount);
-        }
+    pub async fn drop_held_item(self: &Arc<Self>, drop_stack: bool) {
+        let (drop_amount, item_to_drop) = {
+            let inv = self.inventory.lock().await;
+            if let Some(item_stack) = inv.held_item() {
+                let amount = if drop_stack { item_stack.item_count } else { 1 };
+                // Clone the necessary data
+                (amount, item_stack.item.clone())
+            } else {
+                return;
+            }
+        };
+
+        // Create an item stack clone for the event
+        let event_stack = ItemStack::new(drop_amount, item_to_drop.clone());
+
+        send_cancellable! {{
+            PlayerDropItemEvent::new(
+                self.clone(),
+                event_stack
+            );
+
+            'after: {
+                self.drop_item(event.item_stack.item.id, u32::from(event.item_stack.item_count))
+                    .await;
+                let mut inv = self.inventory.lock().await;
+                inv.decrease_current_stack(drop_amount);
+            }
+        }}
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
@@ -1535,7 +1607,20 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                self.handle_killed().await;
+                if let Some(player_arc) = self
+                    .world()
+                    .await
+                    .get_player_by_uuid(self.gameprofile.id)
+                    .await
+                {
+                    // Fire the death event
+                    let mut event =
+                        PlayerDeathEvent::new(player_arc, TextComponent::text("noob"), damage_type);
+
+                    event = PLUGIN_MANAGER.lock().await.fire(event).await;
+
+                    self.handle_killed(event.death_message).await;
+                }
             }
         }
         result
