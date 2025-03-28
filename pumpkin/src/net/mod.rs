@@ -42,15 +42,17 @@ use sha2::Sha256;
 use tokio::{
     io::{BufReader, BufWriter},
     sync::{
-        Notify,
-        Mutex,
+        Mutex, Notify,
         mpsc::{Receiver, Sender},
     },
     task::JoinHandle,
 };
 
 #[cfg(not(target_family = "wasm"))]
-use tokio::net::{TcpStream, tcp::{OwnedReadHalf, OwnedWriteHalf}};
+use tokio::net::{
+    TcpStream,
+    tcp::{OwnedReadHalf, OwnedWriteHalf},
+};
 
 use thiserror::Error;
 use tokio_util::task::TaskTracker;
@@ -168,7 +170,6 @@ pub struct Client {
 
 impl Client {
     #[must_use]
-    #[cfg(not(target_family = "wasm"))]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: usize) -> Self {
         let (read, write) = tcp_stream.into_split();
         let (send, recv) = tokio::sync::mpsc::channel(128);
@@ -192,12 +193,10 @@ impl Client {
         }
     }
 
-    #[cfg(not(target_family = "wasm"))]
     pub fn init(&mut self) {
         self.start_outgoing_packet_task();
     }
 
-    #[cfg(not(target_family = "wasm"))]
     fn start_outgoing_packet_task(&mut self) {
         let mut packet_receiver = self
             .outgoing_packet_queue_recv
@@ -288,7 +287,6 @@ impl Client {
     ///       return;
     ///  }
     /// ```
-    #[cfg(not(target_family = "wasm"))]
     pub async fn set_encryption(
         &self,
         shared_secret: &[u8], // decrypted
@@ -309,7 +307,6 @@ impl Client {
     /// # Arguments
     ///
     /// * `compression`: A `CompressionInfo` struct containing the compression threshold and compression level.
-    #[cfg(not(target_family = "wasm"))]
     pub async fn set_compression(&self, compression: CompressionInfo) {
         if compression.level > 9 {
             log::error!("Invalid compression level! Clients will not be able to read this!");
@@ -327,7 +324,6 @@ impl Client {
     }
 
     /// Gets the next packet from the network or `None` if the connection has closed
-    #[cfg(not(target_family = "wasm"))]
     pub async fn get_packet(&self) -> Option<RawPacket> {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {

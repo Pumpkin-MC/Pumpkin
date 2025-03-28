@@ -12,19 +12,23 @@ use tokio::{
 use tokio_util::task::TaskTracker;
 
 use crate::{
-    chunk::{
-        ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
-    },
+    chunk::{ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority},
     generation::{Seed, WorldGenerator, get_world_gen},
-    world_info::{
-        LevelData}
+    world_info::LevelData,
 };
 
 #[cfg(not(target_family = "wasm"))]
-use crate::{lock::{LevelLocker, anvil::AnvilLevelLocker}, chunk::{        format::{anvil::AnvilChunkFile, linear::LinearFile},
-io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},},     world_info::{WorldInfoError, WorldInfoReader, WorldInfoWriter,
-    anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
-},};
+use crate::{
+    chunk::{
+        format::{anvil::AnvilChunkFile, linear::LinearFile},
+        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
+    },
+    lock::{LevelLocker, anvil::AnvilLevelLocker},
+    world_info::{
+        WorldInfoError, WorldInfoReader, WorldInfoWriter,
+        anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
+    },
+};
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 

@@ -15,11 +15,11 @@ use std::{
     net::SocketAddr,
     sync::{Arc, LazyLock},
 };
-use tokio::select;
-use tokio::sync::Notify;
-use tokio::sync::Mutex;
 #[cfg(not(target_family = "wasm"))]
 use tokio::net::TcpListener;
+use tokio::select;
+use tokio::sync::Mutex;
+use tokio::sync::Notify;
 use tokio_util::task::TaskTracker;
 
 pub mod block;

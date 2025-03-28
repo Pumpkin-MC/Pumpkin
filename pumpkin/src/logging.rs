@@ -1,11 +1,17 @@
-use std::{str::FromStr, sync::{Arc, LazyLock}};
 use log::{Level, LevelFilter, Log};
 use pumpkin_config::advanced_config;
 use pumpkin_macros::send_cancellable;
 use rustyline_async::{Readline, ReadlineEvent};
+use std::{
+    str::FromStr,
+    sync::{Arc, LazyLock},
+};
 use tokio::select;
 
-use crate::{command, plugin::server::server_command::ServerCommandEvent, server::Server, stop_server, SHOULD_STOP, STOP_INTERRUPT};
+use crate::{
+    SHOULD_STOP, STOP_INTERRUPT, command, plugin::server::server_command::ServerCommandEvent,
+    server::Server, stop_server,
+};
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched
