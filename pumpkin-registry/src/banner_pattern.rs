@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_protocol::codec::identifier::Identifier;
 use serde::{Deserialize, Serialize};
 
@@ -6,5 +8,5 @@ use serde::{Deserialize, Serialize};
 pub struct BannerPattern<'a> {
     #[serde(borrow)]
     asset_id: Identifier<'a>,
-    translation_key: String,
+    translation_key: Cow<'a, str>,
 }

@@ -2,10 +2,10 @@ use pumpkin_util::registry::RegistryEntryList;
 
 use super::super::recipe::RecipeType;
 use super::read::{CraftingType, RecipeKeys, RecipeResult, RecipeTrait};
-pub struct ShapedCrafting {
+pub struct ShapedCrafting<'a> {
     keys: RecipeKeys,
     pattern: [[Option<char>; 3]; 3],
-    output: RecipeResult,
+    output: RecipeResult<'a>,
 }
 impl RecipeKeys {
     fn pattern_to_thing(
@@ -16,8 +16,12 @@ impl RecipeKeys {
             .map(|row| row.map(|maybe_char| maybe_char.and_then(|char| self.0.get(&char).cloned())))
     }
 }
-impl ShapedCrafting {
-    pub fn new(keys: RecipeKeys, pattern: [[Option<char>; 3]; 3], output: RecipeResult) -> Self {
+impl<'a> ShapedCrafting<'a> {
+    pub fn new(
+        keys: RecipeKeys,
+        pattern: [[Option<char>; 3]; 3],
+        output: RecipeResult<'a>,
+    ) -> Self {
         Self {
             keys,
             pattern,
@@ -26,7 +30,7 @@ impl ShapedCrafting {
     }
 }
 
-impl RecipeTrait for ShapedCrafting {
+impl<'a> RecipeTrait<'a> for ShapedCrafting<'a> {
     fn recipe_type(&self) -> RecipeType {
         RecipeType::Crafting(CraftingType::Shaped)
     }
@@ -35,18 +39,18 @@ impl RecipeTrait for ShapedCrafting {
         vec![self.keys.pattern_to_thing(self.pattern)]
     }
 
-    fn result(self) -> RecipeResult {
+    fn result(self) -> RecipeResult<'a> {
         self.output
     }
 }
 
-pub struct ShapelessCrafting {
+pub struct ShapelessCrafting<'a> {
     ingredients: Vec<RegistryEntryList>,
-    output: RecipeResult,
+    output: RecipeResult<'a>,
 }
 
-impl ShapelessCrafting {
-    pub(crate) fn new(ingredients: Vec<RegistryEntryList>, output: RecipeResult) -> Self {
+impl<'a> ShapelessCrafting<'a> {
+    pub(crate) fn new(ingredients: Vec<RegistryEntryList>, output: RecipeResult<'a>) -> Self {
         Self {
             ingredients,
             output,
@@ -54,7 +58,7 @@ impl ShapelessCrafting {
     }
 }
 
-impl RecipeTrait for ShapelessCrafting {
+impl<'a> RecipeTrait<'a> for ShapelessCrafting<'a> {
     fn recipe_type(&self) -> RecipeType {
         RecipeType::Crafting(CraftingType::Shapeless)
     }
@@ -86,7 +90,7 @@ impl RecipeTrait for ShapelessCrafting {
         .collect()
     }
 
-    fn result(self) -> RecipeResult {
+    fn result(self) -> RecipeResult<'a> {
         self.output
     }
 }

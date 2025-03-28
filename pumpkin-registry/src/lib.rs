@@ -55,25 +55,25 @@ pub struct Registry<'a> {
 #[serde(bound(deserialize = "'a: 'de"))]
 pub struct SyncedRegistry<'a> {
     #[serde(rename = "worldgen/biome")]
-    biome: IndexMap<String, Biome>,
-    chat_type: IndexMap<String, ChatType>,
-    trim_pattern: IndexMap<String, TrimPattern<'a>>,
-    trim_material: IndexMap<String, TrimMaterial>,
-    wolf_variant: IndexMap<String, WolfVariant>,
-    painting_variant: IndexMap<String, Painting<'a>>,
-    dimension_type: IndexMap<String, Dimension>,
-    damage_type: IndexMap<String, DamageType>,
-    cat_variant: IndexMap<String, CatVariant>,
-    chicken_variant: IndexMap<String, ChickenVariant>,
-    cow_variant: IndexMap<String, CowVariant>,
-    frog_variant: IndexMap<String, FrogVariant>,
-    pig_variant: IndexMap<String, PigVariant>,
-    wolf_sound_variant: IndexMap<String, WolfSoundVariant>,
+    pub biome: IndexMap<String, Biome<'a>>,
+    pub chat_type: IndexMap<String, ChatType<'a>>,
+    pub trim_pattern: IndexMap<String, TrimPattern<'a>>,
+    pub trim_material: IndexMap<String, TrimMaterial<'a>>,
+    pub wolf_variant: IndexMap<String, WolfVariant<'a>>,
+    pub painting_variant: IndexMap<String, Painting<'a>>,
+    pub dimension_type: IndexMap<String, Dimension<'a>>,
+    pub damage_type: IndexMap<String, DamageType<'a>>,
+    pub cat_variant: IndexMap<String, CatVariant<'a>>,
+    pub chicken_variant: IndexMap<String, ChickenVariant<'a>>,
+    pub cow_variant: IndexMap<String, CowVariant<'a>>,
+    pub frog_variant: IndexMap<String, FrogVariant<'a>>,
+    pub pig_variant: IndexMap<String, PigVariant<'a>>,
+    pub wolf_sound_variant: IndexMap<String, WolfSoundVariant<'a>>,
     #[serde(borrow)]
-    banner_pattern: IndexMap<String, BannerPattern<'a>>,
-    enchantment: IndexMap<String, Enchantment>,
-    pub jukebox_song: IndexMap<String, JukeboxSong>,
-    instrument: IndexMap<String, Instrument>,
+    pub banner_pattern: IndexMap<String, BannerPattern<'a>>,
+    pub enchantment: IndexMap<String, Enchantment>,
+    pub jukebox_song: IndexMap<String, JukeboxSong<'a>>,
+    pub instrument: IndexMap<String, Instrument<'a>>,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1,7 +1,9 @@
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Dimension {
+pub struct Dimension<'a> {
     ambient_light: f32,
     bed_works: bool,
     coordinate_scale: f64,
@@ -12,11 +14,11 @@ pub struct Dimension {
     has_raids: bool,
     has_skylight: bool,
     height: i32,
-    infiniburn: String,
+    infiniburn: Cow<'a, str>,
     logical_height: i32,
     min_y: i32,
     monster_spawn_block_light_limit: i32,
-    monster_spawn_light_level: MonsterSpawnLightLevel,
+    monster_spawn_light_level: MonsterSpawnLightLevel<'a>,
     natural: bool,
     piglin_safe: bool,
     respawn_anchor_works: bool,
@@ -36,19 +38,19 @@ pub enum DimensionEffects {
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum MonsterSpawnLightLevel {
+pub enum MonsterSpawnLightLevel<'a> {
     Int(i32),
-    Tagged(MonsterSpawnLightLevelTagged),
+    Tagged(MonsterSpawnLightLevelTagged<'a>),
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct MonsterSpawnLightLevelTagged {
+pub struct MonsterSpawnLightLevelTagged<'a> {
     min_inclusive: i32,
     max_inclusive: i32,
-    r#type: String,
+    r#type: Cow<'a, str>,
 }
 
-impl From<i32> for MonsterSpawnLightLevel {
+impl From<i32> for MonsterSpawnLightLevel<'_> {
     fn from(value: i32) -> Self {
         Self::Int(value)
     }
