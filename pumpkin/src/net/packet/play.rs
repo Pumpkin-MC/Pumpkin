@@ -699,7 +699,6 @@ impl Player {
 
                 let config = advanced_config();
 
-                // Todo: check chat permissions for chat formatting with &
                 let decorated_message = &TextComponent::chat_decorated(
                     config.chat.format.clone(),
                     gameprofile.name.clone(),

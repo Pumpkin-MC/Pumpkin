@@ -143,6 +143,7 @@ impl TextComponent {
     }
 
     pub fn chat_decorated(format: String, player_name: String, content: String) -> Self {
+        // Todo: maybe allow players to use & in chat contingent on permissions
         let with_resolved_fields = format
             .replace("&", "§")
             .replace("{DISPLAYNAME}", player_name.as_str())
