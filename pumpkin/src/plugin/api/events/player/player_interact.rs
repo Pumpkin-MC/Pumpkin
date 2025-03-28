@@ -3,7 +3,7 @@ use crate::entity::player::Player;
 use crate::world::GetBlockError;
 use pumpkin_data::block::Block;
 use pumpkin_macros::{Event, cancellable};
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::{BlockDirection, InvalidBlockFace};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ pub struct PlayerInteractEvent {
     pub block: Result<Block, GetBlockError>,
 
     /// The face of the block the player is interacting with
-    pub block_direction: BlockDirection,
+    pub block_direction: Result<BlockDirection, InvalidBlockFace>,
 
     /// The ItemStack the player is interacting using
     pub item_stack: Arc<Option<ItemStack>>,
@@ -50,7 +50,7 @@ impl PlayerInteractEvent {
         player: Arc<Player>,
         sneaking: bool,
         block: Result<Block, GetBlockError>,
-        block_direction: BlockDirection,
+        block_direction: Result<BlockDirection, InvalidBlockFace>,
         item_stack: Arc<Option<ItemStack>>,
         cancelled: bool,
     ) -> Self {
