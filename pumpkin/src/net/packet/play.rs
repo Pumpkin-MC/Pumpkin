@@ -23,6 +23,7 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::world::RAW;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
@@ -64,7 +65,6 @@ use pumpkin_world::block::registry::get_block_collision_shapes;
 use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
-use pumpkin_data::world::CHAT;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -721,7 +721,7 @@ impl Player {
                         chat_session.previous_messages.clone(),
                         Some(decorated_message.clone()),
                         FilterType::PassThrough,
-                        (CHAT + 1).into(), // Custom registry chat_type with no sender name
+                        (RAW + 1).into(), // Custom registry chat_type with no sender name
                         TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
                         None,
                     );

@@ -22,6 +22,12 @@ impl Identifier {
             path: path.to_string(),
         }
     }
+    pub fn pumpkin(path: &str) -> Self {
+        Self {
+            namespace: "pumpkin".to_string(),
+            path: path.to_string(),
+        }
+    }
 }
 impl Codec<Self> for Identifier {
     /// The maximum number of bytes an `Identifier` is the same as for a normal `String`.
