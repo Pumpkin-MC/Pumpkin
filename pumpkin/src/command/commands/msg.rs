@@ -50,9 +50,12 @@ impl CommandExecutor for Executor {
                                 target.living_entity.entity.entity_type.resource_name.into(),
                                 Some(TextComponent::text(target.gameprofile.name.clone())),
                             ))
-                            .click_event(ClickEvent::SuggestCommand(
-                                format!("/tell {} ", target.gameprofile.name.clone()).into(),
-                            )),
+                            .click_event(ClickEvent::SuggestCommand {
+                                command: Cow::Owned(format!(
+                                    "/tell {} ",
+                                    player.gameprofile.name.clone()
+                                )),
+                            }),
                     )),
                 )
                 .await;
@@ -68,9 +71,12 @@ impl CommandExecutor for Executor {
                             player.living_entity.entity.entity_type.resource_name.into(),
                             Some(TextComponent::text(player.gameprofile.name.clone())),
                         ))
-                        .click_event(ClickEvent::SuggestCommand(
-                            format!("/tell {} ", player.gameprofile.name.clone()).into(),
-                        )),
+                        .click_event(ClickEvent::SuggestCommand {
+                            command: Cow::Owned(format!(
+                                "/tell {} ",
+                                player.gameprofile.name.clone()
+                            )),
+                        }),
                     Some(Cow::Owned(TextComponent::text(
                         target.gameprofile.name.clone(),
                     ))),

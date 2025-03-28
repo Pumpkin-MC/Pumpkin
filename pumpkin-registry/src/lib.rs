@@ -137,7 +137,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .cat_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let cat_variant = Registry {
             registry_id: Identifier::vanilla("cat_variant"),
@@ -146,7 +146,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .chicken_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let chicken_variant = Registry {
             registry_id: Identifier::vanilla("chicken_variant"),
@@ -155,7 +155,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .cow_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let cow_variant = Registry {
             registry_id: Identifier::vanilla("cow_variant"),
@@ -164,7 +164,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .frog_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let frog_variant = Registry {
             registry_id: Identifier::vanilla("frog_variant"),
@@ -173,7 +173,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .pig_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let pig_variant = Registry {
             registry_id: Identifier::vanilla("pig_variant"),
@@ -182,7 +182,7 @@ impl Registry<'_> {
         let registry_entries = SYNCED_REGISTRIES
             .wolf_sound_variant
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, nbt)| RegistryEntry::from_nbt(Cow::Borrowed(name), nbt))
             .collect();
         let wolf_sound_variant = Registry {
             registry_id: Identifier::vanilla("wolf_sound_variant"),
