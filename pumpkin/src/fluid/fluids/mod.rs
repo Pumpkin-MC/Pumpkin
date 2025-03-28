@@ -1,2 +1,2 @@
 pub(crate) mod water;
-pub(crate) mod lava;
+pub(crate) mod flowing_fluid;

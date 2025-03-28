@@ -9,7 +9,7 @@ use pumpkin_util::math::vector3::Vector3;
 use serde::Deserialize;
 pub use state::ChunkBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum BlockDirection {
     Down = 0,
     Up,
