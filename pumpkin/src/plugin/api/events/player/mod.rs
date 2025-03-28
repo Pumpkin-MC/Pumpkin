@@ -7,6 +7,7 @@ pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
 pub mod player_teleport;
+pub mod player_interact;
 
 use std::sync::Arc;
 

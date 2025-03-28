@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 use std::sync::Arc;
 
-use crate::block;
+use crate::{block, PLUGIN_MANAGER};
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
 use crate::net::PlayerConfig;
@@ -64,6 +64,7 @@ use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
+use crate::plugin::player::player_interact::PlayerInteractEvent;
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -1149,7 +1150,7 @@ impl Player {
     }
 
     pub async fn handle_use_item_on(
-        &self,
+        self: &Arc<Self>,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), Box<dyn PumpkinError>> {
@@ -1161,31 +1162,96 @@ impl Player {
         let location = use_item_on.location;
         let mut should_try_decrement = false;
 
-        if !self.can_interact_with_block_at(&location, 1.0) {
-            // TODO: maybe log?
-            return Err(BlockPlacingError::BlockOutOfReach.into());
-        }
-
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
             return Err(BlockPlacingError::InvalidBlockFace.into());
         };
 
         let inventory = self.inventory().lock().await;
         let slot_id = inventory.get_selected_slot();
-        let held_item = inventory.held_item().cloned();
+        let held_item = Arc::new(inventory.held_item().cloned());
         drop(inventory);
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
-        let Ok(block) = world.get_block(&location).await else {
-            return Err(BlockPlacingError::NoBaseBlock.into());
-        };
+        let block = world.get_block(&location).await;
         let sneaking = self
             .living_entity
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-        let Some(stack) = held_item else {
+
+        let event = PlayerInteractEvent::new(
+            self.clone(),
+            sneaking,
+            block.clone(),
+            face,
+            held_item.clone(),
+            !self.can_interact_with_block_at(&location, 1.0) // Default cancel condition
+        );
+        let event = PLUGIN_MANAGER
+            .lock()
+            .await
+            .fire::<PlayerInteractEvent>(event)
+            .await;
+
+        if event.cancelled {
+            // Block out of reach seems to be the most sensible error as it is a. somewhat generic, b. doesn't kick and c. is the correct type for the default cancel condition
+            return Err(BlockPlacingError::BlockOutOfReach.into())
+        }
+
+        let Ok(block) = event.block else { return Err(BlockPlacingError::NoBaseBlock.into()) };
+
+        if let Some(stack) = event.item_stack.as_ref().as_ref() {
+            if !sneaking {
+                server
+                    .item_registry
+                    .use_on_block(&stack.item, self, location, &event.block_direction, &block, server)
+                    .await;
+
+                let action_result = server
+                    .block_registry
+                    .use_with_item(&block, self, location, &stack.item, server, world)
+                    .await;
+                match action_result {
+                    BlockActionResult::Continue => {}
+                    BlockActionResult::Consume => {
+                        return Ok(());
+                    }
+                }
+            }
+            // Check if the item is a block, because not every item can be placed :D
+            if let Some(block) = get_block_by_item(stack.item.id) {
+                should_try_decrement = self
+                    .run_is_block_place(block.clone(), server, use_item_on, location, &face)
+                    .await?;
+            }
+            // Check if the item is a spawn egg
+            if let Some(entity) = entity_from_egg(stack.item.id) {
+                self.spawn_entity_from_egg(entity, location, &face).await;
+                should_try_decrement = true;
+            };
+
+            if should_try_decrement {
+                // TODO: Config
+                // Decrease block count
+                if self.gamemode.load() != GameMode::Creative {
+                    let mut inventory = self.inventory().lock().await;
+
+                    if !inventory.decrease_current_stack(1) {
+                        return Err(BlockPlacingError::InventoryInvalid.into());
+                    }
+                    // TODO: this should be by use item on not currently selected as they might be different
+                    let _ = self
+                        .handle_decrease_item(
+                            server,
+                            slot_id as i16,
+                            inventory.held_item().cloned().as_ref(),
+                            &mut inventory.state_id,
+                        )
+                        .await;
+                }
+            }
+        } else {
             if !sneaking {
                 // Using block with empty hand
                 server
@@ -1194,55 +1260,6 @@ impl Player {
                     .await;
             }
             return Ok(());
-        };
-        if !sneaking {
-            server
-                .item_registry
-                .use_on_block(&stack.item, self, location, &face, &block, server)
-                .await;
-
-            let action_result = server
-                .block_registry
-                .use_with_item(&block, self, location, &stack.item, server, world)
-                .await;
-            match action_result {
-                BlockActionResult::Continue => {}
-                BlockActionResult::Consume => {
-                    return Ok(());
-                }
-            }
-        }
-        // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(stack.item.id) {
-            should_try_decrement = self
-                .run_is_block_place(block.clone(), server, use_item_on, location, &face)
-                .await?;
-        }
-        // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(stack.item.id) {
-            self.spawn_entity_from_egg(entity, location, &face).await;
-            should_try_decrement = true;
-        };
-
-        if should_try_decrement {
-            // TODO: Config
-            // Decrease block count
-            if self.gamemode.load() != GameMode::Creative {
-                let mut inventory = self.inventory().lock().await;
-
-                if !inventory.decrease_current_stack(1) {
-                    return Err(BlockPlacingError::InventoryInvalid.into());
-                }
-                // TODO: this should be by use item on not currently selected as they might be different
-                let _ = self
-                    .handle_decrease_item(
-                        server,
-                        slot_id as i16,
-                        inventory.held_item().cloned().as_ref(),
-                        &mut inventory.state_id,
-                    )
-                    .await;
-            }
         }
 
         Ok(())
