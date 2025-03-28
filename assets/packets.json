@@ -82,9 +82,11 @@
       "set_creative_mode_slot",
       "set_jigsaw_block",
       "set_structure_block",
+      "set_test_block",
       "sign_update",
       "swing",
       "teleport_to_entity",
+      "test_instance_block_action",
       "use_item_on",
       "use_item"
     ]
@@ -124,7 +126,6 @@
     "play": [
       "bundle_delimiter",
       "add_entity",
-      "add_experience_orb",
       "animate",
       "award_stats",
       "block_changed_ack",
@@ -242,6 +243,7 @@
       "tag_query",
       "take_item_entity",
       "teleport_entity",
+      "test_instance_block_status",
       "ticking_state",
       "ticking_step",
       "transfer",

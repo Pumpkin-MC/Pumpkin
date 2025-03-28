@@ -6,7 +6,5 @@ use serde::{Deserialize, Serialize};
 pub struct TrimPattern<'a> {
     #[serde(borrow)]
     asset_id: Identifier<'a>,
-    template_item: String,
-    //  description: TextComponent<'static>,
     decal: bool,
 }

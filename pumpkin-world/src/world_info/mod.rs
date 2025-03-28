@@ -8,7 +8,7 @@ use crate::{generation::Seed, level::LevelFolder};
 pub mod anvil;
 
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4080; // 1.21.2
-pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4189; // 1.21.4
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4325; // 1.21.5
 
 pub(crate) trait WorldInfoReader {
     fn read_world_info(&self, level_folder: &LevelFolder) -> Result<LevelData, WorldInfoError>;

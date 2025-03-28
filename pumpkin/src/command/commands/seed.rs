@@ -45,7 +45,9 @@ impl CommandExecutor for Executor {
                         Cow::from("chat.copy.click"),
                         [],
                     )))
-                    .click_event(ClickEvent::CopyToClipboard(Cow::from(seed)))
+                    .click_event(ClickEvent::CopyToClipboard {
+                        value: Cow::from(seed),
+                    })
                     .color_named(NamedColor::Green)],
             ))
             .await;
