@@ -11,7 +11,9 @@ use pumpkin_data::sound::Sound;
 pub struct EggItem;
 
 impl ItemMetadata for EggItem {
-    const IDS: &'static [u16] = &[Item::EGG.id];
+    fn ids() -> Box<[u16]> {
+        [Item::EGG.id].into()
+    }
 }
 
 const POWER: f32 = 1.5;

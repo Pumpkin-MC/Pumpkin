@@ -2,30 +2,40 @@ use std::sync::LazyLock;
 
 use banner_pattern::BannerPattern;
 use biome::Biome;
+use cat::CatVariant;
 use chat_type::ChatType;
+use chicken::ChickenVariant;
+use cow::CowVariant;
 use damage_type::DamageType;
 use dimension::Dimension;
 use enchantment::Enchantment;
+use frog::FrogVariant;
 use indexmap::IndexMap;
 use instrument::Instrument;
 use jukebox_song::JukeboxSong;
 use paint::Painting;
+use pig::PigVariant;
 use pumpkin_protocol::{client::config::RegistryEntry, codec::identifier::Identifier};
 pub use recipe::{RECIPES, Recipe, RecipeResult, RecipeType, flatten_3x3};
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;
-use wolf::WolfVariant;
+use wolf::{WolfSoundVariant, WolfVariant};
 
 mod banner_pattern;
 mod biome;
+mod cat;
 mod chat_type;
+mod chicken;
+mod cow;
 mod damage_type;
 mod dimension;
 mod enchantment;
+mod frog;
 mod instrument;
 mod jukebox_song;
 mod paint;
+mod pig;
 mod recipe;
 mod trim_material;
 mod trim_pattern;
@@ -52,6 +62,12 @@ pub struct SyncedRegistry {
     painting_variant: IndexMap<String, Painting>,
     dimension_type: IndexMap<String, Dimension>,
     damage_type: IndexMap<String, DamageType>,
+    cat_variant: IndexMap<String, CatVariant>,
+    chicken_variant: IndexMap<String, ChickenVariant>,
+    cow_variant: IndexMap<String, CowVariant>,
+    frog_variant: IndexMap<String, FrogVariant>,
+    pig_variant: IndexMap<String, PigVariant>,
+    wolf_sound_variant: IndexMap<String, WolfSoundVariant>,
     banner_pattern: IndexMap<String, BannerPattern>,
     enchantment: IndexMap<String, Enchantment>,
     pub jukebox_song: IndexMap<String, JukeboxSong>,
@@ -106,32 +122,6 @@ impl Registry {
             registry_entries,
         };
 
-        // let registry_entries = SYNCED_REGISTRIES
-        //     .trim_pattern
-        //     .iter()
-        //     .map(|s| RegistryEntry {
-        //         entry_id: Identifier::vanilla(s.0),
-        //         data: pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap(),
-        //     })
-        //     .collect();
-        // let trim_pattern = Registry {
-        //     registry_id: "minecraft:trim_pattern".to_string(),
-        //     registry_entries,
-        // };
-
-        // let registry_entries = SYNCED_REGISTRIES
-        //     .trim_material
-        //     .iter()
-        //     .map(|s| RegistryEntry {
-        //         entry_id: Identifier::vanilla(s.0),
-        //         data: pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap(),
-        //     })
-        //     .collect();
-        // let trim_material = Registry {
-        //     registry_id: "minecraft:trim_material".to_string(),
-        //     registry_entries,
-        // };
-
         let registry_entries = SYNCED_REGISTRIES
             .wolf_variant
             .iter()
@@ -139,6 +129,61 @@ impl Registry {
             .collect();
         let wolf_variant = Registry {
             registry_id: Identifier::vanilla("wolf_variant"),
+            registry_entries,
+        };
+
+        let registry_entries = SYNCED_REGISTRIES
+            .cat_variant
+            .iter()
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .collect();
+        let cat_variant = Registry {
+            registry_id: Identifier::vanilla("cat_variant"),
+            registry_entries,
+        };
+        let registry_entries = SYNCED_REGISTRIES
+            .chicken_variant
+            .iter()
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .collect();
+        let chicken_variant = Registry {
+            registry_id: Identifier::vanilla("chicken_variant"),
+            registry_entries,
+        };
+        let registry_entries = SYNCED_REGISTRIES
+            .cow_variant
+            .iter()
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .collect();
+        let cow_variant = Registry {
+            registry_id: Identifier::vanilla("cow_variant"),
+            registry_entries,
+        };
+        let registry_entries = SYNCED_REGISTRIES
+            .frog_variant
+            .iter()
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .collect();
+        let frog_variant = Registry {
+            registry_id: Identifier::vanilla("frog_variant"),
+            registry_entries,
+        };
+        let registry_entries = SYNCED_REGISTRIES
+            .pig_variant
+            .iter()
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .collect();
+        let pig_variant = Registry {
+            registry_id: Identifier::vanilla("pig_variant"),
+            registry_entries,
+        };
+        let registry_entries = SYNCED_REGISTRIES
+            .wolf_sound_variant
+            .iter()
+            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .collect();
+        let wolf_sound_variant = Registry {
+            registry_id: Identifier::vanilla("wolf_sound_variant"),
             registry_entries,
         };
 
@@ -182,20 +227,6 @@ impl Registry {
             registry_entries,
         };
 
-        // TODO
-        // let registry_entries = SYNCED_REGISTRIES
-        //     .enchantment
-        //     .iter()
-        //     .map(|s| RegistryEntry {
-        //         entry_id: Identifier::vanilla(s.0),
-        //         data: pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap(),
-        //     })
-        //     .collect();
-        // let enchantment = Registry {
-        //     registry_id: "minecraft:enchantment".to_string(),
-        //     registry_entries,
-        // };
-
         let registry_entries = SYNCED_REGISTRIES
             .jukebox_song
             .iter()
@@ -206,26 +237,19 @@ impl Registry {
             registry_entries,
         };
 
-        // let registry_entries = SYNCED_REGISTRIES
-        //     .instrument
-        //     .iter()
-        //     .map(|s| RegistryEntry {
-        //         entry_id: Identifier::vanilla(s.0),
-        //         data: pumpkin_nbt::serializer::to_bytes_unnamed(&s.1).unwrap(),
-        //     })
-        //     .collect();
-        // let instrument = Registry {
-        //     registry_id: "minecraft:instrument".to_string(),
-        //     registry_entries,
-        // };
-
         vec![
+            cat_variant,
+            chicken_variant,
+            cow_variant,
+            frog_variant,
+            pig_variant,
             biome,
             chat_type,
             // trim_pattern,
             // trim_material,
             wolf_variant,
             painting_variant,
+            wolf_sound_variant,
             dimension_type,
             damage_type,
             banner_pattern,
