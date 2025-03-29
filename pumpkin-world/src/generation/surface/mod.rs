@@ -4,6 +4,7 @@ use pumpkin_util::{
     random::RandomDeriver,
 };
 use serde::Deserialize;
+
 use terrain::SurfaceTerrainBuilder;
 
 use crate::generation::{positions::chunk_pos, section_coords};
@@ -65,7 +66,7 @@ impl<'a> MaterialRuleContext<'a> {
             terrain_builder,
             fluid_height: 0,
             block_pos: Vector3::new(0, 0, 0),
-            biome: Biome::Plains,
+            biome: Biome::PLAINS,
             run_depth: 0,
             secondary_depth: 0.0,
             surface_noise: noise_builder.get_noise_sampler_for_id("surface"),

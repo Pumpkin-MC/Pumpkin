@@ -166,7 +166,7 @@ impl<'a> ProtoChunk<'a> {
             flat_block_map: vec![ChunkBlockState::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
             flat_biome_map: vec![
-                Biome::Plains;
+                Biome::PLAINS;
                 biome_coords::from_block(CHUNK_DIM as usize)
                     * biome_coords::from_block(CHUNK_DIM as usize)
                     * biome_coords::from_block(height as usize)
@@ -242,7 +242,7 @@ impl<'a> ProtoChunk<'a> {
         if local_pos.y < 0
             || local_pos.y >= biome_coords::from_block(self.noise_sampler.height() as i32)
         {
-            Biome::Plains
+            Biome::PLAINS
         } else {
             self.flat_biome_map[self.local_biome_pos_to_biome_index(&local_pos)]
         }
@@ -431,7 +431,7 @@ impl<'a> ProtoChunk<'a> {
                 };
 
                 let this_biome = self.get_biome_for_terrain_gen(&Vector3::new(x, biome_y, z));
-                if this_biome == Biome::ErodedBadlands {
+                if this_biome == Biome::ERODED_BADLANDS {
                     terrain_builder.place_badlands_pillar(
                         self,
                         x,
@@ -495,7 +495,7 @@ impl<'a> ProtoChunk<'a> {
                         }
                     }
                 }
-                if this_biome == Biome::FrozenOcean || this_biome == Biome::DeepFrozenOcean {
+                if this_biome == Biome::FROZEN_OCEAN || this_biome == Biome::DEEP_FROZEN_OCEAN {
                     let min_y = estimate_surface_height(
                         &mut context,
                         &mut self.surface_height_estimate_sampler,

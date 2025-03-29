@@ -98,6 +98,6 @@ mod test {
             &pumpkin_util::math::vector3::Vector3 { x: -24, y: 1, z: 8 },
             &mut sampler,
         );
-        assert_eq!(biome, Biome::Desert)
+        assert_eq!(biome, Biome::DESERT)
     }
 }
