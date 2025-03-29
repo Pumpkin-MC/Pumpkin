@@ -144,7 +144,7 @@ impl ClientPacket for CChunkData<'_> {
             let block_palette_type = PaletteType::new(blocks.len() as u32);
             block_palette_type.write(&blocks.as_slice(), &mut data_buf)?;
 
-            let biomes_index = biomes.map(|b| b.to_id() as u16);
+            let biomes_index = biomes.map(|b| b.id as u16);
 
             // TODO: change this
             let biome_palette_type = PaletteType::Single;

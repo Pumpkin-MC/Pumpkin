@@ -4,7 +4,7 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{coordinates::ChunkRelativeBlockCoordinates, generation::chunk_noise::CHUNK_DIM};
+use crate::coordinates::ChunkRelativeBlockCoordinates;
 
 pub mod format;
 pub mod io;
@@ -142,7 +142,7 @@ pub struct SubChunk {
 }
 
 impl SubChunk {
-    pub fn new_single(block_state: u16, biome: Biome) -> Self {
+    pub fn new_single(block_state: u16, biome: &'static Biome) -> Self {
         Self {
             block_states: SubchunkBlocks::Homogeneous(block_state),
             biomes: SubchunkBiomes::Homogeneous(biome),
@@ -151,7 +151,7 @@ impl SubChunk {
     pub fn empty() -> Self {
         Self {
             block_states: SubchunkBlocks::Homogeneous(0),
-            biomes: SubchunkBiomes::Homogeneous(Biome::Plains),
+            biomes: SubchunkBiomes::Homogeneous(&Biome::PLAINS),
         }
     }
 }
@@ -174,10 +174,10 @@ pub enum SubchunkBlocks {
 /// - Heterogeneous: 64 individual biomes are stored.
 #[derive(Clone, PartialEq, Debug)]
 pub enum SubchunkBiomes {
-    Homogeneous(Biome),
+    Homogeneous(&'static Biome),
     // The packet relies on this ordering -> leave it like this for performance
     /// Ordering: yzx (y being the most significant)
-    Heterogeneous(Box<[Biome; BIOME_VOLUME]>),
+    Heterogeneous(Box<[&'static Biome; BIOME_VOLUME]>),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -261,14 +261,18 @@ impl SubchunkBlocks {
 
 impl SubchunkBiomes {
     /// Gets the given block in the chunk
-    pub fn get_biome(&self, position: ChunkRelativeBlockCoordinates) -> Option<Biome> {
-        match &self {
-            Self::Homogeneous(block) => Some(*block),
-            Self::Heterogeneous(blocks) => blocks.get(Self::convert_index(position)).copied(),
+    pub fn get_biome(&self, position: ChunkRelativeBlockCoordinates) -> Option<&Biome> {
+        match self {
+            Self::Homogeneous(biome) => Some(biome),
+            Self::Heterogeneous(biomes) => biomes.get(Self::convert_index(position)).copied(),
         }
     }
 
-    pub fn set_biome(&mut self, position: ChunkRelativeBlockCoordinates, new_biome: Biome) {
+    pub fn set_biome(
+        &mut self,
+        position: ChunkRelativeBlockCoordinates,
+        new_biome: &'static Biome,
+    ) {
         match self {
             Self::Homogeneous(biome) => {
                 if *biome != new_biome {
@@ -288,9 +292,9 @@ impl SubchunkBiomes {
         }
     }
 
-    pub fn clone_as_array(&self) -> Box<[Biome; BIOME_VOLUME]> {
-        match &self {
-            Self::Homogeneous(biome) => Box::new([*biome; BIOME_VOLUME]),
+    pub fn clone_as_array(&self) -> Box<[&Biome; BIOME_VOLUME]> {
+        match self {
+            Self::Homogeneous(biome) => Box::new([biome; BIOME_VOLUME]),
             Self::Heterogeneous(biomes) => biomes.clone(),
         }
     }
@@ -318,7 +322,7 @@ impl ChunkSection {
     }
 
     /// Sets the given block in the chunk, returning the old block
-    pub fn set_biome(&mut self, position: ChunkRelativeBlockCoordinates, biome: Biome) {
+    pub fn set_biome(&mut self, position: ChunkRelativeBlockCoordinates, biome: &'static Biome) {
         self.sections[(position.y.get_absolute() / 16) as usize]
             .biomes
             .set_biome(position, biome);

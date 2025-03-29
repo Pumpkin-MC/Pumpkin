@@ -680,6 +680,9 @@ impl Player {
         }
 
         let gameprofile = &self.gameprofile;
+        let global_index = self
+            .global_chat_message_index
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         send_cancellable! {{
             PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
 
@@ -691,6 +694,7 @@ impl Player {
                     let world = &entity.world.read().await;
                     world
                         .broadcast_packet_all(&CPlayerChatMessage::new(
+                            VarInt(global_index as i32),
                             gameprofile.id,
                             1.into(),
                             chat_message.signature,
@@ -709,6 +713,7 @@ impl Player {
                 } else {
                     let packet =
                         CPlayerChatMessage::new(
+                            VarInt(global_index as i32),
                             gameprofile.id,
                             1.into(),
                             chat_message.signature,

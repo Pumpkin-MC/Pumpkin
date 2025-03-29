@@ -9,6 +9,7 @@ use crate::{VarInt, codec::bit_set::BitSet};
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
+    global_index: VarInt,
     #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
     index: VarInt,
@@ -29,6 +30,7 @@ pub struct CPlayerChatMessage {
 impl CPlayerChatMessage {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
+        global_index: VarInt,
         sender: uuid::Uuid,
         index: VarInt,
         message_signature: Option<Box<[u8]>>,
@@ -43,13 +45,14 @@ impl CPlayerChatMessage {
         target_name: Option<TextComponent>,
     ) -> Self {
         Self {
+            global_index,
             sender,
             index,
             message_signature,
             message,
             timestamp,
             salt,
-            previous_messages_count: previous_messages.len().into(),
+            previous_messages_count: VarInt(previous_messages.len() as i32),
             previous_messages,
             unsigned_content,
             filter_type,

@@ -66,7 +66,7 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
                         coordinates.with_chunk_coordinates(at),
                         &mut section,
                         chunk_height,
-                        biome,
+                        &biome,
                     );
                 }
             }

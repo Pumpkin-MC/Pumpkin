@@ -822,7 +822,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .into_iter()
             .enumerate()
             .map(|(i, biome)| {
-                let name = biome.to_name();
+                let name = biome.registry_id;
                 (biome, (name, i))
             })
             .collect();
@@ -913,7 +913,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
     Ok(result)
 }
 
-fn pack_biomes(biomes: &[Biome], palette: &IndexMap<Biome, (&str, usize)>) -> Vec<i64> {
+fn pack_biomes(biomes: &[&Biome], palette: &IndexMap<&Biome, (&str, usize)>) -> Vec<i64> {
     // Determine the number of bits needed to represent the largest index in the palette
     let block_bit_size = if palette.len() < 16 {
         // Biomes use 2 bits instead of 4 like blocks
