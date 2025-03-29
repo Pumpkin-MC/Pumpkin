@@ -429,6 +429,7 @@ impl World {
     }
 
     #[expect(clippy::too_many_lines)]
+    #[cfg(not(target_family = "wasm"))]
     pub async fn spawn_player(
         &self,
         base_config: &BasicConfiguration,

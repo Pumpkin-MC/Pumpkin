@@ -340,6 +340,7 @@ impl Player {
 
     /// Removes the [`Player`] out of the current [`World`].
     #[allow(unused_variables)]
+    #[cfg(not(target_family = "wasm"))]
     pub async fn remove(self: &Arc<Self>) {
         let world = self.world().await;
         world.remove_player(self, true).await;
@@ -793,6 +794,7 @@ impl Player {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
@@ -811,6 +813,7 @@ impl Player {
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
+    #[cfg(not(target_family = "wasm"))]
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,

@@ -1,0 +1,23 @@
+[package]
+name = "hello-pumpkin"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+# This is the base crate with most high-level type definitions
+pumpkin = { path = "../../pumpkin" } 
+# Other utilities used by Pumpkin (e.g. TextComponent, Vectors...)
+pumpkin-util = { path = "../../pumpkin-util" } 
+# Macros for easier plugin development
+pumpkin-api-macros = { path = "../../pumpkin-api-macros" } 
+
+# A utility allowing plugins to work asynchronously
+async-trait = "0.1"
+# A rust asynchronous runtime
+tokio = "1.42"
+# Logging
+log = "0.4"

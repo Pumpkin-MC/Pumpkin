@@ -21,7 +21,6 @@ uuid.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
-tokio.workspace = true
 bytes.workspace = true
 
 # encryption
@@ -36,3 +35,22 @@ take_mut = "0.2.2"
 [dev-dependencies]
 # Validate correctness
 flate2 = "1.1.0"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { version = "1.44", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { version = "1.44", features = [
+    "macros",
+    "rt",
+    "sync",
+    "io-util",
+] }

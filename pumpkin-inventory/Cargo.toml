@@ -13,6 +13,23 @@ pumpkin-util = { path = "../pumpkin-util" }
 
 log.workspace = true
 rayon.workspace = true
-tokio.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { version = "1.44", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { version = "1.44", features = [
+    "macros",
+    "rt",
+    "sync",
+    "io-util",
+] }

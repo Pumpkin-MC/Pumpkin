@@ -35,6 +35,7 @@ pub async fn player_join(player: &Arc<Player>) {
     update_position(player).await;
 }
 
+#[cfg(not(target_family = "wasm"))]
 pub async fn update_position(player: &Arc<Player>) {
     let entity = &player.living_entity.entity;
 

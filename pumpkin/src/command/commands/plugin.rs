@@ -56,7 +56,7 @@ impl CommandExecutor for ListExecutor {
                 "Version: {}\nAuthors: {}\nDescription: {}",
                 metadata.version, metadata.authors, metadata.description
             );
-            let component = if *loaded {
+            let component = if loaded {
                 TextComponent::text(fmt)
                     .color_named(NamedColor::Green)
                     .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
@@ -89,7 +89,7 @@ impl CommandExecutor for LoadExecutor {
         };
         let mut plugin_manager = PLUGIN_MANAGER.lock().await;
 
-        if plugin_manager.is_plugin_loaded(plugin_name) {
+        /*if plugin_manager.is_plugin_loaded(plugin_name) {
             sender
                 .send_message(
                     TextComponent::text(format!("Plugin {plugin_name} is already loaded"))
@@ -118,7 +118,7 @@ impl CommandExecutor for LoadExecutor {
                     )
                     .await;
             }
-        }
+        }*/
 
         Ok(())
     }
@@ -134,7 +134,7 @@ impl CommandExecutor for UnloadExecutor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
+        /*let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
             return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
         };
         let mut plugin_manager = PLUGIN_MANAGER.lock().await;
@@ -168,7 +168,7 @@ impl CommandExecutor for UnloadExecutor {
                     )
                     .await;
             }
-        }
+        }*/
 
         Ok(())
     }

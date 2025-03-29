@@ -11,6 +11,7 @@ pub mod dimension;
 mod generation;
 pub mod item;
 pub mod level;
+#[cfg(not(target_family = "wasm"))]
 mod lock;
 mod noise_router;
 pub mod world_info;

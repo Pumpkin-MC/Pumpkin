@@ -1,7 +1,9 @@
+#[cfg(not(target_family = "wasm"))]
 use std::path::PathBuf;
 
 use serde::Deserialize;
 
+#[cfg(not(target_family = "wasm"))]
 use crate::level::Level;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
@@ -13,6 +15,7 @@ pub enum Dimension {
 }
 
 impl Dimension {
+    #[cfg(not(target_family = "wasm"))]
     pub fn into_level(&self, mut base_directory: PathBuf) -> Level {
         match self {
             Dimension::Overworld => {}

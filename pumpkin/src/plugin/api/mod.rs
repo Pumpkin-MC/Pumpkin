@@ -1,7 +1,10 @@
 pub mod context;
 pub mod events;
 
+use std::borrow::Cow;
+
 use async_trait::async_trait;
+use bincode::{Decode, Encode};
 pub use context::*;
 pub use events::*;
 
@@ -10,16 +13,16 @@ pub use events::*;
 /// This struct contains essential information about a plugin, including its name,
 /// version, authors, and a description. It is generic over a lifetime `'s` to allow
 /// for string slices that are valid for the lifetime of the plugin metadata.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct PluginMetadata<'s> {
     /// The name of the plugin.
-    pub name: &'s str,
+    pub name: Cow<'s, str>,
     /// The version of the plugin.
-    pub version: &'s str,
+    pub version: Cow<'s, str>,
     /// The authors of the plugin.
-    pub authors: &'s str,
+    pub authors: Cow<'s, str>,
     /// A description of the plugin.
-    pub description: &'s str,
+    pub description: Cow<'s, str>,
 }
 
 /// Trait representing a plugin with asynchronous lifecycle methods.

@@ -41,16 +41,17 @@ use sha1::Digest;
 use sha2::Sha256;
 use tokio::{
     io::{BufReader, BufWriter},
-    net::tcp::OwnedWriteHalf,
     sync::{
-        Notify,
+        Mutex, Notify,
         mpsc::{Receiver, Sender},
     },
     task::JoinHandle,
 };
-use tokio::{
-    net::{TcpStream, tcp::OwnedReadHalf},
-    sync::Mutex,
+
+#[cfg(not(target_family = "wasm"))]
+use tokio::net::{
+    TcpStream,
+    tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 
 use thiserror::Error;
@@ -58,10 +59,13 @@ use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 mod authentication;
 mod container;
+#[cfg(not(target_family = "wasm"))]
 pub mod lan_broadcast;
 mod packet;
 mod proxy;
+#[cfg(not(target_family = "wasm"))]
 pub mod query;
+#[cfg(not(target_family = "wasm"))]
 pub mod rcon;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -147,8 +151,10 @@ pub struct Client {
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
     /// The packet encoder for outgoing packets.
+    #[cfg(not(target_family = "wasm"))]
     network_writer: Arc<Mutex<NetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
+    #[cfg(not(target_family = "wasm"))]
     network_reader: Mutex<NetworkDecoder<BufReader<OwnedReadHalf>>>,
     /// Indicates whether the client should be converted into a player.
     pub make_player: AtomicBool,
@@ -387,6 +393,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns an `PacketError` if the packet could not be Send.
+    #[cfg(not(target_family = "wasm"))]
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         if let Err(err) = packet.write(&mut packet_buf) {
