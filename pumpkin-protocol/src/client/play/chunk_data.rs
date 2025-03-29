@@ -46,7 +46,6 @@ impl PaletteType {
             PaletteType::Single => {
                 data_buf.write_u8_be(0)?;
                 data_buf.write_var_int(&VarInt(*palette.first().unwrap() as i32))?;
-                data_buf.write_var_int(&VarInt(0))?;
             }
             PaletteType::Indirect(block_size) => {
                 // Bits per entry
@@ -131,7 +130,7 @@ impl ClientPacket for CChunkData<'_> {
 
             // TODO
             let chunk_light_len = (blocks.len() + 1) / 2;
-            let mut chunk_light = vec![0xFFu8; chunk_light_len];
+            let chunk_light = vec![0xFFu8; chunk_light_len];
 
             light_buf.write_var_int(&VarInt(chunk_light.len() as i32))?;
             light_buf.write_slice(&chunk_light)?;
@@ -147,7 +146,8 @@ impl ClientPacket for CChunkData<'_> {
 
             let biomes_index = biomes.map(|b| b.to_id() as u16);
 
-            let biome_palette_type = PaletteType::Direct;
+            // TODO: change this
+            let biome_palette_type = PaletteType::Single;
             biome_palette_type.write(&biomes_index, &mut data_buf)?;
 
             //// Biomes
