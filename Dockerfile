@@ -23,8 +23,6 @@ FROM alpine:3.21
 # Identifying information for registries like ghcr.io
 LABEL org.opencontainers.image.source=https://github.com/Pumpkin-MC/Pumpkin
 
-RUN apk add --no-cache libgcc
-
 COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
 
 # set workdir to /pumpkin, this is required to influence the PWD environment variable
@@ -32,6 +30,9 @@ COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
 # executable (without requiring an `docker cp`-ing the binary to the host folder)
 WORKDIR /pumpkin
 
+RUN apk add --no-cache libgcc && chown 1000:1000 .
+
 ENV RUST_BACKTRACE=1
 EXPOSE 25565
+USER 1000:1000
 ENTRYPOINT [ "/bin/pumpkin" ]
