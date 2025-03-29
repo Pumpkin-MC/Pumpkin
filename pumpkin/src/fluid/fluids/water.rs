@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
 use pumpkin_macros::pumpkin_fluid;
@@ -32,7 +34,7 @@ impl PumpkinFluid for FlowingWater {
             .await;
     }
 
-    async fn on_scheduled_tick(&self, world: &World, fluid: &Fluid, block_pos: &BlockPos) {
+    async fn on_scheduled_tick(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
         self.spread_fluid(world, fluid, block_pos).await;
     }
 }
@@ -61,7 +63,7 @@ impl FlowingFluid for FlowingWater {
         4
     }
 
-    async fn can_convert_to_source(&self, _world: &World) -> bool {
+    async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
         //TODO add game rule check for water conversion
         true
     }
