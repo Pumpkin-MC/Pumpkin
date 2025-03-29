@@ -9,9 +9,11 @@ use crate::{VarInt, codec::bit_set::BitSet};
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
-    global_index: VarInt,
+    /// An index that increases for every message sent TO the client
+    pub global_index: VarInt,
     #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
+    /// An index that increases for every message sent BY the client
     index: VarInt,
     message_signature: Option<Box<[u8]>>, // always 256
     message: String,
@@ -63,10 +65,10 @@ impl CPlayerChatMessage {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct PreviousMessage {
-    message_id: VarInt,
-    signature: Option<Box<[u8]>>, // Always 256
+    pub id: VarInt,
+    pub signature: Box<[u8]>, // Always 256
 }
 
 #[derive(Serialize)]

@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CSetHeldItem;
+use pumpkin_protocol::client::play::{CSetHeldItem, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -64,8 +64,8 @@ use pumpkin_protocol::{
         SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
         SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
         SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-        SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
+        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
     },
 };
 use pumpkin_protocol::{
@@ -90,6 +90,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
+use uuid::Uuid;
 
 enum BatchState {
     Initial,
@@ -233,7 +234,7 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
-    pub global_chat_message_index: AtomicU32,
+    pub chat_session: Mutex<ChatSession>,
 }
 
 impl Player {
@@ -317,7 +318,7 @@ impl Player {
             last_sent_food: AtomicU32::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
-            global_chat_message_index: AtomicU32::new(0),
+            chat_session: Mutex::new(ChatSession::new(Uuid::nil())), // Placeholder value until the player actually sets their session id
         }
     }
 
@@ -1697,6 +1698,10 @@ impl Player {
             SChunkBatch::PACKET_ID => {
                 self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
+            SPlayerSession::PACKET_ID => {
+                self.handle_chat_session_update(server, SPlayerSession::read(payload)?)
+                    .await;
+            }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
                 // TODO: We give an error if all play packets are implemented
@@ -1846,5 +1851,46 @@ impl TryFrom<i32> for ChatMode {
             2 => Ok(Self::Hidden),
             _ => Err(InvalidChatMode),
         }
+    }
+}
+
+/// Player's current chat session
+#[derive(Debug)]
+pub struct ChatSession {
+    pub session_id: uuid::Uuid,
+    pub previous_messages: Box<[PreviousMessage]>,
+    pub messages_sent: i32,
+    pub messages_received: i32,
+}
+
+impl ChatSession {
+    #[must_use]
+    pub fn new(session_id: Uuid) -> Self {
+        Self {
+            session_id,
+            previous_messages: Box::new([]),
+            messages_sent: 0,
+            messages_received: 0,
+        }
+    }
+
+    pub fn append_previous_message(&mut self, signature: Option<Box<[u8]>>) {
+        let new_message = PreviousMessage {
+            // Packet cannot be deserialized by the client unless this is 0. I do not know why. It doesn't seem to affect anything
+            id: VarInt(0),
+            signature: signature.unwrap_or(Box::new([])),
+        };
+
+        let mut messages = Vec::from(self.previous_messages.as_ref());
+
+        if messages.len() >= 20 {
+            messages.remove(0);
+        }
+
+        messages.push(new_message);
+
+        self.previous_messages = messages.into_boxed_slice();
+
+        self.messages_sent += 1;
     }
 }

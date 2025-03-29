@@ -17,6 +17,7 @@ pub mod networking;
 
 pub mod resource_pack;
 
+pub use chat::ChatConfig;
 pub use commands::CommandsConfig;
 pub use networking::auth::AuthenticationConfig;
 pub use networking::compression::CompressionConfig;
@@ -27,6 +28,7 @@ pub use server_links::ServerLinksConfig;
 
 mod commands;
 
+mod chat;
 pub mod chunk;
 pub mod op;
 mod player_data;
@@ -93,6 +95,7 @@ pub struct AdvancedConfiguration {
     pub chunk: ChunkConfig,
     pub networking: NetworkingConfig,
     pub commands: CommandsConfig,
+    pub chat: ChatConfig,
     pub pvp: PVPConfig,
     pub server_links: ServerLinksConfig,
     pub player_data: PlayerDataConfig,
@@ -139,6 +142,8 @@ pub struct BasicConfiguration {
     pub favicon_path: String,
     /// The default level name
     pub default_level_name: String,
+    /// Whether chat messages should be signed or not
+    pub allow_chat_reports: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -163,6 +168,7 @@ impl Default for BasicConfiguration {
             use_favicon: true,
             favicon_path: "icon.png".to_string(),
             default_level_name: "world".to_string(),
+            allow_chat_reports: false,
         }
     }
 }
