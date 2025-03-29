@@ -45,7 +45,7 @@ jobs:
             type=ref,event=branch
             type=raw,value=latest
             type=sha
-            type=raw,value=mc-${{ env.MC_VERSION }}
+            type=raw,value=mc${{ env.MC_VERSION }}
             type=raw,value=${{ env.VERSION }}
             type=raw,value=mc${{ env.MC_VERSION }}-${{ env.VERSION }}
 
