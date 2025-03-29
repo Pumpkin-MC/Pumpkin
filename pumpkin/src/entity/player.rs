@@ -234,7 +234,6 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
-    /// The player's current chat session UUID
     pub chat_session: Mutex<ChatSession>,
 }
 
