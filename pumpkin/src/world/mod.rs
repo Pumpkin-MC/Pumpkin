@@ -13,6 +13,7 @@ use crate::{
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
+    fluid::registry::FluidRegistry,
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
@@ -28,6 +29,7 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     block::Block,
     entity::{EntityStatus, EntityType},
+    fluid::Fluid,
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::WorldEvent,
@@ -150,6 +152,7 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    pub fluid_registry: Arc<FluidRegistry>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
@@ -161,6 +164,7 @@ impl World {
         level: Level,
         dimension_type: DimensionType,
         block_registry: Arc<BlockRegistry>,
+        fluid_registry: Arc<FluidRegistry>,
     ) -> Self {
         // TODO
         let generation_settings = GENERATION_SETTINGS
@@ -177,6 +181,7 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
+            fluid_registry,
             unsent_block_changes: Mutex::new(HashMap::new()),
         }
     }
@@ -334,6 +339,7 @@ impl World {
         };
 
         self.tick_scheduled_block_ticks().await;
+        self.tick_scheduled_fluid_ticks().await;
 
         // player ticks
         for player in self.players.read().await.values() {
@@ -408,6 +414,22 @@ impl World {
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
                 pumpkin_block
                     .on_scheduled_tick(self, &block, &scheduled_tick.block_pos)
+                    .await;
+            }
+        }
+    }
+
+    pub async fn tick_scheduled_fluid_ticks(self: &Arc<Self>) {
+        let blocks_to_tick = self.level.get_and_tick_fluid_ticks().await;
+
+        for scheduled_tick in blocks_to_tick {
+            let fluid = self.get_fluid(&scheduled_tick.block_pos).await.unwrap();
+            if scheduled_tick.target_block_id != fluid.id {
+                continue;
+            }
+            if let Some(pumpkin_fluid) = self.fluid_registry.get_pumpkin_fluid(&fluid) {
+                pumpkin_fluid
+                    .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
                     .await;
             }
         }
@@ -1244,6 +1266,18 @@ impl World {
                     block_moved,
                 )
                 .await;
+            if Fluid::from_state_id(block_state_id).is_some() {
+                self.fluid_registry
+                    .on_placed(
+                        self,
+                        &Fluid::from_state_id(block_state_id).unwrap(),
+                        block_state_id,
+                        position,
+                        replaced_block_state_id,
+                        block_moved,
+                    )
+                    .await;
+            }
         }
 
         // Ig they do this cause it could be modified in chunkPos.setBlockState?
@@ -1302,6 +1336,12 @@ impl World {
     ) {
         self.level
             .schedule_block_tick(block.id, block_pos, delay, priority)
+            .await;
+    }
+
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
+        self.level
+            .schedule_fluid_tick(block_id, &block_pos, delay)
             .await;
     }
 
@@ -1413,6 +1453,14 @@ impl World {
     ) -> Result<pumpkin_data::block::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    pub async fn get_fluid(
+        &self,
+        position: &BlockPos,
+    ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
+        let id = self.get_block_state_id(position).await?;
+        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
