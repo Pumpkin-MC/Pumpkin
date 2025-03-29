@@ -1,12 +1,20 @@
+use std::num::NonZeroUsize;
+
+use lru::LruCache;
+use parking_lot::Mutex;
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::{
     math::{lerp2, vector2::Vector2, vector3::Vector3, vertical_surface_type::VerticalSurfaceType},
-    random::RandomDeriver,
+    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 use serde::Deserialize;
+
 use terrain::SurfaceTerrainBuilder;
 
-use crate::generation::{positions::chunk_pos, section_coords};
+use crate::{
+    ProtoChunk,
+    generation::{positions::chunk_pos, section_coords},
+};
 
 use super::{
     noise::perlin::DoublePerlinNoiseSampler,
@@ -26,7 +34,7 @@ pub struct MaterialRuleContext<'a> {
     pub random_deriver: &'a RandomDeriver,
     fluid_height: i32,
     pub block_pos: Vector3<i32>,
-    pub biome: Biome,
+    pub biome: &'a Biome,
     pub run_depth: i32,
     pub secondary_depth: f64,
     noise_builder: DoublePerlinNoiseBuilder<'a>,
@@ -65,7 +73,7 @@ impl<'a> MaterialRuleContext<'a> {
             terrain_builder,
             fluid_height: 0,
             block_pos: Vector3::new(0, 0, 0),
-            biome: Biome::Plains,
+            biome: &Biome::PLAINS,
             run_depth: 0,
             secondary_depth: 0.0,
             surface_noise: noise_builder.get_noise_sampler_for_id("surface"),
@@ -149,11 +157,7 @@ pub enum MaterialCondition {
 }
 
 impl MaterialCondition {
-    pub fn test(
-        &self,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> bool {
+    pub fn test(&self, chunk: &mut ProtoChunk, context: &mut MaterialRuleContext) -> bool {
         match self {
             MaterialCondition::Biome(biome) => biome.test(context),
             MaterialCondition::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
@@ -162,12 +166,43 @@ impl MaterialCondition {
             }
             MaterialCondition::YAbove(above_y) => above_y.test(context),
             MaterialCondition::Water(water) => water.test(context),
-            MaterialCondition::Temperature => false,
-            MaterialCondition::Steep => false,
-            MaterialCondition::Not(not) => not.test(context, surface_height_estimate_sampler),
+            MaterialCondition::Temperature => {
+                let temperature = context
+                    .biome
+                    .weather
+                    .compute_temperature(&context.block_pos, chunk.generation_settings().sea_level);
+                temperature < 0.15f32
+            }
+            MaterialCondition::Steep => {
+                let local_x = context.block_pos.x & 15;
+                let local_z = context.block_pos.z & 15;
+
+                let local_z_sub = 0.max(local_z - 1);
+                let local_z_add = 15.min(local_z + 1);
+
+                let sub_height =
+                    chunk.top_block_height_exclusive(&Vector2::new(local_x, local_z_sub));
+                let add_height =
+                    chunk.top_block_height_exclusive(&Vector2::new(local_x, local_z_add));
+
+                if add_height >= sub_height + 4 {
+                    true
+                } else {
+                    let local_x_sub = 0.max(local_x - 1);
+                    let local_x_add = 15.min(local_x + 1);
+
+                    let sub_height =
+                        chunk.top_block_height_exclusive(&Vector2::new(local_x_sub, local_z));
+                    let add_height =
+                        chunk.top_block_height_exclusive(&Vector2::new(local_x_add, local_z));
+
+                    sub_height >= add_height + 4
+                }
+            }
+            MaterialCondition::Not(not) => not.test(chunk, context),
             MaterialCondition::Hole(hole) => hole.test(context),
             MaterialCondition::AbovePreliminarySurface(above) => {
-                above.test(context, surface_height_estimate_sampler)
+                above.test(context, &mut chunk.surface_height_estimate_sampler)
             }
             MaterialCondition::StoneDepth(stone_depth) => stone_depth.test(context),
         }
@@ -209,12 +244,8 @@ pub struct NotMaterialCondition {
 }
 
 impl NotMaterialCondition {
-    pub fn test(
-        &self,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> bool {
-        !self.invert.test(context, surface_height_estimate_sampler)
+    pub fn test(&self, chunk: &mut ProtoChunk, context: &mut MaterialRuleContext) -> bool {
+        !self.invert.test(chunk, context)
     }
 }
 
@@ -276,7 +307,7 @@ pub fn estimate_surface_height(
 
 #[derive(Deserialize)]
 pub struct BiomeMaterialCondition {
-    biome_is: Vec<Biome>,
+    biome_is: Box<[&'static Biome]>,
 }
 
 impl BiomeMaterialCondition {
@@ -358,21 +389,40 @@ impl WaterMaterialCondition {
     }
 }
 
+fn create_gradient_cache() -> Mutex<LruCache<usize, RandomDeriver>> {
+    let cache_size = NonZeroUsize::new(1024).unwrap();
+    let cache = LruCache::new(cache_size);
+    Mutex::new(cache)
+}
+
 #[derive(Deserialize)]
 pub struct VerticalGradientMaterialCondition {
     random_name: String,
     true_at_and_below: YOffset,
     false_at_and_above: YOffset,
+    #[serde(skip, default = "create_gradient_cache")]
+    random_deriver: Mutex<LruCache<usize, RandomDeriver>>,
 }
 
 impl VerticalGradientMaterialCondition {
     pub fn test(&self, context: &MaterialRuleContext) -> bool {
         let true_at = self.true_at_and_below.get_y(context.min_y, context.height);
         let false_at = self.false_at_and_above.get_y(context.min_y, context.height);
-        let splitter = context
-            .random_deriver
-            .split_string(&self.random_name)
-            .next_splitter();
+
+        let splitter = {
+            let context_pointer: *const RandomDeriver = context.random_deriver;
+            let key = context_pointer.addr();
+            let mut cache = self.random_deriver.lock();
+            cache
+                .get_or_insert(key, || {
+                    context
+                        .random_deriver
+                        .split_string(&self.random_name)
+                        .next_splitter()
+                })
+                .clone()
+        };
+
         let block_y = context.block_pos.y;
         if block_y <= true_at as i32 {
             return true;

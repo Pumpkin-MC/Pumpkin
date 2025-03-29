@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use pumpkin_util::{
     math::clamped_map,
+    noise::simplex::SimplexNoiseSampler,
     random::{RandomImpl, legacy_rand::LegacyRand},
 };
 
 use crate::{
     generation::{
-        noise::{perlin::DoublePerlinNoiseSampler, simplex::SimplexNoiseSampler},
+        noise::perlin::DoublePerlinNoiseSampler,
         noise_router::{
             chunk_density_function::ChunkNoiseFunctionSampleOptions,
             chunk_noise_router::{

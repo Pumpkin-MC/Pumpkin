@@ -233,6 +233,7 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
+    pub global_chat_message_index: AtomicU32,
 }
 
 impl Player {
@@ -316,6 +317,7 @@ impl Player {
             last_sent_food: AtomicU32::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
+            global_chat_message_index: AtomicU32::new(0),
         }
     }
 
