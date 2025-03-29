@@ -2,6 +2,7 @@
 /// Sadly, `PaperMC` does not care about 3rd parties providing support for Velocity. There is no documentation.
 /// I had to understand the code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/master/patches/server/0731-Add-Velocity-IP-Forwarding-Support.patch>
 use std::{
+    borrow::Cow,
     io::Read,
     net::{IpAddr, SocketAddr},
 };
@@ -55,7 +56,7 @@ pub async fn velocity_login(client: &Client) {
     client
         .enqueue_packet(&CLoginPluginRequest::new(
             velocity_message_id.into(),
-            PLAYER_INFO_CHANNEL,
+            Cow::Borrowed(PLAYER_INFO_CHANNEL),
             &buf,
         ))
         .await;

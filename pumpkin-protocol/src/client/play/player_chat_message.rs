@@ -1,20 +1,22 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{VarInt, codec::bit_set::BitSet};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_PLAYER_CHAT)]
-pub struct CPlayerChatMessage {
+pub struct CPlayerChatMessage<'a> {
     global_index: VarInt,
     #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
     index: VarInt,
     message_signature: Option<Box<[u8]>>, // always 256
-    message: String,
+    message: Cow<'a, str>,
     timestamp: i64,
     salt: i64,
     previous_messages_count: VarInt,
@@ -27,14 +29,14 @@ pub struct CPlayerChatMessage {
     target_name: Option<TextComponent>,
 }
 
-impl CPlayerChatMessage {
+impl<'a> CPlayerChatMessage<'a> {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         global_index: VarInt,
         sender: uuid::Uuid,
         index: VarInt,
         message_signature: Option<Box<[u8]>>,
-        message: String,
+        message: Cow<'a, str>,
         timestamp: i64,
         salt: i64,
         previous_messages: Box<[PreviousMessage]>,
@@ -63,13 +65,13 @@ impl CPlayerChatMessage {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PreviousMessage {
     message_id: VarInt,
     signature: Option<Box<[u8]>>, // Always 256
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub enum FilterType {
     /// Message is not filtered at all
     PassThrough,

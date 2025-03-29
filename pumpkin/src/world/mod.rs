@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
 };
@@ -208,12 +209,12 @@ impl World {
         message: &TextComponent,
         sender_name: &TextComponent,
         chat_type: u32,
-        target_name: Option<&TextComponent>,
+        target_name: Option<Cow<'_, TextComponent>>,
     ) {
         self.broadcast_packet_all(&CDisguisedChatMessage::new(
-            message,
+            Cow::Borrowed(message),
             (chat_type + 1).into(),
-            sender_name,
+            Cow::Borrowed(sender_name),
             target_name,
         ))
         .await;
@@ -453,7 +454,7 @@ impl World {
             .send_packet_now(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
-                &dimensions,
+                dimensions,
                 base_config.max_players.into(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance
@@ -518,7 +519,7 @@ impl World {
                 uuid: gameprofile.id,
                 actions: &[
                     PlayerAction::AddPlayer {
-                        name: &gameprofile.name,
+                        name: Cow::Borrowed(&gameprofile.name),
                         properties: &gameprofile.properties,
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
@@ -537,10 +538,13 @@ impl World {
                 .map(|(_, player)| {
                     (
                         &player.gameprofile.id,
-                        [PlayerAction::AddPlayer {
-                            name: &player.gameprofile.name,
-                            properties: &player.gameprofile.properties,
-                        }],
+                        [
+                            PlayerAction::AddPlayer {
+                                name: Cow::Borrowed(&player.gameprofile.name),
+                                properties: &player.gameprofile.properties,
+                            },
+                            PlayerAction::UpdateListed(true),
+                        ],
                     )
                 })
                 .collect::<Vec<_>>();
@@ -749,7 +753,8 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.last_pos.load();
-        let death_dimension = player.world().await.dimension_type.name();
+        let world = player.world().await;
+        let death_dimension = world.dimension_type.name();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -1122,10 +1127,12 @@ impl World {
         let uuid = player.gameprofile.id;
         self.broadcast_packet_except(
             &[player.gameprofile.id],
-            &CRemovePlayerInfo::new(1.into(), &[uuid]),
+            &CRemovePlayerInfo::new(1.into(), Cow::Borrowed(&[uuid])),
         )
         .await;
-        self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
+        self.broadcast_packet_all(&CRemoveEntities::new(Cow::Borrowed(&[player
+            .entity_id()
+            .into()])))
             .await;
 
         if fire_event {
@@ -1172,7 +1179,9 @@ impl World {
 
     pub async fn remove_entity(&self, entity: &Entity) {
         self.entities.write().await.remove(&entity.entity_uuid);
-        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
+        self.broadcast_packet_all(&CRemoveEntities::new(Cow::Borrowed(&[entity
+            .entity_id
+            .into()])))
             .await;
     }
 

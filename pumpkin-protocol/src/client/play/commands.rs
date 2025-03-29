@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::packet;
@@ -42,11 +42,11 @@ pub struct ProtoNode<'a> {
 pub enum ProtoNodeType<'a> {
     Root,
     Literal {
-        name: &'a str,
+        name: Cow<'a, str>,
         is_executable: bool,
     },
     Argument {
-        name: &'a str,
+        name: Cow<'a, str>,
         is_executable: bool,
         parser: ArgumentType<'a>,
         override_suggestion_type: Option<SuggestionProviders>,
@@ -101,7 +101,7 @@ impl ProtoNode<'_> {
         }
 
         // name
-        match self.node_type {
+        match &self.node_type {
             ProtoNodeType::Argument { name, .. } | ProtoNodeType::Literal { name, .. } => {
                 write.write_string(name)?;
             }
@@ -187,10 +187,10 @@ pub enum ArgumentType<'a> {
     Dimension,
     Gamemode,
     Time { min: i32 },
-    ResourceOrTag { identifier: &'a str },
-    ResourceOrTagKey { identifier: &'a str },
-    Resource { identifier: &'a str },
-    ResourceKey { identifier: &'a str },
+    ResourceOrTag { identifier: Cow<'a, str> },
+    ResourceOrTagKey { identifier: Cow<'a, str> },
+    Resource { identifier: Cow<'a, str> },
+    ResourceKey { identifier: Cow<'a, str> },
     TemplateMirror,
     TemplateRotation,
     Heightmap,

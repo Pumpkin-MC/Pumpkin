@@ -2,17 +2,19 @@ use pumpkin_data::packet::clientbound::PLAY_LOGIN;
 use pumpkin_util::math::position::BlockPos;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{VarInt, codec::identifier::Identifier};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
+#[serde(bound(deserialize = "'a: 'de"))]
 #[packet(PLAY_LOGIN)]
 pub struct CLogin<'a> {
     entity_id: i32,
     is_hardcore: bool,
     dimension_count: VarInt,
-    dimension_names: &'a [Identifier],
+    #[serde(borrow)]
+    dimension_names: Vec<Identifier<'a>>,
     max_players: VarInt,
     view_distance: VarInt,
     simulated_distance: VarInt,
@@ -21,14 +23,14 @@ pub struct CLogin<'a> {
     limited_crafting: bool,
     // Spawn info
     dimension_type: VarInt,
-    dimension_name: Identifier,
+    dimension_name: Identifier<'a>,
     /// First 8 bytes of the SHA-256 hash of the world's seed. Used client side for biome noise
     hashed_seed: i64,
     game_mode: u8,
     previous_gamemode: i8,
     debug: bool,
     is_flat: bool,
-    death_dimension_name: Option<(Identifier, BlockPos)>,
+    death_dimension_name: Option<(Identifier<'a>, BlockPos)>,
     portal_cooldown: VarInt,
     sealevel: VarInt,
     enforce_secure_chat: bool,
@@ -39,7 +41,7 @@ impl<'a> CLogin<'a> {
     pub fn new(
         entity_id: i32,
         is_hardcore: bool,
-        dimension_names: &'a [Identifier],
+        dimension_names: Vec<Identifier<'a>>,
         max_players: VarInt,
         view_distance: VarInt,
         simulated_distance: VarInt,
@@ -47,13 +49,13 @@ impl<'a> CLogin<'a> {
         enabled_respawn_screen: bool,
         limited_crafting: bool,
         dimension_type: VarInt,
-        dimension_name: Identifier,
+        dimension_name: Identifier<'a>,
         hashed_seed: i64,
         game_mode: u8,
         previous_gamemode: i8,
         debug: bool,
         is_flat: bool,
-        death_dimension_name: Option<(Identifier, BlockPos)>,
+        death_dimension_name: Option<(Identifier<'a>, BlockPos)>,
         portal_cooldown: VarInt,
         sealevel: VarInt,
         enforce_secure_chat: bool,

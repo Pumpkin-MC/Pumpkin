@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::VecDeque,
     num::NonZeroU8,
     ops::AddAssign,
@@ -475,9 +476,21 @@ impl Player {
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
         match mode {
-            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
+            TitleMode::Title => {
+                self.client
+                    .enqueue_packet(&CTitleText::new(Cow::Borrowed(text)))
+                    .await;
+            }
+            TitleMode::SubTitle => {
+                self.client
+                    .enqueue_packet(&CSubtitle::new(Cow::Borrowed(text)))
+                    .await;
+            }
+            TitleMode::ActionBar => {
+                self.client
+                    .enqueue_packet(&CActionBar::new(Cow::Borrowed(text)))
+                    .await;
+            }
         }
     }
 
@@ -530,7 +543,11 @@ impl Player {
     ///
     /// * `sound_id`: An optional `Identifier` specifying the sound to stop. If `None`, all sounds in the specified category (if any) will be stopped.
     /// * `category`: An optional `SoundCategory` specifying the sound category to stop. If `None`, all sounds with the specified identifier (if any) will be stopped.
-    pub async fn stop_sound(&self, sound_id: Option<Identifier>, category: Option<SoundCategory>) {
+    pub async fn stop_sound(
+        &self,
+        sound_id: Option<Identifier<'_>>,
+        category: Option<SoundCategory>,
+    ) {
         self.client
             .enqueue_packet(&CStopSound::new(sound_id, category))
             .await;
@@ -864,7 +881,8 @@ impl Player {
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
                 let last_pos = self.living_entity.last_pos.load();
-                let death_dimension = self.world().await.dimension_type.name();
+                let world = self.world().await;
+                let death_dimension = world.dimension_type.name();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -1008,7 +1026,7 @@ impl Player {
         }
 
         self.client
-            .send_packet_now(&CPlayDisconnect::new(&reason))
+            .send_packet_now(&CPlayDisconnect::new(Cow::Borrowed(&reason)))
             .await;
 
         log::info!(
@@ -1091,7 +1109,7 @@ impl Player {
         self.client
             .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
-                &TextComponent::text("noob"),
+                Cow::Borrowed(&TextComponent::text("noob")),
             ))
             .await;
     }
@@ -1229,13 +1247,13 @@ impl Player {
         message: &TextComponent,
         chat_type: u32,
         sender_name: &TextComponent,
-        target_name: Option<&TextComponent>,
+        target_name: Option<Cow<'_, TextComponent>>,
     ) {
         self.client
             .enqueue_packet(&CDisguisedChatMessage::new(
-                message,
+                Cow::Borrowed(message),
                 (chat_type + 1).into(),
-                sender_name,
+                Cow::Borrowed(sender_name),
                 target_name,
             ))
             .await;
@@ -1269,7 +1287,7 @@ impl Player {
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         self.client
-            .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+            .enqueue_packet(&CSystemChatMessage::new(Cow::Borrowed(text), overlay))
             .await;
     }
 

@@ -8,6 +8,7 @@ use crate::recipe::recipe_formats::{ShapedCrafting, ShapelessCrafting};
 use pumpkin_util::registry::RegistryEntryList;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, de};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::str::FromStr;
@@ -110,22 +111,22 @@ pub mod ingredients {
 }
 
 #[derive(Debug)]
-pub enum RecipeResult {
+pub enum RecipeResult<'a> {
     Many {
         count: u8,
-        id: String,
+        id: Cow<'a, str>,
         // TODO
         components: Option<serde_json::Value>,
     },
     Single {
-        id: String,
+        id: Cow<'a, str>,
         // TODO
         components: Option<serde_json::Value>,
     },
     Special,
 }
 
-impl RecipeResult {
+impl RecipeResult<'_> {
     pub fn id(&self) -> &str {
         match self {
             Self::Many { id, .. } | Self::Single { id, .. } => id,
@@ -133,7 +134,8 @@ impl RecipeResult {
         }
     }
 }
-impl<'de> Deserialize<'de> for RecipeResult {
+
+impl<'a, 'de: 'a> Deserialize<'de> for RecipeResult<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -147,7 +149,7 @@ impl<'de> Deserialize<'de> for RecipeResult {
         }
         struct ResultVisitor;
         impl<'de> Visitor<'de> for ResultVisitor {
-            type Value = RecipeResult;
+            type Value = RecipeResult<'de>;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 write!(formatter, "valid recipe result")
@@ -170,17 +172,18 @@ impl<'de> Deserialize<'de> for RecipeResult {
                     }
                 }
 
-                let id = id
-                    .ok_or_else(|| de::Error::missing_field("id"))?
-                    .to_string();
+                let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
                 if let Some(count) = count {
                     Ok(RecipeResult::Many {
-                        id,
+                        id: Cow::Borrowed(id),
                         count,
                         components,
                     })
                 } else {
-                    Ok(RecipeResult::Single { id, components })
+                    Ok(RecipeResult::Single {
+                        id: Cow::Borrowed(id),
+                        components,
+                    })
                 }
             }
 
@@ -189,7 +192,7 @@ impl<'de> Deserialize<'de> for RecipeResult {
                 E: Error,
             {
                 Ok(RecipeResult::Single {
-                    id: v.to_string(),
+                    id: Cow::Owned(v.to_owned()),
                     components: None,
                 })
             }
@@ -231,7 +234,7 @@ impl<'de> Deserialize<'de> for RecipeKeys {
         deserializer.deserialize_map(KeyVisitor).map(Self)
     }
 }
-impl<'de> Deserialize<'de> for Recipe {
+impl<'a, 'de: 'a> Deserialize<'de> for Recipe<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -268,7 +271,7 @@ impl<'de> Deserialize<'de> for Recipe {
 
         struct RecipeVisitor;
         impl<'de> Visitor<'de> for RecipeVisitor {
-            type Value = Recipe;
+            type Value = Recipe<'de>;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 write!(formatter, "valid recipe")
@@ -425,13 +428,13 @@ fn visit_option<'de, T: Deserialize<'de>, Map: MapAccess<'de>>(
     }
 }
 
-pub struct Recipe {
+pub struct Recipe<'a> {
     pub recipe_type: RecipeType,
     pattern: Vec<[[Option<RegistryEntryList>; 3]; 3]>,
-    result: RecipeResult,
+    result: RecipeResult<'a>,
 }
 
-impl Recipe {
+impl Recipe<'_> {
     pub fn pattern(&self) -> &[[[Option<RegistryEntryList>; 3]; 3]] {
         &self.pattern
     }
@@ -453,11 +456,11 @@ impl Recipe {
     }
 }
 
-struct Test {
+struct Test<'a> {
     recipe_type: RecipeType,
-    result: RecipeResult,
+    result: RecipeResult<'a>,
 }
-impl RecipeTrait for Test {
+impl<'a> RecipeTrait<'a> for Test<'a> {
     fn recipe_type(&self) -> RecipeType {
         self.recipe_type
     }
@@ -466,24 +469,24 @@ impl RecipeTrait for Test {
         vec![[const { [const { None }; 3] }; 3]]
     }
 
-    fn result(self) -> RecipeResult {
+    fn result(self) -> RecipeResult<'a> {
         self.result
     }
 }
-impl<T: RecipeTrait> From<T> for Recipe {
+impl<'a, T: RecipeTrait<'a>> From<T> for Recipe<'a> {
     fn from(recipe_type: T) -> Self {
         recipe_type.to_recipe()
     }
 }
 
-pub trait RecipeTrait: Sized {
+pub trait RecipeTrait<'a>: Sized {
     fn recipe_type(&self) -> RecipeType;
 
     fn pattern(&self) -> Vec<[[Option<RegistryEntryList>; 3]; 3]>;
 
-    fn result(self) -> RecipeResult;
+    fn result(self) -> RecipeResult<'a>;
 
-    fn to_recipe(self) -> Recipe {
+    fn to_recipe(self) -> Recipe<'a> {
         Recipe {
             recipe_type: self.recipe_type(),
             pattern: self.pattern().into_iter().map(flatten_3x3).collect(),

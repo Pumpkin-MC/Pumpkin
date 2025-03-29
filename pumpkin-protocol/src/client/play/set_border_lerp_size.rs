@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_BORDER_LERP_SIZE;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::codec::var_long::VarLong;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_SET_BORDER_LERP_SIZE)]
 pub struct CSetBorderLerpSize {
     old_diameter: f64,

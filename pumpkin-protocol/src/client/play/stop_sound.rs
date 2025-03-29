@@ -7,18 +7,18 @@ use pumpkin_data::{packet::clientbound::PLAY_STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::packet;
 
 #[packet(PLAY_STOP_SOUND)]
-pub struct CStopSound {
-    sound_id: Option<Identifier>,
+pub struct CStopSound<'a> {
+    sound_id: Option<Identifier<'a>>,
     category: Option<SoundCategory>,
 }
 
-impl CStopSound {
-    pub fn new(sound_id: Option<Identifier>, category: Option<SoundCategory>) -> Self {
+impl<'a> CStopSound<'a> {
+    pub fn new(sound_id: Option<Identifier<'a>>, category: Option<SoundCategory>) -> Self {
         Self { sound_id, category }
     }
 }
 
-impl ClientPacket for CStopSound {
+impl ClientPacket for CStopSound<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 

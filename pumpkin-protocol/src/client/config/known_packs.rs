@@ -23,9 +23,9 @@ impl ClientPacket for CKnownPacks<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list::<KnownPack>(self.known_packs, |p, v| {
-            p.write_string(v.namespace)?;
-            p.write_string(v.id)?;
-            p.write_string(v.version)
+            p.write_string(&v.namespace)?;
+            p.write_string(&v.id)?;
+            p.write_string(&v.version)
         })
     }
 }

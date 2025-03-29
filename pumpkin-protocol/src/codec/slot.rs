@@ -194,3 +194,23 @@ impl From<Option<&ItemStack>> for Slot {
 //             .unwrap_or(Slot::empty())
 //     }
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::Slot;
+    use crate::VarInt;
+
+    #[test]
+    fn test_slot_to_stack() {
+        let valid_slot = Slot::new(1, 64);
+        let stack = valid_slot.to_stack().unwrap().unwrap();
+        assert_eq!(stack.item_count, 64);
+
+        let invalid_slot = Slot {
+            item_count: VarInt(999),
+            item_id: Some(VarInt(99999)),
+            ..Slot::empty()
+        };
+        assert!(invalid_slot.to_stack().is_err());
+    }
+}
