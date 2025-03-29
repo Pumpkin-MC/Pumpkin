@@ -234,7 +234,7 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
-    pub chat_session: Mutex<ChatSession>,
+    pub chat_session: Arc<Mutex<ChatSession>>,
 }
 
 impl Player {
@@ -318,7 +318,7 @@ impl Player {
             last_sent_food: AtomicU32::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
-            chat_session: Mutex::new(ChatSession::new(Uuid::nil())), // Placeholder value until the player actually sets their session id
+            chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
         }
     }
 
@@ -1858,16 +1858,33 @@ impl TryFrom<i32> for ChatMode {
 #[derive(Debug)]
 pub struct ChatSession {
     pub session_id: uuid::Uuid,
+    pub expires_at: i64,
+    pub public_key: Box<[u8]>,
+    pub signature: Box<[u8]>,
     pub previous_messages: Box<[PreviousMessage]>,
     pub messages_sent: i32,
     pub messages_received: i32,
 }
 
+impl Default for ChatSession {
+    fn default() -> Self {
+        Self::new(Uuid::nil(), 0, Box::new([]), Box::new([]))
+    }
+}
+
 impl ChatSession {
     #[must_use]
-    pub fn new(session_id: Uuid) -> Self {
+    pub fn new(
+        session_id: Uuid,
+        expires_at: i64,
+        public_key: Box<[u8]>,
+        key_signature: Box<[u8]>,
+    ) -> Self {
         Self {
             session_id,
+            expires_at: expires_at,
+            public_key: public_key,
+            signature: key_signature,
             previous_messages: Box::new([]),
             messages_sent: 0,
             messages_received: 0,

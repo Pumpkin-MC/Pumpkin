@@ -17,7 +17,7 @@ pub struct SChatMessage {
     pub salt: i64,
     pub signature: Option<Box<[u8]>>,
     pub message_count: VarInt,
-    pub acknowledged: Box<[u8]>,
+    pub acknowledged: Box<[u8]>, // Bitset fixed 20 bits
 }
 
 // TODO

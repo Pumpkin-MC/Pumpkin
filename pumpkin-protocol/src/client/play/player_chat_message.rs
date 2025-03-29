@@ -15,7 +15,7 @@ pub struct CPlayerChatMessage {
     sender: uuid::Uuid,
     /// An index that increases for every message sent BY the client
     index: VarInt,
-    message_signature: Option<Box<[u8]>>, // always 256
+    pub message_signature: Option<Box<[u8]>>, // always 256
     message: String,
     timestamp: i64,
     salt: i64,

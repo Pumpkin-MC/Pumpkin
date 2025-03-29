@@ -666,6 +666,12 @@ impl Player {
     }
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
+        log::warn!(
+            "ACK: {:04b}{:08b}{:08b}",
+            chat_message.acknowledged[2],
+            chat_message.acknowledged[1],
+            chat_message.acknowledged[0]
+        );
         let message = chat_message.message;
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
@@ -717,8 +723,8 @@ impl Player {
                     );
                     drop(chat_session);
                     world.broadcast_secure_player_chat(reportable_packet).await;
-                    let mut chat_session = self.chat_session.lock().await;
-                    chat_session.append_previous_message(chat_message.signature.clone());
+                    // let mut chat_session = self.chat_session.lock().await;
+                    // chat_session.append_previous_message(chat_message.signature.clone());
                 } else {
                     let no_reports_packet = &CSystemChatMessage::new(
                         decorated_message,
@@ -744,7 +750,12 @@ impl Player {
         let mut chat_session = self.chat_session.lock().await; // Await the lock
 
         // Update the chat session fields
-        *chat_session = ChatSession::new(session.session_id);
+        *chat_session = ChatSession::new(
+            session.session_id,
+            session.expires_at.clone(),
+            session.public_key.clone(),
+            session.key_signature.clone(),
+        );
 
         server
             .broadcast_packet_all(&CPlayerInfoUpdate::new(
@@ -754,8 +765,8 @@ impl Player {
                     actions: &[PlayerAction::InitializeChat(Some(InitChat {
                         session_id: session.session_id,
                         expires_at: session.expires_at,
-                        public_key: &session.public_key,
-                        signature: &session.key_signature,
+                        public_key: session.public_key.clone(),
+                        signature: session.key_signature.clone(),
                     }))],
                 }],
             ))

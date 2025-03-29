@@ -38,7 +38,7 @@ use pumpkin_protocol::{
     client::play::{
         CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        GameEvent, PlayerAction,
+        GameEvent, InitChat, PlayerAction,
     },
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
@@ -228,6 +228,7 @@ impl World {
             packet.global_index = VarInt(chat_session.messages_received);
             player.client.enqueue_packet(packet).await;
             chat_session.messages_received += 1;
+            chat_session.append_previous_message(packet.message_signature.clone());
         }
     }
 
@@ -543,19 +544,32 @@ impl World {
         {
             let current_players = self.players.read().await;
 
-            let current_player_data = current_players
+            let mut current_player_data = Vec::new();
+
+            for (_, player) in current_players
                 .iter()
                 .filter(|(c, _)| **c != player.gameprofile.id)
-                .map(|(_, player)| {
-                    (
-                        &player.gameprofile.id,
-                        [PlayerAction::AddPlayer {
+            {
+                let chat_session = player.chat_session.lock().await;
+
+                let player_data = (
+                    &player.gameprofile.id,
+                    [
+                        PlayerAction::AddPlayer {
                             name: &player.gameprofile.name,
                             properties: &player.gameprofile.properties,
-                        }],
-                    )
-                })
-                .collect::<Vec<_>>();
+                        },
+                        PlayerAction::InitializeChat(Some(InitChat {
+                            session_id: chat_session.session_id,
+                            expires_at: chat_session.expires_at,
+                            public_key: chat_session.public_key.clone(),
+                            signature: chat_session.signature.clone(),
+                        })),
+                    ],
+                );
+
+                current_player_data.push(player_data);
+            }
 
             let entries = current_player_data
                 .iter()
@@ -568,7 +582,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(0x01, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(0x01 | 0x02, &entries)) // TODO: Remove magic numbers
                 .await;
         };
 
