@@ -1,4 +1,4 @@
-use pumpkin_util::random::RandomGenerator;
+use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use serde::Deserialize;
 
 use super::y_offset::YOffset;

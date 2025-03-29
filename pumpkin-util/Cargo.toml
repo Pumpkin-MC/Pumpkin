@@ -18,3 +18,5 @@ md5 = "0.7"
 quote = "1.0"
 syn = "2.0"
 proc-macro2 = "1.0"
+enum_dispatch = "0.3.13"
+

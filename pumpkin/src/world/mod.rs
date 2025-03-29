@@ -462,7 +462,7 @@ impl World {
                 false,
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
-                biome::hash_seed(self.level.seed.0 as i64), // seed
+                biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 base_config.default_gamemode as i8,
                 false,
@@ -765,7 +765,7 @@ impl World {
             .enqueue_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
-                biome::hash_seed(self.level.seed.0 as i64), // seed
+                biome::hash_seed(self.level.seed.0), // seed
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,

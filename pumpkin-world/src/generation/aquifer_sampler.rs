@@ -1,7 +1,7 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector2::Vector2, vector3::Vector3},
-    random::RandomDeriver,
+    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
 use crate::block::ChunkBlockState;

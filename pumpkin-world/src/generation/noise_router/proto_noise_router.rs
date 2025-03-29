@@ -5,6 +5,7 @@ use std::{
 
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+use pumpkin_util::random::RandomDeriverImpl;
 
 use crate::{
     GlobalRandomConfig,
