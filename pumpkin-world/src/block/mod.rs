@@ -19,6 +19,7 @@ pub enum BlockDirection {
     East,
 }
 
+#[derive(Clone, Debug)]
 pub struct InvalidBlockFace;
 
 impl TryFrom<i32> for BlockDirection {
