@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap,
     io::ErrorKind,
-    ops::{AddAssign, SubAssign},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -127,19 +126,12 @@ where
     type Data = SyncChunk;
 
     async fn watch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]) {
-        // It is intentional that regions are watched multiple times (once per chunk)
         let mut watchers = self.watchers.write().await;
         for chunk in chunks {
             let key = S::get_chunk_key(chunk);
             let map_key = Self::map_key(folder, &key);
-            match watchers.entry(map_key) {
-                std::collections::btree_map::Entry::Vacant(vacant) => {
-                    let _ = vacant.insert(1);
-                }
-                std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                    occupied.get_mut().add_assign(1);
-                }
-            }
+            let counter = watchers.entry(map_key).or_insert(0);
+            *counter += 1; // Increment the counter directly
         }
     }
 
@@ -148,13 +140,11 @@ where
         for chunk in chunks {
             let key = S::get_chunk_key(chunk);
             let map_key = Self::map_key(folder, &key);
-            match watchers.entry(map_key) {
-                std::collections::btree_map::Entry::Vacant(_vacant) => {}
-                std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                    occupied.get_mut().sub_assign(1);
-                    if occupied.get().is_zero() {
-                        occupied.remove_entry();
-                    }
+            if let Some(counter) = watchers.get_mut(&map_key) {
+                if *counter > 1 {
+                    *counter -= 1; // Decrement the counter if more than 1
+                } else {
+                    watchers.remove(&map_key); // Remove the entry if the counter reaches 0
                 }
             }
         }
@@ -227,10 +217,10 @@ where
         chunks_data: Vec<(Vector2<i32>, SyncChunk)>,
     ) -> Result<(), ChunkWritingError> {
         let mut regions_chunks: BTreeMap<String, Vec<SyncChunk>> = BTreeMap::new();
-
+    
         for (at, chunk) in chunks_data {
             let key = S::get_chunk_key(&at);
-
+    
             match regions_chunks.entry(key) {
                 std::collections::btree_map::Entry::Occupied(mut occupied) => {
                     occupied.get_mut().push(chunk);
@@ -240,89 +230,87 @@ where
                 }
             }
         }
-
-        // we use a Sync Closure with an Async Block to execute the tasks in parallel
-        // with out waiting the future. Also it improve we File Cache utilizations.
-        let tasks = regions_chunks
-            .into_iter()
-            .map(async |(file_name, chunk_locks)| {
-                let path = Self::map_key(folder, &file_name);
-                log::trace!("Updating data for file {:?}", path);
-
-                let chunk_serializer = match self.read_file(&path).await {
-                    Ok(file) => Ok(file),
-                    Err(ChunkReadingError::ChunkNotExist) => {
-                        unreachable!("Must be managed by the cache")
-                    }
-                    Err(ChunkReadingError::IoError(err)) => {
-                        error!("Error reading the data before write: {}", err);
-                        Err(ChunkWritingError::IoError(err))
-                    }
-                    Err(err) => {
-                        error!("Error reading the data before write: {:?}", err);
-                        Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
-                    }
-                }?;
-
-                let mut serializer = chunk_serializer.write().await;
-                for chunk_lock in chunk_locks {
-                    let mut chunk = chunk_lock.write().await;
-                    let chunk_is_dirty = chunk.dirty;
-                    // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
-                    // updating what we will write here
-                    chunk.dirty = false;
-                    // It is important that we keep the lock after we mark the chunk as clean so no one else
-                    // can modify it
-                    let chunk = chunk.downgrade();
-
-                    // We only need to update the chunk if it is dirty
-                    if chunk_is_dirty {
-                        serializer.update_chunk(&*chunk).await?;
+    
+        // Execute the tasks in parallel while improving file cache utilization
+        let tasks = regions_chunks.into_iter().map(async |(file_name, chunk_locks)| {
+            let path = Self::map_key(folder, &file_name);
+            log::trace!("Updating data for file {:?}", path);
+    
+            // Attempt to read the file and handle errors
+            let chunk_serializer = match self.read_file(&path).await {
+                Ok(file) => Ok(file),
+                Err(ChunkReadingError::ChunkNotExist) => {
+                    unreachable!("This should be managed by the cache")
+                }
+                Err(ChunkReadingError::IoError(err)) => {
+                    error!("Error reading the data before write: {}", err);
+                    Err(ChunkWritingError::IoError(err))
+                }
+                Err(err) => {
+                    error!("Error reading the data before write: {:?}", err);
+                    Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
+                }
+            }?;
+    
+            let mut serializer = chunk_serializer.write().await;
+            for chunk_lock in chunk_locks {
+                let mut chunk = chunk_lock.write().await;
+                let chunk_is_dirty = chunk.dirty;
+                chunk.dirty = false; // Mark the chunk as cleaned
+    
+                // Only update if the chunk is dirty
+                if chunk_is_dirty {
+                    if let Err(e) = serializer.update_chunk(&*chunk).await {
+                        error!("Failed to update chunk for {:?}: {:?}", path, e);
+                        return Err(ChunkWritingError::IoError(std::io::ErrorKind::Other));
                     }
                 }
-                log::trace!("Updated data for file {:?}", path);
-
-                let is_watched = self
+            }
+            log::trace!("Updated data for file {:?}", path);
+    
+            // Check if the file is being watched
+            let is_watched = self
+                .watchers
+                .read()
+                .await
+                .get(&path)
+                .is_some_and(|count| !count.is_zero());
+    
+            // Write the file if required
+            if serializer.should_write(is_watched) {
+                let serializer = serializer.downgrade();
+    
+                log::debug!("Writing file for {:?}", path);
+                if let Err(err) = serializer.write(path.clone()).await {
+                    error!("Error writing the file {:?}: {}", path, err);
+                    return Err(ChunkWritingError::IoError(err.kind()));
+                }
+    
+                // After writing, check if the file can be removed from cache if it's no longer watched
+                let mut locks = self.file_locks.write().await;
+                if self
                     .watchers
                     .read()
                     .await
                     .get(&path)
-                    .is_some_and(|count| !count.is_zero());
-
-                if serializer.should_write(is_watched) {
-                    // With the modification done, we can drop the write lock but keep the read lock
-                    // to avoid other threads to write/modify the data, but allow other threads to read it
-                    let serializer = serializer.downgrade();
-
-                    log::debug!("Writing file for {:?}", path);
-                    serializer
-                        .write(path.clone())
-                        .await
-                        .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
-                    drop(serializer);
-
-                    // If there are still no watchers, drop from the locks
-                    let mut locks = self.file_locks.write().await;
-
-                    if self
-                        .watchers
-                        .read()
-                        .await
-                        .get(&path)
-                        .is_none_or(|count| count.is_zero())
-                    {
-                        locks.remove(&path);
-                        log::trace!("Removed lockfile cache {:?}", path);
-                    }
+                    .is_none_or(|count| count.is_zero())
+                {
+                    locks.remove(&path);
+                    log::trace!("Removed lockfile cache {:?}", path);
                 }
-
-                Ok(())
-            });
-
-        //TODO: we need to handle the errors and return the result
-        // files to save
-        let _: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
-
+            }
+    
+            Ok(())
+        });
+    
+        // Collect and handle errors from all tasks
+        let results: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
+    
+        // Check if any task resulted in an error
+        if results.iter().any(|result| result.is_err()) {
+            return Err(ChunkWritingError::IoError(std::io::ErrorKind::Other));
+        }
+    
         Ok(())
     }
 
