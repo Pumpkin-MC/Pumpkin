@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_data::particle::Particle;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -18,7 +20,7 @@ pub struct ParticleArgumentConsumer;
 impl GetClientSideArgParser for ParticleArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "particle_type",
+            identifier: Cow::Borrowed("particle_type"),
         }
     }
 

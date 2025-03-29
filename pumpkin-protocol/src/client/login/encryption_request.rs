@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::clientbound::LOGIN_HELLO;
 use pumpkin_macros::packet;
 use serde::{Deserialize, Serialize};
@@ -7,7 +9,7 @@ use crate::VarInt;
 #[derive(Serialize, Deserialize)]
 #[packet(LOGIN_HELLO)]
 pub struct CEncryptionRequest<'a> {
-    pub server_id: &'a str, // 20
+    pub server_id: Cow<'a, str>, // 20
     pub public_key_length: VarInt,
     pub public_key: &'a [u8],
     pub verify_token_length: VarInt,
@@ -17,7 +19,7 @@ pub struct CEncryptionRequest<'a> {
 
 impl<'a> CEncryptionRequest<'a> {
     pub fn new(
-        server_id: &'a str,
+        server_id: Cow<'a, str>,
         public_key: &'a [u8],
         verify_token: &'a [u8],
         should_authenticate: bool,

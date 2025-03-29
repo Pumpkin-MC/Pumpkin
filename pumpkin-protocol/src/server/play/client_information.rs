@@ -1,13 +1,15 @@
+use std::borrow::Cow;
+
 use pumpkin_data::packet::serverbound::PLAY_CLIENT_INFORMATION;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(serde::Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[packet(PLAY_CLIENT_INFORMATION)]
-pub struct SClientInformationPlay {
-    pub locale: String, // 16
+pub struct SClientInformationPlay<'a> {
+    pub locale: Cow<'a, str>, // 16
     pub view_distance: i8,
     pub chat_mode: VarInt, // VarInt
     pub chat_colors: bool,

@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
 use pumpkin_macros::packet;
@@ -10,17 +10,17 @@ use crate::{
 };
 
 #[packet(PLAY_SET_OBJECTIVE)]
-pub struct CUpdateObjectives {
-    objective_name: String,
+pub struct CUpdateObjectives<'a> {
+    objective_name: Cow<'a, str>,
     mode: u8,
     display_name: TextComponent,
     render_type: VarInt,
     number_format: Option<NumberFormat>,
 }
 
-impl CUpdateObjectives {
+impl<'a> CUpdateObjectives<'a> {
     pub fn new(
-        objective_name: String,
+        objective_name: Cow<'a, str>,
         mode: Mode,
         display_name: TextComponent,
         render_type: RenderType,
@@ -36,7 +36,7 @@ impl CUpdateObjectives {
     }
 }
 
-impl ClientPacket for CUpdateObjectives {
+impl ClientPacket for CUpdateObjectives<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 

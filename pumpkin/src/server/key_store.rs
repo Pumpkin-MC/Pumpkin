@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use num_bigint::BigInt;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use rand::rngs::OsRng;
@@ -44,7 +46,7 @@ impl KeyStore {
         should_authenticate: bool,
     ) -> CEncryptionRequest<'a> {
         CEncryptionRequest::new(
-            server_id,
+            Cow::Borrowed(server_id),
             &self.public_key_der,
             verification_token,
             should_authenticate,

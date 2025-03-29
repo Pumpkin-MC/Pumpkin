@@ -1,21 +1,23 @@
+use std::borrow::Cow;
+
 use crate::VarInt;
 use crate::codec::slot::Slot;
 
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_SLOT;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_CONTAINER_SET_SLOT)]
 pub struct CSetContainerSlot<'a> {
     window_id: i8,
     state_id: VarInt,
     slot: i16,
-    slot_data: &'a Slot,
+    slot_data: Cow<'a, Slot>,
 }
 
 impl<'a> CSetContainerSlot<'a> {
-    pub fn new(window_id: i8, state_id: i32, slot: i16, slot_data: &'a Slot) -> Self {
+    pub fn new(window_id: i8, state_id: i32, slot: i16, slot_data: Cow<'a, Slot>) -> Self {
         Self {
             window_id,
             state_id: state_id.into(),

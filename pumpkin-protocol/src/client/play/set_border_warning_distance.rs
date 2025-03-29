@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_BORDER_WARNING_DISTANCE;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_SET_BORDER_WARNING_DISTANCE)]
 pub struct CSetBorderWarningDistance {
     warning_blocks: VarInt,

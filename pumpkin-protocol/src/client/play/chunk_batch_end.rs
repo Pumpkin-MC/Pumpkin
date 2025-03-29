@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_CHUNK_BATCH_FINISHED;
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::codec::var_int::VarInt;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(PLAY_CHUNK_BATCH_FINISHED)]
 pub struct CChunkBatchEnd {
     batch_size: VarInt,

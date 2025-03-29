@@ -2,7 +2,9 @@ use std::io::Read;
 use std::io::Write;
 use std::num::NonZeroUsize;
 
-use serde::{Serialize, Serializer};
+use serde::de::{Deserializer, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::ser::NetworkReadExt;
 use crate::ser::NetworkWriteExt;
@@ -10,6 +12,7 @@ use crate::ser::ReadingError;
 use crate::ser::WritingError;
 
 use super::Codec;
+use super::var_int::VarInt;
 
 pub struct BitSet(pub Box<[i64]>);
 
@@ -18,7 +21,7 @@ impl Codec<BitSet> for BitSet {
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(usize::MAX) };
 
     fn written_size(&self) -> usize {
-        todo!()
+        VarInt(self.0.len() as i32).written_size()
     }
 
     fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
@@ -43,10 +46,95 @@ impl Codec<BitSet> for BitSet {
 }
 
 impl Serialize for BitSet {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        todo!()
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for &value in self.0.iter() {
+            seq.serialize_element(&value)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for BitSet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct BitSetVisitor;
+
+        impl<'de> Visitor<'de> for BitSetVisitor {
+            type Value = BitSet;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a sequence of i64 integers")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut vec = Vec::new();
+                while let Some(value) = seq.next_element()? {
+                    vec.push(value);
+                }
+                Ok(BitSet(vec.into_boxed_slice()))
+            }
+        }
+
+        deserializer.deserialize_seq(BitSetVisitor)
+    }
+}
+
+#[cfg(test)]
+mod bitset_tests {
+    use super::BitSet;
+    use crate::codec::Codec;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_bitset_encode_decode() {
+        let test_data = BitSet(vec![0x1234_5678_9ABC_DEFF, -123456789].into_boxed_slice());
+        let mut buffer = Vec::new();
+        test_data.encode(&mut buffer).unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = BitSet::decode(&mut reader).unwrap();
+
+        assert_eq!(decoded.0.as_ref(), test_data.0.as_ref());
+    }
+
+    #[test]
+    fn test_bitset_empty() {
+        let empty = BitSet(Vec::new().into_boxed_slice());
+        let mut buffer = Vec::new();
+        empty.encode(&mut buffer).unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = BitSet::decode(&mut reader).unwrap();
+
+        assert!(decoded.0.is_empty());
+    }
+
+    #[test]
+    fn test_bitset_large() {
+        let large_data: Vec<_> = (0..1000).map(|i| i * 123456).collect();
+        let bitset = BitSet(large_data.into_boxed_slice());
+        let mut buffer = Vec::new();
+        bitset.encode(&mut buffer).unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = BitSet::decode(&mut reader).unwrap();
+
+        assert_eq!(decoded.0.len(), 1000);
+        assert!(
+            decoded
+                .0
+                .iter()
+                .enumerate()
+                .all(|(i, &v)| v == (i * 123456) as i64)
+        );
     }
 }

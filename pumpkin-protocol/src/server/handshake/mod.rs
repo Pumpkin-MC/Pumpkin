@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Read;
 
 use crate::ser::NetworkReadExt;
@@ -6,20 +7,20 @@ use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::packet;
 
 #[packet(HANDSHAKE_INTENTION)]
-pub struct SHandShake {
+pub struct SHandShake<'a> {
     pub protocol_version: VarInt,
-    pub server_address: String, // 255
+    pub server_address: Cow<'a, str>, // 255
     pub server_port: u16,
     pub next_state: ConnectionState,
 }
 
-impl ServerPacket for SHandShake {
+impl ServerPacket for SHandShake<'_> {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 
         Ok(Self {
             protocol_version: read.get_var_int()?,
-            server_address: read.get_string_bounded(255)?,
+            server_address: Cow::Owned(read.get_string_bounded(255)?),
             server_port: read.get_u16_be()?,
             next_state: read
                 .get_var_int()?

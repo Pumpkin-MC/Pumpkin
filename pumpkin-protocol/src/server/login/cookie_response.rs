@@ -11,14 +11,14 @@ use pumpkin_macros::packet;
 #[packet(LOGIN_COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (login) from the server.
 /// The Notchian server only accepts responses of up to 5 kiB in size.
-pub struct SLoginCookieResponse {
-    pub key: Identifier,
+pub struct SLoginCookieResponse<'a> {
+    pub key: Identifier<'a>,
     pub payload: Option<Box<[u8]>>, // 5120,
 }
 
 const MAX_COOKIE_LENGTH: usize = 5120;
 
-impl ServerPacket for SLoginCookieResponse {
+impl ServerPacket for SLoginCookieResponse<'_> {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 

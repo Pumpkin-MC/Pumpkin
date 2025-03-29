@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
@@ -35,7 +35,7 @@ impl Scoreboard {
         }
         world
             .broadcast_packet_all(&CUpdateObjectives::new(
-                objective.name.to_string(),
+                Cow::Borrowed(objective.name),
                 pumpkin_protocol::client::play::Mode::Add,
                 objective.display_name,
                 objective.render_type,
@@ -45,7 +45,7 @@ impl Scoreboard {
         world
             .broadcast_packet_all(&CDisplayObjective::new(
                 ScoreboardDisplaySlot::Sidebar,
-                objective.name.to_string(),
+                Cow::Borrowed(objective.name),
             ))
             .await;
     }
@@ -60,8 +60,8 @@ impl Scoreboard {
         }
         world
             .broadcast_packet_all(&CUpdateScore::new(
-                score.entity_name.to_string(),
-                score.objective_name.to_string(),
+                Cow::Borrowed(score.entity_name),
+                Cow::Borrowed(score.objective_name),
                 score.value,
                 score.display_name,
                 score.number_format,

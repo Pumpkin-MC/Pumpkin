@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io::{Read, Write},
     marker::PhantomData,
     num::NonZeroU16,
@@ -183,8 +184,10 @@ impl<T: Serialize> Serialize for IdOr<T> {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct SoundEvent {
-    pub sound_name: Identifier,
+#[serde(bound(deserialize = "'a: 'de"))]
+pub struct SoundEvent<'a> {
+    #[serde(borrow)]
+    pub sound_name: Identifier<'a>,
     pub range: Option<f32>,
 }
 
@@ -389,12 +392,12 @@ pub struct Property {
 }
 
 pub struct KnownPack<'a> {
-    pub namespace: &'a str,
-    pub id: &'a str,
-    pub version: &'a str,
+    pub namespace: Cow<'a, str>,
+    pub id: Cow<'a, str>,
+    pub version: Cow<'a, str>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,

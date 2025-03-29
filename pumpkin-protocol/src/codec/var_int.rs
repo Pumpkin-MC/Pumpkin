@@ -4,7 +4,7 @@ use std::{
     ops::Deref,
 };
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::ser::{NetworkReadExt, ReadingError, WritingError};
 
 use super::Codec;
 use bytes::BufMut;
@@ -36,15 +36,12 @@ impl Codec<Self> for VarInt {
     }
 
     fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
-        let mut val = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
-            val >>= 7;
-            write.write_u8_be(if val == 0 { b } else { b | 0b10000000 })?;
-            if val == 0 {
-                break;
-            }
-        }
+        let (simd, bytes_needed) = self.encode_simd();
+        let bytes = simd.to_le_bytes();
+
+        write
+            .write_all(&bytes[..bytes_needed as usize])
+            .map_err(WritingError::IoError)?;
         Ok(())
     }
 
@@ -62,6 +59,28 @@ impl Codec<Self> for VarInt {
 }
 
 impl VarInt {
+    // Adapted from VarInt-Simd encode
+    // https://github.com/as-com/varint-simd/blob/0f468783da8e181929b01b9c6e9f741c1fe09825/src/encode/mod.rs#L71
+    pub fn encode_simd(&self) -> (u64, u32) {
+        let x = self.0 as u64;
+        let stage1 = (x & 0x000000000000007f)
+            | ((x & 0x0000000000003f80) << 1)
+            | ((x & 0x00000000001fc000) << 2)
+            | ((x & 0x000000000fe00000) << 3)
+            | ((x & 0x00000000f0000000) << 4);
+
+        let leading = stage1.leading_zeros();
+
+        let unused_bytes = (leading - 1) >> 3;
+        let bytes_needed = 8 - unused_bytes;
+
+        // set all but the last MSBs
+        let msbs = 0x8080808080808080;
+        let msbmask = 0xffffffffffffffff >> (((8 - bytes_needed + 1) << 3) - 1);
+
+        (stage1 | (msbs & msbmask), bytes_needed)
+    }
+
     pub async fn decode_async(read: &mut (impl AsyncRead + Unpin)) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -84,18 +103,13 @@ impl VarInt {
         &self,
         write: &mut (impl AsyncWrite + Unpin),
     ) -> Result<(), WritingError> {
-        let mut val = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
-            val >>= 7;
-            write
-                .write_u8(if val == 0 { b } else { b | 0b10000000 })
-                .await
-                .map_err(WritingError::IoError)?;
-            if val == 0 {
-                break;
-            }
-        }
+        let (simd, bytes_needed) = self.encode_simd();
+        let bytes = simd.to_le_bytes();
+
+        write
+            .write_all(&bytes[..bytes_needed as usize])
+            .await
+            .map_err(WritingError::IoError)?;
         Ok(())
     }
 }
@@ -197,5 +211,70 @@ impl<'de> Deserialize<'de> for VarInt {
         }
 
         deserializer.deserialize_seq(VarIntVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VarInt;
+    use crate::{codec::Codec, ser::ReadingError};
+    use std::io::Cursor;
+
+    #[test]
+    fn test_varint_encode_decode() {
+        let test_cases = [
+            0,
+            1,
+            127,
+            128,
+            255,
+            2147,
+            16384,
+            0x7FFF_FFFF,
+            -1,
+            -2147483648,
+        ];
+
+        for &value in &test_cases {
+            let varint = VarInt(value);
+            let mut buffer = Vec::new();
+            varint.encode(&mut buffer).unwrap();
+
+            let mut reader = Cursor::new(buffer);
+            let decoded = VarInt::decode(&mut reader).unwrap();
+
+            assert_eq!(decoded.0, value);
+            assert_eq!(reader.position() as usize, varint.written_size());
+        }
+    }
+
+    #[test]
+    fn test_varint_max_size() {
+        let mut buffer = [0u8; 5];
+        // Max varint (5 bytes)
+        let max_varint = VarInt(0x7FFF_FFFF);
+        max_varint.encode(&mut &mut buffer[..]).unwrap();
+
+        let mut reader = Cursor::new(&buffer[..]);
+        assert_eq!(VarInt::decode(&mut reader).unwrap().0, 0x7FFF_FFFF);
+
+        // Long varint (6 bytes)
+        let invalid_data = [0x80, 0x80, 0x80, 0x80, 0x80, 0x00];
+        let mut reader = Cursor::new(&invalid_data[..]);
+        match VarInt::decode(&mut reader) {
+            Err(ReadingError::TooLarge(_)) => (),
+            _ => panic!("Expected TooLarge error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_varint_async() {
+        let varint = VarInt(32767);
+        let mut buffer = Vec::new();
+        varint.encode_async(&mut buffer).await.unwrap();
+
+        let mut reader = Cursor::new(buffer);
+        let decoded = VarInt::decode_async(&mut reader).await.unwrap();
+        assert_eq!(decoded.0, 32767);
     }
 }

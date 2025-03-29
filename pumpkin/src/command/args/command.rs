@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{
     ArgumentType, CommandSuggestion, StringProtoArgBehavior, SuggestionProviders,
@@ -58,7 +60,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
             .commands
             .keys()
             .filter(|suggestion| suggestion.starts_with(input))
-            .map(|suggestion| CommandSuggestion::new(suggestion.to_string(), None))
+            .map(|suggestion| CommandSuggestion::new(Cow::Owned(suggestion.to_owned()), None))
             .collect();
         Ok(Some(suggestions))
     }

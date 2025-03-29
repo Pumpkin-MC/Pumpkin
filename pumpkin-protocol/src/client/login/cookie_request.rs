@@ -8,11 +8,11 @@ use crate::codec::identifier::Identifier;
 #[packet(LOGIN_COOKIE_REQUEST)]
 /// Requests a cookie that was previously stored.
 pub struct CLoginCookieRequest<'a> {
-    key: &'a Identifier,
+    key: Identifier<'a>,
 }
 
 impl<'a> CLoginCookieRequest<'a> {
-    pub fn new(key: &'a Identifier) -> Self {
+    pub fn new(key: Identifier<'a>) -> Self {
         Self { key }
     }
 }

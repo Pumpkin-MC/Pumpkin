@@ -11,14 +11,14 @@ use pumpkin_macros::packet;
 #[packet(PLAY_COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (play) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
-pub struct SCookieResponse {
-    pub key: Identifier,
+pub struct SCookieResponse<'a> {
+    pub key: Identifier<'a>,
     pub payload: Option<Box<[u8]>>, // 5120,
 }
 
 const MAX_COOKIE_LENGTH: usize = 5120;
 
-impl ServerPacket for SCookieResponse {
+impl ServerPacket for SCookieResponse<'_> {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 
