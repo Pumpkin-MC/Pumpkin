@@ -11,8 +11,16 @@ pub struct Biome {
     has_precipitation: bool,
     temperature: f32,
     downfall: f32,
+    temperature_modifier: Option<TemperatureModifier>,
     //carvers: Vec<String>,
     features: Vec<Vec<String>>,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum TemperatureModifier {
+    None,
+    Frozen,
 }
 
 pub(crate) fn build() -> TokenStream {
@@ -34,11 +42,19 @@ pub(crate) fn build() -> TokenStream {
         let downfall = biome.downfall;
         //  let carvers = &biome.carvers;
         let features = &biome.features;
-
+        let temperature_modifier = biome
+            .temperature_modifier
+            .clone()
+            .unwrap_or(TemperatureModifier::None);
+        let temperature_modifier = match temperature_modifier {
+            TemperatureModifier::Frozen => quote! { TemperatureModifier::Frozen },
+            TemperatureModifier::None => quote! { TemperatureModifier::None },
+        };
         variants.extend([quote! {
             pub const #format_name: Biome = Biome {
                has_precipitation: #has_precipitation,
                temperature: #temperature,
+               temperature_modifier: #temperature_modifier,
                downfall: #downfall,
               features: &[#(&[#(#features),*]),*]
             };
@@ -58,6 +74,7 @@ pub(crate) fn build() -> TokenStream {
         pub struct Biome {
             has_precipitation: bool,
             temperature: f32,
+            temperature_modifier: TemperatureModifier,
             downfall: f32,
            // carvers: &'static [&str],
             features: &'static [&'static [&'static str]]
@@ -96,6 +113,12 @@ pub(crate) fn build() -> TokenStream {
 
                 deserializer.deserialize_str(BiomeVisitor)
             }
+        }
+
+        #[derive(Clone, Copy, PartialEq, Debug)]
+        pub enum TemperatureModifier {
+            None,
+            Frozen
         }
 
         impl Biome {
