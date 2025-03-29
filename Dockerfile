@@ -1,8 +1,8 @@
 FROM rust:1-alpine3.21 AS builder
-ARG GIT_VERSION=Docker
-ENV GIT_VERSION=$GIT_VERSION
 ENV RUSTFLAGS="-C target-feature=-crt-static"
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache musl-dev \
+    # Required for git-version
+    git
 
 WORKDIR /pumpkin
 COPY . /pumpkin

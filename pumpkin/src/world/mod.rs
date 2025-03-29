@@ -513,7 +513,7 @@ impl World {
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
             // TODO: Remove magic numbers
-            0x01 | 0x04 | 0x08,
+            0x01 | 0x04,
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
@@ -521,7 +521,6 @@ impl World {
                         name: &gameprofile.name,
                         properties: &gameprofile.properties,
                     },
-                    PlayerAction::UpdateListed(true),
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
                 ],
             }],
@@ -538,13 +537,10 @@ impl World {
                 .map(|(_, player)| {
                     (
                         &player.gameprofile.id,
-                        [
-                            PlayerAction::AddPlayer {
-                                name: &player.gameprofile.name,
-                                properties: &player.gameprofile.properties,
-                            },
-                            PlayerAction::UpdateListed(true),
-                        ],
+                        [PlayerAction::AddPlayer {
+                            name: &player.gameprofile.name,
+                            properties: &player.gameprofile.properties,
+                        }],
                     )
                 })
                 .collect::<Vec<_>>();
@@ -560,7 +556,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(0x01, &entries))
                 .await;
         };
 
@@ -591,6 +587,7 @@ impl World {
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
             log::debug!("Sending player entities to {}", player.gameprofile.name);
+
             player
                 .client
                 .enqueue_packet(&CSpawnEntity::new(
@@ -607,9 +604,22 @@ impl World {
                 .await;
         }
 
-        // Entity meta data
-        // Set skin parts
-        player.send_client_information().await;
+        // Set skin parts and tablist
+        for player in self.players.read().await.values() {
+            //Set / Update skin part for every player
+            player.send_client_information().await;
+
+            //Update tablist
+            //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
+            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+                0x08,
+                &[pumpkin_protocol::client::play::Player {
+                    uuid: player.gameprofile.id,
+                    actions: &[PlayerAction::UpdateListed(true)],
+                }],
+            ))
+            .await;
+        }
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
