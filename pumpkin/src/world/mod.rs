@@ -419,7 +419,7 @@ impl World {
         }
     }
 
-    pub async fn tick_scheduled_fluid_ticks(&self) {
+    pub async fn tick_scheduled_fluid_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
