@@ -33,6 +33,7 @@ pub(crate) fn build() -> TokenStream {
     let mut type_to_name = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut type_to_id = TokenStream::new();
+    let mut id_to_type = TokenStream::new();
 
     for (i, (name, biome)) in biomes.iter().enumerate() {
         // let full_name = format!("minecraft:{name}");
@@ -50,8 +51,11 @@ pub(crate) fn build() -> TokenStream {
             TemperatureModifier::Frozen => quote! { TemperatureModifier::Frozen },
             TemperatureModifier::None => quote! { TemperatureModifier::None },
         };
+        let index = LitInt::new(&i.to_string(), Span::call_site());
+
         variants.extend([quote! {
             pub const #format_name: Biome = Biome {
+               index: #index,
                has_precipitation: #has_precipitation,
                temperature: #temperature,
                temperature_modifier: #temperature_modifier,
@@ -62,8 +66,8 @@ pub(crate) fn build() -> TokenStream {
 
         type_to_name.extend(quote! { Self::#format_name => #name, });
         name_to_type.extend(quote! { #name => Some(Self::#format_name), });
-        let index = LitInt::new(&i.to_string(), Span::call_site());
         type_to_id.extend(quote! { Self::#format_name => #index, });
+        id_to_type.extend(quote! { #index => Some(Self::#format_name), });
     }
 
     quote! {
@@ -72,12 +76,13 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Copy, PartialEq, Debug)]
         pub struct Biome {
-            has_precipitation: bool,
-            temperature: f32,
-            temperature_modifier: TemperatureModifier,
-            downfall: f32,
+            pub index: u8,
+            pub has_precipitation: bool,
+            pub temperature: f32,
+            pub temperature_modifier: TemperatureModifier,
+            pub downfall: f32,
            // carvers: &'static [&str],
-            features: &'static [&'static [&'static str]]
+            pub features: &'static [&'static [&'static str]]
         }
 
         impl<'de> Deserialize<'de> for Biome {
@@ -124,13 +129,19 @@ pub(crate) fn build() -> TokenStream {
         impl Biome {
             #variants
 
-            pub  fn from_name(name: &str) -> Option<Self> {
-                          match name {
-                              #name_to_type
-                              _ => None
+            pub fn from_name(name: &str) -> Option<Self> {
+                match name {
+                    #name_to_type
+                    _ => None
+                }
+            }
 
-                          }
-                      }
+            pub const fn from_id(id: u16) -> Option<Self> {
+                match id {
+                    #id_to_type
+                    _ => None
+                }
+            }
         }
     }
 }
