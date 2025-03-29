@@ -4,13 +4,11 @@ use crate::entity::player::Player;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockFace, BlockState, LeverLikeProperties};
-use pumpkin_data::{
-    block::{BlockProperties, HorizontalFacing},
-    item::Item,
-};
+use pumpkin_data::{block::BlockProperties, item::Item};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
 use crate::{
@@ -48,7 +46,7 @@ impl PumpkinBlock for LeverBlock {
         face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player_direction: &f32,
         _other: bool,
     ) -> u16 {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
@@ -60,7 +58,9 @@ impl PumpkinBlock for LeverBlock {
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
-            lever_props.facing = *player_direction;
+            let horizontal_direction =
+                PreciseDirection::from(*player_direction).to_horizontal_direction();
+            lever_props.facing = horizontal_direction;
         } else {
             lever_props.facing = face.opposite().to_cardinal_direction();
         };

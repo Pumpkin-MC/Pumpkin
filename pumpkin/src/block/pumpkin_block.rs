@@ -3,7 +3,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
+use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -56,7 +56,7 @@ pub trait PumpkinBlock: Send + Sync {
         _face: &BlockDirection,
         _pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player_direction: &f32,
         _other: bool,
     ) -> u16 {
         block.default_state_id

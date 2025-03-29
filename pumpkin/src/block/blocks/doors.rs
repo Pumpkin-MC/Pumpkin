@@ -4,12 +4,12 @@ use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::DoorHinge;
 use pumpkin_data::block::DoubleBlockHalf;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::precise_direction::PreciseDirection;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -92,12 +92,14 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 _face: &BlockDirection,
                 _block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                player_direction: &HorizontalFacing,
+                player_direction: &f32,
                 _other: bool,
             ) -> u16 {
                 let mut door_props = DoorProperties::default(block);
+                let horizontal_direction =
+                    PreciseDirection::from(*player_direction).to_horizontal_direction();
                 door_props.half = DoubleBlockHalf::Lower;
-                door_props.facing = *player_direction;
+                door_props.facing = horizontal_direction;
                 door_props.hinge = DoorHinge::Left;
 
                 door_props.to_state_id(block)
