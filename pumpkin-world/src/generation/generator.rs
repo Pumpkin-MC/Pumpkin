@@ -4,7 +4,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::block::state::ChunkBlockState;
-use crate::chunk::{ChunkBlocks, ChunkData};
+use crate::chunk::{ChunkData, ChunkSection};
 use crate::coordinates::{BlockCoordinates, ChunkRelativeBlockCoordinates, XZBlockCoordinates};
 use crate::generation::Seed;
 
@@ -46,7 +46,7 @@ pub(crate) trait PerlinTerrainGenerator: Sync + Send {
         &self,
         coordinates: ChunkRelativeBlockCoordinates,
         at: BlockCoordinates,
-        chunk_blocks: &mut ChunkBlocks,
+        chunk_blocks: &mut ChunkSection,
         chunk_height: i16,
         biome: Biome,
     );
