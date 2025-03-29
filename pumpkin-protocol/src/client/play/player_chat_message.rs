@@ -54,7 +54,7 @@ impl CPlayerChatMessage {
             message,
             timestamp,
             salt,
-            previous_messages_count: previous_messages.len().into(),
+            previous_messages_count: VarInt(previous_messages.len() as i32),
             previous_messages,
             unsigned_content,
             filter_type,

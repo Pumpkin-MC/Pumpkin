@@ -681,15 +681,6 @@ impl Player {
         }
 
         let gameprofile = &self.gameprofile;
-        /* server.broadcast_packet(
-            self,
-            &CDisguisedChatMessage::new(
-                TextComponent::from(message.clone()),
-                VarInt(0),
-                gameprofile.name.clone().into(),
-                None,
-            ),
-        ) */
 
         send_cancellable! {{
             PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
