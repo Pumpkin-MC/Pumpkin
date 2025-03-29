@@ -30,11 +30,24 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract Versions
+        id: versions
+        run: |
+          echo "VERSION=$(grep '^version' pumpkin/Cargo.toml | head -1 | awk -F '"' '{print $2}')" >> $GITHUB_ENV
+          echo "MC_VERSION=$(awk -F '\"' '/CURRENT_MC_VERSION/ {print $2}' pumpkin/src/server/mod.rs)" >> $GITHUB_ENV
+
       - name: Extract Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=raw,value=latest
+            type=sha
+            type=raw,value=mc-${{ env.MC_VERSION }}
+            type=raw,value=${{ env.VERSION }}
+            type=raw,value=mc${{ env.MC_VERSION }}-${{ env.VERSION }}
 
       - name: Docker Buildx
         uses: docker/setup-buildx-action@v3
