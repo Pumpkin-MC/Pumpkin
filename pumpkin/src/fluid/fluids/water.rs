@@ -5,10 +5,7 @@ use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
 use pumpkin_macros::pumpkin_fluid;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::{
-    fluid::pumpkin_fluid::PumpkinFluid,
-    world::World,
-};
+use crate::{fluid::pumpkin_fluid::PumpkinFluid, world::World};
 
 use super::flowing_fluid::FlowingFluid;
 
@@ -48,14 +45,27 @@ impl FlowingFluid for FlowingWater {
     async fn get_source(&self, fluid: &Fluid, falling: bool) -> FlowingFluidProperties {
         let mut source_props = FlowingFluidProperties::default(fluid);
         source_props.level = Level::L8;
-        source_props.falling = if falling { Falling::True } else { Falling::False };
+        source_props.falling = if falling {
+            Falling::True
+        } else {
+            Falling::False
+        };
         source_props
     }
 
-    async fn get_flowing(&self, fluid: &Fluid, level: Level, falling: bool) -> FlowingFluidProperties {
+    async fn get_flowing(
+        &self,
+        fluid: &Fluid,
+        level: Level,
+        falling: bool,
+    ) -> FlowingFluidProperties {
         let mut flowing_props = FlowingFluidProperties::default(fluid);
         flowing_props.level = level;
-        flowing_props.falling = if falling { Falling::True } else { Falling::False };
+        flowing_props.falling = if falling {
+            Falling::True
+        } else {
+            Falling::False
+        };
         flowing_props
     }
 
@@ -69,6 +79,9 @@ impl FlowingFluid for FlowingWater {
     }
 
     fn is_same_fluid(&self, fluid: &Fluid, other_state_id: u16) -> bool {
-        fluid.id == other_state_id
+        if let Some(other_fluid) = Fluid::from_state_id(other_state_id) {
+            return fluid.id == other_fluid.id;
+        }
+        false
     }
 }
