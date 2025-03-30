@@ -442,7 +442,6 @@ pub(crate) fn build() -> TokenStream {
                 },
             ));
         }
-
         fluid_from_state_id.extend(quote! {
             #state_id_start..=#state_id_end => Some(Fluid::#const_ident),
         });
@@ -688,7 +687,7 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
-
+            #[allow(unreachable_patterns)]
             pub const fn from_state_id(id: u16) -> Option<Self> {
                 match id {
                     #fluid_from_state_id
