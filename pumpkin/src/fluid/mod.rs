@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use fluids::water::FlowingWater;
+use fluids::{lava::FlowingLava, water::FlowingWater};
 use registry::FluidRegistry;
 
 mod fluids;
@@ -13,6 +13,7 @@ pub fn default_registry() -> Arc<FluidRegistry> {
     let mut manager = FluidRegistry::default();
 
     manager.register(FlowingWater);
+    manager.register(FlowingLava);
 
     Arc::new(manager)
 }
