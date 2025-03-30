@@ -231,22 +231,26 @@ impl World {
         chat_message: &SChatMessage,
         decorated_message: &TextComponent,
     ) {
-        // let filtered_chat_log = self
-        //     .get_filtered_chat_log(chat_message.acknowledged.clone())
-        //     .await;
+        log::warn!("Count: {:?}", chat_message.message_count);
+        let filtered_chat_log = self
+            .get_filtered_chat_log(chat_message.acknowledged.clone())
+            .await;
 
-        let filtered_chat_log = self.chat_log.lock().await;
-
-        log::warn!("Acknowledged: {:?}", filtered_chat_log.clone());
+        // Don't leave this locked in case sender is also recipient
+        let sender_messages_sent = {
+            let sender_chat_session = sender.chat_session.lock().await;
+            sender_chat_session.messages_sent
+        };
 
         let current_players = self.players.read().await;
+
         for (_, recipient) in current_players.iter() {
             let mut recipient_chat_session = recipient.chat_session.lock().await;
 
             let packet = &CPlayerChatMessage::new(
                 VarInt(recipient_chat_session.messages_received),
                 sender.gameprofile.id,
-                VarInt(recipient_chat_session.messages_sent),
+                VarInt(sender_messages_sent),
                 chat_message.signature.clone(),
                 chat_message.message.clone(),
                 chat_message.timestamp,
@@ -259,16 +263,12 @@ impl World {
                 None,
             );
 
-            let signature = base64::encode(chat_message.signature.clone().unwrap());
-            log::warn!("Signature: {:?}", signature);
-
             recipient.client.enqueue_packet(packet).await;
+
             recipient_chat_session.messages_received += 1;
         }
 
         sender.chat_session.lock().await.messages_sent += 1;
-
-        drop(filtered_chat_log);
 
         self.append_to_chat_log(chat_message.signature.clone())
             .await;
@@ -278,22 +278,21 @@ impl World {
     /// id 0 is most recent, id 19 is oldest
     pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
         let new_message = PreviousMessage {
-            id: VarInt(0),
-            signature,
+            id: VarInt(1),
+            signature: None,
         };
 
         let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
         messages.push(new_message);
+        if messages.len() > 20 {
+            messages.remove(0);
+        }
+        let messages_len = messages.len();
 
         for (i, message) in messages.iter_mut().enumerate() {
-            if i != 0 {
-                message.signature = None;
-            }
-            message.id = VarInt(i as i32);
-        }
+            message.signature = None;
 
-        if messages.len() >= 20 {
-            messages.remove(0);
+            message.id = VarInt((messages_len - i) as i32);
         }
 
         *self.chat_log.lock().await = messages.into_boxed_slice();
@@ -312,9 +311,8 @@ impl World {
             .lock()
             .await
             .iter()
-            .enumerate()
-            .filter(|(i, _)| bitset.chars().nth(*i).unwrap_or('0') == '1') // Filter based on bitset
-            .map(|(_, message)| message.clone()) // Clone the messages
+            .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
+            .map(|message| message.clone()) // Clone the messages
             .collect();
 
         return filtered_log.into_boxed_slice();
