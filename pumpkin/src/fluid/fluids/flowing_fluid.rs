@@ -285,7 +285,6 @@ pub trait FlowingFluid {
         let mut min_dist = 1000;
         let mut result = HashMap::new();
         let mut ctx = None;
-
         for direction in BlockDirection::horizontal() {
             let side_pos = block_pos.offset(direction.to_offset());
 
@@ -374,13 +373,6 @@ pub trait FlowingFluid {
     async fn spread_to(&self, world: &Arc<World>, _fluid: &Fluid, pos: &BlockPos, state_id: u16) {
         //TODO Implement lava water mix
 
-        let existing_block = world.get_block(pos).await.ok();
-        if let Some(block) = existing_block {
-            if block.id != 0 {
-                self.before_destroying_block(&world, pos, block.id).await;
-            }
-        }
-
         world
             .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
             .await;
@@ -393,10 +385,7 @@ pub trait FlowingFluid {
         };
 
         if self.is_same_fluid(fluid, state_id) {
-            let props = FlowingFluidProperties::from_state_id(state_id, fluid);
-            if props.level == Level::L8 && props.falling != Falling::True {
-                return false;
-            }
+            return true;
         }
 
         self.can_replace_block(world, pos, fluid).await
@@ -416,7 +405,6 @@ pub trait FlowingFluid {
     }
 
     async fn can_be_replaced(&self, world: &Arc<World>, pos: &BlockPos, block_id: u16) -> bool {
-        // Check if the block is a fluid block
         let block_state_id = match world.get_block_state_id(pos).await {
             Ok(id) => id,
             Err(_) => return false,
@@ -428,17 +416,10 @@ pub trait FlowingFluid {
             }
         }
 
-        //TODO Add specific block IDs here that aren't solid
+        //TODO Add check for blocks that aren't solid
         match block_id {
             0 => true,
             _ => false,
-        }
-    }
-
-    async fn before_destroying_block(&self, _world: &Arc<World>, _pos: &BlockPos, block_id: u16) {
-        //TODO Add specific block IDs here that need to be handled before destroying
-        match block_id {
-            _ => (),
         }
     }
 
