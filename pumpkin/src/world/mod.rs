@@ -654,23 +654,27 @@ impl World {
             {
                 let chat_session = player.chat_session.lock().await;
 
-                let player_data = (
-                    &player.gameprofile.id,
-                    [
-                        PlayerAction::AddPlayer {
-                            name: &player.gameprofile.name,
-                            properties: &player.gameprofile.properties,
-                        },
-                        PlayerAction::InitializeChat(Some(InitChat {
-                            session_id: chat_session.session_id,
-                            expires_at: chat_session.expires_at,
-                            public_key: chat_session.public_key.clone(),
-                            signature: chat_session.signature.clone(),
-                        })),
-                    ],
-                );
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties: &player.gameprofile.properties,
+                }];
 
-                current_player_data.push(player_data);
+                if base_config.allow_chat_reports {
+                    player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: chat_session.session_id,
+                        expires_at: chat_session.expires_at,
+                        public_key: chat_session.public_key.clone(),
+                        signature: chat_session.signature.clone(),
+                    })))
+                }
+
+                current_player_data.push((&player.gameprofile.id, player_actions));
+            }
+
+            // TODO: Remove magic numbers
+            let mut action_flags = 0x01;
+            if base_config.allow_chat_reports {
+                action_flags |= 0x02;
             }
 
             let entries = current_player_data
@@ -684,7 +688,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(0x01 | 0x02, &entries)) // TODO: Remove magic numbers
+                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags, &entries))
                 .await;
         };
 
