@@ -1861,7 +1861,6 @@ pub struct ChatSession {
     pub expires_at: i64,
     pub public_key: Box<[u8]>,
     pub signature: Box<[u8]>,
-    pub previous_messages: Box<[PreviousMessage]>,
     pub messages_sent: i32,
     pub messages_received: i32,
 }
@@ -1885,29 +1884,8 @@ impl ChatSession {
             expires_at: expires_at,
             public_key: public_key,
             signature: key_signature,
-            previous_messages: Box::new([]),
             messages_sent: 0,
             messages_received: 0,
         }
-    }
-
-    pub fn append_previous_message(&mut self, signature: Option<Box<[u8]>>) {
-        let new_message = PreviousMessage {
-            // Packet cannot be deserialized by the client unless this is 0. I do not know why. It doesn't seem to affect anything
-            id: VarInt(0),
-            signature: signature.unwrap_or(Box::new([])),
-        };
-
-        let mut messages = Vec::from(self.previous_messages.as_ref());
-
-        if messages.len() >= 20 {
-            messages.remove(0);
-        }
-
-        messages.push(new_message);
-
-        self.previous_messages = messages.into_boxed_slice();
-
-        self.messages_sent += 1;
     }
 }

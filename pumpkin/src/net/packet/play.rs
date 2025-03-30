@@ -666,13 +666,7 @@ impl Player {
     }
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
-        log::warn!(
-            "ACK: {:04b}{:08b}{:08b}",
-            chat_message.acknowledged[2],
-            chat_message.acknowledged[1],
-            chat_message.acknowledged[0]
-        );
-        let message = chat_message.message;
+        let message = chat_message.message.clone();
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
             return;
@@ -705,26 +699,7 @@ impl Player {
                 let entity = &self.living_entity.entity;
                 let world = &entity.world.read().await;
                 if BASIC_CONFIG.allow_chat_reports {
-                    let chat_session = self.chat_session.lock().await;
-                    let reportable_packet = &mut CPlayerChatMessage::new(
-                        VarInt(0), // This will get modified later
-                        gameprofile.id,
-                        VarInt(chat_session.messages_sent),
-                        chat_message.signature.clone(),
-                        event.message.clone(),
-                        chat_message.timestamp,
-                        chat_message.salt,
-                        chat_session.previous_messages.clone(),
-                        Some(decorated_message.clone()),
-                        FilterType::PassThrough,
-                        (RAW + 1).into(), // Custom registry chat_type with no sender name
-                        TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
-                        None,
-                    );
-                    drop(chat_session);
-                    world.broadcast_secure_player_chat(reportable_packet).await;
-                    // let mut chat_session = self.chat_session.lock().await;
-                    // chat_session.append_previous_message(chat_message.signature.clone());
+                    world.broadcast_secure_player_chat(&self, &chat_message, decorated_message).await;
                 } else {
                     let no_reports_packet = &CSystemChatMessage::new(
                         decorated_message,

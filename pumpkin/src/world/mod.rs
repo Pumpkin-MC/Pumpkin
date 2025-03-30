@@ -30,7 +30,7 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
-    world::WorldEvent,
+    world::{RAW, WorldEvent},
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
@@ -38,8 +38,9 @@ use pumpkin_protocol::{
     client::play::{
         CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        GameEvent, InitChat, PlayerAction,
+        FilterType, GameEvent, InitChat, PlayerAction, PreviousMessage,
     },
+    server::play::SChatMessage,
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
@@ -154,6 +155,9 @@ pub struct World {
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
+    /// A log of the last 20 chat messages (or attempted chat messages) from players.
+    /// Used for previous message acknowledgement.
+    pub chat_log: Mutex<Box<[PreviousMessage]>>,
 }
 
 impl World {
@@ -179,6 +183,7 @@ impl World {
             block_registry,
             sea_level: generation_settings.sea_level,
             unsent_block_changes: Mutex::new(HashMap::new()),
+            chat_log: Mutex::new(Box::new([])),
         }
     }
 
@@ -220,16 +225,99 @@ impl World {
         .await;
     }
 
-    pub async fn broadcast_secure_player_chat(&self, packet: &mut CPlayerChatMessage) {
-        let current_players = self.players.read().await;
+    pub async fn broadcast_secure_player_chat(
+        &self,
+        sender: &Arc<Player>,
+        chat_message: &SChatMessage,
+        decorated_message: &TextComponent,
+    ) {
+        // let filtered_chat_log = self
+        //     .get_filtered_chat_log(chat_message.acknowledged.clone())
+        //     .await;
 
-        for (_, player) in current_players.iter() {
-            let mut chat_session = player.chat_session.lock().await;
-            packet.global_index = VarInt(chat_session.messages_received);
-            player.client.enqueue_packet(packet).await;
-            chat_session.messages_received += 1;
-            chat_session.append_previous_message(packet.message_signature.clone());
+        let filtered_chat_log = self.chat_log.lock().await;
+
+        log::warn!("Acknowledged: {:?}", filtered_chat_log.clone());
+
+        let current_players = self.players.read().await;
+        for (_, recipient) in current_players.iter() {
+            let mut recipient_chat_session = recipient.chat_session.lock().await;
+
+            let packet = &CPlayerChatMessage::new(
+                VarInt(recipient_chat_session.messages_received),
+                sender.gameprofile.id,
+                VarInt(recipient_chat_session.messages_sent),
+                chat_message.signature.clone(),
+                chat_message.message.clone(),
+                chat_message.timestamp,
+                chat_message.salt,
+                filtered_chat_log.clone(),
+                Some(decorated_message.clone()),
+                FilterType::PassThrough,
+                (RAW + 1).into(), // Custom registry chat_type with no sender name
+                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                None,
+            );
+
+            let signature = base64::encode(chat_message.signature.clone().unwrap());
+            log::warn!("Signature: {:?}", signature);
+
+            recipient.client.enqueue_packet(packet).await;
+            recipient_chat_session.messages_received += 1;
         }
+
+        sender.chat_session.lock().await.messages_sent += 1;
+
+        drop(filtered_chat_log);
+
+        self.append_to_chat_log(chat_message.signature.clone())
+            .await;
+    }
+
+    /// Adds a message to the chat log and updates ids in the chat log
+    /// id 0 is most recent, id 19 is oldest
+    pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
+        let new_message = PreviousMessage {
+            id: VarInt(0),
+            signature,
+        };
+
+        let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
+        messages.push(new_message);
+
+        for (i, message) in messages.iter_mut().enumerate() {
+            if i != 0 {
+                message.signature = None;
+            }
+            message.id = VarInt(i as i32);
+        }
+
+        if messages.len() >= 20 {
+            messages.remove(0);
+        }
+
+        *self.chat_log.lock().await = messages.into_boxed_slice();
+    }
+
+    pub async fn get_filtered_chat_log(&self, acknowledged: Box<[u8]>) -> Box<[PreviousMessage]> {
+        let bitset = format!(
+            "{:04b}{:08b}{:08b}",
+            acknowledged[2], acknowledged[1], acknowledged[0]
+        );
+
+        log::warn!("Bitset: {:?}", bitset);
+
+        let filtered_log: Vec<PreviousMessage> = self
+            .chat_log
+            .lock()
+            .await
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| bitset.chars().nth(*i).unwrap_or('0') == '1') // Filter based on bitset
+            .map(|(_, message)| message.clone()) // Clone the messages
+            .collect();
+
+        return filtered_log.into_boxed_slice();
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
