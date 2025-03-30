@@ -665,7 +665,7 @@ impl World {
                         expires_at: chat_session.expires_at,
                         public_key: chat_session.public_key.clone(),
                         signature: chat_session.signature.clone(),
-                    })))
+                    })));
                 }
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
