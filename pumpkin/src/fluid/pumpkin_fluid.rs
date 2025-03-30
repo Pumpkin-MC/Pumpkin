@@ -53,6 +53,7 @@ pub trait PumpkinFluid: Send + Sync {
     ) {
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn on_place(
         &self,
         _server: &Server,

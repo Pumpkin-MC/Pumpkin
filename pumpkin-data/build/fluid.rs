@@ -249,7 +249,7 @@ impl ToTokens for FluidPropertyStruct {
                         panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
                     }
 
-                    Self::from_state_id(fluid.default_state_index as u16, fluid)
+                    Self::from_state_id(fluid.default_state_index, fluid)
                 }
 
                 #[allow(clippy::vec_init_then_push)]

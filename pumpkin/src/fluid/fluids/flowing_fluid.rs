@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{collections::HashMap, i32};
+use std::collections::HashMap;
 
 use async_trait::async_trait;
 use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
@@ -24,7 +24,6 @@ fn level_to_int(level: Level) -> i32 {
 
 fn int_to_level(level: i32) -> Level {
     match level {
-        1 => Level::L1,
         2 => Level::L2,
         3 => Level::L3,
         4 => Level::L4,
@@ -64,7 +63,7 @@ impl SpreadContext {
             .is_water_hole(world, fluid_type, pos, &below_pos)
             .await;
 
-        self.holes.insert(pos.clone(), is_hole);
+        self.holes.insert(*pos, is_hole);
         is_hole
     }
 }
@@ -89,26 +88,19 @@ pub trait FlowingFluid {
     fn is_same_fluid(&self, fluid: &Fluid, other_state_id: u16) -> bool;
 
     async fn spread_fluid(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
-        let block_state_id = match world.get_block_state_id(block_pos).await {
-            Ok(id) => id,
-            Err(_) => return,
-        };
-
+        let Ok(block_state_id) = world.get_block_state_id(block_pos).await else { return };
         let props = FlowingFluidProperties::from_state_id(block_state_id, fluid);
 
-        match self.get_new_liquid(world, fluid, block_pos).await {
-            Some(new_fluid_state) => {
-                if new_fluid_state.to_state_id(fluid) != block_state_id {
-                    world
-                        .set_block_state(
-                            block_pos,
-                            new_fluid_state.to_state_id(fluid),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                }
+        if let Some(new_fluid_state) = self.get_new_liquid(world, fluid, block_pos).await {
+            if new_fluid_state.to_state_id(fluid) != block_state_id {
+                world
+                    .set_block_state(
+                        block_pos,
+                        new_fluid_state.to_state_id(fluid),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
             }
-            None => (),
         }
 
         self.spread(world, fluid, block_pos, &props).await;
@@ -135,15 +127,14 @@ pub trait FlowingFluid {
 
             self.spread_to(world, fluid, &below_pos, new_props.to_state_id(fluid))
                 .await;
-        } else {
-            if props.level == Level::L8
+        } else if props.level == Level::L8
                 || !self
                     .is_water_hole(world, fluid, block_pos, &below_pos)
                     .await
             {
                 self.spread_to_sides(world, fluid, block_pos).await;
             }
-        }
+
     }
 
     async fn get_new_liquid(
@@ -157,10 +148,7 @@ pub trait FlowingFluid {
 
         for direction in BlockDirection::horizontal() {
             let neighbor_pos = block_pos.offset(direction.to_offset());
-            let neighbor_state_id = match world.get_block_state_id(&neighbor_pos).await {
-                Ok(id) => id,
-                Err(_) => continue,
-            };
+            let Ok(neighbor_state_id) = world.get_block_state_id(&neighbor_pos).await else { continue };
 
             if !self.is_same_fluid(fluid, neighbor_state_id) {
                 continue;
@@ -178,11 +166,12 @@ pub trait FlowingFluid {
 
         if source_count >= 2 && self.can_convert_to_source(world).await {
             let below_pos = block_pos.down();
-            let below_state_id = match world.get_block_state_id(&below_pos).await {
-                Ok(id) => id,
-                Err(_) => 0,
-            };
+            // let below_state_id = match world.get_block_state_id(&below_pos).await {
+            //     Ok(id) => id,
+            //     Err(_) => 0,
+            // };
 
+            let below_state_id = world.get_block_state_id(&below_pos).await.unwrap_or(0);
             if self
                 .is_solid_or_source(world, &below_pos, below_state_id, fluid)
                 .await
@@ -192,10 +181,7 @@ pub trait FlowingFluid {
         }
 
         let above_pos = block_pos.up();
-        let above_state_id = match world.get_block_state_id(&above_pos).await {
-            Ok(id) => id,
-            Err(_) => 0,
-        };
+        let above_state_id = world.get_block_state_id(&above_pos).await.unwrap_or(0);
 
         if self.is_same_fluid(fluid, above_state_id) {
             return Some(self.get_flowing(fluid, Level::L8, true).await);
@@ -221,10 +207,7 @@ pub trait FlowingFluid {
         state_id: u16,
         fluid: &Fluid,
     ) -> bool {
-        let block = match world.get_block(block_pos).await {
-            Ok(block) => block,
-            Err(_) => return false,
-        };
+        let Ok(block) = world.get_block(block_pos).await else { return false };
 
         if block.id != 0 && !self.can_be_replaced(world, block_pos, block.id).await {
             return true;
@@ -240,10 +223,7 @@ pub trait FlowingFluid {
     }
 
     async fn spread_to_sides(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
-        let block_state_id = match world.get_block_state_id(block_pos).await {
-            Ok(id) => id,
-            Err(_) => return,
-        };
+        let Ok(block_state_id) = world.get_block_state_id(block_pos).await else { return };
 
         let props = FlowingFluidProperties::from_state_id(block_state_id, fluid);
         let level = level_to_int(props.level);
@@ -304,7 +284,7 @@ pub trait FlowingFluid {
                 self.get_slope_distance(
                     world,
                     fluid,
-                    side_pos.clone(),
+                    side_pos,
                     1,
                     direction.opposite(),
                     ctx_ref,
@@ -358,7 +338,7 @@ pub trait FlowingFluid {
                 .get_slope_distance(
                     world,
                     fluid,
-                    next_pos.clone(),
+                    next_pos,
                     distance + 1,
                     direction.opposite(),
                     ctx,
@@ -379,10 +359,7 @@ pub trait FlowingFluid {
     }
 
     async fn can_pass_through(&self, world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
-        let state_id = match world.get_block_state_id(pos).await {
-            Ok(id) => id,
-            Err(_) => return false,
-        };
+        let Ok(state_id) = world.get_block_state_id(pos).await else { return false };
 
         if self.is_same_fluid(fluid, state_id) {
             return true;
@@ -392,10 +369,7 @@ pub trait FlowingFluid {
     }
 
     async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, _fluid: &Fluid) -> bool {
-        let block = match world.get_block(pos).await {
-            Ok(block) => block,
-            Err(_) => return false,
-        };
+        let Ok(block) = world.get_block(pos).await else { return false };
 
         if self.can_be_replaced(world, pos, block.id).await {
             return true;
@@ -405,10 +379,7 @@ pub trait FlowingFluid {
     }
 
     async fn can_be_replaced(&self, world: &Arc<World>, pos: &BlockPos, block_id: u16) -> bool {
-        let block_state_id = match world.get_block_state_id(pos).await {
-            Ok(id) => id,
-            Err(_) => return false,
-        };
+        let Ok(block_state_id) = world.get_block_state_id(pos).await else { return false };
 
         if let Some(fluid) = Fluid::from_state_id(block_state_id) {
             if fluid.is_source(block_state_id) && fluid.is_falling(block_state_id) {
@@ -417,10 +388,7 @@ pub trait FlowingFluid {
         }
 
         //TODO Add check for blocks that aren't solid
-        match block_id {
-            0 => true,
-            _ => false,
-        }
+        matches!(block_id, 0)
     }
 
     async fn is_water_hole(
@@ -430,10 +398,7 @@ pub trait FlowingFluid {
         _pos: &BlockPos,
         below_pos: &BlockPos,
     ) -> bool {
-        let below_state_id = match world.get_block_state_id(below_pos).await {
-            Ok(id) => id,
-            Err(_) => return false,
-        };
+        let Ok(below_state_id) = world.get_block_state_id(below_pos).await else { return false };
 
         if self.is_same_fluid(fluid, below_state_id) {
             return true;
