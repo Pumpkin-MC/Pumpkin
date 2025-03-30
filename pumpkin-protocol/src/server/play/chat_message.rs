@@ -9,7 +9,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 #[packet(PLAY_CHAT)]
 pub struct SChatMessage {
     pub message: String,
@@ -18,10 +18,9 @@ pub struct SChatMessage {
     pub signature: Option<Box<[u8]>>,
     pub message_count: VarInt,
     pub acknowledged: Box<[u8]>, // Bitset fixed 20 bits
-    pub checksum: u8,
+    pub checksum: u8,            // 1.21.5 "fingerprint" checksum
 }
 
-// TODO
 impl ServerPacket for SChatMessage {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;

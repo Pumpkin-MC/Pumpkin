@@ -156,20 +156,6 @@ impl TextComponent {
             style: Style::default(),
             extra: vec![],
         })
-
-        // Self(TextComponentBase {
-        //     content: TextContent::Text {
-        //         text: Cow::Borrowed("..."),
-        //     },
-        //     style: Style::default(),
-        //     extra: vec![TextComponentBase {
-        //         content: TextContent::Text {
-        //             text: Cow::Borrowed("ABC"),
-        //         },
-        //         style: Style::default(),
-        //         extra: vec![],
-        //     }],
-        // })
     }
 
     pub fn to_pretty_console(self) -> String {

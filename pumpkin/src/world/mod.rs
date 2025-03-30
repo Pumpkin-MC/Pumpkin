@@ -583,6 +583,8 @@ impl World {
                 None,
                 0.into(),
                 self.sea_level.into(),
+                // This should stay true even when reports are disabled.
+                // It prevents the annoying popup when joining the server.
                 true,
             ))
             .await;
