@@ -23,16 +23,14 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::world::RAW;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerChatMessage, CPlayerInfoUpdate,
-    CPlayerPosition, CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot,
-    FilterType, InitChat, PlayerAction,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
+    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -699,7 +697,7 @@ impl Player {
                 let entity = &self.living_entity.entity;
                 let world = &entity.world.read().await;
                 if BASIC_CONFIG.allow_chat_reports {
-                    world.broadcast_secure_player_chat(&self, &chat_message, decorated_message).await;
+                    world.broadcast_secure_player_chat(self, &chat_message, decorated_message).await;
                 } else {
                     let no_reports_packet = &CSystemChatMessage::new(
                         decorated_message,
@@ -727,7 +725,7 @@ impl Player {
         // Update the chat session fields
         *chat_session = ChatSession::new(
             session.session_id,
-            session.expires_at.clone(),
+            session.expires_at,
             session.public_key.clone(),
             session.key_signature.clone(),
         );

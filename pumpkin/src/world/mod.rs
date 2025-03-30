@@ -231,10 +231,7 @@ impl World {
         chat_message: &SChatMessage,
         decorated_message: &TextComponent,
     ) {
-        log::warn!("Count: {:?}", chat_message.message_count);
-        let filtered_chat_log = self
-            .get_filtered_chat_log(chat_message.acknowledged.clone())
-            .await;
+        // Todo: Proper ACK handling, handle signature chain de-sync
 
         // Don't leave this locked in case sender is also recipient
         let sender_messages_sent = {
@@ -246,6 +243,12 @@ impl World {
 
         for (_, recipient) in current_players.iter() {
             let mut recipient_chat_session = recipient.chat_session.lock().await;
+            let filtered_chat_log = self
+                .get_filtered_chat_log(
+                    chat_message.acknowledged.clone(),
+                    recipient_chat_session.messages_received == 0,
+                )
+                .await;
 
             let packet = &CPlayerChatMessage::new(
                 VarInt(recipient_chat_session.messages_received),
@@ -275,11 +278,11 @@ impl World {
     }
 
     /// Adds a message to the chat log and updates ids in the chat log
-    /// id 0 is most recent, id 19 is oldest
+    /// id 1 is most recent, id 20 is oldest
     pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
         let new_message = PreviousMessage {
             id: VarInt(1),
-            signature: None,
+            signature,
         };
 
         let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
@@ -290,21 +293,24 @@ impl World {
         let messages_len = messages.len();
 
         for (i, message) in messages.iter_mut().enumerate() {
-            message.signature = None;
-
             message.id = VarInt((messages_len - i) as i32);
         }
 
         *self.chat_log.lock().await = messages.into_boxed_slice();
     }
 
-    pub async fn get_filtered_chat_log(&self, acknowledged: Box<[u8]>) -> Box<[PreviousMessage]> {
+    /// Returns a log of the last 20 messages, filtered by ACK bitset
+    /// Message ID should only be 0 if signatures are being sent
+    /// Signatures should only be sent in the first chat to each player
+    pub async fn get_filtered_chat_log(
+        &self,
+        acknowledged: Box<[u8]>,
+        first_message: bool,
+    ) -> Box<[PreviousMessage]> {
         let bitset = format!(
             "{:04b}{:08b}{:08b}",
             acknowledged[2], acknowledged[1], acknowledged[0]
         );
-
-        log::warn!("Bitset: {:?}", bitset);
 
         let filtered_log: Vec<PreviousMessage> = self
             .chat_log
@@ -312,10 +318,18 @@ impl World {
             .await
             .iter()
             .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
-            .map(|message| message.clone()) // Clone the messages
+            .map(|message| {
+                let mut message = message.clone();
+                if first_message {
+                    message.id = VarInt(0);
+                } else {
+                    message.signature = None;
+                }
+                message
+            }) // Clone the messages
             .collect();
 
-        return filtered_log.into_boxed_slice();
+        filtered_log.into_boxed_slice()
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.

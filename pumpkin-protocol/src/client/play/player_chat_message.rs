@@ -3,7 +3,6 @@ use std::io::Write;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_macros::packet;
 use pumpkin_util::text::TextComponent;
-use serde::Serialize;
 
 use crate::{
     ClientPacket,
@@ -22,7 +21,6 @@ pub struct CPlayerChatMessage {
     message: String,
     timestamp: i64,
     salt: i64,
-    previous_messages_count: VarInt,
     previous_messages: Box<[PreviousMessage]>, // max 20
     unsigned_content: Option<TextComponent>,
     filter_type: FilterType,
@@ -57,7 +55,6 @@ impl CPlayerChatMessage {
             message,
             timestamp,
             salt,
-            previous_messages_count: VarInt(previous_messages.len() as i32),
             previous_messages,
             unsigned_content,
             filter_type,
@@ -79,16 +76,19 @@ impl ClientPacket for CPlayerChatMessage {
         write.write_string(&self.message)?;
         write.write_i64_be(self.timestamp)?;
         write.write_i64_be(self.salt)?;
-        //
         write.write_list(&self.previous_messages, |p, v| {
             p.write_var_int(&v.id)?;
             if let Some(signature) = &v.signature {
-                p.write_slice(&signature)?;
+                p.write_slice(signature)?;
             }
             Ok(())
         })?;
         write.write_option(&self.unsigned_content, |p, v| p.write_slice(&v.encode()))?;
-        write.write_var_int(&VarInt(0))?; // Todo: filter type
+        write.write_var_int(&VarInt(match self.filter_type {
+            FilterType::PassThrough => 0,
+            FilterType::FullyFiltered => 1,
+            FilterType::PartiallyFiltered(_) => 2,
+        }))?;
         write.write_var_int(&self.chat_type)?;
         write.write_slice(&self.sender_name.encode())?;
         write.write_option(&self.target_name, |p, v| p.write_slice(&v.encode()))?;
@@ -101,6 +101,7 @@ pub struct PreviousMessage {
     pub id: VarInt,
     pub signature: Option<Box<[u8]>>, // Always 256
 }
+
 pub enum FilterType {
     /// Message is not filtered at all
     PassThrough,

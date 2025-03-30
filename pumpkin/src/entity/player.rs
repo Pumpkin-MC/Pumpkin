@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PreviousMessage};
+use pumpkin_protocol::client::play::CSetHeldItem;
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -1881,8 +1881,8 @@ impl ChatSession {
     ) -> Self {
         Self {
             session_id,
-            expires_at: expires_at,
-            public_key: public_key,
+            expires_at,
+            public_key,
             signature: key_signature,
             messages_sent: 0,
             messages_received: 0,
