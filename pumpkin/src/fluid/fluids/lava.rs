@@ -1,20 +1,18 @@
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_fluid;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::{
-    fluid::pumpkin_fluid::PumpkinFluid,
-    world::{BlockFlags, World},
-};
+use crate::{fluid::pumpkin_fluid::PumpkinFluid, world::World};
+
+use super::flowing_fluid::FlowingFluid;
 
 #[pumpkin_fluid("minecraft:flowing_lava")]
 pub struct FlowingLava;
 
 const LAVA_FLOW_SPEED: u16 = 30;
-
-type FlowingLavaProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 #[async_trait]
 impl PumpkinFluid for FlowingLava {
@@ -32,23 +30,23 @@ impl PumpkinFluid for FlowingLava {
             .await;
     }
 
-    async fn on_scheduled_tick(&self, world: &World, fluid: &Fluid, block_pos: &BlockPos) {
-        let block_under = block_pos.down();
+    async fn on_scheduled_tick(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
+        self.spread_fluid(world, fluid, block_pos).await;
+    }
+}
 
-        let block = world.get_block(&block_under).await.unwrap();
+#[async_trait]
+impl FlowingFluid for FlowingLava {
+    async fn get_drop_off(&self) -> i32 {
+        2
+    }
 
-        if block.id == 0 {
-            let mut block_props = FlowingLavaProperties::from_state_id(fluid.id, fluid);
-            block_props.level = Level::L8;
-            block_props.falling = Falling::False;
-            world
-                .set_block_state(
-                    &block_under,
-                    block_props.to_state_id(&fluid),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-            return;
-        }
+    async fn get_slope_find_distance(&self) -> i32 {
+        2
+    }
+
+    async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
+        //TODO add game rule check for water conversion
+        true
     }
 }
