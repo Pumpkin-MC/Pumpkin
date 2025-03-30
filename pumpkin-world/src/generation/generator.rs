@@ -48,6 +48,6 @@ pub(crate) trait PerlinTerrainGenerator: Sync + Send {
         at: BlockCoordinates,
         chunk_blocks: &mut ChunkBlocks,
         chunk_height: i16,
-        biome: Biome,
+        biome: &Biome,
     );
 }
