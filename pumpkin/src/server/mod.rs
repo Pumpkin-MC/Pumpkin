@@ -3,7 +3,6 @@ use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::EntityId;
-use crate::fluid::registry::FluidRegistry;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -57,7 +56,6 @@ pub struct Server {
     pub command_dispatcher: RwLock<CommandDispatcher>,
     /// Block behaviour.
     pub block_registry: Arc<BlockRegistry>,
-    pub fluid_registry: Arc<FluidRegistry>,
     /// Item behaviour.
     pub item_registry: Arc<ItemRegistry>,
     /// Manages multiple worlds within the server.
@@ -104,13 +102,11 @@ impl Server {
         let world_path = BASIC_CONFIG.get_world_path();
 
         let block_registry = super::block::default_registry();
-        let fluid_registry = super::fluid::default_registry();
 
         let world = World::load(
             Dimension::Overworld.into_level(world_path.clone()),
             DimensionType::Overworld,
             block_registry.clone(),
-            fluid_registry.clone(),
         );
 
         let world_name = world_path.to_str().unwrap();
@@ -129,7 +125,6 @@ impl Server {
             ],
             command_dispatcher,
             block_registry,
-            fluid_registry,
             item_registry: super::item::items::default_registry(),
             auth_client,
             key_store: KeyStore::new(),

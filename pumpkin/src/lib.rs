@@ -26,7 +26,6 @@ pub mod command;
 pub mod data;
 pub mod entity;
 pub mod error;
-pub mod fluid;
 pub mod item;
 pub mod net;
 pub mod plugin;

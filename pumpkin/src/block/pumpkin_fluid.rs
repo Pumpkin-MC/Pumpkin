@@ -9,15 +9,7 @@ use pumpkin_world::block::BlockDirection;
 
 use crate::{server::Server, world::World};
 
-use super::registry::FluidActionResult;
-
-pub trait FluidMetadata {
-    fn namespace(&self) -> &'static str;
-    fn id(&self) -> &'static str;
-    fn name(&self) -> String {
-        format!("{}:{}", self.namespace(), self.id())
-    }
-}
+use super::registry::BlockActionResult;
 
 #[async_trait]
 pub trait PumpkinFluid: Send + Sync {
@@ -38,8 +30,8 @@ pub trait PumpkinFluid: Send + Sync {
         _item: &Item,
         _server: &Server,
         _world: &World,
-    ) -> FluidActionResult {
-        FluidActionResult::Continue
+    ) -> BlockActionResult {
+        BlockActionResult::Continue
     }
 
     async fn placed(

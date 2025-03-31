@@ -2,20 +2,20 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_macros::pumpkin_fluid;
+use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::{fluid::pumpkin_fluid::PumpkinFluid, world::World};
+use crate::{block::pumpkin_fluid::PumpkinFluid, world::World};
 
 use super::flowing_fluid::FlowingFluid;
 
-#[pumpkin_fluid("minecraft:flowing_water")]
-pub struct FlowingWater;
+#[pumpkin_block("minecraft:flowing_lava")]
+pub struct FlowingLava;
 
-const WATER_FLOW_SPEED: u16 = 5;
+const LAVA_FLOW_SPEED: u16 = 30;
 
 #[async_trait]
-impl PumpkinFluid for FlowingWater {
+impl PumpkinFluid for FlowingLava {
     async fn placed(
         &self,
         world: &World,
@@ -26,7 +26,7 @@ impl PumpkinFluid for FlowingWater {
         _notify: bool,
     ) {
         world
-            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+            .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
             .await;
     }
 
@@ -36,13 +36,13 @@ impl PumpkinFluid for FlowingWater {
 }
 
 #[async_trait]
-impl FlowingFluid for FlowingWater {
+impl FlowingFluid for FlowingLava {
     async fn get_drop_off(&self) -> i32 {
-        1
+        2
     }
 
     async fn get_slope_find_distance(&self) -> i32 {
-        4
+        2
     }
 
     async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {

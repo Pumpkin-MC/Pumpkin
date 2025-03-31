@@ -13,7 +13,6 @@ use crate::{
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player},
     error::PumpkinError,
-    fluid::registry::FluidRegistry,
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
@@ -152,7 +151,6 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
-    pub fluid_registry: Arc<FluidRegistry>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
@@ -164,7 +162,6 @@ impl World {
         level: Level,
         dimension_type: DimensionType,
         block_registry: Arc<BlockRegistry>,
-        fluid_registry: Arc<FluidRegistry>,
     ) -> Self {
         // TODO
         let generation_settings = GENERATION_SETTINGS
@@ -181,7 +178,6 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
-            fluid_registry,
             unsent_block_changes: Mutex::new(HashMap::new()),
         }
     }
@@ -339,7 +335,6 @@ impl World {
         };
 
         self.tick_scheduled_block_ticks().await;
-        self.tick_scheduled_fluid_ticks().await;
 
         // player ticks
         for player in self.players.read().await.values() {
@@ -405,6 +400,7 @@ impl World {
 
     pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
+        let fluids_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
             let block = self.get_block(&scheduled_tick.block_pos).await.unwrap();
@@ -417,17 +413,13 @@ impl World {
                     .await;
             }
         }
-    }
 
-    pub async fn tick_scheduled_fluid_ticks(self: &Arc<Self>) {
-        let blocks_to_tick = self.level.get_and_tick_fluid_ticks().await;
-
-        for scheduled_tick in blocks_to_tick {
+        for scheduled_tick in fluids_to_tick {
             let fluid = self.get_fluid(&scheduled_tick.block_pos).await.unwrap();
             if scheduled_tick.target_block_id != fluid.id {
                 continue;
             }
-            if let Some(pumpkin_fluid) = self.fluid_registry.get_pumpkin_fluid(&fluid) {
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
                 pumpkin_fluid
                     .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
                     .await;
@@ -1253,6 +1245,7 @@ impl World {
 
         let block_state = self.get_block_state(position).await.unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
+        let new_fluid = self.get_fluid(position).await.unwrap_or(Fluid::EMPTY);
 
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
@@ -1266,18 +1259,15 @@ impl World {
                     block_moved,
                 )
                 .await;
-            if Fluid::from_state_id(block_state_id).is_some() {
-                self.fluid_registry
-                    .on_placed(
-                        self,
-                        &Fluid::from_state_id(block_state_id).unwrap(),
-                        block_state_id,
-                        position,
-                        replaced_block_state_id,
-                        block_moved,
-                    )
-                    .await;
-            }
+            self.block_registry
+                .on_placed_fluid(
+                    self,
+                    &new_fluid,
+                    block_state_id,
+                    position,
+                    replaced_block_state_id,
+                    block_moved,
+                ).await;
         }
 
         // Ig they do this cause it could be modified in chunkPos.setBlockState?
