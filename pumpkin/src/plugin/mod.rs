@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use std::{any::Any, collections::HashMap, path::Path, sync::Arc};
 use thiserror::Error;
@@ -329,9 +330,7 @@ impl PluginManager {
             }
 
             // Process non-blocking handlers
-            for handler in non_blocking {
-                handler.handle_dyn(&event).await;
-            }
+            join_all(non_blocking.into_iter().map(|h| h.handle_dyn(&event))).await;
         }
         event
     }
