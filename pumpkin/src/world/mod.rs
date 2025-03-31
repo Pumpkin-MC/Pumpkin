@@ -1267,7 +1267,8 @@ impl World {
                     position,
                     replaced_block_state_id,
                     block_moved,
-                ).await;
+                )
+                .await;
         }
 
         // Ig they do this cause it could be modified in chunkPos.setBlockState?
