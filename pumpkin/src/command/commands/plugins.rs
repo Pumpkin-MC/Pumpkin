@@ -22,7 +22,7 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let plugin_manager = PLUGIN_MANAGER.lock().await;
+        /*let plugin_manager = PLUGIN_MANAGER.lock().await;
         let plugins = plugin_manager.list_plugins();
 
         let message_text = if plugins.is_empty() {
@@ -56,7 +56,7 @@ impl CommandExecutor for Executor {
             message = message.add_child(component);
         }
 
-        sender.send_message(message).await;
+        sender.send_message(message).await;*/
 
         Ok(())
     }

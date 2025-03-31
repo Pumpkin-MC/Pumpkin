@@ -1,19 +1,14 @@
-pub mod api;
-
-pub use api::*;
 use async_trait::async_trait;
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
+use std::{any::Any, collections::HashMap, path::Path, sync::Arc};
+use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::server::Server;
-use thiserror::Error;
+pub mod api;
+pub mod loader;
 
-type PluginData = (
-    PluginMetadata<'static>,
-    Box<dyn Plugin>,
-    libloading::Library,
-    bool,
-);
+use crate::server::Server;
+pub use api::*;
 
 /// A trait for handling events dynamically.
 ///
@@ -121,232 +116,178 @@ where
 
 /// A type alias for a map of event handlers, where the key is a static string
 /// and the value is a vector of dynamic event handlers.
-pub type HandlerMap = HashMap<&'static str, Vec<Box<dyn DynEventHandler>>>;
+type HandlerMap = HashMap<&'static str, Vec<Box<dyn DynEventHandler>>>;
 
-/// A struct for managing plugins.
+/// Core plugin management system
 pub struct PluginManager {
-    plugins: Vec<PluginData>,
+    plugins: Vec<LoadedPlugin>,
+    loaders: Vec<Arc<dyn PluginLoader>>,
     server: Option<Arc<Server>>,
     handlers: Arc<RwLock<HandlerMap>>,
 }
 
-impl Default for PluginManager {
-    /// Creates a new instance of `PluginManager` with default values.
-    fn default() -> Self {
-        Self::new()
-    }
+/// Represents a successfully loaded plugin
+struct LoadedPlugin {
+    metadata: PluginMetadata<'static>,
+    instance: Box<dyn Plugin>,
+    loader: Arc<dyn PluginLoader>,
+    loader_data: Box<dyn Any + Send + Sync>,
+}
+
+/// Error types for plugin management
+#[derive(Error, Debug)]
+pub enum ManagerError {
+    #[error("Server not initialized")]
+    ServerNotInitialized,
+
+    #[error("Plugin not found: {0}")]
+    PluginNotFound(String),
+
+    #[error("Loader error: {0}")]
+    LoaderError(#[from] LoaderError),
+
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 impl PluginManager {
-    /// Creates a new instance of `PluginManager`.
-    ///
-    /// # Returns
-    /// A new instance of `PluginManager`.
-    #[must_use]
+    /// Create a new plugin manager with default loaders
     pub fn new() -> Self {
         Self {
-            plugins: vec![],
+            plugins: Vec::new(),
+            loaders: vec![Arc::new(NativePluginLoader)],
             server: None,
             handlers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Sets the server reference for the plugin manager.
-    ///
-    /// # Arguments
-    /// - `server`: An `Arc` reference to the server to set.
+    /// Add a new plugin loader implementation
+    pub fn add_loader(&mut self, loader: Arc<dyn PluginLoader>) {
+        self.loaders.push(loader);
+    }
+
+    /// Set server reference for plugin context
     pub fn set_server(&mut self, server: Arc<Server>) {
         self.server = Some(server);
     }
 
-    /// Asynchronously loads plugins from the specified plugin directory.
-    ///
-    /// # Returns
-    /// A result indicating success or failure. If it fails, it returns a `PluginsLoadError`.
-    pub async fn load_plugins(&mut self) -> Result<(), PluginsLoadError> {
+    /// Load all plugins from the plugin directory
+    pub async fn load_plugins(&mut self) -> Result<(), ManagerError> {
         const PLUGIN_DIR: &str = "./plugins";
+        let path = Path::new(PLUGIN_DIR);
 
-        if !Path::new(PLUGIN_DIR).exists() {
-            fs::create_dir(PLUGIN_DIR).map_err(|_| PluginsLoadError::CreatePluginDir)?;
-            // If the directory was just created, it should be empty, so we return.
+        if !path.exists() {
+            std::fs::create_dir(path)?;
             return Ok(());
         }
 
-        let dir_entries = fs::read_dir(PLUGIN_DIR).map_err(|_| PluginsLoadError::ReadPluginDir)?;
+        let mut entries = std::fs::read_dir(path)?;
+        while let Some(entry) = entries.next() {
+            let entry = entry?;
+            let path = entry.path();
 
-        for entry in dir_entries {
-            let entry = entry.unwrap();
-            if !entry.file_type().unwrap().is_file() {
+            if path.is_dir() {
                 continue;
             }
-            let name = entry.file_name().into_string().unwrap();
-            if let Err(err) = self.try_load_plugin(&entry.path()).await {
-                log::error!("Plugin {name}: {err}");
-            }
+
+            self.try_load_plugin(&path).await?;
         }
 
         Ok(())
     }
 
-    /// Tries to load a plugin from the specified path.
-    ///
-    /// # Arguments
-    /// - `path`: The path to the plugin to load.
-    ///
-    /// # Returns
-    /// A result indicating success or failure. If it fails, it returns a `PluginLoadError`.
-    async fn try_load_plugin(&mut self, path: &Path) -> Result<(), PluginLoadError> {
-        let library = unsafe {
-            libloading::Library::new(path)
-                .map_err(|e| PluginLoadError::LoadLibrary(e.to_string()))?
-        };
+    /// Attempt to load a single plugin file
+    async fn try_load_plugin(&mut self, path: &Path) -> Result<(), ManagerError> {
+        for loader in &self.loaders {
+            if loader.can_load(path) {
+                match self.load_with_loader(loader, path).await {
+                    Ok(plugin) => {
+                        self.plugins.push(plugin);
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load plugin {}: {}", path.display(), e);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 
-        let plugin_fn = unsafe {
-            library
-                .get::<fn() -> Box<dyn Plugin>>(b"plugin")
-                .map_err(|_| PluginLoadError::GetPluginMain)?
-        };
-        let metadata: &PluginMetadata = unsafe {
-            &**library
-                .get::<*const PluginMetadata>(b"METADATA")
-                .map_err(|_| PluginLoadError::GetPluginMeta)?
-        };
+    /// Load plugin using a specific loader
+    async fn load_with_loader(
+        &self,
+        loader: &Arc<dyn PluginLoader>,
+        path: &Path,
+    ) -> Result<LoadedPlugin, LoaderError> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or(LoaderError::ServerNotInitialized)?;
+        let (mut instance, metadata, loader_data) = loader.load(path).await?;
 
-        // Create a context for the plugin.
         let context = Context::new(
             metadata.clone(),
-            self.server.clone().expect("Server not set"),
-            self.handlers.clone(),
+            Arc::clone(server),
+            Arc::clone(&self.handlers),
         );
-        let mut plugin_box = plugin_fn();
-        let res = plugin_box.on_load(&context).await;
-        let mut loaded = true;
-        if let Err(e) = res {
-            log::error!("Error loading plugin: {e}");
-            loaded = false;
+
+        if let Err(e) = instance.on_load(&context).await {
+            let data = loader_data;
+            let loader = loader.clone();
+            tokio::spawn(async move {
+                loader.unload(data).await.ok();
+            });
+            return Err(LoaderError::InitializationFailed(e));
         }
 
-        self.plugins
-            .push((metadata.clone(), plugin_box, library, loaded));
+        Ok(LoadedPlugin {
+            metadata,
+            instance,
+            loader: loader.clone(),
+            loader_data,
+        })
+    }
+
+    /// Get list of loaded plugins
+    pub fn loaded_plugins(&self) -> Vec<&PluginMetadata<'static>> {
+        self.plugins.iter().map(|p| &p.metadata).collect()
+    }
+
+    /// Unload a plugin by name
+    pub async fn unload_plugin(&mut self, name: &str) -> Result<(), ManagerError> {
+        let index = self
+            .plugins
+            .iter()
+            .position(|p| p.metadata.name == name)
+            .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
+
+        let mut plugin = self.plugins.swap_remove(index);
+        let server = self
+            .server
+            .as_ref()
+            .ok_or(ManagerError::ServerNotInitialized)?;
+
+        let context = Context::new(
+            plugin.metadata.clone(),
+            Arc::clone(server),
+            Arc::clone(&self.handlers),
+        );
+
+        plugin.instance.on_unload(&context).await.ok();
+        plugin.loader.unload(plugin.loader_data).await?;
 
         Ok(())
     }
 
-    /// Checks if a plugin is loaded by its name.
-    ///
-    /// # Arguments
-    /// - `name`: The name of the plugin to check.
-    ///
-    /// # Returns
-    /// A boolean indicating whether the plugin is loaded.
-    #[must_use]
-    pub fn is_plugin_loaded(&self, name: &str) -> bool {
-        self.plugins
-            .iter()
-            .any(|(metadata, _, _, loaded)| metadata.name == name && *loaded)
-    }
-
-    /// Asynchronously loads a plugin by its name.
-    ///
-    /// # Arguments
-    /// - `name`: The name of the plugin to load.
-    ///
-    /// # Returns
-    /// A `Result` indicating success or failure. If it fails, it returns an error message.
-    pub async fn load_plugin(&mut self, name: &str) -> Result<(), String> {
-        let plugin = self
-            .plugins
-            .iter_mut()
-            .find(|(metadata, _, _, _)| metadata.name == name);
-
-        if let Some((metadata, plugin, _, loaded)) = plugin {
-            if *loaded {
-                return Err(format!("Plugin {name} is already loaded"));
-            }
-
-            let context = Context::new(
-                metadata.clone(),
-                self.server.clone().expect("Server not set"),
-                self.handlers.clone(),
-            );
-            let res = plugin.on_load(&context).await;
-            res?;
-            *loaded = true;
-
-            Ok(())
-        } else {
-            Err(format!("Plugin {name} not found"))
-        }
-    }
-
-    /// Asynchronously unloads a plugin by its name.
-    ///
-    /// # Arguments
-    /// - `name`: The name of the plugin to unload.
-    ///
-    /// # Returns
-    /// A `Result` indicating success or failure. If it fails, it returns an error message.
-    pub async fn unload_plugin(&mut self, name: &str) -> Result<(), String> {
-        let plugin = self
-            .plugins
-            .iter_mut()
-            .find(|(metadata, _, _, _)| metadata.name == name);
-
-        if let Some((metadata, plugin, _, loaded)) = plugin {
-            let context = Context::new(
-                metadata.clone(),
-                self.server.clone().expect("Server not set"),
-                self.handlers.clone(),
-            );
-            let res = plugin.on_unload(&context).await;
-            res?;
-            *loaded = false;
-            Ok(())
-        } else {
-            Err(format!("Plugin {name} not found"))
-        }
-    }
-
-    /// Lists all plugins along with their loaded status.
-    ///
-    /// # Returns
-    /// A vector of tuples containing references to the plugin metadata and a boolean indicating
-    /// whether each plugin is loaded.
-    #[must_use]
-    pub fn list_plugins(&self) -> Vec<(&PluginMetadata, &bool)> {
-        self.plugins
-            .iter()
-            .map(|(metadata, _, _, loaded)| (metadata, loaded))
-            .collect()
-    }
-
-    /// Asynchronously registers an event handler for a specific event type.
-    ///
-    /// # Type Parameters
-    /// - `E`: The event type that the handler will respond to.
-    /// - `H`: The type of the event handler.
-    ///
-    /// # Arguments
-    /// - `handler`: A reference to the event handler.
-    /// - `priority`: The priority of the event handler.
-    /// - `blocking`: A boolean indicating whether the handler is blocking.
-    ///
-    /// # Constraints
-    /// The handler must implement the `EventHandler<E>` trait.
-    pub async fn register<E: Event + 'static, H>(
-        &self,
-        handler: Arc<H>,
-        priority: EventPriority,
-        blocking: bool,
-    ) where
+    /// Register an event handler
+    pub async fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
+    where
+        E: Event + Send + Sync + 'static,
         H: EventHandler<E> + 'static,
     {
         let mut handlers = self.handlers.write().await;
-
-        let handlers_vec = handlers
-            .entry(E::get_name_static())
-            .or_insert_with(Vec::new);
-
         let typed_handler = TypedEventHandler {
             handler,
             priority,
@@ -354,69 +295,29 @@ impl PluginManager {
             _phantom: std::marker::PhantomData,
         };
 
-        handlers_vec.push(Box::new(typed_handler));
+        handlers
+            .entry(E::get_name_static())
+            .or_default()
+            .push(Box::new(typed_handler));
     }
 
-    /// Asynchronously fires an event, invoking all registered handlers for that event type.
-    ///
-    /// # Type Parameters
-    /// - `E`: The event type to fire.
-    ///
-    /// # Arguments
-    /// - `event`: The event to fire.
-    ///
-    /// # Returns
-    /// The event after all handlers have processed it.
+    /// Fire an event to all registered handlers
     pub async fn fire<E: Event + Send + Sync + 'static>(&self, mut event: E) -> E {
-        // Take a snapshot of handlers to avoid lifetime issues
         let handlers = self.handlers.read().await;
+        if let Some(handlers) = handlers.get(&E::get_name_static()) {
+            let (blocking, non_blocking): (Vec<_>, Vec<_>) =
+                handlers.iter().partition(|h| h.is_blocking());
 
-        log::trace!("Firing event: {}", E::get_name_static());
-
-        if let Some(handlers_vec) = handlers.get(&E::get_name_static()) {
-            log::trace!(
-                "Found {} handlers for event: {}",
-                handlers_vec.len(),
-                E::get_name_static()
-            );
-
-            let (blocking_handlers, non_blocking_handlers): (Vec<_>, Vec<_>) = handlers_vec
-                .iter()
-                .partition(|handler| handler.is_blocking());
-
-            // Handle blocking handlers first
-            for handler in blocking_handlers {
+            // Process blocking handlers first
+            for handler in blocking {
                 handler.handle_blocking_dyn(&mut event).await;
             }
 
-            // TODO: Run non-blocking handlers in parallel
-            for handler in non_blocking_handlers {
+            // Process non-blocking handlers
+            for handler in non_blocking {
                 handler.handle_dyn(&event).await;
             }
         }
-
         event
     }
-}
-
-/// Error when failed to load the entire Plugin directory
-#[derive(Error, Debug)]
-pub enum PluginsLoadError {
-    #[error("Failed to create new plugins directory")]
-    CreatePluginDir,
-    #[error("Failed to read plugins directory")]
-    ReadPluginDir,
-    #[error("Failed to load plugin {0}")]
-    LoadPlugin(String, PluginLoadError),
-}
-
-/// Error when failed to load a single plugin
-#[derive(Error, Debug)]
-pub enum PluginLoadError {
-    #[error("Failed to load library: {0}")]
-    LoadLibrary(String),
-    #[error("Failed to load plugin entry function")]
-    GetPluginMain,
-    #[error("Failed to load plugin metadata")]
-    GetPluginMeta,
 }
