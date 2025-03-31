@@ -212,7 +212,7 @@ impl PluginManager {
                 }
             }
         }
-        Ok(())
+        Err(ManagerError::PluginNotFound(path.to_string_lossy().to_string()))
     }
 
     /// Load plugin using a specific loader
