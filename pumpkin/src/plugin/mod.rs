@@ -197,7 +197,7 @@ impl PluginManager {
     }
 
     /// Attempt to load a single plugin file
-    async fn try_load_plugin(&mut self, path: &Path) -> Result<(), ManagerError> {
+    pub async fn try_load_plugin(&mut self, path: &Path) -> Result<(), ManagerError> {
         for loader in &self.loaders {
             if loader.can_load(path) {
                 match self.load_with_loader(loader, path).await {
@@ -254,6 +254,10 @@ impl PluginManager {
     /// Get list of loaded plugins
     pub fn loaded_plugins(&self) -> Vec<&PluginMetadata<'static>> {
         self.plugins.iter().map(|p| &p.metadata).collect()
+    }
+
+    pub fn is_plugin_loaded(&self, name: &str) -> bool {
+        self.plugins.iter().any(|p| p.metadata.name == name)
     }
 
     /// Unload a plugin by name

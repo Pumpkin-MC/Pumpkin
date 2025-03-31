@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use async_trait::async_trait;
 use pumpkin_util::{
     PermissionLvl,
@@ -34,8 +36,8 @@ impl CommandExecutor for ListExecutor {
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        /*let plugin_manager = PLUGIN_MANAGER.lock().await;
-        let plugins = plugin_manager.list_plugins();
+        let plugin_manager = PLUGIN_MANAGER.lock().await;
+        let plugins = plugin_manager.loaded_plugins();
 
         let message_text = if plugins.is_empty() {
             "There are no loaded plugins.".to_string()
@@ -46,7 +48,7 @@ impl CommandExecutor for ListExecutor {
         };
         let mut message = TextComponent::text(message_text);
 
-        for (i, (metadata, loaded)) in plugins.clone().into_iter().enumerate() {
+        for (i, metadata) in plugins.clone().into_iter().enumerate() {
             let fmt = if i == plugins.len() - 1 {
                 metadata.name.to_string()
             } else {
@@ -56,19 +58,14 @@ impl CommandExecutor for ListExecutor {
                 "Version: {}\nAuthors: {}\nDescription: {}",
                 metadata.version, metadata.authors, metadata.description
             );
-            let component = if *loaded {
-                TextComponent::text(fmt)
-                    .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
-            } else {
-                TextComponent::text(fmt)
-                    .color_named(NamedColor::Red)
-                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
-            };
+            let component = TextComponent::text(fmt)
+                .color_named(NamedColor::Green)
+                .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
+
             message = message.add_child(component);
         }
 
-        sender.send_message(message).await;*/
+        sender.send_message(message).await;
 
         Ok(())
     }
@@ -84,7 +81,7 @@ impl CommandExecutor for LoadExecutor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        /*let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
+        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
             return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
         };
         let mut plugin_manager = PLUGIN_MANAGER.lock().await;
@@ -99,7 +96,9 @@ impl CommandExecutor for LoadExecutor {
             return Ok(());
         }
 
-        let result = plugin_manager.load_plugin(plugin_name).await;
+        let result = plugin_manager
+            .try_load_plugin(&Path::new(plugin_name))
+            .await;
 
         match result {
             Ok(()) => {
@@ -118,7 +117,7 @@ impl CommandExecutor for LoadExecutor {
                     )
                     .await;
             }
-        }*/
+        }
 
         Ok(())
     }
@@ -134,7 +133,7 @@ impl CommandExecutor for UnloadExecutor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        /*let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
+        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
             return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
         };
         let mut plugin_manager = PLUGIN_MANAGER.lock().await;
@@ -168,7 +167,7 @@ impl CommandExecutor for UnloadExecutor {
                     )
                     .await;
             }
-        }*/
+        }
 
         Ok(())
     }
