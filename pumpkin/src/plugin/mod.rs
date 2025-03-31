@@ -136,11 +136,15 @@ pub struct PluginManager {
 }
 
 /// Represents a successfully loaded plugin
+///
+/// OS specific issues
+/// - Windows: Plugin cannot be unloaded, it can be only active or not
 struct LoadedPlugin {
     metadata: PluginMetadata<'static>,
     instance: Box<dyn Plugin>,
     loader: Arc<dyn PluginLoader>,
     loader_data: Box<dyn Any + Send + Sync>,
+    is_active: bool,
 }
 
 /// Error types for plugin management
@@ -265,18 +269,38 @@ impl PluginManager {
             instance,
             loader: loader.clone(),
             loader_data,
+            is_active: true,
         })
+    }
+
+    /// Checks if plugin active
+    #[must_use]
+    pub fn is_plugin_active(&self, name: &str) -> bool {
+        self.plugins
+            .iter()
+            .any(|p| p.metadata.name == name && p.is_active)
+    }
+
+    /// Get list of active plugins
+    #[must_use]
+    pub fn active_plugins(&self) -> Vec<&PluginMetadata<'static>> {
+        self.plugins
+            .iter()
+            .filter(|p| p.is_active)
+            .map(|p| &p.metadata)
+            .collect()
+    }
+
+    /// Checks if plugin loaded
+    #[must_use]
+    pub fn is_plugin_loaded(&self, name: &str) -> bool {
+        self.plugins.iter().any(|p| p.metadata.name == name)
     }
 
     /// Get list of loaded plugins
     #[must_use]
     pub fn loaded_plugins(&self) -> Vec<&PluginMetadata<'static>> {
         self.plugins.iter().map(|p| &p.metadata).collect()
-    }
-
-    #[must_use]
-    pub fn is_plugin_loaded(&self, name: &str) -> bool {
-        self.plugins.iter().any(|p| p.metadata.name == name)
     }
 
     /// Unload a plugin by name
@@ -287,7 +311,7 @@ impl PluginManager {
             .position(|p| p.metadata.name == name)
             .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
 
-        let mut plugin = self.plugins.swap_remove(index);
+        let mut plugin = self.plugins.remove(index);
         let server = self
             .server
             .as_ref()
@@ -300,7 +324,13 @@ impl PluginManager {
         );
 
         plugin.instance.on_unload(&context).await.ok();
-        plugin.loader.unload(plugin.loader_data).await?;
+
+        if plugin.loader.can_unload() {
+            plugin.loader.unload(plugin.loader_data).await?;
+        } else {
+            plugin.is_active = false;
+            self.plugins.push(plugin);
+        }
 
         Ok(())
     }

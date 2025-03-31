@@ -67,4 +67,9 @@ impl PluginLoader for NativePluginLoader {
             Err(_) => Err(LoaderError::InvalidLoaderData),
         }
     }
+
+    /// Windows specific issue
+    fn can_unload(&self) -> bool {
+        !cfg!(target_os = "windows")
+    }
 }

@@ -25,6 +25,9 @@ pub trait PluginLoader: Send + Sync {
     fn can_load(&self, path: &Path) -> bool;
 
     async fn unload(&self, data: Box<dyn Any + Send + Sync>) -> Result<(), LoaderError>;
+
+    /// Checks if the plugin can be safely unloaded.
+    fn can_unload(&self) -> bool;
 }
 
 /// Unified loader error type

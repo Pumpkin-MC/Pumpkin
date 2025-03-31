@@ -37,7 +37,7 @@ impl CommandExecutor for ListExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let plugin_manager = PLUGIN_MANAGER.lock().await;
-        let plugins = plugin_manager.loaded_plugins();
+        let plugins = plugin_manager.active_plugins();
 
         let message_text = if plugins.is_empty() {
             "There are no loaded plugins.".to_string()
@@ -86,7 +86,7 @@ impl CommandExecutor for LoadExecutor {
         };
         let mut plugin_manager = PLUGIN_MANAGER.lock().await;
 
-        if plugin_manager.is_plugin_loaded(plugin_name) {
+        if plugin_manager.is_plugin_active(plugin_name) {
             sender
                 .send_message(
                     TextComponent::text(format!("Plugin {plugin_name} is already loaded"))
@@ -136,7 +136,7 @@ impl CommandExecutor for UnloadExecutor {
         };
         let mut plugin_manager = PLUGIN_MANAGER.lock().await;
 
-        if !plugin_manager.is_plugin_loaded(plugin_name) {
+        if !plugin_manager.is_plugin_active(plugin_name) {
             sender
                 .send_message(
                     TextComponent::text(format!("Plugin {plugin_name} is not loaded"))

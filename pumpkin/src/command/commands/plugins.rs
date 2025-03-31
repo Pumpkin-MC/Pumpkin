@@ -23,7 +23,7 @@ impl CommandExecutor for Executor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let plugin_manager = PLUGIN_MANAGER.lock().await;
-        let plugins = plugin_manager.loaded_plugins();
+        let plugins = plugin_manager.active_plugins();
 
         let message_text = if plugins.is_empty() {
             "There are no loaded plugins.".to_string()
