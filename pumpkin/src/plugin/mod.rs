@@ -26,7 +26,11 @@ pub trait DynEventHandler: Send + Sync {
     ///
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
-    async fn handle_blocking_dyn(&self, _server: &Arc<Server>, _event: &mut (dyn Event + Send + Sync));
+    async fn handle_blocking_dyn(
+        &self,
+        _server: &Arc<Server>,
+        _event: &mut (dyn Event + Send + Sync),
+    );
 
     /// Checks if the event handler is blocking.
     ///
@@ -84,7 +88,11 @@ where
     H: EventHandler<E> + Send + Sync,
 {
     /// Asynchronously handles a blocking dynamic event.
-    async fn handle_blocking_dyn(&self, server: &Arc<Server>, event: &mut (dyn Event + Send + Sync)) {
+    async fn handle_blocking_dyn(
+        &self,
+        server: &Arc<Server>,
+        event: &mut (dyn Event + Send + Sync),
+    ) {
         if E::get_name_static() == event.get_name() {
             // Safely cast the event to the correct type and handle it.
             let event = unsafe {
@@ -324,14 +332,19 @@ impl PluginManager {
             if let Some(handlers) = handlers.get(&E::get_name_static()) {
                 let (blocking, non_blocking): (Vec<_>, Vec<_>) =
                     handlers.iter().partition(|h| h.is_blocking());
-    
+
                 // Process blocking handlers first
                 for handler in blocking {
                     handler.handle_blocking_dyn(server, &mut event).await;
                 }
-    
+
                 // Process non-blocking handlers
-                join_all(non_blocking.into_iter().map(|h| h.handle_dyn(server, &event))).await;
+                join_all(
+                    non_blocking
+                        .into_iter()
+                        .map(|h| h.handle_dyn(server, &event)),
+                )
+                .await;
             }
         }
         event
