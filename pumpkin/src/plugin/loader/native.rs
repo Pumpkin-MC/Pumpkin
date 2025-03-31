@@ -3,7 +3,7 @@ use std::any::Any;
 #[cfg(not(target_family = "wasm"))]
 use libloading::Library;
 
-use super::*;
+use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata, async_trait};
 
 #[derive(Debug)]
 pub struct NativePluginLoader;
@@ -51,10 +51,13 @@ impl PluginLoader for NativePluginLoader {
             .extension()
             .and_then(|s| s.to_str())
             .unwrap_or_default();
-        match () {
-            _ if cfg!(target_os = "windows") => ext.eq_ignore_ascii_case("dll"),
-            _ if cfg!(target_os = "macos") => ext.eq_ignore_ascii_case("dylib"),
-            _ => ext.eq_ignore_ascii_case("so"),
+
+        if cfg!(target_os = "windows") {
+            ext.eq_ignore_ascii_case("dll")
+        } else if cfg!(target_os = "macos") {
+            ext.eq_ignore_ascii_case("dylib")
+        } else {
+            ext.eq_ignore_ascii_case("so")
         }
     }
 

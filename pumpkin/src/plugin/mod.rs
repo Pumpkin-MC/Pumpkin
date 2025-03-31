@@ -163,6 +163,7 @@ impl Default for PluginManager {
 
 impl PluginManager {
     /// Create a new plugin manager with default loaders
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -259,10 +260,12 @@ impl PluginManager {
     }
 
     /// Get list of loaded plugins
+    #[must_use]
     pub fn loaded_plugins(&self) -> Vec<&PluginMetadata<'static>> {
         self.plugins.iter().map(|p| &p.metadata).collect()
     }
 
+    #[must_use]
     pub fn is_plugin_loaded(&self, name: &str) -> bool {
         self.plugins.iter().any(|p| p.metadata.name == name)
     }
