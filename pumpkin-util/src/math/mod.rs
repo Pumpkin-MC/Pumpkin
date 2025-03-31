@@ -177,7 +177,7 @@ pub fn polynomial_rolling_hash(signatures: Vec<Box<[u8]>>) -> u8 {
 
     for signature in signatures.iter() {
         // Ensure hash_code operates on i64
-        i = i.wrapping_mul(31).wrapping_add(hash_code(signature) as i32);
+        i = i.wrapping_mul(31).wrapping_add(hash_code(signature));
     }
 
     let b = (i & 0xFF) as u8; // Take the least significant byte.

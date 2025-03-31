@@ -53,7 +53,6 @@ use pumpkin_protocol::{
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::polynomial_rolling_hash;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::text::TextContent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     GameMode,
