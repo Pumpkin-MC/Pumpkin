@@ -236,6 +236,7 @@ impl PluginManager {
         if let Err(e) = instance.on_load(&context).await {
             let data = loader_data;
             let loader = loader.clone();
+            let _ = instance.on_unload(&context).await;
             tokio::spawn(async move {
                 loader.unload(data).await.ok();
             });
