@@ -8,6 +8,7 @@ use crate::coordinates::ChunkRelativeBlockCoordinates;
 
 pub mod format;
 pub mod io;
+mod palette;
 
 // TODO
 const WORLD_HEIGHT: usize = 384;

@@ -1,5 +1,6 @@
 pub mod superflat;
 
+use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
@@ -55,13 +56,14 @@ impl WorldGenerator for VanillaGenerator {
                 for z in 0..4u8 {
                     let y = generation_settings.noise.min_y as i32 + y as i32;
 
-                    let biome = proto_chunk.get_biome(&Vector3::new(x.into(), y, z.into()));
+                    // TODO: Biomes
+                    //let biome = proto_chunk.get_biome(&Vector3::new(x.into(), y, z.into()));
                     let coordinates = ChunkRelativeBlockCoordinates {
                         x: x.into(),
                         y: y.into(),
                         z: z.into(),
                     };
-                    sections.set_biome(coordinates, biome);
+                    sections.set_biome(coordinates, &Biome::PLAINS);
                 }
             }
         }
