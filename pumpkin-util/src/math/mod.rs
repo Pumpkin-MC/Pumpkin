@@ -169,3 +169,27 @@ pub fn lerp3(
         lerp2(delta_x, delta_y, x0y0z1, x1y0z1, x0y1z1, x1y1z1),
     )
 }
+
+/// Calculates a Polynomial Rolling Hash
+/// Mojang's checksum algorithm for previous messages
+pub fn polynomial_rolling_hash(signatures: Vec<Box<[u8]>>) -> u8 {
+    let mut i: i32 = 1; // Use i64 to prevent overflow during the accumulation.
+
+    for signature in signatures.iter() {
+        // Ensure hash_code operates on i64
+        i = i.wrapping_mul(31).wrapping_add(hash_code(signature) as i32);
+    }
+
+    let b = (i & 0xFF) as u8; // Take the least significant byte.
+    if b == 0 { 1 } else { b } // Ensure the checksum is never zero.
+}
+
+/// Basically a 1:1 rewrite of Java's Arrays.hashCode()
+fn hash_code(data: &[u8]) -> i32 {
+    let mut hash: i32 = 1; // Start with 1 like Java
+    for &byte in data {
+        let signed_byte = byte as i8 as i32; // Convert u8 to signed i8
+        hash = hash.wrapping_mul(31).wrapping_add(signed_byte); // Prevent panic
+    }
+    hash
+}

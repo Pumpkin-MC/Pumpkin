@@ -51,7 +51,9 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::polynomial_rolling_hash;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::TextContent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
     GameMode,
@@ -103,6 +105,57 @@ impl PumpkinError for BlockPlacingError {
             Self::InvalidBlockFace => Some("Invalid block face".into()),
             Self::InventoryInvalid => Some("Held item invalid".into()),
             Self::NoBaseBlock => Some("No base block".into()),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ChatError {
+    #[error("sent an oversized message")]
+    OversizedMessage,
+    #[error("sent a message with illegal characters")]
+    IllegalCharacters,
+    #[error("sent a chat with invalid/no signature")]
+    UnsignedChat,
+    #[error("has too many unacknowledged chats queued")]
+    TooManyPendingChats,
+    #[error("sent a chat that couldn't be validated")]
+    ChatValidationFailed,
+}
+
+impl PumpkinError for ChatError {
+    fn is_kick(&self) -> bool {
+        true
+    }
+
+    fn severity(&self) -> log::Level {
+        match self {
+            Self::IllegalCharacters
+            | Self::OversizedMessage
+            | Self::UnsignedChat
+            | Self::ChatValidationFailed
+            | Self::TooManyPendingChats => log::Level::Warn,
+        }
+    }
+
+    fn client_kick_reason(&self) -> Option<String> {
+        match self {
+            Self::OversizedMessage => Some("Chat message too long".into()),
+            Self::IllegalCharacters => Some(
+                TextComponent::translate("multiplayer.disconnect.illegal_characters", [])
+                    .get_text(),
+            ),
+            Self::UnsignedChat => Some(
+                TextComponent::translate("multiplayer.disconnect.unsigned_chat", []).get_text(),
+            ),
+            Self::TooManyPendingChats => Some(
+                TextComponent::translate("multiplayer.disconnect.too_many_pending_chats", [])
+                    .get_text(),
+            ),
+            Self::ChatValidationFailed => Some(
+                TextComponent::translate("multiplayer.disconnect.chat_validation_failed", [])
+                    .get_text(),
+            ),
         }
     }
 }
@@ -664,24 +717,26 @@ impl Player {
     }
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
-        let message = chat_message.message.clone();
-        if message.len() > 256 {
-            self.kick(TextComponent::text("Oversized message")).await;
-            return;
-        }
-        if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
-            self.kick(TextComponent::translate(
-                "multiplayer.disconnect.illegal_characters",
-                [],
-            ))
-            .await;
-            return;
-        }
-
         let gameprofile = &self.gameprofile;
 
+        if let Err(err) = self.validate_chat_message(&chat_message).await {
+            log::log!(
+                err.severity(),
+                "{} (uuid {}) {}",
+                gameprofile.name,
+                gameprofile.id,
+                err
+            );
+            if err.is_kick() {
+                if let Some(reason) = err.client_kick_reason() {
+                    self.kick(TextComponent::text(reason)).await;
+                }
+            }
+            return;
+        }
+
         send_cancellable! {{
-            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
+            PlayerChatEvent::new(self.clone(), chat_message.message.clone(), vec![]);
 
             'after: {
                 log::info!("<chat> {}: {}", gameprofile.name, event.message);
@@ -707,6 +762,55 @@ impl Player {
                 }
             }
         }}
+    }
+
+    /// Runs all vanilla checks for a valid chat message
+    pub async fn validate_chat_message(
+        &self,
+        chat_message: &SChatMessage,
+    ) -> Result<(), ChatError> {
+        // Check for oversized messages
+        if chat_message.message.len() > 256 {
+            return Err(ChatError::OversizedMessage);
+        }
+        // Check for illegal characters
+        if chat_message
+            .message
+            .chars()
+            .any(|c| c == '§' || c < ' ' || c == '\x7F')
+        {
+            return Err(ChatError::IllegalCharacters);
+        }
+        // These checks are only run in secure chat mode
+        if BASIC_CONFIG.allow_chat_reports {
+            // Check for unsigned chat
+            if let Some(signature) = &chat_message.signature {
+                if signature.len() != 256 {
+                    return Err(ChatError::UnsignedChat); // Signature is the wrong length
+                }
+            } else {
+                return Err(ChatError::UnsignedChat); // There is no signature
+            }
+
+            // Validate previous signature checksum (new in 1.21.5)
+            // The client can bypass this check by sending 0
+            if chat_message.checksum != 0 {
+                let entity = &self.living_entity.entity;
+                let world = &entity.world.read().await;
+                let last_seen = world
+                    .get_filtered_chat_log(chat_message.acknowledged.clone(), true)
+                    .await;
+                let last_seen_signatures: Vec<Box<[u8]>> = last_seen
+                    .iter()
+                    .filter_map(|entry| entry.signature.clone())
+                    .collect();
+                let checksum = polynomial_rolling_hash(last_seen_signatures);
+                if checksum != chat_message.checksum {
+                    return Err(ChatError::ChatValidationFailed);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub async fn handle_chat_session_update(
