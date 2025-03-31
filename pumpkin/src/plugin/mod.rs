@@ -150,15 +150,21 @@ pub enum ManagerError {
     IoError(#[from] std::io::Error),
 }
 
-impl PluginManager {
-    /// Create a new plugin manager with default loaders
-    pub fn new() -> Self {
+impl Default for PluginManager {
+    fn default() -> Self {
         Self {
             plugins: Vec::new(),
             loaders: vec![Arc::new(NativePluginLoader)],
             server: None,
             handlers: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl PluginManager {
+    /// Create a new plugin manager with default loaders
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Add a new plugin loader implementation
@@ -181,8 +187,7 @@ impl PluginManager {
             return Ok(());
         }
 
-        let mut entries = std::fs::read_dir(path)?;
-        while let Some(entry) = entries.next() {
+        for entry in std::fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
 

@@ -96,9 +96,7 @@ impl CommandExecutor for LoadExecutor {
             return Ok(());
         }
 
-        let result = plugin_manager
-            .try_load_plugin(&Path::new(plugin_name))
-            .await;
+        let result = plugin_manager.try_load_plugin(Path::new(plugin_name)).await;
 
         match result {
             Ok(()) => {
