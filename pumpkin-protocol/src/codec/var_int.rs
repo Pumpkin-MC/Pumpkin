@@ -6,7 +6,6 @@ use std::{
 
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-use super::Codec;
 use bytes::BufMut;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
@@ -22,20 +21,20 @@ pub type VarIntType = i32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VarInt(pub VarIntType);
 
-impl Codec<Self> for VarInt {
+impl VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
     const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
 
     /// Returns the exact number of bytes this VarInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    fn written_size(&self) -> usize {
+    pub fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
         }
     }
 
-    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
+    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0;
         for _ in 0..Self::MAX_SIZE.get() {
             let b: u8 = val as u8 & 0b01111111;
@@ -48,7 +47,7 @@ impl Codec<Self> for VarInt {
         Ok(())
     }
 
-    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
+    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8_be()?;
