@@ -283,7 +283,7 @@ impl PluginManager {
 
     /// Get list of active plugins
     #[must_use]
-    pub fn active_plugins(&self) -> Vec<&PluginMetadata<'static>> {
+    pub fn active_plugins(&self) -> Vec<&PluginMetadata> {
         self.plugins
             .iter()
             .filter(|p| p.is_active)
@@ -299,7 +299,7 @@ impl PluginManager {
 
     /// Get list of loaded plugins
     #[must_use]
-    pub fn loaded_plugins(&self) -> Vec<&PluginMetadata<'static>> {
+    pub fn loaded_plugins(&self) -> Vec<&PluginMetadata> {
         self.plugins.iter().map(|p| &p.metadata).collect()
     }
 
