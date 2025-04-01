@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
+use pumpkin_data::{
+    block::Block,
+    fluid::{Falling, Fluid, FluidProperties, Level},
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
@@ -114,8 +117,6 @@ pub trait FlowingFluid {
         let Ok(block_state_id) = world.get_block_state_id(block_pos).await else {
             return;
         };
-        let props = FlowingFluidProperties::from_state_id(block_state_id, fluid);
-
         if let Some(new_fluid_state) = self.get_new_liquid(world, fluid, block_pos).await {
             if new_fluid_state.to_state_id(fluid) != block_state_id {
                 world
@@ -126,9 +127,16 @@ pub trait FlowingFluid {
                     )
                     .await;
             }
+            self.spread(world, fluid, block_pos, &new_fluid_state).await;
+        } else {
+            world
+                .set_block_state(
+                    block_pos,
+                    Block::AIR.default_state_id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
         }
-
-        self.spread(world, fluid, block_pos, &props).await;
     }
 
     async fn spread(
@@ -170,8 +178,12 @@ pub trait FlowingFluid {
         let Ok(current_state_id) = world.get_block_state_id(block_pos).await else {
             return None;
         };
+
         let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
         let current_level = level_to_int(current_props.level);
+        if current_level == 8 && current_props.falling != Falling::True {
+            return Some(current_props);
+        }
         let mut highest_level = 0;
         let mut source_count = 0;
 
@@ -198,7 +210,7 @@ pub trait FlowingFluid {
         if source_count >= 2 && self.can_convert_to_source(world).await {
             let below_pos = block_pos.down();
             let Ok(below_state_id) = world.get_block_state_id(&below_pos).await else {
-                return None;
+                return Some(current_props);
             };
             if self
                 .is_solid_or_source(world, &below_pos, below_state_id, fluid)
@@ -210,7 +222,7 @@ pub trait FlowingFluid {
 
         let above_pos = block_pos.up();
         let Ok(above_state_id) = world.get_block_state_id(&above_pos).await else {
-            return None;
+            return Some(current_props);
         };
 
         if self.is_same_fluid(fluid, above_state_id) {
@@ -223,13 +235,13 @@ pub trait FlowingFluid {
         if new_level <= 0 {
             return None;
         }
-        if new_level > current_level {
+        if new_level != current_level {
             return Some(
                 self.get_flowing(fluid, int_to_level(new_level), false)
                     .await,
             );
         }
-        None
+        Some(current_props)
     }
 
     async fn is_solid_or_source(
