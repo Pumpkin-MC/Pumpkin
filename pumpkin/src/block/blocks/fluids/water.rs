@@ -34,7 +34,6 @@ impl PumpkinFluid for FlowingWater {
         self.spread_fluid(world, fluid, block_pos).await;
     }
 
-
     async fn on_neighbor_update(
         &self,
         world: &World,

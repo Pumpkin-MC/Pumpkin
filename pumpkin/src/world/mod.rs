@@ -415,9 +415,8 @@ impl World {
         }
 
         for scheduled_tick in fluids_to_tick {
-            let fluid = match self.get_fluid(&scheduled_tick.block_pos).await {
-                Ok(fluid) => fluid,
-                Err(_) => continue,
+            let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
+                continue;
             };
             if scheduled_tick.target_block_id != fluid.id {
                 continue;
@@ -1516,12 +1515,7 @@ impl World {
                     self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
                 {
                     neighbor_pumpkin_fluid
-                        .on_neighbor_update(
-                            self,
-                            &neighbor_fluid,
-                            &neighbor_pos,
-                            false,
-                        )
+                        .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
                         .await;
                 }
             }
