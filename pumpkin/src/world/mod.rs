@@ -232,14 +232,13 @@ impl World {
         decorated_message: &TextComponent,
     ) {
         let messages_sent: i32 = sender.chat_session.lock().await.messages_sent;
+        let sender_last_seen = {
+            let cache = sender.signature_cache.lock().await;
+            cache.last_seen.clone()
+        };
 
         let current_players = self.players.read().await;
-        let sender_seen_signatures = {
-            let cache = sender.signature_cache.lock().await;
-            cache.clone().last_seen()
-        };
         for (_, recipient) in current_players.iter() {
-            // If the recipient is the sender, don't deadlock Mutex
             let messages_received: i32 = recipient.chat_session.lock().await.messages_received;
             let packet = &CPlayerChatMessage::new(
                 VarInt(messages_received),
@@ -249,7 +248,7 @@ impl World {
                 chat_message.message.clone(),
                 chat_message.timestamp,
                 chat_message.salt,
-                sender_seen_signatures.clone().indexed_for(recipient).await,
+                sender_last_seen.indexed_for(recipient).await,
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
@@ -258,11 +257,18 @@ impl World {
             );
             recipient.client.enqueue_packet(packet).await;
 
-            let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
-            // Sender may update recipient on signatures recipient hasn't seen
-            recipient_signature_cache.sync_with_peer(sender_seen_signatures.clone());
+            // Todo: Correctly cache and add seen signatures
+            //let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
+            // if recipient.gameprofile.id != sender.gameprofile.id {
+            //     // Sender may update recipient on signatures recipient hasn't seen
+            //     recipient_signature_cache.sync_with_peer(sender_seen_signatures.clone());
+            // }
             // Cache this new signature
-            recipient_signature_cache.cache_signature(chat_message.signature.clone());
+            // recipient_signature_cache.cache_signatures(
+            //     sender_last_seen
+            //         .clone()
+            //         .push(chat_message.signature.clone()),
+            // );
             recipient.chat_session.lock().await.messages_received += 1;
         }
 
