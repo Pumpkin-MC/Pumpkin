@@ -69,6 +69,15 @@ pub trait PumpkinFluid: Send + Sync {
         0
     }
 
+    async fn on_neighbor_update(
+        &self,
+        _world: &World,
+        _fluid: &Fluid,
+        _block_pos: &BlockPos,
+        _notify: bool,
+    ) {
+    }
+
     async fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
 
     async fn create_legacy_block(&self, _world: &World, _block_pos: &BlockPos) {}

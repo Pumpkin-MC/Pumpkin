@@ -33,6 +33,18 @@ impl PumpkinFluid for FlowingLava {
     async fn on_scheduled_tick(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
         self.spread_fluid(world, fluid, block_pos).await;
     }
+
+    async fn on_neighbor_update(
+        &self,
+        world: &World,
+        fluid: &Fluid,
+        block_pos: &BlockPos,
+        _notify: bool,
+    ) {
+        world
+            .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
+            .await;
+    }
 }
 
 #[async_trait]

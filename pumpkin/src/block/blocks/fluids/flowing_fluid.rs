@@ -167,6 +167,11 @@ pub trait FlowingFluid {
         fluid: &Fluid,
         block_pos: &BlockPos,
     ) -> Option<FlowingFluidProperties> {
+        let Ok(current_state_id) = world.get_block_state_id(block_pos).await else {
+            return None;
+        };
+        let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
+        let current_level = level_to_int(current_props.level);
         let mut highest_level = 0;
         let mut source_count = 0;
 
@@ -218,11 +223,13 @@ pub trait FlowingFluid {
         if new_level <= 0 {
             return None;
         }
-
-        return Some(
-            self.get_flowing(fluid, int_to_level(new_level), false)
-                .await,
-        );
+        if new_level > current_level {
+            return Some(
+                self.get_flowing(fluid, int_to_level(new_level), false)
+                    .await,
+            );
+        }
+        None
     }
 
     async fn is_solid_or_source(
