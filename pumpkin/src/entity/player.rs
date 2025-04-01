@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CSetHeldItem;
+use pumpkin_protocol::client::play::{CSetHeldItem, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -235,6 +235,7 @@ pub struct Player {
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
+    pub signature_cache: Mutex<SignatureCache>,
 }
 
 impl Player {
@@ -319,6 +320,7 @@ impl Player {
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
+            signature_cache: Mutex::new(SignatureCache::default()),
         }
     }
 
@@ -1863,6 +1865,7 @@ pub struct ChatSession {
     pub signature: Box<[u8]>,
     pub messages_sent: i32,
     pub messages_received: i32,
+    pub signature_cache: Vec<Box<[u8]>>,
 }
 
 impl Default for ChatSession {
@@ -1886,6 +1889,90 @@ impl ChatSession {
             signature: key_signature,
             messages_sent: 0,
             messages_received: 0,
+            signature_cache: Vec::new(),
         }
+    }
+}
+
+/// Player's current chat session
+#[derive(Debug, Clone)]
+pub struct SignatureCache(Vec<Box<[u8]>>);
+
+impl Default for SignatureCache {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl From<SignatureCache> for Vec<Box<[u8]>> {
+    fn from(cache: SignatureCache) -> Self {
+        cache.0
+    }
+}
+
+impl SignatureCache {
+    pub fn cache_signature(&mut self, signature: Option<Box<[u8]>>) {
+        if let Some(sig) = signature {
+            if self.0.len() >= 128 {
+                self.0.pop();
+            }
+            self.0.insert(0, sig);
+        };
+    }
+
+    pub fn sync_with_peer(&mut self, peer_cache: Self) {
+        // Prepend signatures in their original order to signature_cache
+        for sig in peer_cache.0.into_iter().rev() {
+            if !self.0.contains(&sig) {
+                if self.0.len() >= 128 {
+                    self.0.pop();
+                }
+                self.0.insert(0, sig);
+            }
+        }
+    }
+
+    pub fn last_seen(&self) -> Self {
+        let mut last_seen = self.clone();
+        last_seen.0.truncate(20);
+        last_seen.0.reverse();
+        last_seen
+    }
+
+    /// A bit confusing but this is how vanilla does it
+    /// The sender's last seen messages are sent as id's if the recipient has seen them or full signatures otherwise.
+    pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
+        let mut indexed = Vec::new();
+        // Recipient is not the sender if this can lock
+        for (i, signature) in self.0.iter().enumerate() {
+            // We only want 20 messages max
+            if i == 20 {
+                break;
+            }
+            if let Some(index) = recipient
+                .signature_cache
+                .lock()
+                .await
+                .0
+                .iter()
+                .position(|s| s == signature)
+            {
+                indexed.push(PreviousMessage {
+                    // Send ID as signature in recipient's last seen
+                    id: VarInt(1 + index as i32),
+                    signature: None,
+                });
+            } else {
+                indexed.push(PreviousMessage {
+                    // Send ID as 0 and full signature
+                    id: VarInt(0),
+                    signature: Some(signature.clone()),
+                });
+            }
+        }
+
+        indexed.reverse(); // Newest last when sending
+        log::warn!("to {}: {:#?}", recipient.gameprofile.name, indexed);
+        indexed.into_boxed_slice()
     }
 }

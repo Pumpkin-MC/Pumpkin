@@ -231,106 +231,98 @@ impl World {
         chat_message: &SChatMessage,
         decorated_message: &TextComponent,
     ) {
-        // Todo: Proper ACK handling, handle signature chain de-sync
-
-        // Don't leave this locked in case sender is also recipient
-        let sender_messages_sent = {
-            let sender_chat_session = sender.chat_session.lock().await;
-            sender_chat_session.messages_sent
-        };
+        let messages_sent: i32 = sender.chat_session.lock().await.messages_sent;
 
         let current_players = self.players.read().await;
-
+        let sender_seen_signatures = {
+            let cache = sender.signature_cache.lock().await;
+            cache.clone().last_seen()
+        };
         for (_, recipient) in current_players.iter() {
-            let mut recipient_chat_session = recipient.chat_session.lock().await;
-            let filtered_chat_log = self
-                .get_filtered_chat_log(
-                    chat_message.acknowledged.clone(),
-                    recipient_chat_session.messages_received == 0,
-                )
-                .await;
-
+            // If the recipient is the sender, don't deadlock Mutex
+            let messages_received: i32 = recipient.chat_session.lock().await.messages_received;
             let packet = &CPlayerChatMessage::new(
-                VarInt(recipient_chat_session.messages_received),
+                VarInt(messages_received),
                 sender.gameprofile.id,
-                VarInt(sender_messages_sent),
+                VarInt(messages_sent),
                 chat_message.signature.clone(),
                 chat_message.message.clone(),
                 chat_message.timestamp,
                 chat_message.salt,
-                filtered_chat_log.clone(),
+                sender_seen_signatures.clone().indexed_for(recipient).await,
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
                 TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
                 None,
             );
-
             recipient.client.enqueue_packet(packet).await;
 
-            recipient_chat_session.messages_received += 1;
+            let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
+            // Sender may update recipient on signatures recipient hasn't seen
+            recipient_signature_cache.sync_with_peer(sender_seen_signatures.clone());
+            // Cache this new signature
+            recipient_signature_cache.cache_signature(chat_message.signature.clone());
+            recipient.chat_session.lock().await.messages_received += 1;
         }
 
         sender.chat_session.lock().await.messages_sent += 1;
-
-        self.append_to_chat_log(chat_message.signature.clone())
-            .await;
     }
 
-    /// Adds a message to the chat log and updates ids in the chat log
-    /// id 1 is most recent, id 20 is oldest
-    pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
-        let new_message = PreviousMessage {
-            id: VarInt(1),
-            signature,
-        };
+    // /// Adds a message to the chat log and updates ids in the chat log
+    // /// id 1 is most recent, id 20 is oldest
+    // pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
+    //     let new_message = PreviousMessage {
+    //         id: VarInt(1),
+    //         signature,
+    //     };
 
-        let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
-        messages.push(new_message);
-        if messages.len() > 20 {
-            messages.remove(0);
-        }
-        let messages_len = messages.len();
+    //     let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
+    //     messages.push(new_message);
+    //     if messages.len() > 20 {
+    //         messages.remove(0);
+    //     }
+    //     let messages_len = messages.len();
 
-        for (i, message) in messages.iter_mut().enumerate() {
-            message.id = VarInt((messages_len - i) as i32);
-        }
+    //     for (i, message) in messages.iter_mut().enumerate() {
+    //         message.id = VarInt((messages_len - i) as i32);
+    //     }
 
-        *self.chat_log.lock().await = messages.into_boxed_slice();
-    }
+    //     *self.chat_log.lock().await = messages.into_boxed_slice();
+    // }
 
-    /// Returns a log of the last 20 messages, filtered by ACK bitset
-    /// Message ID should only be 0 if signatures are being sent
-    /// Signatures should only be sent in the first chat to each player
-    pub async fn get_filtered_chat_log(
-        &self,
-        acknowledged: Box<[u8]>,
-        first_message: bool,
-    ) -> Box<[PreviousMessage]> {
-        let bitset = format!(
-            "{:04b}{:08b}{:08b}",
-            acknowledged[2], acknowledged[1], acknowledged[0]
-        );
+    // /// Returns a log of the last 20 messages, filtered by ACK bitset
+    // /// Message ID should only be 0 if signatures are being sent
+    // /// Signatures should only be sent in the first chat to each player
+    // pub async fn get_filtered_chat_log(
+    //     &self,
+    //     acknowledged: Box<[u8]>,
+    //     first_message: bool,
+    // ) -> Box<[PreviousMessage]> {
+    //     let bitset = format!(
+    //         "{:04b}{:08b}{:08b}",
+    //         acknowledged[2], acknowledged[1], acknowledged[0]
+    //     );
 
-        let filtered_log: Vec<PreviousMessage> = self
-            .chat_log
-            .lock()
-            .await
-            .iter()
-            .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
-            .map(|message| {
-                let mut message = message.clone();
-                if first_message {
-                    message.id = VarInt(0);
-                } else {
-                    message.signature = None;
-                }
-                message
-            }) // Clone the messages
-            .collect();
+    //     let filtered_log: Vec<PreviousMessage> = self
+    //         .chat_log
+    //         .lock()
+    //         .await
+    //         .iter()
+    //         .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
+    //         .map(|message| {
+    //             let mut message = message.clone();
+    //             if first_message {
+    //                 message.id = VarInt(0);
+    //             } else {
+    //                 message.signature = None;
+    //             }
+    //             message
+    //         }) // Clone the messages
+    //         .collect();
 
-        filtered_log.into_boxed_slice()
-    }
+    //     filtered_log.into_boxed_slice()
+    // }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
     ///

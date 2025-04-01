@@ -794,16 +794,9 @@ impl Player {
             // Validate previous signature checksum (new in 1.21.5)
             // The client can bypass this check by sending 0
             if chat_message.checksum != 0 {
-                let entity = &self.living_entity.entity;
-                let world = &entity.world.read().await;
-                let last_seen = world
-                    .get_filtered_chat_log(chat_message.acknowledged.clone(), true)
-                    .await;
-                let last_seen_signatures: Vec<Box<[u8]>> = last_seen
-                    .iter()
-                    .filter_map(|entry| entry.signature.clone())
-                    .collect();
-                let checksum = polynomial_rolling_hash(last_seen_signatures);
+                let last_seen_signatures = self.signature_cache.lock().await.last_seen().into();
+                let checksum = polynomial_rolling_hash(&last_seen_signatures);
+                log::warn!("checksum: {} != {}", checksum, chat_message.checksum);
                 if checksum != chat_message.checksum {
                     return Err(ChatError::ChatValidationFailed);
                 }

@@ -96,7 +96,7 @@ impl ClientPacket for CPlayerChatMessage {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PreviousMessage {
     pub id: VarInt,
     pub signature: Option<Box<[u8]>>, // Always 256
