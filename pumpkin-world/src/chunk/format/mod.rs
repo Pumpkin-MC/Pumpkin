@@ -3,17 +3,16 @@ use std::collections::HashMap;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::{from_bytes, nbt_long_array};
 
-use pumpkin_util::math::{ceil_log2, position::BlockPos, vector2::Vector2};
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    block::ChunkBlockState,
-    coordinates::{ChunkRelativeBlockCoordinates, Height},
-};
+use crate::block::ChunkBlockState;
+use crate::generation::section_coords;
 
 use super::{
-    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSection, SUBCHUNK_VOLUME,
+    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, SUBCHUNK_VOLUME,
     ScheduledTick, TickPriority,
+    palette::{BlockPalette, encompassing_bits},
 };
 
 pub mod anvil;
@@ -50,8 +49,10 @@ impl ChunkData {
             )));
         }
 
-        // this needs to be boxed, otherwise it will cause a stack-overflow
-        let mut final_section = ChunkSection::new();
+        // TODO: Biomes
+
+        let min_y = section_coords::section_to_block(chunk_data.min_y_section);
+        let mut final_section = ChunkSections::new(min_y);
         let mut block_index = 0; // which block we're currently at
 
         for section in chunk_data.sections.into_iter() {
@@ -77,29 +78,24 @@ impl ChunkData {
             };
 
             // How many bits each block has in one of the palette u64s
-            let block_bit_size = if palette.len() < 16 {
-                4
-            } else {
-                ceil_log2(palette.len() as u32).max(4)
-            };
+            let bits_per_block_id = encompassing_bits(palette.len()).max(4);
             // How many blocks there are in one of the palettes u64s
-            let blocks_in_palette = 64 / block_bit_size;
+            let blocks_in_palette = 64 / bits_per_block_id;
 
-            let mask = (1 << block_bit_size) - 1;
+            let mask = (1 << bits_per_block_id) - 1;
             'block_loop: for block in block_data.iter() {
                 for i in 0..blocks_in_palette {
-                    let index = (block >> (i * block_bit_size)) & mask;
+                    let index = (block >> (i * bits_per_block_id)) & mask;
                     let block = &palette[index as usize];
 
-                    // TODO allow indexing blocks directly so we can just use block_index and save some time?
-                    // this is fine because we initialized the heightmap of `blocks`
-                    // from the cached value in the world file
+                    let relative_x = block_index % BlockPalette::SIZE;
+                    let relative_y = block_index / CHUNK_AREA;
+                    let relative_z = (block_index % CHUNK_AREA) / BlockPalette::SIZE;
+
                     final_section.set_block_no_heightmap_update(
-                        ChunkRelativeBlockCoordinates {
-                            z: ((block_index % CHUNK_AREA) / 16).into(),
-                            y: Height::from_absolute((block_index / CHUNK_AREA) as u16),
-                            x: (block_index % 16).into(),
-                        },
+                        relative_x,
+                        relative_y,
+                        relative_z,
                         block.get_id(),
                     );
 
@@ -225,8 +221,8 @@ struct ChunkNbt {
     data_version: i32,
     #[serde(rename = "xPos")]
     x_pos: i32,
-    // #[serde(rename = "yPos")]
-    //y_pos: i32,
+    #[serde(rename = "yPos")]
+    min_y_section: i32,
     #[serde(rename = "zPos")]
     z_pos: i32,
     status: ChunkStatus,

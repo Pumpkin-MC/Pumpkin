@@ -72,7 +72,7 @@ pub(crate) fn build() -> TokenStream {
         type_to_name.extend(quote! { Self::#format_name => #name, });
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
         type_to_id.extend(quote! { Self::#format_name => #index, });
-        id_to_type.extend(quote! { #index => Some(Self::#format_name), });
+        id_to_type.extend(quote! { #index => Some(&Self::#format_name), });
     }
 
     quote! {
@@ -82,7 +82,7 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Debug)]
         pub struct Biome {
-            pub id: u8,
+            pub id: u16,
             pub registry_id: &'static str,
             pub weather: Weather,
             // carvers: &'static [&str],
@@ -148,7 +148,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            pub const fn from_id(id: u8) -> Option<Self> {
+            pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #id_to_type
                     _ => None

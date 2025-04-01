@@ -80,7 +80,7 @@ mod test {
         struct BiomeData {
             x: i32,
             z: i32,
-            data: Vec<(i32, i32, i32, u8)>,
+            data: Vec<(i32, i32, i32, u16)>,
         }
 
         let expected_data: Vec<BiomeData> =

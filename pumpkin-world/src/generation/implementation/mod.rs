@@ -1,11 +1,8 @@
-pub mod superflat;
-
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    chunk::{ChunkData, ChunkSection},
-    coordinates::ChunkRelativeBlockCoordinates,
+    chunk::{ChunkData, ChunkSections},
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
         noise_router::proto_noise_router::GlobalProtoNoiseRouter, proto_chunk::ProtoChunk,
@@ -35,14 +32,14 @@ impl GeneratorInit for VanillaGenerator {
 }
 
 impl WorldGenerator for VanillaGenerator {
-    fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
-        let mut sections = ChunkSection::new();
+    fn generate_chunk(&self, at: &Vector2<i32>) -> ChunkData {
+        let mut sections = ChunkSections::new();
         // TODO: This is bad, but it works
         let generation_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
         let mut proto_chunk = ProtoChunk::new(
-            at,
+            *at,
             &self.base_router,
             &self.random_config,
             generation_settings,
@@ -70,7 +67,6 @@ impl WorldGenerator for VanillaGenerator {
 
         for x in 0..16u8 {
             for z in 0..16u8 {
-                // TODO: This can be chunk specific
                 for y in 0..generation_settings.noise.height {
                     let y = generation_settings.noise.min_y as i32 + y as i32;
                     let coordinates = ChunkRelativeBlockCoordinates {
@@ -88,7 +84,7 @@ impl WorldGenerator for VanillaGenerator {
         ChunkData {
             section: sections,
             heightmap: Default::default(),
-            position: at,
+            position: *at,
             dirty: true,
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),

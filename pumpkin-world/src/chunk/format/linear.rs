@@ -414,7 +414,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(position);
+                let chunk = generator.generate_chunk(&position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -465,7 +465,15 @@ mod tests {
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
-                        assert_eq!(chunk.section, read_chunk.section, "Chunks don't match");
+                        let original = chunk.section.dump_blocks();
+                        let read = read_chunk.section.dump_blocks();
+
+                        assert_eq!(original, read, "Chunk blocks don't match");
+
+                        let original = chunk.section.dump_biomes();
+                        let read = read_chunk.section.dump_biomes();
+
+                        assert_eq!(original, read, "Chunk biomes don't match");
                         break;
                     }
                 }

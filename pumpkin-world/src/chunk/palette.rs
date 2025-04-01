@@ -7,11 +7,12 @@ type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
 /// The minimum number of bits required to represent this number
 #[inline]
-fn encompassing_bits(count: usize) -> usize {
+pub fn encompassing_bits(count: usize) -> usize {
     count.ilog2() as usize + 1
 }
 
-struct SinglePalettedContainer {
+#[derive(Debug)]
+pub struct SinglePalettedContainer {
     registry_id: u16,
 }
 
@@ -21,6 +22,7 @@ impl SinglePalettedContainer {
     }
 }
 
+#[derive(Debug)]
 struct MappedPalettedConatinerMetadata {
     /// The value that this registry id is mapped to
     mapping: u8,
@@ -31,8 +33,12 @@ struct MappedPalettedConatinerMetadata {
 /// A paletted container that compresses data depending on how many bits are needed to encode ids.
 /// `LOWER_BOUND` is the minimum bits per entry used to encode values. `UPPER_BOUND` is the maximum
 /// bits per entry used to encode values. `DIM` is the length of the side of the cube.
-struct MappedPalettedContainer<const DIM: usize, const LOWER_BOUND: usize, const UPPER_BOUND: usize>
-{
+#[derive(Debug)]
+pub struct MappedPalettedContainer<
+    const DIM: usize,
+    const LOWER_BOUND: usize,
+    const UPPER_BOUND: usize,
+> {
     data: AbstractCube<u8, DIM>,
     index_to_id_map: Vec<Option<u16>>,
     id_to_data_map: HashMap<u16, MappedPalettedConatinerMetadata>,
@@ -62,6 +68,22 @@ impl<const DIM: usize, const LOWER_BOUND: usize, const UPPER_BOUND: usize>
                     });
             });
         return_data
+    }
+
+    fn iter_yzx<F>(&self, f: F)
+    where
+        F: FnMut(u16),
+    {
+        let mut f = f;
+        self.data.iter().for_each(|zxs| {
+            zxs.iter().for_each(|xs| {
+                xs.iter().for_each(|x| {
+                    let registry_id = self.index_to_id_map[*x as usize]
+                        .expect("The index to id map should be synchronized with the data");
+                    f(registry_id);
+                });
+            });
+        });
     }
 
     fn set_id(&mut self, x: usize, y: usize, z: usize, registry_id: u16) {
@@ -248,7 +270,8 @@ impl<const DIM: usize, const LOWER_BOUND: usize, const UPPER_BOUND: usize>
 
 /// A paletted container that directly holds values. `BPE` is the bits to use to encode data
 /// entries. `DIM` is the length of the side of the cube.
-struct DirectPalettedContainer<const DIM: usize, const UPPER_BOUND: usize, const BPE: usize> {
+#[derive(Debug)]
+pub struct DirectPalettedContainer<const DIM: usize, const UPPER_BOUND: usize, const BPE: usize> {
     data: AbstractCube<u16, DIM>,
     id_to_count_map: HashMap<u16, u16>,
 }
@@ -256,6 +279,20 @@ struct DirectPalettedContainer<const DIM: usize, const UPPER_BOUND: usize, const
 impl<const DIM: usize, const UPPER_BOUND: usize, const BPE: usize>
     DirectPalettedContainer<DIM, UPPER_BOUND, BPE>
 {
+    fn iter_yzx<F>(&self, f: F)
+    where
+        F: FnMut(u16),
+    {
+        let mut f = f;
+        self.data.iter().for_each(|zxs| {
+            zxs.iter().for_each(|xs| {
+                xs.iter().for_each(|x| {
+                    f(*x);
+                });
+            });
+        });
+    }
+
     fn from_abstract_cube(data: AbstractCube<u16, DIM>) -> Self {
         let mut id_to_count_map = HashMap::new();
 
@@ -318,7 +355,8 @@ impl<const DIM: usize, const UPPER_BOUND: usize, const BPE: usize>
 
 /// A paletted container is a cube of registry ids. It uses a custom compression scheme based on how
 /// may distinct registry ids are in the cube.
-enum PalettedContainer<
+#[derive(Debug)]
+pub enum PalettedContainer<
     const DIM: usize,
     const MAP_LOWER_BOUND: usize,
     const MAP_UPPER_BOUND: usize,
@@ -337,6 +375,26 @@ impl<
 > PalettedContainer<DIM, MAP_LOWER_BOUND, MAP_UPPER_BOUND, MAX_BPE>
 {
     pub const SIZE: usize = DIM;
+
+    pub fn iter_yzx<F>(&self, f: F)
+    where
+        F: FnMut(u16),
+    {
+        match self {
+            Self::Single(single) => {
+                let mut f = f;
+                for _ in 0..DIM * DIM * DIM {
+                    f(single.registry_id);
+                }
+            }
+            Self::Mapped(mapped) => {
+                mapped.iter_yzx(f);
+            }
+            Self::Direct(direct) => {
+                direct.iter_yzx(f);
+            }
+        }
+    }
 
     #[inline]
     pub fn get_id(&self, x: usize, y: usize, z: usize) -> u16 {
@@ -421,12 +479,7 @@ mod test {
         let mut palette = BlockPalette::default();
         palette.set_id(0, 0, 0, 1);
 
-        match &palette {
-            BlockPalette::Mapped(map) => {
-                // Just check that its now a mapping
-            }
-            _ => unreachable!(),
-        }
+        assert!(matches!(palette, BlockPalette::Mapped(_)));
 
         assert_eq!(palette.get_id(0, 0, 0), 1);
         assert_eq!(palette.get_id(0, 0, 1), 0);
