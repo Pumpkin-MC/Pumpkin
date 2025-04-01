@@ -54,17 +54,13 @@ pub trait EventHandler<E: Event>: Send + Sync {
     ///
     /// # Arguments
     /// - `event`: A reference to the event to handle.
-    async fn handle(&self, _server: &Arc<Server>, _event: &E) {
-        unimplemented!();
-    }
+    async fn handle(&self, _server: &Arc<Server>, _event: &E) {}
 
     /// Asynchronously handles a blocking event of type `E`.
     ///
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
-    async fn handle_blocking(&self, _server: &Arc<Server>, _event: &mut E) {
-        unimplemented!();
-    }
+    async fn handle_blocking(&self, _server: &Arc<Server>, _event: &mut E) {}
 }
 
 /// A struct representing a typed event handler.
