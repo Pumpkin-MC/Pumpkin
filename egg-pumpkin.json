@@ -4,89 +4,28 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2024-12-29T00:41:20+01:00",
+    "exported_at": "2025-03-26T10:30:59+00:00",
     "name": "Pumpkin",
-    "author": "lilalexmed@proton.me",
-    "description": "Pumpkin is a Minecraft server built entirely in Rust, offering a fast, efficient, and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game. Requires around 2GB RAM to build, adjust docker.installer_limits.memory in your wing accordingly! Currently, you need to adjust the port in the config manually!",
+    "author": "kubik.palacky@gmail.com",
+    "description": "Empowering everyone to host fast and efficient Minecraft servers.\r\nhttps:\/\/pumpkinmc.org",
     "features": null,
     "docker_images": {
-        "Alpine": "ghcr.io\/pterodactyl\/yolks:alpine"
+        "ghcr.io\/pumpkin-mc\/pumpkin:pterodactyl": "ghcr.io\/pumpkin-mc\/pumpkin:pterodactyl"
     },
     "file_denylist": [],
-    "startup": ".\/pumpkin",
+    "startup": "pumpkin",
     "config": {
         "files": "{}",
-        "startup": "{\"done\":\"Started Server took\"}",
+        "startup": "{\r\n    \"done\": \"You now can connect to the server\"\r\n}",
         "logs": "{}",
-        "stop": "stop"
+        "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!\/bin\/ash\r\nset -eux\r\n\r\napk add --no-cache musl-dev git\r\nmkdir -p \/mnt\/server\r\n\r\nREPO_URL=\"${GIT_URL:-https:\/\/github.com\/Snowiiii\/Pumpkin.git}\"\r\n\r\nif [ -n \"$GIT_BRANCH\" ]; then\r\n    git clone --depth 1 --single-branch --branch \"$GIT_BRANCH\" \"$REPO_URL\"\r\nelse\r\n    git clone --depth 1 --single-branch \"$REPO_URL\"\r\nfi\r\n\r\nif [ -n \"$GIT_COMMIT\" ]; then\r\n    git checkout \"$GIT_COMMIT\"\r\nfi\r\n\r\ncd Pumpkin\r\n\r\n#export RUSTFLAGS=\"-C target-feature=-crt-static -C target-cpu=native\"\r\nexport CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-default}\r\n\r\nif [[ \"$BUILD_RELEASE\" == \"1\" || \"$BUILD_RELEASE\" == \"true\" ]]; then\r\n    cargo build --release\r\n    strip target\/release\/pumpkin\r\n    cp target\/release\/pumpkin \/mnt\/server\/pumpkin\r\nelse\r\n    cargo build\r\n    cp target\/debug\/pumpkin \/mnt\/server\/pumpkin\r\nfi",
-            "container": "docker.io\/rust:1-alpine3.21",
+            "script": "#!\/bin\/ash\r\n\r\n# Target directory\r\nTARGET_DIR=\"\/mnt\/server\/config\"\r\n\r\n# Create target directory if it doesn't exist\r\nmkdir -p \"$TARGET_DIR\"\r\n\r\n# Change directory to the target directory\r\ncd \"$TARGET_DIR\"\r\n\r\n# Contents of features.toml\r\nFEATURES_TOML=\"\r\n[logging]\r\nenabled = true\r\nthreads = true\r\ncolor = true\r\ntimestamp = true\r\n\r\n[resource_pack]\r\nenabled = false\r\nurl = \\\"\\\"\r\nsha1 = \\\"\\\"\r\nprompt_message = \\\"\\\"\r\nforce = false\r\n\r\n[chunk]\r\nformat = \\\"Anvil\\\"\r\nwrite_in_place = false\r\n\r\n[chunk.compression]\r\nalgorithm = \\\"LZ4\\\"\r\nlevel = 6\r\n\r\n[networking.authentication]\r\nenabled = true\r\nconnect_timeout = 5000\r\nread_timeout = 5000\r\nprevent_proxy_connections = false\r\n\r\n[networking.authentication.player_profile]\r\nallow_banned_players = false\r\nallowed_actions = [\\\"FORCED_NAME_CHANGE\\\", \\\"USING_BANNED_SKIN\\\"]\r\n\r\n[networking.authentication.textures]\r\nenabled = true\r\nallowed_url_schemes = [\\\"http\\\", \\\"https\\\"]\r\nallowed_url_domains = [\\\".minecraft.net\\\", \\\".mojang.com\\\"]\r\n\r\n[networking.authentication.textures.types]\r\nskin = true\r\ncape = true\r\nelytra = true\r\n\r\n[networking.query]\r\nenabled = false\r\n\r\n[networking.rcon]\r\nenabled = false\r\naddress = \\\"0.0.0.0:25575\\\"\r\npassword = \\\"\\\"\r\nmax_connections = 0\r\n\r\n[networking.rcon.logging]\r\nlogged_successfully = true\r\nwrong_password = true\r\ncommands = true\r\nquit = true\r\n\r\n[networking.proxy]\r\nenabled = false\r\n\r\n[networking.proxy.velocity]\r\nenabled = false\r\nsecret = \\\"\\\"\r\n\r\n[networking.proxy.bungeecord]\r\nenabled = false\r\n\r\n[networking.packet_compression]\r\nenabled = true\r\nthreshold = 256\r\nlevel = 4\r\n\r\n[networking.lan_broadcast]\r\nenabled = false\r\n\r\n[commands]\r\nuse_console = false\r\nlog_console = true\r\ndefault_op_level = 0\r\n\r\n[pvp]\r\nenabled = true\r\nhurt_animation = true\r\nprotect_creative = true\r\nknockback = true\r\nswing = true\r\n\r\n[server_links]\r\nenabled = true\r\nbug_report = \\\"https:\/\/github.com\/Pumpkin-MC\/Pumpkin\/issues\\\"\r\nsupport = \\\"\\\"\r\nstatus = \\\"\\\"\r\nfeedback = \\\"\\\"\r\ncommunity = \\\"\\\"\r\nwebsite = \\\"\\\"\r\nforums = \\\"\\\"\r\nnews = \\\"\\\"\r\nannouncements = \\\"\\\"\r\n\r\n[server_links.custom]\r\n\"\r\n\r\n# Contents of configuration.toml\r\nCONFIGURATION_TOML=\"\r\nserver_address = \\\"0.0.0.0:$SERVER_PORT\\\"\r\nseed = \\\"\\\"\r\nmax_players = 100000\r\nview_distance = 10\r\nsimulation_distance = 10\r\ndefault_difficulty = \\\"Normal\\\"\r\nop_permission_level = 4\r\nallow_nether = true\r\nhardcore = false\r\nonline_mode = true\r\nencryption = true\r\nmotd = \\\"A blazingly fast Pumpkin server!\\\"\r\ntps = 20.0\r\ndefault_gamemode = \\\"Survival\\\"\r\nforce_gamemode = false\r\nscrub_ips = true\r\nuse_favicon = true\r\nfavicon_path = \\\"icon.png\\\"\r\n\"\r\n\r\n# Write the contents to the files\r\necho \"$FEATURES_TOML\" > features.toml\r\necho \"$CONFIGURATION_TOML\" > configuration.toml\r\n\r\necho \"Files created successfully.\"\r\n\r\nexit 0",
+            "container": "alpine:3.4",
             "entrypoint": "ash"
         }
     },
-    "variables": [
-        {
-            "name": "Rust backtrace",
-            "description": "\"0\" -> No backtrace is generated. This is the default behavior.\r\n\"1\" -> Generates a minimal backtrace showing only relevant information about where the panic occurred.\r\n\"full\" -> Generates a detailed backtrace, showing all frames leading to the panic, including functions in the Rust standard library and dependencies.",
-            "env_variable": "RUST_BACKTRACE",
-            "default_value": "1",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|in:1,0,full",
-            "field_type": "text"
-        },
-        {
-            "name": "Build Release",
-            "description": "Either build release or a debug build of pumpkin.\r\nScope: installation",
-            "env_variable": "BUILD_RELEASE",
-            "default_value": "1",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "required|boolean",
-            "field_type": "text"
-        },
-        {
-            "name": "Git commit",
-            "description": "Chose which git commit to clone.\r\nScope: installation",
-            "env_variable": "GIT_COMMIT",
-            "default_value": "",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|string|max:40|min:7",
-            "field_type": "text"
-        },
-        {
-            "name": "Git branch",
-            "description": "Chose which git branch to clone.\r\nScope: installation",
-            "env_variable": "GIT_BRANCH",
-            "default_value": "",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|string|max:255",
-            "field_type": "text"
-        },
-        {
-            "name": "Git URL",
-            "description": "Chose which git URL to clone from. Useful if you are using a fork.\r\nScope: installation",
-            "env_variable": "GIT_URL",
-            "default_value": "",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|string",
-            "field_type": "text"
-        },
-        {
-            "name": "Cargo build jobs",
-            "description": "Amount of jobs that cargo spawns to compile. Try to reduce them if you encounter a deadlock.\r\nScope: installation",
-            "env_variable": "CARGO_BUILD_JOBS",
-            "default_value": "",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|integer",
-            "field_type": "text"
-        }
-    ]
+    "variables": []
 }
