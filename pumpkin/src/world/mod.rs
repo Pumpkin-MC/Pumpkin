@@ -37,7 +37,7 @@ use pumpkin_nbt::to_bytes_unnamed;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
+        CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
         FilterType, GameEvent, InitChat, PlayerAction, PreviousMessage,
     },
