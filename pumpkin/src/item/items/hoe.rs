@@ -47,13 +47,13 @@ impl PumpkinItem for HoeItem {
             || block == &Block::COARSE_DIRT
             || block == &Block::ROOTED_DIRT
         {
-            let mut future_block = block.clone();
+            let mut future_block = block;
             let world = player.world().await;
 
             //Only rooted can be right-clicked on the bottom of the block
             if face == &BlockDirection::Down {
                 if block == &Block::ROOTED_DIRT {
-                    future_block = Block::DIRT;
+                    future_block = &Block::DIRT;
                 }
             } else {
                 // grass, dirt && dirt path become farmland
@@ -62,11 +62,11 @@ impl PumpkinItem for HoeItem {
                     || block == &Block::DIRT)
                     && world.get_block_state(&location.up()).await.unwrap().air
                 {
-                    future_block = Block::FARMLAND;
+                    future_block = &Block::FARMLAND;
                 }
                 //Coarse dirt and rooted dirt become dirt
                 else if block == &Block::COARSE_DIRT || block == &Block::ROOTED_DIRT {
-                    future_block = Block::DIRT;
+                    future_block = &Block::DIRT;
                 }
             }
 
@@ -80,31 +80,15 @@ impl PumpkinItem for HoeItem {
 
             //Also rooted_dirt drop a hanging_root
             if block == &Block::ROOTED_DIRT {
-                let entity = match face {
-                    BlockDirection::Up => {
-                        world.create_entity(location.up().to_f64(), EntityType::ITEM)
-                    }
-                    BlockDirection::Down => {
-                        world.create_entity(location.down().to_f64(), EntityType::ITEM)
-                    }
-                    BlockDirection::North => world.create_entity(
-                        location.up().to_f64().add_raw(0.0, -0.4, -1.0),
-                        EntityType::ITEM,
-                    ),
-                    BlockDirection::South => world.create_entity(
-                        location.up().to_f64().add_raw(0.0, -0.4, 1.0),
-                        EntityType::ITEM,
-                    ),
-                    BlockDirection::West => world.create_entity(
-                        location.up().to_f64().add_raw(-1.0, -0.4, 0.0),
-                        EntityType::ITEM,
-                    ),
-                    BlockDirection::East => world.create_entity(
-                        location.up().to_f64().add_raw(1.0, -0.4, 0.0),
-                        EntityType::ITEM,
-                    ),
+                let location = match face {
+                    BlockDirection::Up => location.up().to_f64(),
+                    BlockDirection::Down => location.down().to_f64(),
+                    BlockDirection::North => location.up().to_f64().add_raw(0.0, -0.4, -1.0),
+                    BlockDirection::South => location.up().to_f64().add_raw(0.0, -0.4, 1.0),
+                    BlockDirection::West => location.up().to_f64().add_raw(-1.0, -0.4, 0.0),
+                    BlockDirection::East => location.up().to_f64().add_raw(1.0, -0.4, 0.0),
                 };
-
+                let entity = world.create_entity(location, EntityType::ITEM);
                 // TODO: Merge stacks together
                 let item_entity =
                     Arc::new(ItemEntity::new(entity, Block::HANGING_ROOTS.item_id, 1).await);
