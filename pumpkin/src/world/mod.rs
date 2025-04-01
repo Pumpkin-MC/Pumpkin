@@ -30,15 +30,17 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     particle::Particle,
     sound::{Sound, SoundCategory},
-    world::WorldEvent,
+    world::{RAW, WorldEvent},
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
+        CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
+        FilterType, GameEvent, InitChat, PlayerAction, PreviousMessage,
     },
+    server::play::SChatMessage,
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
@@ -153,6 +155,9 @@ pub struct World {
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
+    /// A log of the last 20 chat messages (or attempted chat messages) from players.
+    /// Used for previous message acknowledgement.
+    pub chat_log: Mutex<Box<[PreviousMessage]>>,
 }
 
 impl World {
@@ -178,6 +183,7 @@ impl World {
             block_registry,
             sea_level: generation_settings.sea_level,
             unsent_block_changes: Mutex::new(HashMap::new()),
+            chat_log: Mutex::new(Box::new([])),
         }
     }
 
@@ -217,6 +223,113 @@ impl World {
             target_name,
         ))
         .await;
+    }
+
+    pub async fn broadcast_secure_player_chat(
+        &self,
+        sender: &Arc<Player>,
+        chat_message: &SChatMessage,
+        decorated_message: &TextComponent,
+    ) {
+        // Todo: Proper ACK handling, handle signature chain de-sync
+
+        // Don't leave this locked in case sender is also recipient
+        let sender_messages_sent = {
+            let sender_chat_session = sender.chat_session.lock().await;
+            sender_chat_session.messages_sent
+        };
+
+        let current_players = self.players.read().await;
+
+        for (_, recipient) in current_players.iter() {
+            let mut recipient_chat_session = recipient.chat_session.lock().await;
+            let filtered_chat_log = self
+                .get_filtered_chat_log(
+                    chat_message.acknowledged.clone(),
+                    recipient_chat_session.messages_received == 0,
+                )
+                .await;
+
+            let packet = &CPlayerChatMessage::new(
+                VarInt(recipient_chat_session.messages_received),
+                sender.gameprofile.id,
+                VarInt(sender_messages_sent),
+                chat_message.signature.clone(),
+                chat_message.message.clone(),
+                chat_message.timestamp,
+                chat_message.salt,
+                filtered_chat_log.clone(),
+                Some(decorated_message.clone()),
+                FilterType::PassThrough,
+                (RAW + 1).into(), // Custom registry chat_type with no sender name
+                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                None,
+            );
+
+            recipient.client.enqueue_packet(packet).await;
+
+            recipient_chat_session.messages_received += 1;
+        }
+
+        sender.chat_session.lock().await.messages_sent += 1;
+
+        self.append_to_chat_log(chat_message.signature.clone())
+            .await;
+    }
+
+    /// Adds a message to the chat log and updates ids in the chat log
+    /// id 1 is most recent, id 20 is oldest
+    pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
+        let new_message = PreviousMessage {
+            id: VarInt(1),
+            signature,
+        };
+
+        let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
+        messages.push(new_message);
+        if messages.len() > 20 {
+            messages.remove(0);
+        }
+        let messages_len = messages.len();
+
+        for (i, message) in messages.iter_mut().enumerate() {
+            message.id = VarInt((messages_len - i) as i32);
+        }
+
+        *self.chat_log.lock().await = messages.into_boxed_slice();
+    }
+
+    /// Returns a log of the last 20 messages, filtered by ACK bitset
+    /// Message ID should only be 0 if signatures are being sent
+    /// Signatures should only be sent in the first chat to each player
+    pub async fn get_filtered_chat_log(
+        &self,
+        acknowledged: Box<[u8]>,
+        first_message: bool,
+    ) -> Box<[PreviousMessage]> {
+        let bitset = format!(
+            "{:04b}{:08b}{:08b}",
+            acknowledged[2], acknowledged[1], acknowledged[0]
+        );
+
+        let filtered_log: Vec<PreviousMessage> = self
+            .chat_log
+            .lock()
+            .await
+            .iter()
+            .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
+            .map(|message| {
+                let mut message = message.clone();
+                if first_message {
+                    message.id = VarInt(0);
+                } else {
+                    message.signature = None;
+                }
+                message
+            }) // Clone the messages
+            .collect();
+
+        filtered_log.into_boxed_slice()
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
@@ -470,7 +583,9 @@ impl World {
                 None,
                 0.into(),
                 self.sea_level.into(),
-                false,
+                // This should stay true even when reports are disabled.
+                // It prevents the annoying popup when joining the server.
+                true,
             ))
             .await;
         // Permissions, i.e. the commands a player may use.
@@ -531,19 +646,36 @@ impl World {
         {
             let current_players = self.players.read().await;
 
-            let current_player_data = current_players
+            let mut current_player_data = Vec::new();
+
+            for (_, player) in current_players
                 .iter()
                 .filter(|(c, _)| **c != player.gameprofile.id)
-                .map(|(_, player)| {
-                    (
-                        &player.gameprofile.id,
-                        [PlayerAction::AddPlayer {
-                            name: &player.gameprofile.name,
-                            properties: &player.gameprofile.properties,
-                        }],
-                    )
-                })
-                .collect::<Vec<_>>();
+            {
+                let chat_session = player.chat_session.lock().await;
+
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties: &player.gameprofile.properties,
+                }];
+
+                if base_config.allow_chat_reports {
+                    player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: chat_session.session_id,
+                        expires_at: chat_session.expires_at,
+                        public_key: chat_session.public_key.clone(),
+                        signature: chat_session.signature.clone(),
+                    })));
+                }
+
+                current_player_data.push((&player.gameprofile.id, player_actions));
+            }
+
+            // TODO: Remove magic numbers
+            let mut action_flags = 0x01;
+            if base_config.allow_chat_reports {
+                action_flags |= 0x02;
+            }
 
             let entries = current_player_data
                 .iter()
@@ -556,7 +688,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(0x01, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags, &entries))
                 .await;
         };
 

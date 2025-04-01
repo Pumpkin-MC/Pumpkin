@@ -1,16 +1,16 @@
 use async_trait::async_trait;
-use pumpkin_protocol::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::borrow::Cow;
 
+use crate::server::CURRENT_MC_VERSION;
 use crate::{
     GIT_VERSION,
     command::{
         CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
     },
-    server::CURRENT_MC_VERSION,
 };
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];

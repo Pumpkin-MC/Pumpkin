@@ -1,6 +1,5 @@
-use std::num::NonZeroI32;
-
-use pumpkin_protocol::{CURRENT_MC_PROTOCOL, ConnectionState, server::handshake::SHandShake};
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_protocol::{ConnectionState, server::handshake::SHandShake};
 use pumpkin_util::text::TextComponent;
 
 use crate::{net::Client, server::CURRENT_MC_VERSION};
@@ -16,7 +15,7 @@ impl Client {
         self.connection_state.store(handshake.next_state);
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
-            match protocol.cmp(&NonZeroI32::from(CURRENT_MC_PROTOCOL).get()) {
+            match protocol.cmp(&(CURRENT_MC_PROTOCOL as i32)) {
                 std::cmp::Ordering::Less => {
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.outdated_client",
