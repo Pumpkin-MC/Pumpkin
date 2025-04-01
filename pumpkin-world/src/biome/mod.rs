@@ -1,90 +1,63 @@
 use sha2::{Digest, Sha256};
-use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
+use std::{cell::RefCell, sync::LazyLock};
 
 use enum_dispatch::enum_dispatch;
-use multi_noise::{NoiseHypercube, SearchTree, TreeLeafNode};
+use multi_noise::BiomeTree;
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector3::Vector3;
-use serde::Deserialize;
 
-use crate::{
-    dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
-};
+use crate::generation::noise_router::multi_noise_sampler::MultiNoiseSampler;
 pub mod multi_noise;
 
-#[derive(Deserialize)]
-pub struct BiomeEntries {
-    biomes: Vec<BiomeEntry>,
-}
-
-#[derive(Deserialize)]
-pub struct BiomeEntry {
-    parameters: NoiseHypercube,
-    biome: Biome,
-}
-
-pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
-    let data: HashMap<Dimension, BiomeEntries> =
-        serde_json::from_str(include_str!("../../../assets/multi_noise.json"))
-            .expect("Could not parse multi_noise.json.");
-    // TODO: support non overworld biomes
-    let overworld_data = data
-        .get(&Dimension::Overworld)
-        .expect("Overworld dimension not found");
-
-    let entries: Vec<(Biome, &NoiseHypercube)> = overworld_data
-        .biomes
-        .iter()
-        .map(|entry| (entry.biome, &entry.parameters))
-        .collect();
-
-    SearchTree::create(entries)
+pub static BIOME_SEARCH_TREE: LazyLock<BiomeTree> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../assets/multi_noise_biome_tree.json"))
+        .expect("Could not parse multi_noise_biome_tree.json")
 });
 
 thread_local! {
-    static LAST_RESULT_NODE: RefCell<Option<TreeLeafNode<Biome>>> = const {RefCell::new(None) };
+    /// A shortcut; check if last used biome is what we should use
+    static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
 }
 
 #[enum_dispatch]
 pub trait BiomeSupplier {
-    fn biome(at: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome;
+    fn biome(at: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }
 
 pub struct MultiNoiseBiomeSupplier;
 
-// TODO: Add End supplier
+// TODO: Add Nether & End supplier
 
 impl BiomeSupplier for MultiNoiseBiomeSupplier {
-    fn biome(at: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> Biome {
-        //panic!("{}:{}:{}", at.x, at.y, at.z);
-        let point = noise.sample(at.x, at.y, at.z);
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| {
-            BIOME_ENTRIES
-                .get(&point, last_result)
-                .expect("failed to get biome entry")
-        })
+    fn biome(global_biome_pos: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
+        let point = noise.sample(global_biome_pos.x, global_biome_pos.y, global_biome_pos.z);
+        LAST_RESULT_NODE.with_borrow_mut(|last_result| BIOME_SEARCH_TREE.get(&point, last_result))
     }
 }
 
-pub fn hash_seed(seed: i64) -> i64 {
+pub fn hash_seed(seed: u64) -> i64 {
     let mut hasher = Sha256::new();
-    hasher.update(seed.to_be_bytes());
+    hasher.update(seed.to_le_bytes());
     let result = hasher.finalize();
-    i64::from_be_bytes(result[..8].try_into().unwrap())
+    i64::from_le_bytes(result[..8].try_into().unwrap())
 }
 
 #[cfg(test)]
 mod test {
     use pumpkin_data::chunk::Biome;
+    use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+    use serde::Deserialize;
 
     use crate::{
-        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
+        GENERATION_SETTINGS, GeneratorSetting, GlobalProtoNoiseRouter, GlobalRandomConfig,
+        NOISE_ROUTER_ASTS, ProtoChunk,
         generation::noise_router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         },
+        read_data_from_file,
     };
 
-    use super::{BiomeSupplier, MultiNoiseBiomeSupplier};
+    use super::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed};
 
     #[test]
     fn test_biome_desert() {
@@ -98,6 +71,61 @@ mod test {
             &pumpkin_util::math::vector3::Vector3 { x: -24, y: 1, z: 8 },
             &mut sampler,
         );
-        assert_eq!(biome, Biome::Desert)
+        assert_eq!(biome, &Biome::DESERT)
+    }
+
+    #[test]
+    fn test_wide_area_surface() {
+        #[derive(Deserialize)]
+        struct BiomeData {
+            x: i32,
+            z: i32,
+            data: Vec<(i32, i32, i32, u8)>,
+        }
+
+        let expected_data: Vec<BiomeData> =
+            read_data_from_file!("../../assets/biome_no_blend_no_beard_0.json");
+
+        let seed = 0;
+        let random_config = GlobalRandomConfig::new(seed, false);
+        let noise_router =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let surface_settings = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+
+        for data in expected_data.into_iter() {
+            let chunk_pos = Vector2::new(data.x, data.z);
+            let mut chunk =
+                ProtoChunk::new(chunk_pos, &noise_router, &random_config, surface_settings);
+            chunk.populate_biomes();
+
+            for (biome_x, biome_y, biome_z, biome_id) in data.data {
+                let global_biome_pos = Vector3::new(biome_x, biome_y, biome_z);
+                let calculated_biome = chunk.get_biome(&global_biome_pos);
+
+                assert_eq!(
+                    biome_id,
+                    calculated_biome.id,
+                    "Expected {:?} was {:?} at {},{},{} ({},{})",
+                    Biome::from_id(biome_id),
+                    calculated_biome,
+                    biome_x,
+                    biome_y,
+                    biome_z,
+                    data.x,
+                    data.z
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_hash_seed() {
+        let hashed_seed = hash_seed(0);
+        assert_eq!(8794265229978523055, hashed_seed);
+
+        let hashed_seed = hash_seed((-777i64) as u64);
+        assert_eq!(-1087248400229165450, hashed_seed);
     }
 }

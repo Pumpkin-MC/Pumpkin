@@ -142,6 +142,22 @@ impl TextComponent {
         }
     }
 
+    pub fn chat_decorated(format: String, player_name: String, content: String) -> Self {
+        // Todo: maybe allow players to use & in chat contingent on permissions
+        let with_resolved_fields = format
+            .replace("&", "§")
+            .replace("{DISPLAYNAME}", player_name.as_str())
+            .replace("{MESSAGE}", content.as_str());
+
+        Self(TextComponentBase {
+            content: TextContent::Text {
+                text: Cow::Owned(with_resolved_fields),
+            },
+            style: Style::default(),
+            extra: vec![],
+        })
+    }
+
     pub fn to_pretty_console(self) -> String {
         self.0.to_pretty_console()
     }
