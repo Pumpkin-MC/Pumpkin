@@ -1897,7 +1897,7 @@ impl ChatSession {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LastSeen(Vec<Box<[u8]>>);
 
 impl From<LastSeen> for Vec<Box<[u8]>> {
@@ -1909,12 +1909,6 @@ impl From<LastSeen> for Vec<Box<[u8]>> {
 impl AsRef<[Box<[u8]>]> for LastSeen {
     fn as_ref(&self) -> &[Box<[u8]>] {
         &self.0
-    }
-}
-
-impl Default for LastSeen {
-    fn default() -> Self {
-        Self(Vec::new())
     }
 }
 
@@ -1949,7 +1943,7 @@ impl LastSeen {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
     /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
@@ -1957,15 +1951,6 @@ pub struct MessageCache {
     full_cache: Vec<Box<[u8]>>,
     /// max 20 last seen messages by the sender. Most Recent LAST
     pub last_seen: LastSeen,
-}
-
-impl Default for MessageCache {
-    fn default() -> Self {
-        Self {
-            full_cache: Vec::new(),
-            last_seen: LastSeen::default(),
-        }
-    }
 }
 
 impl MessageCache {
