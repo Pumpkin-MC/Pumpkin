@@ -1,5 +1,6 @@
 use std::num::NonZeroU8;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::block;
 use crate::block::registry::BlockActionResult;
@@ -66,6 +67,10 @@ use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
 
+/// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
+/// Vanilla: 2 minutes
+const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
+
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
@@ -120,6 +125,10 @@ pub enum ChatError {
     TooManyPendingChats,
     #[error("sent a chat that couldn't be validated")]
     ChatValidationFailed,
+    #[error("sent a chat with an out of order timestamp")]
+    OutOfOrderChat,
+    #[error("has an expired public key")]
+    ExpiredPublicKey,
 }
 
 impl PumpkinError for ChatError {
@@ -132,8 +141,10 @@ impl PumpkinError for ChatError {
             Self::IllegalCharacters
             | Self::OversizedMessage
             | Self::UnsignedChat
+            | Self::TooManyPendingChats
             | Self::ChatValidationFailed
-            | Self::TooManyPendingChats => log::Level::Warn,
+            | Self::OutOfOrderChat
+            | Self::ExpiredPublicKey => log::Level::Warn,
         }
     }
 
@@ -153,6 +164,13 @@ impl PumpkinError for ChatError {
             ),
             Self::ChatValidationFailed => Some(
                 TextComponent::translate("multiplayer.disconnect.chat_validation_failed", [])
+                    .get_text(),
+            ),
+            Self::OutOfOrderChat => Some(
+                TextComponent::translate("multiplayer.disconnect.out_of_order_chat", []).get_text(),
+            ),
+            Self::ExpiredPublicKey => Some(
+                TextComponent::translate("multiplayer.disconnect.expired_public_key", [])
                     .get_text(),
             ),
         }
@@ -791,8 +809,21 @@ impl Player {
                 return Err(ChatError::UnsignedChat); // There is no signature
             }
 
-            // Todo: check session expiry
-            // Todo: check message timestamp
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+
+            // Verify message timestamp
+            if chat_message.timestamp > now || chat_message.timestamp < (now - CHAT_MESSAGE_MAX_AGE)
+            {
+                return Err(ChatError::OutOfOrderChat);
+            }
+
+            // Verify session expiry
+            if self.chat_session.lock().await.expires_at < now {
+                return Err(ChatError::ExpiredPublicKey);
+            }
 
             // Validate previous signature checksum (new in 1.21.5)
             // The client can bypass this check by sending 0
