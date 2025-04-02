@@ -468,12 +468,28 @@ mod tests {
                         let original = chunk.section.dump_blocks();
                         let read = read_chunk.section.dump_blocks();
 
-                        assert_eq!(original, read, "Chunk blocks don't match");
+                        original
+                            .into_iter()
+                            .zip(read)
+                            .enumerate()
+                            .for_each(|(i, (o, r))| {
+                                if o != r {
+                                    panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                }
+                            });
 
                         let original = chunk.section.dump_biomes();
                         let read = read_chunk.section.dump_biomes();
 
-                        assert_eq!(original, read, "Chunk biomes don't match");
+                        original
+                            .into_iter()
+                            .zip(read)
+                            .enumerate()
+                            .for_each(|(i, (o, r))| {
+                                if o != r {
+                                    panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                }
+                            });
                         break;
                     }
                 }

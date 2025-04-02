@@ -1,8 +1,10 @@
-use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    chunk::{ChunkData, ChunkSections},
+    chunk::{
+        ChunkData, ChunkSections, SubChunk,
+        palette::{BiomePalette, BlockPalette},
+    },
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
         noise_router::proto_noise_router::GlobalProtoNoiseRouter, proto_chunk::ProtoChunk,
@@ -10,7 +12,10 @@ use crate::{
     noise_router::NOISE_ROUTER_ASTS,
 };
 
-use super::settings::{GENERATION_SETTINGS, GeneratorSetting};
+use super::{
+    biome_coords,
+    settings::{GENERATION_SETTINGS, GeneratorSetting},
+};
 
 pub struct VanillaGenerator {
     random_config: GlobalRandomConfig,
@@ -33,11 +38,15 @@ impl GeneratorInit for VanillaGenerator {
 
 impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(&self, at: &Vector2<i32>) -> ChunkData {
-        let mut sections = ChunkSections::new();
-        // TODO: This is bad, but it works
+        // TODO: Dont hardcode this
         let generation_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
+
+        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
+        let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
+        let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
+
         let mut proto_chunk = ProtoChunk::new(
             *at,
             &self.base_router,
@@ -48,35 +57,25 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
 
-        for x in 0..4u8 {
-            for y in 0..4u8 {
-                for z in 0..4u8 {
-                    let y = generation_settings.noise.min_y as i32 + y as i32;
-
-                    // TODO: Biomes
-                    //let biome = proto_chunk.get_biome(&Vector3::new(x.into(), y, z.into()));
-                    let coordinates = ChunkRelativeBlockCoordinates {
-                        x: x.into(),
-                        y: y.into(),
-                        z: z.into(),
-                    };
-                    sections.set_biome(coordinates, &Biome::PLAINS);
+        for y in 0..biome_coords::from_block(generation_settings.shape.height) {
+            for z in 0..BiomePalette::SIZE {
+                for x in 0..BiomePalette::SIZE {
+                    let absolute_y =
+                        biome_coords::from_block(generation_settings.shape.min_y as i32) + y as i32;
+                    let biome =
+                        proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                    sections.set_relative_biome(x, y as usize, z, biome.id);
                 }
             }
         }
 
-        for x in 0..16u8 {
-            for z in 0..16u8 {
-                for y in 0..generation_settings.noise.height {
-                    let y = generation_settings.noise.min_y as i32 + y as i32;
-                    let coordinates = ChunkRelativeBlockCoordinates {
-                        x: x.into(),
-                        y: y.into(),
-                        z: z.into(),
-                    };
-
-                    let block = proto_chunk.get_block_state(&Vector3::new(x.into(), y, z.into()));
-                    sections.set_block(coordinates, block.state_id);
+        for y in 0..generation_settings.shape.height {
+            for z in 0..BlockPalette::SIZE {
+                for x in 0..BlockPalette::SIZE {
+                    let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
+                    let block =
+                        proto_chunk.get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
+                    sections.set_relative_block(x, y as usize, z, block.state_id);
                 }
             }
         }

@@ -112,7 +112,7 @@ impl<'a> ProtoChunk<'a> {
         random_config: &'a GlobalRandomConfig,
         settings: &'a GenerationSettings,
     ) -> Self {
-        let generation_shape = &settings.noise;
+        let generation_shape = &settings.shape;
 
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 

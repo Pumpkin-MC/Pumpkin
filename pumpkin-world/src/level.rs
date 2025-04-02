@@ -499,7 +499,7 @@ impl Level {
                         .entry(pos)
                         .or_insert_with(|| {
                             // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk = world_gen.generate_chunk(pos);
+                            let generated_chunk = world_gen.generate_chunk(&pos);
                             Arc::new(RwLock::new(generated_chunk))
                         })
                         .value()

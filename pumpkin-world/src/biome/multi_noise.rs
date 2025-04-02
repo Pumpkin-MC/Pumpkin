@@ -183,7 +183,7 @@ mod test {
 
     #[test]
     fn test_sample_multinoise_biome() {
-        let expected_data: Vec<(i32, i32, i32, u16)> =
+        let expected_data: Vec<(i32, i32, i32, u8)> =
             read_data_from_file!("../../assets/multi_noise_biome_source_test.json");
 
         let seed = 0;

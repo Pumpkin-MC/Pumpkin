@@ -117,6 +117,12 @@ impl From<u8> for VarInt {
     }
 }
 
+impl From<u16> for VarInt {
+    fn from(value: u16) -> Self {
+        VarInt(value as i32)
+    }
+}
+
 impl From<usize> for VarInt {
     fn from(value: usize) -> Self {
         VarInt(value as i32)

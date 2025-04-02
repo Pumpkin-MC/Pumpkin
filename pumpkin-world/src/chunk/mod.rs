@@ -9,12 +9,10 @@ pub mod io;
 pub mod palette;
 
 // TODO
-const WORLD_HEIGHT: usize = 384;
-pub const CHUNK_AREA: usize = BlockPalette::SIZE * BlockPalette::SIZE;
-pub const BIOME_VOLUME: usize = 64;
-pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * BlockPalette::SIZE;
-pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / BlockPalette::SIZE;
-pub const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
+pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
+pub const CHUNK_AREA: usize = CHUNK_WIDTH * CHUNK_WIDTH;
+pub const BIOME_VOLUME: usize = BiomePalette::VOLUME;
+pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
 
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
@@ -124,7 +122,7 @@ pub struct ChunkData {
 /// - Subchunks: 24 separate subchunks are stored.
 #[derive(Debug)]
 pub struct ChunkSections {
-    pub sections: Box<[SubChunk; SUBCHUNKS_COUNT]>,
+    pub sections: Box<[SubChunk]>,
     min_y: i32,
 }
 
@@ -133,7 +131,7 @@ impl ChunkSections {
     pub fn dump_blocks(&self) -> Vec<u16> {
         let mut dump = Vec::new();
         for section in self.sections.iter() {
-            section.block_states.iter_yzx(|raw_id| {
+            section.block_states.for_each(|raw_id| {
                 dump.push(raw_id);
             });
         }
@@ -141,10 +139,10 @@ impl ChunkSections {
     }
 
     #[cfg(test)]
-    pub fn dump_biomes(&self) -> Vec<u16> {
+    pub fn dump_biomes(&self) -> Vec<u8> {
         let mut dump = Vec::new();
         for section in self.sections.iter() {
-            section.biomes.iter_yzx(|raw_id| {
+            section.biomes.for_each(|raw_id| {
                 dump.push(raw_id);
             });
         }
@@ -180,28 +178,59 @@ impl Default for ChunkHeightmaps {
 }
 
 impl ChunkSections {
-    pub fn new(min_y: i32) -> Self {
-        let sections: [SubChunk; SUBCHUNKS_COUNT] = core::array::from_fn(|_| SubChunk::default());
-        Self {
-            sections: Box::new(sections),
-            min_y,
+    pub fn new(sections: Box<[SubChunk]>, min_y: i32) -> Self {
+        Self { sections, min_y }
+    }
+
+    pub fn get_block_absolute_y(
+        &self,
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+    ) -> Option<u16> {
+        let y = y - self.min_y;
+        if y < 0 {
+            None
+        } else {
+            let relative_y = y as usize;
+            self.get_relative_block(relative_x, relative_y, relative_z)
         }
     }
+
+    pub fn set_block_absolute_y(
+        &mut self,
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+        block_state_id: u16,
+    ) {
+        let y = y - self.min_y;
+        debug_assert!(y > 0);
+        let relative_y = y as usize;
+
+        self.set_relative_block(relative_x, relative_y, relative_z, block_state_id);
+    }
+
     /// Gets the given block in the chunk
-    pub fn get_block(&self, relative_x: usize, relative_y: usize, relative_z: usize) -> u16 {
+    fn get_relative_block(
+        &self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+    ) -> Option<u16> {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        self.sections[section_index]
-            .block_states
-            .get_id(relative_x, relative_y, relative_z)
+        self.sections
+            .get(section_index)
+            .map(|section| section.block_states.get(relative_x, relative_y, relative_z))
     }
 
     /// Sets the given block in the chunk, returning the old block
     #[inline]
-    pub fn set_block(
+    pub fn set_relative_block(
         &mut self,
         relative_x: usize,
         relative_y: usize,
@@ -229,21 +258,20 @@ impl ChunkSections {
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        self.sections[section_index].block_states.set_id(
-            relative_x,
-            relative_y,
-            relative_z,
-            block_state_id,
-        );
+        if let Some(section) = self.sections.get_mut(section_index) {
+            section
+                .block_states
+                .set(relative_x, relative_y, relative_z, block_state_id);
+        }
     }
 
     /// Sets the given block in the chunk, returning the old block
-    pub fn set_biome(
+    pub fn set_relative_biome(
         &mut self,
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        biome_id: u16,
+        biome_id: u8,
     ) {
         debug_assert!(relative_x < BiomePalette::SIZE);
         debug_assert!(relative_z < BiomePalette::SIZE);
@@ -252,20 +280,26 @@ impl ChunkSections {
         let relative_y = relative_y % BiomePalette::SIZE;
         self.sections[section_index]
             .biomes
-            .set_id(relative_x, relative_y, relative_z, biome_id);
+            .set(relative_x, relative_y, relative_z, biome_id);
     }
 }
 
 impl ChunkData {
     /// Gets the given block in the chunk
     #[inline]
-    pub fn get_block(&self, relative_x: usize, relative_y: usize, relative_z: usize) -> u16 {
-        self.section.get_block(relative_x, relative_y, relative_z)
+    pub fn get_relative_block(
+        &self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+    ) -> Option<u16> {
+        self.section
+            .get_relative_block(relative_x, relative_y, relative_z)
     }
 
     /// Sets the given block in the chunk
     #[inline]
-    pub fn set_block(
+    pub fn set_relative_block(
         &mut self,
         relative_x: usize,
         relative_y: usize,
@@ -274,7 +308,7 @@ impl ChunkData {
     ) {
         // TODO @LUK_ESC? update the heightmap
         self.section
-            .set_block(relative_x, relative_y, relative_z, block_state_id);
+            .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -291,7 +325,7 @@ impl ChunkData {
         block_state_id: u16,
     ) {
         self.section
-            .set_block(relative_x, relative_y, relative_z, block_state_id);
+            .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
     #[expect(dead_code)]

@@ -82,7 +82,7 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Debug)]
         pub struct Biome {
-            pub id: u16,
+            pub id: u8,
             pub registry_id: &'static str,
             pub weather: Weather,
             // carvers: &'static [&str],
@@ -148,7 +148,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            pub const fn from_id(id: u16) -> Option<&'static Self> {
+            pub const fn from_id(id: u8) -> Option<&'static Self> {
                 match id {
                     #id_to_type
                     _ => None

@@ -6,13 +6,12 @@ use pumpkin_nbt::{from_bytes, nbt_long_array};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::block::ChunkBlockState;
 use crate::generation::section_coords;
 
 use super::{
-    CHUNK_AREA, ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, SUBCHUNK_VOLUME,
-    ScheduledTick, TickPriority,
-    palette::{BlockPalette, encompassing_bits},
+    ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, ScheduledTick, SubChunk,
+    TickPriority,
+    palette::{BiomePalette, BlockPalette},
 };
 
 pub mod anvil;
@@ -49,69 +48,19 @@ impl ChunkData {
             )));
         }
 
-        // TODO: Biomes
-
+        let sub_chunks = chunk_data
+            .sections
+            .into_iter()
+            .map(|section| SubChunk {
+                block_states: BlockPalette::from_disk_nbt(section.block_states),
+                biomes: BiomePalette::from_disk_nbt(section.biomes),
+            })
+            .collect();
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
-        let mut final_section = ChunkSections::new(min_y);
-        let mut block_index = 0; // which block we're currently at
-
-        for section in chunk_data.sections.into_iter() {
-            let block_states = match section.block_states {
-                Some(states) => states,
-                None => continue, // TODO @lukas0008 this should instead fill all blocks with the only element of the palette
-            };
-
-            let palette = block_states
-                .palette
-                .iter()
-                .map(ChunkBlockState::from_palette)
-                .collect::<Vec<_>>();
-
-            let block_data = match block_states.data {
-                None => {
-                    // We skipped placing an empty subchunk.
-                    // We need to increase the y coordinate of the next subchunk being placed.
-                    block_index += SUBCHUNK_VOLUME;
-                    continue;
-                }
-                Some(d) => d,
-            };
-
-            // How many bits each block has in one of the palette u64s
-            let bits_per_block_id = encompassing_bits(palette.len()).max(4);
-            // How many blocks there are in one of the palettes u64s
-            let blocks_in_palette = 64 / bits_per_block_id;
-
-            let mask = (1 << bits_per_block_id) - 1;
-            'block_loop: for block in block_data.iter() {
-                for i in 0..blocks_in_palette {
-                    let index = (block >> (i * bits_per_block_id)) & mask;
-                    let block = &palette[index as usize];
-
-                    let relative_x = block_index % BlockPalette::SIZE;
-                    let relative_y = block_index / CHUNK_AREA;
-                    let relative_z = (block_index % CHUNK_AREA) / BlockPalette::SIZE;
-
-                    final_section.set_block_no_heightmap_update(
-                        relative_x,
-                        relative_y,
-                        relative_z,
-                        block.get_id(),
-                    );
-
-                    block_index += 1;
-
-                    // if `SUBCHUNK_VOLUME `is not divisible by `blocks_in_palette` the block_data
-                    // can sometimes spill into other subchunks. We avoid that by aborting early
-                    if (block_index % SUBCHUNK_VOLUME) == 0 {
-                        break 'block_loop;
-                    }
-                }
-            }
-        }
+        let section = ChunkSections::new(sub_chunks, min_y);
 
         Ok(ChunkData {
-            section: final_section,
+            section,
             heightmap: chunk_data.heightmaps,
             position,
             // This chunk is read from disk, so it has not been modified
@@ -150,10 +99,8 @@ impl ChunkData {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChunkSectionNBT {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    block_states: Option<ChunkSectionBlockStates>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    biomes: Option<ChunkSectionBiomes>,
+    block_states: ChunkSectionBlockStates,
+    biomes: ChunkSectionBiomes,
     // TODO
     // #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
     // block_light: Option<Box<[u8]>>,
@@ -164,13 +111,13 @@ struct ChunkSectionNBT {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct ChunkSectionBiomes {
+pub struct ChunkSectionBiomes {
     #[serde(
         serialize_with = "nbt_long_array",
         skip_serializing_if = "Option::is_none"
     )]
-    data: Option<Box<[i64]>>,
-    palette: Vec<PaletteBiomeEntry>,
+    pub(crate) data: Option<Box<[i64]>>,
+    pub(crate) palette: Vec<PaletteBiomeEntry>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -181,13 +128,13 @@ pub struct PaletteBiomeEntry {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct ChunkSectionBlockStates {
+pub struct ChunkSectionBlockStates {
     #[serde(
         serialize_with = "nbt_long_array",
         skip_serializing_if = "Option::is_none"
     )]
-    data: Option<Box<[i64]>>,
-    palette: Vec<PaletteBlockEntry>,
+    pub(crate) data: Option<Box<[i64]>>,
+    pub(crate) palette: Vec<PaletteBlockEntry>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -195,7 +142,7 @@ struct ChunkSectionBlockStates {
 pub struct PaletteBlockEntry {
     /// Block name
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Key-value pairs of properties
     pub properties: Option<HashMap<String, String>>,
 }
 
