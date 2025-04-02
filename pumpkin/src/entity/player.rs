@@ -1860,7 +1860,6 @@ impl TryFrom<i32> for ChatMode {
 }
 
 /// Player's current chat session
-#[derive(Debug)]
 pub struct ChatSession {
     pub session_id: uuid::Uuid,
     pub expires_at: i64,
