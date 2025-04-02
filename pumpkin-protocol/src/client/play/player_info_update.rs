@@ -12,7 +12,7 @@ use super::PlayerAction;
 
 #[packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
-    pub actions: i8,
+    pub actions: u8,
     pub players: &'a [Player<'a>],
 }
 
@@ -22,7 +22,7 @@ pub struct Player<'a> {
 }
 
 impl<'a> CPlayerInfoUpdate<'a> {
-    pub fn new(actions: i8, players: &'a [Player<'a>]) -> Self {
+    pub fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
         Self { actions, players }
     }
 }
@@ -31,7 +31,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_i8_be(self.actions)?;
+        write.write_u8_be(self.actions)?;
         write.write_list::<Player>(self.players, |p, v| {
             p.write_uuid(&v.uuid)?;
             for action in v.actions {

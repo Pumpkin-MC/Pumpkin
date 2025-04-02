@@ -1137,7 +1137,7 @@ impl Player {
                     .read()
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                        PlayerInfoFlags::UPDATE_GAME_MODE.bits() as i8,
+                        PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
