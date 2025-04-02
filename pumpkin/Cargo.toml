@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin"
-version = "0.1.0-dev"
+version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
 rust-version = "1.85"

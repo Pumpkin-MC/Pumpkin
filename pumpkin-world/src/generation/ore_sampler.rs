@@ -1,4 +1,7 @@
-use pumpkin_util::{math::clamped_map, random::RandomDeriver};
+use pumpkin_util::{
+    math::clamped_map,
+    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
+};
 
 use crate::{
     block::ChunkBlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter,

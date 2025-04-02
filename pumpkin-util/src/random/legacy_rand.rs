@@ -1,5 +1,6 @@
 use super::{
-    RandomDeriverImpl, RandomImpl, gaussian::GaussianGenerator, hash_block_pos, java_string_hash,
+    RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl, gaussian::GaussianGenerator,
+    hash_block_pos, java_string_hash,
 };
 
 pub struct LegacyRand {
@@ -8,6 +9,13 @@ pub struct LegacyRand {
 }
 
 impl LegacyRand {
+    pub fn from_seed(seed: u64) -> Self {
+        LegacyRand {
+            seed: (seed ^ 0x5DEECE66D) & 0xFFFFFFFFFFFF,
+            internal_next_gaussian: None,
+        }
+    }
+
     fn next_random(&mut self) -> i64 {
         let l = self.seed as i64;
         let m = l.wrapping_mul(0x5DEECE66D).wrapping_add(11) & 0xFFFFFFFFFFFF;
@@ -31,13 +39,6 @@ impl GaussianGenerator for LegacyRand {
 }
 
 impl RandomImpl for LegacyRand {
-    fn from_seed(seed: u64) -> Self {
-        LegacyRand {
-            seed: (seed ^ 0x5DEECE66D) & 0xFFFFFFFFFFFF,
-            internal_next_gaussian: None,
-        }
-    }
-
     fn split(&mut self) -> Self {
         LegacyRand::from_seed(self.next_i64() as u64)
     }
@@ -67,9 +68,8 @@ impl RandomImpl for LegacyRand {
         self.next(1) != 0
     }
 
-    #[allow(refining_impl_trait)]
-    fn next_splitter(&mut self) -> LegacySplitter {
-        LegacySplitter::new(self.next_i64() as u64)
+    fn next_splitter(&mut self) -> RandomDeriver {
+        RandomDeriver::Legacy(LegacySplitter::new(self.next_i64() as u64))
     }
 
     fn next_gaussian(&mut self) -> f64 {
@@ -102,26 +102,27 @@ impl LegacySplitter {
     }
 }
 
-#[allow(refining_impl_trait)]
 impl RandomDeriverImpl for LegacySplitter {
-    fn split_u64(&self, seed: u64) -> LegacyRand {
-        LegacyRand::from_seed(seed)
+    fn split_u64(&self, seed: u64) -> RandomGenerator {
+        RandomGenerator::Legacy(LegacyRand::from_seed(seed))
     }
 
-    fn split_string(&self, seed: &str) -> LegacyRand {
+    fn split_string(&self, seed: &str) -> RandomGenerator {
         let string_hash = java_string_hash(seed);
-        LegacyRand::from_seed((string_hash as u64) ^ self.seed)
+
+        RandomGenerator::Legacy(LegacyRand::from_seed((string_hash as u64) ^ self.seed))
     }
 
-    fn split_pos(&self, x: i32, y: i32, z: i32) -> LegacyRand {
+    fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator {
         let pos_hash = hash_block_pos(x, y, z);
-        LegacyRand::from_seed((pos_hash as u64) ^ self.seed)
+
+        RandomGenerator::Legacy(LegacyRand::from_seed((pos_hash as u64) ^ self.seed))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::random::{RandomDeriverImpl, RandomImpl, legacy_rand::LegacySplitter};
+    use crate::random::{RandomDeriver, RandomDeriverImpl, RandomImpl};
 
     use super::LegacyRand;
 
@@ -313,7 +314,10 @@ mod test {
 
         let mut original_rand = LegacyRand::from_seed(0);
         {
-            let splitter: LegacySplitter = original_rand.next_splitter();
+            let splitter = match original_rand.next_splitter() {
+                RandomDeriver::Legacy(splitter) => splitter,
+                _ => unreachable!(),
+            };
             assert_eq!(splitter.seed, (-4962768465676381896i64) as u64);
 
             let mut rand = splitter.split_string("minecraft:offset");
