@@ -92,6 +92,9 @@ use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, le
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
 
+const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
+const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
+
 enum BatchState {
     Initial,
     Waiting,
@@ -1973,7 +1976,7 @@ impl MessageCache {
             if self.full_cache.contains(sig) {
                 continue;
             }
-            if self.full_cache.len() >= 128 {
+            if self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
                 self.full_cache.pop();
             }
             self.full_cache.push(sig.clone());
@@ -1982,11 +1985,11 @@ impl MessageCache {
 
     /// Adds a seen signature to seen cache and full cache.
     pub fn add_seen_signature(&mut self, signature: &[u8]) {
-        if self.last_seen.0.len() >= 20 {
+        if self.last_seen.0.len() >= MAX_PREVIOUS_MESSAGES as usize {
             self.last_seen.0.remove(0);
         }
         self.last_seen.0.push(signature.into());
-        if self.full_cache.len() >= 128 {
+        if self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
             self.full_cache.pop();
         }
         self.full_cache.insert(0, signature.into()); // Since recipient saw this message it will be most recent in cache
