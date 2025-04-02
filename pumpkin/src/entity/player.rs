@@ -1919,8 +1919,8 @@ impl Default for LastSeen {
 }
 
 impl LastSeen {
-    /// The sender's lastseen signatures are sent as id's if the recipient has them in their cache.
-    /// Otherwise, the full signature is sent.
+    /// The sender's `last_seen` signatures are sent as ID's if the recipient has them in their cache.
+    /// Otherwise, the full signature is sent. (ID:0 indicates full signature is being sent)
     pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
         let mut indexed = Vec::new();
         for signature in &self.0 {
@@ -1933,13 +1933,13 @@ impl LastSeen {
                 .position(|s| s == signature)
             {
                 indexed.push(PreviousMessage {
-                    // Send ID reference to recipient's cache
+                    // Send ID reference to recipient's cache (index + 1 because 0 is reserved for full signature)
                     id: VarInt(1 + index as i32),
                     signature: None,
                 });
             } else {
                 indexed.push(PreviousMessage {
-                    // Send ID as 0 and full signature
+                    // Send ID as 0 for full signature
                     id: VarInt(0),
                     signature: Some(signature.clone()),
                 });
@@ -1949,7 +1949,6 @@ impl LastSeen {
     }
 }
 
-/// Player's current chat session
 #[derive(Clone)]
 pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
@@ -1973,26 +1972,22 @@ impl MessageCache {
     /// Not used for caching seen messages. Only for non-indexed signatures from senders.
     pub fn cache_signatures(&mut self, signatures: &[Box<[u8]>]) {
         for sig in signatures.iter().rev() {
-            // Skip or maybe remove??
             if self.full_cache.contains(sig) {
+                // Already cached
                 continue;
             }
-            if self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
-                self.full_cache.pop();
-            }
-            self.full_cache.push(sig.clone());
+            self.full_cache.truncate(MAX_CACHED_SIGNATURES as usize);
+            self.full_cache.push(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
         }
     }
 
-    /// Adds a seen signature to seen cache and full cache.
+    /// Adds a seen signature to `last_seen` and `full_cache`.
     pub fn add_seen_signature(&mut self, signature: &[u8]) {
         if self.last_seen.0.len() >= MAX_PREVIOUS_MESSAGES as usize {
             self.last_seen.0.remove(0);
         }
         self.last_seen.0.push(signature.into());
-        if self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
-            self.full_cache.pop();
-        }
+        self.full_cache.truncate(MAX_CACHED_SIGNATURES as usize);
         self.full_cache.insert(0, signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }
