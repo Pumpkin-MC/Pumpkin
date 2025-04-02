@@ -27,7 +27,7 @@ use crate::{
         player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
     },
     server::Server,
-    world::World,
+    world::{PlayerInfoFlags, World},
 };
 use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
@@ -1137,8 +1137,7 @@ impl Player {
                     .read()
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                        // TODO: Remove magic number
-                        0x04,
+                        PlayerInfoFlags::UPDATE_GAME_MODE.bits() as i8,
                         &[pumpkin_protocol::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],

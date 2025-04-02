@@ -96,6 +96,20 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct PlayerInfoFlags: u8 {
+        const ADD_PLAYER            = 0x01;
+        const INITIALIZE_CHAT       = 0x02;
+        const UPDATE_GAME_MODE      = 0x04;
+        const UPDATE_LISTED         = 0x08;
+        const UPDATE_LATENCY        = 0x10;
+        const UPDATE_DISPLAY_NAME   = 0x20;
+        const UPDATE_LIST_PRIORITY  = 0x40;
+        const UPDATE_HAT            = 0x80;
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GetBlockError {
     InvalidBlockId,
@@ -565,8 +579,7 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            // TODO: Remove magic numbers
-            0x01 | 0x04,
+            (PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_GAME_MODE).bits() as i8,
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
@@ -609,10 +622,9 @@ impl World {
                 current_player_data.push((&player.gameprofile.id, player_actions));
             }
 
-            // TODO: Remove magic numbers
-            let mut action_flags = 0x01;
+            let mut action_flags = PlayerInfoFlags::ADD_PLAYER;
             if base_config.allow_chat_reports {
-                action_flags |= 0x02;
+                action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
 
             let entries = current_player_data
@@ -626,7 +638,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits() as i8, &entries))
                 .await;
         };
 
