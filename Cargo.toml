@@ -1,20 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-  "pumpkin-api-macros",
-  "pumpkin-config",
-  "pumpkin-util",
-  "pumpkin-inventory",
-  "pumpkin-macros/",
-  "pumpkin-protocol/",
-  "pumpkin-registry/",
-  "pumpkin-world",
-  "pumpkin/",
-  "pumpkin-data",
+    "pumpkin-api-macros",
+    "pumpkin-config",
+    "pumpkin-util",
+    "pumpkin-inventory",
+    "pumpkin-macros/",
+    "pumpkin-protocol/",
+    "pumpkin-registry/",
+    "pumpkin-world",
+    "pumpkin/",
+    "pumpkin-data",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-dev+1.21.5"
 edition = "2024"
 
 
@@ -35,13 +35,13 @@ debug = true
 [workspace.dependencies]
 log = "0.4"
 tokio = { version = "1.44", features = [
-  "macros",
-  "net",
-  "rt-multi-thread",
-  "sync",
-  "io-std",
-  "signal",
-  "fs",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
 ] }
 
 thiserror = "2.0"
