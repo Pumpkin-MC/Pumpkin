@@ -5,5 +5,10 @@ services:
       - "25565:25565"
     volumes:
       - ./data:/pumpkin
+      # Use the following, if you want to make your config immutable
+      #- ./config:/pumpkin/config:ro
     stdin_open: true
     tty: true
+    cap_drop:
+      - ALL
+    read_only: true
