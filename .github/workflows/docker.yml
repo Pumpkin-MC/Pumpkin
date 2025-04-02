@@ -33,8 +33,9 @@ jobs:
       - name: Extract Versions
         id: versions
         run: |
-          echo "VERSION=$(grep '^version' pumpkin/Cargo.toml | head -1 | awk -F '"' '{print $2}')" >> $GITHUB_ENV
-          echo "MC_VERSION=$(awk -F '\"' '/CURRENT_MC_VERSION/ {print $2}' pumpkin/src/server/mod.rs)" >> $GITHUB_ENV
+          VERSION=$(awk -F '"' '/^version/ {print $2}' Cargo.toml)
+          echo "PUMPKIN_VERSION=$(echo $VERSION | cut -d '+' -f 1)" >> $GITHUB_ENV
+          echo "MC_VERSION=$(echo $VERSION | cut -d '+' -f 2)" >> $GITHUB_ENV
 
       - name: Extract Metadata
         id: meta
@@ -46,8 +47,8 @@ jobs:
             type=raw,value=latest
             type=sha
             type=raw,value=mc${{ env.MC_VERSION }}
-            type=raw,value=${{ env.VERSION }}
-            type=raw,value=mc${{ env.MC_VERSION }}-${{ env.VERSION }}
+            type=raw,value=${{ env.PUMPKIN_VERSION }}
+            type=raw,value=mc${{ env.MC_VERSION }}-${{ env.PUMPKIN_VERSION }}
 
       - name: Docker Buildx
         uses: docker/setup-buildx-action@v3
