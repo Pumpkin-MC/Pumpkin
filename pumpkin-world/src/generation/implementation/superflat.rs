@@ -25,7 +25,7 @@ impl GeneratorInit for SuperflatBiomeGenerator {
 impl BiomeGenerator for SuperflatBiomeGenerator {
     // TODO make generic over Biome and allow changing the Biome in the config.
     fn generate_biome(&self, _: XZBlockCoordinates) -> Biome {
-        Biome::Plains
+        Biome::PLAINS
     }
 }
 

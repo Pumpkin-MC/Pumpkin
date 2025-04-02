@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Packets {
+    version: u32,
     serverbound: HashMap<String, Vec<String>>,
     clientbound: HashMap<String, Vec<String>>,
 }
@@ -15,10 +16,14 @@ pub(crate) fn build() -> TokenStream {
 
     let packets: Packets = serde_json::from_str(include_str!("../../assets/packets.json"))
         .expect("Failed to parse packets.json");
+    let version = packets.version;
     let serverbound_consts = parse_packets(packets.serverbound);
     let clientbound_consts = parse_packets(packets.clientbound);
 
     quote!(
+        /// The current Minecraft protocol version. This changes only when the protocol itself is modified.
+        pub const CURRENT_MC_PROTOCOL: u32 = #version;
+
         pub mod serverbound {
             #serverbound_consts
         }

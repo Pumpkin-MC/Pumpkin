@@ -1,4 +1,5 @@
 {
+  "version": 770,
   "serverbound": {
     "handshake": [
       "intention"
