@@ -155,9 +155,6 @@ pub struct World {
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
-    /// A log of the last 20 chat messages (or attempted chat messages) from players.
-    /// Used for previous message acknowledgement.
-    pub chat_log: Mutex<Box<[PreviousMessage]>>,
 }
 
 impl World {
@@ -183,7 +180,6 @@ impl World {
             block_registry,
             sea_level: generation_settings.sea_level,
             unsent_block_changes: Mutex::new(HashMap::new()),
-            chat_log: Mutex::new(Box::new([])),
         }
     }
 
@@ -257,78 +253,22 @@ impl World {
             );
             recipient.client.enqueue_packet(packet).await;
 
-            // Todo: Correctly cache and add seen signatures
-            //let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
-            // if recipient.gameprofile.id != sender.gameprofile.id {
-            //     // Sender may update recipient on signatures recipient hasn't seen
-            //     recipient_signature_cache.sync_with_peer(sender_seen_signatures.clone());
-            // }
-            // Cache this new signature
-            // recipient_signature_cache.cache_signatures(
-            //     sender_last_seen
-            //         .clone()
-            //         .push(chat_message.signature.clone()),
-            // );
+            recipient
+                .signature_cache
+                .lock()
+                .await
+                .add_seen_signature(chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+
+            let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
+            if recipient.gameprofile.id != sender.gameprofile.id {
+                // Sender may update recipient on signatures recipient hasn't seen
+                recipient_signature_cache.cache_signatures(sender_last_seen.clone().into());
+            }
             recipient.chat_session.lock().await.messages_received += 1;
         }
 
         sender.chat_session.lock().await.messages_sent += 1;
     }
-
-    // /// Adds a message to the chat log and updates ids in the chat log
-    // /// id 1 is most recent, id 20 is oldest
-    // pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
-    //     let new_message = PreviousMessage {
-    //         id: VarInt(1),
-    //         signature,
-    //     };
-
-    //     let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
-    //     messages.push(new_message);
-    //     if messages.len() > 20 {
-    //         messages.remove(0);
-    //     }
-    //     let messages_len = messages.len();
-
-    //     for (i, message) in messages.iter_mut().enumerate() {
-    //         message.id = VarInt((messages_len - i) as i32);
-    //     }
-
-    //     *self.chat_log.lock().await = messages.into_boxed_slice();
-    // }
-
-    // /// Returns a log of the last 20 messages, filtered by ACK bitset
-    // /// Message ID should only be 0 if signatures are being sent
-    // /// Signatures should only be sent in the first chat to each player
-    // pub async fn get_filtered_chat_log(
-    //     &self,
-    //     acknowledged: Box<[u8]>,
-    //     first_message: bool,
-    // ) -> Box<[PreviousMessage]> {
-    //     let bitset = format!(
-    //         "{:04b}{:08b}{:08b}",
-    //         acknowledged[2], acknowledged[1], acknowledged[0]
-    //     );
-
-    //     let filtered_log: Vec<PreviousMessage> = self
-    //         .chat_log
-    //         .lock()
-    //         .await
-    //         .iter()
-    //         .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
-    //         .map(|message| {
-    //             let mut message = message.clone();
-    //             if first_message {
-    //                 message.id = VarInt(0);
-    //             } else {
-    //                 message.signature = None;
-    //             }
-    //             message
-    //         }) // Clone the messages
-    //         .collect();
-
-    //     filtered_log.into_boxed_slice()
-    // }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
     ///

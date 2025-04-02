@@ -797,7 +797,6 @@ impl Player {
                 let last_seen_signatures =
                     self.signature_cache.lock().await.last_seen.clone().into();
                 let checksum = polynomial_rolling_hash(&last_seen_signatures);
-                log::warn!("checksum: {} != {}", checksum, chat_message.checksum);
                 if checksum != chat_message.checksum {
                     return Err(ChatError::ChatValidationFailed);
                 }

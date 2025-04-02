@@ -1913,42 +1913,29 @@ impl LastSeen {
     /// Otherwise, the full signature is sent.
     pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
         let mut indexed = Vec::new();
-        // Recipient is not the sender if this can lock
         for signature in self.0.iter() {
-            // if let Some(index) = recipient
-            //     .signature_cache
-            //     .lock()
-            //     .await
-            //     .0
-            //     .iter()
-            //     .position(|s| s == signature)
-            // {
-            //     indexed.push(PreviousMessage {
-            //         // Send ID as signature in recipient's last seen
-            //         id: VarInt(1 + index as i32),
-            //         signature: None,
-            //     });
-            // } else {
-            //     indexed.push(PreviousMessage {
-            //         // Send ID as 0 and full signature
-            //         id: VarInt(0),
-            //         signature: Some(signature.clone()),
-            //     });
-            // }
-            indexed.push(PreviousMessage {
-                id: VarInt(0),
-                signature: Some(signature.clone()),
-            });
+            if let Some(index) = recipient
+                .signature_cache
+                .lock()
+                .await
+                .full_cache
+                .iter()
+                .position(|s| s == signature)
+            {
+                indexed.push(PreviousMessage {
+                    // Send ID reference to recipient's cache
+                    id: VarInt(1 + index as i32),
+                    signature: None,
+                });
+            } else {
+                indexed.push(PreviousMessage {
+                    // Send ID as 0 and full signature
+                    id: VarInt(0),
+                    signature: Some(signature.clone()),
+                });
+            }
         }
-
         indexed.into_boxed_slice()
-    }
-
-    pub fn add(&mut self, signature: Box<[u8]>) {
-        if self.0.len() >= 20 {
-            self.0.remove(0);
-        }
-        self.0.push(signature);
     }
 }
 
@@ -1972,28 +1959,30 @@ impl Default for MessageCache {
     }
 }
 
-// impl Display for MessageCache {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let mut checksumvec = Vec::new();
-//         for sig in self.0.iter() {
-//             checksumvec.push(simple_checksum_box(sig));
-//         }
-//         write!(f, "Cache: {:?}", checksumvec)
-//     }
-// }
-// fn simple_checksum_box(data: &Box<[u8]>) -> u32 {
-//     data.iter()
-//         .fold(0, |acc, byte| acc.wrapping_add(*byte as u32)) // Dereference each Box and accumulate
-// }
-
 impl MessageCache {
+    /// Not used for caching seen messages. Only for non-indexed signatures from senders.
     pub fn cache_signatures(&mut self, signatures: Vec<Box<[u8]>>) {
-        // Todo: Make 1:1 with vanilla
-        for sig in signatures.iter() {
+        for sig in signatures.iter().rev() {
+            // Skip or maybe remove??
+            if self.full_cache.contains(sig) {
+                continue;
+            }
             if self.full_cache.len() >= 128 {
                 self.full_cache.pop();
             }
-            self.full_cache.insert(0, sig.clone());
+            self.full_cache.push(sig.clone());
         }
+    }
+
+    /// Adds a seen signature to seen cache and full cache.
+    pub fn add_seen_signature(&mut self, signature: Box<[u8]>) {
+        if self.last_seen.0.len() >= 20 {
+            self.last_seen.0.remove(0);
+        }
+        self.last_seen.0.push(signature.clone());
+        if self.full_cache.len() >= 128 {
+            self.full_cache.pop();
+        }
+        self.full_cache.insert(0, signature.clone()); // Since recipient saw this message it will be most recent in cache
     }
 }
