@@ -1912,12 +1912,13 @@ impl AsRef<[Box<[u8]>]> for LastSeen {
     }
 }
 
-impl LastSeen {
-    #[must_use]
-    pub fn new(signatures: Vec<Box<[u8]>>) -> Self {
-        Self(signatures)
+impl Default for LastSeen {
+    fn default() -> Self {
+        Self(Vec::new())
     }
+}
 
+impl LastSeen {
     /// The sender's lastseen signatures are sent as id's if the recipient has them in their cache.
     /// Otherwise, the full signature is sent.
     pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
@@ -1963,7 +1964,7 @@ impl Default for MessageCache {
     fn default() -> Self {
         Self {
             full_cache: Vec::new(),
-            last_seen: LastSeen::new(Vec::new()),
+            last_seen: LastSeen::default(),
         }
     }
 }
