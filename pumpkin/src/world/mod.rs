@@ -38,7 +38,7 @@ use pumpkin_protocol::{
     client::play::{
         CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        FilterType, GameEvent, InitChat, PlayerAction, PreviousMessage,
+        FilterType, GameEvent, InitChat, PlayerAction,
     },
     server::play::SChatMessage,
 };
@@ -257,12 +257,12 @@ impl World {
                 .signature_cache
                 .lock()
                 .await
-                .add_seen_signature(chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+                .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
 
             let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
             if recipient.gameprofile.id != sender.gameprofile.id {
                 // Sender may update recipient on signatures recipient hasn't seen
-                recipient_signature_cache.cache_signatures(sender_last_seen.clone().into());
+                recipient_signature_cache.cache_signatures(sender_last_seen.as_ref());
             }
             recipient.chat_session.lock().await.messages_received += 1;
         }

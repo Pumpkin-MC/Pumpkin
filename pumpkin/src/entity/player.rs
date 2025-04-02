@@ -1,6 +1,5 @@
 use std::{
     collections::VecDeque,
-    fmt::Display,
     num::NonZeroU8,
     ops::AddAssign,
     sync::{
@@ -1904,7 +1903,14 @@ impl From<LastSeen> for Vec<Box<[u8]>> {
     }
 }
 
+impl AsRef<[Box<[u8]>]> for LastSeen {
+    fn as_ref(&self) -> &[Box<[u8]>] {
+        &self.0
+    }
+}
+
 impl LastSeen {
+    #[must_use]
     pub fn new(signatures: Vec<Box<[u8]>>) -> Self {
         Self(signatures)
     }
@@ -1913,7 +1919,7 @@ impl LastSeen {
     /// Otherwise, the full signature is sent.
     pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
         let mut indexed = Vec::new();
-        for signature in self.0.iter() {
+        for signature in &self.0 {
             if let Some(index) = recipient
                 .signature_cache
                 .lock()
@@ -1943,7 +1949,7 @@ impl LastSeen {
 #[derive(Clone)]
 pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
-    /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last_seen.
+    /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
     /// Must be 1:1 with client's signature cache.
     full_cache: Vec<Box<[u8]>>,
     /// max 20 last seen messages by the sender. Most Recent LAST
@@ -1961,7 +1967,7 @@ impl Default for MessageCache {
 
 impl MessageCache {
     /// Not used for caching seen messages. Only for non-indexed signatures from senders.
-    pub fn cache_signatures(&mut self, signatures: Vec<Box<[u8]>>) {
+    pub fn cache_signatures(&mut self, signatures: &[Box<[u8]>]) {
         for sig in signatures.iter().rev() {
             // Skip or maybe remove??
             if self.full_cache.contains(sig) {
@@ -1975,14 +1981,14 @@ impl MessageCache {
     }
 
     /// Adds a seen signature to seen cache and full cache.
-    pub fn add_seen_signature(&mut self, signature: Box<[u8]>) {
+    pub fn add_seen_signature(&mut self, signature: &[u8]) {
         if self.last_seen.0.len() >= 20 {
             self.last_seen.0.remove(0);
         }
-        self.last_seen.0.push(signature.clone());
+        self.last_seen.0.push(signature.into());
         if self.full_cache.len() >= 128 {
             self.full_cache.pop();
         }
-        self.full_cache.insert(0, signature.clone()); // Since recipient saw this message it will be most recent in cache
+        self.full_cache.insert(0, signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }

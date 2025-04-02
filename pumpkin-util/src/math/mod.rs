@@ -172,7 +172,7 @@ pub fn lerp3(
 
 /// Calculates a Polynomial Rolling Hash
 /// Mojang's checksum algorithm for previous messages
-pub fn polynomial_rolling_hash(signatures: &Vec<Box<[u8]>>) -> u8 {
+pub fn polynomial_rolling_hash(signatures: &[Box<[u8]>]) -> u8 {
     let mut i: i32 = 1;
 
     for signature in signatures.iter() {

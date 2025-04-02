@@ -794,9 +794,8 @@ impl Player {
             // Validate previous signature checksum (new in 1.21.5)
             // The client can bypass this check by sending 0
             if chat_message.checksum != 0 {
-                let last_seen_signatures =
-                    self.signature_cache.lock().await.last_seen.clone().into();
-                let checksum = polynomial_rolling_hash(&last_seen_signatures);
+                let checksum =
+                    polynomial_rolling_hash(self.signature_cache.lock().await.last_seen.as_ref());
                 if checksum != chat_message.checksum {
                     return Err(ChatError::ChatValidationFailed);
                 }
