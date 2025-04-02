@@ -30,9 +30,9 @@ COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
 # executable (without requiring an `docker cp`-ing the binary to the host folder)
 WORKDIR /pumpkin
 
-RUN apk add --no-cache libgcc && chown 1000:1000 .
+RUN apk add --no-cache libgcc && chown 2613:2613 .
 
 ENV RUST_BACKTRACE=1
 EXPOSE 25565
-USER 1000:1000
+USER 2613:2613
 ENTRYPOINT [ "/bin/pumpkin" ]
