@@ -803,7 +803,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         let biomes = section.biomes.to_disk_nbt();
 
         sections.push(ChunkSectionNBT {
-            y: i as i8 - 4,
+            y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
             block_states,
             biomes,
         });

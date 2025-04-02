@@ -127,6 +127,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                         xs.iter().for_each(|registry_id| {
                             packed_data |= (*id_to_index_map.get(registry_id).unwrap() as i64)
                                 << (bits_per_entry * pack_count);
+                            pack_count += 1;
                             if pack_count == blocks_per_i64 {
                                 packed_indices.push(packed_data);
                                 packed_data = 0;
@@ -135,6 +136,9 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                         });
                     });
                 });
+                if pack_count != 0 {
+                    packed_indices.push(packed_data);
+                }
 
                 (
                     palette.into_boxed_slice(),
@@ -189,7 +193,9 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             if index_count < Self::VOLUME {
                 // We pre-filled with defaults
                 log::warn!(
-                    "Ran out of packed indices, but did not fill the section. Defaulting..."
+                    "Ran out of packed indices, but did not fill the section ({} vs {}). Defaulting...",
+                    index_count,
+                    Self::VOLUME
                 );
             }
 
@@ -423,7 +429,17 @@ impl BlockPalette {
         let palette = nbt
             .palette
             .into_iter()
-            .map(|entry| ChunkBlockState::from_palette(&entry).get_id())
+            .map(|entry| {
+                if let Some(block_state) = ChunkBlockState::from_palette(&entry) {
+                    block_state.get_id()
+                } else {
+                    log::warn!(
+                        "Could not find valid block state for {}. Defaulting...",
+                        entry.name
+                    );
+                    0
+                }
+            })
             .collect::<Vec<_>>();
 
         Self::from_palette_and_packed_data(
