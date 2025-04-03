@@ -63,7 +63,7 @@ impl PumpkinBlock for LeverBlock {
             lever_props.facing = *player_direction;
         } else {
             lever_props.facing = face.opposite().to_cardinal_direction();
-        };
+        }
 
         lever_props.to_state_id(block)
     }

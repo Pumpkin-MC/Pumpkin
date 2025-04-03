@@ -15,7 +15,7 @@ pub struct BitSet(pub Box<[i64]>);
 
 impl Codec<BitSet> for BitSet {
     /// The maximum size of the `BitSet` is `remaining / 8`.
-    const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(usize::MAX) };
+    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(usize::MAX).unwrap();
 
     fn written_size(&self) -> usize {
         todo!()

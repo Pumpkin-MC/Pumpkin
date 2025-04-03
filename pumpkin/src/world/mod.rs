@@ -1144,8 +1144,7 @@ impl World {
     ///
     /// # Arguments
     /// * `pos`: The center of the sphere.
-    /// * `radius`: The radius of the sphere. The higher the radius,
-    ///             the more area will be checked (in every direction).
+    /// * `radius`: The radius of the sphere. The higher the radius, the more area will be checked (in every direction).
     pub async fn get_nearby_players(
         &self,
         pos: Vector3<f64>,

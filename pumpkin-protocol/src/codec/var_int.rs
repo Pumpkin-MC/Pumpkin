@@ -24,7 +24,7 @@ pub struct VarInt(pub VarIntType);
 
 impl Codec<Self> for VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
-    const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
+    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
     /// Returns the exact number of bytes this VarInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
