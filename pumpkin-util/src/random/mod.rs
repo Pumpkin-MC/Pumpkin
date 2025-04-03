@@ -104,8 +104,6 @@ pub fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
 #[cfg(test)]
 mod tests {
 
-    use crate::math::java_string_hash;
-
     use super::hash_block_pos;
 
     #[test]
