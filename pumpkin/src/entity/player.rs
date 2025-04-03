@@ -1959,7 +1959,8 @@ impl MessageCache {
                 // Already cached
                 continue;
             }
-            self.full_cache.truncate(MAX_CACHED_SIGNATURES as usize);
+            self.full_cache
+                .truncate((MAX_CACHED_SIGNATURES - 1) as usize);
             self.full_cache.push(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
         }
     }
