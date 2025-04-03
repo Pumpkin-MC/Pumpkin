@@ -2,7 +2,7 @@ services:
   pumpkin:
     # Make sure to change the tag to the pumpkin version you want to use.
     # https://github.com/Pumpkin-MC/Pumpkin/pkgs/container/pumpkin/versions?filters%5Bversion_type%5D=tagged
-    image: ghcr.io/pumpkin-mc/pumpkin:master
+    #image: ghcr.io/pumpkin-mc/pumpkin:master
     build: .
     ports:
       - "25565:25565"
