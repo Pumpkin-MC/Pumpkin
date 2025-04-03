@@ -103,7 +103,9 @@ pub trait FlowingFluid {
             }
             self.spread(world, fluid, block_pos, &new_fluid_state).await;
         } else {
-            world.break_block(block_pos, None, BlockFlags::empty()).await;
+            world
+                .break_block(block_pos, None, BlockFlags::empty())
+                .await;
             world
                 .set_block_state(
                     block_pos,
@@ -169,7 +171,7 @@ pub trait FlowingFluid {
             }
 
             let neighbor_props = FlowingFluidProperties::from_state_id(neighbor_state_id, fluid);
-            let neighbor_level = i32::from(neighbor_props.level.to_index()) + 1 ;
+            let neighbor_level = i32::from(neighbor_props.level.to_index()) + 1;
 
             if neighbor_level == 8 && neighbor_props.falling != Falling::True {
                 source_count += 1;
