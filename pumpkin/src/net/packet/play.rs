@@ -1,3 +1,7 @@
+use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
+use rsa::signature::Verifier;
+use sha1::Sha1;
+
 use std::num::NonZeroU8;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -129,6 +133,8 @@ pub enum ChatError {
     OutOfOrderChat,
     #[error("has an expired public key")]
     ExpiredPublicKey,
+    #[error("attempted to initialize a session with an invalid public key")]
+    InvalidPublicKey,
 }
 
 impl PumpkinError for ChatError {
@@ -144,7 +150,8 @@ impl PumpkinError for ChatError {
             | Self::TooManyPendingChats
             | Self::ChatValidationFailed
             | Self::OutOfOrderChat
-            | Self::ExpiredPublicKey => log::Level::Warn,
+            | Self::ExpiredPublicKey
+            | Self::InvalidPublicKey => log::Level::Warn,
         }
     }
 
@@ -171,6 +178,10 @@ impl PumpkinError for ChatError {
             ),
             Self::ExpiredPublicKey => Some(
                 TextComponent::translate("multiplayer.disconnect.expired_public_key", [])
+                    .get_text(),
+            ),
+            Self::InvalidPublicKey => Some(
+                TextComponent::translate("multiplayer.disconnect.invalid_public_key_signature", [])
                     .get_text(),
             ),
         }
@@ -848,6 +859,22 @@ impl Player {
             return;
         }
 
+        if let Err(err) = self.validate_chat_session(server, &session).await {
+            log::log!(
+                err.severity(),
+                "{} (uuid {}) {}",
+                self.gameprofile.name,
+                self.gameprofile.id,
+                err
+            );
+            if err.is_kick() {
+                if let Some(reason) = err.client_kick_reason() {
+                    self.kick(TextComponent::text(reason)).await;
+                }
+            }
+            return;
+        }
+
         // Update the chat session fields
         let mut chat_session = self.chat_session.lock().await; // Await the lock
 
@@ -873,6 +900,54 @@ impl Player {
                 }],
             ))
             .await;
+    }
+
+    /// Runs vanilla checks for a valid player session
+    pub async fn validate_chat_session(
+        &self,
+        server: &Server,
+        session: &SPlayerSession,
+    ) -> Result<(), ChatError> {
+        // Verify key length
+        if session.key_signature.len() != 512 {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        // Verify session expiry
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        if session.expires_at < now {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        // Verify signature with RSA-SHA1
+        let mojang_verifying_keys = server
+            .mojang_public_keys
+            .lock()
+            .await
+            .iter()
+            .map(|key| VerifyingKey::<Sha1>::new(key.clone()))
+            .collect::<Vec<_>>();
+
+        let key_signature = RsaPkcs1v15Signature::try_from(session.key_signature.as_ref())
+            .map_err(|_| ChatError::InvalidPublicKey)?;
+
+        let mut signable = Vec::new();
+        signable.extend_from_slice(self.gameprofile.id.as_bytes());
+        signable.extend_from_slice(&session.expires_at.to_be_bytes());
+        signable.extend_from_slice(&session.public_key);
+
+        // Verify that the signable is valid for any one of Mojang's public keys
+        if !mojang_verifying_keys
+            .iter()
+            .any(|key| key.verify(&signable, &key_signature).is_ok())
+        {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        Ok(())
     }
 
     pub async fn handle_client_information(

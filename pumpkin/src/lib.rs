@@ -220,6 +220,10 @@ impl PumpkinServer {
             server.spawn_task(lan_broadcast::start_lan_broadcast(addr));
         }
 
+        if BASIC_CONFIG.allow_chat_reports {
+            server.fetch_mojang_public_keys().await.unwrap();
+        }
+
         // Ticker
         {
             let ticker_server = server.clone();
