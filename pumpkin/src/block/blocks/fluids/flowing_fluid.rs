@@ -318,7 +318,9 @@ pub trait FlowingFluid {
                 continue;
             };
 
-            if !self.can_pass_through(world, fluid, &side_pos).await || self.is_same_fluid(fluid, side_state_id) {
+            if !self.can_pass_through(world, fluid, &side_pos).await
+                || self.is_same_fluid(fluid, side_state_id)
+            {
                 continue;
             }
 
