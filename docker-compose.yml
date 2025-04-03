@@ -1,16 +1,12 @@
-x-common-keys-core: &common-keys-core
-  security_opt:
-    - no-new-privileges:true
-    - apparmor=docker-default
-  restart: unless-stopped
-
 services:
   pumpkin:
-    <<: *common-keys-core
     build: .
     ports:
       - "25565:25565"
     volumes:
       - ./data:/pumpkin
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
     stdin_open: true
     tty: true
