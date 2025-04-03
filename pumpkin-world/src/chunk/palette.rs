@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::{HashMap, hash_map::Entry},
     hash::Hash,
 };
@@ -39,17 +40,14 @@ pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
 
 impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
     fn from_cube(cube: AbstractCube<V, DIM>) -> Self {
-        let mut counts = HashMap::new();
-        cube.iter().for_each(|zxs| {
-            zxs.iter().for_each(|xs| {
-                xs.iter().for_each(|value| {
-                    counts
-                        .entry(*value)
-                        .and_modify(|count| *count += 1)
-                        .or_insert(1);
+        let counts =
+            cube.as_flattened()
+                .as_flattened()
+                .iter()
+                .fold(HashMap::new(), |mut acc, key| {
+                    acc.entry(*key).and_modify(|count| *count += 1).or_insert(1);
+                    acc
                 });
-            });
-        });
 
         Self { cube, counts }
     }
@@ -107,43 +105,33 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         match self {
             Self::Homogeneous(registry_id) => (Box::new([*registry_id]), Box::new([])),
             Self::Heterogeneous(data) => {
-                let mut palette = Vec::new();
-                let mut id_to_index_map = HashMap::new();
-                data.counts.keys().for_each(|registry_id| {
-                    let _ = id_to_index_map.entry(*registry_id).or_insert_with(|| {
-                        palette.push(*registry_id);
-                        palette.len() - 1
-                    });
-                });
+                debug_assert!(bits_per_entry >= encompassing_bits(data.counts.len()));
+
+                let palette: Box<[V]> = data.counts.keys().copied().collect();
+                let key_to_index_map: HashMap<V, usize> = palette
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| (*key, index))
+                    .collect();
 
                 let blocks_per_i64 = 64 / bits_per_entry;
-                let expected_len = Self::VOLUME.div_ceil(blocks_per_i64 as usize);
-                let mut packed_indices = Vec::with_capacity(expected_len);
 
-                let mut packed_data = 0i64;
-                let mut pack_count = 0;
-                data.cube.iter().for_each(|zxs| {
-                    zxs.iter().for_each(|xs| {
-                        xs.iter().for_each(|registry_id| {
-                            packed_data |= (*id_to_index_map.get(registry_id).unwrap() as i64)
-                                << (bits_per_entry * pack_count);
-                            pack_count += 1;
-                            if pack_count == blocks_per_i64 {
-                                packed_indices.push(packed_data);
-                                packed_data = 0;
-                                pack_count = 0;
-                            }
-                        });
-                    });
-                });
-                if pack_count != 0 {
-                    packed_indices.push(packed_data);
-                }
+                let packed_indices = data
+                    .cube
+                    .as_flattened()
+                    .as_flattened()
+                    .chunks(blocks_per_i64 as usize)
+                    .map(|chunk| {
+                        chunk.iter().enumerate().fold(0, |acc, (index, key)| {
+                            let key_index = key_to_index_map.get(key).unwrap();
+                            let packed_offset_index =
+                                (*key_index as i64) << (bits_per_entry as usize * index);
+                            acc | packed_offset_index
+                        })
+                    })
+                    .collect();
 
-                (
-                    palette.into_boxed_slice(),
-                    packed_indices.into_boxed_slice(),
-                )
+                (palette, packed_indices)
             }
         }
     }
@@ -159,45 +147,48 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         } else if palette.len() == 1 {
             Self::Homogeneous(palette[0])
         } else {
-            let bits_per_block = encompassing_bits(palette.len()).max(minimum_bits_per_entry);
-            let index_mask = (1 << bits_per_block) - 1;
-            let blocks_per_i64 = 64 / bits_per_block;
+            let bits_per_key = encompassing_bits(palette.len()).max(minimum_bits_per_entry);
+            let index_mask = (1 << bits_per_key) - 1;
+            let keys_per_i64 = 64 / bits_per_key;
+
+            let expected_i64_count = Self::VOLUME.div_ceil(keys_per_i64 as usize);
+
+            match packed_data.len().cmp(&expected_i64_count) {
+                Ordering::Greater => {
+                    // Handled by the zip
+                    log::warn!("Filled the section but there is still more data! Ignoring...");
+                }
+                Ordering::Less => {
+                    // Handled by the array initialization and zip
+                    log::warn!(
+                        "Ran out of packed indices, but did not fill the section ({} vs {}). Defaulting...",
+                        packed_data.len() * keys_per_i64 as usize,
+                        Self::VOLUME
+                    );
+                }
+                // This is what we want!
+                Ordering::Equal => {}
+            }
 
             // TODO: Can we do this all with an `array::from_fn` or something?
             let mut cube = [[[V::default(); DIM]; DIM]; DIM];
+            cube.as_flattened_mut()
+                .as_flattened_mut()
+                .chunks_mut(keys_per_i64 as usize)
+                .zip(packed_data)
+                .for_each(|(values, packed)| {
+                    values.iter_mut().enumerate().for_each(|(index, value)| {
+                        let lookup_index =
+                            (*packed as usize >> (index * bits_per_key as usize)) & index_mask;
 
-            let mut index_count = 0;
-            'outer: for packed_index in packed_data {
-                for block in 0..blocks_per_i64 {
-                    if index_count == Self::VOLUME {
-                        log::warn!("Filled the section but there is still more data! Ignoring...");
-                        break 'outer;
-                    }
-
-                    let relative_x = index_count % Self::SIZE;
-                    let relative_y = index_count / (Self::SIZE * Self::SIZE);
-                    let relative_z = (index_count % (Self::SIZE * Self::SIZE)) / Self::SIZE;
-
-                    let index = (packed_index >> (bits_per_block * block)) & index_mask;
-                    let registry_id = palette.get(index as usize).copied().unwrap_or_else(|| {
-                        log::warn!("Palette index out of bounds! Defaulting...");
-                        V::default()
+                        if let Some(v) = palette.get(lookup_index) {
+                            *value = *v;
+                        } else {
+                            // The cube is already initialized to the default
+                            log::warn!("Lookup index out of bounds! Defaulting...");
+                        }
                     });
-
-                    cube[relative_y][relative_z][relative_x] = registry_id;
-
-                    index_count += 1;
-                }
-            }
-
-            if index_count < Self::VOLUME {
-                // We pre-filled with defaults
-                log::warn!(
-                    "Ran out of packed indices, but did not fill the section ({} vs {}). Defaulting...",
-                    index_count,
-                    Self::VOLUME
-                );
-            }
+                });
 
             Self::Heterogeneous(Box::new(HeterogeneousPaletteData::from_cube(cube)))
         }
@@ -244,13 +235,13 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 }
             }
             Self::Heterogeneous(data) => {
-                data.cube.iter().for_each(|zxs| {
-                    zxs.iter().for_each(|xs| {
-                        xs.iter().for_each(|registry_id| {
-                            f(*registry_id);
-                        });
+                data.cube
+                    .as_flattened()
+                    .as_flattened()
+                    .iter()
+                    .for_each(|value| {
+                        f(*value);
                     });
-                });
             }
         }
     }
@@ -276,30 +267,25 @@ impl BiomePalette {
                     let bits_per_entry = BIOME_NETWORK_MAX_BITS;
                     debug_assert!((1 << bits_per_entry) > data.counts.len());
 
-                    let blocks_per_i64 = 64 / bits_per_entry;
-                    let expected_len = Self::VOLUME.div_ceil(blocks_per_i64 as usize);
-                    let mut packed_datas = Vec::with_capacity(expected_len);
-
-                    let mut packed_data = 0i64;
-                    let mut pack_count = 0;
-                    data.cube.iter().for_each(|zxs| {
-                        zxs.iter().for_each(|xs| {
-                            xs.iter().for_each(|registry_id| {
-                                packed_data |=
-                                    (*registry_id as i64) << (bits_per_entry * pack_count);
-                                if pack_count == blocks_per_i64 {
-                                    packed_datas.push(packed_data);
-                                    packed_data = 0;
-                                    pack_count = 0;
-                                }
-                            });
-                        });
-                    });
+                    let values_per_i64 = 64 / bits_per_entry;
+                    let packed_datas = data
+                        .cube
+                        .as_flattened()
+                        .as_flattened()
+                        .chunks(values_per_i64 as usize)
+                        .map(|chunk| {
+                            chunk.iter().enumerate().fold(0, |acc, (index, value)| {
+                                let packed_offset_index =
+                                    (*value as i64) << (bits_per_entry as usize * index);
+                                acc | packed_offset_index
+                            })
+                        })
+                        .collect();
 
                     NetworkSerialization {
                         bits_per_entry,
                         palette: NetworkPalette::Direct,
-                        packed_data: packed_datas.into_boxed_slice(),
+                        packed_data: packed_datas,
                     }
                 } else {
                     let bits_per_entry = raw_bits_per_entry.max(BIOME_NETWORK_MIN_MAP_BITS);
@@ -363,30 +349,25 @@ impl BlockPalette {
                     let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
                     debug_assert!((1 << bits_per_entry) > data.counts.len());
 
-                    let blocks_per_i64 = 64 / bits_per_entry;
-                    let expected_len = Self::VOLUME.div_ceil(blocks_per_i64 as usize);
-                    let mut packed_datas = Vec::with_capacity(expected_len);
-
-                    let mut packed_data = 0i64;
-                    let mut pack_count = 0;
-                    data.cube.iter().for_each(|zxs| {
-                        zxs.iter().for_each(|xs| {
-                            xs.iter().for_each(|registry_id| {
-                                packed_data |=
-                                    (*registry_id as i64) << (bits_per_entry * pack_count);
-                                if pack_count == blocks_per_i64 {
-                                    packed_datas.push(packed_data);
-                                    packed_data = 0;
-                                    pack_count = 0;
-                                }
-                            });
-                        });
-                    });
+                    let values_per_i64 = 64 / bits_per_entry;
+                    let packed_datas = data
+                        .cube
+                        .as_flattened()
+                        .as_flattened()
+                        .chunks(values_per_i64 as usize)
+                        .map(|chunk| {
+                            chunk.iter().enumerate().fold(0, |acc, (index, value)| {
+                                let packed_offset_index =
+                                    (*value as i64) << (bits_per_entry as usize * index);
+                                acc | packed_offset_index
+                            })
+                        })
+                        .collect();
 
                     NetworkSerialization {
                         bits_per_entry,
                         palette: NetworkPalette::Direct,
-                        packed_data: packed_datas.into_boxed_slice(),
+                        packed_data: packed_datas,
                     }
                 } else {
                     let bits_per_entry = raw_bits_per_entry.max(BLOCK_NETWORK_MIN_MAP_BITS);
@@ -498,6 +479,9 @@ pub struct NetworkSerialization<V> {
     pub packed_data: Box<[i64]>,
 }
 
+// According to the wiki, palette serialization for disk and network is different. Disk
+// serialization always uses a palette if greater than one entry. Network serialization packs ids
+// directly instead of using a palette above a certain bits-per-entry
 pub type BlockPalette = PalettedContainer<u16, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
