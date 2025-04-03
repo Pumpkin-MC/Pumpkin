@@ -1,23 +1,26 @@
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
+use pumpkin_macros::packet;
 use pumpkin_util::text::TextComponent;
 
-use pumpkin_macros::packet;
-use serde::Serialize;
+use crate::{
+    ClientPacket,
+    codec::{bit_set::BitSet, var_int::VarInt},
+    ser::{NetworkWriteExt, WritingError},
+};
 
-use crate::{VarInt, codec::bit_set::BitSet};
-
-#[derive(Serialize)]
 #[packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
+    /// An index that increases for every message sent TO the client
     global_index: VarInt,
-    #[serde(with = "uuid::serde::compact")]
     sender: uuid::Uuid,
+    /// An index that increases for every message sent BY the client
     index: VarInt,
     message_signature: Option<Box<[u8]>>, // always 256
     message: String,
     timestamp: i64,
     salt: i64,
-    previous_messages_count: VarInt,
     previous_messages: Box<[PreviousMessage]>, // max 20
     unsigned_content: Option<TextComponent>,
     filter_type: FilterType,
@@ -52,7 +55,6 @@ impl CPlayerChatMessage {
             message,
             timestamp,
             salt,
-            previous_messages_count: VarInt(previous_messages.len() as i32),
             previous_messages,
             unsigned_content,
             filter_type,
@@ -63,13 +65,43 @@ impl CPlayerChatMessage {
     }
 }
 
-#[derive(Serialize)]
-pub struct PreviousMessage {
-    message_id: VarInt,
-    signature: Option<Box<[u8]>>, // Always 256
+impl ClientPacket for CPlayerChatMessage {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_var_int(&self.global_index)?;
+        write.write_uuid(&self.sender)?;
+        write.write_var_int(&self.index)?;
+        write.write_option(&self.message_signature, |p, v| p.write_slice(v))?;
+        write.write_string(&self.message)?;
+        write.write_i64_be(self.timestamp)?;
+        write.write_i64_be(self.salt)?;
+        write.write_list(&self.previous_messages, |p, v| {
+            p.write_var_int(&v.id)?;
+            if let Some(signature) = &v.signature {
+                p.write_slice(signature)?;
+            }
+            Ok(())
+        })?;
+        write.write_option(&self.unsigned_content, |p, v| p.write_slice(&v.encode()))?;
+        write.write_var_int(&VarInt(match self.filter_type {
+            FilterType::PassThrough => 0,
+            FilterType::FullyFiltered => 1,
+            FilterType::PartiallyFiltered(_) => 2,
+        }))?;
+        write.write_var_int(&self.chat_type)?;
+        write.write_slice(&self.sender_name.encode())?;
+        write.write_option(&self.target_name, |p, v| p.write_slice(&v.encode()))?;
+        Ok(())
+    }
 }
 
-#[derive(Serialize)]
+#[derive(Clone)]
+pub struct PreviousMessage {
+    pub id: VarInt,
+    pub signature: Option<Box<[u8]>>, // Always 256
+}
+
 pub enum FilterType {
     /// Message is not filtered at all
     PassThrough,

@@ -20,10 +20,16 @@ impl Identifier {
             path: path.to_string(),
         }
     }
+    pub fn pumpkin(path: &str) -> Self {
+        Self {
+            namespace: "pumpkin".to_string(),
+            path: path.to_string(),
+        }
+    }
 }
 impl Identifier {
     /// The maximum number of bytes an `Identifier` is the same as for a normal `String`.
-    const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(i16::MAX as usize) };
+    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         write.write_string_bounded(&self.to_string(), Self::MAX_SIZE.get())

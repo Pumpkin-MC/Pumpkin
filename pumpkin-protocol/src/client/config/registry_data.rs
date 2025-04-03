@@ -39,6 +39,14 @@ impl RegistryEntry {
             data: Some(data_buf.into_boxed_slice()),
         }
     }
+    pub fn from_nbt_custom(name: &str, nbt: &impl Serialize) -> Self {
+        let mut data_buf = Vec::new();
+        pumpkin_nbt::serializer::to_bytes_unnamed(nbt, &mut data_buf).unwrap();
+        RegistryEntry {
+            entry_id: Identifier::pumpkin(name),
+            data: Some(data_buf.into_boxed_slice()),
+        }
+    }
 }
 
 impl ClientPacket for CRegistryData<'_> {

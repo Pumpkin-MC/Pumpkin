@@ -4,10 +4,12 @@ use std::sync::Arc;
 use crate::block;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
+use crate::entity::player::ChatSession;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::server::seasonal_events;
 use crate::world::BlockFlags;
 use crate::{
     command::CommandSender,
@@ -16,31 +18,30 @@ use crate::{
     server::Server,
     world::chunker,
 };
-use pumpkin_config::advanced_config;
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::world::CHAT;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, EquipmentSlot,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
+    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    SChunkBatch, SCookieResponse as SPCookieResponse, SUpdateSign,
+    SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
 };
 use pumpkin_protocol::{
     client::play::{
         Animation, CCommandSuggestions, CEntityAnimation, CHeadRot, CPingResponse,
-        CPlayerChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, FilterType,
+        CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
     },
     server::play::{
         Action, ActionType, SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay,
@@ -664,12 +665,11 @@ impl Player {
     }
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
-        let message = chat_message.message;
+        let message = chat_message.message.clone();
         if message.len() > 256 {
             self.kick(TextComponent::text("Oversized message")).await;
             return;
         }
-
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.illegal_characters",
@@ -680,70 +680,76 @@ impl Player {
         }
 
         let gameprofile = &self.gameprofile;
-        let global_index = self
-            .global_chat_message_index
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         send_cancellable! {{
             PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
 
             'after: {
-                log::info!("<chat>{}: {}", gameprofile.name, event.message);
+                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+
+                let config = advanced_config();
+
+                let message = match seasonal_events::modify_chat_message(&event.message) {
+                    Some(m) => m,
+                    None => event.message.clone(),
+                };
+
+                let decorated_message = &TextComponent::chat_decorated(
+                    config.chat.format.clone(),
+                    gameprofile.name.clone(),
+                    message,
+                );
 
                 let entity = &self.living_entity.entity;
-                if event.recipients.is_empty() {
-                    let world = &entity.world.read().await;
-                    world
-                        .broadcast_packet_all(&CPlayerChatMessage::new(
-                            VarInt(global_index as i32),
-                            gameprofile.id,
-                            1.into(),
-                            chat_message.signature,
-                            event.message.clone(),
-                            chat_message.timestamp,
-                            chat_message.salt,
-                            // TODO: Previous messages
-                            Box::new([]),
-                            Some(TextComponent::text(event.message)),
-                            FilterType::PassThrough,
-                            (CHAT + 1).into(),
-                            TextComponent::text(gameprofile.name.clone()),
-                            None,
-                        ))
-                        .await;
+                let world = &entity.world.read().await;
+                if BASIC_CONFIG.allow_chat_reports {
+                    world.broadcast_secure_player_chat(self, &chat_message, decorated_message).await;
                 } else {
-                    let packet =
-                        CPlayerChatMessage::new(
-                            VarInt(global_index as i32),
-                            gameprofile.id,
-                            1.into(),
-                            chat_message.signature,
-                            event.message.clone(),
-                            chat_message.timestamp,
-                            chat_message.salt,
-                            Box::new([]),
-                            Some(TextComponent::text(event.message)),
-                            FilterType::PassThrough,
-                            (CHAT + 1).into(),
-                            TextComponent::text(gameprofile.name.clone()),
-                            None,
-                        );
-
-                    for recipient in event.recipients {
-                        recipient.client.enqueue_packet(&packet).await;
-                    }
+                    let no_reports_packet = &CSystemChatMessage::new(
+                        decorated_message,
+                        false,
+                    );
+                    world.broadcast_packet_all(no_reports_packet).await;
                 }
             }
         }}
+    }
 
-        /* server.broadcast_packet(
-            self,
-            &CDisguisedChatMessage::new(
-                TextComponent::from(message.clone()),
-                VarInt(0),
-               gameprofile.name.clone().into(),
-                None,
-            ),
-        ) */
+    pub async fn handle_chat_session_update(
+        self: &Arc<Self>,
+        server: &Server,
+        session: SPlayerSession,
+    ) {
+        // Keep the chat session default if we don't want reports
+        if !BASIC_CONFIG.allow_chat_reports {
+            return;
+        }
+
+        // Update the chat session fields
+        let mut chat_session = self.chat_session.lock().await; // Await the lock
+
+        // Update the chat session fields
+        *chat_session = ChatSession::new(
+            session.session_id,
+            session.expires_at,
+            session.public_key.clone(),
+            session.key_signature.clone(),
+        );
+
+        server
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                0x02,
+                &[pumpkin_protocol::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: session.session_id,
+                        expires_at: session.expires_at,
+                        public_key: session.public_key.clone(),
+                        signature: session.key_signature.clone(),
+                    }))],
+                }],
+            ))
+            .await;
     }
 
     pub async fn handle_client_information(
@@ -841,7 +847,7 @@ impl Player {
                 self.kick(TextComponent::text("Invalid client status"))
                     .await;
             }
-        };
+        }
     }
 
     pub async fn handle_interact(&self, interact: SInteract) {
@@ -914,7 +920,7 @@ impl Player {
                     ))
                     .await;
                     return;
-                };
+                }
             }
             ActionType::Interact | ActionType::InteractAt => {
                 log::debug!("todo");
@@ -1227,7 +1233,7 @@ impl Player {
         if let Some(entity) = entity_from_egg(stack.item.id) {
             self.spawn_entity_from_egg(entity, location, &face).await;
             should_try_decrement = true;
-        };
+        }
 
         if should_try_decrement {
             // TODO: Config
@@ -1319,7 +1325,7 @@ impl Player {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;
-        };
+        }
         Ok(())
     }
 

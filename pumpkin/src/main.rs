@@ -37,6 +37,7 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
     sync::LazyLock,
@@ -49,7 +50,6 @@ use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
-use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
@@ -92,7 +92,6 @@ async fn main() {
         .thread_name(|_| "rayon-worker".to_string())
         .build_global()
         .expect("Rayon thread pool can only be initialized once");
-
     log::info!(
         "Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
     );

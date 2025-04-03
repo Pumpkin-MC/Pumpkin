@@ -2,14 +2,14 @@ use core::error;
 use std::{
     fs::File,
     io::{Cursor, Read},
-    num::NonZeroU32,
     path::Path,
 };
 
 use base64::{Engine as _, engine::general_purpose};
 use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
-    CURRENT_MC_PROTOCOL, Players, StatusResponse, Version,
+    Players, StatusResponse, Version,
     client::{config::CPluginMessage, status::CStatusResponse},
     codec::var_int::VarInt,
 };
@@ -144,7 +144,7 @@ impl CachedStatus {
         StatusResponse {
             version: Some(Version {
                 name: CURRENT_MC_VERSION.into(),
-                protocol: NonZeroU32::from(CURRENT_MC_PROTOCOL).get(),
+                protocol: CURRENT_MC_PROTOCOL,
             }),
             players: Some(Players {
                 max: config.max_players,
@@ -153,7 +153,9 @@ impl CachedStatus {
             }),
             description: config.motd.clone(),
             favicon,
-            enforce_secure_chat: false,
+            // This should stay true even when reports are disabled.
+            // It prevents the annoying popup when joining the server.
+            enforce_secure_chat: true,
         }
     }
 }

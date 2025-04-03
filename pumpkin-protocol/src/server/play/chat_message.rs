@@ -17,10 +17,10 @@ pub struct SChatMessage {
     pub salt: i64,
     pub signature: Option<Box<[u8]>>,
     pub message_count: VarInt,
-    pub acknowledged: Box<[u8]>,
+    pub acknowledged: Box<[u8]>, // Bitset fixed 20 bits
+    pub checksum: u8,            // 1.21.5 "fingerprint" checksum
 }
 
-// TODO
 impl ServerPacket for SChatMessage {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
@@ -32,6 +32,7 @@ impl ServerPacket for SChatMessage {
             signature: read.get_option(|v| v.read_boxed_slice(256))?,
             message_count: read.get_var_int()?,
             acknowledged: read.get_fixed_bitset(20)?,
+            checksum: read.get_u8_be()?,
         })
     }
 }

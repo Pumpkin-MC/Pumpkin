@@ -21,7 +21,7 @@ pub struct VarLong(pub VarLongType);
 
 impl VarLong {
     /// The maximum number of bytes a `VarLong` can occupy.
-    const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(10) };
+    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
     /// Returns the exact number of bytes this VarLong will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
