@@ -143,16 +143,7 @@ impl PumpkinError for ChatError {
     }
 
     fn severity(&self) -> log::Level {
-        match self {
-            Self::IllegalCharacters
-            | Self::OversizedMessage
-            | Self::UnsignedChat
-            | Self::TooManyPendingChats
-            | Self::ChatValidationFailed
-            | Self::OutOfOrderChat
-            | Self::ExpiredPublicKey
-            | Self::InvalidPublicKey => log::Level::Warn,
-        }
+        log::Level::Warn
     }
 
     fn client_kick_reason(&self) -> Option<String> {
