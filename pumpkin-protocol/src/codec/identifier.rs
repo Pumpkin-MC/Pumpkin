@@ -31,7 +31,7 @@ impl Identifier {
 }
 impl Codec<Self> for Identifier {
     /// The maximum number of bytes an `Identifier` is the same as for a normal `String`.
-    const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(i16::MAX as usize) };
+    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
 
     fn written_size(&self) -> usize {
         todo!()

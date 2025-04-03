@@ -90,7 +90,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                     props.facing = *player_direction;
                 } else {
                     props.facing = face.opposite().to_cardinal_direction();
-                };
+                }
 
                 props.to_state_id(block)
             }

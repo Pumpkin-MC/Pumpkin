@@ -259,7 +259,6 @@ impl CommandExecutor for Executor {
                                         .color(Color::Named(NamedColor::Red)),
                                 )
                                 .await;
-                            continue;
                         }
                     }
                 }

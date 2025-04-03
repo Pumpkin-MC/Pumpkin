@@ -392,7 +392,7 @@ impl Client {
         if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
             return;
-        };
+        }
 
         if let Err(err) = self
             .network_writer
@@ -437,7 +437,7 @@ impl Client {
                     error
                 );
                 self.kick(TextComponent::text(text)).await;
-            };
+            }
         }
     }
 
@@ -505,7 +505,7 @@ impl Client {
                     packet.id
                 );
             }
-        };
+        }
         Ok(())
     }
 
@@ -530,7 +530,7 @@ impl Client {
                     packet.id
                 );
             }
-        };
+        }
 
         Ok(())
     }
@@ -567,7 +567,7 @@ impl Client {
                     packet.id
                 );
             }
-        };
+        }
         Ok(())
     }
 
@@ -607,7 +607,7 @@ impl Client {
                     packet.id
                 );
             }
-        };
+        }
         Ok(())
     }
 
@@ -637,7 +637,7 @@ impl Client {
                 log::warn!("Can't kick in {:?} State", self.connection_state);
                 return;
             }
-        };
+        }
         log::debug!("Closing connection for {}", self.id);
         self.close();
     }

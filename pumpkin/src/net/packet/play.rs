@@ -847,7 +847,7 @@ impl Player {
                 self.kick(TextComponent::text("Invalid client status"))
                     .await;
             }
-        };
+        }
     }
 
     pub async fn handle_interact(&self, interact: SInteract) {
@@ -920,7 +920,7 @@ impl Player {
                     ))
                     .await;
                     return;
-                };
+                }
             }
             ActionType::Interact | ActionType::InteractAt => {
                 log::debug!("todo");
@@ -1233,7 +1233,7 @@ impl Player {
         if let Some(entity) = entity_from_egg(stack.item.id) {
             self.spawn_entity_from_egg(entity, location, &face).await;
             should_try_decrement = true;
-        };
+        }
 
         if should_try_decrement {
             // TODO: Config
@@ -1325,7 +1325,7 @@ impl Player {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;
-        };
+        }
         Ok(())
     }
 

@@ -459,7 +459,7 @@ impl Player {
                     combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
                 }
                 _ => {}
-            };
+            }
             if config.knockback {
                 combat::handle_knockback(
                     attacker_entity,
@@ -1707,7 +1707,7 @@ impl Player {
                 // TODO: We give an error if all play packets are implemented
                 //  return Err(Box::new(DeserializerError::UnknownPacket));
             }
-        };
+        }
         Ok(())
     }
 }
