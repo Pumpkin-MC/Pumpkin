@@ -138,4 +138,8 @@ impl ItemStack {
 
         Some(item_stack)
     }
+
+    pub fn get_max_stack_size(&self) -> u8 {
+        self.item.components.max_stack_size
+    }
 }
