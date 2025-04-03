@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::deserializer::NbtReadHelper;
 use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
@@ -239,5 +241,55 @@ impl Extend<(String, NbtTag)> for NbtCompound {
 impl AsRef<NbtCompound> for NbtCompound {
     fn as_ref(&self) -> &NbtCompound {
         self
+    }
+}
+
+impl Serialize for NbtCompound {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.child_tags.len()))?;
+        for (key, value) in &self.child_tags {
+            map.serialize_entry(key, &value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for NbtCompound {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct CompoundVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for CompoundVisitor {
+            type Value = NbtCompound;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an NBT compound")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut compound = NbtCompound::new();
+                while let Some((key, value)) = map.next_entry::<String, NbtTag>()? {
+                    compound.put(&key, value);
+                }
+                Ok(compound)
+            }
+        }
+
+        deserializer.deserialize_map(CompoundVisitor)
+    }
+}
+
+impl From<NbtCompound> for NbtTag {
+    fn from(value: NbtCompound) -> Self {
+        NbtTag::Compound(value)
     }
 }

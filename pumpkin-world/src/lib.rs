@@ -3,6 +3,7 @@ use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
 pub mod block;
+pub mod block_entities;
 pub mod chunk;
 pub mod coordinates;
 pub mod cylindrical_chunk_iterator;

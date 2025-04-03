@@ -78,8 +78,9 @@ impl<B: BiomeGenerator, T: PerlinTerrainGenerator> WorldGenerator for GenericGen
             position: at,
             // This chunk was just created! We want to say its been changed
             dirty: true,
-            block_ticks: vec![],
-            fluid_ticks: vec![],
+            block_ticks: Default::default(),
+            fluid_ticks: Default::default(),
+            block_entities: Default::default(),
         }
     }
 }
