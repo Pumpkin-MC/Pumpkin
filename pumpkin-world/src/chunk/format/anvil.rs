@@ -773,11 +773,8 @@ impl ChunkSerializer for AnvilChunkFile {
         // runtime
         for chunk in chunks.iter().cloned() {
             let index = AnvilChunkFile::get_chunk_index(&chunk);
-            match &self.chunks_data[index] {
-                None => stream
-                    .send(LoadedData::Missing(chunk))
-                    .await
-                    .expect("Failed to send chunk"),
+            let is_ok = match &self.chunks_data[index] {
+                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
                     let chunk_data = &chunk_metadata.serialized_data;
                     let result = match chunk_data.to_chunk(chunk) {
@@ -785,11 +782,13 @@ impl ChunkSerializer for AnvilChunkFile {
                         Err(err) => LoadedData::Error((chunk, err)),
                     };
 
-                    stream
-                        .send(result)
-                        .await
-                        .expect("Failed to read the chunk to the stream");
+                    stream.send(result).await.is_ok()
                 }
+            };
+
+            if !is_ok {
+                // Stream is closed. Stop unneeded work and IO
+                return;
             }
         }
     }

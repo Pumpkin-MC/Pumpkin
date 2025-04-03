@@ -345,10 +345,10 @@ impl ChunkSerializer for LinearFile {
                 LoadedData::Missing(chunk)
             };
 
-            stream
-                .send(result)
-                .await
-                .expect("Failed to read chunks to stream");
+            if stream.send(result).await.is_err() {
+                // The stream is closed. Return early to prevent unneeded work and IO
+                return;
+            }
         }
     }
 }
