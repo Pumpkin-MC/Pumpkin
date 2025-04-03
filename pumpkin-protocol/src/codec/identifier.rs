@@ -7,8 +7,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-use super::Codec;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub namespace: String,
@@ -29,19 +27,15 @@ impl Identifier {
         }
     }
 }
-impl Codec<Self> for Identifier {
+impl Identifier {
     /// The maximum number of bytes an `Identifier` is the same as for a normal `String`.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
 
-    fn written_size(&self) -> usize {
-        todo!()
-    }
-
-    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
+    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         write.write_string_bounded(&self.to_string(), Self::MAX_SIZE.get())
     }
 
-    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
+    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let identifier = read.get_string_bounded(Self::MAX_SIZE.get())?;
         match identifier.split_once(":") {
             Some((namespace, path)) => Ok(Identifier {

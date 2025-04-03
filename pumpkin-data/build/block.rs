@@ -21,23 +21,23 @@ struct PropertyVariantMapping {
 
 struct PropertyCollectionData {
     variant_mappings: Vec<PropertyVariantMapping>,
-    block_names: Vec<String>,
+    blocks: Vec<(String, u16)>,
 }
 
 impl PropertyCollectionData {
-    pub fn add_block_name(&mut self, block_name: String) {
-        self.block_names.push(block_name);
+    pub fn add_block(&mut self, block_name: String, block_id: u16) {
+        self.blocks.push((block_name, block_id));
     }
 
     pub fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
         Self {
             variant_mappings,
-            block_names: Vec::new(),
+            blocks: Vec::new(),
         }
     }
 
     pub fn derive_name(&self) -> String {
-        format!("{}_like", self.block_names[0])
+        format!("{}_like", self.blocks[0].0)
     }
 }
 
@@ -148,7 +148,12 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
-        let block_names = &self.data.block_names;
+        let block_ids = self
+            .data
+            .blocks
+            .iter()
+            .map(|(_, id)| *id)
+            .collect::<Vec<_>>();
 
         let field_names: Vec<_> = self
             .data
@@ -222,7 +227,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn to_state_id(&self, block: &Block) -> u16 {
-                    if ![#(#block_names),*].contains(&block.name) {
+                    if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -230,7 +235,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
-                    if ![#(#block_names),*].contains(&block.name) {
+                    if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -243,7 +248,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn default(block: &Block) -> Self {
-                    if ![#(#block_names),*].contains(&block.name) {
+                    if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -260,7 +265,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_props(props: Vec<(String, String)>, block: &Block) -> Self {
-                    if ![#(#block_names),*].contains(&block.name) {
+                    if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -844,7 +849,7 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
-    let mut block_properties_from_state_and_name = TokenStream::new();
+    let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
@@ -973,12 +978,12 @@ pub(crate) fn build() -> TokenStream {
             property_collection_map
                 .entry(property_collection)
                 .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
-                .add_block_name(block.name);
+                .add_block(block.name, block.id);
         }
     }
 
     for property_group in property_collection_map.into_values() {
-        for block_name in &property_group.block_names {
+        for (block_name, id) in &property_group.blocks {
             let const_block_name = Ident::new(
                 &const_block_name_from_block_name(block_name),
                 Span::call_site(),
@@ -987,13 +992,14 @@ pub(crate) fn build() -> TokenStream {
                 &property_group_name_from_derived_name(&property_group.derive_name()),
                 Span::call_site(),
             );
+            let id_lit = LitInt::new(&id.to_string(), Span::call_site());
 
-            block_properties_from_state_and_name.extend(quote! {
-                #block_name => Some(Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name))),
+            block_properties_from_state_and_block_id.extend(quote! {
+                #id_lit => Some(Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name))),
             });
 
             block_properties_from_props_and_name.extend(quote! {
-                #block_name => Some(Box::new(#property_name::from_props(props, &Block::#const_block_name))),
+                #id_lit => Some(Box::new(#property_name::from_props(props, &Block::#const_block_name))),
             });
         }
 
@@ -1215,15 +1221,15 @@ pub(crate) fn build() -> TokenStream {
 
             #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
-                match self.name {
-                    #block_properties_from_state_and_name
+                match self.id {
+                    #block_properties_from_state_and_block_id
                     _ => None
                 }
             }
 
             #[doc = r" Get the properties of the block."]
             pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn BlockProperties>> {
-                match self.name {
+                match self.id {
                     #block_properties_from_props_and_name
                     _ => None
                 }

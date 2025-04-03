@@ -15,9 +15,6 @@ RUN --mount=type=cache,sharing=private,target=/pumpkin/target \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     cargo build --release && cp target/release/pumpkin ./pumpkin.release
 
-# strip debug symbols from binary
-RUN strip pumpkin.release
-
 FROM alpine:3.21
 
 # Identifying information for registries like ghcr.io

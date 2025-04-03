@@ -695,7 +695,7 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let shape = &surface_config.noise;
+        let shape = &surface_config.shape;
         let chunk_pos = Vector2::new(7, 4);
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, WATER_BLOCK),
