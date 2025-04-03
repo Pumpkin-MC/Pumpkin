@@ -985,7 +985,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
 
@@ -998,7 +998,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
                     break;
@@ -1043,7 +1043,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
 
@@ -1056,7 +1056,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
 
@@ -1116,7 +1116,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
 
@@ -1129,7 +1129,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
 
@@ -1177,7 +1177,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
 
@@ -1190,7 +1190,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                             }
                         });
                     break;
@@ -1258,7 +1258,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                                 }
                             });
 
@@ -1271,7 +1271,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data mis-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
                                 }
                             });
                         break;

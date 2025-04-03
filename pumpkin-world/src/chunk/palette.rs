@@ -265,7 +265,7 @@ impl BiomePalette {
                 if raw_bits_per_entry > BIOME_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BIOME_NETWORK_MAX_BITS;
                     let values_per_i64 = 64 / bits_per_entry;
-                    let packed_datas = data
+                    let packed_data = data
                         .cube
                         .as_flattened()
                         .as_flattened()
@@ -283,7 +283,7 @@ impl BiomePalette {
                     NetworkSerialization {
                         bits_per_entry,
                         palette: NetworkPalette::Direct,
-                        packed_data: packed_datas,
+                        packed_data,
                     }
                 } else {
                     let bits_per_entry = raw_bits_per_entry.max(BIOME_NETWORK_MIN_MAP_BITS);
@@ -346,7 +346,7 @@ impl BlockPalette {
                 if raw_bits_per_entry > BLOCK_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
                     let values_per_i64 = 64 / bits_per_entry;
-                    let packed_datas = data
+                    let packed_data = data
                         .cube
                         .as_flattened()
                         .as_flattened()
@@ -365,7 +365,7 @@ impl BlockPalette {
                     NetworkSerialization {
                         bits_per_entry,
                         palette: NetworkPalette::Direct,
-                        packed_data: packed_datas,
+                        packed_data,
                     }
                 } else {
                     let bits_per_entry = raw_bits_per_entry.max(BLOCK_NETWORK_MIN_MAP_BITS);
