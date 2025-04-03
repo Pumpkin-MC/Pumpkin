@@ -151,7 +151,7 @@ pub trait FlowingFluid {
         }
 
         let below_pos = block_pos.down();
-        let below_can_replace = self.can_replace_block(world, &below_pos, fluid).await;
+        let below_can_replace = !self.is_solid_or_source(world, &below_pos, 0, fluid).await;
 
         if below_can_replace {
             let mut new_props = FlowingFluidProperties::default(fluid);
@@ -160,7 +160,7 @@ pub trait FlowingFluid {
 
             self.spread_to(world, fluid, &below_pos, new_props.to_state_id(fluid))
                 .await;
-        } else if props.level == Level::L8
+        } else if props.level == Level::L8 && props.falling == Falling::False
             || !self
                 .is_water_hole(world, fluid, block_pos, &below_pos)
                 .await
@@ -314,8 +314,11 @@ pub trait FlowingFluid {
         let mut ctx = None;
         for direction in BlockDirection::horizontal() {
             let side_pos = block_pos.offset(direction.to_offset());
+            let Ok(side_state_id) = world.get_block_state_id(&side_pos).await else {
+                continue;
+            };
 
-            if !self.can_pass_through(world, fluid, &side_pos).await {
+            if !self.can_pass_through(world, fluid, &side_pos).await || self.is_same_fluid(fluid, side_state_id) {
                 continue;
             }
 
