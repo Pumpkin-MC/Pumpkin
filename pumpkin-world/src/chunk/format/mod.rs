@@ -121,7 +121,8 @@ pub struct ChunkSectionBiomes {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
+// NOTE: Change not documented in the wiki; biome palettes are directly just the name now
+#[serde(rename_all = "PascalCase", transparent)]
 pub struct PaletteBiomeEntry {
     /// Biome name
     pub name: String,
@@ -143,6 +144,7 @@ pub struct PaletteBlockEntry {
     /// Block name
     pub name: String,
     /// Key-value pairs of properties
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub properties: Option<HashMap<String, String>>,
 }
 
@@ -168,10 +170,10 @@ struct ChunkNbt {
     data_version: i32,
     #[serde(rename = "xPos")]
     x_pos: i32,
-    #[serde(rename = "yPos")]
-    min_y_section: i32,
     #[serde(rename = "zPos")]
     z_pos: i32,
+    #[serde(rename = "yPos")]
+    min_y_section: i32,
     status: ChunkStatus,
     #[serde(rename = "sections")]
     sections: Vec<ChunkSectionNBT>,

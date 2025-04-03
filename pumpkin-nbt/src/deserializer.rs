@@ -113,6 +113,8 @@ pub struct Deserializer<R: Read> {
     // Yes, this breaks with recursion. Just an attempt at a sanity check
     in_list: bool,
     is_named: bool,
+    // For debugging
+    key_stack: Vec<String>,
 }
 
 impl<R: Read> Deserializer<R> {
@@ -122,6 +124,7 @@ impl<R: Read> Deserializer<R> {
             tag_to_deserialize_stack: Vec::new(),
             in_list: false,
             is_named,
+            key_stack: Vec::new(),
         }
     }
 }
@@ -310,9 +313,14 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     {
         if let Some(tag_id) = self.tag_to_deserialize_stack.pop() {
             if tag_id != COMPOUND_ID {
-                return Err(Error::SerdeError(
-                    "Trying to deserialize a map without a compound ID".to_string(),
-                ));
+                return Err(Error::SerdeError(format!(
+                    "Trying to deserialize a map without a compound ID ({} with id {})",
+                    self.key_stack
+                        .last()
+                        .cloned()
+                        .unwrap_or_else(|| "compound root".to_string()),
+                    tag_id
+                )));
             }
         } else {
             let next_byte = self.input.get_u8_be()?;
@@ -380,7 +388,9 @@ impl<'de, R: Read> MapAccess<'de> for CompoundAccess<'_, R> {
     where
         V: DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de)
+        let result = seed.deserialize(&mut *self.de);
+        self.de.key_stack.pop();
+        result
     }
 }
 
@@ -396,6 +406,7 @@ impl<'de, R: Read> de::Deserializer<'de> for MapKey<'_, R> {
         V: de::Visitor<'de>,
     {
         let key = get_nbt_string(&mut self.de.input)?;
+        self.de.key_stack.push(key.clone());
         visitor.visit_string(key)
     }
 

@@ -19,7 +19,7 @@ type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 /// The minimum number of bits required to represent this number
 #[inline]
 fn encompassing_bits(count: usize) -> u8 {
-    count.ilog2() as u8 + 1
+    count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
 }
 
 // TODO: Verify the default state for these blocks is the only state
@@ -161,9 +161,10 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 Ordering::Less => {
                     // Handled by the array initialization and zip
                     log::warn!(
-                        "Ran out of packed indices, but did not fill the section ({} vs {}). Defaulting...",
+                        "Ran out of packed indices, but did not fill the section ({} vs {} for {}). Defaulting...",
                         packed_data.len() * keys_per_i64 as usize,
-                        Self::VOLUME
+                        Self::VOLUME,
+                        palette.len(),
                     );
                 }
                 // This is what we want!
@@ -482,6 +483,8 @@ pub struct NetworkSerialization<V> {
 // According to the wiki, palette serialization for disk and network is different. Disk
 // serialization always uses a palette if greater than one entry. Network serialization packs ids
 // directly instead of using a palette above a certain bits-per-entry
+
+// TODO: Do our own testing; do we really need to handle network and disk serialization differently?
 pub type BlockPalette = PalettedContainer<u16, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
