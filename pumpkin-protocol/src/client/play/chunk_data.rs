@@ -75,7 +75,9 @@ impl ClientPacket for CChunkData<'_> {
                 }
                 NetworkPalette::Direct => {}
             }
-            data_buf.write_var_int(&network_repr.packed_data.len().into())?;
+
+            // NOTE: Not updated in wiki; i64 array length is now determined by the bits per entry
+            //data_buf.write_var_int(&network_repr.packed_data.len().into())?;
             for packed in network_repr.packed_data {
                 data_buf.write_i64_be(packed)?;
             }
@@ -94,7 +96,9 @@ impl ClientPacket for CChunkData<'_> {
                 }
                 NetworkPalette::Direct => {}
             }
-            data_buf.write_var_int(&network_repr.packed_data.len().into())?;
+
+            // NOTE: Not updated in wiki; i64 array length is now determined by the bits per entry
+            //data_buf.write_var_int(&network_repr.packed_data.len().into())?;
             for packed in network_repr.packed_data {
                 data_buf.write_i64_be(packed)?;
             }

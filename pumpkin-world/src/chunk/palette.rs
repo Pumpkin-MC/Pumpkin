@@ -6,6 +6,7 @@ use std::{
 
 use pumpkin_data::{block::Block, chunk::Biome};
 use pumpkin_macros::block_state;
+use pumpkin_util::encompassing_bits;
 
 use crate::block::ChunkBlockState;
 
@@ -15,12 +16,6 @@ use super::format::{
 
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
-
-/// The minimum number of bits required to represent this number
-#[inline]
-fn encompassing_bits(count: usize) -> u8 {
-    count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
-}
 
 // TODO: Verify the default state for these blocks is the only state
 const AIR: ChunkBlockState = block_state!("air");
@@ -106,6 +101,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             Self::Homogeneous(registry_id) => (Box::new([*registry_id]), Box::new([])),
             Self::Heterogeneous(data) => {
                 debug_assert!(bits_per_entry >= encompassing_bits(data.counts.len()));
+                debug_assert!(bits_per_entry <= 15);
 
                 let palette: Box<[V]> = data.counts.keys().copied().collect();
                 let key_to_index_map: HashMap<V, usize> = palette
@@ -124,9 +120,11 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                     .map(|chunk| {
                         chunk.iter().enumerate().fold(0, |acc, (index, key)| {
                             let key_index = key_to_index_map.get(key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > *key_index);
+
                             let packed_offset_index =
-                                (*key_index as i64) << (bits_per_entry as usize * index);
-                            acc | packed_offset_index
+                                (*key_index as u64) << (bits_per_entry as usize * index);
+                            acc | packed_offset_index as i64
                         })
                     })
                     .collect();
@@ -266,8 +264,6 @@ impl BiomePalette {
                 let raw_bits_per_entry = encompassing_bits(data.counts.len());
                 if raw_bits_per_entry > BIOME_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BIOME_NETWORK_MAX_BITS;
-                    debug_assert!((1 << bits_per_entry) > data.counts.len());
-
                     let values_per_i64 = 64 / bits_per_entry;
                     let packed_datas = data
                         .cube
@@ -276,9 +272,10 @@ impl BiomePalette {
                         .chunks(values_per_i64 as usize)
                         .map(|chunk| {
                             chunk.iter().enumerate().fold(0, |acc, (index, value)| {
+                                debug_assert!((1 << bits_per_entry) > *value);
                                 let packed_offset_index =
-                                    (*value as i64) << (bits_per_entry as usize * index);
-                                acc | packed_offset_index
+                                    (*value as u64) << (bits_per_entry as usize * index);
+                                acc | packed_offset_index as i64
                             })
                         })
                         .collect();
@@ -348,8 +345,6 @@ impl BlockPalette {
                 let raw_bits_per_entry = encompassing_bits(data.counts.len());
                 if raw_bits_per_entry > BLOCK_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
-                    debug_assert!((1 << bits_per_entry) > data.counts.len());
-
                     let values_per_i64 = 64 / bits_per_entry;
                     let packed_datas = data
                         .cube
@@ -358,6 +353,8 @@ impl BlockPalette {
                         .chunks(values_per_i64 as usize)
                         .map(|chunk| {
                             chunk.iter().enumerate().fold(0, |acc, (index, value)| {
+                                debug_assert!((1 << bits_per_entry) > *value);
+
                                 let packed_offset_index =
                                     (*value as i64) << (bits_per_entry as usize * index);
                                 acc | packed_offset_index
@@ -489,10 +486,10 @@ pub type BlockPalette = PalettedContainer<u16, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;
-const BLOCK_NETWORK_MAX_BITS: u8 = 15;
+pub(crate) const BLOCK_NETWORK_MAX_BITS: u8 = 15;
 
 pub type BiomePalette = PalettedContainer<u8, 4>;
 const BIOME_DISK_MIN_BITS: u8 = 0;
 const BIOME_NETWORK_MIN_MAP_BITS: u8 = 1;
 const BIOME_NETWORK_MAX_MAP_BITS: u8 = 3;
-const BIOME_NETWORK_MAX_BITS: u8 = 6;
+pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
