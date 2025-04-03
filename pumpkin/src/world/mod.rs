@@ -1329,6 +1329,7 @@ impl World {
     }
 
     /// Sets a block
+    #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,

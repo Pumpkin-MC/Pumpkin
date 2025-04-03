@@ -4,39 +4,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     block::Block,
-    fluid::{Falling, Fluid, FluidProperties, Level},
+    fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
 use crate::world::{BlockFlags, World};
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
-
-fn level_to_int(level: Level) -> i32 {
-    match level {
-        Level::L1 => 1,
-        Level::L2 => 2,
-        Level::L3 => 3,
-        Level::L4 => 4,
-        Level::L5 => 5,
-        Level::L6 => 6,
-        Level::L7 => 7,
-        Level::L8 => 8,
-    }
-}
-
-fn int_to_level(level: i32) -> Level {
-    match level {
-        2 => Level::L2,
-        3 => Level::L3,
-        4 => Level::L4,
-        5 => Level::L5,
-        6 => Level::L6,
-        7 => Level::L7,
-        8 => Level::L8,
-        _ => Level::L1,
-    }
-}
 
 #[derive(Clone)]
 pub struct SpreadContext {
@@ -129,6 +103,7 @@ pub trait FlowingFluid {
             }
             self.spread(world, fluid, block_pos, &new_fluid_state).await;
         } else {
+            world.break_block(block_pos, None, BlockFlags::empty()).await;
             world
                 .set_block_state(
                     block_pos,
@@ -146,10 +121,6 @@ pub trait FlowingFluid {
         block_pos: &BlockPos,
         props: &FlowingFluidProperties,
     ) {
-        if level_to_int(props.level) <= 0 {
-            return;
-        }
-
         let below_pos = block_pos.down();
         let below_can_replace = !self.is_solid_or_source(world, &below_pos, 0, fluid).await;
 
@@ -180,7 +151,7 @@ pub trait FlowingFluid {
         };
 
         let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
-        let current_level = level_to_int(current_props.level);
+        let current_level = i32::from(current_props.level.to_index()) + 1;
         if current_level == 8 && current_props.falling != Falling::True {
             return Some(current_props);
         }
@@ -198,7 +169,7 @@ pub trait FlowingFluid {
             }
 
             let neighbor_props = FlowingFluidProperties::from_state_id(neighbor_state_id, fluid);
-            let neighbor_level = level_to_int(neighbor_props.level);
+            let neighbor_level = i32::from(neighbor_props.level.to_index()) + 1 ;
 
             if neighbor_level == 8 && neighbor_props.falling != Falling::True {
                 source_count += 1;
@@ -237,7 +208,7 @@ pub trait FlowingFluid {
         }
         if new_level != current_level {
             return Some(
-                self.get_flowing(fluid, int_to_level(new_level), false)
+                self.get_flowing(fluid, Level::from_index(new_level as u16 - 1), false)
                     .await,
             );
         }
@@ -273,7 +244,7 @@ pub trait FlowingFluid {
         };
 
         let props = FlowingFluidProperties::from_state_id(block_state_id, fluid);
-        let level = level_to_int(props.level);
+        let level = i32::from(props.level.to_index()) + 1;
 
         let effective_level = if props.falling == Falling::True {
             7
@@ -295,7 +266,7 @@ pub trait FlowingFluid {
 
             if self.can_replace_block(world, &side_pos, fluid).await {
                 let new_props = self
-                    .get_flowing(fluid, int_to_level(new_level), false)
+                    .get_flowing(fluid, Level::from_index(new_level as u16 - 1), false)
                     .await;
                 self.spread_to(world, fluid, &side_pos, new_props.to_state_id(fluid))
                     .await;

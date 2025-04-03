@@ -58,7 +58,7 @@ impl FlowingFluid for FlowingLava {
     }
 
     async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
-        //TODO add game rule check for water conversion
-        true
+        //TODO add game rule check for lava conversion
+        false
     }
 }
