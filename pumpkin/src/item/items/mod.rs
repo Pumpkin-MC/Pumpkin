@@ -1,5 +1,6 @@
 mod egg;
 mod hoe;
+mod pickaxe;
 mod snowball;
 mod sword;
 mod trident;
@@ -8,6 +9,7 @@ use std::sync::Arc;
 
 use egg::EggItem;
 use hoe::HoeItem;
+use pickaxe::PickaxeItem;
 use snowball::SnowBallItem;
 use sword::SwordItem;
 use trident::TridentItem;
@@ -20,6 +22,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(SnowBallItem);
     manager.register(HoeItem);
     manager.register(EggItem);
+    manager.register(PickaxeItem);
     manager.register(SwordItem);
     manager.register(TridentItem);
 
