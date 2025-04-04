@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, Boolean, HorizontalFacing};
+use pumpkin_data::block::{Block, BlockProperties, Boolean};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_world::block::{
+    BlockDirection, HorizontalFacingExt, precise_direction::PreciseDirection,
+};
 
 use crate::{
     block::pumpkin_block::PumpkinBlock,
@@ -30,12 +32,14 @@ impl PumpkinBlock for PistonBlock {
         _face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player_direction: &f32,
         _other: bool,
     ) -> u16 {
         let mut props = PistonProps::default(block);
+        let horizontal_direction =
+            PreciseDirection::from(*player_direction).to_horizontal_direction();
         props.extended = Boolean::from_bool(block_receives_redstone_power(world, block_pos).await);
-        props.facing = player_direction.to_block_direction().to_facing();
+        props.facing = horizontal_direction.to_block_direction().to_facing();
         props.to_state_id(block)
     }
 

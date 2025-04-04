@@ -3,7 +3,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockState;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -48,7 +47,7 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 face: &BlockDirection,
                 block_pos: &BlockPos,
                 _use_item_on: &SUseItemOn,
-                _player_direction: &HorizontalFacing,
+                _player_direction: &f32,
                 _other: bool,
             ) -> u16 {
                 if face.is_horizontal() {

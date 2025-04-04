@@ -19,7 +19,7 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::{Block, HorizontalFacing};
+use pumpkin_data::block::Block;
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
@@ -1448,16 +1448,8 @@ impl Player {
         // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
-    fn get_player_direction(&self) -> HorizontalFacing {
-        let adjusted_yaw = (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
-
-        match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
-            45.0..=135.0 => HorizontalFacing::West,
-            135.0..=225.0 => HorizontalFacing::North,
-            225.0..=315.0 => HorizontalFacing::East,
-            _ => HorizontalFacing::South, // Default case, should not occur
-        }
+    fn get_player_direction(&self) -> f32 {
+        (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0 // Normalize yaw to [0, 360)
     }
 
     const WORLD_LOWEST_Y: i8 = -64;
@@ -1560,7 +1552,7 @@ impl Player {
                 .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
                 .await;
 
-            self.send_sign_packet(block, final_block_pos, face).await;
+            self.send_sign_packet(block, final_block_pos).await;
             // The block was placed successfully, so decrement their inventory
             return Ok(true);
         }
@@ -1569,21 +1561,13 @@ impl Player {
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.
-    async fn send_sign_packet(
-        &self,
-        block: Block,
-        block_position: BlockPos,
-        selected_face: &BlockDirection,
-    ) {
+    async fn send_sign_packet(&self, block: Block, block_position: BlockPos) {
         if block.states.iter().any(|state| {
             state.get_state().block_entity_type == Some(block_entity!("sign"))
                 || state.get_state().block_entity_type == Some(block_entity!("hanging_sign"))
         }) {
             self.client
-                .enqueue_packet(&COpenSignEditor::new(
-                    block_position,
-                    selected_face.to_offset().z == 1,
-                ))
+                .enqueue_packet(&COpenSignEditor::new(block_position, true))
                 .await;
         }
     }

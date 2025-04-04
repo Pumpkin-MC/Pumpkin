@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::{
     Block, BlockState, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
     ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
     SouthWireConnection, WestWireConnection,
 };
-use pumpkin_data::block::{BlockProperties, HorizontalFacing};
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -44,7 +44,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player_direction: &f32,
         _other: bool,
     ) -> u16 {
         let mut wire = RedstoneWireProperties::default(block);
