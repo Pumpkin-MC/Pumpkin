@@ -38,7 +38,7 @@ use pumpkin_protocol::{
     client::play::{
         CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        FilterType, GameEvent, InitChat, PlayerAction,
+        FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
     },
     server::play::SChatMessage,
 };
@@ -93,20 +93,6 @@ bitflags! {
         const SKIP_REDSTONE_WIRE_STATE_REPLACEMENT  = 0b000_0010_0000;
         const SKIP_BLOCK_ENTITY_REPLACED_CALLBACK   = 0b000_0100_0000;
         const SKIP_BLOCK_ADDED_CALLBACK             = 0b000_1000_0000;
-    }
-}
-
-bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct PlayerInfoFlags: u8 {
-        const ADD_PLAYER            = 0x01;
-        const INITIALIZE_CHAT       = 0x02;
-        const UPDATE_GAME_MODE      = 0x04;
-        const UPDATE_LISTED         = 0x08;
-        const UPDATE_LATENCY        = 0x10;
-        const UPDATE_DISPLAY_NAME   = 0x20;
-        const UPDATE_LIST_PRIORITY  = 0x40;
-        const UPDATE_HAT            = 0x80;
     }
 }
 

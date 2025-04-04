@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
 use pumpkin_macros::packet;
 
@@ -9,6 +10,20 @@ use crate::{
 };
 
 use super::PlayerAction;
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct PlayerInfoFlags: u8 {
+        const ADD_PLAYER            = 0x01;
+        const INITIALIZE_CHAT       = 0x02;
+        const UPDATE_GAME_MODE      = 0x04;
+        const UPDATE_LISTED         = 0x08;
+        const UPDATE_LATENCY        = 0x10;
+        const UPDATE_DISPLAY_NAME   = 0x20;
+        const UPDATE_LIST_PRIORITY  = 0x40;
+        const UPDATE_HAT            = 0x80;
+    }
+}
 
 #[packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {

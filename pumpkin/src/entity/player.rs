@@ -27,7 +27,7 @@ use crate::{
         player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
     },
     server::Server,
-    world::{PlayerInfoFlags, World},
+    world::World,
 };
 use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PreviousMessage};
+use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
