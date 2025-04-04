@@ -191,9 +191,7 @@ where
                     unreachable!("Default Serializer must be created")
                 }
                 Err(err) => {
-                    if let Err(err) = stream.send(LoadedData::Error((chunks[0], err))).await {
-                        log::warn!("Failed to send data to the chunk stream: {:?}", err);
-                    };
+                    let _ = stream.send(LoadedData::Error((chunks[0], err))).await;
                     return;
                 }
             };
@@ -204,10 +202,10 @@ where
             let intermediary = async {
                 while let Some(data) = recv.recv().await {
                     let wrapped_data = data.map_loaded(|data| Arc::new(RwLock::new(data)));
-                    stream
-                        .send(wrapped_data)
-                        .await
-                        .expect("Failed chunk wrapper intermediary");
+                    if stream.send(wrapped_data).await.is_err() {
+                        // Stream is closed, so stop unneeded computation and io
+                        return;
+                    }
                 }
             };
 

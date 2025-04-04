@@ -44,7 +44,16 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                             p.write_option(&v.signature, |p, v| p.write_string(v))
                         })?;
                     }
-                    PlayerAction::InitializeChat(_) => todo!(),
+                    PlayerAction::InitializeChat(init_chat) => {
+                        p.write_option(init_chat, |p, v| {
+                            p.write_uuid(&v.session_id)?;
+                            p.write_i64_be(v.expires_at)?;
+                            p.write_var_int(&v.public_key.len().into())?;
+                            p.write_slice(&v.public_key)?;
+                            p.write_var_int(&v.signature.len().into())?;
+                            p.write_slice(&v.signature)
+                        })?;
+                    }
                     PlayerAction::UpdateGameMode(gamemode) => p.write_var_int(gamemode)?,
                     PlayerAction::UpdateListed(listed) => p.write_bool(*listed)?,
                     PlayerAction::UpdateLatency(_) => todo!(),

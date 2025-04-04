@@ -1,15 +1,13 @@
 use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
-use indexmap::IndexMap;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::serializer::to_bytes;
-use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::{Read, SeekFrom, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -19,14 +17,15 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::chunk::{
-    ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
-    io::{ChunkSerializer, LoadedData},
+use crate::{
+    chunk::{
+        ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
+        io::{ChunkSerializer, LoadedData},
+    },
+    generation::section_coords,
 };
 
-use super::{
-    ChunkNbt, ChunkSection, ChunkSectionBlockStates, PaletteEntry, SerializedScheduledTick,
-};
+use super::{ChunkNbt, ChunkSectionNBT, SerializedScheduledTick};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -774,11 +773,8 @@ impl ChunkSerializer for AnvilChunkFile {
         // runtime
         for chunk in chunks.iter().cloned() {
             let index = AnvilChunkFile::get_chunk_index(&chunk);
-            match &self.chunks_data[index] {
-                None => stream
-                    .send(LoadedData::Missing(chunk))
-                    .await
-                    .expect("Failed to send chunk"),
+            let is_ok = match &self.chunks_data[index] {
+                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
                     let chunk_data = &chunk_metadata.serialized_data;
                     let result = match chunk_data.to_chunk(chunk) {
@@ -786,11 +782,13 @@ impl ChunkSerializer for AnvilChunkFile {
                         Err(err) => LoadedData::Error((chunk, err)),
                     };
 
-                    stream
-                        .send(result)
-                        .await
-                        .expect("Failed to read the chunk to the stream");
+                    stream.send(result).await.is_ok()
                 }
+            };
+
+            if !is_ok {
+                // Stream is closed. Stop unneeded work and IO
+                return;
             }
         }
     }
@@ -799,83 +797,14 @@ impl ChunkSerializer for AnvilChunkFile {
 pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
     let mut sections = Vec::new();
 
-    for (i, blocks) in chunk_data.sections.array_iter_subchunks().enumerate() {
-        // get unique blocks
-        let unique_blocks: HashSet<_> = blocks.iter().collect();
+    for (i, section) in chunk_data.section.sections.iter().enumerate() {
+        let block_states = section.block_states.to_disk_nbt();
+        let biomes = section.biomes.to_disk_nbt();
 
-        let palette: IndexMap<_, _> = unique_blocks
-            .into_iter()
-            .enumerate()
-            .map(|(i, block)| {
-                let name = Block::from_state_id(*block).unwrap().name;
-                (block, (name, i))
-            })
-            .collect();
-
-        // Determine the number of bits needed to represent the largest index in the palette
-        let block_bit_size = if palette.len() < 16 {
-            4
-        } else {
-            ceil_log2(palette.len() as u32).max(4)
-        };
-
-        let mut section_longs = Vec::new();
-        let mut current_pack_long: i64 = 0;
-        let mut bits_used_in_pack: u32 = 0;
-
-        // Empty data if the palette only contains one index https://minecraft.fandom.com/wiki/Chunk_format
-        // if palette.len() > 1 {}
-        // TODO: Update to write empty data. Rn or read does not handle this elegantly
-        for block in blocks.iter() {
-            // Push if next bit does not fit
-            if bits_used_in_pack + block_bit_size as u32 > 64 {
-                section_longs.push(current_pack_long);
-                current_pack_long = 0;
-                bits_used_in_pack = 0;
-            }
-            let index = palette.get(block).expect("Just added all unique").1;
-            current_pack_long |= (index as i64) << bits_used_in_pack;
-            bits_used_in_pack += block_bit_size as u32;
-
-            assert!(bits_used_in_pack <= 64);
-
-            // If the current 64-bit integer is full, push it to the section_longs and start a new one
-            if bits_used_in_pack >= 64 {
-                section_longs.push(current_pack_long);
-                current_pack_long = 0;
-                bits_used_in_pack = 0;
-            }
-        }
-
-        // Push the last 64-bit integer if it contains any data
-        if bits_used_in_pack > 0 {
-            section_longs.push(current_pack_long);
-        }
-
-        sections.push(ChunkSection {
-            y: i as i8 - 4,
-            block_states: Some(ChunkSectionBlockStates {
-                data: Some(section_longs.into_boxed_slice()),
-                palette: palette
-                    .into_iter()
-                    .map(|entry| PaletteEntry {
-                        name: entry.1.0.to_string(),
-                        properties: {
-                            let block = Block::from_state_id(*entry.0).unwrap();
-                            if let Some(properties) = block.properties(*entry.0) {
-                                let props = properties.to_props();
-                                let mut props_map = HashMap::new();
-                                for prop in props {
-                                    props_map.insert(prop.0.clone(), prop.1.clone());
-                                }
-                                Some(props_map)
-                            } else {
-                                None
-                            }
-                        },
-                    })
-                    .collect(),
-            }),
+        sections.push(ChunkSectionNBT {
+            y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
+            block_states,
+            biomes,
         });
     }
 
@@ -883,6 +812,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
         data_version: WORLD_DATA_VERSION,
         x_pos: chunk_data.position.x,
         z_pos: chunk_data.position.z,
+        min_y_section: section_coords::block_to_section(chunk_data.section.min_y),
         status: ChunkStatus::Full,
         heightmaps: chunk_data.heightmap.clone(),
         sections,
@@ -940,7 +870,6 @@ mod tests {
     use crate::chunk::format::anvil::AnvilChunkFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
     use crate::chunk::io::{ChunkIO, LoadedData};
-    use crate::coordinates::ChunkRelativeBlockCoordinates;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::{LevelFolder, SyncChunk};
 
@@ -1026,7 +955,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(position);
+                let chunk = generator.generate_chunk(&position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1047,7 +976,31 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    let original = chunk.section.dump_blocks();
+                    let read = read_chunk.section.dump_blocks();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
+
+                    let original = chunk.section.dump_biomes();
+                    let read = read_chunk.section.dump_biomes();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
                     break;
                 }
             }
@@ -1057,26 +1010,12 @@ mod tests {
 
         // Idk what blocks these are, they just have to be different
         let mut chunk = chunks.first().unwrap().1.write().await;
-        chunk.sections.set_block(
-            ChunkRelativeBlockCoordinates {
-                x: 0u32.into(),
-                y: 0.into(),
-                z: 0u32.into(),
-            },
-            1000,
-        );
+        chunk.section.set_relative_block(0, 0, 0, 1000);
         // Mark dirty so we actually write it
         chunk.dirty = true;
         drop(chunk);
         let mut chunk = chunks.last().unwrap().1.write().await;
-        chunk.sections.set_block(
-            ChunkRelativeBlockCoordinates {
-                x: 0u32.into(),
-                y: 0.into(),
-                z: 0u32.into(),
-            },
-            1000,
-        );
+        chunk.section.set_relative_block(0, 0, 0, 1000);
         // Mark dirty so we actually write it
         chunk.dirty = true;
         drop(chunk);
@@ -1095,7 +1034,32 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    let original = chunk.section.dump_blocks();
+                    let read = read_chunk.section.dump_blocks();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
+
+                    let original = chunk.section.dump_biomes();
+                    let read = read_chunk.section.dump_biomes();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
+
                     break;
                 }
             }
@@ -1109,14 +1073,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..4 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.sections.set_block(
-                        ChunkRelativeBlockCoordinates {
-                            x: x.into(),
-                            y: (y as i32).into(),
-                            z: z.into(),
-                        },
-                        block_id,
-                    );
+                    chunk.section.set_relative_block(x, y, z, block_id as u16);
                 }
             }
         }
@@ -1128,14 +1085,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..4 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.sections.set_block(
-                        ChunkRelativeBlockCoordinates {
-                            x: x.into(),
-                            y: (y as i32).into(),
-                            z: z.into(),
-                        },
-                        block_id,
-                    );
+                    chunk.section.set_relative_block(x, y, z, block_id as u16);
                 }
             }
         }
@@ -1157,7 +1107,32 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    let original = chunk.section.dump_blocks();
+                    let read = read_chunk.section.dump_blocks();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
+
+                    let original = chunk.section.dump_biomes();
+                    let read = read_chunk.section.dump_biomes();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
+
                     break;
                 }
             }
@@ -1171,14 +1146,7 @@ mod tests {
             for z in 0..16 {
                 for y in 0..16 {
                     let block_id = 16 * 16 * y + 16 * z + x;
-                    chunk.sections.set_block(
-                        ChunkRelativeBlockCoordinates {
-                            x: x.into(),
-                            y: (y as i32).into(),
-                            z: z.into(),
-                        },
-                        block_id,
-                    );
+                    chunk.section.set_relative_block(x, y, z, block_id as u16);
                 }
             }
         }
@@ -1200,7 +1168,31 @@ mod tests {
             for read_chunk in read_chunks.iter() {
                 let read_chunk = read_chunk.read().await;
                 if read_chunk.position == chunk.position {
-                    assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                    let original = chunk.section.dump_blocks();
+                    let read = read_chunk.section.dump_blocks();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
+
+                    let original = chunk.section.dump_biomes();
+                    let read = read_chunk.section.dump_biomes();
+
+                    original
+                        .into_iter()
+                        .zip(read)
+                        .enumerate()
+                        .for_each(|(i, (o, r))| {
+                            if o != r {
+                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                            }
+                        });
                     break;
                 }
             }
@@ -1231,7 +1223,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(position);
+                let chunk = generator.generate_chunk(&position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1257,7 +1249,31 @@ mod tests {
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
-                        assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                        let original = chunk.section.dump_blocks();
+                        let read = read_chunk.section.dump_blocks();
+
+                        original
+                            .into_iter()
+                            .zip(read)
+                            .enumerate()
+                            .for_each(|(i, (o, r))| {
+                                if o != r {
+                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                }
+                            });
+
+                        let original = chunk.section.dump_biomes();
+                        let read = read_chunk.section.dump_biomes();
+
+                        original
+                            .into_iter()
+                            .zip(read)
+                            .enumerate()
+                            .for_each(|(i, (o, r))| {
+                                if o != r {
+                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                }
+                            });
                         break;
                     }
                 }

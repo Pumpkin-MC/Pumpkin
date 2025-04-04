@@ -41,6 +41,11 @@ pub(crate) fn build() -> TokenStream {
         }]);
     }
 
+    let raw_id = json.len() as u32;
+    variants.extend([quote! {
+        pub const RAW: u32 = #raw_id; // One higher than highest vanilla id
+    }]);
+
     quote! {
         #variants
     }

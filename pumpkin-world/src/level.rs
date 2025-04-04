@@ -1,4 +1,11 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use dashmap::{DashMap, Entry};
 use log::trace;
@@ -7,7 +14,7 @@ use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use tokio::{
     sync::{Mutex, Notify, RwLock, mpsc},
-    task::{JoinHandle, JoinSet},
+    task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
 
@@ -400,28 +407,32 @@ impl Level {
             return;
         }
 
+        // If false, stop loading chunks because the channel has closed.
         let send_chunk =
             move |is_new: bool,
                   chunk: SyncChunk,
                   channel: &mpsc::UnboundedSender<(SyncChunk, bool)>| {
-                let _ = channel
-                    .send((chunk, is_new))
-                    .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
+                channel.send((chunk, is_new)).is_ok()
             };
 
         // First send all chunks that we have cached
         // We expect best case scenario to have all cached
         let mut remaining_chunks = Vec::new();
         for chunk in chunks {
-            if let Some(chunk) = self.loaded_chunks.get(chunk) {
-                send_chunk(false, chunk.value().clone(), &channel);
+            let is_ok = if let Some(chunk) = self.loaded_chunks.get(chunk) {
+                send_chunk(false, chunk.value().clone(), &channel)
             } else if let Some(spawn_chunk) = self.spawn_chunks.get(chunk) {
                 // Also clone the arc into the loaded chunks
                 self.loaded_chunks
                     .insert(*chunk, spawn_chunk.value().clone());
-                send_chunk(false, spawn_chunk.value().clone(), &channel);
+                send_chunk(false, spawn_chunk.value().clone(), &channel)
             } else {
                 remaining_chunks.push(*chunk);
+                true
+            };
+
+            if !is_ok {
+                return;
             }
         }
 
@@ -440,7 +451,7 @@ impl Level {
         let level_block_ticks = self.block_ticks.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
-                match data {
+                let is_ok = match data {
                     LoadedData::Loaded(chunk) => {
                         let position = chunk.read().await.position;
 
@@ -455,12 +466,9 @@ impl Level {
                             .or_insert(chunk)
                             .value()
                             .clone();
-                        send_chunk(false, value, &load_channel);
+                        send_chunk(false, value, &load_channel)
                     }
-                    LoadedData::Missing(pos) => generate_bridge_send
-                        .send(pos)
-                        .await
-                        .expect("Failed to send position to generation handler"),
+                    LoadedData::Missing(pos) => generate_bridge_send.send(pos).await.is_ok(),
                     LoadedData::Error((pos, error)) => {
                         match error {
                             // this is expected, and is not an error
@@ -478,11 +486,13 @@ impl Level {
                             }
                         };
 
-                        generate_bridge_send
-                            .send(pos)
-                            .await
-                            .expect("Failed to send position to generation handler");
+                        generate_bridge_send.send(pos).await.is_ok()
                     }
+                };
+
+                if !is_ok {
+                    // This isn't recoverable, so stop listening
+                    return;
                 }
             }
         };
@@ -490,34 +500,50 @@ impl Level {
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
         let handle_generate = async move {
+            let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
+                if !continue_to_generate.load(Ordering::Relaxed) {
+                    return;
+                }
+
                 let loaded_chunks = loaded_chunks.clone();
                 let world_gen = world_gen.clone();
                 let channel = channel.clone();
+                let cloned_continue_to_generate = continue_to_generate.clone();
                 rayon::spawn(move || {
+                    // Rayon tasks are queued, so also check it here
+                    if !cloned_continue_to_generate.load(Ordering::Relaxed) {
+                        return;
+                    }
+
                     let result = loaded_chunks
                         .entry(pos)
                         .or_insert_with(|| {
                             // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk = world_gen.generate_chunk(pos);
+                            let generated_chunk = world_gen.generate_chunk(&pos);
                             Arc::new(RwLock::new(generated_chunk))
                         })
                         .value()
                         .clone();
 
-                    send_chunk(true, result, &channel);
+                    if !send_chunk(true, result, &channel) {
+                        // Stop any additional queued generations
+                        cloned_continue_to_generate.store(false, Ordering::Relaxed);
+                    }
                 });
             }
         };
 
-        let mut set = JoinSet::new();
-        set.spawn(handle_load);
-        set.spawn(handle_generate);
+        let tracker = TaskTracker::new();
+        tracker.spawn(handle_load);
+        tracker.spawn(handle_generate);
 
         self.chunk_saver
             .fetch_chunks(&self.level_folder, &remaining_chunks, load_bridge_send)
             .await;
-        let _ = set.join_all().await;
+
+        tracker.close();
+        tracker.wait().await;
     }
 
     pub fn try_get_chunk(

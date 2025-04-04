@@ -112,7 +112,7 @@ impl<'a> ProtoChunk<'a> {
         random_config: &'a GlobalRandomConfig,
         settings: &'a GenerationSettings,
     ) -> Self {
-        let generation_shape = &settings.noise;
+        let generation_shape = &settings.shape;
 
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
@@ -216,10 +216,10 @@ impl<'a> ProtoChunk<'a> {
         #[cfg(debug_assertions)]
         {
             assert!(local_pos.x >= 0 && local_pos.x <= 15);
-            assert!(local_pos.y < self.noise_sampler.height() as i32 && local_pos.y >= 0);
+            assert!(local_pos.y < self.height() as i32 && local_pos.y >= 0);
             assert!(local_pos.z >= 0 && local_pos.z <= 15);
         }
-        self.noise_sampler.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
+        self.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
             + CHUNK_DIM as usize * local_pos.y as usize
             + local_pos.z as usize
     }
@@ -230,8 +230,12 @@ impl<'a> ProtoChunk<'a> {
         {
             assert!(local_biome_pos.x >= 0 && local_biome_pos.x <= 3);
             assert!(
-                local_biome_pos.y < biome_coords::from_chunk(self.noise_sampler.height() as i32)
-                    && local_biome_pos.y >= 0
+                local_biome_pos.y < biome_coords::from_chunk(self.height() as i32)
+                    && local_biome_pos.y >= 0,
+                "{} - {} vs {}",
+                0,
+                biome_coords::from_chunk(self.height() as i32),
+                local_biome_pos.y
             );
             assert!(local_biome_pos.z >= 0 && local_biome_pos.z <= 3);
         }
