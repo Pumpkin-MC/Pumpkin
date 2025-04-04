@@ -1941,7 +1941,6 @@ impl LastSeen {
     }
 }
 
-#[derive(Clone, Default)]
 pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
     /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
@@ -1949,6 +1948,15 @@ pub struct MessageCache {
     full_cache: VecDeque<Box<[u8]>>,
     /// max 20 last seen messages by the sender. Most Recent LAST
     pub last_seen: LastSeen,
+}
+
+impl Default for MessageCache {
+    fn default() -> Self {
+        Self {
+            full_cache: VecDeque::with_capacity(MAX_CACHED_SIGNATURES as usize),
+            last_seen: LastSeen::default(),
+        }
+    }
 }
 
 impl MessageCache {
