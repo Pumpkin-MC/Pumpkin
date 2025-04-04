@@ -328,6 +328,22 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
+
+            pub fn has_property_changed(&self, field: &str) -> bool {
+                let components = &self.components;
+
+                if let Some(original_item) = Item::from_id(self.id) {
+                    let original_components = &original_item.components;
+
+                    return match field {
+                        "damage" => original_components.damage != components.damage,
+                        _ => false
+                    };
+                }
+
+                false
+            }
+
         }
 
         impl Tagable for Item {

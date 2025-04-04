@@ -5,7 +5,7 @@ use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_SLOT;
 use pumpkin_macros::packet;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[packet(PLAY_CONTAINER_SET_SLOT)]
 pub struct CSetContainerSlot<'a> {
     window_id: i8,
