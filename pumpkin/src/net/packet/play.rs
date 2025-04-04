@@ -899,11 +899,6 @@ impl Player {
         server: &Server,
         session: &SPlayerSession,
     ) -> Result<(), ChatError> {
-        // Verify key length
-        if session.key_signature.len() != 512 {
-            return Err(ChatError::InvalidPublicKey);
-        }
-
         // Verify session expiry
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
