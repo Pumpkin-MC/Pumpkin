@@ -22,7 +22,7 @@ impl YOffset {
 
 #[derive(Deserialize)]
 pub struct Absolute {
-    absolute: u16,
+    absolute: i16,
 }
 
 #[derive(Deserialize)]

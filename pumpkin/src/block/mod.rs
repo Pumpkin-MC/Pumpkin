@@ -27,6 +27,8 @@ use pumpkin_util::loot_table::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::get_seed;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
@@ -97,7 +99,13 @@ pub async fn drop_loot(
 
     if experience {
         if let Some(experience) = &block.experience {
-            let amount = experience.experience.get();
+            // TODO: this is bad, this is ugly, this is used :D
+            let amount =
+                experience
+                    .experience
+                    .get(&mut pumpkin_util::random::RandomGenerator::Xoroshiro(
+                        Xoroshiro::from_seed(get_seed()),
+                    ));
             // TODO: Silk touch gives no exp
             if amount > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
