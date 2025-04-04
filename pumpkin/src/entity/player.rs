@@ -1946,7 +1946,7 @@ pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
     /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
     /// Must be 1:1 with client's signature cache.
-    full_cache: Vec<Box<[u8]>>,
+    full_cache: VecDeque<Box<[u8]>>,
     /// max 20 last seen messages by the sender. Most Recent LAST
     pub last_seen: LastSeen,
 }
@@ -1956,12 +1956,12 @@ impl MessageCache {
     pub fn cache_signatures(&mut self, signatures: &[Box<[u8]>]) {
         for sig in signatures.iter().rev() {
             if self.full_cache.contains(sig) {
-                // Already cached
                 continue;
             }
-            self.full_cache
-                .truncate((MAX_CACHED_SIGNATURES - 1) as usize);
-            self.full_cache.push(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
+            // If the cache is maxed, and someone sends a signature older than the oldest in cache, ignore it
+            if self.full_cache.len() < MAX_CACHED_SIGNATURES as usize {
+                self.full_cache.push_back(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
+            }
         }
     }
 
@@ -1971,7 +1971,10 @@ impl MessageCache {
             self.last_seen.0.remove(0);
         }
         self.last_seen.0.push(signature.into());
-        self.full_cache.truncate(MAX_CACHED_SIGNATURES as usize);
-        self.full_cache.insert(0, signature.into()); // Since recipient saw this message it will be most recent in cache
+        // This probably doesn't need to be a loop, but better safe than sorry
+        while self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
+            self.full_cache.pop_back();
+        }
+        self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }
