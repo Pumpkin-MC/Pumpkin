@@ -5,7 +5,6 @@ use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::EntityId;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
-use crate::net::authentication::AuthError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::world::custom_bossbar::CustomBossbars;
@@ -28,9 +27,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
-use reqwest::StatusCode;
 use rsa::RsaPublicKey;
-use rsa::pkcs8::DecodePublicKey;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
@@ -42,32 +39,11 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
-use base64::Engine;
-use base64::engine::general_purpose;
-
 mod connection_cache;
 mod key_store;
 pub mod ticker;
-use serde::Deserialize;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.5";
-
-const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct JsonPublicKey {
-    #[serde(rename = "publicKey")]
-    pub public_key: String,
-}
-#[derive(Deserialize, Clone, Debug)]
-pub struct MojangPublicKeys {
-    #[serde(rename = "profilePropertyKeys")]
-    pub profile_property_keys: Vec<JsonPublicKey>,
-    #[serde(rename = "playerCertificateKeys")]
-    pub player_certificate_keys: Vec<JsonPublicKey>,
-    #[serde(rename = "authenticationKeys")]
-    pub authentication_keys: Option<Vec<JsonPublicKey>>,
-}
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -169,48 +145,6 @@ impl Server {
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
         }
-    }
-
-    pub async fn fetch_mojang_public_keys(&self) -> Result<(), AuthError> {
-        let services_url = advanced_config()
-            .networking
-            .authentication
-            .services_url
-            .as_deref()
-            .unwrap_or(MOJANG_SERVICES_URL);
-
-        let url = format!("{services_url}/publickeys");
-
-        let response = self
-            .auth_client
-            .as_ref()
-            .unwrap()
-            .get(url)
-            .send()
-            .await
-            .map_err(|_| AuthError::FailedResponse)?;
-
-        match response.status() {
-            StatusCode::OK => {}
-            StatusCode::NO_CONTENT => Err(AuthError::FailedResponse)?,
-            other => Err(AuthError::UnknownStatusCode(other))?,
-        }
-
-        let public_keys: MojangPublicKeys =
-            response.json().await.map_err(|_| AuthError::FailedParse)?;
-
-        *self.mojang_public_keys.lock().await = public_keys
-            .player_certificate_keys
-            .into_iter()
-            .map(|key| {
-                let decoded_key = general_purpose::STANDARD
-                    .decode(key.public_key.as_bytes())
-                    .map_err(|_| AuthError::FailedParse)?;
-                RsaPublicKey::from_public_key_der(&decoded_key).map_err(|_| AuthError::FailedParse)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(())
     }
 
     const SPAWN_CHUNK_RADIUS: i32 = 1;
