@@ -28,6 +28,8 @@ pub struct ItemComponents {
     pub max_damage: Option<u16>,
     #[serde(rename = "minecraft:attribute_modifiers")]
     pub attribute_modifiers: Option<Vec<Modifier>>,
+    #[serde(rename = "minecraft:break_sound")]
+    pub break_sound: Option<String>,
     #[serde(rename = "minecraft:tool")]
     pub tool: Option<ToolComponent>,
 }
@@ -49,6 +51,15 @@ impl ToTokens for ItemComponents {
                 let text = d.get_text();
                 let item_name = LitStr::new(&text, Span::call_site());
                 quote! { Some(#item_name) }
+            }
+            None => quote! { None },
+        };
+
+        let break_sound = match self.break_sound.clone() {
+            Some(text) => {
+                let text = text.replace("minecraft:", "");
+                let break_sound = LitStr::new(&text, Span::call_site());
+                quote! { Some(#break_sound) }
             }
             None => quote! { None },
         };
@@ -153,6 +164,7 @@ impl ToTokens for ItemComponents {
         tokens.extend(quote! {
             ItemComponents {
                 item_name: #item_name,
+                break_sound: #break_sound,
                 max_stack_size: #max_stack_size,
                 jukebox_playable: #jukebox_playable,
                 damage: #damage,
@@ -252,6 +264,7 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Copy, Debug)]
         pub struct ItemComponents {
+            pub break_sound: Option<&'static str>,
             pub item_name: Option<&'static str>,
             pub max_stack_size: u8,
             pub jukebox_playable: Option<&'static str>,

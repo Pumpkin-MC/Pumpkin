@@ -547,25 +547,41 @@ impl Player {
             .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub async fn update_single_slot(
+    pub async fn empty_slot(&self, inventory: &mut PlayerInventory, slot_id: usize) {
+        self.update_slot(inventory, slot_id, None).await;
+    }
+
+    async fn update_slot(
         &self,
         inventory: &mut PlayerInventory,
-        slot: usize,
-        stack: ItemStack,
+        slot_id: usize,
+        stack: Option<ItemStack>,
     ) {
         inventory.increment_state_id();
-        let slot_data = Slot::from(&stack);
-        if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
+
+        let slot = stack.as_ref().map_or_else(Slot::empty, Slot::from);
+
+        if let Err(err) = inventory.set_slot(slot_id, stack, false) {
             log::error!("Pick item set slot error: {err}");
         } else {
             let dest_packet = CSetContainerSlot::new(
                 PlayerInventory::CONTAINER_ID,
                 inventory.state_id as i32,
-                slot as i16,
-                &slot_data,
+                slot_id as i16,
+                &slot,
             );
+
             self.client.enqueue_packet(&dest_packet).await;
         }
+    }
+
+    pub async fn update_single_slot(
+        &self,
+        inventory: &mut PlayerInventory,
+        slot_id: usize,
+        stack: ItemStack,
+    ) {
+        self.update_slot(inventory, slot_id, Some(stack)).await;
     }
 
     pub async fn handle_pick_item_from_block(&self, pick_item: SPickItemFromBlock) {
@@ -624,7 +640,7 @@ impl Player {
             }
             None if self.gamemode.load() == GameMode::Creative => {
                 // Case where item is not present, if in creative mode create the item
-                let item_stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
+                let item_stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap().clone());
                 self.update_single_slot(&mut inventory, dest_slot + SLOT_HOTBAR_START, item_stack)
                     .await;
 
@@ -1045,7 +1061,7 @@ impl Player {
         }
     }
 
-    pub async fn handle_interact(&self, interact: SInteract) {
+    pub async fn handle_interact(&self, interact: SInteract, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
@@ -1100,9 +1116,9 @@ impl Player {
                             .await;
                         return;
                     }
-                    self.attack(player_victim).await;
+                    self.attack(server, player_victim).await;
                 } else if let Some(entity_victim) = world.get_entity_by_id(entity_id.0).await {
-                    self.attack(entity_victim).await;
+                    self.attack(server, entity_victim).await;
                 } else {
                     log::error!(
                         "Player id {} interacted with entity id {}, which was not found.",
@@ -1293,6 +1309,18 @@ impl Player {
                                 broken_state,
                             )
                             .await;
+
+                        let inventory = self.inventory().lock().await;
+                        let held_item = inventory.held_item().cloned();
+
+                        drop(inventory);
+
+                        if let Some(stack) = held_item {
+                            server
+                                .item_registry
+                                .on_after_dig(&stack.item, self, location, &block, server)
+                                .await;
+                        }
                     }
                     self.update_sequence(player_action.sequence.0);
                 }
@@ -1483,8 +1511,15 @@ impl Player {
         if !self.has_client_loaded() {
             return;
         }
-        if let Some(held) = self.inventory().lock().await.held_item() {
-            server.item_registry.on_use(&held.item, self).await;
+
+        let inventory = self.inventory().lock().await;
+
+        if let Some(item_stack) = inventory.held_item().cloned() {
+            drop(inventory);
+
+            if !item_stack.is_broken() {
+                server.item_registry.on_use(&item_stack.item, self).await;
+            }
         }
     }
 
