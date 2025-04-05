@@ -3,18 +3,20 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
-use lazy_static::lazy_static;
 use pumpkin_data::block::{Block, BlockProperties, PaleOakWoodLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
+use std::sync::LazyLock;
+
 pub struct AxeItem;
 
 // Need review. Since I can't verify if a block is equal to another (like mojang did) I'm going to do it with there id.
-lazy_static! {
-    static ref STRIPPED_BLOCKS: HashMap<u16, Block> = HashMap::from([
+
+static STRIPPED_BLOCKS: LazyLock<HashMap<u16, Block>> = LazyLock::new(|| {
+    HashMap::from([
         (Block::OAK_WOOD.id, Block::STRIPPED_OAK_WOOD),
         (Block::OAK_LOG.id, Block::STRIPPED_OAK_LOG),
         (Block::DARK_OAK_WOOD.id, Block::STRIPPED_DARK_OAK_WOOD),
@@ -37,9 +39,10 @@ lazy_static! {
         (Block::CRIMSON_HYPHAE.id, Block::STRIPPED_CRIMSON_HYPHAE),
         (Block::MANGROVE_WOOD.id, Block::STRIPPED_MANGROVE_WOOD),
         (Block::MANGROVE_LOG.id, Block::STRIPPED_MANGROVE_LOG),
-        (Block::BAMBOO_BLOCK.id, Block::STRIPPED_BAMBOO_BLOCK)
-    ]);
-}
+        (Block::BAMBOO_BLOCK.id, Block::STRIPPED_BAMBOO_BLOCK),
+    ])
+});
+
 impl ItemMetadata for AxeItem {
     fn ids() -> Box<[u16]> {
         Item::get_tag_values("#minecraft:axes")
@@ -63,7 +66,7 @@ impl PumpkinItem for AxeItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        _face: &BlockDirection,
         block: &Block,
         _server: &Server,
     ) {

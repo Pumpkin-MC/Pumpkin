@@ -89,9 +89,6 @@ rustc-hash = "2.1.1"
 # Task handling
 tokio-util = { version = "0.7.14", features = ["rt"] }
 
-# Block equivalent
-lazy_static = "1.5.0"
-
 [build-dependencies]
 git-version = "0.3"
 # This makes it so the entire project doesn't recompile on each build on linux.
