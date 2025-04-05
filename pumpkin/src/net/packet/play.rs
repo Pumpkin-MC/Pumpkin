@@ -790,6 +790,8 @@ impl Player {
                 return;
             }
         } else {
+            // TODO: Check if client_information.locale is a valid locale and not a forged string
+
             // Non-modded client won't send anything outside range [2, 32]
             if !(2..=32).contains(&client_information.view_distance) {
                 self.kick(TextComponent::text(
@@ -1237,6 +1239,8 @@ impl Player {
         let location = use_item_on.location;
         let mut should_try_decrement = false;
 
+        // TODO: Validate if use_item_on.hand is a possible hand. InvalidHand is not a PumpkinError
+
         if !self.can_interact_with_block_at(&location, 1.0) {
             // TODO: maybe log?
             return Err(BlockPlacingError::BlockOutOfReach.into());
@@ -1395,6 +1399,7 @@ impl Player {
     }
 
     pub async fn handle_chunk_batch(&self, packet: SChunkBatch) {
+        // TODO: check if packet.chunks_per_tick is a valid value
         let mut chunk_manager = self.chunk_manager.lock().await;
         chunk_manager.handle_acknowledge(packet.chunks_per_tick);
         log::trace!(
