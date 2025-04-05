@@ -251,6 +251,14 @@ impl Player {
         }}
     }
 
+    fn is_head_position_possible(pitch: f32) -> bool {
+        pitch >= -90.0
+        && pitch <= 90.0
+        // We can't validate the value of yaw here, because the yaw changes 360 degrees
+        // indefinitely with each player rotation
+        // Great job, Mojang
+    }
+
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
         if !self.has_client_loaded() {
             return;
@@ -262,6 +270,8 @@ impl Player {
             || position.z.is_nan()
             || packet.yaw.is_infinite()
             || packet.pitch.is_infinite()
+            || (!BASIC_CONFIG.allow_impossible_actions
+                && !Self::is_head_position_possible(packet.pitch))
         {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
@@ -393,7 +403,11 @@ impl Player {
         if !self.has_client_loaded() {
             return;
         }
-        if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
+        if !rotation.yaw.is_finite()
+            ||!rotation.pitch.is_finite()
+            || (!BASIC_CONFIG.allow_impossible_actions
+                && !Self::is_head_position_possible(rotation.pitch))
+        {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
                 [],
