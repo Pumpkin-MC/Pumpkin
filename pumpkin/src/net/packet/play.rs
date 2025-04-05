@@ -683,10 +683,6 @@ impl Player {
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
         let message = chat_message.message.clone();
-        if message.len() > 256 {
-            self.kick(TextComponent::text("Oversized message")).await;
-            return;
-        }
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.illegal_characters",
