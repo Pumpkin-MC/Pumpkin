@@ -56,7 +56,7 @@ use tokio::{
 use thiserror::Error;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
-mod authentication;
+pub mod authentication;
 mod container;
 pub mod lan_broadcast;
 mod packet;

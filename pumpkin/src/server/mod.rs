@@ -27,6 +27,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
+use rsa::RsaPublicKey;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
@@ -80,6 +81,9 @@ pub struct Server {
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
     tasks: TaskTracker,
+    /// Mojang's public keys, used for chat session signing
+    /// Pulled from Mojang API on startup
+    pub mojang_public_keys: Mutex<Vec<RsaPublicKey>>,
 }
 
 impl Server {
@@ -140,6 +144,7 @@ impl Server {
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
             tasks: TaskTracker::new(),
+            mojang_public_keys: Mutex::new(Vec::new()),
         }
     }
 

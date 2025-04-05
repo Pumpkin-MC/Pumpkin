@@ -4,6 +4,7 @@
 use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter, Log};
+use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
@@ -218,6 +219,13 @@ impl PumpkinServer {
         if advanced_config().networking.lan_broadcast.enabled {
             log::info!("LAN broadcast is enabled. Starting...");
             server.spawn_task(lan_broadcast::start_lan_broadcast(addr));
+        }
+
+        if BASIC_CONFIG.allow_chat_reports {
+            let mojang_public_keys = fetch_mojang_public_keys(server.auth_client.as_ref().unwrap())
+                .await
+                .unwrap();
+            *server.mojang_public_keys.lock().await = mojang_public_keys;
         }
 
         // Ticker

@@ -260,5 +260,11 @@ impl LoadConfiguration for BasicConfiguration {
                 "When online mode is enabled, encryption must be enabled"
             )
         }
+        if self.allow_chat_reports {
+            assert!(
+                self.online_mode,
+                "When allow_chat_reports is enabled, online_mode must be enabled"
+            )
+        }
     }
 }

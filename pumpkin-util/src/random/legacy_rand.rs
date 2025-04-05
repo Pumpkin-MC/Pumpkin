@@ -1,7 +1,9 @@
 use super::{
     RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl, gaussian::GaussianGenerator,
-    hash_block_pos, java_string_hash,
+    hash_block_pos,
 };
+
+use crate::math::java_string_hash;
 
 pub struct LegacyRand {
     seed: u64,
