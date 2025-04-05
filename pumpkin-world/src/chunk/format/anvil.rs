@@ -19,7 +19,8 @@ use tokio::{
 
 use crate::{
     chunk::{
-        ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
+        ChunkData, ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
+        CompressionError,
         io::{ChunkSerializer, LoadedData},
     },
     generation::section_coords,
@@ -239,7 +240,7 @@ impl AnvilChunkData {
     #[inline]
     fn raw_write_size(&self) -> usize {
         // 4 bytes for the *length* and 1 byte for the *compression* method
-        self.compressed_data.remaining() + 4 + 1
+        self.compressed_data.len() + 4 + 1
     }
 
     /// Size of serialized chunk with padding
@@ -259,6 +260,16 @@ impl AnvilChunkData {
         let mut bytes = bytes;
         // Minus one for the compression byte
         let length = bytes.get_u32() as usize - 1;
+
+        if length > bytes.len() {
+            return Err(ChunkReadingError::ParsingError(
+                ChunkParsingError::ErrorDeserializingChunk(format!(
+                    "Chunk length is greater than available bytes ({} vs {})",
+                    length,
+                    bytes.len()
+                )),
+            ));
+        }
 
         let compression_method = bytes.get_u8();
         let compression = Compression::from_byte(compression_method)
@@ -573,6 +584,17 @@ impl ChunkSerializer for AnvilChunkFile {
             // that we walked earlier
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
+
+            if bytes_offset + bytes_count > raw_file_bytes.len() {
+                return Err(ChunkReadingError::ParsingError(
+                    ChunkParsingError::ErrorDeserializingChunk(format!(
+                        "Not enough bytes available for the chunk {} ({} vs {})",
+                        i,
+                        bytes_count,
+                        raw_file_bytes.len().saturating_sub(bytes_offset)
+                    )),
+                ));
+            }
 
             let serialized_data = AnvilChunkData::from_bytes(
                 raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
