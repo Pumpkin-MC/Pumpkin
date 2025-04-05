@@ -13,10 +13,10 @@ use crate::{
 pub struct SUpdateSign {
     pub location: BlockPos,
     pub is_front_text: bool,
-    pub line_1: String,
-    pub line_2: String,
-    pub line_3: String,
-    pub line_4: String,
+    pub line_1: String, // 384
+    pub line_2: String, // 384
+    pub line_3: String, // 384
+    pub line_4: String, // 384
 }
 
 const MAX_LINE_LENGTH: usize = 386;
