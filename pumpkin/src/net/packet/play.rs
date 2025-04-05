@@ -251,6 +251,14 @@ impl Player {
         }}
     }
 
+    fn is_head_position_possible(pitch: f32) -> bool {
+        pitch >= -90.0
+        && pitch <= 90.0
+        // We can't validate the value of yaw here, because the yaw changes 360 degrees
+        // indefinitely with each player rotation
+        // Great job, Mojang
+    }
+
     pub async fn handle_position_rotation(self: &Arc<Self>, packet: SPlayerPositionRotation) {
         if !self.has_client_loaded() {
             return;
@@ -262,6 +270,8 @@ impl Player {
             || position.z.is_nan()
             || packet.yaw.is_infinite()
             || packet.pitch.is_infinite()
+            || (!BASIC_CONFIG.allow_impossible_actions
+                && !Self::is_head_position_possible(packet.pitch))
         {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
@@ -393,7 +403,11 @@ impl Player {
         if !self.has_client_loaded() {
             return;
         }
-        if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
+        if !rotation.yaw.is_finite()
+            ||!rotation.pitch.is_finite()
+            || (!BASIC_CONFIG.allow_impossible_actions
+                && !Self::is_head_position_possible(rotation.pitch))
+        {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
                 [],
@@ -485,6 +499,9 @@ impl Player {
         let slot_data = Slot::from(&stack);
         if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
             log::error!("Pick item set slot error: {err}");
+            if !BASIC_CONFIG.allow_impossible_actions {
+                self.kick(TextComponent::text("Invalid pick item slot")).await;
+            }
         } else {
             let dest_packet = CSetContainerSlot::new(
                 PlayerInventory::CONTAINER_ID,
@@ -666,10 +683,6 @@ impl Player {
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
         let message = chat_message.message.clone();
-        if message.len() > 256 {
-            self.kick(TextComponent::text("Oversized message")).await;
-            return;
-        }
         if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.illegal_characters",
@@ -752,14 +765,23 @@ impl Player {
             .await;
     }
 
+    pub fn is_skin_bit_mask_possible(skin_parts: u8) -> bool {
+        // Bit 0 (0x01): Cape enabled
+        // Bit 1 (0x02): Jacket enabled
+        // Bit 2 (0x04): Left Sleeve enabled
+        // Bit 3 (0x08): Right Sleeve enabled
+        // Bit 4 (0x10): Left Pants Leg enabled
+        // Bit 5 (0x20): Right Pants Leg enabled
+        // Bit 6 (0x40): Hat enabled
+        let defined_bits: u8 = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40;
+        (skin_parts & !defined_bits) == 0
+    }
+
     pub async fn handle_client_information(
         self: &Arc<Self>,
         client_information: SClientInformationPlay,
     ) {
-        if let (Ok(main_hand), Ok(chat_mode)) = (
-            Hand::try_from(client_information.main_hand.0),
-            ChatMode::try_from(client_information.chat_mode.0),
-        ) {
+        if BASIC_CONFIG.allow_impossible_actions {
             if client_information.view_distance <= 0 {
                 self.kick(TextComponent::text(
                     "Cannot have zero or negative view distance!",
@@ -767,7 +789,32 @@ impl Player {
                 .await;
                 return;
             }
+        } else {
+            // TODO: Check if client_information.locale is a valid locale and not a forged string
 
+            // Non-modded client won't send anything outside range [2, 32]
+            if !(2..=32).contains(&client_information.view_distance) {
+                self.kick(TextComponent::text(
+                    "View distance is out of range [2, 32]",
+                ))
+                .await;
+                return;
+            }
+
+            // Validate if skin parts bit mask is possible
+            if !Self::is_skin_bit_mask_possible(client_information.skin_parts) {
+                self.kick(TextComponent::text(
+                    "Invalid skin bit mask.",
+                ))
+                .await;
+                return;
+            }
+        }
+
+        if let (Ok(main_hand), Ok(chat_mode)) = (
+            Hand::try_from(client_information.main_hand.0),
+            ChatMode::try_from(client_information.chat_mode.0),
+        ) {
             let (update_settings, update_watched) = {
                 let mut config = self.config.lock().await;
                 let update_settings = config.main_hand != main_hand
@@ -792,7 +839,7 @@ impl Player {
 
                 *config = PlayerConfig {
                     locale: client_information.locale,
-                    // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it signed :D
+                    // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it unsigned :D
                     // client_information.view_distance was checked above to be > 0, so compiler should optimize this out.
                     view_distance: match NonZeroU8::new(client_information.view_distance as u8) {
                         Some(dist) => dist,
@@ -1148,8 +1195,23 @@ impl Player {
         );
     }
 
+    pub fn is_abilities_bit_mask_possible(abilities_flags: i8) -> bool {
+        // 0x02: flying
+        let defined_bits: i8 = 0x02;
+        (abilities_flags & !defined_bits) == 0
+    }
+
     pub async fn handle_player_abilities(&self, player_abilities: SPlayerAbilities) {
         let mut abilities = self.abilities.lock().await;
+
+        // Validate if abilities bit mask is possible
+        if !BASIC_CONFIG.allow_impossible_actions && !Self::is_abilities_bit_mask_possible(player_abilities.flags) {
+            self.kick(TextComponent::text(
+                "Invalid abilities bit mask.",
+            ))
+            .await;
+            return;
+        }
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
@@ -1177,6 +1239,8 @@ impl Player {
 
         let location = use_item_on.location;
         let mut should_try_decrement = false;
+
+        // TODO: Validate if use_item_on.hand is a possible hand. InvalidHand is not a PumpkinError
 
         if !self.can_interact_with_block_at(&location, 1.0) {
             // TODO: maybe log?
@@ -1336,6 +1400,7 @@ impl Player {
     }
 
     pub async fn handle_chunk_batch(&self, packet: SChunkBatch) {
+        // TODO: check if packet.chunks_per_tick is a valid value
         let mut chunk_manager = self.chunk_manager.lock().await;
         chunk_manager.handle_acknowledge(packet.chunks_per_tick);
         log::trace!(

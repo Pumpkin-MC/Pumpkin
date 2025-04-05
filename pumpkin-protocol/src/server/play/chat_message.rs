@@ -12,7 +12,7 @@ use crate::{
 #[derive(Serialize)]
 #[packet(PLAY_CHAT)]
 pub struct SChatMessage {
-    pub message: String,
+    pub message: String, // 256
     pub timestamp: i64,
     pub salt: i64,
     pub signature: Option<Box<[u8]>>,

@@ -16,6 +16,7 @@ pumpkin-data = { path = "../pumpkin-data" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-world = { path = "../pumpkin-world" }
 pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-config = { path = "../pumpkin-config" }
 
 uuid.workspace = true
 serde.workspace = true

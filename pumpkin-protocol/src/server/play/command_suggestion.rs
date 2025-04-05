@@ -8,5 +8,5 @@ use crate::VarInt;
 #[packet(PLAY_COMMAND_SUGGESTION)]
 pub struct SCommandSuggestion {
     pub id: VarInt,
-    pub command: String,
+    pub command: String, // 32500
 }
