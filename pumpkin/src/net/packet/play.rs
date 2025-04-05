@@ -1192,8 +1192,23 @@ impl Player {
         );
     }
 
+    pub fn is_abilities_bit_mask_possible(abilities_flags: i8) -> bool {
+        // 0x02: flying
+        let defined_bits: i8 = 0x02;
+        (abilities_flags & !defined_bits) == 0
+    }
+
     pub async fn handle_player_abilities(&self, player_abilities: SPlayerAbilities) {
         let mut abilities = self.abilities.lock().await;
+
+        // Validate if abilities bit mask is possible
+        if !BASIC_CONFIG.allow_impossible_actions && !Self::is_abilities_bit_mask_possible(player_abilities.flags) {
+            self.kick(TextComponent::text(
+                "Invalid abilities bit mask.",
+            ))
+            .await;
+            return;
+        }
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
