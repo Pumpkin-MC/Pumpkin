@@ -294,8 +294,7 @@ pub trait FlowingFluid {
             let side_props = FlowingFluidProperties::from_state_id(side_state_id, fluid);
 
             if !self.can_pass_through(world, fluid, &side_pos).await
-                || (side_props.level == Level::L8
-                    && side_props.falling != Falling::True)
+                || (side_props.level == Level::L8 && side_props.falling != Falling::True)
             {
                 continue;
             }
