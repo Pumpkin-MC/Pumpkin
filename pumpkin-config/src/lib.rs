@@ -147,6 +147,8 @@ pub struct BasicConfiguration {
     pub default_level_name: String,
     /// Whether chat messages should be signed or not
     pub allow_chat_reports: bool,
+    /// Whether to allow actions that are protocol-compliant but impossible for a non-modded client to perform
+    pub allow_impossible_actions: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -172,6 +174,7 @@ impl Default for BasicConfiguration {
             favicon_path: "icon.png".to_string(),
             default_level_name: "world".to_string(),
             allow_chat_reports: false,
+            allow_impossible_actions: false,
         }
     }
 }
