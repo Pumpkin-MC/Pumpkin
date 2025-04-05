@@ -765,14 +765,23 @@ impl Player {
             .await;
     }
 
+    pub fn is_skin_bit_mask_possible(skin_parts: u8) -> bool {
+        // Bit 0 (0x01): Cape enabled
+        // Bit 1 (0x02): Jacket enabled
+        // Bit 2 (0x04): Left Sleeve enabled
+        // Bit 3 (0x08): Right Sleeve enabled
+        // Bit 4 (0x10): Left Pants Leg enabled
+        // Bit 5 (0x20): Right Pants Leg enabled
+        // Bit 6 (0x40): Hat enabled
+        let defined_bits: u8 = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40;
+        (skin_parts & !defined_bits) == 0
+    }
+
     pub async fn handle_client_information(
         self: &Arc<Self>,
         client_information: SClientInformationPlay,
     ) {
-        if let (Ok(main_hand), Ok(chat_mode)) = (
-            Hand::try_from(client_information.main_hand.0),
-            ChatMode::try_from(client_information.chat_mode.0),
-        ) {
+        if BASIC_CONFIG.allow_impossible_actions {
             if client_information.view_distance <= 0 {
                 self.kick(TextComponent::text(
                     "Cannot have zero or negative view distance!",
@@ -780,7 +789,30 @@ impl Player {
                 .await;
                 return;
             }
+        } else {
+            // Non-modded client won't send anything outside range [2, 32]
+            if !(2..=32).contains(&client_information.view_distance) {
+                self.kick(TextComponent::text(
+                    "View distance is out of range [2, 32]",
+                ))
+                .await;
+                return;
+            }
 
+            // Validate if skin parts bit mask is possible
+            if !Self::is_skin_bit_mask_possible(client_information.skin_parts) {
+                self.kick(TextComponent::text(
+                    "Invalid skin bit mask.",
+                ))
+                .await;
+                return;
+            }
+        }
+
+        if let (Ok(main_hand), Ok(chat_mode)) = (
+            Hand::try_from(client_information.main_hand.0),
+            ChatMode::try_from(client_information.chat_mode.0),
+        ) {
             let (update_settings, update_watched) = {
                 let mut config = self.config.lock().await;
                 let update_settings = config.main_hand != main_hand
@@ -805,7 +837,7 @@ impl Player {
 
                 *config = PlayerConfig {
                     locale: client_information.locale,
-                    // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it signed :D
+                    // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it unsigned :D
                     // client_information.view_distance was checked above to be > 0, so compiler should optimize this out.
                     view_distance: match NonZeroU8::new(client_information.view_distance as u8) {
                         Some(dist) => dist,
