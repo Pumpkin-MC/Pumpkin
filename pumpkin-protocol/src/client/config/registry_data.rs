@@ -1,15 +1,10 @@
-use std::io::Write;
-
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
 use serde::Serialize;
 
-use crate::{
-    ClientPacket,
-    codec::identifier::Identifier,
-    ser::{NetworkWriteExt, WritingError},
-};
+use crate::{codec::identifier::Identifier, ser::network_serialize_no_prefix};
 
+#[derive(Serialize)]
 #[packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
     pub registry_id: &'a Identifier,
@@ -25,11 +20,14 @@ impl<'a> CRegistryData<'a> {
     }
 }
 
+#[derive(Serialize)]
 pub struct RegistryEntry {
     pub entry_id: Identifier,
+    #[serde(serialize_with = "network_serialize_no_prefix")]
     pub data: Option<Box<[u8]>>,
 }
 
+// TODO: No unwraps
 impl RegistryEntry {
     pub fn from_nbt(name: &str, nbt: &impl Serialize) -> Self {
         let mut data_buf = Vec::new();
@@ -46,16 +44,5 @@ impl RegistryEntry {
             entry_id: Identifier::pumpkin(name),
             data: Some(data_buf.into_boxed_slice()),
         }
-    }
-}
-
-impl ClientPacket for CRegistryData<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
-        let mut write = write;
-        write.write_identifier(self.registry_id)?;
-        write.write_list::<RegistryEntry>(self.entries, |p, v| {
-            p.write_identifier(&v.entry_id)?;
-            p.write_option(&v.data, |p, v| p.write_slice(v))
-        })
     }
 }

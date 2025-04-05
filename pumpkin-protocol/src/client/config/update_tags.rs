@@ -10,7 +10,7 @@ use pumpkin_world::block::registry;
 
 use crate::{
     ClientPacket,
-    codec::{identifier::Identifier, var_int::VarInt},
+    codec::identifier::Identifier,
     ser::{NetworkWriteExt, WritingError},
 };
 
@@ -32,7 +32,10 @@ impl ClientPacket for CUpdateTags<'_> {
             p.write_identifier(&Identifier::vanilla(registry_key.identifier_string()))?;
 
             let values = get_registry_key_tags(registry_key);
-            p.write_var_int(&VarInt::from(values.len()))?;
+            p.write_var_int(&values.len().try_into().map_err(|_| {
+                WritingError::Message(format!("{} isn't representable as a VarInt", values.len()))
+            })?)?;
+
             for (key, values) in values.iter() {
                 // This is technically an `Identifier` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
@@ -43,7 +46,7 @@ impl ClientPacket for CUpdateTags<'_> {
                         _ => unimplemented!(),
                     };
 
-                    p.write_var_int(&VarInt::from(id))
+                    p.write_var_int(&id.into())
                 })?;
             }
 

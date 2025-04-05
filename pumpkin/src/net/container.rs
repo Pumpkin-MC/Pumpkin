@@ -75,7 +75,7 @@ impl Player {
         inventory.increment_state_id();
         let packet = CSetContainerContent::new(
             id.into(),
-            (inventory.state_id).into(),
+            (inventory.state_id).try_into().unwrap(),
             &slots,
             &carried_item,
         );

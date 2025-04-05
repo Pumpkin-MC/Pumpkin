@@ -144,7 +144,7 @@ impl EntityBase for ItemEntity {
                     .enqueue_packet(&CTakeItemEntity::new(
                         self.entity.entity_id.into(),
                         player.entity_id().into(),
-                        total_pick_up.into(),
+                        total_pick_up.try_into().unwrap(),
                     ))
                     .await;
             }

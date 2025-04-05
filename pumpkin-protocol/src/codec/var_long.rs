@@ -47,6 +47,7 @@ impl VarLong {
         Ok(())
     }
 
+    // TODO: Validate that the first byte will not overflow a i64
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {

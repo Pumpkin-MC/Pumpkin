@@ -2,17 +2,19 @@ use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_DATA;
 use pumpkin_macros::packet;
 use serde::Serialize;
 
-use crate::VarInt;
+use crate::{VarInt, ser::network_serialize_no_prefix};
 
 #[derive(Serialize)]
 #[packet(PLAY_SET_ENTITY_DATA)]
 pub struct CSetEntityMetadata {
     entity_id: VarInt,
-    metadata: Vec<u8>,
+    // TODO: We should migrate the serialization of this into this file
+    #[serde(serialize_with = "network_serialize_no_prefix")]
+    metadata: Box<[u8]>,
 }
 
 impl CSetEntityMetadata {
-    pub fn new(entity_id: VarInt, metadata: Vec<u8>) -> Self {
+    pub fn new(entity_id: VarInt, metadata: Box<[u8]>) -> Self {
         Self {
             entity_id,
             metadata,

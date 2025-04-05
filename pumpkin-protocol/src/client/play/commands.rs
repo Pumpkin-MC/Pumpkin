@@ -10,12 +10,12 @@ use crate::{
 
 #[packet(PLAY_COMMANDS)]
 pub struct CCommands<'a> {
-    pub nodes: Vec<ProtoNode<'a>>,
+    pub nodes: Box<[ProtoNode<'a>]>,
     pub root_node_index: VarInt,
 }
 
 impl<'a> CCommands<'a> {
-    pub fn new(nodes: Vec<ProtoNode<'a>>, root_node_index: VarInt) -> Self {
+    pub fn new(nodes: Box<[ProtoNode<'a>]>, root_node_index: VarInt) -> Self {
         Self {
             nodes,
             root_node_index,
@@ -34,7 +34,7 @@ impl ClientPacket for CCommands<'_> {
 }
 
 pub struct ProtoNode<'a> {
-    pub children: Vec<VarInt>,
+    pub children: Box<[VarInt]>,
     pub node_type: ProtoNodeType<'a>,
 }
 
