@@ -37,7 +37,7 @@ impl ArgumentConsumer for GamemodeArgumentConsumer {
             if let Ok(gamemode) = GameMode::try_from(id) {
                 return Some(Arg::GameMode(gamemode));
             }
-        };
+        }
 
         GameMode::from_str(s).map_or_else(|_| None, |gamemode| Some(Arg::GameMode(gamemode)))
     }

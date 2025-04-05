@@ -27,7 +27,8 @@ pub enum GeneratorSetting {
 pub struct GenerationSettings {
     pub legacy_random_source: bool,
     pub sea_level: i32,
-    pub noise: GenerationShapeConfig,
+    #[serde(rename = "noise")]
+    pub shape: GenerationShapeConfig,
     pub surface_rule: MaterialRule,
     pub default_block: BlockStateCodec,
 }

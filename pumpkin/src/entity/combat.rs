@@ -125,5 +125,5 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
                 .play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos)
                 .await;
         }
-    };
+    }
 }

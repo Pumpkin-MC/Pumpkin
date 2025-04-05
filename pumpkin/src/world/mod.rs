@@ -54,14 +54,11 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_world::block::registry::{
+    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+};
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
-use pumpkin_world::{
-    block::registry::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
-    },
-    coordinates::ChunkRelativeBlockCoordinates,
-};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
@@ -1141,8 +1138,7 @@ impl World {
     ///
     /// # Arguments
     /// * `pos`: The center of the sphere.
-    /// * `radius`: The radius of the sphere. The higher the radius,
-    ///             the more area will be checked (in every direction).
+    /// * `radius`: The radius of the sphere. The higher the radius, the more area will be checked (in every direction).
     pub async fn get_nearby_players(
         &self,
         pos: Vector3<f64>,
@@ -1325,18 +1321,24 @@ impl World {
     ) -> u16 {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
-        let relative = ChunkRelativeBlockCoordinates::from(relative);
         let mut chunk = chunk.write().await;
         let replaced_block_state_id = chunk
-            .sections
-            .get_block(relative)
-            .unwrap_or(Block::AIR.default_state_id);
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+            .unwrap();
+
         if replaced_block_state_id == block_state_id {
             return block_state_id;
         }
+
         chunk.dirty = true;
 
-        chunk.sections.set_block(relative, block_state_id);
+        chunk.section.set_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+            block_state_id,
+        );
         self.unsent_block_changes
             .lock()
             .await
@@ -1527,11 +1529,13 @@ impl World {
     pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
-        let relative = ChunkRelativeBlockCoordinates::from(relative);
 
-        let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
-
-        let Some(id) = chunk.sections.get_block(relative) else {
+        let chunk = chunk.read().await;
+        let Some(id) = chunk.section.get_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        ) else {
             return Err(GetBlockError::BlockOutOfWorldBounds);
         };
 

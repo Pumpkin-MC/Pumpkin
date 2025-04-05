@@ -1,20 +1,18 @@
+use palette::{BiomePalette, BlockPalette};
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::iter::repeat_with;
 use thiserror::Error;
-
-use crate::coordinates::ChunkRelativeBlockCoordinates;
 
 pub mod format;
 pub mod io;
+pub mod palette;
 
 // TODO
-const WORLD_HEIGHT: usize = 384;
-pub const CHUNK_AREA: usize = 16 * 16;
-pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
-pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;
-pub const CHUNK_VOLUME: usize = CHUNK_AREA * WORLD_HEIGHT;
+pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
+pub const CHUNK_AREA: usize = CHUNK_WIDTH * CHUNK_WIDTH;
+pub const BIOME_VOLUME: usize = BiomePalette::VOLUME;
+pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
 
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
@@ -106,14 +104,14 @@ pub struct ScheduledTick {
 }
 
 pub struct ChunkData {
-    /// See description in [`ChunkBlocks`]
-    pub sections: ChunkBlocks,
+    pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
-    pub dirty: bool,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
+
+    pub dirty: bool,
 }
 
 /// Represents pure block data for a chunk.
@@ -121,25 +119,41 @@ pub struct ChunkData {
 /// There are currently 24 subchunks per chunk.
 ///
 /// A chunk can be:
-/// - Homogeneous: the whole chunk is filled with one block type, like air or water.
 /// - Subchunks: 24 separate subchunks are stored.
-#[derive(PartialEq, Debug, Clone)]
-pub enum ChunkBlocks {
-    Homogeneous(u16),
-    Subchunks(Box<[SubchunkBlocks; SUBCHUNKS_COUNT]>),
+#[derive(Debug)]
+pub struct ChunkSections {
+    pub sections: Box<[SubChunk]>,
+    min_y: i32,
 }
 
-/// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
-///
-/// A subchunk can be:
-/// - Homogeneous: the whole subchunk is filled with one block type, like air or water.
-/// - Heterogeneous: 16^3 = 4096 individual blocks are stored.
-#[derive(Clone, PartialEq, Debug)]
-pub enum SubchunkBlocks {
-    Homogeneous(u16),
-    // The packet relies on this ordering -> leave it like this for performance
-    /// Ordering: yzx (y being the most significant)
-    Heterogeneous(Box<[u16; SUBCHUNK_VOLUME]>),
+impl ChunkSections {
+    #[cfg(test)]
+    pub fn dump_blocks(&self) -> Vec<u16> {
+        let mut dump = Vec::new();
+        for section in self.sections.iter() {
+            section.block_states.for_each(|raw_id| {
+                dump.push(raw_id);
+            });
+        }
+        dump
+    }
+
+    #[cfg(test)]
+    pub fn dump_biomes(&self) -> Vec<u8> {
+        let mut dump = Vec::new();
+        for section in self.sections.iter() {
+            section.biomes.for_each(|raw_id| {
+                dump.push(raw_id);
+            });
+        }
+        dump
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct SubChunk {
+    pub block_states: BlockPalette,
+    pub biomes: BiomePalette,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -155,6 +169,7 @@ pub struct ChunkHeightmaps {
 impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
+            // 9 bits per entry
             // 0 packed into an i64 7 times.
             motion_blocking: vec![0; 37].into_boxed_slice(),
             world_surface: vec![0; 37].into_boxed_slice(),
@@ -162,134 +177,138 @@ impl Default for ChunkHeightmaps {
     }
 }
 
-impl SubchunkBlocks {
-    /// Gets the given block in the chunk
-    pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-        match &self {
-            Self::Homogeneous(block) => Some(*block),
-            Self::Heterogeneous(blocks) => blocks.get(convert_index(position)).copied(),
-        }
+impl ChunkSections {
+    pub fn new(sections: Box<[SubChunk]>, min_y: i32) -> Self {
+        Self { sections, min_y }
     }
 
-    /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
-        // TODO @LUK_ESC? update the heightmap
-        self.set_block_no_heightmap_update(position, block_id)
-    }
-
-    /// Sets the given block in the chunk, returning the old block
-    /// Contrary to `set_block` this does not update the heightmap.
-    ///
-    /// Only use this if you know you don't need to update the heightmap
-    /// or if you manually set the heightmap in `empty_with_heightmap`
-    pub fn set_block_no_heightmap_update(
-        &mut self,
-        position: ChunkRelativeBlockCoordinates,
-        new_block: u16,
-    ) {
-        match self {
-            Self::Homogeneous(block) => {
-                if *block != new_block {
-                    let mut blocks = Box::new([*block; SUBCHUNK_VOLUME]);
-                    blocks[convert_index(position)] = new_block;
-
-                    *self = Self::Heterogeneous(blocks)
-                }
-            }
-            Self::Heterogeneous(blocks) => {
-                blocks[convert_index(position)] = new_block;
-
-                if blocks.iter().all(|b| *b == new_block) {
-                    *self = Self::Homogeneous(new_block)
-                }
-            }
-        }
-    }
-
-    pub fn clone_as_array(&self) -> Box<[u16; SUBCHUNK_VOLUME]> {
-        match &self {
-            Self::Homogeneous(block) => Box::new([*block; SUBCHUNK_VOLUME]),
-            Self::Heterogeneous(blocks) => blocks.clone(),
-        }
-    }
-}
-
-impl ChunkBlocks {
-    /// Gets the given block in the chunk
-    pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-        match &self {
-            Self::Homogeneous(block) => Some(*block),
-            Self::Subchunks(subchunks) => subchunks
-                .get((position.y.get_absolute() / 16) as usize)
-                .and_then(|subchunk| subchunk.get_block(position)),
-        }
-    }
-
-    /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
-        // TODO @LUK_ESC? update the heightmap
-        self.set_block_no_heightmap_update(position, block_id)
-    }
-
-    /// Sets the given block in the chunk, returning the old block
-    /// Contrary to `set_block` this does not update the heightmap.
-    ///
-    /// Only use this if you know you don't need to update the heightmap
-    /// or if you manually set the heightmap in `empty_with_heightmap`
-    pub fn set_block_no_heightmap_update(
-        &mut self,
-        position: ChunkRelativeBlockCoordinates,
-        new_block: u16,
-    ) {
-        match self {
-            Self::Homogeneous(block) => {
-                if *block != new_block {
-                    let mut subchunks = vec![SubchunkBlocks::Homogeneous(0); SUBCHUNKS_COUNT];
-
-                    subchunks[(position.y.get_absolute() / 16) as usize]
-                        .set_block(position, new_block);
-
-                    *self = Self::Subchunks(subchunks.try_into().unwrap());
-                }
-            }
-            Self::Subchunks(subchunks) => {
-                subchunks[(position.y.get_absolute() / 16) as usize].set_block(position, new_block);
-
-                if subchunks
-                    .iter()
-                    .all(|subchunk| *subchunk == SubchunkBlocks::Homogeneous(new_block))
-                {
-                    *self = Self::Homogeneous(new_block)
-                }
-            }
-        }
-    }
-
-    //TODO: Needs optimizations
-    pub fn array_iter_subchunks(
+    pub fn get_block_absolute_y(
         &self,
-    ) -> Box<dyn Iterator<Item = Box<[u16; SUBCHUNK_VOLUME]>> + '_> {
-        match self {
-            Self::Homogeneous(block) => {
-                Box::new(repeat_with(|| Box::new([*block; SUBCHUNK_VOLUME])).take(SUBCHUNKS_COUNT))
-            }
-            Self::Subchunks(subchunks) => {
-                Box::new(subchunks.iter().map(|subchunk| subchunk.clone_as_array()))
-            }
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+    ) -> Option<u16> {
+        let y = y - self.min_y;
+        if y < 0 {
+            None
+        } else {
+            let relative_y = y as usize;
+            self.get_relative_block(relative_x, relative_y, relative_z)
         }
+    }
+
+    pub fn set_block_absolute_y(
+        &mut self,
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+        block_state_id: u16,
+    ) {
+        let y = y - self.min_y;
+        debug_assert!(y > 0);
+        let relative_y = y as usize;
+
+        self.set_relative_block(relative_x, relative_y, relative_z, block_state_id);
+    }
+
+    /// Gets the given block in the chunk
+    fn get_relative_block(
+        &self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+    ) -> Option<u16> {
+        debug_assert!(relative_x < BlockPalette::SIZE);
+        debug_assert!(relative_z < BlockPalette::SIZE);
+
+        let section_index = relative_y / BlockPalette::SIZE;
+        let relative_y = relative_y % BlockPalette::SIZE;
+        self.sections
+            .get(section_index)
+            .map(|section| section.block_states.get(relative_x, relative_y, relative_z))
+    }
+
+    /// Sets the given block in the chunk, returning the old block
+    #[inline]
+    pub fn set_relative_block(
+        &mut self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        block_state_id: u16,
+    ) {
+        // TODO @LUK_ESC? update the heightmap
+        self.set_block_no_heightmap_update(relative_x, relative_y, relative_z, block_state_id);
+    }
+
+    /// Sets the given block in the chunk, returning the old block
+    /// Contrary to `set_block` this does not update the heightmap.
+    ///
+    /// Only use this if you know you don't need to update the heightmap
+    /// or if you manually set the heightmap in `empty_with_heightmap`
+    pub fn set_block_no_heightmap_update(
+        &mut self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        block_state_id: u16,
+    ) {
+        debug_assert!(relative_x < BlockPalette::SIZE);
+        debug_assert!(relative_z < BlockPalette::SIZE);
+
+        let section_index = relative_y / BlockPalette::SIZE;
+        let relative_y = relative_y % BlockPalette::SIZE;
+        if let Some(section) = self.sections.get_mut(section_index) {
+            section
+                .block_states
+                .set(relative_x, relative_y, relative_z, block_state_id);
+        }
+    }
+
+    /// Sets the given block in the chunk, returning the old block
+    pub fn set_relative_biome(
+        &mut self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        biome_id: u8,
+    ) {
+        debug_assert!(relative_x < BiomePalette::SIZE);
+        debug_assert!(relative_z < BiomePalette::SIZE);
+
+        let section_index = relative_y / BiomePalette::SIZE;
+        let relative_y = relative_y % BiomePalette::SIZE;
+        self.sections[section_index]
+            .biomes
+            .set(relative_x, relative_y, relative_z, biome_id);
     }
 }
 
 impl ChunkData {
     /// Gets the given block in the chunk
-    pub fn get_block(&self, position: ChunkRelativeBlockCoordinates) -> Option<u16> {
-        self.sections.get_block(position)
+    #[inline]
+    pub fn get_relative_block(
+        &self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+    ) -> Option<u16> {
+        self.section
+            .get_relative_block(relative_x, relative_y, relative_z)
     }
 
-    /// Sets the given block in the chunk, returning the old block
-    pub fn set_block(&mut self, position: ChunkRelativeBlockCoordinates, block_id: u16) {
+    /// Sets the given block in the chunk
+    #[inline]
+    pub fn set_relative_block(
+        &mut self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        block_state_id: u16,
+    ) {
         // TODO @LUK_ESC? update the heightmap
-        self.sections.set_block(position, block_id);
+        self.section
+            .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -297,12 +316,16 @@ impl ChunkData {
     ///
     /// Only use this if you know you don't need to update the heightmap
     /// or if you manually set the heightmap in `empty_with_heightmap`
+    #[inline]
     pub fn set_block_no_heightmap_update(
         &mut self,
-        position: ChunkRelativeBlockCoordinates,
-        block: u16,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        block_state_id: u16,
     ) {
-        self.sections.set_block_no_heightmap_update(position, block);
+        self.section
+            .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
     #[expect(dead_code)]
@@ -312,6 +335,7 @@ impl ChunkData {
         todo!()
     }
 }
+
 #[derive(Error, Debug)]
 pub enum ChunkParsingError {
     #[error("Failed reading chunk status {0}")]
@@ -322,10 +346,6 @@ pub enum ChunkParsingError {
     ErrorDeserializingChunk(String),
 }
 
-fn convert_index(index: ChunkRelativeBlockCoordinates) -> usize {
-    // % works for negative numbers as intended.
-    (index.y.get_absolute() % 16) as usize * CHUNK_AREA + *index.z as usize * 16 + *index.x as usize
-}
 #[derive(Error, Debug)]
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
