@@ -207,6 +207,8 @@ impl ArgumentType<'_> {
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     pub fn write_to_buffer(&self, write: &mut impl Write) -> Result<(), WritingError> {
+        // Safety: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
+        // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
         let id = unsafe { *(self as *const Self as *const i32) };
         write.write_var_int(&(id).into())?;
         match self {

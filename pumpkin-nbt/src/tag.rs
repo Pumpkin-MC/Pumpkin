@@ -26,6 +26,7 @@ pub enum NbtTag {
 impl NbtTag {
     /// Returns the numeric id associated with the data type.
     pub const fn get_type_id(&self) -> u8 {
+        // Safety: Since Self is repr(u8), it is guaranteed to hold the discriminant in the first byte
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
         unsafe { *(self as *const Self as *const u8) }
     }

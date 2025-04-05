@@ -97,11 +97,10 @@ mod test {
 
     #[test]
     fn test_bounds() {
-        let mut cylinder =
-            Cylindrical::new(Vector2::new(0, 0), unsafe { NonZeroU8::new_unchecked(1) });
+        let mut cylinder = Cylindrical::new(Vector2::new(0, 0), NonZeroU8::new(1).unwrap());
 
         for view_distance in 1..=32 {
-            cylinder.view_distance = unsafe { NonZeroU8::new_unchecked(view_distance) };
+            cylinder.view_distance = NonZeroU8::new(view_distance).unwrap();
 
             for chunk in cylinder.all_chunks_within() {
                 assert!(chunk.x >= cylinder.left() && chunk.x <= cylinder.right());
@@ -121,11 +120,10 @@ mod test {
 
     #[test]
     fn all_chunks_within_capacity_estimation() {
-        let mut cylinder =
-            Cylindrical::new(Vector2::new(0, 0), unsafe { NonZeroU8::new_unchecked(1) });
+        let mut cylinder = Cylindrical::new(Vector2::new(0, 0), NonZeroU8::new(1).unwrap());
 
         for distance in 1..=64 {
-            cylinder.view_distance = unsafe { NonZeroU8::new_unchecked(distance) };
+            cylinder.view_distance = NonZeroU8::new(distance).unwrap();
             let chunks = cylinder.all_chunks_within();
             let estimated_capacity = ((distance as usize + 3).pow(2) * 3167) >> 10;
 
