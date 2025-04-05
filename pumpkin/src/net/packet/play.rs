@@ -499,6 +499,9 @@ impl Player {
         let slot_data = Slot::from(&stack);
         if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
             log::error!("Pick item set slot error: {err}");
+            if !BASIC_CONFIG.allow_impossible_actions {
+                self.kick(TextComponent::text("Invalid pick item slot")).await;
+            }
         } else {
             let dest_packet = CSetContainerSlot::new(
                 PlayerInventory::CONTAINER_ID,
