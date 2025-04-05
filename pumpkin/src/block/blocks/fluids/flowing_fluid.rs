@@ -104,7 +104,7 @@ pub trait FlowingFluid {
             self.spread(world, fluid, block_pos, &new_fluid_state).await;
         } else {
             world
-                .break_block(block_pos, None, BlockFlags::empty())
+                .break_block(block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
             world
                 .set_block_state(
@@ -291,8 +291,10 @@ pub trait FlowingFluid {
                 continue;
             };
 
+            let side_props = FlowingFluidProperties::from_state_id(side_state_id, fluid);
+
             if !self.can_pass_through(world, fluid, &side_pos).await
-                || self.is_same_fluid(fluid, side_state_id)
+                || (side_props.level == Level::L8 && side_props.falling != Falling::True)
             {
                 continue;
             }
