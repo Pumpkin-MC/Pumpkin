@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 pub struct HoneyCombItem;
-static UNWAXED2WAXED: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
+pub static UNWAXED2WAXED: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
     HashMap::from([
         (Block::COPPER_BLOCK.id, Block::WAXED_COPPER_BLOCK.id),
         (Block::EXPOSED_COPPER.id, Block::WAXED_EXPOSED_COPPER.id),
@@ -126,7 +126,7 @@ static UNWAXED2WAXED: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
         ),
     ])
 });
-static WAXED2UNWAXED: LazyLock<HashMap<u16, u16>> =
+pub static WAXED2UNWAXED: LazyLock<HashMap<u16, u16>> =
     LazyLock::new(|| HashMap::from_iter(UNWAXED2WAXED.iter().map(|(k, v)| (*v, k.clone()))));
 
 impl ItemMetadata for HoneyCombItem {

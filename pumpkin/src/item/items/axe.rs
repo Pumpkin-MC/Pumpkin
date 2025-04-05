@@ -1,4 +1,5 @@
 use crate::entity::player::Player;
+use crate::item::items::honeycomb::WAXED2UNWAXED;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::BlockFlags;
@@ -73,7 +74,7 @@ impl PumpkinItem for AxeItem {
         let world = player.world().await;
 
         // First we try to strip the block. by getting his equivalent and applying it the axis.
-        let replacement_block = STRIPPED_BLOCKS.get(&block.id);
+        let mut replacement_block = STRIPPED_BLOCKS.get(&block.id);
         // If there is a strip equivalent.
         if replacement_block.is_some() {
             // get block state of the old log.
@@ -93,6 +94,22 @@ impl PumpkinItem for AxeItem {
                 )
                 .await;
             return;
+        }
+        // TODO Improve this to conserve block data.
+        let block_id = WAXED2UNWAXED.get(&block.id);
+        if block_id.is_some() {
+            let replacement_block = Block::from_id(*block_id.unwrap());
+
+            if replacement_block.is_some() {
+                world
+                    .set_block_state(
+                        &location,
+                        replacement_block.unwrap().default_state_id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                return;
+            }
         }
     }
 }
