@@ -4,6 +4,7 @@ use blocks::doors::register_door_blocks;
 use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::register_fence_gate_blocks;
 use blocks::fences::register_fence_blocks;
+use blocks::fluids::{lava::FlowingLava, water::FlowingWater};
 use blocks::logs::register_log_blocks;
 use blocks::redstone::buttons::register_button_blocks;
 use blocks::redstone::observer::ObserverBlock;
@@ -39,6 +40,7 @@ use std::sync::Arc;
 
 mod blocks;
 pub mod pumpkin_block;
+pub mod pumpkin_fluid;
 pub mod registry;
 
 #[must_use]
@@ -62,6 +64,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
     manager.register(TargetBlock);
+    manager.register_fluid(FlowingWater);
+    manager.register_fluid(FlowingLava);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);

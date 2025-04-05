@@ -996,6 +996,7 @@ impl Player {
                                 broken_state,
                             )
                             .await;
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
                     self.start_mining_time.store(

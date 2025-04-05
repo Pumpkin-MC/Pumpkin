@@ -60,7 +60,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Chunk Saving (Vanilla, Linear)
   - [x] Biomes
   - [x] Redstone (W.I.P)
-  - [ ] Liquid Physics
+  - [x] Liquid Physics
   - [ ] Vegetation
 - Player
   - [x] Skins

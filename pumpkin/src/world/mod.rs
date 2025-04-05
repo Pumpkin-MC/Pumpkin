@@ -28,6 +28,7 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     block::Block,
     entity::{EntityStatus, EntityType},
+    fluid::Fluid,
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
@@ -509,6 +510,7 @@ impl World {
 
     pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
+        let fluids_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
             let block = self.get_block(&scheduled_tick.block_pos).await.unwrap();
@@ -518,6 +520,20 @@ impl World {
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
                 pumpkin_block
                     .on_scheduled_tick(self, &block, &scheduled_tick.block_pos)
+                    .await;
+            }
+        }
+
+        for scheduled_tick in fluids_to_tick {
+            let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
+                continue;
+            };
+            if scheduled_tick.target_block_id != fluid.id {
+                continue;
+            }
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
+                pumpkin_fluid
+                    .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
                     .await;
             }
         }
@@ -1313,6 +1329,7 @@ impl World {
     }
 
     /// Sets a block
+    #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -1365,6 +1382,7 @@ impl World {
 
         let block_state = self.get_block_state(position).await.unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
+        let new_fluid = self.get_fluid(position).await.unwrap_or(Fluid::EMPTY);
 
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
@@ -1372,6 +1390,16 @@ impl World {
                 .on_placed(
                     self,
                     &new_block,
+                    block_state_id,
+                    position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
+                .await;
+            self.block_registry
+                .on_placed_fluid(
+                    self,
+                    &new_fluid,
                     block_state_id,
                     position,
                     replaced_block_state_id,
@@ -1436,6 +1464,12 @@ impl World {
     ) {
         self.level
             .schedule_block_tick(block.id, block_pos, delay, priority)
+            .await;
+    }
+
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
+        self.level
+            .schedule_fluid_tick(block_id, &block_pos, delay)
             .await;
     }
 
@@ -1551,6 +1585,14 @@ impl World {
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
+    pub async fn get_fluid(
+        &self,
+        position: &BlockPos,
+    ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
+        let id = self.get_block_state_id(position).await?;
+        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
     /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
     pub async fn get_block_state(
         &self,
@@ -1589,6 +1631,7 @@ impl World {
             }
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let neighbor_block = self.get_block(&neighbor_pos).await;
+            let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
                     self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1601,6 +1644,15 @@ impl World {
                             &source_block,
                             false,
                         )
+                        .await;
+                }
+            }
+            if let Ok(neighbor_fluid) = neighbor_fluid {
+                if let Some(neighbor_pumpkin_fluid) =
+                    self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
+                {
+                    neighbor_pumpkin_fluid
+                        .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
                         .await;
                 }
             }
