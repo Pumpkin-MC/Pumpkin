@@ -116,7 +116,7 @@ async fn get_hinge(
         .is_tagged_with("minecraft:doors")
         .unwrap()
         && DoorProperties::from_state_id(lv7.id, &block).half == DoubleBlockHalf::Lower;
-        
+
     let bl2 = world
         .get_block(&lv11)
         .await
