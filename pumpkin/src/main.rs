@@ -65,6 +65,13 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
+#[cfg(feature = "dhat-heap")]
+use pumpkin::HEAP_PROFILER;
+
 pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
 
@@ -76,6 +83,13 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "dhat-heap")]
+    {
+        let profiler = dhat::Profiler::new_heap();
+        let mut static_loc = HEAP_PROFILER.lock().await;
+        *static_loc = Some(profiler);
+    };
+
     let time = Instant::now();
 
     init_log!();

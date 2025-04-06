@@ -101,25 +101,8 @@ pub fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
     l >> 16
 }
 
-pub fn java_string_hash(string: &str) -> i32 {
-    // All byte values of latin1 align with
-    // the values of U+0000 - U+00FF, making this code
-    // equivalent to both Java hash implementations
-
-    let mut result = 0i32;
-
-    for char_encoding in string.encode_utf16() {
-        result = 31i32
-            .wrapping_mul(result)
-            .wrapping_add(char_encoding as i32);
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
-
-    use crate::random::java_string_hash;
 
     use super::hash_block_pos;
 
@@ -138,36 +121,6 @@ mod tests {
 
         for ((x, y, z), value) in values {
             assert_eq!(hash_block_pos(x, y, z), value);
-        }
-    }
-
-    #[test]
-    fn test_java_string_hash() {
-        let values = [
-            ("", 0),
-            ("1", 49),
-            ("TEST", 2571410),
-            ("TEST1", 79713759),
-            ("TEST0123456789", 506557463),
-            (
-                " !\"#$%&'()*+,-./0123456789:\
-                ;<=>?@ABCDEFGHIJKLMNOPQRST\
-                UVWXYZ[\\]^_`abcdefghijklm\
-                nopqrstuvwxyz{|}~¡¢£¤¥¦§¨©\
-                ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄ\
-                ÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞ\
-                ßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþ",
-                -1992287231i32,
-            ),
-            ("求同存异", 847053876),
-            // This might look weird because hebrew is text is right to left
-            ("אבְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ:", 1372570871),
-            ("संस्कृत-", 1748614838),
-            ("minecraft:offset", -920384768i32),
-        ];
-
-        for (string, value) in values {
-            assert_eq!(java_string_hash(string), value);
         }
     }
 }

@@ -29,12 +29,12 @@ fn is_not_air_block(state_id: u16) -> bool {
 
 #[derive(Debug)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
-    cube: AbstractCube<V, DIM>,
+    cube: Box<AbstractCube<V, DIM>>,
     counts: HashMap<V, u16>,
 }
 
 impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
-    fn from_cube(cube: AbstractCube<V, DIM>) -> Self {
+    fn from_cube(cube: Box<AbstractCube<V, DIM>>) -> Self {
         let counts =
             cube.as_flattened()
                 .as_flattened()
@@ -170,7 +170,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             }
 
             // TODO: Can we do this all with an `array::from_fn` or something?
-            let mut cube = [[[V::default(); DIM]; DIM]; DIM];
+            let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
             cube.as_flattened_mut()
                 .as_flattened_mut()
                 .chunks_mut(keys_per_i64 as usize)
@@ -208,7 +208,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         match self {
             Self::Homogeneous(original) => {
                 if value != *original {
-                    let mut cube = [[[*original; DIM]; DIM]; DIM];
+                    let mut cube = Box::new([[[*original; DIM]; DIM]; DIM]);
                     cube[y][z][x] = value;
                     let data = HeterogeneousPaletteData::from_cube(cube);
                     *self = Self::Heterogeneous(Box::new(data));
