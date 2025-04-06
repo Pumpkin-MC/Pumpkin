@@ -296,7 +296,8 @@ pub(crate) fn build() -> TokenStream {
             #constants
 
             pub fn translated_name(&self) -> TextComponent {
-                serde_json::from_str(self.components.item_name.unwrap()).expect("Could not parse item name.")
+                // TODO
+                TextComponent::text(self.components.item_name.unwrap())
             }
 
             #[doc = "Try to parse an item from a resource location string."]

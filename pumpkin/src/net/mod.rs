@@ -56,7 +56,7 @@ use tokio::{
 use thiserror::Error;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
-mod authentication;
+pub mod authentication;
 mod container;
 pub mod lan_broadcast;
 mod packet;
@@ -108,7 +108,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: unsafe { NonZeroU8::new_unchecked(10) },
+            view_distance: NonZeroU8::new(10).unwrap(),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0,

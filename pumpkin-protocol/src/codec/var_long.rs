@@ -6,8 +6,6 @@ use std::{
 
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-use super::Codec;
-use bytes::BufMut;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, SeqAccess, Visitor},
@@ -21,20 +19,20 @@ pub type VarLongType = i64;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarLong(pub VarLongType);
 
-impl Codec<Self> for VarLong {
+impl VarLong {
     /// The maximum number of bytes a `VarLong` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
     /// Returns the exact number of bytes this VarLong will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    fn written_size(&self) -> usize {
+    pub fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
         }
     }
 
-    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
+    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut x = self.0;
         for _ in 0..Self::MAX_SIZE.get() {
             let byte = (x & 0x7F) as u8;
@@ -49,7 +47,7 @@ impl Codec<Self> for VarLong {
         Ok(())
     }
 
-    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
+    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8_be()?;
@@ -115,11 +113,11 @@ impl Serialize for VarLong {
         let mut buf = Vec::new();
 
         while value > 0x7F {
-            buf.put_u8(value as u8 | 0x80);
+            buf.push(value as u8 | 0x80);
             value >>= 7;
         }
 
-        buf.put_u8(value as u8);
+        buf.push(value as u8);
 
         serializer.serialize_bytes(&buf)
     }

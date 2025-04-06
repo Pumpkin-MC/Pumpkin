@@ -6,7 +6,7 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
     Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE,
-    StreamEncryptor, VarInt, codec::Codec,
+    StreamEncryptor, VarInt,
 };
 
 // raw -> compress -> encrypt

@@ -169,3 +169,75 @@ pub fn lerp3(
         lerp2(delta_x, delta_y, x0y0z1, x1y0z1, x0y1z1, x1y1z1),
     )
 }
+
+/// Calculates a Polynomial Rolling Hash
+/// Mojang's checksum algorithm for previous messages
+pub fn polynomial_rolling_hash(signatures: &[Box<[u8]>]) -> u8 {
+    let mut i: i32 = 1;
+
+    for signature in signatures.iter() {
+        i = i.wrapping_mul(31).wrapping_add(java_array_hash(signature)); // Wrap to prevent multiplication overflow
+    }
+
+    let b = (i & 0xFF) as u8; // Take the least significant byte.
+    if b == 0 { 1 } else { b } // Ensure the checksum is never zero.
+}
+
+/// Arrays.hashCode() and String.hashCode() have similar but different implementations.
+fn java_array_hash(data: &[u8]) -> i32 {
+    let mut hash: i32 = 1;
+    for &byte in data {
+        let signed_byte = byte as i32;
+        hash = hash.wrapping_mul(31).wrapping_add(signed_byte);
+    }
+    hash
+}
+
+pub fn java_string_hash(string: &str) -> i32 {
+    let mut result = 0i32;
+    for char_encoding in string.encode_utf16() {
+        result = 31i32
+            .wrapping_mul(result)
+            .wrapping_add(char_encoding as i32);
+    }
+    result
+}
+
+#[test]
+fn test_java_hash() {
+    let values = [
+        ("", 0, 1),
+        ("1", 49, 80),
+        ("TEST", 2571410, 3494931),
+        ("TEST1", 79713759, 108342910),
+        ("TEST0123456789", 506557463, 2014109272),
+        (
+            " !\"#$%&'()*+,-./0123456789:\
+            ;<=>?@ABCDEFGHIJKLMNOPQRST\
+            UVWXYZ[\\]^_`abcdefghijklm\
+            nopqrstuvwxyz{|}~¡¢£¤¥¦§¨©\
+            ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄ\
+            ÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞ\
+            ßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþ",
+            -1992287231i32,
+            -1606003975i32,
+        ),
+        ("求同存异", 847053876, 1709557670),
+        // This might look weird because hebrew is text is right to left
+        (
+            "אבְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ:",
+            1372570871,
+            -396640725i32,
+        ),
+        ("संस्कृत-", 1748614838, -187482695i32),
+        ("minecraft:offset", -920384768i32, 432924929),
+    ];
+
+    for (string, value, _) in values {
+        assert_eq!(java_string_hash(string), value);
+    }
+
+    for (string, _, value) in values {
+        assert_eq!(java_array_hash(string.as_bytes()), value);
+    }
+}

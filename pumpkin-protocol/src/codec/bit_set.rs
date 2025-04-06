@@ -1,6 +1,5 @@
 use std::io::Read;
 use std::io::Write;
-use std::num::NonZeroUsize;
 
 use serde::{Serialize, Serializer};
 
@@ -9,19 +8,10 @@ use crate::ser::NetworkWriteExt;
 use crate::ser::ReadingError;
 use crate::ser::WritingError;
 
-use super::Codec;
-
 pub struct BitSet(pub Box<[i64]>);
 
-impl Codec<BitSet> for BitSet {
-    /// The maximum size of the `BitSet` is `remaining / 8`.
-    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(usize::MAX).unwrap();
-
-    fn written_size(&self) -> usize {
-        todo!()
-    }
-
-    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
+impl BitSet {
+    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.0.len().into())?;
         for b in &self.0 {
             write.write_i64_be(*b)?;
@@ -30,7 +20,7 @@ impl Codec<BitSet> for BitSet {
         Ok(())
     }
 
-    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
+    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         // Read length
         let length = read.get_var_int()?;
         let mut array: Vec<i64> = Vec::with_capacity(length.0 as usize);
