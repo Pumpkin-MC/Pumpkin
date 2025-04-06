@@ -79,14 +79,12 @@ fn get_sound(block: &Block, open: bool) -> Sound {
         } else {
             Sound::BlockCopperDoorOpen
         }
+    } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+        Sound::BlockWoodenDoorClose
+    } else if block.id == Block::IRON_DOOR.id {
+        Sound::BlockIronDoorClose
     } else {
-        if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
-            Sound::BlockWoodenDoorClose
-        } else if block.id == Block::IRON_DOOR.id {
-            Sound::BlockIronDoorClose
-        } else {
-            Sound::BlockCopperDoorClose
-        }
+        Sound::BlockCopperDoorClose
     }
 }
 
@@ -115,7 +113,7 @@ async fn get_hinge(
         .unwrap()
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(lv7.id, &block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(lv7.id, block).half == DoubleBlockHalf::Lower;
 
     let bl2 = world
         .get_block(&lv11)
@@ -123,10 +121,9 @@ async fn get_hinge(
         .unwrap()
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(lv12.id, &block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(lv12.id, block).half == DoubleBlockHalf::Lower;
 
-    let i = (lv7.is_full_cube() as i32) * -1
-        + (lv9.is_full_cube() as i32) * -1
+    let i = -(lv7.is_full_cube() as i32) - (lv9.is_full_cube() as i32)
         + (lv12.is_full_cube() as i32)
         + (lv14.is_full_cube() as i32);
 
@@ -134,10 +131,10 @@ async fn get_hinge(
         if (!bl2 || bl) && i >= 0 {
             let j = player_direction.to_block_direction().to_offset();
             let lv15 = use_item_on.cursor_pos;
-            if (j.x >= 0 || !(lv15.z < 0.5))
-                && (j.x <= 0 || !(lv15.z > 0.5))
-                && (j.z >= 0 || !(lv15.x > 0.5))
-                && (j.z <= 0 || !(lv15.x < 0.5))
+            if (j.x >= 0 || lv15.z > 0.5)
+                && (j.x <= 0 || lv15.z < 0.5)
+                && (j.z >= 0 || lv15.x < 0.5)
+                && (j.z <= 0 || lv15.x > 0.5)
             {
                 DoorHinge::Left
             } else {
@@ -273,7 +270,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 _notify: bool,
             ) {
                 let block_state = world.get_block_state(pos).await.unwrap();
-                let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
+                let mut door_props = DoorProperties::from_state_id(block_state.id, block);
 
                 let other_half = match door_props.half {
                     DoubleBlockHalf::Upper => BlockDirection::Down,
