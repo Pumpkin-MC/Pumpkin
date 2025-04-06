@@ -305,7 +305,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                     world
                         .set_block_state(
                             pos,
-                            door_props.to_state_id(&block),
+                            door_props.to_state_id(block),
                             BlockFlags::NOTIFY_LISTENERS,
                         )
                         .await;
