@@ -1098,6 +1098,12 @@ pub(crate) fn build() -> TokenStream {
             pub is_solid: bool,
         }
 
+        impl BlockState {
+            pub fn is_full_cube(&self) -> bool {
+                self.collision_shapes.len() != 0 && self.collision_shapes[0] == 0
+            }
+        }
+
         #[derive(Clone, Debug)]
         pub struct BlockStateRef {
             pub id: u16,

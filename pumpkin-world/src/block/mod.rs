@@ -207,8 +207,8 @@ impl HorizontalFacingExt for HorizontalFacing {
         match self {
             HorizontalFacing::North => HorizontalFacing::West,
             HorizontalFacing::South => HorizontalFacing::East,
-            HorizontalFacing::West => HorizontalFacing::North,
-            HorizontalFacing::East => HorizontalFacing::South,
+            HorizontalFacing::West => HorizontalFacing::South,
+            HorizontalFacing::East => HorizontalFacing::North,
         }
     }
 }

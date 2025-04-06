@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
+use pumpkin_data::block::BlockState;
 use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
@@ -17,13 +18,13 @@ use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
-fn connects_to(from: &Block, to: &Block, to_state_id: u16, direction: BlockDirection) -> bool {
+fn connects_to(from: &Block, to: &Block, to_state: BlockState, direction: BlockDirection) -> bool {
     if from.id == to.id {
         return true;
     }
 
     if to.is_tagged_with("c:fence_gates").unwrap() {
-        let fence_gate_props = FenceGateProperties::from_state_id(to_state_id, to);
+        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
         if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
             == direction.rotate_clockwise().to_axis()
         {
@@ -36,7 +37,7 @@ fn connects_to(from: &Block, to: &Block, to_state_id: u16, direction: BlockDirec
         return false;
     }
 
-    to.is_tagged_with("c:fences/wooden").unwrap()
+    to.is_tagged_with("c:fences/wooden").unwrap() || (to_state.is_solid && to_state.is_full_cube())
 }
 
 /// This returns an index and not a state id making it so all fences can use the same state calculation function
@@ -48,7 +49,7 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&offset).await.unwrap();
 
-        if connects_to(block, &other_block, other_block_state.id, direction) {
+        if connects_to(block, &other_block, other_block_state, direction) {
             match direction {
                 BlockDirection::North => block_properties.north = Boolean::True,
                 BlockDirection::South => block_properties.south = Boolean::True,
