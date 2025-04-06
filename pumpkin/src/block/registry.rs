@@ -125,6 +125,23 @@ impl BlockRegistry {
         block.default_state_id
     }
 
+    pub async fn player_placed(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        state_id: u16,
+        pos: &BlockPos,
+        face: &BlockDirection,
+        player: &Player,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .player_placed(world, block, state_id, pos, face, player)
+                .await;
+        }
+    }
+
     pub async fn can_place_at(&self, world: &World, block: &Block, block_pos: &BlockPos) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {

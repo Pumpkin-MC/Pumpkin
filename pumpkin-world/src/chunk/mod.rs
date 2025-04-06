@@ -2,10 +2,10 @@ use palette::{BiomePalette, BlockPalette};
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::repeat_with, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
-use crate::{block_entities::BlockEntity, coordinates::ChunkRelativeBlockCoordinates};
+use crate::block_entities::BlockEntity;
 
 pub mod format;
 pub mod io;

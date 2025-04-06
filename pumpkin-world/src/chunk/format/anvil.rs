@@ -5,7 +5,6 @@ use itertools::Itertools;
 use pumpkin_config::advanced_config;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
 use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
-use pumpkin_util::math::ceil_log2;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,

@@ -9,10 +9,10 @@ use crate::{
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
 use pumpkin_nbt::END_ID;
-use pumpkin_util::math::{ceil_log2, position::get_local_cord};
-use pumpkin_world::{
-    DIRECT_PALETTE_BITS,
-    chunk::{ChunkData, SUBCHUNKS_COUNT},
+use pumpkin_util::math::position::get_local_cord;
+use pumpkin_world::chunk::{
+    ChunkData,
+    palette::{BlockPalette, NetworkPalette},
 };
 
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
