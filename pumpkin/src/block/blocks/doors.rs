@@ -88,53 +88,55 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     }
 }
 
+#[allow(clippy::pedantic)]
 #[inline]
 async fn get_hinge(
     world: &World,
     block: &Block,
-    block_pos: &BlockPos,
-    use_item_on: &SUseItemOn,
-    player_direction: &HorizontalFacing,
+    pos: &BlockPos,
+    use_item: &SUseItemOn,
+    facing: &HorizontalFacing,
 ) -> DoorHinge {
-    let lv4 = block_pos.up();
-    let lv5 = player_direction.rotate_ccw();
-    let lv6 = block_pos.offset(lv5.to_block_direction().to_offset());
-    let lv7 = world.get_block_state(&lv6).await.unwrap();
-    let lv8 = lv4.offset(player_direction.to_block_direction().to_offset());
-    let lv9 = world.get_block_state(&lv8).await.unwrap();
-    let lv10 = player_direction.rotate();
-    let lv11 = block_pos.offset(lv10.to_block_direction().to_offset());
-    let lv12 = world.get_block_state(&lv11).await.unwrap();
-    let lv13 = lv4.offset(player_direction.to_block_direction().to_offset());
-    let lv14 = world.get_block_state(&lv13).await.unwrap();
-    let bl = world
-        .get_block(&lv6)
+    let top_pos = pos.up();
+    let left_dir = facing.rotate_ccw();
+    let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
+    let left_state = world.get_block_state(&left_pos).await.unwrap();
+    let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_state = world.get_block_state(&top_facing).await.unwrap();
+    let right_dir = facing.rotate();
+    let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
+    let right_state = world.get_block_state(&right_pos).await.unwrap();
+    let top_right = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_right_state = world.get_block_state(&top_right).await.unwrap();
+
+    let has_left_door = world
+        .get_block(&left_pos)
         .await
         .unwrap()
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(lv7.id, block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(left_state.id, block).half == DoubleBlockHalf::Lower;
 
-    let bl2 = world
-        .get_block(&lv11)
+    let has_right_door = world
+        .get_block(&right_pos)
         .await
         .unwrap()
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(lv12.id, block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(right_state.id, block).half == DoubleBlockHalf::Lower;
 
-    let i = -(lv7.is_full_cube() as i32) - (lv9.is_full_cube() as i32)
-        + (lv12.is_full_cube() as i32)
-        + (lv14.is_full_cube() as i32);
+    let score = -(left_state.is_full_cube() as i32) - (top_state.is_full_cube() as i32)
+        + right_state.is_full_cube() as i32
+        + top_right_state.is_full_cube() as i32;
 
-    if (!bl || bl2) && i <= 0 {
-        if (!bl2 || bl) && i >= 0 {
-            let j = player_direction.to_block_direction().to_offset();
-            let lv15 = use_item_on.cursor_pos;
-            if (j.x >= 0 || lv15.z > 0.5)
-                && (j.x <= 0 || lv15.z < 0.5)
-                && (j.z >= 0 || lv15.x < 0.5)
-                && (j.z <= 0 || lv15.x > 0.5)
+    if (!has_left_door || has_right_door) && score <= 0 {
+        if (!has_right_door || has_left_door) && score >= 0 {
+            let offset = facing.to_block_direction().to_offset();
+            let hit = use_item.cursor_pos;
+            if (offset.x >= 0 || hit.z > 0.5)
+                && (offset.x <= 0 || hit.z < 0.5)
+                && (offset.z >= 0 || hit.x < 0.5)
+                && (offset.z <= 0 || hit.x > 0.5)
             {
                 DoorHinge::Left
             } else {

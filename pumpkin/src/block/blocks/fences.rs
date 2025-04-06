@@ -18,7 +18,7 @@ use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
-fn connects_to(from: &Block, to: &Block, to_state: BlockState, direction: BlockDirection) -> bool {
+fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: BlockDirection) -> bool {
     if from.id == to.id {
         return true;
     }
@@ -49,7 +49,7 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&offset).await.unwrap();
 
-        if connects_to(block, &other_block, other_block_state, direction) {
+        if connects_to(block, &other_block, &other_block_state, direction) {
             match direction {
                 BlockDirection::North => block_properties.north = Boolean::True,
                 BlockDirection::South => block_properties.south = Boolean::True,
