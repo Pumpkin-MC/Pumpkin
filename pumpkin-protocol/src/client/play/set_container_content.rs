@@ -5,7 +5,7 @@ use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_CONTENT;
 use pumpkin_macros::packet;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[packet(PLAY_CONTAINER_SET_CONTENT)]
 pub struct CSetContainerContent<'a> {
     window_id: VarInt,

@@ -43,7 +43,7 @@ impl ItemEntity {
         }
     }
     pub async fn send_meta_packet(&self) {
-        let slot = Slot::new(self.item.id, *self.item_count.lock().await);
+        let slot = Slot::new(&self.item, *self.item_count.lock().await);
         self.entity
             .send_meta_data(&[Metadata::new(8, MetaDataType::ItemStack, &slot)])
             .await;

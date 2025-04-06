@@ -1,5 +1,8 @@
 use crate::VarInt;
 use pumpkin_data::item::Item;
+use pumpkin_util::constants::structured_component_constants::{
+    DAMAGE, DAMAGE_COMPONENT_TYPE, MAX_DAMAGE, MAX_DAMAGE_COMPONENT_TYPE,
+};
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeSeq;
 use serde::{
@@ -7,13 +10,55 @@ use serde::{
     de::{self, SeqAccess},
 };
 
+// TODO: add other types for this enum. I don't think we need a trait.
+//
+// If a plugin wants to send their own data, they can use the custom data
+// component_type that uses the NBT type.
+//
+// Refer to https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Slot_Data
+#[derive(Debug, Clone)]
+pub enum ComponentData {
+    VarInt(VarInt),
+}
+
+impl Serialize for ComponentData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ComponentData::VarInt(var_int) => var_int.serialize(serializer),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct StructuredComponent {
+    component_type: VarInt,
+    value: ComponentData,
+}
+
+impl Serialize for StructuredComponent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_seq(Some(2))?;
+
+        s.serialize_element(&self.component_type)?;
+        s.serialize_element(&self.value)?;
+
+        s.end()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Slot {
     pub item_count: VarInt,
     item_id: Option<VarInt>,
     num_components_to_add: Option<VarInt>,
     num_components_to_remove: Option<VarInt>,
-    components_to_add: Option<Vec<(VarInt, ())>>, // The second type depends on the varint
+    components_to_add: Option<Vec<StructuredComponent>>,
     components_to_remove: Option<Vec<VarInt>>,
 }
 
@@ -130,16 +175,43 @@ impl Serialize for Slot {
 }
 
 impl Slot {
-    pub fn new(item_id: u16, count: u32) -> Self {
-        Slot {
+    pub fn new(item: &Item, count: u32) -> Self {
+        let mut slot = Slot {
             item_count: count.into(),
-            item_id: Some((item_id as i32).into()),
+            item_id: Some((item.id as i32).into()),
             // TODO: add these
             num_components_to_add: None,
             num_components_to_remove: None,
             components_to_add: None,
             components_to_remove: None,
+        };
+
+        let mut components_to_add = Vec::new();
+
+        if item.has_property_changed(MAX_DAMAGE) {
+            if let Some(max_damage) = item.components.max_damage {
+                components_to_add.push(StructuredComponent {
+                    component_type: MAX_DAMAGE_COMPONENT_TYPE.into(),
+                    value: ComponentData::VarInt((max_damage as i32).into()),
+                });
+            }
         }
+
+        if item.has_property_changed(DAMAGE) {
+            if let Some(damage) = item.components.damage {
+                components_to_add.push(StructuredComponent {
+                    component_type: DAMAGE_COMPONENT_TYPE.into(),
+                    value: ComponentData::VarInt((damage as i32).into()),
+                });
+            }
+        }
+
+        if !components_to_add.is_empty() {
+            slot.num_components_to_add = Some(components_to_add.len().into());
+            slot.components_to_add = Some(components_to_add);
+        }
+
+        slot
     }
 
     pub fn to_stack(self) -> Result<Option<ItemStack>, &'static str> {
@@ -178,7 +250,7 @@ impl Slot {
 
 impl From<&ItemStack> for Slot {
     fn from(item: &ItemStack) -> Self {
-        Slot::new(item.item.id, item.item_count as u32)
+        Slot::new(&item.item, item.item_count as u32)
     }
 }
 

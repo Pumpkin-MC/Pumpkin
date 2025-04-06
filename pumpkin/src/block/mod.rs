@@ -191,7 +191,10 @@ trait ItemEntryExt {
 impl ItemEntryExt for ItemEntry {
     fn get_items(&self) -> Vec<ItemStack> {
         let item = &self.name.replace("minecraft:", "");
-        vec![ItemStack::new(1, Item::from_registry_key(item).unwrap())]
+        vec![ItemStack::new(
+            1,
+            Item::from_registry_key(item).unwrap().clone(),
+        )]
     }
 }
 

@@ -8,6 +8,7 @@ use pumpkin_data::block::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
@@ -31,6 +32,19 @@ impl ItemMetadata for HoeItem {
 
 #[async_trait]
 impl PumpkinItem for HoeItem {
+    async fn on_after_dig(
+        &self,
+        _item: &Item,
+        player: &Player,
+        _location: BlockPos,
+        _block: &Block,
+        _server: &Server,
+    ) {
+        if player.gamemode.load() != GameMode::Creative {
+            self.increment_damage(player).await;
+        }
+    }
+
     async fn use_on_block(
         &self,
         _item: &Item,
@@ -94,6 +108,10 @@ impl PumpkinItem for HoeItem {
                     Arc::new(ItemEntity::new(entity, Block::HANGING_ROOTS.item_id, 1).await);
                 world.spawn_entity(item_entity.clone()).await;
                 item_entity.send_meta_packet().await;
+            }
+
+            if player.gamemode.load() != GameMode::Creative {
+                self.increment_damage(player).await;
             }
         }
     }

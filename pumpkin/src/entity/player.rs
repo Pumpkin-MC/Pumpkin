@@ -385,7 +385,7 @@ impl Player {
         //self.world().level.list_cached();
     }
 
-    pub async fn attack(&self, victim: Arc<dyn EntityBase>) {
+    pub async fn attack(&self, server: &Server, victim: Arc<dyn EntityBase>) {
         let world = self.world().await;
         let victim_entity = victim.get_entity();
         let attacker_entity = &self.living_entity.entity;
@@ -473,6 +473,17 @@ impl Player {
                     knockback_strength,
                 )
                 .await;
+            }
+
+            let inventory = self.inventory().lock().await;
+
+            if let Some(item) = inventory.held_item().cloned() {
+                drop(inventory);
+
+                server
+                    .item_registry
+                    .on_attack(victim_entity, &item.item, self)
+                    .await;
             }
         }
 
@@ -1619,7 +1630,8 @@ impl Player {
                 // TODO
             }
             SInteract::PACKET_ID => {
-                self.handle_interact(SInteract::read(payload)?).await;
+                self.handle_interact(SInteract::read(payload)?, server)
+                    .await;
             }
             SKeepAlive::PACKET_ID => {
                 self.handle_keep_alive(SKeepAlive::read(payload)?).await;
