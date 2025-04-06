@@ -1100,7 +1100,7 @@ pub(crate) fn build() -> TokenStream {
 
         impl BlockState {
             pub fn is_full_cube(&self) -> bool {
-                self.collision_shapes.len() != 0 && self.collision_shapes[0] == 0
+                !self.collision_shapes.is_empty() && self.collision_shapes[0] == 0
             }
         }
 

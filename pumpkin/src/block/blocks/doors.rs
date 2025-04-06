@@ -116,6 +116,7 @@ async fn get_hinge(
         .is_tagged_with("minecraft:doors")
         .unwrap()
         && DoorProperties::from_state_id(lv7.id, &block).half == DoubleBlockHalf::Lower;
+        
     let bl2 = world
         .get_block(&lv11)
         .await
@@ -124,8 +125,6 @@ async fn get_hinge(
         .unwrap()
         && DoorProperties::from_state_id(lv12.id, &block).half == DoubleBlockHalf::Lower;
 
-    // Todo! Replace lvx.is_solid and the part after "&&" with lvx.is_full_cube
-    // it is nessesary to prevent it from counting other doors
     let i = (lv7.is_full_cube() as i32) * -1
         + (lv9.is_full_cube() as i32) * -1
         + (lv12.is_full_cube() as i32)
