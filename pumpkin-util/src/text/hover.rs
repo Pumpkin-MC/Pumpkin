@@ -16,18 +16,16 @@ pub enum HoverEvent {
         /// Number of the items in the stack
         #[serde(default, skip_serializing_if = "Option::is_none")]
         count: Option<i32>,
-        /// NBT information about the item (sNBT format)
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        tag: Option<Cow<'static, str>>,
+        // #[serde(default, skip_serializing_if = "Option::is_none")]
+        // components: Option<Cow<'static, str>>,
     },
     /// Shows an entity.
     ShowEntity {
+        /// The entity's ID Entity Type
+        id: Cow<'static, str>,
         /// The entity's UUID
         /// The UUID cannot use uuid::Uuid because its serialization parses it into bytes, so its double bytes serialized
-        id: Cow<'static, str>,
-        /// Resource identifier of the entity
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        r#type: Option<Cow<'static, str>>,
+        uuid: Cow<'static, str>,
         /// Optional custom name for the entity
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<Vec<TextComponentBase>>,
@@ -40,13 +38,13 @@ impl HoverEvent {
             value: vec![text.0],
         }
     }
-    pub fn show_entity<P>(id: P, kind: P, name: Option<TextComponent>) -> Self
+    pub fn show_entity<P>(uuid: P, kind: P, name: Option<TextComponent>) -> Self
     where
         P: Into<Cow<'static, str>>,
     {
         Self::ShowEntity {
-            id: id.into(),
-            r#type: Some(kind.into()),
+            id: kind.into(),
+            uuid: uuid.into(),
             name: match name {
                 Some(name) => Some(vec![name.0]),
                 None => None,

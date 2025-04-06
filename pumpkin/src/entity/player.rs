@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CSetHeldItem;
+use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -91,6 +91,9 @@ use pumpkin_util::{
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
+
+const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
+const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 enum BatchState {
     Initial,
@@ -235,6 +238,7 @@ pub struct Player {
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
+    pub signature_cache: Mutex<MessageCache>,
 }
 
 impl Player {
@@ -319,6 +323,7 @@ impl Player {
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
+            signature_cache: Mutex::new(MessageCache::default()),
         }
     }
 
@@ -1132,8 +1137,7 @@ impl Player {
                     .read()
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                        // TODO: Remove magic number
-                        0x04,
+                        PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
@@ -1855,7 +1859,6 @@ impl TryFrom<i32> for ChatMode {
 }
 
 /// Player's current chat session
-#[derive(Debug)]
 pub struct ChatSession {
     pub session_id: uuid::Uuid,
     pub expires_at: i64,
@@ -1863,6 +1866,7 @@ pub struct ChatSession {
     pub signature: Box<[u8]>,
     pub messages_sent: i32,
     pub messages_received: i32,
+    pub signature_cache: Vec<Box<[u8]>>,
 }
 
 impl Default for ChatSession {
@@ -1886,6 +1890,99 @@ impl ChatSession {
             signature: key_signature,
             messages_sent: 0,
             messages_received: 0,
+            signature_cache: Vec::new(),
         }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct LastSeen(Vec<Box<[u8]>>);
+
+impl From<LastSeen> for Vec<Box<[u8]>> {
+    fn from(seen: LastSeen) -> Self {
+        seen.0
+    }
+}
+
+impl AsRef<[Box<[u8]>]> for LastSeen {
+    fn as_ref(&self) -> &[Box<[u8]>] {
+        &self.0
+    }
+}
+
+impl LastSeen {
+    /// The sender's `last_seen` signatures are sent as ID's if the recipient has them in their cache.
+    /// Otherwise, the full signature is sent. (ID:0 indicates full signature is being sent)
+    pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
+        let mut indexed = Vec::new();
+        for signature in &self.0 {
+            if let Some(index) = recipient
+                .signature_cache
+                .lock()
+                .await
+                .full_cache
+                .iter()
+                .position(|s| s == signature)
+            {
+                indexed.push(PreviousMessage {
+                    // Send ID reference to recipient's cache (index + 1 because 0 is reserved for full signature)
+                    id: VarInt(1 + index as i32),
+                    signature: None,
+                });
+            } else {
+                indexed.push(PreviousMessage {
+                    // Send ID as 0 for full signature
+                    id: VarInt(0),
+                    signature: Some(signature.clone()),
+                });
+            }
+        }
+        indexed.into_boxed_slice()
+    }
+}
+
+pub struct MessageCache {
+    /// max 128 cached message signatures. Most recent FIRST.
+    /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
+    /// Must be 1:1 with client's signature cache.
+    full_cache: VecDeque<Box<[u8]>>,
+    /// max 20 last seen messages by the sender. Most Recent LAST
+    pub last_seen: LastSeen,
+}
+
+impl Default for MessageCache {
+    fn default() -> Self {
+        Self {
+            full_cache: VecDeque::with_capacity(MAX_CACHED_SIGNATURES as usize),
+            last_seen: LastSeen::default(),
+        }
+    }
+}
+
+impl MessageCache {
+    /// Not used for caching seen messages. Only for non-indexed signatures from senders.
+    pub fn cache_signatures(&mut self, signatures: &[Box<[u8]>]) {
+        for sig in signatures.iter().rev() {
+            if self.full_cache.contains(sig) {
+                continue;
+            }
+            // If the cache is maxed, and someone sends a signature older than the oldest in cache, ignore it
+            if self.full_cache.len() < MAX_CACHED_SIGNATURES as usize {
+                self.full_cache.push_back(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
+            }
+        }
+    }
+
+    /// Adds a seen signature to `last_seen` and `full_cache`.
+    pub fn add_seen_signature(&mut self, signature: &[u8]) {
+        if self.last_seen.0.len() >= MAX_PREVIOUS_MESSAGES as usize {
+            self.last_seen.0.remove(0);
+        }
+        self.last_seen.0.push(signature.into());
+        // This probably doesn't need to be a loop, but better safe than sorry
+        while self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
+            self.full_cache.pop_back();
+        }
+        self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }
