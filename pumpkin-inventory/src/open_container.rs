@@ -1,6 +1,6 @@
 use crate::Container;
 use crate::crafting::check_if_matches_crafting;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;

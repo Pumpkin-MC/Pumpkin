@@ -56,10 +56,17 @@ pub mod fluid {
     include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }
 
-pub mod block {
+pub mod properties {
     include!(concat!(env!("OUT_DIR"), "/block.rs"));
 }
 
 pub mod tag {
     include!(concat!(env!("OUT_DIR"), "/tag.rs"));
 }
+
+mod block_state;
+mod blocks;
+
+pub use block_state::BlockState;
+pub use block_state::BlockStateRef;
+pub use blocks::Block;

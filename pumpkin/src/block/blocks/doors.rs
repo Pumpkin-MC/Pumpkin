@@ -1,11 +1,10 @@
 use async_trait::async_trait;
-use pumpkin_data::block::Axis;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::Boolean;
-use pumpkin_data::block::DoorHinge;
-use pumpkin_data::block::DoubleBlockHalf;
-use pumpkin_data::block::HorizontalFacing;
+use pumpkin_data::Block;
+use pumpkin_data::properties::Axis;
+use pumpkin_data::properties::BlockProperties;
+use pumpkin_data::properties::DoorHinge;
+use pumpkin_data::properties::DoubleBlockHalf;
+use pumpkin_data::properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::RegistryKey;
@@ -28,12 +27,12 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use crate::server::Server;
 use crate::world::World;
 
-type DoorProperties = pumpkin_data::block::OakDoorLikeProperties;
+type DoorProperties = pumpkin_data::properties::OakDoorLikeProperties;
 
 async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
     let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
-    door_props.open = door_props.open.flip();
+    door_props.open = !door_props.open;
 
     let other_half = match door_props.half {
         DoubleBlockHalf::Upper => BlockDirection::Down,
@@ -190,8 +189,8 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 door_props.half = DoubleBlockHalf::Lower;
                 door_props.facing = *player_direction;
                 door_props.hinge = hinge;
-                door_props.powered = Boolean::from_bool(powered);
-                door_props.open = Boolean::from_bool(powered);
+                door_props.powered = powered;
+                door_props.open = powered;
 
                 door_props.to_state_id(block)
             }
@@ -285,13 +284,13 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 let powered = block_receives_redstone_power(world, pos).await
                     || block_receives_redstone_power(world, &other_pos).await;
 
-                if block.id == other_block.id && powered != door_props.powered.to_bool() {
+                if block.id == other_block.id && powered != door_props.powered {
                     let mut other_door_props =
                         DoorProperties::from_state_id(other_state_id.id, &other_block);
-                    door_props.powered = door_props.powered.flip();
+                    door_props.powered = !door_props.powered;
                     other_door_props.powered = door_props.powered;
 
-                    if powered != door_props.open.to_bool() {
+                    if powered != door_props.open {
                         door_props.open = door_props.powered;
                         other_door_props.open = other_door_props.powered;
 

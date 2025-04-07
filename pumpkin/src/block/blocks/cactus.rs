@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
+use pumpkin_data::{
+    Block,
+    properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::block::BlockDirection;

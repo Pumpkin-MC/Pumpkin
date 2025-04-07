@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, Boolean, HorizontalFacing};
+use pumpkin_data::{
+    Block,
+    properties::{BlockProperties, HorizontalFacing},
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -15,7 +18,7 @@ use crate::{
 
 use super::block_receives_redstone_power;
 
-type PistonProps = pumpkin_data::block::StickyPistonLikeProperties;
+type PistonProps = pumpkin_data::properties::StickyPistonLikeProperties;
 
 #[pumpkin_block("minecraft:piston")]
 pub struct PistonBlock;
@@ -34,7 +37,7 @@ impl PumpkinBlock for PistonBlock {
         _other: bool,
     ) -> u16 {
         let mut props = PistonProps::default(block);
-        props.extended = Boolean::from_bool(block_receives_redstone_power(world, block_pos).await);
+        props.extended = block_receives_redstone_power(world, block_pos).await;
         props.facing = player_direction.to_block_direction().to_facing();
         props.to_state_id(block)
     }
@@ -52,7 +55,7 @@ impl PumpkinBlock for PistonBlock {
         let is_receiving_power = block_receives_redstone_power(world, block_pos).await;
 
         if is_receiving_power {
-            props.extended = props.extended.flip();
+            props.extended = !props.extended;
             world
                 .set_block_state(
                     block_pos,

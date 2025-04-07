@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockFace;
-use pumpkin_data::block::BlockState;
-use pumpkin_data::block::HorizontalFacing;
-use pumpkin_data::block::{BlockProperties, Boolean};
+use pumpkin_data::Block;
+use pumpkin_data::BlockState;
 use pumpkin_data::item::Item;
+use pumpkin_data::properties::BlockFace;
+use pumpkin_data::properties::BlockProperties;
+use pumpkin_data::properties::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -14,7 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
-type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
+type ButtonLikeProperties = pumpkin_data::properties::LeverLikeProperties;
 
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -35,8 +35,8 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
             let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
             let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
-            if !button_props.powered.to_bool() {
-                button_props.powered = Boolean::True;
+            if !button_props.powered {
+                button_props.powered = true;
                 world
                     .set_block_state(
                         block_pos,
@@ -127,7 +127,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
             ) {
                 let state = world.get_block_state(block_pos).await.unwrap();
                 let mut props = ButtonLikeProperties::from_state_id(state.id, block);
-                props.powered = Boolean::False;
+                props.powered = false;
                 world
                     .set_block_state(block_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                     .await;
@@ -152,11 +152,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 _direction: &BlockDirection,
             ) -> u8 {
                 let button_props = ButtonLikeProperties::from_state_id(state.id, block);
-                if button_props.powered.to_bool() {
-                    15
-                } else {
-                    0
-                }
+                if button_props.powered { 15 } else { 0 }
             }
 
             async fn get_strong_redstone_power(
@@ -168,7 +164,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 direction: &BlockDirection,
             ) -> u8 {
                 let button_props = ButtonLikeProperties::from_state_id(state.id, block);
-                if button_props.powered.to_bool() && button_props.get_direction() == *direction {
+                if button_props.powered && button_props.get_direction() == *direction {
                     15
                 } else {
                     0
@@ -185,7 +181,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
             ) {
                 if !moved {
                     let button_props = ButtonLikeProperties::from_state_id(old_state_id, block);
-                    if button_props.powered.to_bool() {
+                    if button_props.powered {
                         Self::update_neighbors(world, &location, &button_props).await;
                     }
                 }

@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockState, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
-    ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
-    SouthWireConnection, WestWireConnection,
-};
-use pumpkin_data::block::{BlockProperties, HorizontalFacing};
 use pumpkin_data::item::Item;
+use pumpkin_data::properties::{
+    BlockProperties, EastWireConnection, EnumVariants, HorizontalFacing, Integer0To15,
+    NorthWireConnection, ObserverLikeProperties, RedstoneWireLikeProperties,
+    RepeaterLikeProperties, SouthWireConnection, WestWireConnection,
+};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;

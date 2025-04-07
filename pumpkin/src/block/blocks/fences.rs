@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockState;
-use pumpkin_data::block::HorizontalFacing;
-use pumpkin_data::block::{BlockProperties, Boolean};
+use pumpkin_data::Block;
+use pumpkin_data::BlockState;
+use pumpkin_data::properties::BlockProperties;
+use pumpkin_data::properties::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
@@ -10,8 +10,8 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
-type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
-type FenceLikeProperties = pumpkin_data::block::OakFenceLikeProperties;
+type FenceGateProperties = pumpkin_data::properties::OakFenceGateLikeProperties;
+type FenceLikeProperties = pumpkin_data::properties::OakFenceLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;
@@ -51,10 +51,10 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
 
         if connects_to(block, &other_block, &other_block_state, direction) {
             match direction {
-                BlockDirection::North => block_properties.north = Boolean::True,
-                BlockDirection::South => block_properties.south = Boolean::True,
-                BlockDirection::West => block_properties.west = Boolean::True,
-                BlockDirection::East => block_properties.east = Boolean::True,
+                BlockDirection::North => block_properties.north = true,
+                BlockDirection::South => block_properties.south = true,
+                BlockDirection::West => block_properties.west = true,
+                BlockDirection::East => block_properties.east = true,
                 _ => {}
             }
         }

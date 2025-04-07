@@ -1,4 +1,4 @@
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_util::math::position::BlockPos;

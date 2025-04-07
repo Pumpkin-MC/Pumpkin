@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::{
-    block::BlockState,
+    BlockState,
     damage::DamageType,
     entity::{EffectType, EntityStatus, EntityType},
     item::Operation,

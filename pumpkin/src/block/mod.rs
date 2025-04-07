@@ -20,9 +20,9 @@ use blocks::torches::register_torch_blocks;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
-use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::loot_table::{
     AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
 };

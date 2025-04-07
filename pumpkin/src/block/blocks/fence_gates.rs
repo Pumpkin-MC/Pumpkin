@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::HorizontalFacing;
+use pumpkin_data::Block;
+use pumpkin_data::properties::BlockProperties;
+use pumpkin_data::properties::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -19,13 +19,13 @@ use crate::world::BlockFlags;
 use crate::world::World;
 use pumpkin_data::item::Item;
 
-type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
+type FenceGateProperties = pumpkin_data::properties::OakFenceGateLikeProperties;
 
 pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> u16 {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
-    fence_gate_props.open = fence_gate_props.open.flip();
+    fence_gate_props.open = !fence_gate_props.open;
     world
         .set_block_state(
             block_pos,

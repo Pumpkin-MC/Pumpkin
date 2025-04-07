@@ -24,11 +24,11 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::{Block, properties::HorizontalFacing};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
