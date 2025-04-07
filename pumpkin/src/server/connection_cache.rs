@@ -11,7 +11,7 @@ use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
     Players, StatusResponse, Version,
     client::{config::CPluginMessage, status::CStatusResponse},
-    codec::{Codec, var_int::VarInt},
+    codec::var_int::VarInt,
 };
 
 use super::CURRENT_MC_VERSION;

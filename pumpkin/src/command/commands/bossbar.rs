@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
+use std::fmt::Write as _;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];
@@ -283,7 +284,7 @@ impl CommandExecutor for RemoveExecuter {
                 handle_bossbar_error(sender, err).await;
                 return Ok(());
             }
-        };
+        }
 
         Ok(())
     }
@@ -691,7 +692,7 @@ async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<
             key.push_str(value);
             key.push_str(".unchanged");
             if let Some(variation) = variation {
-                key.push_str(&format!(".{variation}"));
+                write!(key, ".{variation}").unwrap();
             }
 
             send_error_message(sender, TextComponent::translate(key, [])).await;

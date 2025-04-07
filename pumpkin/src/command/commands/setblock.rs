@@ -55,20 +55,32 @@ impl CommandExecutor for Executor {
                     .break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE)
                     .await;
                 world
-                    .set_block_state(&pos, block_state_id, BlockFlags::FORCE_STATE)
+                    .set_block_state(
+                        &pos,
+                        block_state_id,
+                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    )
                     .await;
                 true
             }
             Mode::Replace => {
                 world
-                    .set_block_state(&pos, block_state_id, BlockFlags::FORCE_STATE)
+                    .set_block_state(
+                        &pos,
+                        block_state_id,
+                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    )
                     .await;
                 true
             }
             Mode::Keep => match world.get_block_state(&pos).await {
                 Ok(old_state) if old_state.air => {
                     world
-                        .set_block_state(&pos, block_state_id, BlockFlags::FORCE_STATE)
+                        .set_block_state(
+                            &pos,
+                            block_state_id,
+                            BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                        )
                         .await;
                     true
                 }

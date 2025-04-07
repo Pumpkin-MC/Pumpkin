@@ -28,7 +28,7 @@ impl Display for Node {
                 f.write_char('>')?;
             }
             _ => {}
-        };
+        }
 
         Ok(())
     }
@@ -72,7 +72,7 @@ impl Display for CommandTree {
 
             if visible_children.is_empty() {
                 break;
-            };
+            }
 
             f.write_char(' ')?;
 

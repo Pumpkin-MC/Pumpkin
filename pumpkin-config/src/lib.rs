@@ -243,8 +243,8 @@ impl LoadConfiguration for BasicConfiguration {
     }
 
     fn validate(&self) {
-        let min = unsafe { NonZeroU8::new_unchecked(2) };
-        let max = unsafe { NonZeroU8::new_unchecked(32) };
+        let min = NonZeroU8::new(2).unwrap();
+        let max = NonZeroU8::new(32).unwrap();
 
         assert!(
             self.view_distance.ge(&min),
@@ -258,6 +258,12 @@ impl LoadConfiguration for BasicConfiguration {
             assert!(
                 self.encryption,
                 "When online mode is enabled, encryption must be enabled"
+            )
+        }
+        if self.allow_chat_reports {
+            assert!(
+                self.online_mode,
+                "When allow_chat_reports is enabled, online_mode must be enabled"
             )
         }
     }
