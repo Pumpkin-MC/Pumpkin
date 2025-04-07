@@ -74,7 +74,7 @@ impl PumpkinItem for AxeItem {
         let world = player.world().await;
 
         // First we try to strip the block. by getting his equivalent and applying it the axis.
-        let mut replacement_block = STRIPPED_BLOCKS.get(&block.id);
+        let replacement_block = STRIPPED_BLOCKS.get(&block.id);
         // If there is a strip equivalent.
         if replacement_block.is_some() {
             // get block state of the old log.
