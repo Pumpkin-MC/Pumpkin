@@ -1,3 +1,4 @@
+use crate::block::get_oxidizable;
 use crate::entity::player::Player;
 use crate::item::items::honeycomb::WAXED2UNWAXED;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -71,6 +72,7 @@ impl PumpkinItem for AxeItem {
         block: &Block,
         _server: &Server,
     ) {
+        // I tried to follow mojang order of doing things.
         let world = player.world().await;
 
         // First we try to strip the block. by getting his equivalent and applying it the axis.
@@ -96,6 +98,21 @@ impl PumpkinItem for AxeItem {
             return;
         }
         // TODO Improve this to conserve block data.
+        // 2 - Try to change stage of oxidation
+        let oxidizable = get_oxidizable().await;
+        let replacement_block = oxidizable.decrease_oxidation(block.clone()).await;
+        if replacement_block.is_some() {
+            world
+                .set_block_state(
+                    &location,
+                    replacement_block.unwrap().default_state_id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+            return;
+        }
+
+        //  3 - Try to get the unwaxed equivalent of the block
         let block_id = WAXED2UNWAXED.get(&block.id);
         if block_id.is_some() {
             let replacement_block = Block::from_id(*block_id.unwrap());

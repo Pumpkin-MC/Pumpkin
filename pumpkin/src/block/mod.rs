@@ -30,6 +30,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
+use crate::block::blocks::oxidizable::Oxidation;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
@@ -62,7 +63,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
     manager.register(TargetBlock);
-
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
     register_fence_gate_blocks(&mut manager);
@@ -72,6 +72,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     register_redstone_torch_blocks(&mut manager);
 
     Arc::new(manager)
+}
+
+pub async fn get_oxidizable() -> Box<Oxidation> {
+    Box::new(Oxidation {})
 }
 
 pub async fn drop_loot(
