@@ -126,8 +126,12 @@ pub static UNWAXED2WAXED: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
         ),
     ])
 });
-pub static WAXED2UNWAXED: LazyLock<HashMap<u16, u16>> =
-    LazyLock::new(|| HashMap::from_iter(UNWAXED2WAXED.iter().map(|(k, v)| (*v, *k))));
+pub static WAXED2UNWAXED: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
+    UNWAXED2WAXED
+        .iter()
+        .map(|(k, v)| (*v, *k))
+        .collect::<HashMap<_, _>>()
+});
 
 impl ItemMetadata for HoneyCombItem {
     fn ids() -> Box<[u16]> {
