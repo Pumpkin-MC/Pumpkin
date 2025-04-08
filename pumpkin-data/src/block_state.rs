@@ -17,7 +17,8 @@ pub struct BlockState {
 
 // Add your methods here
 impl BlockState {
-    pub fn is_full_cube(&self) -> bool {
+    // As you guys can see this is actually a const fn
+    pub const fn is_full_cube(&self) -> bool {
         !self.collision_shapes.is_empty() && self.collision_shapes[0] == 0
     }
 }
