@@ -3,16 +3,16 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
-use pumpkin_data::properties::BlockProperties;
-use pumpkin_data::properties::HorizontalFacing;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::HorizontalFacingExt;
 use pumpkin_world::chunk::TickPriority;
 
-type RWallTorchProps = pumpkin_data::properties::FurnaceLikeProperties;
-type RTorchProps = pumpkin_data::properties::RedstoneOreLikeProperties;
+type RWallTorchProps = pumpkin_data::block_properties::FurnaceLikeProperties;
+type RTorchProps = pumpkin_data::block_properties::RedstoneOreLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
-    properties::{BlockProperties, HorizontalFacing, ObserverLikeProperties},
+    block_properties::{BlockProperties, HorizontalFacing, ObserverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;

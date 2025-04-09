@@ -56,7 +56,7 @@ pub mod fluid {
     include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }
 
-pub mod properties {
+pub mod block_properties {
     include!(concat!(env!("OUT_DIR"), "/block.rs"));
 }
 

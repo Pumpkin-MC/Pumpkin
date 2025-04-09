@@ -4,7 +4,7 @@ use crate::server::Server;
 use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState, properties::HorizontalFacing};
+use pumpkin_data::{Block, BlockState, block_properties::HorizontalFacing};
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;

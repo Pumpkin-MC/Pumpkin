@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::properties::BlockProperties;
-use pumpkin_data::properties::HorizontalFacing;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -13,7 +13,7 @@ use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
-type LogProperties = pumpkin_data::properties::PaleOakWoodLikeProperties;
+type LogProperties = pumpkin_data::block_properties::PaleOakWoodLikeProperties;
 
 pub fn register_log_blocks(manager: &mut BlockRegistry) {
     let tag_values: &'static [&'static str] =

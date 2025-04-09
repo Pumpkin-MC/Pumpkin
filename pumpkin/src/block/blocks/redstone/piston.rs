@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block,
-    properties::{BlockProperties, HorizontalFacing},
+    block_properties::{BlockProperties, HorizontalFacing},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -18,7 +18,7 @@ use crate::{
 
 use super::block_receives_redstone_power;
 
-type PistonProps = pumpkin_data::properties::StickyPistonLikeProperties;
+type PistonProps = pumpkin_data::block_properties::StickyPistonLikeProperties;
 
 #[pumpkin_block("minecraft:piston")]
 pub struct PistonBlock;

@@ -27,6 +27,7 @@ use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     Block,
+    block_properties::COLLISION_SHAPES,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
@@ -52,11 +53,13 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{
+    boundingbox::BoundingBox, collision_shape::CollisionShape, position::BlockPos, vector3::Vector3,
+};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::block::registry::{
-    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_id,
 };
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
@@ -483,7 +486,7 @@ impl World {
             let pos = BlockPos(Vector3::new(position.x, y, position.z));
             let block = self.get_block_state(&pos).await;
             if let Ok(block) = block {
-                if block.air {
+                if block.is_air() {
                     continue;
                 }
             }
@@ -1535,11 +1538,11 @@ impl World {
         position: &BlockPos,
     ) -> Result<pumpkin_data::BlockState, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
-        get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+        get_state_by_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     pub fn get_state_by_id(&self, id: u16) -> Result<pumpkin_data::BlockState, GetBlockError> {
-        get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+        get_state_by_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
@@ -1652,5 +1655,73 @@ impl World {
         if new_state_id != block_state.id {
             self.set_block_state(block_pos, new_state_id, flags).await;
         }
+    }
+
+    pub async fn get_block_collisions(
+        self: &Arc<Self>,
+        from_box: BoundingBox,
+        to_box: BoundingBox,
+    ) -> Vec<CollisionShape> {
+        let mut vec = Vec::new();
+
+        let diff = to_box.min.sub(&from_box.min);
+        let from_pos = BlockPos::floored(
+            from_box.min.x,
+            from_box.min.y,
+            from_box.min.z,
+        );
+        let to_pos = BlockPos::floored(
+            to_box.min.x,
+            to_box.min.y,
+            to_box.min.z,
+        );
+
+        if diff.length_squared() < 0.9999 {
+            for x in from_pos.0.x..=to_pos.0.x {
+                for y in from_pos.0.y..=to_pos.0.y {
+                    for z in from_pos.0.z..=to_pos.0.z {
+                        let block_pos = BlockPos::new(x, y, z);
+                        let block = self.get_block_state(&block_pos).await.unwrap();
+                        let collision_shapes = block.collision_shapes;
+                        for shape in collision_shapes {
+                            let collision_shape = COLLISION_SHAPES[*shape as usize];
+                            if collision_shape.intersects(&from_box) {
+                                vec.push(collision_shape);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        vec
+    }
+
+    pub async fn is_space_empty(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
+        let min = BlockPos::floored(bounding_box.min.x, bounding_box.min.y, bounding_box.min.z);
+        let max = BlockPos::floored(bounding_box.max.x, bounding_box.max.y, bounding_box.max.z);
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.x {
+                for z in min.0.z..=max.0.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    let block = self.get_block_state(&block_pos).await.unwrap();
+                    if block.is_air() || block.collision_shapes.is_empty() {
+                        continue;
+                    } else if block.is_full_cube() {
+                        return false;
+                    }
+
+                    for shape in block.collision_shapes {
+                        let collision_shape = COLLISION_SHAPES[*shape as usize];
+                        if collision_shape.intersects(&bounding_box) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        true
     }
 }

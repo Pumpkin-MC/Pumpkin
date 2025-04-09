@@ -1,10 +1,10 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::math::experience::Experience;
+use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use syn::{Ident, LitBool, LitInt, LitStr};
+use syn::{Ident, LitInt, LitStr};
 
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
@@ -168,7 +168,6 @@ impl ToTokens for BlockPropertyStruct {
             .map(|(_, id)| *id)
             .collect::<Vec<_>>();
 
-        // to_index Körper
         let to_index_body = self
             .data
             .variant_mappings
@@ -192,7 +191,6 @@ impl ToTokens for BlockPropertyStruct {
             })
             .collect::<Vec<_>>();
 
-        // from_index körper
         let from_index_body = self
             .data
             .variant_mappings
@@ -222,7 +220,6 @@ impl ToTokens for BlockPropertyStruct {
             })
             .collect::<Vec<_>>();
 
-        // to_props Werte
         let to_props_values = self.data.variant_mappings.iter().map(|entry| {
             let key = &entry.original_name;
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
@@ -236,7 +233,6 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
-        // from_props Werte
         let from_props_values = self.data.variant_mappings.iter().map(|entry| {
             let key = &entry.original_name;
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
@@ -245,8 +241,7 @@ impl ToTokens for BlockPropertyStruct {
                     #key => {
                         block_props.#field_name = match value.as_str() {
                             "true" => true,
-                            "false" => false,
-                            _ => panic!("Invalid value for {}: {}", #key, value)
+                            _ => false
                         }
                     }
                 },
@@ -334,26 +329,26 @@ impl ToTokens for BlockPropertyStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Copy, Debug)]
 pub struct CollisionShape {
-    pub min: [f64; 3],
-    pub max: [f64; 3],
+    pub min: Vector3<f64>,
+    pub max: Vector3<f64>,
 }
 
 impl ToTokens for CollisionShape {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_x = &self.min[0];
-        let min_y = &self.min[1];
-        let min_z = &self.min[2];
+        let min_x = &self.min.x;
+        let min_y = &self.min.y;
+        let min_z = &self.min.z;
 
-        let max_x = &self.max[0];
-        let max_y = &self.max[1];
-        let max_z = &self.max[2];
+        let max_x = &self.max.x;
+        let max_y = &self.max.y;
+        let max_z = &self.max.z;
 
         tokens.extend(quote! {
             CollisionShape {
-                min: [#min_x, #min_y, #min_z],
-                max: [#max_x, #max_y, #max_z],
+                min: Vector3::new(#min_x, #min_y, #min_z),
+                max: Vector3::new(#max_x, #max_y, #max_z),
             }
         });
     }
@@ -362,19 +357,13 @@ impl ToTokens for CollisionShape {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockState {
     pub id: u16,
-    pub air: bool,
+    pub state_flags: u8,
     pub luminance: u8,
-    pub burnable: bool,
-    pub tool_required: bool,
     pub hardness: f32,
-    pub sided_transparency: bool,
-    pub replaceable: bool,
     pub collision_shapes: Vec<u16>,
     pub opacity: Option<u32>,
     pub block_entity_type: Option<u32>,
     // pub instrument: String, // TODO: make this an enum
-    pub is_solid: bool,
-    pub is_liquid: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -386,15 +375,10 @@ pub struct BlockStateRef {
 impl BlockState {
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
-        //let id = LitInt::new(&self.id.to_string(), Span::call_site());
-        let air = LitBool::new(self.air, Span::call_site());
+        let id = LitInt::new(&self.id.to_string(), Span::call_site());
+        let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
-        let burnable = LitBool::new(self.burnable, Span::call_site());
-        let tool_required = LitBool::new(self.tool_required, Span::call_site());
         let hardness = self.hardness;
-        let is_liquid = LitBool::new(self.is_liquid, Span::call_site());
-        let sided_transparency = LitBool::new(self.sided_transparency, Span::call_site());
-        let replaceable = LitBool::new(self.replaceable, Span::call_site());
         let opacity = match self.opacity {
             Some(opacity) => {
                 let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
@@ -416,22 +400,15 @@ impl BlockState {
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
 
-        let is_solid = LitBool::new(self.is_solid, Span::call_site());
-
         tokens.extend(quote! {
-            PartialBlockState {
-                air: #air,
+            BlockState {
+                id: #id,
+                state_flags: #state_flags,
                 luminance: #luminance,
-                burnable: #burnable,
-                tool_required: #tool_required,
                 hardness: #hardness,
-                sided_transparency: #sided_transparency,
-                replaceable: #replaceable,
                 collision_shapes: &[#(#collision_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
-                is_liquid: #is_liquid,
-                is_solid: #is_solid,
             }
         });
         tokens
@@ -909,15 +886,10 @@ pub(crate) fn build() -> TokenStream {
         for state in block.states.clone() {
             // Check if this state is already in `unique_states` by comparing all fields except `id`.
             let already_exists = unique_states.iter().any(|s: &BlockState| {
-                s.air == state.air
+                s.state_flags == state.state_flags
                     && s.luminance == state.luminance
-                    && s.burnable == state.burnable
-                    && s.tool_required == state.tool_required
                     && s.hardness == state.hardness
-                    && s.sided_transparency == state.sided_transparency
-                    && s.replaceable == state.replaceable
                     && s.collision_shapes == state.collision_shapes
-                    && s.is_liquid == state.is_liquid
             });
 
             if !already_exists {
@@ -956,13 +928,9 @@ pub(crate) fn build() -> TokenStream {
                     let state_idx = unique_states
                         .iter()
                         .position(|s| {
-                            s.air == state.air
+                            s.state_flags == state.state_flags
                                 && s.luminance == state.luminance
-                                && s.burnable == state.burnable
-                                && s.tool_required == state.tool_required
                                 && s.hardness == state.hardness
-                                && s.sided_transparency == state.sided_transparency
-                                && s.replaceable == state.replaceable
                                 && s.collision_shapes == state.collision_shapes
                         })
                         .unwrap() as u16;
@@ -983,7 +951,7 @@ pub(crate) fn build() -> TokenStream {
             let generated_property = generated_properties
                 .iter()
                 .find(|p| p.hash_key == property)
-                .unwrap();
+                .expect(&format!("invalid property: {}", property));
             property_collection.insert(generated_property.hash_key);
             let property = generated_property.to_property();
             let renamed_property = property.enum_name.to_upper_camel_case();
@@ -1108,33 +1076,13 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
-
-        #[derive(Clone, Debug)]
-        pub struct PartialBlockState {
-            pub air: bool,
-            pub luminance: u8,
-            pub burnable: bool,
-            pub tool_required: bool,
-            pub hardness: f32,
-            pub sided_transparency: bool,
-            pub replaceable: bool,
-            pub collision_shapes: &'static [u16],
-            pub opacity: Option<u32>,
-            pub block_entity_type: Option<u32>,
-            pub is_liquid: bool,
-            pub is_solid: bool,
-        }
+        use pumpkin_util::math::collision_shape::CollisionShape;
+        use pumpkin_util::math::vector3::Vector3;
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
             pub name: &'static str,
             pub values: &'static [&'static str],
-        }
-
-        #[derive(Clone, Copy, Debug)]
-        pub struct CollisionShape {
-            pub min: [f64; 3],
-            pub max: [f64; 3],
         }
 
         pub trait BlockProperties where Self: 'static {
@@ -1171,7 +1119,7 @@ pub(crate) fn build() -> TokenStream {
             #(#shapes),*
         ];
 
-        pub static BLOCK_STATES: &[PartialBlockState] = &[
+        pub static BLOCK_STATES: &[BlockState] = &[
             #(#unique_states),*
         ];
 
@@ -1240,22 +1188,9 @@ pub(crate) fn build() -> TokenStream {
 
         impl BlockStateRef {
             pub fn get_state(&self) -> BlockState {
-                let partial_state = &BLOCK_STATES[self.state_idx as usize];
-                BlockState {
-                    id: self.id,
-                    air: partial_state.air,
-                    luminance: partial_state.luminance,
-                    burnable: partial_state.burnable,
-                    tool_required: partial_state.tool_required,
-                    hardness: partial_state.hardness,
-                    sided_transparency: partial_state.sided_transparency,
-                    replaceable: partial_state.replaceable,
-                    collision_shapes: partial_state.collision_shapes,
-                    opacity: partial_state.opacity,
-                    block_entity_type: partial_state.block_entity_type,
-                    is_liquid: partial_state.is_liquid,
-                    is_solid: partial_state.is_solid,
-                }
+                let mut state = BLOCK_STATES[self.state_idx as usize].clone();
+                state.id = self.id;
+                state
             }
         }
 

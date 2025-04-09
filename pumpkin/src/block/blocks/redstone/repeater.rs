@@ -3,8 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
+    block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
     item::Item,
-    properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -23,7 +23,7 @@ use crate::{
 
 use super::{diode_get_input_strength, get_weak_power, is_diode};
 
-type RepeaterProperties = pumpkin_data::properties::RepeaterLikeProperties;
+type RepeaterProperties = pumpkin_data::block_properties::RepeaterLikeProperties;
 
 #[pumpkin_block("minecraft:repeater")]
 pub struct RepeaterBlock;

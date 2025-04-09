@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
-use pumpkin_data::properties::BlockProperties;
-use pumpkin_data::properties::HorizontalFacing;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
@@ -10,8 +10,8 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
-type FenceGateProperties = pumpkin_data::properties::OakFenceGateLikeProperties;
-type FenceLikeProperties = pumpkin_data::properties::OakFenceLikeProperties;
+type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
+type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;
@@ -37,7 +37,8 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
         return false;
     }
 
-    to.is_tagged_with("c:fences/wooden").unwrap() || (to_state.is_solid && to_state.is_full_cube())
+    to.is_tagged_with("c:fences/wooden").unwrap()
+        || (to_state.is_solid() && to_state.is_full_cube())
 }
 
 /// This returns an index and not a state id making it so all fences can use the same state calculation function

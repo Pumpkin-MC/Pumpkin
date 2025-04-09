@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use crate::server::Server;
@@ -163,9 +163,7 @@ impl LivingEntity {
 
     /// Returns if the entity was damaged or not
     pub fn check_damage(&self, amount: f32) -> bool {
-        let regen = self
-            .time_until_regen
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let regen = self.time_until_regen.load(Relaxed);
 
         let last_damage = self.last_damage_taken.load();
         // TODO: check if bypasses iframe
@@ -174,8 +172,7 @@ impl LivingEntity {
                 return false;
             }
         } else {
-            self.time_until_regen
-                .store(20, std::sync::atomic::Ordering::Relaxed);
+            self.time_until_regen.store(20, Relaxed);
         }
 
         self.last_damage_taken.store(amount);
@@ -238,25 +235,31 @@ impl LivingEntity {
             )
             .await;
     }
+
+    fn tick_move(&self) {
+        let velo = self.entity.velocity.load();
+        let pos = self.entity.pos.load();
+        self.entity
+            .pos
+            .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
+        let multiplier = f64::from(Entity::velocity_multiplier(pos));
+        self.entity
+            .velocity
+            .store(velo.multiply(multiplier, 1.0, multiplier));
+    }
 }
 
 #[async_trait]
 impl EntityBase for LivingEntity {
     async fn tick(&self, server: &Server) {
         self.entity.tick(server).await;
+        self.tick_move();
 
-        if self
-            .time_until_regen
-            .load(std::sync::atomic::Ordering::Relaxed)
-            > 0
-        {
-            self.time_until_regen
-                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        if self.time_until_regen.load(Relaxed) > 0 {
+            self.time_until_regen.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
-            let time = self
-                .death_time
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let time = self.death_time.fetch_add(1, Relaxed);
             if time >= 20 {
                 // Spawn Death particles
                 self.entity

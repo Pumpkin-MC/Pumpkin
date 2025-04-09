@@ -74,7 +74,7 @@ impl Explosion {
         for pos in blocks {
             let block_state = world.get_block_state(&pos).await.unwrap();
 
-            if block_state.air {
+            if block_state.is_air() {
                 continue;
             }
 

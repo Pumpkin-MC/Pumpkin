@@ -120,8 +120,20 @@ async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     );
 
     let entity = world.create_entity(pos, EntityType::ITEM);
-    let item_entity =
-        Arc::new(ItemEntity::new(entity, stack.item.id, u32::from(stack.item_count)).await);
+    let item_entity = Arc::new(
+        ItemEntity::new(
+            entity,
+            stack.item.id,
+            u32::from(stack.item_count),
+            Vector3::new(
+                rand::random::<f64>() * 0.2 - 0.1,
+                0.2,
+                rand::random::<f64>() * 0.2 - 0.1,
+            ),
+            10,
+        )
+        .await,
+    );
     world.spawn_entity(item_entity.clone()).await;
     item_entity.send_meta_packet().await;
 }

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block, BlockState,
-    properties::{BlockProperties, JukeboxLikeProperties},
+    block_properties::{BlockProperties, JukeboxLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;

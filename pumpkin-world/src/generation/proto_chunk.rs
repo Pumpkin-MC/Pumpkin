@@ -4,7 +4,7 @@ use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
-    block::{ChunkBlockState, registry::get_state_by_state_id},
+    block::{ChunkBlockState, registry::get_state_by_id},
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
 };
@@ -486,13 +486,13 @@ impl<'a> ProtoChunk<'a> {
                 for y in (min_y as i32..top_block).rev() {
                     let pos = Vector3::new(x, y, z);
                     let state = self.get_block_state(&pos);
-                    let state = get_state_by_state_id(state.state_id).unwrap();
-                    if state.air {
+                    let state = get_state_by_id(state.state_id).unwrap();
+                    if state.is_air() {
                         stone_depth_above = 0;
                         fluid_height = i32::MIN;
                         continue;
                     }
-                    if state.is_liquid {
+                    if state.is_liquid() {
                         if fluid_height == i32::MIN {
                             fluid_height = y + 1;
                         }

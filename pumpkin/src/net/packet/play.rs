@@ -28,7 +28,7 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, properties::HorizontalFacing};
+use pumpkin_data::{Block, block_properties::HorizontalFacing};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
@@ -56,7 +56,6 @@ use pumpkin_protocol::{
         SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
     },
 };
-use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::polynomial_rolling_hash;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
@@ -1193,7 +1192,7 @@ impl Player {
                         self.tick_counter.load(std::sync::atomic::Ordering::Relaxed),
                         std::sync::atomic::Ordering::Relaxed,
                     );
-                    if !state.air {
+                    if !state.is_air() {
                         let speed = block::calc_block_breaking(self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
@@ -1643,11 +1642,10 @@ impl Player {
         let adjusted_yaw = (self.living_entity.entity.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
 
         match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
             45.0..=135.0 => HorizontalFacing::West,
             135.0..=225.0 => HorizontalFacing::North,
             225.0..=315.0 => HorizontalFacing::East,
-            _ => HorizontalFacing::South, // Default case, should not occur
+            _ => HorizontalFacing::South,
         }
     }
 
@@ -1706,8 +1704,9 @@ impl Player {
             //let previous_block = world.get_block(&block_pos).await?;
             let previous_block_state = world.get_block_state(&block_pos).await?;
 
-            if !previous_block_state.replaceable && !updateable {
-                return Ok(true);
+            if !previous_block_state.replaceable() && !updateable {
+                //no decrement if the block is not replaceable
+                return Ok(false);
             }
 
             (block_pos, &face.opposite())
@@ -1723,21 +1722,19 @@ impl Player {
                 &final_block_pos,
                 &use_item_on,
                 &self.get_player_direction(),
-                !(clicked_block_state.replaceable || updateable),
+                !(clicked_block_state.replaceable() || updateable),
             )
             .await;
 
         // At this point, we must have the new block state.
         let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
         let mut intersects = false;
-        for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
+        'main: for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {
-                let block_box = BoundingBox::from_block_raw(&final_block_pos)
-                    .offset(BoundingBox::new_array(shape.min, shape.max));
-                if player_box.intersects(&block_box) {
+                if shape.intersects(&player_box) {
                     intersects = true;
-                    break;
+                    break 'main;
                 }
             }
         }

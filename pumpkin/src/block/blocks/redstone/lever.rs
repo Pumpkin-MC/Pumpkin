@@ -5,8 +5,8 @@ use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
+    block_properties::{BlockFace, BlockProperties, HorizontalFacing, LeverLikeProperties},
     item::Item,
-    properties::{BlockFace, BlockProperties, HorizontalFacing, LeverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;

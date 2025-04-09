@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::AtomicU32};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering::Relaxed},
+};
 
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, item::Item};
@@ -6,7 +9,7 @@ use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::slot::Slot,
 };
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
@@ -25,21 +28,21 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
-    pub async fn new(entity: Entity, item_id: u16, count: u32) -> Self {
-        entity
-            .set_velocity(Vector3::new(
-                rand::random::<f64>() * 0.2 - 0.1,
-                0.2,
-                rand::random::<f64>() * 0.2 - 0.1,
-            ))
-            .await;
+    pub async fn new(
+        entity: Entity,
+        item_id: u16,
+        count: u32,
+        velocity: Vector3<f64>,
+        pickup_delay: u8,
+    ) -> Self {
+        entity.set_velocity(velocity).await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
             item: Item::from_id(item_id).expect("We passed a bad item id into ItemEntity"),
             item_age: AtomicU32::new(0),
             item_count: Mutex::new(count),
-            pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
+            pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
         }
     }
     pub async fn send_meta_packet(&self) {
@@ -53,19 +56,76 @@ impl ItemEntity {
 #[async_trait]
 impl EntityBase for ItemEntity {
     async fn tick(&self, server: &Server) {
-        self.entity.tick(server).await;
+        let entity = &self.entity;
+        entity.tick(server).await;
         {
             let mut delay = self.pickup_delay.lock().await;
             *delay = delay.saturating_sub(1);
         };
 
-        let age = self
-            .item_age
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let age = self.item_age.fetch_add(1, Relaxed);
         if age >= 6000 {
-            self.entity.remove().await;
+            entity.remove().await;
         }
+
+        let mut velocity = entity.velocity.load();
+
+        if entity.pos.load().y > 99.9 {
+            velocity.y -= 0.04;
+            entity.on_ground.store(false, Relaxed);
+        } else {
+            entity.on_ground.store(true, Relaxed);
+        }
+
+        if !entity.on_ground.load(Relaxed)
+            || velocity.horizontal_length_squared() > 1.0E-5
+            || (age + entity.entity_id as u32) % 4 == 0
+        {
+            let no_clip = true;
+            println!("space: {}", entity.world.read().await.is_space_empty(entity.bounding_box.load()).await);
+            entity.move_entity(velocity, no_clip);
+            entity.tick_block_collision();
+
+            let mut friction = 0.98;
+
+            if entity.on_ground.load(Relaxed) {
+                let pos = entity.pos.load();
+                let block_pos = BlockPos::floored(pos.x, pos.y - 0.51, pos.z);
+                friction *= entity
+                    .world
+                    .read()
+                    .await
+                    .get_block(&block_pos)
+                    .await
+                    .unwrap()
+                    .slipperiness as f64;
+            }
+
+            println!("friction: {}", friction);
+
+            velocity = velocity.multiply(friction, 0.98, friction);
+
+            if entity.on_ground.load(Relaxed) && velocity.y < 0.1 {
+                velocity.y *= -0.5;
+            }
+        }
+
+        entity.velocity.store(velocity);
+
+        entity
+            .world
+            .read()
+            .await
+            .spawn_particle(
+                entity.pos.load(),
+                Vector3::new(0.0, 0.0, 0.0),
+                0.1,
+                7,
+                pumpkin_data::particle::Particle::DustPlume,
+            )
+            .await;
     }
+
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
         false
     }
@@ -86,9 +146,7 @@ impl EntityBase for ItemEntity {
                 while *stack_size > 0 {
                     if let Some(slot) = inv.get_pickup_item_slot(self.item.id) {
                         // Fill the inventory while there are items in the stack and space in the inventory
-                        let maybe_stack = inv
-                            .get_slot(slot)
-                            .expect("collect item slot returned an invalid slot");
+                        let maybe_stack = inv.get_slot(slot).unwrap();
 
                         if let Some(existing_stack) = maybe_stack {
                             // We have the item in this stack already

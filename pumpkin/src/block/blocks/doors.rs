@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::properties::Axis;
-use pumpkin_data::properties::BlockProperties;
-use pumpkin_data::properties::DoorHinge;
-use pumpkin_data::properties::DoubleBlockHalf;
-use pumpkin_data::properties::HorizontalFacing;
+use pumpkin_data::block_properties::Axis;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::DoorHinge;
+use pumpkin_data::block_properties::DoubleBlockHalf;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::RegistryKey;
@@ -27,7 +27,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use crate::server::Server;
 use crate::world::World;
 
-type DoorProperties = pumpkin_data::properties::OakDoorLikeProperties;
+type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
 async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
@@ -199,11 +199,11 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 if world
                     .get_block_state(&block_pos.offset(BlockDirection::Up.to_offset()))
                     .await
-                    .is_ok_and(|state| state.replaceable)
+                    .is_ok_and(|state| state.replaceable())
                     && world
                         .get_block_state(&block_pos.offset(BlockDirection::Down.to_offset()))
                         .await
-                        .is_ok_and(|state| state.is_solid && state.is_full_cube())
+                        .is_ok_and(|state| state.is_solid() && state.is_full_cube())
                 {
                     return true;
                 }

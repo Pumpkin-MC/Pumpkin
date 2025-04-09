@@ -3,10 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
+use pumpkin_data::block_properties::BlockFace;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::item::Item;
-use pumpkin_data::properties::BlockFace;
-use pumpkin_data::properties::BlockProperties;
-use pumpkin_data::properties::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -14,7 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
-type ButtonLikeProperties = pumpkin_data::properties::LeverLikeProperties;
+type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};

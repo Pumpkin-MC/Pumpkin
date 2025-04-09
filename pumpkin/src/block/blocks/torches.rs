@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::properties::BlockProperties;
-use pumpkin_data::properties::HorizontalFacing;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
-type WallTorchProps = pumpkin_data::properties::WallTorchLikeProperties;
+type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
