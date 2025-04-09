@@ -100,7 +100,8 @@ impl PumpkinItem for AxeItem {
         // TODO Improve this to conserve block data.
         // 2 - Try to change stage of oxidation
         let oxidizable = get_oxidizable().await;
-        let replacement_block = oxidizable.decrease_oxidation(block.clone()).await;
+
+        let replacement_block = oxidizable.decrease_oxidation(block);
         if replacement_block.is_some() {
             world
                 .set_block_state(

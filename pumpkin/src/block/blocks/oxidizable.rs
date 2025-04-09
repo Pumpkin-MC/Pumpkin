@@ -88,14 +88,16 @@ static OXIDATION_DECREASE: LazyLock<HashMap<u16, u16>> = LazyLock::new(|| {
         .map(|(k, v)| (*v, *k))
         .collect::<HashMap<_, _>>()
 });
-
-pub struct Oxidation {}
-
-impl Oxidation {
-    pub async fn decrease_oxidation(&self, block: Block) -> Option<Block> {
+pub trait Oxidizable {
+    fn decrease_oxidation(&self, block: &Block) -> Option<Block>;
+}
+pub struct Oxidation;
+impl Oxidizable for Oxidation {
+    fn decrease_oxidation(&self, block: &Block) -> Option<Block> {
         let replacement_block = OXIDATION_DECREASE.get(&block.id);
-        if replacement_block.is_some() {
-            return Block::from_id(*replacement_block.unwrap());
+        // Clippy made me do this
+        if let Some(item) = replacement_block {
+            return Block::from_id(*item);
         }
         None
     }
