@@ -237,7 +237,7 @@ impl PluginManager {
         &self,
         loader: &Arc<dyn PluginLoader>,
         path: &Path,
-    ) -> Result<LoadedPlugin, LoaderError> {
+    ) -> Result<LoadedPlugin, ManagerError> {
         let server = self
             .server
             .as_ref()
@@ -257,7 +257,7 @@ impl PluginManager {
             tokio::spawn(async move {
                 loader.unload(data).await.ok();
             });
-            return Err(LoaderError::InitializationFailed(e));
+            return Err(ManagerError::LoaderError(LoaderError::InitializationFailed(e)));
         }
 
         Ok(LoadedPlugin {
