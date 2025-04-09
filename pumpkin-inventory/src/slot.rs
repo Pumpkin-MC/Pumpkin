@@ -156,6 +156,7 @@ pub trait Slot<I: Inventory> {
 }
 
 #[derive(Debug, Clone)]
+/// Just called Slot in Vanilla
 pub struct NormalSlot<I: Inventory> {
     pub inventory: Arc<Mutex<I>>,
     pub index: usize,

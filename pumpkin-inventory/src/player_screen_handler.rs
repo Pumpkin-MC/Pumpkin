@@ -2,7 +2,13 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use crate::{equipment_slot::EquipmentSlot, inventory::Inventory, screen_handler::ScreenHandler};
+use crate::{
+    crafting::{CraftingScreenHandler, RecipeFinderScreenHandler},
+    equipment_slot::EquipmentSlot,
+    inventory::Inventory,
+    player_inventory::PlayerInventory,
+    screen_handler::ScreenHandler,
+};
 
 pub struct PlayerScreenHandler {}
 
@@ -13,4 +19,10 @@ impl PlayerScreenHandler {
         EquipmentSlot::LEGS,
         EquipmentSlot::FEET,
     ];
+
+    //pub fn new(player_inventory: Arc<Mutex<PlayerInventory>>) -> Self {
+
+    //}
 }
+
+impl RecipeFinderScreenHandler for PlayerScreenHandler {}
