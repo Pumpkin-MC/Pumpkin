@@ -1469,7 +1469,7 @@ impl NBTStorage for Player {
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Save the selected slot (hotbar)
-        nbt.put_int("SelectedItemSlot", self.selected_slot as i32);
+        nbt.put_int("SelectedItemSlot", self.get_selected_slot() as i32);
 
         // Create inventory list with the correct capacity (inventory size)
         let mut vec: Vec<NbtTag> = Vec::with_capacity(36);
@@ -1492,7 +1492,7 @@ impl NBTStorage for PlayerInventory {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
-        self.selected_slot = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
+        self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
 
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {

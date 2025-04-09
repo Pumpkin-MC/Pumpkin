@@ -20,8 +20,8 @@ use std::collections::HashMap;
 pub struct PlayerInventory {
     pub main_inventory: [ItemStack; Self::MAIN_SIZE],
     pub equipment_slots: HashMap<usize, EquipmentSlot>,
-    pub change_count: u32,
-    pub selected_slot: usize,
+    change_count: u32,
+    selected_slot: u8,
     pub entity_equipment: EntityEquipment,
 }
 
@@ -43,11 +43,15 @@ impl PlayerInventory {
 
     /// getSelectedStack in source
     pub fn held_item(&self) -> &ItemStack {
-        self.main_inventory.get(self.selected_slot).unwrap()
+        self.main_inventory
+            .get(self.selected_slot as usize)
+            .unwrap()
     }
 
     pub fn held_item_mut(&mut self) -> &mut ItemStack {
-        self.main_inventory.get_mut(self.selected_slot).unwrap()
+        self.main_inventory
+            .get_mut(self.selected_slot as usize)
+            .unwrap()
     }
 
     pub fn is_valid_hotbar_index(slot: usize) -> bool {
@@ -164,5 +168,23 @@ impl IntoIterator for PlayerInventory {
 
     fn into_iter(self) -> Self::IntoIter {
         InventoryIterator::new(self)
+    }
+}
+
+pub fn is_valid_hotbar_slot(slot: u8) -> bool {
+    slot < 9
+}
+
+impl PlayerInventory {
+    pub fn set_selected_slot(&mut self, slot: u8) {
+        if is_valid_hotbar_slot(slot) {
+            self.selected_slot = slot;
+        } else {
+            panic!("Invalid hotbar slot: {}", slot);
+        }
+    }
+
+    pub fn get_selected_slot(&self) -> u8 {
+        self.selected_slot
     }
 }

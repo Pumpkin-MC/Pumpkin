@@ -1379,7 +1379,6 @@ impl Player {
         };
 
         let inventory = self.inventory().lock().await;
-        let slot_id = inventory.selected_slot;
         let held_item = inventory.held_item().clone();
         drop(inventory);
 
@@ -1496,7 +1495,7 @@ impl Player {
             return;
         }
         let mut inv = self.inventory().lock().await;
-        inv.selected_slot = slot as usize;
+        inv.set_selected_slot(slot as u8);
         let stack = inv.held_item();
         let equipment = &[(EquipmentSlot::MainHand, stack.clone())];
         self.living_entity.send_equipment_changes(equipment).await;
