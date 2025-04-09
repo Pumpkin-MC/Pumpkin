@@ -51,6 +51,7 @@ mod test {
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalProtoNoiseRouter, GlobalRandomConfig,
         NOISE_ROUTER_ASTS, ProtoChunk,
+        chunk::palette::BIOME_NETWORK_MAX_BITS,
         generation::noise_router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         },
@@ -127,5 +128,13 @@ mod test {
 
         let hashed_seed = hash_seed((-777i64) as u64);
         assert_eq!(-1087248400229165450, hashed_seed);
+    }
+
+    #[test]
+    fn test_proper_network_bits_per_entry() {
+        let id_to_test = 1 << BIOME_NETWORK_MAX_BITS;
+        if Biome::from_id(id_to_test).is_some() {
+            panic!("We need to update our constants!");
+        }
     }
 }

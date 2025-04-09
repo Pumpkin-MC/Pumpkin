@@ -75,7 +75,7 @@ impl Player {
         inventory.increment_state_id();
         let packet = CSetContainerContent::new(
             id.into(),
-            (inventory.state_id).into(),
+            (inventory.state_id).try_into().unwrap(),
             &slots,
             &carried_item,
         );
@@ -335,7 +335,7 @@ impl Player {
                                 *carried_item = None;
                             }
                         }
-                    };
+                    }
                 }
                 Ok(())
             }
@@ -463,7 +463,7 @@ impl Player {
                 }
             }
             container_click::Slot::OutsideInventory => (),
-        };
+        }
         Ok(())
     }
 

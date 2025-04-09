@@ -4,6 +4,8 @@ use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{advanced_config, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
 use reqwest::{StatusCode, Url};
+use rsa::RsaPublicKey;
+use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;
 use thiserror::Error;
 use uuid::Uuid;
@@ -28,8 +30,24 @@ pub struct Texture {
     metadata: Option<HashMap<String, String>>,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+pub struct JsonPublicKey {
+    #[serde(rename = "publicKey")]
+    pub public_key: String,
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct MojangPublicKeys {
+    #[serde(rename = "profilePropertyKeys")]
+    pub profile_property_keys: Vec<JsonPublicKey>,
+    #[serde(rename = "playerCertificateKeys")]
+    pub player_certificate_keys: Vec<JsonPublicKey>,
+    #[serde(rename = "authenticationKeys")]
+    pub authentication_keys: Option<Vec<JsonPublicKey>>,
+}
+
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
+const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
 
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///
@@ -125,6 +143,47 @@ pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), Tex
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
     Ok(())
+}
+
+pub async fn fetch_mojang_public_keys(
+    auth_client: &reqwest::Client,
+) -> Result<Vec<RsaPublicKey>, AuthError> {
+    let services_url = advanced_config()
+        .networking
+        .authentication
+        .services_url
+        .as_deref()
+        .unwrap_or(MOJANG_SERVICES_URL);
+
+    let url = format!("{services_url}/publickeys");
+
+    let response = auth_client
+        .get(url)
+        .send()
+        .await
+        .map_err(|_| AuthError::FailedResponse)?;
+
+    match response.status() {
+        StatusCode::OK => {}
+        StatusCode::NO_CONTENT => Err(AuthError::FailedResponse)?,
+        other => Err(AuthError::UnknownStatusCode(other))?,
+    }
+
+    let public_keys: MojangPublicKeys =
+        response.json().await.map_err(|_| AuthError::FailedParse)?;
+
+    let as_rsa_keys = public_keys
+        .player_certificate_keys
+        .into_iter()
+        .map(|key| {
+            let decoded_key = general_purpose::STANDARD
+                .decode(key.public_key.as_bytes())
+                .map_err(|_| AuthError::FailedParse)?;
+            RsaPublicKey::from_public_key_der(&decoded_key).map_err(|_| AuthError::FailedParse)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(as_rsa_keys)
 }
 
 #[derive(Error, Debug)]

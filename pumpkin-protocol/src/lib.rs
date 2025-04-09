@@ -1,7 +1,6 @@
 use std::{
     io::{Read, Write},
     marker::PhantomData,
-    num::NonZeroU16,
 };
 
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, BlockSizeUser, generic_array::GenericArray};
@@ -12,7 +11,6 @@ use ser::{NetworkWriteExt, ReadingError, WritingError, packet::Packet};
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{DeserializeSeed, Visitor},
-    ser::SerializeSeq,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -26,10 +24,6 @@ pub mod query;
 pub mod ser;
 #[cfg(feature = "serverbound")]
 pub mod server;
-
-/// The current Minecraft protocol number.
-/// Don't forget to change this when porting.
-pub const CURRENT_MC_PROTOCOL: NonZeroU16 = unsafe { NonZeroU16::new_unchecked(770) };
 
 pub const MAX_PACKET_SIZE: u64 = 2097152;
 pub const MAX_PACKET_DATA_SIZE: usize = 8388608;
@@ -91,7 +85,7 @@ where
     {
         enum IdOrStateDeserializer<T> {
             Init,
-            Id(u32),
+            Id(u16),
             Value(T),
         }
 
@@ -109,11 +103,15 @@ where
                     IdOrStateDeserializer::Init => {
                         // Get the VarInt
                         let id = VarInt::deserialize(deserializer)?;
-                        assert!(id.0 >= 0);
-                        *self = IdOrStateDeserializer::<T>::Id(id.0 as u32);
+                        *self = IdOrStateDeserializer::<T>::Id(id.0.try_into().map_err(|_| {
+                            serde::de::Error::custom(format!(
+                                "{} cannot be mapped to a registry id",
+                                id.0
+                            ))
+                        })?);
                     }
                     IdOrStateDeserializer::Id(id) => {
-                        assert!(*id == 0);
+                        debug_assert!(*id == 0);
                         // Get the data
                         let value = T::deserialize(deserializer)?;
                         *self = IdOrStateDeserializer::Value(value);
@@ -149,7 +147,7 @@ where
 
 #[derive(PartialEq, Clone)]
 pub enum IdOr<T> {
-    Id(u32),
+    Id(u16),
     Value(T),
 }
 
@@ -173,10 +171,16 @@ impl<T: Serialize> Serialize for IdOr<T> {
         match self {
             IdOr::Id(id) => VarInt::from(*id + 1).serialize(serializer),
             IdOr::Value(value) => {
-                let mut seq = serializer.serialize_seq(None)?;
-                seq.serialize_element(&VarInt::from(0))?;
-                seq.serialize_element(value)?;
-                seq.end()
+                #[derive(Serialize)]
+                struct NetworkRepr<T: Serialize> {
+                    zero_id: VarInt,
+                    value: T,
+                }
+                NetworkRepr {
+                    zero_id: 0.into(),
+                    value,
+                }
+                .serialize(serializer)
             }
         }
     }
@@ -388,6 +392,7 @@ pub struct Property {
     pub signature: Option<String>,
 }
 
+#[derive(Serialize)]
 pub struct KnownPack<'a> {
     pub namespace: &'a str,
     pub id: &'a str,

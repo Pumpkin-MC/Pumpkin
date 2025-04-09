@@ -2,16 +2,16 @@ use core::error;
 use std::{
     fs::File,
     io::{Cursor, Read},
-    num::NonZeroU32,
     path::Path,
 };
 
 use base64::{Engine as _, engine::general_purpose};
 use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
-    CURRENT_MC_PROTOCOL, Players, StatusResponse, Version,
+    Players, StatusResponse, Version,
     client::{config::CPluginMessage, status::CStatusResponse},
-    codec::{Codec, var_int::VarInt},
+    codec::var_int::VarInt,
 };
 
 use super::CURRENT_MC_VERSION;
@@ -144,7 +144,7 @@ impl CachedStatus {
         StatusResponse {
             version: Some(Version {
                 name: CURRENT_MC_VERSION.into(),
-                protocol: NonZeroU32::from(CURRENT_MC_PROTOCOL).get(),
+                protocol: CURRENT_MC_PROTOCOL,
             }),
             players: Some(Players {
                 max: config.max_players,

@@ -1,4 +1,4 @@
-use crate::chunk::format::PaletteEntry;
+use crate::chunk::format::PaletteBlockEntry;
 
 use super::registry::{get_block, get_state_by_state_id};
 
@@ -29,7 +29,7 @@ impl ChunkBlockState {
         })
     }
 
-    pub fn from_palette(palette: &PaletteEntry) -> Self {
+    pub fn from_palette(palette: &PaletteBlockEntry) -> Option<Self> {
         let block = get_block(palette.name.as_str());
 
         if let Some(block) = block {
@@ -44,13 +44,13 @@ impl ChunkBlockState {
                 state_id = block_properties.to_state_id(&block);
             }
 
-            return Self {
+            return Some(Self {
                 state_id,
                 block_id: block.id,
-            };
+            });
         }
 
-        ChunkBlockState::AIR
+        None
     }
 
     pub fn get_id(&self) -> u16 {

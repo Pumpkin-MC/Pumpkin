@@ -37,6 +37,7 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
     sync::LazyLock,
@@ -49,7 +50,6 @@ use tokio::sync::Mutex;
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
-use pumpkin_protocol::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
@@ -65,6 +65,13 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
+#[cfg(feature = "dhat-heap")]
+use pumpkin::HEAP_PROFILER;
+
 pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
 
@@ -76,6 +83,13 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "dhat-heap")]
+    {
+        let profiler = dhat::Profiler::new_heap();
+        let mut static_loc = HEAP_PROFILER.lock().await;
+        *static_loc = Some(profiler);
+    };
+
     let time = Instant::now();
 
     init_log!();
@@ -92,7 +106,6 @@ async fn main() {
         .thread_name(|_| "rayon-worker".to_string())
         .build_global()
         .expect("Rayon thread pool can only be initialized once");
-
     log::info!(
         "Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
     );

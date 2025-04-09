@@ -42,6 +42,7 @@ impl<'a> CTeleportEntity<'a> {
     }
 }
 
+// TODO: Do we need a custom impl?
 impl ClientPacket for CTeleportEntity<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;

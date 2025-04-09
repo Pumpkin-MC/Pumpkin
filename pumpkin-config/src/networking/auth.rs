@@ -11,6 +11,8 @@ pub struct AuthenticationConfig {
     pub read_timeout: u32,
     pub prevent_proxy_connections: bool,
     pub prevent_proxy_connection_auth_url: Option<String>,
+    /// Drasl and Mojang both call their public keys endpoint the "services url"
+    pub services_url: Option<String>,
     /// Player profile handling.
     pub player_profile: PlayerProfileConfig,
     /// Texture handling.
@@ -26,6 +28,7 @@ impl Default for AuthenticationConfig {
             textures: Default::default(),
             url: None,
             prevent_proxy_connection_auth_url: None,
+            services_url: None,
             connect_timeout: 5000,
             read_timeout: 5000,
         }
