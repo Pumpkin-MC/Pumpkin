@@ -8,10 +8,13 @@ use crate::{
     slot::{NormalSlot, Slot},
 };
 
+//ScreenHandler.java
+// TODO: Fully implement this
 pub trait ScreenHandler {
-    fn new(window_type: WindowType, sync_id: u8) -> Self;
+    /// WindowType is None for the player inventory
+    fn new(window_type: Option<WindowType>, sync_id: u8) -> Self;
 
-    fn window_type(&self) -> WindowType;
+    fn window_type(&self) -> Option<WindowType>;
 
     fn size(&self) -> usize;
 

@@ -4,14 +4,12 @@ use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::inventory::Inventory;
+use crate::{equipment_slot::EquipmentSlot, inventory::Inventory};
 
 // Slot.java
 // This is a trait due to crafting slots being a thing
 #[async_trait]
 pub trait Slot<I: Inventory> {
-    fn new(inventory: Arc<Mutex<I>>, index: usize) -> Self;
-
     fn get_inventory(&self) -> &Arc<Mutex<I>>;
 
     fn get_index(&self) -> usize;
@@ -32,8 +30,8 @@ pub trait Slot<I: Inventory> {
     fn on_take(&self, _amount: u8) {}
 
     // TODO: Source takes player as parameter
-    fn on_take_item(&self, _stack: &ItemStack) {
-        self.mark_dirty();
+    async fn on_take_item(&self, _stack: &ItemStack) {
+        self.mark_dirty().await;
     }
 
     fn can_insert(&self, _stack: &ItemStack) -> bool {
@@ -63,7 +61,7 @@ pub trait Slot<I: Inventory> {
         let mut inv = self.get_inventory().lock().await;
         inv.set_stack(self.get_index(), stack);
         drop(inv);
-        self.mark_dirty();
+        self.mark_dirty().await;
     }
 
     async fn mark_dirty(&self);
@@ -164,16 +162,17 @@ pub struct NormalSlot<I: Inventory> {
     pub id: usize,
 }
 
-#[async_trait]
-impl<I: Inventory> Slot<I> for NormalSlot<I> {
-    fn new(inventory: Arc<Mutex<I>>, index: usize) -> Self {
+impl<I: Inventory> NormalSlot<I> {
+    pub fn new(inventory: Arc<Mutex<I>>, index: usize) -> Self {
         Self {
             inventory,
             index,
             id: 0,
         }
     }
-
+}
+#[async_trait]
+impl<I: Inventory> Slot<I> for NormalSlot<I> {
     fn get_inventory(&self) -> &Arc<Mutex<I>> {
         &self.inventory
     }
@@ -184,6 +183,64 @@ impl<I: Inventory> Slot<I> for NormalSlot<I> {
 
     fn set_id(&mut self, id: usize) {
         self.id = id;
+    }
+
+    async fn mark_dirty(&self) {
+        self.inventory.lock().await.mark_dirty();
+    }
+}
+
+// ArmorSlot.java
+#[derive(Debug, Clone)]
+pub struct ArmorSlot<I: Inventory> {
+    pub inventory: Arc<Mutex<I>>,
+    pub index: usize,
+    pub id: usize,
+    pub equipment_slot: EquipmentSlot,
+}
+
+impl<I: Inventory> ArmorSlot<I> {
+    pub fn new(inventory: Arc<Mutex<I>>, index: usize, equipment_slot: EquipmentSlot) -> Self {
+        Self {
+            inventory,
+            index,
+            id: 0,
+            equipment_slot,
+        }
+    }
+}
+
+#[async_trait]
+impl<I: Inventory> Slot<I> for ArmorSlot<I> {
+    fn get_inventory(&self) -> &Arc<Mutex<I>> {
+        &self.inventory
+    }
+
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&mut self, id: usize) {
+        self.id = id;
+    }
+
+    fn get_max_item_count(&self) -> u8 {
+        1
+    }
+
+    async fn set_stack_prev(&self, stack: ItemStack, previous_stack: ItemStack) {
+        //TODO: this.entity.onEquipStack(this.equipmentSlot, previousStack, stack);
+        Slot::set_stack_prev(self, stack, previous_stack).await;
+    }
+
+    fn can_insert(&self, _stack: &ItemStack) -> bool {
+        // TODO: return this.entity.canEquip(stack, this.equipmentSlot);
+        true
+    }
+
+    fn can_take_items(&self) -> bool {
+        // TODO: Check enchantments
+        true
     }
 
     async fn mark_dirty(&self) {

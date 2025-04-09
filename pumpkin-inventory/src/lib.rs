@@ -6,6 +6,7 @@ pub mod equipment_slot;
 mod error;
 pub mod inventory;
 pub mod player_inventory;
+pub mod player_screen_handler;
 pub mod screen_handler;
 pub mod slot;
 pub mod window_property;

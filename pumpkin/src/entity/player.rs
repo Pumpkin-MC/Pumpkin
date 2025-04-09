@@ -311,6 +311,7 @@ impl Player {
                     |op| AtomicCell::new(op.level),
                 ),
             inventory: Mutex::new(PlayerInventory::new(EntityEquipment::new())),
+            // TODO: enderChestInventory
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
