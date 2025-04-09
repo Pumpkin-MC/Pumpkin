@@ -50,7 +50,4 @@ pub enum LoaderError {
 
     #[error("Invalid loader data")]
     InvalidLoaderData,
-
-    #[error("Server not initialized")]
-    ServerNotInitialized,
 }
