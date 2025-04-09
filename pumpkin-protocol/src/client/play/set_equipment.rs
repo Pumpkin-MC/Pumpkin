@@ -7,17 +7,17 @@ use serde::Serialize;
 
 use crate::{
     ClientPacket,
-    codec::{slot::Slot, var_int::VarInt},
+    codec::{item_stack_seralizer::ItemStackSerializer, var_int::VarInt},
 };
 
 #[packet(PLAY_SET_EQUIPMENT)]
 pub struct CSetEquipment {
     entity_id: VarInt,
-    equipment: Vec<(EquipmentSlot, Slot)>,
+    equipment: Vec<(EquipmentSlot, ItemStackSerializer)>,
 }
 
 impl CSetEquipment {
-    pub fn new(entity_id: VarInt, equipment: Vec<(EquipmentSlot, Slot)>) -> Self {
+    pub fn new(entity_id: VarInt, equipment: Vec<(EquipmentSlot, ItemStackSerializer)>) -> Self {
         Self {
             entity_id,
             equipment,

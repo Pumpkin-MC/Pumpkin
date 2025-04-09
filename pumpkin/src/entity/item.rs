@@ -3,8 +3,8 @@ use std::sync::{Arc, atomic::AtomicU32};
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, item::Item};
 use pumpkin_protocol::{
-    client::play::{CTakeItemEntity, MetaDataType, Metadata},
-    codec::slot::Slot,
+    client::play::{MetaDataType, Metadata},
+    codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -16,11 +16,10 @@ use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
-    item: Item,
     item_age: AtomicU32,
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
-    item_count: Mutex<u32>,
+    item_stack: Mutex<ItemStack>,
     pickup_delay: Mutex<u8>,
 }
 
@@ -36,16 +35,21 @@ impl ItemEntity {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
-            item: Item::from_id(item_id).expect("We passed a bad item id into ItemEntity"),
+            item_stack: Mutex::new(ItemStack::new(
+                count as u8,
+                Item::from_id(item_id).expect("We passed a bad item id into ItemEntity"),
+            )),
             item_age: AtomicU32::new(0),
-            item_count: Mutex::new(count),
             pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
         }
     }
     pub async fn send_meta_packet(&self) {
-        let slot = Slot::new(self.item.id, *self.item_count.lock().await);
         self.entity
-            .send_meta_data(&[Metadata::new(8, MetaDataType::ItemStack, &slot)])
+            .send_meta_data(&[Metadata::new(
+                8,
+                MetaDataType::ItemStack,
+                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            )])
             .await;
     }
 }
@@ -76,6 +80,8 @@ impl EntityBase for ItemEntity {
             *delay == 0
         };
 
+        /*
+        TODO: Implement this
         if can_pickup {
             let mut inv = player.inventory.lock().await;
             let mut total_pick_up = 0;
@@ -161,6 +167,7 @@ impl EntityBase for ItemEntity {
                 self.send_meta_packet().await;
             }
         }
+        */
     }
 
     fn get_entity(&self) -> &Entity {

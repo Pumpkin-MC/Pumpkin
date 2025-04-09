@@ -2,27 +2,19 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
-use pumpkin_inventory::Container;
-use pumpkin_inventory::container_click::{
-    Click, ClickType, DropType, KeyClick, MouseClick, MouseDragState, MouseDragType,
-};
-use pumpkin_inventory::drag_handler::DragHandler;
-use pumpkin_inventory::player::{SLOT_BOOT, SLOT_CHEST, SLOT_HELM, SLOT_HOTBAR_START, SLOT_LEG};
+use pumpkin_inventory::container_click::{Click, KeyClick, MouseClick, MouseDragState};
+
 use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
-use pumpkin_inventory::{InventoryError, OptionallyCombinedContainer, container_click};
-use pumpkin_protocol::client::play::{
-    CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
-};
-use pumpkin_protocol::codec::slot::Slot;
-use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_inventory::{InventoryError, container_click};
+use pumpkin_protocol::client::play::CSetContainerSlot;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::server::play::SClickContainer;
-use pumpkin_util::text::TextComponent;
-use pumpkin_util::{GameMode, MutableSplitSlice};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
 impl Player {
     pub async fn open_container(&self, server: &Server, window_type: WindowType) {
+        /* TODO: Inv
         let mut inventory = self.inventory().lock().await;
         //inventory.state_id = 0;
         inventory.increment_state_id();
@@ -47,9 +39,11 @@ impl Player {
             .await;
         drop(inventory);
         self.set_container_content(container.as_deref_mut()).await;
+         */
     }
 
-    pub async fn set_container_content(&self, container: Option<&mut Box<dyn Container>>) {
+    pub async fn set_container_content(&self) {
+        /* TODO: Inv
         let mut inventory = self.inventory().lock().await;
 
         let total_opened_containers = inventory.total_opened_containers;
@@ -61,16 +55,17 @@ impl Player {
 
         let container = OptionallyCombinedContainer::new(&mut inventory, container);
 
-        let slots: Vec<Slot> = container
+        let slots: Vec<ItemStackSerializer> = container
             .all_slots_ref()
             .into_iter()
-            .map(Slot::from)
+            .map(|i| ItemStackSerializer::from(i.unwrap_or(&ItemStack::EMPTY).clone()))
             .collect();
 
         let carried_item = self.carried_item.lock().await;
-        let carried_item = carried_item
-            .as_ref()
-            .map_or_else(Slot::empty, std::convert::Into::into);
+        let carried_item = carried_item.as_ref().map_or_else(
+            || ItemStackSerializer::from(ItemStack::EMPTY.clone()),
+            |item| ItemStackSerializer::from(item.clone()),
+        );
 
         inventory.increment_state_id();
         let packet = CSetContainerContent::new(
@@ -79,12 +74,13 @@ impl Player {
             &slots,
             &carried_item,
         );
-        self.client.enqueue_packet(&packet).await;
+        self.client.enqueue_packet(&packet).await; */
     }
 
     /// The official Minecraft client is weird, and will always just close *any* window that is opened when this gets sent
     // TODO: is this just bc ids are not synced?
     pub async fn close_container(&self) {
+        /* TODO: Inv
         let mut inventory = self.inventory().lock().await;
         inventory.total_opened_containers += 1;
         self.client
@@ -92,12 +88,14 @@ impl Player {
                 inventory.total_opened_containers.into(),
             ))
             .await;
+        */
     }
 
     pub async fn set_container_property<T: WindowPropertyTrait>(
         &mut self,
         window_property: WindowProperty<T>,
     ) {
+        /* TODO: Inv
         let (id, value) = window_property.into_tuple();
         self.client
             .enqueue_packet(&CSetContainerProperty::new(
@@ -106,6 +104,7 @@ impl Player {
                 value,
             ))
             .await;
+        */
     }
 
     pub async fn handle_click_container(
@@ -113,6 +112,7 @@ impl Player {
         server: &Arc<Server>,
         packet: SClickContainer,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         let opened_container = self.get_open_container(server).await;
         let mut opened_container = match opened_container.as_ref() {
             Some(container) => Some(container.lock().await),
@@ -192,13 +192,14 @@ impl Player {
                 let combined_container =
                     OptionallyCombinedContainer::new(&mut inventory, Some(&mut opened_container));
                 if let Some(slot) = combined_container.get_slot_excluding_inventory(slot_index) {
-                    let slot = Slot::from(slot);
+                    let slot = ItemStackSerializer::from(slot.cloned());
                     drop(opened_container);
                     self.send_container_changes(server, slot_index, slot)
                         .await?;
                 }
             }
         }
+            */
         Ok(())
     }
 
@@ -206,12 +207,12 @@ impl Player {
         &self,
         _server: &Server,
         slot_index: i16,
-        item_stack: Option<&ItemStack>,
+        item_stack: &ItemStack,
         state_id: &mut u32,
     ) -> Result<(), InventoryError> {
         // TODO: this will not update hotbar when server admin is peeking
         // TODO: check and iterate over all players in player inventory
-        let slot = Slot::from(item_stack);
+        let slot = ItemStackSerializer::from(item_stack.clone());
         *state_id += 1;
         let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, &slot);
         self.client.enqueue_packet(&packet).await;
@@ -220,12 +221,13 @@ impl Player {
 
     async fn match_click_behaviour(
         &self,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //opened_container: Option<&mut Box<dyn Container>>,
         click: Click,
-        drag_handler: &DragHandler,
+        //drag_handler: &DragHandler,
         update_whole_container: &mut bool,
         using_crafting_slot: bool,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         match click.click_type {
             ClickType::MouseClick(mouse_click) => {
                 self.mouse_click(
@@ -304,15 +306,18 @@ impl Player {
                 Ok(())
             }
         }
+        */
+        Ok(())
     }
 
     async fn mouse_click(
         &self,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //opened_container: Option<&mut Box<dyn Container>>,
         mouse_click: MouseClick,
         slot: container_click::Slot,
         taking_crafted: bool,
     ) -> Result<(), InventoryError> {
+        /*
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
         let mut carried_item = self.carried_item.lock().await;
@@ -340,15 +345,18 @@ impl Player {
                 Ok(())
             }
         }
+         */
+        Ok(())
     }
 
     /// TODO: Allow equiping/de equiping armor and allow taking items from crafting grid
     async fn shift_mouse_click(
         &self,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //opened_container: Option<&mut Box<dyn Container>>,
         slot: container_click::Slot,
         _taking_crafted: bool,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         let mut inventory = self.inventory().lock().await;
         let has_container = opened_container.is_some();
         let container_size = opened_container
@@ -464,16 +472,18 @@ impl Player {
             }
             container_click::Slot::OutsideInventory => (),
         }
+         */
         Ok(())
     }
 
     async fn number_button_pressed(
         &self,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //opened_container: Option<&mut Box<dyn Container>>,
         key_click: KeyClick,
         slot: usize,
         taking_crafted: bool,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         let changing_slot = match key_click {
             KeyClick::Slot(slot) => slot as usize + SLOT_HOTBAR_START,
             KeyClick::Offhand => 45,
@@ -489,14 +499,16 @@ impl Player {
             taking_crafted,
         )?;
         *inventory.get_slot(changing_slot)? = changing_item_slot;
+        */
         Ok(())
     }
 
     async fn creative_pick_item(
         &self,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //opened_container: Option<&mut Box<dyn Container>>,
         slot: usize,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         if self.gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
@@ -506,14 +518,16 @@ impl Player {
             let mut carried_item = self.carried_item.lock().await;
             *carried_item = Some(item.clone());
         }
+        */
         Ok(())
     }
 
     async fn double_click(
         &self,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //opened_container: Option<&mut Box<dyn Container>>,
         _slot: usize,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         let mut inventory = self.inventory().lock().await;
         let mut container = OptionallyCombinedContainer::new(&mut inventory, opened_container);
         let mut carried_item = self.carried_item.lock().await;
@@ -544,15 +558,17 @@ impl Player {
                 }
             }
         }
+        */
         Ok(())
     }
 
     async fn mouse_drag(
         &self,
-        drag_handler: &DragHandler,
-        opened_container: Option<&mut Box<dyn Container>>,
+        //drag_handler: &DragHandler,
+        //opened_container: Option<&mut Box<dyn Container>>,
         mouse_drag_state: MouseDragState,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         let player_id = self.entity_id();
         let container_id = opened_container
             .as_ref()
@@ -582,52 +598,18 @@ impl Player {
                     .await
             }
         }
-    }
-
-    async fn get_current_players_in_container(&self, server: &Server) -> Vec<Arc<Self>> {
-        let player_ids: Vec<i32> = {
-            let open_containers = server.open_containers.read().await;
-            open_containers
-                .get(&self.open_container.load().unwrap())
-                .unwrap()
-                .all_player_ids()
-                .into_iter()
-                .filter(|player_id| *player_id != self.entity_id())
-                .collect()
-        };
-        let player_token = self.gameprofile.id;
-
-        // TODO: Figure out better way to get only the players from player_ids
-        // Also refactor out a better method to get individual advanced state ids
-
-        let players = self
-            .living_entity
-            .entity
-            .world
-            .read()
-            .await
-            .players
-            .read()
-            .await
-            .iter()
-            .filter_map(|(token, player)| {
-                if *token == player_token {
-                    None
-                } else {
-                    let entity_id = player.entity_id();
-                    player_ids.contains(&entity_id).then(|| player.clone())
-                }
-            })
-            .collect();
-        players
+        */
+        Ok(())
     }
 
     pub async fn send_container_changes(
         &self,
         server: &Server,
         slot_index: usize,
-        slot: Slot,
+        slot: ItemStackSerializer,
     ) -> Result<(), InventoryError> {
+        /*
+        TODO: Inv
         for player in self.get_current_players_in_container(server).await {
             let mut inventory = player.inventory().lock().await;
             let total_opened_containers = inventory.total_opened_containers;
@@ -642,10 +624,13 @@ impl Player {
             );
             player.client.enqueue_packet(&packet).await;
         }
+        */
         Ok(())
     }
 
     pub async fn send_whole_container_change(&self, server: &Server) -> Result<(), InventoryError> {
+        /*
+        TODO: Inv
         let players = self.get_current_players_in_container(server).await;
 
         for player in players {
@@ -656,21 +641,13 @@ impl Player {
             };
             player.set_container_content(container.as_deref_mut()).await;
         }
+        */
         Ok(())
-    }
-
-    pub async fn get_open_container(
-        &self,
-        server: &Server,
-    ) -> Option<Arc<tokio::sync::Mutex<Box<dyn Container>>>> {
-        match self.open_container.load() {
-            Some(id) => server.try_get_container(self.entity_id(), id).await,
-            None => None,
-        }
     }
 
     // TODO: Use this method when actually picking up items instead of just the command
     async fn pickup_items(&self, item: Item, amount: u32) {
+        /* TODO: Inv
         let mut amount_left = amount;
         let max_stack = item.components.max_stack_size;
         let mut inventory = self.inventory().lock().await;
@@ -713,13 +690,15 @@ impl Player {
         log::warn!(
             "{amount} items were discarded because dropping them to the ground is not implemented"
         );
+        */
     }
 
     /// Add items to inventory if there's space, else drop them to the ground.
     ///
     /// This method automatically syncs changes with the client.
     pub async fn give_items(&self, item: Item, amount: u32) {
+        // TODO: Inv
         self.pickup_items(item, amount).await;
-        self.set_container_content(None).await;
+        //self.set_container_content(None).await;
     }
 }

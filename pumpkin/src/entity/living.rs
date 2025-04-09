@@ -12,7 +12,7 @@ use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::{
     client::play::{CDamageEvent, CSetEquipment, EquipmentSlot, MetaDataType, Metadata},
-    codec::slot::Slot,
+    codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -55,9 +55,9 @@ impl LivingEntity {
     }
 
     pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
-        let equipment: Vec<(EquipmentSlot, Slot)> = equipment
+        let equipment: Vec<(EquipmentSlot, ItemStackSerializer)> = equipment
             .iter()
-            .map(|(slot, stack)| (*slot, Slot::from(stack)))
+            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
             .collect();
         self.entity
             .world

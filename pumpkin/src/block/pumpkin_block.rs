@@ -5,7 +5,6 @@ use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
-use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -88,16 +87,6 @@ pub trait PumpkinBlock: Send + Sync {
         _server: &Server,
         _world: Arc<World>,
         _state: BlockState,
-    ) {
-    }
-
-    async fn close(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _server: &Server,
-        _container: &mut OpenContainer,
     ) {
     }
 

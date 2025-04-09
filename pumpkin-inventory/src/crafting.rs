@@ -1,103 +1,84 @@
-use pumpkin_data::{
-    item::Item,
-    tag::{RegistryKey, get_tag_values},
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use tokio::sync::Mutex;
+
+use crate::{
+    inventory::Inventory,
+    screen_handler::ScreenHandler,
+    slot::{NormalSlot, Slot},
 };
-use pumpkin_registry::{RECIPES, RecipeResult, flatten_3x3};
-use pumpkin_util::registry::{RegistryEntryList, TagType};
-use pumpkin_world::item::ItemStack;
-use rayon::prelude::*;
 
-#[inline(always)]
-fn check_ingredient_type(ingredient_type: &TagType, input: &ItemStack) -> bool {
-    match ingredient_type {
-        TagType::Tag(tag) => {
-            let _items = match get_tag_values(RegistryKey::Item, tag) {
-                Some(items) => items,
-                None => return false,
-            };
-            // TODO
-            false
-            // items.iter().any(|tag| check_ingredient_type(&tag, input))
-        }
-        TagType::Item(item) => {
-            Item::from_registry_key(item).is_some_and(|item| item.id == input.item.id)
+// RecipeMatcher.java
+pub struct RecipeMatcher {}
+
+// RecipeFinder.java
+pub struct RecipeFinder {}
+
+// AbstractRecipeScreenHandle.java
+pub trait RecipeFinderScreenHandler {}
+
+pub trait RecipeInputInventory: Inventory {
+    fn get_width(&self) -> usize;
+    fn get_height(&self) -> usize;
+    //fn get_held_stacks(), Get a lock on the inventory instead
+    // createRecipeInput
+    // createPositionedRecipeInput
+}
+
+pub struct ResultSlot<I: RecipeInputInventory> {
+    pub inventory: Arc<Mutex<I>>,
+    pub index: usize,
+    pub id: usize,
+}
+
+impl<I: RecipeInputInventory> ResultSlot<I> {
+    pub fn new(inventory: Arc<Mutex<I>>, index: usize) -> Self {
+        Self {
+            inventory,
+            index,
+            id: 0,
         }
     }
 }
+#[async_trait]
+impl<I: RecipeInputInventory> Slot<I> for ResultSlot<I> {
+    fn get_inventory(&self) -> &Arc<Mutex<I>> {
+        &self.inventory
+    }
 
-pub fn check_if_matches_crafting(input: [[Option<&ItemStack>; 3]; 3]) -> Option<ItemStack> {
-    let input = flatten_3x3(input);
-    RECIPES
-        .par_iter()
-        .find_any(|recipe| {
-            let patterns = recipe.pattern();
-            if patterns
-                .iter()
-                .flatten()
-                .flatten()
-                .all(|slot| slot.is_none())
-            {
-                false
-            } else if recipe.recipe_type.is_shapeless() {
-                shapeless_crafting_match(input, recipe.pattern())
-            } else {
-                patterns.par_iter().any(|pattern| {
-                    pattern.iter().enumerate().all(|(i, row)| {
-                        row.iter()
-                            .enumerate()
-                            .all(|(j, item)| match (item, input[i][j]) {
-                                (Some(item), Some(input)) => ingredient_slot_check(item, input),
-                                (None, None) => true,
-                                (Some(_), None) | (None, Some(_)) => false,
-                            })
-                    })
-                })
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&mut self, id: usize) {
+        self.id = id;
+    }
+
+    async fn mark_dirty(&self) {
+        self.inventory.lock().await.mark_dirty();
+    }
+}
+
+// AbstractCraftingScreenHandler.java
+pub trait CraftingScreenHandler<I: RecipeInputInventory>:
+    RecipeFinderScreenHandler + ScreenHandler
+{
+    async fn add_result_slot(&mut self, crafing_inventory: Arc<Mutex<I>>) {
+        let result_slot = ResultSlot::new(crafing_inventory, 0);
+        self.add_slot(result_slot);
+    }
+
+    async fn add_input_slots(&mut self, crafing_inventory: Arc<Mutex<I>>) {
+        let crafting_temp = crafing_inventory.lock().await;
+        let width = crafting_temp.get_width();
+        let height = crafting_temp.get_height();
+        drop(crafting_temp);
+        for i in 0..width {
+            for j in 0..height {
+                let input_slot = NormalSlot::new(crafing_inventory.clone(), j + i * width);
+                self.add_slot(input_slot);
             }
-        })
-        .map(|recipe| match recipe.result() {
-            RecipeResult::Single { id, .. } => Some(ItemStack {
-                item: Item::from_registry_key(id).unwrap(),
-                item_count: 1,
-            }),
-            RecipeResult::Many { id, count, .. } => Some(ItemStack {
-                item: Item::from_registry_key(id).unwrap(),
-                item_count: *count,
-            }),
-            RecipeResult::Special => None,
-        })?
-}
-
-fn ingredient_slot_check(recipe_item: &RegistryEntryList, input: &ItemStack) -> bool {
-    match recipe_item {
-        RegistryEntryList::Single(ingredient) => check_ingredient_type(ingredient, input),
-        RegistryEntryList::Many(ingredients) => ingredients
-            .iter()
-            .any(|ingredient| check_ingredient_type(ingredient, input)),
-    }
-}
-fn shapeless_crafting_match(
-    input: [[Option<&ItemStack>; 3]; 3],
-    pattern: &[[[Option<RegistryEntryList>; 3]; 3]],
-) -> bool {
-    let mut pattern: Vec<RegistryEntryList> = pattern
-        .iter()
-        .flatten()
-        .flatten()
-        .flatten()
-        .cloned()
-        .collect();
-    for item in input.into_iter().flatten().flatten() {
-        if let Some(index) = pattern.iter().enumerate().find_map(|(i, recipe_item)| {
-            if ingredient_slot_check(recipe_item, item) {
-                Some(i)
-            } else {
-                None
-            }
-        }) {
-            pattern.remove(index);
-        } else {
-            return false;
         }
     }
-    pattern.is_empty()
 }

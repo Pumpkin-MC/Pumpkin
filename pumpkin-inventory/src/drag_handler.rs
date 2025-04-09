@@ -1,9 +1,4 @@
-use crate::container_click::MouseDragType;
-use crate::{Container, InventoryError};
-use pumpkin_world::item::ItemStack;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+/*
 #[derive(Debug, Default)]
 pub struct DragHandler(RwLock<HashMap<u64, Arc<Mutex<Drag>>>>);
 
@@ -173,3 +168,4 @@ impl Drag {
             .collect()
     }
 }
+ */
