@@ -1,3 +1,4 @@
+use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
@@ -6,20 +7,19 @@ use crate::{
         palette::{BiomePalette, BlockPalette},
     },
     generation::{
-        GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
-        noise_router::proto_noise_router::GlobalProtoNoiseRouter, proto_chunk::ProtoChunk,
+        GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit, proto_chunk::ProtoChunk,
     },
-    noise_router::NOISE_ROUTER_ASTS,
 };
 
 use super::{
     biome_coords,
+    noise_router::proto_noise_router::ProtoNoiseRouters,
     settings::{GENERATION_SETTINGS, GeneratorSetting},
 };
 
 pub struct VanillaGenerator {
     random_config: GlobalRandomConfig,
-    base_router: GlobalProtoNoiseRouter,
+    base_router: ProtoNoiseRouters,
 }
 
 impl GeneratorInit for VanillaGenerator {
@@ -27,8 +27,7 @@ impl GeneratorInit for VanillaGenerator {
         let random_config = GlobalRandomConfig::new(seed.0, false);
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?
-        let base_router =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let base_router = ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         Self {
             random_config,
             base_router,

@@ -1,23 +1,19 @@
 use std::sync::Arc;
 
+use pumpkin_data::noise_router::{
+    ClampedYGradientData, RangeChoiceData, WeirdScaledData, WeirdScaledMapper,
+};
 use pumpkin_util::{
     math::clamped_map,
     noise::simplex::SimplexNoiseSampler,
     random::{RandomImpl, legacy_rand::LegacyRand},
 };
 
-use crate::{
-    generation::{
-        noise::perlin::DoublePerlinNoiseSampler,
-        noise_router::{
-            chunk_density_function::ChunkNoiseFunctionSampleOptions,
-            chunk_noise_router::{
-                ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl,
-            },
-        },
-    },
-    noise_router::density_function_ast::{
-        ClampedYGradientData, RangeChoiceData, WeirdScaledData, WeirdScaledMapper,
+use crate::generation::{
+    noise::perlin::DoublePerlinNoiseSampler,
+    noise_router::{
+        chunk_density_function::ChunkNoiseFunctionSampleOptions,
+        chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     },
 };
 
@@ -92,7 +88,6 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for EndIsland {
     }
 }
 
-#[derive(Clone)]
 pub struct WeirdScaled {
     pub input_index: usize,
     pub sampler: DoublePerlinNoiseSampler,
@@ -181,32 +176,24 @@ impl NoiseFunctionComponentRange for WeirdScaled {
 
 #[derive(Clone)]
 pub struct ClampedYGradient {
-    pub from_y: i32,
-    pub to_y: i32,
-    pub from_value: f64,
-    pub to_value: f64,
+    data: &'static ClampedYGradientData,
 }
 
 impl ClampedYGradient {
-    pub fn new(data: &ClampedYGradientData) -> Self {
-        Self {
-            from_y: data.from_y,
-            to_y: data.to_y,
-            from_value: data.from_value.0,
-            to_value: data.to_value.0,
-        }
+    pub fn new(data: &'static ClampedYGradientData) -> Self {
+        Self { data }
     }
 }
 
 impl NoiseFunctionComponentRange for ClampedYGradient {
     #[inline]
     fn min(&self) -> f64 {
-        self.from_value.min(self.to_value)
+        self.data.from_value.min(self.data.to_value)
     }
 
     #[inline]
     fn max(&self) -> f64 {
-        self.from_value.max(self.to_value)
+        self.data.from_value.max(self.data.to_value)
     }
 }
 
@@ -214,21 +201,20 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
     fn sample(&self, pos: &impl NoisePos) -> f64 {
         clamped_map(
             pos.y() as f64,
-            self.from_y as f64,
-            self.to_y as f64,
-            self.from_value,
-            self.to_value,
+            self.data.from_y,
+            self.data.to_y,
+            self.data.from_value,
+            self.data.to_value,
         )
     }
 }
 
 #[derive(Clone)]
 pub struct RangeChoice {
-    pub input_index: usize,
-    pub when_in_index: usize,
-    pub when_out_index: usize,
-    pub min_inclusive: f64,
-    pub max_exclusive: f64,
+    input_index: usize,
+    pub(crate) when_in_index: usize,
+    pub(crate) when_out_index: usize,
+    data: &'static RangeChoiceData,
     min_value: f64,
     max_value: f64,
 }
@@ -240,7 +226,7 @@ impl RangeChoice {
         when_out_index: usize,
         min_value: f64,
         max_value: f64,
-        data: &RangeChoiceData,
+        data: &'static RangeChoiceData,
     ) -> Self {
         Self {
             input_index,
@@ -248,8 +234,7 @@ impl RangeChoice {
             when_out_index,
             min_value,
             max_value,
-            min_inclusive: data.min_inclusive.0,
-            max_exclusive: data.max_exclusive.0,
+            data,
         }
     }
 }
@@ -279,7 +264,7 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
             sample_options,
         );
 
-        if self.min_inclusive <= input_sample && input_sample < self.max_exclusive {
+        if self.data.min_inclusive <= input_sample && input_sample < self.data.max_exclusive {
             ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=self.when_in_index],
                 pos,
@@ -310,7 +295,7 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
 
         array.iter_mut().enumerate().for_each(|(index, value)| {
             let pos = mapper.at(index, Some(sample_options));
-            *value = if self.min_inclusive <= *value && *value < self.max_exclusive {
+            *value = if self.data.min_inclusive <= *value && *value < self.data.max_exclusive {
                 ChunkNoiseFunctionComponent::sample_from_stack(
                     &mut component_stack[..=self.when_in_index],
                     &pos,

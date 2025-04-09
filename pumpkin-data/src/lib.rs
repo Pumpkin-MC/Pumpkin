@@ -64,8 +64,9 @@ pub mod tag {
     include!(concat!(env!("OUT_DIR"), "/tag.rs"));
 }
 
-mod block_state;
-mod blocks;
+pub mod noise_router {
+    include!(concat!(env!("OUT_DIR"), "/noise_router.rs"));
+}
 
 pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
