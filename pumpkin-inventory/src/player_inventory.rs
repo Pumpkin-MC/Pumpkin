@@ -5,17 +5,6 @@ use crate::split_stack;
 use pumpkin_world::item::ItemStack;
 use std::collections::HashMap;
 
-/*
-    Inventory Layout:
-    - 0: Crafting Output
-    - 1-4: Crafting Input
-    - 5-8: Armor
-    - 9-35: Main Inventory
-    - 36-44: Hotbar
-    - 45: Offhand
-
-*/
-
 #[derive(Debug, Clone)]
 pub struct PlayerInventory {
     pub main_inventory: [ItemStack; Self::MAIN_SIZE],
