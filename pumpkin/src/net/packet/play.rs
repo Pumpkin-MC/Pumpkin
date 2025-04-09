@@ -38,7 +38,7 @@ use pumpkin_protocol::client::play::{
     CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
     CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
-use pumpkin_protocol::codec::slot::Slot;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
     SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
@@ -554,7 +554,7 @@ impl Player {
         stack: ItemStack,
     ) {
         inventory.increment_state_id();
-        let slot_data = Slot::from(&stack);
+        let slot_data = ItemStackSerializer::from(stack.clone());
         if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
             log::error!("Pick item set slot error: {err}");
         } else {
@@ -1511,13 +1511,13 @@ impl Player {
         }
         let valid_slot = packet.slot >= 0 && packet.slot as usize <= SLOT_OFFHAND;
         // TODO: Handle error
-        let item_stack = packet.clicked_item.to_stack().unwrap();
+        let item_stack = packet.clicked_item.to_stack();
         if valid_slot {
             self.inventory()
                 .lock()
                 .await
-                .set_slot(packet.slot as usize, item_stack, true)?;
-        } else if let Some(item_stack) = item_stack {
+                .set_slot(packet.slot as usize, Some(item_stack), true)?;
+        } else {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;
