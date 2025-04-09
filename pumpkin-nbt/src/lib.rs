@@ -187,6 +187,7 @@ pub fn get_nbt_string<R: Read>(bytes: &mut NbtReadHelper<R>) -> Result<String, E
     Ok(string.to_string())
 }
 
+// TODO: This is a bit hacky
 pub(crate) const NBT_ARRAY_TAG: &str = "__nbt_array";
 pub(crate) const NBT_INT_ARRAY_TAG: &str = "__nbt_int_array";
 pub(crate) const NBT_LONG_ARRAY_TAG: &str = "__nbt_long_array";

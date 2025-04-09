@@ -80,7 +80,7 @@ impl LivingEntity {
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
-                stack_amount.into(),
+                stack_amount.try_into().unwrap(),
             ))
             .await;
     }
@@ -196,16 +196,15 @@ impl LivingEntity {
 
             let safe_fall_distance = 3.0;
             let mut damage = fall_distance - safe_fall_distance;
-            damage = (damage).round();
-            if !self.check_damage(damage) {
-                return;
-            }
+            damage = (damage).ceil();
 
-            self.entity
-                .play_sound(Self::get_fall_sound(fall_distance as i32))
-                .await;
             // TODO: Play block fall sound
-            self.damage(damage, DamageType::FALL).await; // Fall
+            let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
+            if check_damage {
+                self.entity
+                    .play_sound(Self::get_fall_sound(fall_distance as i32))
+                    .await;
+            }
         } else if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance

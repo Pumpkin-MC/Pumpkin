@@ -207,7 +207,7 @@ impl World {
         &self,
         message: &TextComponent,
         sender_name: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
         self.broadcast_packet_all(&CDisguisedChatMessage::new(
@@ -320,14 +320,7 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().r#gen::<f64>();
-        let packet = CSoundEffect::new(
-            IdOr::Id(u32::from(sound_id)),
-            category,
-            position,
-            volume,
-            pitch,
-            seed,
-        );
+        let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
 
@@ -518,7 +511,7 @@ impl World {
                 entity_id,
                 base_config.hardcore,
                 &dimensions,
-                base_config.max_players.into(),
+                base_config.max_players.try_into().unwrap(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance
                 false,
@@ -811,7 +804,7 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u32);
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for (_, player) in self.players.read().await.iter() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
@@ -1200,11 +1193,8 @@ impl World {
             .remove(&player.gameprofile.id)
             .unwrap();
         let uuid = player.gameprofile.id;
-        self.broadcast_packet_except(
-            &[player.gameprofile.id],
-            &CRemovePlayerInfo::new(1.into(), &[uuid]),
-        )
-        .await;
+        self.broadcast_packet_except(&[player.gameprofile.id], &CRemovePlayerInfo::new(&[uuid]))
+            .await;
         self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
             .await;
 

@@ -4,7 +4,7 @@ use std::{
     ops::AddAssign,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -220,7 +220,7 @@ pub struct Player {
     /// The player's last known experience level.
     pub last_sent_xp: AtomicI32,
     pub last_sent_health: AtomicI32,
-    pub last_sent_food: AtomicU32,
+    pub last_sent_food: AtomicU8,
     pub last_food_saturation: AtomicBool,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
@@ -319,7 +319,7 @@ impl Player {
             chunk_manager: Mutex::new(ChunkManager::new(16)),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
-            last_sent_food: AtomicU32::new(0),
+            last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
@@ -520,7 +520,7 @@ impl Player {
     ) {
         self.client
             .enqueue_packet(&CSoundEffect::new(
-                IdOr::Id(u32::from(sound_id)),
+                IdOr::Id(sound_id),
                 category,
                 position,
                 volume,
@@ -581,7 +581,7 @@ impl Player {
                 self.client.send_packet_now(&CChunkData(&chunk)).await;
             }
             self.client
-                .send_packet_now(&CChunkBatchEnd::new(chunk_count))
+                .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
                 .await;
         }
 
@@ -1232,7 +1232,7 @@ impl Player {
     pub async fn send_message(
         &self,
         message: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         sender_name: &TextComponent,
         target_name: Option<&TextComponent>,
     ) {

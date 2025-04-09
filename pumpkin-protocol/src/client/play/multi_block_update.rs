@@ -36,7 +36,14 @@ impl Serialize for CMultiBlockUpdate {
         let mut tuple = serializer.serialize_tuple(2 + self.positions_to_state_ids.len())?;
 
         tuple.serialize_element(&vector3::packed_chunk_pos(&self.chunk_section))?;
-        tuple.serialize_element(&VarInt::from(self.positions_to_state_ids.len() as i32))?;
+        tuple.serialize_element(&VarInt(
+            self.positions_to_state_ids.len().try_into().map_err(|_| {
+                serde::ser::Error::custom(format!(
+                    "{} is not representable as a VarInt!",
+                    self.positions_to_state_ids.len()
+                ))
+            })?,
+        ))?;
 
         for (position, state_id) in &self.positions_to_state_ids {
             let long = ((*state_id as u64) << 12) | (*position as u64);

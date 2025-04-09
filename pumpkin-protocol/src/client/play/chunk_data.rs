@@ -53,7 +53,12 @@ impl ClientPacket for CChunkData<'_> {
             // TODO: Implement, currently default to full bright
             let chunk_light = vec![0xFFu8; chunk_light_len];
 
-            light_buf.write_var_int(&chunk_light_len.into())?;
+            light_buf.write_var_int(&chunk_light_len.try_into().map_err(|_| {
+                WritingError::Message(format!(
+                    "{} is not representable as a VarInt!",
+                    chunk_light_len
+                ))
+            })?)?;
             light_buf.write_slice(&chunk_light)?;
 
             // Block count
@@ -68,7 +73,12 @@ impl ClientPacket for CChunkData<'_> {
                     data_buf.write_var_int(&registry_id.into())?;
                 }
                 NetworkPalette::Indirect(palette) => {
-                    data_buf.write_var_int(&palette.len().into())?;
+                    data_buf.write_var_int(&palette.len().try_into().map_err(|_| {
+                        WritingError::Message(format!(
+                            "{} is not representable as a VarInt!",
+                            palette.len()
+                        ))
+                    })?)?;
                     for registry_id in palette {
                         data_buf.write_var_int(&registry_id.into())?;
                     }
@@ -89,7 +99,12 @@ impl ClientPacket for CChunkData<'_> {
                     data_buf.write_var_int(&registry_id.into())?;
                 }
                 NetworkPalette::Indirect(palette) => {
-                    data_buf.write_var_int(&palette.len().into())?;
+                    data_buf.write_var_int(&palette.len().try_into().map_err(|_| {
+                        WritingError::Message(format!(
+                            "{} is not representable as a VarInt!",
+                            palette.len()
+                        ))
+                    })?)?;
                     for registry_id in palette {
                         data_buf.write_var_int(&registry_id.into())?;
                     }
@@ -105,7 +120,12 @@ impl ClientPacket for CChunkData<'_> {
         }
 
         // Chunk data
-        write.write_var_int(&data_buf.len().into())?;
+        write.write_var_int(&data_buf.len().try_into().map_err(|_| {
+            WritingError::Message(format!(
+                "{} is not representable as a VarInt!",
+                data_buf.len()
+            ))
+        })?)?;
         write.write_slice(&data_buf)?;
 
         // TODO: block entities
@@ -123,7 +143,12 @@ impl ClientPacket for CChunkData<'_> {
         write.write_bitset(&BitSet(Box::new([0])))?;
 
         // Sky light
-        write.write_var_int(&self.0.section.sections.len().into())?;
+        write.write_var_int(&self.0.section.sections.len().try_into().map_err(|_| {
+            WritingError::Message(format!(
+                "{} is not representable as a VarInt!",
+                self.0.section.sections.len()
+            ))
+        })?)?;
         write.write_slice(&light_buf)?;
 
         // Block Lighting
