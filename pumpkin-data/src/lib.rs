@@ -68,6 +68,9 @@ pub mod noise_router {
     include!(concat!(env!("OUT_DIR"), "/noise_router.rs"));
 }
 
+mod block_state;
+mod blocks;
+
 pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
 pub use blocks::Block;
