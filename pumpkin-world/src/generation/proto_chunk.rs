@@ -17,7 +17,7 @@ use super::{
     height_limit::HeightLimitView,
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-        proto_noise_router::{DoublePerlinNoiseBuilder, GlobalProtoNoiseRouter},
+        proto_noise_router::{DoublePerlinNoiseBuilder, ProtoNoiseRouters},
         surface_height_sampler::{
             SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
         },
@@ -108,7 +108,7 @@ pub struct ProtoChunk<'a> {
 impl<'a> ProtoChunk<'a> {
     pub fn new(
         chunk_pos: Vector2<i32>,
-        base_router: &'a GlobalProtoNoiseRouter,
+        base_router: &'a ProtoNoiseRouters,
         random_config: &'a GlobalRandomConfig,
         settings: &'a GenerationSettings,
     ) -> Self {
@@ -126,7 +126,7 @@ impl<'a> ProtoChunk<'a> {
         let start_z = chunk_pos::start_block_z(&chunk_pos);
 
         let sampler = ChunkNoiseGenerator::new(
-            base_router,
+            &base_router.noise,
             random_config,
             horizontal_cell_count as usize,
             start_x,
@@ -149,7 +149,8 @@ impl<'a> ProtoChunk<'a> {
             biome_pos.z,
             horizontal_biome_end as usize,
         );
-        let multi_noise_sampler = MultiNoiseSampler::generate(base_router, &multi_noise_config);
+        let multi_noise_sampler =
+            MultiNoiseSampler::generate(&base_router.multi_noise, &multi_noise_config);
 
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
             biome_pos.x,
@@ -160,7 +161,7 @@ impl<'a> ProtoChunk<'a> {
             generation_shape.vertical_cell_block_count() as usize,
         );
         let surface_height_estimate_sampler =
-            SurfaceHeightEstimateSampler::generate(base_router, &surface_config);
+            SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
         let default_block = ChunkBlockState::new(&settings.default_block.name).unwrap();
         Self {
@@ -579,6 +580,7 @@ impl<'a> ProtoChunk<'a> {
 mod test {
     use std::sync::LazyLock;
 
+    use pumpkin_data::noise_router::{OVERWORLD_BASE_NOISE_ROUTER, WrapperType};
     use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
@@ -586,11 +588,10 @@ mod test {
             GlobalRandomConfig,
             noise_router::{
                 density_function::{NoiseFunctionComponentRange, PassThrough},
-                proto_noise_router::{GlobalProtoNoiseRouter, ProtoNoiseFunctionComponent},
+                proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
             },
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        noise_router::{NOISE_ROUTER_ASTS, density_function_ast::WrapperType},
         read_data_from_file,
     };
 
@@ -599,15 +600,14 @@ mod test {
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED, false)); // TODO: use legacy when needed
-    static BASE_NOISE_ROUTER: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
-        GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &RANDOM_CONFIG)
-    });
+    static BASE_NOISE_ROUTER: LazyLock<ProtoNoiseRouters> =
+        LazyLock::new(|| ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG));
 
     const SEED2: u64 = 13579;
     static RANDOM_CONFIG2: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED2, false)); // TODO: use legacy when needed
-    static BASE_NOISE_ROUTER2: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
-        GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &RANDOM_CONFIG2)
+    static BASE_NOISE_ROUTER2: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
+        ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG2)
     });
 
     #[test]
@@ -616,24 +616,33 @@ mod test {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_only_cell_cache_0_0.chunk");
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -663,25 +672,34 @@ mod test {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_only_cell_cache_0_0.chunk");
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::Cache2D => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::Cache2D => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -711,25 +729,34 @@ mod test {
             "../../assets/no_blend_no_beard_only_cell_cache_flat_cache_0_0.chunk"
         );
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::CacheFlat => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::CacheFlat => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -759,25 +786,34 @@ mod test {
             "../../assets/no_blend_no_beard_only_cell_cache_once_cache_0_0.chunk"
         );
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::CacheOnce => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::CacheOnce => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -807,25 +843,34 @@ mod test {
             "../../assets/no_blend_no_beard_only_cell_cache_interpolated_0_0.chunk"
         );
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::Interpolated => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::Interpolated => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -913,14 +958,18 @@ mod test {
         );
         chunk.populate_noise();
 
-        assert_eq!(
-            expected_data,
-            chunk
-                .flat_block_map
-                .into_iter()
-                .map(|state| state.state_id)
-                .collect::<Vec<u16>>()
-        );
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
     }
 
     #[test]

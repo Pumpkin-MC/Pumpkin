@@ -43,7 +43,6 @@ file-guard = "0.2"
 indexmap = "2.8"
 enum_dispatch = "0.3"
 noise = "0.9"
-serde_json5 = "0.2.1"
 derive-getters = "0.5.0"
 
 thread_local = "1.1.8"
@@ -58,6 +57,8 @@ temp-dir = "0.1.14"
 env_logger = "0.11.7"
 # Allows us to modify the config
 pumpkin-config = { path = "../pumpkin-config", features = ["test_helper"] }
+# Deserialize NaN and Inf
+serde_json5 = "0.2.1"
 
 [[bench]]
 name = "chunk"

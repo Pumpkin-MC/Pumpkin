@@ -47,6 +47,7 @@ impl VarInt {
         Ok(())
     }
 
+    // TODO: Validate that the first byte will not overflow a i32
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -99,41 +100,40 @@ impl VarInt {
     }
 }
 
-impl From<i32> for VarInt {
-    fn from(value: i32) -> Self {
-        VarInt(value)
-    }
+// Macros are needed because traits over generics succccccccccck
+macro_rules! gen_from {
+    ($ty: ty) => {
+        impl From<$ty> for VarInt {
+            fn from(value: $ty) -> Self {
+                VarInt(value.into())
+            }
+        }
+    };
 }
 
-impl From<u32> for VarInt {
-    fn from(value: u32) -> Self {
-        VarInt(value as i32)
-    }
+gen_from!(i8);
+gen_from!(u8);
+gen_from!(i16);
+gen_from!(u16);
+gen_from!(i32);
+
+macro_rules! gen_try_from {
+    ($ty: ty) => {
+        impl TryFrom<$ty> for VarInt {
+            type Error = <i32 as TryFrom<$ty>>::Error;
+
+            fn try_from(value: $ty) -> Result<Self, Self::Error> {
+                Ok(VarInt(value.try_into()?))
+            }
+        }
+    };
 }
 
-impl From<u8> for VarInt {
-    fn from(value: u8) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<u16> for VarInt {
-    fn from(value: u16) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<usize> for VarInt {
-    fn from(value: usize) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<VarInt> for i32 {
-    fn from(value: VarInt) -> Self {
-        value.0
-    }
-}
+gen_try_from!(u32);
+gen_try_from!(i64);
+gen_try_from!(u64);
+gen_try_from!(isize);
+gen_try_from!(usize);
 
 impl AsRef<i32> for VarInt {
     fn as_ref(&self) -> &i32 {

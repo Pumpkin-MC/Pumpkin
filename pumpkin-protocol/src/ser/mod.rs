@@ -11,6 +11,17 @@ use thiserror::Error;
 pub mod packet;
 pub mod serializer;
 
+// TODO: This is a bit hacky
+const NO_PREFIX_MARKER: &str = "__network_no_prefix";
+
+pub fn network_serialize_no_prefix<T, S>(input: T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    T: serde::Serialize,
+    S: serde::Serializer,
+{
+    serializer.serialize_newtype_struct(NO_PREFIX_MARKER, &input)
+}
+
 #[derive(Debug, Error)]
 pub enum ReadingError {
     #[error("EOF, Tried to read {0} but No bytes left to consume")]
@@ -262,26 +273,55 @@ pub trait NetworkWriteExt {
     fn write_f64_be(&mut self, data: f64) -> Result<(), WritingError>;
     fn write_slice(&mut self, data: &[u8]) -> Result<(), WritingError>;
 
-    fn write_bool(&mut self, data: bool) -> Result<(), WritingError>;
+    fn write_bool(&mut self, data: bool) -> Result<(), WritingError> {
+        if data {
+            self.write_u8_be(1)
+        } else {
+            self.write_u8_be(0)
+        }
+    }
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError>;
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
     fn write_identifier(&mut self, data: &Identifier) -> Result<(), WritingError>;
-    fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError>;
+
+    fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
+        let (first, second) = data.as_u64_pair();
+        self.write_u64_be(first)?;
+        self.write_u64_be(second)
+    }
+
     fn write_bitset(&mut self, bitset: &BitSet) -> Result<(), WritingError>;
 
     fn write_option<G>(
         &mut self,
         data: &Option<G>,
-        write: impl FnOnce(&mut Self, &G) -> Result<(), WritingError>,
-    ) -> Result<(), WritingError>;
+        writer: impl FnOnce(&mut Self, &G) -> Result<(), WritingError>,
+    ) -> Result<(), WritingError> {
+        if let Some(data) = data {
+            self.write_bool(true)?;
+            writer(self, data)
+        } else {
+            self.write_bool(false)
+        }
+    }
 
     fn write_list<G>(
         &mut self,
-        data: &[G],
-        write: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
-    ) -> Result<(), WritingError>;
+        list: &[G],
+        writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
+    ) -> Result<(), WritingError> {
+        self.write_var_int(&list.len().try_into().map_err(|_| {
+            WritingError::Message(format!("{} isn't representable as a VarInt", list.len()))
+        })?)?;
+
+        for data in list {
+            writer(self, data)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<W: Write> NetworkWriteExt for W {
@@ -339,14 +379,6 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_all(data).map_err(WritingError::IoError)
     }
 
-    fn write_bool(&mut self, data: bool) -> Result<(), WritingError> {
-        if data {
-            self.write_u8_be(1)
-        } else {
-            self.write_u8_be(0)
-        }
-    }
-
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError> {
         data.encode(self)
     }
@@ -357,7 +389,10 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError> {
         assert!(data.len() <= bound);
-        self.write_var_int(&data.len().into())?;
+        self.write_var_int(&data.len().try_into().map_err(|_| {
+            WritingError::Message(format!("{} isn't representable as a VarInt", data.len()))
+        })?)?;
+
         self.write_all(data.as_bytes())
             .map_err(WritingError::IoError)
     }
@@ -370,40 +405,8 @@ impl<W: Write> NetworkWriteExt for W {
         data.encode(self)
     }
 
-    fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
-        let (first, second) = data.as_u64_pair();
-        self.write_u64_be(first)?;
-        self.write_u64_be(second)
-    }
-
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
         data.encode(self)
-    }
-
-    fn write_option<G>(
-        &mut self,
-        data: &Option<G>,
-        writer: impl FnOnce(&mut Self, &G) -> Result<(), WritingError>,
-    ) -> Result<(), WritingError> {
-        if let Some(data) = data {
-            self.write_bool(true)?;
-            writer(self, data)
-        } else {
-            self.write_bool(false)
-        }
-    }
-
-    fn write_list<G>(
-        &mut self,
-        list: &[G],
-        writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
-    ) -> Result<(), WritingError> {
-        self.write_var_int(&list.len().into())?;
-        for data in list {
-            writer(self, data)?;
-        }
-
-        Ok(())
     }
 }
 
