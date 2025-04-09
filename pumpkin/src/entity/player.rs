@@ -41,7 +41,9 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_inventory::{inventory::Inventory, player_inventory::PlayerInventory};
+use pumpkin_inventory::{
+    entity_equipment::EntityEquipment, inventory::Inventory, player_inventory::PlayerInventory,
+};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -308,7 +310,7 @@ impl Player {
                     AtomicCell::new(advanced_config().commands.default_op_level),
                     |op| AtomicCell::new(op.level),
                 ),
-            inventory: Mutex::new(PlayerInventory::new()),
+            inventory: Mutex::new(PlayerInventory::new(EntityEquipment::new())),
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),

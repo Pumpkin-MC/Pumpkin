@@ -33,7 +33,8 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player_inventory::PlayerInventory;
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
+    CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{

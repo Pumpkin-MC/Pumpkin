@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum EquipmentType {
     Hand,
     HumanoidArmor,
@@ -8,7 +8,7 @@ pub enum EquipmentType {
     Saddle,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EquipmentSlot {
     pub slot_type: EquipmentType,
     pub entity_id: i32,
@@ -18,13 +18,14 @@ pub struct EquipmentSlot {
 }
 
 impl EquipmentSlot {
+    /* Use player_inv.held_item() instead
     pub const MAIN_HAND: Self = Self {
         slot_type: EquipmentType::Hand,
         entity_id: 0,
         index: 0,
         max_count: 0,
         name: Cow::Borrowed("mainhand"),
-    };
+    }; */
     pub const OFF_HAND: Self = Self {
         slot_type: EquipmentType::Hand,
         entity_id: 1,

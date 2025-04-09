@@ -2,9 +2,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::item::Item;
 use pumpkin_data::screen::WindowType;
-use pumpkin_inventory::container_click::{
-    Click, KeyClick, MouseClick, MouseDragState,
-};
+use pumpkin_inventory::container_click::{Click, KeyClick, MouseClick, MouseDragState};
 
 use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
 use pumpkin_inventory::{InventoryError, container_click};
