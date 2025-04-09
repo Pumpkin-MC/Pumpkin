@@ -41,14 +41,11 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_inventory::player::{
-    PlayerInventory, SLOT_BOOT, SLOT_CRAFT_INPUT_END, SLOT_CRAFT_INPUT_START, SLOT_HELM,
-    SLOT_HOTBAR_END, SLOT_INV_START, SLOT_OFFHAND,
-};
+use pumpkin_inventory::{inventory::Inventory, player_inventory::PlayerInventory};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
+use pumpkin_protocol::client::play::{PlayerInfoFlags, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -392,7 +389,7 @@ impl Player {
         let config = &advanced_config().pvp;
 
         let inventory = self.inventory().lock().await;
-        let item_slot = inventory.held_item();
+        let item_stack = inventory.held_item();
 
         let base_damage = 1.0;
         let base_attack_speed = 4.0;
@@ -402,17 +399,15 @@ impl Player {
         let mut add_speed = 0.0;
 
         // Get the attack damage
-        if let Some(item_stack) = item_slot {
-            // TODO: this should be cached in memory
-            if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
-                for item_mod in modifiers {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        }
-                        if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+        // TODO: this should be cached in memory, we shouldn't just use default here either
+        if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
+            for item_mod in modifiers {
+                if item_mod.operation == Operation::AddValue {
+                    if item_mod.id == "minecraft:base_attack_damage" {
+                        add_damage = item_mod.amount;
+                    }
+                    if item_mod.id == "minecraft:base_attack_speed" {
+                        add_speed = item_mod.amount;
                     }
                 }
             }
@@ -1173,7 +1168,7 @@ impl Player {
                 .lock()
                 .await
                 .held_item()
-                .map_or_else(|| false, |e| e.is_correct_for_drops(block_name))
+                .is_correct_for_drops(block_name)
     }
 
     pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
@@ -1181,8 +1176,8 @@ impl Player {
             .inventory
             .lock()
             .await
-            .get_mining_speed(block_name)
-            .await;
+            .held_item()
+            .get_speed(block_name);
         // Haste
         if self.living_entity.has_effect(EffectType::Haste).await
             || self
@@ -1260,11 +1255,13 @@ impl Player {
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
         let mut inv = self.inventory.lock().await;
-        if let Some(item_stack) = inv.held_item_mut() {
+        let item_stack = inv.held_item_mut();
+
+        if !item_stack.is_empty() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
             self.drop_item(item_stack.item.id, u32::from(drop_amount))
                 .await;
-            inv.decrease_current_stack(drop_amount);
+            item_stack.decrement(drop_amount);
         }
     }
 
@@ -1404,12 +1401,14 @@ impl Player {
 
     /// Send the player's inventory to the client.
     pub async fn send_inventory(&self) {
+        /* TODO: Inv
         self.set_container_content(None).await;
         self.client
             .send_packet_now(&CSetHeldItem::new(
                 self.inventory.lock().await.selected as i8,
             ))
             .await;
+        */
     }
 }
 
@@ -1468,13 +1467,13 @@ impl NBTStorage for Player {
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Save the selected slot (hotbar)
-        nbt.put_int("SelectedItemSlot", self.selected as i32);
+        nbt.put_int("SelectedItemSlot", self.selected_slot as i32);
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::with_capacity(SLOT_OFFHAND);
+        let mut vec: Vec<NbtTag> = Vec::with_capacity(36);
 
         // Helper function to add items to the vector
-        let mut add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
+        let add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
             if let Some(stack) = stack_ref {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", slot as i8);
@@ -1483,23 +1482,7 @@ impl NBTStorage for PlayerInventory {
             }
         };
 
-        // Crafting input slots
-        for slot in SLOT_CRAFT_INPUT_START..=SLOT_CRAFT_INPUT_END {
-            add_item(slot, self.crafting_slots()[slot - SLOT_CRAFT_INPUT_START]);
-        }
-
-        // Armor slots
-        for slot in SLOT_HELM..=SLOT_BOOT {
-            add_item(slot, self.armor_slots()[slot - SLOT_HELM]);
-        }
-
-        // Main inventory slots (includes hotbar in the data structure)
-        for slot in SLOT_INV_START..=SLOT_HOTBAR_END {
-            add_item(slot, self.item_slots()[slot - SLOT_INV_START]);
-        }
-
-        // Offhand
-        add_item(SLOT_OFFHAND, self.offhand_slot());
+        // TODO: Inv
 
         // Save the inventory list
         nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
@@ -1507,7 +1490,7 @@ impl NBTStorage for PlayerInventory {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
-        self.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
+        self.selected_slot = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
 
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
@@ -1516,7 +1499,7 @@ impl NBTStorage for PlayerInventory {
                     if let Some(slot_byte) = item_compound.get_byte("Slot") {
                         let slot = slot_byte as usize;
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                            let _ = self.set_slot(slot, Some(item_stack), true);
+                            self.set_stack(slot, item_stack);
                         }
                     }
                 }

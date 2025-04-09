@@ -14,7 +14,6 @@ use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
@@ -61,7 +60,6 @@ pub struct Server {
     pub dimensions: Vec<DimensionType>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
-    pub drag_handler: DragHandler,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     /// Manages authentication with an authentication server, if enabled.
@@ -110,7 +108,6 @@ impl Server {
 
         Self {
             cached_registry: Registry::get_synced(),
-            drag_handler: DragHandler::new(),
             container_id: 0.into(),
             worlds: RwLock::new(vec![Arc::new(world)]),
             dimensions: vec![
