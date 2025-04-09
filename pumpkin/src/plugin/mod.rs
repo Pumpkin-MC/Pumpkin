@@ -241,7 +241,7 @@ impl PluginManager {
         let server = self
             .server
             .as_ref()
-            .ok_or(LoaderError::ServerNotInitialized)?;
+            .ok_or(ManagerError::ServerNotInitialized)?;
         let (mut instance, metadata, loader_data) = loader.load(path).await?;
 
         let context = Context::new(
