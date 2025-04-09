@@ -205,9 +205,7 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
             }
         }
 
-        let value = visitor.visit_seq(Access { deserializer: self });
-
-        value
+        visitor.visit_seq(Access { deserializer: self })
     }
 
     fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
@@ -236,12 +234,10 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
             }
         }
 
-        let value = visitor.visit_seq(Access {
+        visitor.visit_seq(Access {
             deserializer: self,
             len,
-        });
-
-        value
+        })
     }
 
     fn deserialize_tuple_struct<V>(

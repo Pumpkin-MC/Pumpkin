@@ -11,18 +11,17 @@ use pumpkin_inventory::player::{SLOT_BOOT, SLOT_CHEST, SLOT_HELM, SLOT_HOTBAR_ST
 use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
 use pumpkin_inventory::{InventoryError, OptionallyCombinedContainer, container_click};
 use pumpkin_protocol::client::play::{
-    CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CCloseContainer, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
-use pumpkin_util::text::TextComponent;
 use pumpkin_util::{GameMode, MutableSplitSlice};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
 impl Player {
     pub async fn open_container(&self, server: &Server, window_type: WindowType) {
+        /* TODO: Inv
         let mut inventory = self.inventory().lock().await;
         //inventory.state_id = 0;
         inventory.increment_state_id();
@@ -47,6 +46,7 @@ impl Player {
             .await;
         drop(inventory);
         self.set_container_content(container.as_deref_mut()).await;
+         */
     }
 
     pub async fn set_container_content(&self, container: Option<&mut Box<dyn Container>>) {
@@ -114,6 +114,7 @@ impl Player {
         server: &Arc<Server>,
         packet: SClickContainer,
     ) -> Result<(), InventoryError> {
+        /* TODO: Inv
         let opened_container = self.get_open_container(server).await;
         let mut opened_container = match opened_container.as_ref() {
             Some(container) => Some(container.lock().await),
@@ -200,6 +201,7 @@ impl Player {
                 }
             }
         }
+            */
         Ok(())
     }
 
@@ -585,50 +587,14 @@ impl Player {
         }
     }
 
-    async fn get_current_players_in_container(&self, server: &Server) -> Vec<Arc<Self>> {
-        let player_ids: Vec<i32> = {
-            let open_containers = server.open_containers.read().await;
-            open_containers
-                .get(&self.open_container.load().unwrap())
-                .unwrap()
-                .all_player_ids()
-                .into_iter()
-                .filter(|player_id| *player_id != self.entity_id())
-                .collect()
-        };
-        let player_token = self.gameprofile.id;
-
-        // TODO: Figure out better way to get only the players from player_ids
-        // Also refactor out a better method to get individual advanced state ids
-
-        let players = self
-            .living_entity
-            .entity
-            .world
-            .read()
-            .await
-            .players
-            .read()
-            .await
-            .iter()
-            .filter_map(|(token, player)| {
-                if *token == player_token {
-                    None
-                } else {
-                    let entity_id = player.entity_id();
-                    player_ids.contains(&entity_id).then(|| player.clone())
-                }
-            })
-            .collect();
-        players
-    }
-
     pub async fn send_container_changes(
         &self,
         server: &Server,
         slot_index: usize,
         slot: ItemStackSerializer,
     ) -> Result<(), InventoryError> {
+        /*
+        TODO: Inv
         for player in self.get_current_players_in_container(server).await {
             let mut inventory = player.inventory().lock().await;
             let total_opened_containers = inventory.total_opened_containers;
@@ -643,10 +609,13 @@ impl Player {
             );
             player.client.enqueue_packet(&packet).await;
         }
+        */
         Ok(())
     }
 
     pub async fn send_whole_container_change(&self, server: &Server) -> Result<(), InventoryError> {
+        /*
+        TODO: Inv
         let players = self.get_current_players_in_container(server).await;
 
         for player in players {
@@ -657,17 +626,8 @@ impl Player {
             };
             player.set_container_content(container.as_deref_mut()).await;
         }
+        */
         Ok(())
-    }
-
-    pub async fn get_open_container(
-        &self,
-        server: &Server,
-    ) -> Option<Arc<tokio::sync::Mutex<Box<dyn Container>>>> {
-        match self.open_container.load() {
-            Some(id) => server.try_get_container(self.entity_id(), id).await,
-            None => None,
-        }
     }
 
     // TODO: Use this method when actually picking up items instead of just the command

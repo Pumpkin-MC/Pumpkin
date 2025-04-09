@@ -5,8 +5,6 @@ use crate::{block::registry::BlockActionResult, world::World};
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
-use pumpkin_data::screen::WindowType;
-use pumpkin_inventory::Furnace;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 
@@ -52,7 +50,6 @@ impl PumpkinBlock for FurnaceBlock {
         _world: Arc<World>,
         _state: BlockState,
     ) {
-        super::standard_on_broken_with_container(block, player, location, server).await;
     }
 }
 
@@ -64,13 +61,5 @@ impl FurnaceBlock {
         location: BlockPos,
         server: &Server,
     ) {
-        super::standard_open_container::<Furnace>(
-            block,
-            player,
-            location,
-            server,
-            WindowType::Furnace,
-        )
-        .await;
     }
 }

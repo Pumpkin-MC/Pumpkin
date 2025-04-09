@@ -5,7 +5,6 @@ use crate::world::{BlockFlags, World};
 use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
-use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -180,22 +179,6 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .broken(block, player, location, server, world.clone(), state)
-                .await;
-        }
-    }
-
-    pub async fn close(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        server: &Server,
-        container: &mut OpenContainer,
-    ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
-                .close(block, player, location, server, container)
                 .await;
         }
     }

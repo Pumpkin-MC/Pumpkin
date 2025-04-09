@@ -1535,42 +1535,8 @@ impl Player {
         );
     }
 
-    // TODO:
-    // In the future, this function will be used to keep track of if the client is in a valid state.
-    // However, this is not possible yet.
     pub async fn handle_close_container(&self, server: &Server, _packet: SCloseContainer) {
-        // TODO: This should check if player sent this packet before
-        // let Some(_window_type) = WindowType::from_i32(packet.window_id.0) else {
-        //     log::info!("Closed ID: {}", packet.window_id.0);
-        //     self.kick(TextComponent::text("Invalid window ID")).await;
-        //     return;
-        // };
-        // window_id 0 represents both 9x1 Generic AND inventory here
-        let open_container = self.open_container.load();
-        if let Some(id) = open_container {
-            let mut open_containers = server.open_containers.write().await;
-            if let Some(container) = open_containers.get_mut(&id) {
-                // If the container contains both a location and a type, run the `on_close` `block_manager` handler
-                if let Some(pos) = container.get_location() {
-                    if let Some(block) = container.get_block() {
-                        server
-                            .block_registry
-                            .close(&block, self, pos, server, container) //block, self, location, server)
-                            .await;
-                    }
-                }
-                // Remove the player from the container
-                container.remove_player(self.entity_id());
-
-                let mut inventory = self.inventory().lock().await;
-                if inventory.state_id >= 2 {
-                    inventory.state_id -= 2;
-                } else {
-                    inventory.state_id = 0;
-                }
-            }
-            self.open_container.store(None);
-        }
+        // TODO: Inv
     }
 
     pub async fn handle_command_suggestion(
