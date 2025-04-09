@@ -257,7 +257,9 @@ impl PluginManager {
             tokio::spawn(async move {
                 loader.unload(data).await.ok();
             });
-            return Err(ManagerError::LoaderError(LoaderError::InitializationFailed(e)));
+            return Err(ManagerError::LoaderError(
+                LoaderError::InitializationFailed(e),
+            ));
         }
 
         Ok(LoadedPlugin {
