@@ -168,16 +168,16 @@ impl RedstoneWireTurbo {
         let mut cz = 0;
         if from_west {
             cx += 1;
-        };
+        }
         if from_east {
             cx -= 1;
-        };
+        }
         if from_north {
             cz += 1;
-        };
+        }
         if from_south {
             cz -= 1;
-        };
+        }
 
         let UpdateNode { xbias, zbias, .. } = &self.nodes[upd1.index];
         let xbias = *xbias;

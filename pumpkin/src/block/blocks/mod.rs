@@ -13,6 +13,7 @@ pub(crate) mod doors;
 pub(crate) mod farmland;
 pub(crate) mod fence_gates;
 pub(crate) mod fences;
+pub(crate) mod fluids;
 pub(crate) mod furnace;
 pub(crate) mod jukebox;
 pub(crate) mod logs;

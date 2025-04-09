@@ -7,7 +7,8 @@ use crate::{generation::Seed, level::LevelFolder};
 
 pub mod anvil;
 
-pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4080; // 1.21.2
+// Constraint: disk biome palette serialization changed in 1.21.5
+pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4325; // 1.21.5
 pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4325; // 1.21.5
 
 pub(crate) trait WorldInfoReader {

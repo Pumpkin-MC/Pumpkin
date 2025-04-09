@@ -296,7 +296,16 @@ impl ChunkSerializer for LinearFile {
             if header.size != 0 {
                 let last_index = bytes_offset;
                 bytes_offset += header.size as usize;
-                chunks[i] = Some(buffer.slice(last_index..bytes_offset));
+                if bytes_offset > buffer.len() {
+                    log::warn!(
+                        "Not enough bytes are available for chunk {} ({} vs {})",
+                        i,
+                        header.size,
+                        buffer.len() - last_index
+                    );
+                } else {
+                    chunks[i] = Some(buffer.slice(last_index..bytes_offset));
+                }
             }
         }
 
@@ -345,10 +354,10 @@ impl ChunkSerializer for LinearFile {
                 LoadedData::Missing(chunk)
             };
 
-            stream
-                .send(result)
-                .await
-                .expect("Failed to read chunks to stream");
+            if stream.send(result).await.is_err() {
+                // The stream is closed. Return early to prevent unneeded work and IO
+                return;
+            }
         }
     }
 }
@@ -414,7 +423,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(position);
+                let chunk = generator.generate_chunk(&position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -465,7 +474,31 @@ mod tests {
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
                     if read_chunk.position == chunk.position {
-                        assert_eq!(chunk.sections, read_chunk.sections, "Chunks don't match");
+                        let original = chunk.section.dump_blocks();
+                        let read = read_chunk.section.dump_blocks();
+
+                        original
+                            .into_iter()
+                            .zip(read)
+                            .enumerate()
+                            .for_each(|(i, (o, r))| {
+                                if o != r {
+                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                }
+                            });
+
+                        let original = chunk.section.dump_biomes();
+                        let read = read_chunk.section.dump_biomes();
+
+                        original
+                            .into_iter()
+                            .zip(read)
+                            .enumerate()
+                            .for_each(|(i, (o, r))| {
+                                if o != r {
+                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                }
+                            });
                         break;
                     }
                 }

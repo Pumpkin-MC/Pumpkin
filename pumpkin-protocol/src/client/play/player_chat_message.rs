@@ -65,6 +65,7 @@ impl CPlayerChatMessage {
     }
 }
 
+//TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerChatMessage {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;

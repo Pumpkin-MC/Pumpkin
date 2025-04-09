@@ -15,13 +15,7 @@ RUN --mount=type=cache,sharing=private,target=/pumpkin/target \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     cargo build --release && cp target/release/pumpkin ./pumpkin.release
 
-# strip debug symbols from binary
-RUN strip pumpkin.release
-
 FROM alpine:3.21
-
-# Identifying information for registries like ghcr.io
-LABEL org.opencontainers.image.source=https://github.com/Pumpkin-MC/Pumpkin
 
 RUN apk add --no-cache libgcc
 
@@ -35,3 +29,4 @@ WORKDIR /pumpkin
 ENV RUST_BACKTRACE=1
 EXPOSE 25565
 ENTRYPOINT [ "/bin/pumpkin" ]
+HEALTHCHECK CMD nc -z 127.0.0.1 25565 || exit 1

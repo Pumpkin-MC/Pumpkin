@@ -129,4 +129,4 @@ run/
 # Benchmarking
 *perf.data*
 *flamegraph.svg
-
+*dhat*

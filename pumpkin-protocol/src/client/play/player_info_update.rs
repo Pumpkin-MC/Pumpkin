@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
 use pumpkin_macros::packet;
 
@@ -10,9 +11,23 @@ use crate::{
 
 use super::PlayerAction;
 
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct PlayerInfoFlags: u8 {
+        const ADD_PLAYER            = 0x01;
+        const INITIALIZE_CHAT       = 0x02;
+        const UPDATE_GAME_MODE      = 0x04;
+        const UPDATE_LISTED         = 0x08;
+        const UPDATE_LATENCY        = 0x10;
+        const UPDATE_DISPLAY_NAME   = 0x20;
+        const UPDATE_LIST_PRIORITY  = 0x40;
+        const UPDATE_HAT            = 0x80;
+    }
+}
+
 #[packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
-    pub actions: i8,
+    pub actions: u8,
     pub players: &'a [Player<'a>],
 }
 
@@ -22,16 +37,17 @@ pub struct Player<'a> {
 }
 
 impl<'a> CPlayerInfoUpdate<'a> {
-    pub fn new(actions: i8, players: &'a [Player<'a>]) -> Self {
+    pub fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
         Self { actions, players }
     }
 }
 
+// TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerInfoUpdate<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_i8_be(self.actions)?;
+        write.write_u8_be(self.actions)?;
         write.write_list::<Player>(self.players, |p, v| {
             p.write_uuid(&v.uuid)?;
             for action in v.actions {
@@ -48,9 +64,19 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                         p.write_option(init_chat, |p, v| {
                             p.write_uuid(&v.session_id)?;
                             p.write_i64_be(v.expires_at)?;
-                            p.write_var_int(&v.public_key.len().into())?;
+                            p.write_var_int(&v.public_key.len().try_into().map_err(|_| {
+                                WritingError::Message(format!(
+                                    "{} isn't representable as a VarInt",
+                                    v.public_key.len()
+                                ))
+                            })?)?;
                             p.write_slice(&v.public_key)?;
-                            p.write_var_int(&v.signature.len().into())?;
+                            p.write_var_int(&v.signature.len().try_into().map_err(|_| {
+                                WritingError::Message(format!(
+                                    "{} isn't representable as a VarInt",
+                                    v.signature.len()
+                                ))
+                            })?)?;
                             p.write_slice(&v.signature)
                         })?;
                     }

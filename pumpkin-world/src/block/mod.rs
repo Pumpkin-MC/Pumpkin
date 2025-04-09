@@ -9,7 +9,7 @@ use pumpkin_util::math::vector3::Vector3;
 use serde::Deserialize;
 pub use state::ChunkBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum BlockDirection {
     Down = 0,
     Up,
@@ -226,6 +226,21 @@ impl FacingExt for Facing {
             Facing::East => BlockDirection::East,
             Facing::Up => BlockDirection::Up,
             Facing::Down => BlockDirection::Down,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::block::Block;
+
+    use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
+
+    #[test]
+    fn test_proper_network_bits_per_entry() {
+        let id_to_test = 1 << BLOCK_NETWORK_MAX_BITS;
+        if Block::from_state_id(id_to_test).is_some() {
+            panic!("We need to update our constants!");
         }
     }
 }

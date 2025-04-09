@@ -58,6 +58,7 @@ pub(crate) fn build() -> TokenStream {
         variants.extend([quote! {
             pub const #format_name: Biome = Biome {
                id: #index,
+               registry_id: #name,
                weather: Weather::new(
                     #has_precipitation,
                     #temperature,
@@ -71,17 +72,18 @@ pub(crate) fn build() -> TokenStream {
         type_to_name.extend(quote! { Self::#format_name => #name, });
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
         type_to_id.extend(quote! { Self::#format_name => #index, });
-        id_to_type.extend(quote! { #index => Some(Self::#format_name), });
+        id_to_type.extend(quote! { #index => Some(&Self::#format_name), });
     }
 
     quote! {
         use pumpkin_util::biome::{TemperatureModifier, Weather};
         use serde::{de, Deserializer};
-        use std::fmt;
+        use std::{fmt, hash::{Hasher, Hash}};
 
         #[derive(Clone, Debug)]
         pub struct Biome {
             pub id: u8,
+            pub registry_id: &'static str,
             pub weather: Weather,
             // carvers: &'static [&str],
             pub features: &'static [&'static [&'static str]]
@@ -90,6 +92,14 @@ pub(crate) fn build() -> TokenStream {
         impl PartialEq for Biome {
             fn eq(&self, other: &Biome) -> bool {
                 self.id == other.id
+            }
+        }
+
+        impl Eq for Biome {}
+
+        impl Hash for Biome {
+            fn hash<H>(&self, state: &mut H) where H: Hasher {
+                self.id.hash(state);
             }
         }
 
@@ -138,7 +148,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            pub const fn from_id(id: u8) -> Option<Self> {
+            pub const fn from_id(id: u8) -> Option<&'static Self> {
                 match id {
                     #id_to_type
                     _ => None

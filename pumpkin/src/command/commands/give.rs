@@ -67,7 +67,6 @@ impl CommandExecutor for Executor {
                         .hover_event(HoverEvent::ShowItem {
                             id: item_name.to_string().into(),
                             count: Some(item_count),
-                            tag: None,
                         }),
                     TextComponent::text(targets[0].gameprofile.name.to_string())
                         .hover_event(HoverEvent::show_entity(
@@ -97,7 +96,6 @@ impl CommandExecutor for Executor {
                         .hover_event(HoverEvent::ShowItem {
                             id: item_name.to_string().into(),
                             count: Some(item_count),
-                            tag: None,
                         }),
                     TextComponent::text(targets.len().to_string()),
                 ],
