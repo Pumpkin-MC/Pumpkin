@@ -12,7 +12,10 @@ pub struct BitSet(pub Box<[i64]>);
 
 impl BitSet {
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
-        write.write_var_int(&self.0.len().into())?;
+        write.write_var_int(&self.0.len().try_into().map_err(|_| {
+            WritingError::Message(format!("{} isn't representable as a VarInt", self.0.len()))
+        })?)?;
+
         for b in &self.0 {
             write.write_i64_be(*b)?;
         }

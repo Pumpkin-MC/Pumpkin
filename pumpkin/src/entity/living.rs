@@ -80,7 +80,7 @@ impl LivingEntity {
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
-                stack_amount.into(),
+                stack_amount.try_into().unwrap(),
             ))
             .await;
     }
