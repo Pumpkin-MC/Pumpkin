@@ -129,6 +129,7 @@ pub struct ChunkSections {
 impl ChunkSections {
     #[cfg(test)]
     pub fn dump_blocks(&self) -> Vec<u16> {
+        // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
         for section in self.sections.iter() {
             section.block_states.for_each(|raw_id| {
@@ -140,6 +141,7 @@ impl ChunkSections {
 
     #[cfg(test)]
     pub fn dump_biomes(&self) -> Vec<u8> {
+        // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
         for section in self.sections.iter() {
             section.biomes.for_each(|raw_id| {
@@ -154,6 +156,19 @@ impl ChunkSections {
 pub struct SubChunk {
     pub block_states: BlockPalette,
     pub biomes: BiomePalette,
+    pub block_light: Option<Box<[u8]>>,
+    pub sky_light: Option<Box<[u8]>>,
+}
+
+impl SubChunk {
+    pub fn max_light() -> Self {
+        let chunk_light_len = BlockPalette::VOLUME / 2;
+        Self {
+            block_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
+            sky_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

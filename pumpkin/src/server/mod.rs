@@ -51,9 +51,9 @@ pub struct Server {
     /// Handles cryptographic keys for secure communication.
     key_store: KeyStore,
     /// Manages server status information.
-    server_listing: Mutex<CachedStatus>,
+    listing: Mutex<CachedStatus>,
     /// Saves server branding information.
-    server_branding: CachedBranding,
+    branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
     /// Block behaviour.
@@ -74,6 +74,9 @@ pub struct Server {
     container_id: AtomicU32,
     /// Manages authentication with an authentication server, if enabled.
     pub auth_client: Option<reqwest::Client>,
+    /// Mojang's public keys, used for chat session signing
+    /// Pulled from Mojang API on startup
+    pub mojang_public_keys: Mutex<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
     /// The default gamemode when a player joins the server (reset every restart)
@@ -81,9 +84,6 @@ pub struct Server {
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
     tasks: TaskTracker,
-    /// Mojang's public keys, used for chat session signing
-    /// Pulled from Mojang API on startup
-    pub mojang_public_keys: Mutex<Vec<RsaPublicKey>>,
 }
 
 impl Server {
@@ -133,8 +133,8 @@ impl Server {
             item_registry: super::item::items::default_registry(),
             auth_client,
             key_store: KeyStore::new(),
-            server_listing: Mutex::new(CachedStatus::new()),
-            server_branding: CachedBranding::new(),
+            listing: Mutex::new(CachedStatus::new()),
+            branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
             defaultgamemode: Mutex::new(DefaultGamemode {
                 gamemode: BASIC_CONFIG.default_gamemode,
@@ -225,7 +225,7 @@ impl Server {
                 if let Some(config) = player.client.config.lock().await.as_ref() {
                     // TODO: Config so we can also just ignore this hehe
                     if config.server_listing {
-                        self.server_listing.lock().await.add_player();
+                        self.listing.lock().await.add_player();
                     }
                 }
 
@@ -241,7 +241,7 @@ impl Server {
 
     pub async fn remove_player(&self) {
         // TODO: Config if we want decrease online
-        self.server_listing.lock().await.remove_player();
+        self.listing.lock().await.remove_player();
     }
 
     pub async fn shutdown(&self) {
@@ -469,11 +469,11 @@ impl Server {
     }
 
     pub fn get_branding(&self) -> CPluginMessage<'_> {
-        self.server_branding.get_branding()
+        self.branding.get_branding()
     }
 
     pub fn get_status(&self) -> &Mutex<CachedStatus> {
-        &self.server_listing
+        &self.listing
     }
 
     pub fn encryption_request<'a>(

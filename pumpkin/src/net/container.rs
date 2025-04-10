@@ -600,8 +600,7 @@ impl Player {
         // TODO: Figure out better way to get only the players from player_ids
         // Also refactor out a better method to get individual advanced state ids
 
-        let players = self
-            .living_entity
+        self.living_entity
             .entity
             .world
             .read()
@@ -618,8 +617,7 @@ impl Player {
                     player_ids.contains(&entity_id).then(|| player.clone())
                 }
             })
-            .collect();
-        players
+            .collect()
     }
 
     pub async fn send_container_changes(

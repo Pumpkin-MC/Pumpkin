@@ -413,7 +413,7 @@ impl Cache2D {
     pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
         Self {
             input_index,
-            // I know this is because theres is definitely world coords that are this marker, but this
+            // I know this is because there's is definitely world coords that are this marker, but this
             // is how vanilla does it, so I'm going to for pairity
             last_sample_column: chunk_pos::MARKER,
             last_sample_result: Default::default(),
