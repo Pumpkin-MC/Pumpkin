@@ -920,7 +920,7 @@ impl NoiseRouterRepr {
             .vein_gap
             .get_index_for_component(&mut noise_component_stack, &mut noise_lookup_map);
 
-        // These should all be cached so it doesnt matter where their components are
+        // These should all be cached so it doesn't matter where their components are
         let noise_erosion = self
             .erosion
             .clone()

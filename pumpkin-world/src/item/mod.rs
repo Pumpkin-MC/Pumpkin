@@ -57,7 +57,7 @@ impl ItemStack {
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
                     {
-                        if blocks.iter().any(|s| *s == block) {
+                        if blocks.contains(&block) {
                             return speed;
                         }
                     }
@@ -92,7 +92,7 @@ impl ItemStack {
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
                     {
-                        if blocks.iter().any(|s| *s == block) {
+                        if blocks.contains(&block) {
                             return correct_for_drops;
                         }
                     }
