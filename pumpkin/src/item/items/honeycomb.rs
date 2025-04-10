@@ -3,8 +3,9 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::block::{Block, BlockProperties, OakDoorLikeProperties};
 use pumpkin_data::item::Item;
+use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
@@ -159,13 +160,31 @@ impl PumpkinItem for HoneyCombItem {
             // get block state of the old log.
             // get the log properties
             // create new properties for the new log.
-            let block = Block::from_id(*replacement_block.unwrap());
+            let new_block = &Block::from_id(*replacement_block.unwrap()).unwrap();
+
+            let new_state_id = if block.is_tagged_with("#minecraft:doors").is_some()
+                && block.is_tagged_with("#minecraft:doors").unwrap()
+            {
+                // get block state of the old log.
+                let door_information = world.get_block_state_id(&location).await.unwrap();
+                // get the log properties
+                let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+                // create new properties for the new log.
+                let mut new_door_properties = OakDoorLikeProperties::default(new_block);
+                // Set old axis to the new log.
+                new_door_properties.facing = door_props.facing;
+                new_door_properties.open = door_props.open;
+                new_door_properties.half = door_props.half;
+                new_door_properties.hinge = door_props.hinge;
+                new_door_properties.powered = door_props.powered;
+                new_door_properties.to_state_id(new_block)
+            } else {
+                new_block.default_state_id
+            };
+
+            // TODO Implements trapdoors
             world
-                .set_block_state(
-                    &location,
-                    block.unwrap().default_state_id,
-                    BlockFlags::NOTIFY_ALL,
-                )
+                .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                 .await;
             return;
         }

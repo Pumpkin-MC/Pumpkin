@@ -161,50 +161,47 @@ impl PumpkinItem for AxeItem {
         // If there is a strip equivalent.
         if replacement_block.is_some() {
             let new_block = Block::from_id(*replacement_block.unwrap());
-            if new_block.is_some() {
-                let new_block = &new_block.unwrap();
-                let new_state_id = if block.is_tagged_with("#minecraft:logs").is_some()
-                    && block.is_tagged_with("#minecraft:logs").unwrap()
-                {
-                    let log_information = world.get_block_state_id(&location).await.unwrap();
-                    let log_props =
-                        PaleOakWoodLikeProperties::from_state_id(log_information, block);
-                    // create new properties for the new log.
-                    let mut new_log_properties = PaleOakWoodLikeProperties::default(new_block);
-                    new_log_properties.axis = log_props.axis;
+            let new_block = &new_block.unwrap();
+            let new_state_id = if block.is_tagged_with("#minecraft:logs").is_some()
+                && block.is_tagged_with("#minecraft:logs").unwrap()
+            {
+                let log_information = world.get_block_state_id(&location).await.unwrap();
+                let log_props = PaleOakWoodLikeProperties::from_state_id(log_information, block);
+                // create new properties for the new log.
+                let mut new_log_properties = PaleOakWoodLikeProperties::default(new_block);
+                new_log_properties.axis = log_props.axis;
 
-                    // create new properties for the new log.
+                // create new properties for the new log.
 
-                    // Set old axis to the new log.
-                    new_log_properties.axis = log_props.axis;
-                    new_log_properties.to_state_id(new_block)
-                }
-                // Let's check if It's a door
-                else if block.is_tagged_with("#minecraft:doors").is_some()
-                    && block.is_tagged_with("#minecraft:doors").unwrap()
-                {
-                    // get block state of the old log.
-                    let door_information = world.get_block_state_id(&location).await.unwrap();
-                    // get the log properties
-                    let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
-                    // create new properties for the new log.
-                    let mut new_door_properties = OakDoorLikeProperties::default(new_block);
-                    // Set old axis to the new log.
-                    new_door_properties.facing = door_props.facing;
-                    new_door_properties.open = door_props.open;
-                    new_door_properties.half = door_props.half;
-                    new_door_properties.hinge = door_props.hinge;
-                    new_door_properties.powered = door_props.powered;
-                    new_door_properties.to_state_id(new_block)
-                } else {
-                    new_block.default_state_id
-                };
-                // TODO Implements trapdoors when It's implemented
-                world
-                    .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
-                    .await;
-                return;
+                // Set old axis to the new log.
+                new_log_properties.axis = log_props.axis;
+                new_log_properties.to_state_id(new_block)
             }
+            // Let's check if It's a door
+            else if block.is_tagged_with("#minecraft:doors").is_some()
+                && block.is_tagged_with("#minecraft:doors").unwrap()
+            {
+                // get block state of the old log.
+                let door_information = world.get_block_state_id(&location).await.unwrap();
+                // get the log properties
+                let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+                // create new properties for the new log.
+                let mut new_door_properties = OakDoorLikeProperties::default(new_block);
+                // Set old axis to the new log.
+                new_door_properties.facing = door_props.facing;
+                new_door_properties.open = door_props.open;
+                new_door_properties.half = door_props.half;
+                new_door_properties.hinge = door_props.hinge;
+                new_door_properties.powered = door_props.powered;
+                new_door_properties.to_state_id(new_block)
+            } else {
+                new_block.default_state_id
+            };
+            // TODO Implements trapdoors when It's implemented
+            world
+                .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+            return;
         }
     }
 }
