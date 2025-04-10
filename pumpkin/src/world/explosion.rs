@@ -50,7 +50,7 @@ impl Explosion {
                         // }
 
                         // TODO: This should only check air & fluid
-                        if !state.air {
+                        if !state.is_air() {
                             h -= (block.blast_resistance + 0.3) * 0.3;
                         }
                         if h > 0.0 {

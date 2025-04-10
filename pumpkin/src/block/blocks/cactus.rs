@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
 };
-use pumpkin_data::tag::Tagable;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
