@@ -70,7 +70,9 @@ pub mod noise_router {
 
 mod block_state;
 mod blocks;
+mod collision_shape;
 
 pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
 pub use blocks::Block;
+pub use collision_shape::CollisionShape;

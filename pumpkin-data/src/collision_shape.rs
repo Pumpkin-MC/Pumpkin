@@ -1,4 +1,4 @@
-use super::{boundingbox::BoundingBox, vector3::Vector3};
+use pumpkin_util::math::{boundingbox::BoundingBox, vector3::Vector3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionShape {

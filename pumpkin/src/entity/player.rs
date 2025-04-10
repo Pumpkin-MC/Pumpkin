@@ -1231,12 +1231,12 @@ impl Player {
     pub async fn drop_item(&self, item_id: u16, count: u32) {
         let entity = self.world().await.create_entity(
             self.living_entity.entity.pos.load()
-                + Vector3::new(0.0, EntityType::PLAYER.eye_height as f64 - 0.3, 0.0),
+                + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0),
             EntityType::ITEM,
         );
 
-        let pitch = (self.living_entity.entity.pitch.load() as f64).to_radians();
-        let yaw = (self.living_entity.entity.yaw.load() as f64).to_radians();
+        let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
+        let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
         let pitch_sin = pitch.sin();
         let pitch_cos = pitch.cos();
         let yaw_sin = yaw.sin();

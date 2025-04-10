@@ -423,25 +423,6 @@ impl Entity {
         self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type)
     }
 
-    // move() in Java, but in Rust move is a keyword
-    fn move_entity(&self, movement: Vector3<f64>, no_clip: bool) {
-        if no_clip {
-            let pos = self.pos.load().add(&movement);
-            self.set_pos(pos);
-        } else {
-            // this.movementMultiplier.lengthSquared() > 1.0E-7
-        }
-    }
-
-    fn tick_block_collision(&self) {
-        if self.on_ground.load(Relaxed) {
-            //Todo! Trigger on_stepped_on event
-            //let pos = self.pos.load();
-            //let block_pos = BlockPos::floored(pos.x, pos.y - 0.50001, pos.z);
-            //;
-        }
-    }
-
     fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {
         // let world = self.world.read().await;
         // TODO: handle when player is outside world

@@ -1,7 +1,6 @@
 use num_traits::{Float, One, PrimInt, Zero};
 
 pub mod boundingbox;
-pub mod collision_shape;
 pub mod experience;
 pub mod float_provider;
 pub mod int_provider;

@@ -239,10 +239,7 @@ impl ToTokens for BlockPropertyStruct {
             match &entry.property_type {
                 PropertyType::Bool => quote! {
                     #key => {
-                        block_props.#field_name = match value.as_str() {
-                            "true" => true,
-                            _ => false
-                        }
+                        block_props.#field_name = matches!(value.as_str(), "true")
                     }
                 },
                 PropertyType::Enum { name } => {
@@ -951,7 +948,7 @@ pub(crate) fn build() -> TokenStream {
             let generated_property = generated_properties
                 .iter()
                 .find(|p| p.hash_key == property)
-                .expect(&format!("invalid property: {}", property));
+                .unwrap();
             property_collection.insert(generated_property.hash_key);
             let property = generated_property.to_property();
             let renamed_property = property.enum_name.to_upper_camel_case();
@@ -1072,11 +1069,10 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::{BlockState, BlockStateRef, Block};
+        use crate::{BlockState, BlockStateRef, Block, CollisionShape};
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
-        use pumpkin_util::math::collision_shape::CollisionShape;
         use pumpkin_util::math::vector3::Vector3;
 
         #[derive(Clone, Copy, Debug)]

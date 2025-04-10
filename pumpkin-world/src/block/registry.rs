@@ -1,8 +1,8 @@
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateRef;
+use pumpkin_data::CollisionShape;
 use pumpkin_data::block_properties::COLLISION_SHAPES;
-use pumpkin_util::math::collision_shape::CollisionShape;
 
 pub fn get_block(registry_id: &str) -> Option<Block> {
     let key = registry_id.replace("minecraft:", "");

@@ -40,7 +40,6 @@ impl BlockState {
     }
 
     pub const fn is_full_cube(&self) -> bool {
-        //self.collision_shapes.is_empty() && self.collision_shapes[0] == 0
         self.state_flags & IS_FULL_CUBE != 0
     }
 }

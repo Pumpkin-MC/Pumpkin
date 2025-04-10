@@ -9,7 +9,7 @@ use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::slot::Slot,
 };
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
@@ -67,63 +67,6 @@ impl EntityBase for ItemEntity {
         if age >= 6000 {
             entity.remove().await;
         }
-
-        let mut velocity = entity.velocity.load();
-
-        if entity.pos.load().y > 99.9 {
-            velocity.y -= 0.04;
-            entity.on_ground.store(false, Relaxed);
-        } else {
-            entity.on_ground.store(true, Relaxed);
-        }
-
-        if !entity.on_ground.load(Relaxed)
-            || velocity.horizontal_length_squared() > 1.0E-5
-            || (age + entity.entity_id as u32) % 4 == 0
-        {
-            let no_clip = true;
-            println!("space: {}", entity.world.read().await.is_space_empty(entity.bounding_box.load()).await);
-            entity.move_entity(velocity, no_clip);
-            entity.tick_block_collision();
-
-            let mut friction = 0.98;
-
-            if entity.on_ground.load(Relaxed) {
-                let pos = entity.pos.load();
-                let block_pos = BlockPos::floored(pos.x, pos.y - 0.51, pos.z);
-                friction *= entity
-                    .world
-                    .read()
-                    .await
-                    .get_block(&block_pos)
-                    .await
-                    .unwrap()
-                    .slipperiness as f64;
-            }
-
-            println!("friction: {}", friction);
-
-            velocity = velocity.multiply(friction, 0.98, friction);
-
-            if entity.on_ground.load(Relaxed) && velocity.y < 0.1 {
-                velocity.y *= -0.5;
-            }
-        }
-
-        entity.velocity.store(velocity);
-
-        entity
-            .world
-            .read()
-            .await
-            .spawn_particle(
-                entity.pos.load(),
-                Vector3::new(0.0, 0.0, 0.0),
-                0.1,
-                7,
-                pumpkin_data::particle::Particle::DustPlume,
-            )
-            .await;
     }
 
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
