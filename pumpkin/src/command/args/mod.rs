@@ -185,7 +185,7 @@ impl<'a, T: DoubleEndedIterator<Item = (usize, char)>> Iterator
                     self.is_complete = true;
                     return Some(&self.s[start..self.pos]);
                 }
-            };
+            }
         }
     }
 }

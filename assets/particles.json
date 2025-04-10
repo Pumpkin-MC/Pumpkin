@@ -34,6 +34,7 @@
   "infested",
   "cherry_leaves",
   "pale_oak_leaves",
+  "tinted_leaves",
   "sculk_soul",
   "sculk_charge",
   "sculk_charge_pop",
@@ -110,5 +111,6 @@
   "ominous_spawning",
   "raid_omen",
   "trial_omen",
-  "block_crumble"
+  "block_crumble",
+  "firefly"
 ]

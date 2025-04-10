@@ -1,15 +1,22 @@
+use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
+use rsa::signature::Verifier;
+use sha1::Sha1;
+
 use std::num::NonZeroU8;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::block;
 use crate::block::registry::BlockActionResult;
 use crate::entity::mob;
+use crate::entity::player::ChatSession;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_sneak::PlayerToggleSneakEvent;
 use crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent;
+use crate::server::seasonal_events;
 use crate::world::BlockFlags;
 use crate::{
     command::CommandSender,
@@ -18,31 +25,30 @@ use crate::{
     server::Server,
     world::chunker,
 };
-use pumpkin_config::advanced_config;
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block::{Block, HorizontalFacing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::world::CHAT;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, EquipmentSlot,
+    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
+    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::slot::Slot;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    SChunkBatch, SCookieResponse as SPCookieResponse, SUpdateSign,
+    SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
 };
 use pumpkin_protocol::{
     client::play::{
         Animation, CCommandSuggestions, CEntityAnimation, CHeadRot, CPingResponse,
-        CPlayerChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, FilterType,
+        CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
     },
     server::play::{
         Action, ActionType, SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay,
@@ -53,6 +59,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::polynomial_rolling_hash;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{
@@ -66,6 +73,10 @@ use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
+
+/// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
+/// Vanilla: 2 minutes
+const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -105,6 +116,68 @@ impl PumpkinError for BlockPlacingError {
             Self::InvalidBlockFace => Some("Invalid block face".into()),
             Self::InventoryInvalid => Some("Held item invalid".into()),
             Self::NoBaseBlock => Some("No base block".into()),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ChatError {
+    #[error("sent an oversized message")]
+    OversizedMessage,
+    #[error("sent a message with illegal characters")]
+    IllegalCharacters,
+    #[error("sent a chat with invalid/no signature")]
+    UnsignedChat,
+    #[error("has too many unacknowledged chats queued")]
+    TooManyPendingChats,
+    #[error("sent a chat that couldn't be validated")]
+    ChatValidationFailed,
+    #[error("sent a chat with an out of order timestamp")]
+    OutOfOrderChat,
+    #[error("has an expired public key")]
+    ExpiredPublicKey,
+    #[error("attempted to initialize a session with an invalid public key")]
+    InvalidPublicKey,
+}
+
+impl PumpkinError for ChatError {
+    fn is_kick(&self) -> bool {
+        true
+    }
+
+    fn severity(&self) -> log::Level {
+        log::Level::Warn
+    }
+
+    fn client_kick_reason(&self) -> Option<String> {
+        match self {
+            Self::OversizedMessage => Some("Chat message too long".into()),
+            Self::IllegalCharacters => Some(
+                TextComponent::translate("multiplayer.disconnect.illegal_characters", [])
+                    .get_text(),
+            ),
+            Self::UnsignedChat => Some(
+                TextComponent::translate("multiplayer.disconnect.unsigned_chat", []).get_text(),
+            ),
+            Self::TooManyPendingChats => Some(
+                TextComponent::translate("multiplayer.disconnect.too_many_pending_chats", [])
+                    .get_text(),
+            ),
+            Self::ChatValidationFailed => Some(
+                TextComponent::translate("multiplayer.disconnect.chat_validation_failed", [])
+                    .get_text(),
+            ),
+            Self::OutOfOrderChat => Some(
+                TextComponent::translate("multiplayer.disconnect.out_of_order_chat", []).get_text(),
+            ),
+            Self::ExpiredPublicKey => Some(
+                TextComponent::translate("multiplayer.disconnect.expired_public_key", [])
+                    .get_text(),
+            ),
+            Self::InvalidPublicKey => Some(
+                TextComponent::translate("multiplayer.disconnect.invalid_public_key_signature", [])
+                    .get_text(),
+            ),
         }
     }
 }
@@ -702,81 +775,209 @@ impl Player {
     }
 
     pub async fn handle_chat_message(self: &Arc<Self>, chat_message: SChatMessage) {
-        let message = chat_message.message;
-        if message.len() > 256 {
-            self.kick(TextComponent::text("Oversized message")).await;
-            return;
-        }
-
-        if message.chars().any(|c| c == '§' || c < ' ' || c == '\x7F') {
-            self.kick(TextComponent::translate(
-                "multiplayer.disconnect.illegal_characters",
-                [],
-            ))
-            .await;
-            return;
-        }
-
         let gameprofile = &self.gameprofile;
+
+        if let Err(err) = self.validate_chat_message(&chat_message).await {
+            log::log!(
+                err.severity(),
+                "{} (uuid {}) {}",
+                gameprofile.name,
+                gameprofile.id,
+                err
+            );
+            if err.is_kick() {
+                if let Some(reason) = err.client_kick_reason() {
+                    self.kick(TextComponent::text(reason)).await;
+                }
+            }
+            return;
+        }
+
         send_cancellable! {{
-            PlayerChatEvent::new(self.clone(), message.clone(), vec![]);
+            PlayerChatEvent::new(self.clone(), chat_message.message.clone(), vec![]);
 
             'after: {
-                log::info!("<chat>{}: {}", gameprofile.name, event.message);
+                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+
+                let config = advanced_config();
+
+                let message = match seasonal_events::modify_chat_message(&event.message) {
+                    Some(m) => m,
+                    None => event.message.clone(),
+                };
+
+                let decorated_message = &TextComponent::chat_decorated(
+                    config.chat.format.clone(),
+                    gameprofile.name.clone(),
+                    message,
+                );
 
                 let entity = &self.living_entity.entity;
-                if event.recipients.is_empty() {
-                    let world = &entity.world.read().await;
-                    world
-                        .broadcast_packet_all(&CPlayerChatMessage::new(
-                            gameprofile.id,
-                            1.into(),
-                            chat_message.signature,
-                            event.message.clone(),
-                            chat_message.timestamp,
-                            chat_message.salt,
-                            // TODO: Previous messages
-                            Box::new([]),
-                            Some(TextComponent::text(event.message)),
-                            FilterType::PassThrough,
-                            (CHAT + 1).into(),
-                            TextComponent::text(gameprofile.name.clone()),
-                            None,
-                        ))
-                        .await;
+                let world = &entity.world.read().await;
+                if BASIC_CONFIG.allow_chat_reports {
+                    world.broadcast_secure_player_chat(self, &chat_message, decorated_message).await;
                 } else {
-                    let packet =
-                        CPlayerChatMessage::new(
-                            gameprofile.id,
-                            1.into(),
-                            chat_message.signature,
-                            event.message.clone(),
-                            chat_message.timestamp,
-                            chat_message.salt,
-                            Box::new([]),
-                            Some(TextComponent::text(event.message)),
-                            FilterType::PassThrough,
-                            (CHAT + 1).into(),
-                            TextComponent::text(gameprofile.name.clone()),
-                            None,
-                        );
-
-                    for recipient in event.recipients {
-                        recipient.client.enqueue_packet(&packet).await;
-                    }
+                    let no_reports_packet = &CSystemChatMessage::new(
+                        decorated_message,
+                        false,
+                    );
+                    world.broadcast_packet_all(no_reports_packet).await;
                 }
             }
         }}
+    }
 
-        /* server.broadcast_packet(
-            self,
-            &CDisguisedChatMessage::new(
-                TextComponent::from(message.clone()),
-                VarInt(0),
-               gameprofile.name.clone().into(),
-                None,
-            ),
-        ) */
+    /// Runs all vanilla checks for a valid chat message
+    pub async fn validate_chat_message(
+        &self,
+        chat_message: &SChatMessage,
+    ) -> Result<(), ChatError> {
+        // Check for oversized messages
+        if chat_message.message.len() > 256 {
+            return Err(ChatError::OversizedMessage);
+        }
+        // Check for illegal characters
+        if chat_message
+            .message
+            .chars()
+            .any(|c| c == '§' || c < ' ' || c == '\x7F')
+        {
+            return Err(ChatError::IllegalCharacters);
+        }
+        // These checks are only run in secure chat mode
+        if BASIC_CONFIG.allow_chat_reports {
+            // Check for unsigned chat
+            if let Some(signature) = &chat_message.signature {
+                if signature.len() != 256 {
+                    return Err(ChatError::UnsignedChat); // Signature is the wrong length
+                }
+            } else {
+                return Err(ChatError::UnsignedChat); // There is no signature
+            }
+
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+
+            // Verify message timestamp
+            if chat_message.timestamp > now || chat_message.timestamp < (now - CHAT_MESSAGE_MAX_AGE)
+            {
+                return Err(ChatError::OutOfOrderChat);
+            }
+
+            // Verify session expiry
+            if self.chat_session.lock().await.expires_at < now {
+                return Err(ChatError::ExpiredPublicKey);
+            }
+
+            // Validate previous signature checksum (new in 1.21.5)
+            // The client can bypass this check by sending 0
+            if chat_message.checksum != 0 {
+                let checksum =
+                    polynomial_rolling_hash(self.signature_cache.lock().await.last_seen.as_ref());
+                if checksum != chat_message.checksum {
+                    return Err(ChatError::ChatValidationFailed);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn handle_chat_session_update(
+        self: &Arc<Self>,
+        server: &Server,
+        session: SPlayerSession,
+    ) {
+        // Keep the chat session default if we don't want reports
+        if !BASIC_CONFIG.allow_chat_reports {
+            return;
+        }
+
+        if let Err(err) = self.validate_chat_session(server, &session).await {
+            log::log!(
+                err.severity(),
+                "{} (uuid {}) {}",
+                self.gameprofile.name,
+                self.gameprofile.id,
+                err
+            );
+            if err.is_kick() {
+                if let Some(reason) = err.client_kick_reason() {
+                    self.kick(TextComponent::text(reason)).await;
+                }
+            }
+            return;
+        }
+
+        // Update the chat session fields
+        let mut chat_session = self.chat_session.lock().await; // Await the lock
+
+        // Update the chat session fields
+        *chat_session = ChatSession::new(
+            session.session_id,
+            session.expires_at,
+            session.public_key.clone(),
+            session.key_signature.clone(),
+        );
+
+        server
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                0x02,
+                &[pumpkin_protocol::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: session.session_id,
+                        expires_at: session.expires_at,
+                        public_key: session.public_key.clone(),
+                        signature: session.key_signature.clone(),
+                    }))],
+                }],
+            ))
+            .await;
+    }
+
+    /// Runs vanilla checks for a valid player session
+    pub async fn validate_chat_session(
+        &self,
+        server: &Server,
+        session: &SPlayerSession,
+    ) -> Result<(), ChatError> {
+        // Verify session expiry
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        if session.expires_at < now {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        // Verify signature with RSA-SHA1
+        let mojang_verifying_keys = server
+            .mojang_public_keys
+            .lock()
+            .await
+            .iter()
+            .map(|key| VerifyingKey::<Sha1>::new(key.clone()))
+            .collect::<Vec<_>>();
+
+        let key_signature = RsaPkcs1v15Signature::try_from(session.key_signature.as_ref())
+            .map_err(|_| ChatError::InvalidPublicKey)?;
+
+        let mut signable = Vec::new();
+        signable.extend_from_slice(self.gameprofile.id.as_bytes());
+        signable.extend_from_slice(&session.expires_at.to_be_bytes());
+        signable.extend_from_slice(&session.public_key);
+
+        // Verify that the signable is valid for any one of Mojang's public keys
+        if !mojang_verifying_keys
+            .iter()
+            .any(|key| key.verify(&signable, &key_signature).is_ok())
+        {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        Ok(())
     }
 
     pub async fn handle_client_information(
@@ -820,8 +1021,13 @@ impl Player {
                 *config = PlayerConfig {
                     locale: client_information.locale,
                     // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it signed :D
-                    view_distance: unsafe {
-                        NonZeroU8::new_unchecked(client_information.view_distance as u8)
+                    // client_information.view_distance was checked above to be > 0, so compiler should optimize this out.
+                    view_distance: match NonZeroU8::new(client_information.view_distance as u8) {
+                        Some(dist) => dist,
+                        None => {
+                            // Unreachable branch
+                            return;
+                        }
                     },
                     chat_mode,
                     chat_colors: client_information.chat_colors,
@@ -874,7 +1080,7 @@ impl Player {
                 self.kick(TextComponent::text("Invalid client status"))
                     .await;
             }
-        };
+        }
     }
 
     pub async fn handle_interact(&self, interact: SInteract) {
@@ -947,7 +1153,7 @@ impl Player {
                     ))
                     .await;
                     return;
-                };
+                }
             }
             ActionType::Interact | ActionType::InteractAt => {
                 log::debug!("todo");
@@ -1018,6 +1224,7 @@ impl Player {
                                 broken_state,
                             )
                             .await;
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
                     self.start_mining_time.store(
@@ -1260,7 +1467,7 @@ impl Player {
         if let Some(entity) = entity_from_egg(stack.item.id) {
             self.spawn_entity_from_egg(entity, location, &face).await;
             should_try_decrement = true;
-        };
+        }
 
         if should_try_decrement {
             // TODO: Config
@@ -1352,7 +1559,7 @@ impl Player {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;
-        };
+        }
         Ok(())
     }
 
@@ -1424,9 +1631,9 @@ impl Player {
 
         let response = CCommandSuggestions::new(
             packet.id,
-            (last_word_start + 2).into(),
-            (cmd.len() - last_word_start - 1).into(),
-            suggestions,
+            (last_word_start + 2).try_into().unwrap(),
+            (cmd.len() - last_word_start - 1).try_into().unwrap(),
+            suggestions.into(),
         );
 
         self.client.enqueue_packet(&response).await;

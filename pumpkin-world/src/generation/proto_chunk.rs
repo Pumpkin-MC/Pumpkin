@@ -1,8 +1,9 @@
 use pumpkin_data::chunk::Biome;
+use pumpkin_macros::block_state;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
     block::{ChunkBlockState, registry::get_state_by_state_id},
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -16,7 +17,7 @@ use super::{
     height_limit::HeightLimitView,
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-        proto_noise_router::{DoublePerlinNoiseBuilder, GlobalProtoNoiseRouter},
+        proto_noise_router::{DoublePerlinNoiseBuilder, ProtoNoiseRouters},
         surface_height_sampler::{
             SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
         },
@@ -26,6 +27,10 @@ use super::{
     settings::GenerationSettings,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
+
+const AIR_BLOCK: ChunkBlockState = block_state!("air");
+const CAVE_AIR_BLOCK: ChunkBlockState = block_state!("cave_air");
+const VOID_AIR_BLOCK: ChunkBlockState = block_state!("void_air");
 
 pub struct StandardChunkFluidLevelSampler {
     top_fluid: FluidLevel,
@@ -91,20 +96,23 @@ pub struct ProtoChunk<'a> {
     random_config: &'a GlobalRandomConfig,
     settings: &'a GenerationSettings,
     default_block: ChunkBlockState,
+    biome_mixer_seed: i64,
     // These are local positions
     flat_block_map: Box<[ChunkBlockState]>,
-    flat_biome_map: Box<[Biome]>,
+    flat_biome_map: Box<[&'static Biome]>,
+    /// Top block that is not air
+    flat_height_map: Box<[i32]>,
     // may want to use chunk status
 }
 
 impl<'a> ProtoChunk<'a> {
     pub fn new(
         chunk_pos: Vector2<i32>,
-        base_router: &'a GlobalProtoNoiseRouter,
+        base_router: &'a ProtoNoiseRouters,
         random_config: &'a GlobalRandomConfig,
         settings: &'a GenerationSettings,
     ) -> Self {
-        let generation_shape = &settings.noise;
+        let generation_shape = &settings.shape;
 
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
@@ -118,7 +126,7 @@ impl<'a> ProtoChunk<'a> {
         let start_z = chunk_pos::start_block_z(&chunk_pos);
 
         let sampler = ChunkNoiseGenerator::new(
-            base_router,
+            &base_router.noise,
             random_config,
             horizontal_cell_count as usize,
             start_x,
@@ -141,7 +149,8 @@ impl<'a> ProtoChunk<'a> {
             biome_pos.z,
             horizontal_biome_end as usize,
         );
-        let multi_noise_sampler = MultiNoiseSampler::generate(base_router, &multi_noise_config);
+        let multi_noise_sampler =
+            MultiNoiseSampler::generate(&base_router.multi_noise, &multi_noise_config);
 
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
             biome_pos.x,
@@ -152,7 +161,7 @@ impl<'a> ProtoChunk<'a> {
             generation_shape.vertical_cell_block_count() as usize,
         );
         let surface_height_estimate_sampler =
-            SurfaceHeightEstimateSampler::generate(base_router, &surface_config);
+            SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
         let default_block = ChunkBlockState::new(&settings.default_block.name).unwrap();
         Self {
@@ -166,13 +175,41 @@ impl<'a> ProtoChunk<'a> {
             flat_block_map: vec![ChunkBlockState::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
             flat_biome_map: vec![
-                Biome::Plains;
+                &Biome::PLAINS;
                 biome_coords::from_block(CHUNK_DIM as usize)
                     * biome_coords::from_block(CHUNK_DIM as usize)
                     * biome_coords::from_block(height as usize)
             ]
             .into_boxed_slice(),
+            flat_height_map: vec![i32::MIN; CHUNK_AREA].into_boxed_slice(),
+            biome_mixer_seed: hash_seed(random_config.seed),
         }
+    }
+
+    pub fn generation_settings(&self) -> &GenerationSettings {
+        self.settings
+    }
+
+    fn maybe_update_height_map(&mut self, pos: &Vector3<i32>) {
+        let local_x = (pos.x & 15) as usize;
+        let local_z = (pos.z & 15) as usize;
+        let index = Self::local_position_to_height_map_index(local_x, local_z);
+        let current_height = self.flat_height_map[index];
+
+        if pos.y > current_height {
+            self.flat_height_map[index] = pos.y;
+        }
+    }
+
+    pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
+        let local_x = (pos.x & 15) as usize;
+        let local_z = (pos.z & 15) as usize;
+        let index = Self::local_position_to_height_map_index(local_x, local_z);
+        self.flat_height_map[index] + 1
+    }
+
+    fn local_position_to_height_map_index(x: usize, z: usize) -> usize {
+        x * CHUNK_DIM as usize + z
     }
 
     #[inline]
@@ -180,10 +217,10 @@ impl<'a> ProtoChunk<'a> {
         #[cfg(debug_assertions)]
         {
             assert!(local_pos.x >= 0 && local_pos.x <= 15);
-            assert!(local_pos.y < self.noise_sampler.height() as i32 && local_pos.y >= 0);
+            assert!(local_pos.y < self.height() as i32 && local_pos.y >= 0);
             assert!(local_pos.z >= 0 && local_pos.z <= 15);
         }
-        self.noise_sampler.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
+        self.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
             + CHUNK_DIM as usize * local_pos.y as usize
             + local_pos.z as usize
     }
@@ -194,8 +231,12 @@ impl<'a> ProtoChunk<'a> {
         {
             assert!(local_biome_pos.x >= 0 && local_biome_pos.x <= 3);
             assert!(
-                local_biome_pos.y < biome_coords::from_chunk(self.noise_sampler.height() as i32)
-                    && local_biome_pos.y >= 0
+                local_biome_pos.y < biome_coords::from_chunk(self.height() as i32)
+                    && local_biome_pos.y >= 0,
+                "{} - {} vs {}",
+                0,
+                biome_coords::from_chunk(self.height() as i32),
+                local_biome_pos.y
             );
             assert!(local_biome_pos.z >= 0 && local_biome_pos.z <= 3);
         }
@@ -211,21 +252,24 @@ impl<'a> ProtoChunk<'a> {
     pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> ChunkBlockState {
         let local_pos = Vector3::new(
             local_pos.x & 15,
-            local_pos.y - self.noise_sampler.min_y() as i32,
+            local_pos.y - self.bottom_y() as i32,
             local_pos.z & 15,
         );
-        if local_pos.y < 0 || local_pos.y >= self.noise_sampler.height() as i32 {
-            ChunkBlockState::AIR
-        } else {
-            self.flat_block_map[self.local_pos_to_block_index(&local_pos)]
-        }
+        let index = self.local_pos_to_block_index(&local_pos);
+        self.flat_block_map[index]
     }
 
-    #[inline]
     pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: ChunkBlockState) {
+        if !(block_state.of_block(AIR_BLOCK.block_id)
+            || block_state.of_block(CAVE_AIR_BLOCK.block_id)
+            || block_state.of_block(VOID_AIR_BLOCK.block_id))
+        {
+            self.maybe_update_height_map(local_pos);
+        }
+
         let local_pos = Vector3::new(
             local_pos.x & 15,
-            local_pos.y - self.noise_sampler.min_y() as i32,
+            local_pos.y - self.bottom_y() as i32,
             local_pos.z & 15,
         );
         let index = self.local_pos_to_block_index(&local_pos);
@@ -233,19 +277,15 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
-    pub fn get_biome(&self, global_biome_pos: &Vector3<i32>) -> Biome {
+    pub fn get_biome(&self, global_biome_pos: &Vector3<i32>) -> &'static Biome {
         let local_pos = Vector3::new(
             global_biome_pos.x & biome_coords::from_block(15),
-            global_biome_pos.y - biome_coords::from_block(self.noise_sampler.min_y() as i32),
+            global_biome_pos.y - biome_coords::from_block(self.bottom_y() as i32),
             global_biome_pos.z & biome_coords::from_block(15),
         );
-        if local_pos.y < 0
-            || local_pos.y >= biome_coords::from_block(self.noise_sampler.height() as i32)
-        {
-            Biome::Plains
-        } else {
-            self.flat_biome_map[self.local_biome_pos_to_biome_index(&local_pos)]
-        }
+        let index = self.local_biome_pos_to_biome_index(&local_pos);
+
+        self.flat_biome_map[index]
     }
 
     pub fn populate_biomes(&mut self) {
@@ -254,25 +294,26 @@ impl<'a> ProtoChunk<'a> {
         let top_section =
             section_coords::block_to_section(min_y as i32 + self.noise_sampler.height() as i32 - 1);
 
-        let start_x = chunk_pos::start_block_x(&self.chunk_pos);
-        let start_z = chunk_pos::start_block_z(&self.chunk_pos);
+        let start_block_x = chunk_pos::start_block_x(&self.chunk_pos);
+        let start_block_z = chunk_pos::start_block_z(&self.chunk_pos);
 
-        let start_x = biome_coords::from_block(start_x);
-        let start_z = biome_coords::from_block(start_z);
+        let start_biome_x = biome_coords::from_block(start_block_x);
+        let start_biome_z = biome_coords::from_block(start_block_z);
 
         #[cfg(debug_assertions)]
         let mut indices = (0..self.flat_biome_map.len()).collect::<Vec<_>>();
 
         for i in bottom_section..=top_section {
-            let block_y = section_coords::section_to_block(i);
-            let start_y = biome_coords::from_block(block_y);
+            let start_block_y = section_coords::section_to_block(i);
+            let start_biome_y = biome_coords::from_block(start_block_y);
 
             let biomes_per_section = biome_coords::from_block(CHUNK_DIM) as i32;
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
                         // panic!("{}:{}", start_y, y);
-                        let biome_pos = Vector3::new(start_x + x, start_y + y, start_z + z);
+                        let biome_pos =
+                            Vector3::new(start_biome_x + x, start_biome_y + y, start_biome_z + z);
                         let biome = MultiNoiseBiomeSupplier::biome(
                             &biome_pos,
                             &mut self.multi_noise_sampler,
@@ -282,7 +323,7 @@ impl<'a> ProtoChunk<'a> {
                         let local_biome_pos = Vector3 {
                             x,
                             // Make the y start from 0
-                            y: start_y + y - biome_coords::from_block(min_y as i32),
+                            y: start_biome_y + y - biome_coords::from_block(min_y as i32),
                             z,
                         };
                         let index = self.local_biome_pos_to_biome_index(&local_biome_pos);
@@ -294,7 +335,9 @@ impl<'a> ProtoChunk<'a> {
                 }
             }
         }
-        //   assert!(indices.is_empty(), "Not all biome indices were set!");
+
+        #[cfg(debug_assertions)]
+        assert!(indices.is_empty(), "Not all biome indices were set!");
     }
 
     pub fn populate_noise(&mut self) {
@@ -382,13 +425,14 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> Biome {
+    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
         let seed_biome_pos = biome::get_biome_blend(
             self.bottom_y(),
             self.height(),
-            self.random_config.seed,
+            self.biome_mixer_seed,
             global_block_pos,
         );
+
         self.get_biome(&seed_biome_pos)
     }
 
@@ -412,44 +456,36 @@ impl<'a> ProtoChunk<'a> {
                 let x = start_x + local_x;
                 let z = start_z + local_z;
 
-                // TODO: use heightmaps
-                let top_y = self.top_y() as i32;
-                let mut top = i32::MIN;
-                for y in (self.bottom_y() as i32..=top_y).rev() {
-                    let state = self.get_block_state(&Vector3::new(local_x, y, local_z));
-                    if !state.is_air() {
-                        // +1 happens in the height map and another +1 happens when it's sampled
-                        top = y + 2;
-                        break;
-                    }
-                }
+                let mut top_block =
+                    self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
 
                 let biome_y = if self.settings.legacy_random_source {
                     0
                 } else {
-                    top
+                    top_block
                 };
 
                 let this_biome = self.get_biome_for_terrain_gen(&Vector3::new(x, biome_y, z));
-                if this_biome == Biome::ErodedBadlands {
+                if this_biome == &Biome::ERODED_BADLANDS {
                     terrain_builder.place_badlands_pillar(
                         self,
                         x,
                         z,
-                        top,
-                        min_y as i32,
+                        top_block,
                         self.default_block,
                     );
+                    // Get the top block again if we placed a pillar!
+
+                    top_block = self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
                 }
-                let mut pos = Vector3::new(local_x, 0, local_z);
+
                 context.init_horizontal(x, z);
 
                 let mut stone_depth_above = 0;
                 let mut min = i32::MAX;
                 let mut fluid_height = i32::MIN;
-                for y in (min_y as i32..=top).rev() {
-                    pos.y = y;
-
+                for y in (min_y as i32..top_block).rev() {
+                    let pos = Vector3::new(x, y, z);
                     let state = self.get_block_state(&pos);
                     let state = get_state_by_state_id(state.state_id).unwrap();
                     if state.air {
@@ -468,9 +504,19 @@ impl<'a> ProtoChunk<'a> {
                         min = shift as i32;
 
                         for search_y in (min_y as i32 - 1..=y - 1).rev() {
+                            if search_y < min_y as i32 {
+                                min = search_y + 1;
+                                break;
+                            }
+
                             let state =
                                 self.get_block_state(&Vector3::new(local_x, search_y, local_z));
-                            if self.default_block != state {
+
+                            // TODO: Is there a better way to check that its not a fluid?
+                            if !(!state.of_block(AIR_BLOCK.block_id)
+                                && !state.of_block(WATER_BLOCK.block_id)
+                                && !state.of_block(LAVA_BLOCK.block_id))
+                            {
                                 min = search_y + 1;
                                 break;
                             }
@@ -485,27 +531,26 @@ impl<'a> ProtoChunk<'a> {
 
                     if state.id == self.default_block.state_id {
                         context.biome = self.get_biome_for_terrain_gen(&context.block_pos);
-                        let new_state = self
-                            .settings
-                            .surface_rule
-                            .try_apply(&mut context, &mut self.surface_height_estimate_sampler);
+                        let new_state = self.settings.surface_rule.try_apply(self, &mut context);
 
                         if let Some(state) = new_state {
                             self.set_block_state(&pos, state);
                         }
                     }
                 }
-                if this_biome == Biome::FrozenOcean || this_biome == Biome::DeepFrozenOcean {
-                    let min_y = estimate_surface_height(
+                if this_biome == &Biome::FROZEN_OCEAN || this_biome == &Biome::DEEP_FROZEN_OCEAN {
+                    let surface_estimate = estimate_surface_height(
                         &mut context,
                         &mut self.surface_height_estimate_sampler,
                     );
+
                     terrain_builder.place_iceberg(
                         self,
-                        min_y,
+                        this_biome,
                         x,
                         z,
-                        top,
+                        surface_estimate,
+                        top_block,
                         self.settings.sea_level,
                         &self.random_config.base_random_deriver,
                     );
@@ -535,6 +580,7 @@ impl<'a> ProtoChunk<'a> {
 mod test {
     use std::sync::LazyLock;
 
+    use pumpkin_data::noise_router::{OVERWORLD_BASE_NOISE_ROUTER, WrapperType};
     use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
@@ -542,11 +588,10 @@ mod test {
             GlobalRandomConfig,
             noise_router::{
                 density_function::{NoiseFunctionComponentRange, PassThrough},
-                proto_noise_router::{GlobalProtoNoiseRouter, ProtoNoiseFunctionComponent},
+                proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
             },
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        noise_router::{NOISE_ROUTER_ASTS, density_function_ast::WrapperType},
         read_data_from_file,
     };
 
@@ -555,8 +600,14 @@ mod test {
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED, false)); // TODO: use legacy when needed
-    static BASE_NOISE_ROUTER: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
-        GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &RANDOM_CONFIG)
+    static BASE_NOISE_ROUTER: LazyLock<ProtoNoiseRouters> =
+        LazyLock::new(|| ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG));
+
+    const SEED2: u64 = 13579;
+    static RANDOM_CONFIG2: LazyLock<GlobalRandomConfig> =
+        LazyLock::new(|| GlobalRandomConfig::new(SEED2, false)); // TODO: use legacy when needed
+    static BASE_NOISE_ROUTER2: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
+        ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG2)
     });
 
     #[test]
@@ -565,24 +616,33 @@ mod test {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_only_cell_cache_0_0.chunk");
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -612,25 +672,34 @@ mod test {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_only_cell_cache_0_0.chunk");
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::Cache2D => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::Cache2D => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -660,25 +729,34 @@ mod test {
             "../../assets/no_blend_no_beard_only_cell_cache_flat_cache_0_0.chunk"
         );
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::CacheFlat => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::CacheFlat => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -708,25 +786,34 @@ mod test {
             "../../assets/no_blend_no_beard_only_cell_cache_once_cache_0_0.chunk"
         );
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::CacheOnce => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::CacheOnce => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -756,25 +843,34 @@ mod test {
             "../../assets/no_blend_no_beard_only_cell_cache_interpolated_0_0.chunk"
         );
 
-        let mut base_router = BASE_NOISE_ROUTER.clone();
-        base_router
-            .component_stack
-            .iter_mut()
-            .for_each(|component| {
-                if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                    match wrapper.wrapper_type() {
-                        WrapperType::CellCache => (),
-                        WrapperType::Interpolated => (),
-                        _ => {
-                            *component = ProtoNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index(),
-                                min_value: wrapper.min(),
-                                max_value: wrapper.max(),
-                            });
+        let mut base_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+
+        macro_rules! set_wrappers {
+            ($stack: expr) => {
+                $stack.iter_mut().for_each(|component| {
+                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
+                        match wrapper.wrapper_type() {
+                            WrapperType::CellCache => (),
+                            WrapperType::Interpolated => (),
+                            _ => {
+                                *component =
+                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
+                                        wrapper.input_index(),
+                                        wrapper.min(),
+                                        wrapper.max(),
+                                    ));
+                            }
                         }
                     }
-                }
-            });
+                });
+            };
+        }
+
+        set_wrappers!(base_router.noise.full_component_stack);
+        set_wrappers!(base_router.surface_estimator.full_component_stack);
+        set_wrappers!(base_router.multi_noise.full_component_stack);
+
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
@@ -845,5 +941,314 @@ mod test {
                 .map(|state| state.state_id)
                 .collect::<Vec<u16>>()
         );
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_badlands() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_-595_544.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-595, 544),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
+        chunk.populate_noise();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_frozen_ocean() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_-119_183.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-119, 183),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
+        chunk.populate_noise();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_badlands2() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_13579_-6_11.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-6, 11),
+            &BASE_NOISE_ROUTER2,
+            &RANDOM_CONFIG2,
+            surface_config,
+        );
+        chunk.populate_noise();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_badlands3() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_13579_-2_15.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-2, 15),
+            &BASE_NOISE_ROUTER2,
+            &RANDOM_CONFIG2,
+            surface_config,
+        );
+        chunk.populate_noise();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_surface() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_surface_0_0.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
+
+        chunk.populate_biomes();
+        chunk.populate_noise();
+        chunk.build_surface();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_surface_badlands() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_surface_badlands_-595_544.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-595, 544),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
+
+        chunk.populate_biomes();
+        chunk.populate_noise();
+        chunk.build_surface();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_surface_badlands2() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-6_11.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-6, 11),
+            &BASE_NOISE_ROUTER2,
+            &RANDOM_CONFIG2,
+            surface_config,
+        );
+
+        chunk.populate_biomes();
+        chunk.populate_noise();
+        chunk.build_surface();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_surface_badlands3() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-7_9.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-7, 9),
+            &BASE_NOISE_ROUTER2,
+            &RANDOM_CONFIG2,
+            surface_config,
+        );
+
+        chunk.populate_biomes();
+        chunk.populate_noise();
+        chunk.build_surface();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_surface_biome_blend() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-2_15.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-2, 15),
+            &BASE_NOISE_ROUTER2,
+            &RANDOM_CONFIG2,
+            surface_config,
+        );
+
+        chunk.populate_biomes();
+        chunk.populate_noise();
+        chunk.build_surface();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
+    }
+
+    #[test]
+    fn test_no_blend_no_beard_surface_frozen_ocean() {
+        let expected_data: Vec<u16> = read_data_from_file!(
+            "../../assets/no_blend_no_beard_surface_frozen_ocean_-119_183.chunk"
+        );
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(-119, 183),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
+
+        chunk.populate_biomes();
+        chunk.populate_noise();
+        chunk.build_surface();
+
+        expected_data
+            .into_iter()
+            .zip(chunk.flat_block_map)
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != actual.state_id {
+                    panic!(
+                        "expected {}, was {} (at {})",
+                        expected, actual.state_id, index
+                    );
+                }
+            });
     }
 }

@@ -5,7 +5,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::{
     Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE, RawPacket,
-    StreamDecryptor, VarInt, codec::Codec, ser::ReadingError,
+    StreamDecryptor, VarInt, ser::ReadingError,
 };
 
 // decrypt -> decompress -> raw

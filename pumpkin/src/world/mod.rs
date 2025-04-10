@@ -31,17 +31,20 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     block::Block,
     entity::{EntityStatus, EntityType},
+    fluid::Fluid,
     particle::Particle,
     sound::{Sound, SoundCategory},
-    world::WorldEvent,
+    world::{RAW, WorldEvent},
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerInfoUpdate, CRemoveEntities,
-        CRemovePlayerInfo, CSoundEffect, CSpawnEntity, GameEvent, PlayerAction,
+        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
+        CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
+        FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
     },
+    server::play::SChatMessage,
 };
 use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
@@ -55,14 +58,11 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_world::block::registry::{
+    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+};
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
-use pumpkin_world::{
-    block::registry::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
-    },
-    coordinates::ChunkRelativeBlockCoordinates,
-};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
@@ -210,7 +210,7 @@ impl World {
         &self,
         message: &TextComponent,
         sender_name: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
         self.broadcast_packet_all(&CDisguisedChatMessage::new(
@@ -220,6 +220,55 @@ impl World {
             target_name,
         ))
         .await;
+    }
+
+    pub async fn broadcast_secure_player_chat(
+        &self,
+        sender: &Arc<Player>,
+        chat_message: &SChatMessage,
+        decorated_message: &TextComponent,
+    ) {
+        let messages_sent: i32 = sender.chat_session.lock().await.messages_sent;
+        let sender_last_seen = {
+            let cache = sender.signature_cache.lock().await;
+            cache.last_seen.clone()
+        };
+
+        let current_players = self.players.read().await;
+        for (_, recipient) in current_players.iter() {
+            let messages_received: i32 = recipient.chat_session.lock().await.messages_received;
+            let packet = &CPlayerChatMessage::new(
+                VarInt(messages_received),
+                sender.gameprofile.id,
+                VarInt(messages_sent),
+                chat_message.signature.clone(),
+                chat_message.message.clone(),
+                chat_message.timestamp,
+                chat_message.salt,
+                sender_last_seen.indexed_for(recipient).await,
+                Some(decorated_message.clone()),
+                FilterType::PassThrough,
+                (RAW + 1).into(), // Custom registry chat_type with no sender name
+                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                None,
+            );
+            recipient.client.enqueue_packet(packet).await;
+
+            recipient
+                .signature_cache
+                .lock()
+                .await
+                .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+
+            let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
+            if recipient.gameprofile.id != sender.gameprofile.id {
+                // Sender may update recipient on signatures recipient hasn't seen
+                recipient_signature_cache.cache_signatures(sender_last_seen.as_ref());
+            }
+            recipient.chat_session.lock().await.messages_received += 1;
+        }
+
+        sender.chat_session.lock().await.messages_sent += 1;
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
@@ -274,14 +323,7 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().r#gen::<f64>();
-        let packet = CSoundEffect::new(
-            IdOr::Id(u32::from(sound_id)),
-            category,
-            position,
-            volume,
-            pitch,
-            seed,
-        );
+        let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
 
@@ -402,6 +444,7 @@ impl World {
 
     pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
+        let fluids_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
             let block = self.get_block(&scheduled_tick.block_pos).await.unwrap();
@@ -411,6 +454,20 @@ impl World {
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
                 pumpkin_block
                     .on_scheduled_tick(self, &block, &scheduled_tick.block_pos)
+                    .await;
+            }
+        }
+
+        for scheduled_tick in fluids_to_tick {
+            let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
+                continue;
+            };
+            if scheduled_tick.target_block_id != fluid.id {
+                continue;
+            }
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
+                pumpkin_fluid
+                    .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
                     .await;
             }
         }
@@ -457,7 +514,7 @@ impl World {
                 entity_id,
                 base_config.hardcore,
                 &dimensions,
-                base_config.max_players.into(),
+                base_config.max_players.try_into().unwrap(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance
                 false,
@@ -465,7 +522,7 @@ impl World {
                 false,
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
-                biome::hash_seed(self.level.seed.0 as i64), // seed
+                biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 base_config.default_gamemode as i8,
                 false,
@@ -473,7 +530,9 @@ impl World {
                 None,
                 0.into(),
                 self.sea_level.into(),
-                false,
+                // This should stay true even when reports are disabled.
+                // It prevents the annoying popup when joining the server.
+                true,
             ))
             .await;
         // Permissions, i.e. the commands a player may use.
@@ -515,8 +574,7 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            // TODO: Remove magic numbers
-            0x01 | 0x04 | 0x08,
+            (PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_GAME_MODE).bits(),
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
@@ -524,7 +582,6 @@ impl World {
                         name: &gameprofile.name,
                         properties: &gameprofile.properties,
                     },
-                    PlayerAction::UpdateListed(true),
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
                 ],
             }],
@@ -535,22 +592,35 @@ impl World {
         {
             let current_players = self.players.read().await;
 
-            let current_player_data = current_players
+            let mut current_player_data = Vec::new();
+
+            for (_, player) in current_players
                 .iter()
                 .filter(|(c, _)| **c != player.gameprofile.id)
-                .map(|(_, player)| {
-                    (
-                        &player.gameprofile.id,
-                        [
-                            PlayerAction::AddPlayer {
-                                name: &player.gameprofile.name,
-                                properties: &player.gameprofile.properties,
-                            },
-                            PlayerAction::UpdateListed(true),
-                        ],
-                    )
-                })
-                .collect::<Vec<_>>();
+            {
+                let chat_session = player.chat_session.lock().await;
+
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties: &player.gameprofile.properties,
+                }];
+
+                if base_config.allow_chat_reports {
+                    player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: chat_session.session_id,
+                        expires_at: chat_session.expires_at,
+                        public_key: chat_session.public_key.clone(),
+                        signature: chat_session.signature.clone(),
+                    })));
+                }
+
+                current_player_data.push((&player.gameprofile.id, player_actions));
+            }
+
+            let mut action_flags = PlayerInfoFlags::ADD_PLAYER;
+            if base_config.allow_chat_reports {
+                action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
+            }
 
             let entries = current_player_data
                 .iter()
@@ -563,7 +633,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(0x01 | 0x08, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
         };
 
@@ -594,6 +664,7 @@ impl World {
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
             log::debug!("Sending player entities to {}", player.gameprofile.name);
+
             player
                 .client
                 .enqueue_packet(&CSpawnEntity::new(
@@ -610,9 +681,22 @@ impl World {
                 .await;
         }
 
-        // Entity meta data
-        // Set skin parts
-        player.send_client_information().await;
+        // Set skin parts and tablist
+        for player in self.players.read().await.values() {
+            //Set / Update skin part for every player
+            player.send_client_information().await;
+
+            //Update tablist
+            //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
+            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+                0x08,
+                &[pumpkin_protocol::client::play::Player {
+                    uuid: player.gameprofile.id,
+                    actions: &[PlayerAction::UpdateListed(true)],
+                }],
+            ))
+            .await;
+        }
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
@@ -723,7 +807,7 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u32);
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for (_, player) in self.players.read().await.iter() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
@@ -758,7 +842,7 @@ impl World {
             .enqueue_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
                 self.dimension_type.name(),
-                biome::hash_seed(self.level.seed.0 as i64), // seed
+                biome::hash_seed(self.level.seed.0), // seed
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,
@@ -1011,8 +1095,7 @@ impl World {
     ///
     /// # Arguments
     /// * `pos`: The center of the sphere.
-    /// * `radius`: The radius of the sphere. The higher the radius,
-    ///             the more area will be checked (in every direction).
+    /// * `radius`: The radius of the sphere. The higher the radius, the more area will be checked (in every direction).
     pub async fn get_nearby_players(
         &self,
         pos: Vector3<f64>,
@@ -1122,11 +1205,8 @@ impl World {
             .remove(&player.gameprofile.id)
             .unwrap();
         let uuid = player.gameprofile.id;
-        self.broadcast_packet_except(
-            &[player.gameprofile.id],
-            &CRemovePlayerInfo::new(1.into(), &[uuid]),
-        )
-        .await;
+        self.broadcast_packet_except(&[player.gameprofile.id], &CRemovePlayerInfo::new(&[uuid]))
+            .await;
         self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
             .await;
 
@@ -1187,6 +1267,7 @@ impl World {
     }
 
     /// Sets a block
+    #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -1195,18 +1276,24 @@ impl World {
     ) -> u16 {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
-        let relative = ChunkRelativeBlockCoordinates::from(relative);
         let mut chunk = chunk.write().await;
         let replaced_block_state_id = chunk
-            .blocks
-            .get_block(relative)
-            .unwrap_or(Block::AIR.default_state_id);
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+            .unwrap();
+
         if replaced_block_state_id == block_state_id {
             return block_state_id;
         }
+
         chunk.dirty = true;
 
-        chunk.blocks.set_block(relative, block_state_id);
+        chunk.section.set_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+            block_state_id,
+        );
         self.unsent_block_changes
             .lock()
             .await
@@ -1233,6 +1320,7 @@ impl World {
 
         let block_state = self.get_block_state(position).await.unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
+        let new_fluid = self.get_fluid(position).await.unwrap_or(Fluid::EMPTY);
 
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
@@ -1240,6 +1328,16 @@ impl World {
                 .on_placed(
                     self,
                     &new_block,
+                    block_state_id,
+                    position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
+                .await;
+            self.block_registry
+                .on_placed_fluid(
+                    self,
+                    &new_fluid,
                     block_state_id,
                     position,
                     replaced_block_state_id,
@@ -1304,6 +1402,12 @@ impl World {
     ) {
         self.level
             .schedule_block_tick(block.id, block_pos, delay, priority)
+            .await;
+    }
+
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
+        self.level
+            .schedule_fluid_tick(block_id, &block_pos, delay)
             .await;
     }
 
@@ -1397,11 +1501,13 @@ impl World {
     pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
-        let relative = ChunkRelativeBlockCoordinates::from(relative);
 
-        let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
-
-        let Some(id) = chunk.blocks.get_block(relative) else {
+        let chunk = chunk.read().await;
+        let Some(id) = chunk.section.get_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        ) else {
             return Err(GetBlockError::BlockOutOfWorldBounds);
         };
 
@@ -1415,6 +1521,14 @@ impl World {
     ) -> Result<pumpkin_data::block::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    pub async fn get_fluid(
+        &self,
+        position: &BlockPos,
+    ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
+        let id = self.get_block_state_id(position).await?;
+        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
@@ -1455,6 +1569,7 @@ impl World {
             }
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let neighbor_block = self.get_block(&neighbor_pos).await;
+            let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
                     self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1467,6 +1582,15 @@ impl World {
                             &source_block,
                             false,
                         )
+                        .await;
+                }
+            }
+            if let Ok(neighbor_fluid) = neighbor_fluid {
+                if let Some(neighbor_pumpkin_fluid) =
+                    self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
+                {
+                    neighbor_pumpkin_fluid
+                        .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
                         .await;
                 }
             }

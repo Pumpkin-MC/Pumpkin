@@ -67,7 +67,6 @@ impl CommandExecutor for Executor {
                         .hover_event(HoverEvent::ShowItem {
                             id: item_name.to_string().into(),
                             count: Some(item_count),
-                            tag: None,
                         }),
                     TextComponent::text(targets[0].gameprofile.name.to_string())
                         .hover_event(HoverEvent::show_entity(
@@ -80,9 +79,10 @@ impl CommandExecutor for Executor {
                                 .into(),
                             Some(TextComponent::text(targets[0].gameprofile.name.clone())),
                         ))
-                        .click_event(ClickEvent::SuggestCommand(
-                            format!("/tell {} ", targets[0].gameprofile.name.clone()).into(),
-                        )),
+                        .click_event(ClickEvent::SuggestCommand {
+                            command: format!("/tell {} ", targets[0].gameprofile.name.clone())
+                                .into(),
+                        }),
                 ],
             )
         } else {
@@ -96,7 +96,6 @@ impl CommandExecutor for Executor {
                         .hover_event(HoverEvent::ShowItem {
                             id: item_name.to_string().into(),
                             count: Some(item_count),
-                            tag: None,
                         }),
                     TextComponent::text(targets.len().to_string()),
                 ],

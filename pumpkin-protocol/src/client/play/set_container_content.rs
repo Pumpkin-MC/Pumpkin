@@ -10,7 +10,6 @@ use serde::Serialize;
 pub struct CSetContainerContent<'a> {
     window_id: VarInt,
     state_id: VarInt,
-    count: VarInt,
     slot_data: &'a [Slot],
     carried_item: &'a Slot,
 }
@@ -25,7 +24,6 @@ impl<'a> CSetContainerContent<'a> {
         Self {
             window_id,
             state_id,
-            count: slots.len().into(),
             slot_data: slots,
             carried_item,
         }

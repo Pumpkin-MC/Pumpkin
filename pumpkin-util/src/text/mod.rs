@@ -66,12 +66,6 @@ impl TextComponentBase {
         if style.strikethrough.is_some() {
             text = text.strikethrough().to_string();
         }
-        if style.click_event.is_some() {
-            if let Some(ClickEvent::OpenUrl(url)) = style.click_event {
-                // TODO: check if the terminal supports hyperlinks first
-                text = format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text).to_string()
-            }
-        }
         for child in self.extra {
             text += &*child.to_pretty_console();
         }
@@ -146,6 +140,22 @@ impl TextComponent {
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
         }
+    }
+
+    pub fn chat_decorated(format: String, player_name: String, content: String) -> Self {
+        // Todo: maybe allow players to use & in chat contingent on permissions
+        let with_resolved_fields = format
+            .replace("&", "§")
+            .replace("{DISPLAYNAME}", player_name.as_str())
+            .replace("{MESSAGE}", content.as_str());
+
+        Self(TextComponentBase {
+            content: TextContent::Text {
+                text: Cow::Owned(with_resolved_fields),
+            },
+            style: Style::default(),
+            extra: vec![],
+        })
     }
 
     pub fn to_pretty_console(self) -> String {

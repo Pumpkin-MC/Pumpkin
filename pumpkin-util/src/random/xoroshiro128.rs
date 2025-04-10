@@ -1,4 +1,7 @@
-use super::{RandomDeriverImpl, RandomImpl, gaussian::GaussianGenerator, hash_block_pos};
+use super::{
+    RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl, gaussian::GaussianGenerator,
+    hash_block_pos,
+};
 
 pub struct Xoroshiro {
     lo: u64,
@@ -7,6 +10,13 @@ pub struct Xoroshiro {
 }
 
 impl Xoroshiro {
+    pub fn from_seed(seed: u64) -> Self {
+        let (lo, hi) = Self::mix_u64(seed);
+        let lo = mix_stafford_13(lo);
+        let hi = mix_stafford_13(hi);
+        Self::new(lo, hi)
+    }
+
     fn new(lo: u64, hi: u64) -> Self {
         let (lo, hi) = if (lo | hi) == 0 {
             (0x9E3779B97F4A7C15, 0x6A09E667F3BCC909)
@@ -63,23 +73,15 @@ fn mix_stafford_13(z: u64) -> u64 {
 }
 
 impl RandomImpl for Xoroshiro {
-    fn from_seed(seed: u64) -> Self {
-        let (lo, hi) = Self::mix_u64(seed);
-        let lo = mix_stafford_13(lo);
-        let hi = mix_stafford_13(hi);
-        Self::new(lo, hi)
-    }
-
     fn split(&mut self) -> Self {
         Self::new(self.next_random(), self.next_random())
     }
 
-    #[allow(refining_impl_trait)]
-    fn next_splitter(&mut self) -> XoroshiroSplitter {
-        XoroshiroSplitter {
+    fn next_splitter(&mut self) -> RandomDeriver {
+        RandomDeriver::Xoroshiro(XoroshiroSplitter {
             lo: self.next_random(),
             hi: self.next_random(),
-        }
+        })
     }
 
     fn next_i32(&mut self) -> i32 {
@@ -129,24 +131,24 @@ pub struct XoroshiroSplitter {
     hi: u64,
 }
 
-#[allow(refining_impl_trait)]
 impl RandomDeriverImpl for XoroshiroSplitter {
-    fn split_pos(&self, x: i32, y: i32, z: i32) -> Xoroshiro {
+    fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator {
         let l = hash_block_pos(x, y, z) as u64;
         let m = l ^ self.lo;
-        Xoroshiro::new(m, self.hi)
+
+        RandomGenerator::Xoroshiro(Xoroshiro::new(m, self.hi))
     }
 
-    fn split_u64(&self, seed: u64) -> Xoroshiro {
-        Xoroshiro::new(seed ^ self.lo, seed ^ self.hi)
+    fn split_u64(&self, seed: u64) -> RandomGenerator {
+        RandomGenerator::Xoroshiro(Xoroshiro::new(seed ^ self.lo, seed ^ self.hi))
     }
 
-    fn split_string(&self, seed: &str) -> Xoroshiro {
+    fn split_string(&self, seed: &str) -> RandomGenerator {
         let bytes = md5::compute(seed.as_bytes());
         let l = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
         let m = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
 
-        Xoroshiro::new(l ^ self.lo, m ^ self.hi)
+        RandomGenerator::Xoroshiro(Xoroshiro::new(l ^ self.lo, m ^ self.hi))
     }
 }
 

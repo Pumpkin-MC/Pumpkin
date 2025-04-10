@@ -3,6 +3,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::{BlockFlags, World};
 use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -10,6 +11,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use super::pumpkin_fluid::PumpkinFluid;
 
 pub enum BlockActionResult {
     /// Allow other actions to be executed
@@ -21,11 +24,16 @@ pub enum BlockActionResult {
 #[derive(Default)]
 pub struct BlockRegistry {
     blocks: HashMap<String, Arc<dyn PumpkinBlock>>,
+    fluids: HashMap<String, Arc<dyn PumpkinFluid>>,
 }
 
 impl BlockRegistry {
     pub fn register<T: PumpkinBlock + BlockMetadata + 'static>(&mut self, block: T) {
         self.blocks.insert(block.name(), Arc::new(block));
+    }
+
+    pub fn register_fluid<T: PumpkinFluid + BlockMetadata + 'static>(&mut self, fluid: T) {
+        self.fluids.insert(fluid.name(), Arc::new(fluid));
     }
 
     pub async fn on_use(
@@ -64,6 +72,24 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .use_with_item(block, player, location, item, server, world)
+                .await;
+        }
+        BlockActionResult::Continue
+    }
+
+    pub async fn use_with_item_fluid(
+        &self,
+        fluid: &Fluid,
+        player: &Player,
+        location: BlockPos,
+        item: &Item,
+        server: &Server,
+        world: &Arc<World>,
+    ) -> BlockActionResult {
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        if let Some(pumpkin_fluid) = pumpkin_fluid {
+            return pumpkin_fluid
+                .use_with_item(fluid, player, location, item, server, world)
                 .await;
         }
         BlockActionResult::Continue
@@ -120,6 +146,23 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .placed(world, block, state_id, block_pos, old_state_id, notify)
+                .await;
+        }
+    }
+
+    pub async fn on_placed_fluid(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
+        state_id: u16,
+        block_pos: &BlockPos,
+        old_state_id: u16,
+        notify: bool,
+    ) {
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        if let Some(pumpkin_fluid) = pumpkin_fluid {
+            pumpkin_fluid
+                .placed(world, fluid, state_id, block_pos, old_state_id, notify)
                 .await;
         }
     }
@@ -286,6 +329,12 @@ impl BlockRegistry {
     pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn PumpkinBlock>> {
         self.blocks
             .get(format!("minecraft:{}", block.name).as_str())
+    }
+
+    #[must_use]
+    pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn PumpkinFluid>> {
+        self.fluids
+            .get(format!("{}:{}", "minecraft", fluid.name).as_str())
     }
 
     pub async fn emits_redstone_power(

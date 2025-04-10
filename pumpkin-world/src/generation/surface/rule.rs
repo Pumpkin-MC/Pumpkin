@@ -1,9 +1,11 @@
+use std::sync::OnceLock;
+
 use serde::Deserialize;
 
 use super::{MaterialCondition, MaterialRuleContext};
 use crate::{
+    ProtoChunk,
     block::{BlockStateCodec, ChunkBlockState},
-    generation::noise_router::surface_height_sampler::SurfaceHeightEstimateSampler,
 };
 
 #[derive(Deserialize)]
@@ -22,18 +24,14 @@ pub enum MaterialRule {
 impl MaterialRule {
     pub fn try_apply(
         &self,
+        chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<ChunkBlockState> {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => block.try_apply(),
-            MaterialRule::Sequence(sequence) => {
-                sequence.try_apply(context, surface_height_estimate_sampler)
-            }
-            MaterialRule::Condition(condition) => {
-                condition.try_apply(context, surface_height_estimate_sampler)
-            }
+            MaterialRule::Sequence(sequence) => sequence.try_apply(chunk, context),
+            MaterialRule::Condition(condition) => condition.try_apply(chunk, context),
         }
     }
 }
@@ -54,11 +52,15 @@ impl BadLandsMaterialRule {
 #[derive(Deserialize)]
 pub struct BlockMaterialRule {
     result_state: BlockStateCodec,
+    #[serde(skip)]
+    block_state: OnceLock<Option<ChunkBlockState>>,
 }
 
 impl BlockMaterialRule {
     pub fn try_apply(&self) -> Option<ChunkBlockState> {
-        ChunkBlockState::new(&self.result_state.name)
+        *self
+            .block_state
+            .get_or_init(|| ChunkBlockState::new(&self.result_state.name))
     }
 }
 
@@ -70,11 +72,11 @@ pub struct SequenceMaterialRule {
 impl SequenceMaterialRule {
     pub fn try_apply(
         &self,
+        chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<ChunkBlockState> {
         for seq in &self.sequence {
-            if let Some(state) = seq.try_apply(context, surface_height_estimate_sampler) {
+            if let Some(state) = seq.try_apply(chunk, context) {
                 return Some(state);
             }
         }
@@ -91,13 +93,11 @@ pub struct ConditionMaterialRule {
 impl ConditionMaterialRule {
     pub fn try_apply(
         &self,
+        chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<ChunkBlockState> {
-        if self.if_true.test(context, surface_height_estimate_sampler) {
-            return self
-                .then_run
-                .try_apply(context, surface_height_estimate_sampler);
+        if self.if_true.test(chunk, context) {
+            return self.then_run.try_apply(chunk, context);
         }
         None
     }

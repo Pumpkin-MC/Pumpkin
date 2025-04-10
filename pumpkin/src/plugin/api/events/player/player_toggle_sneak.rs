@@ -10,6 +10,13 @@ use super::PlayerEvent;
 /// If the event is cancelled, the sneaking state will not change.
 ///
 /// This event contains information about the player and whether they are now sneaking.
+///
+/// # Note
+///
+/// Cancelling this event will only prevent the server from processing the state change.  
+/// The player’s client will still reflect the attempted action, meaning that the sneaking animation may still  
+/// display on the initiating client, even though other players won't see the sneak action.
+///
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerToggleSneakEvent {
@@ -29,6 +36,7 @@ impl PlayerToggleSneakEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerToggleSneakEvent`.
+    ///
     #[must_use]
     pub fn new(player: Arc<Player>, is_sneaking: bool) -> Self {
         Self {

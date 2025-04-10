@@ -1,7 +1,7 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector2::Vector2, vector3::Vector3},
-    random::RandomDeriver,
+    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
 use crate::block::ChunkBlockState;
@@ -648,6 +648,7 @@ pub trait AquiferSamplerImpl {
 mod test {
     use std::{mem, sync::LazyLock};
 
+    use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
     use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
@@ -662,7 +663,7 @@ mod test {
                 chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
                 chunk_noise_router::ChunkNoiseRouter,
                 density_function::UnblendedNoisePos,
-                proto_noise_router::GlobalProtoNoiseRouter,
+                proto_noise_router::ProtoNoiseRouters,
                 surface_height_sampler::{
                     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
                 },
@@ -671,7 +672,6 @@ mod test {
             proto_chunk::StandardChunkFluidLevelSampler,
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        noise_router::NOISE_ROUTER_ASTS,
     };
 
     use super::{AquiferSampler, FluidLevel, FluidLevelSampler, WorldAquiferSampler};
@@ -679,13 +679,13 @@ mod test {
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
-    static PROTO_ROUTER: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
-        let router_ast = NOISE_ROUTER_ASTS.overworld();
-        GlobalProtoNoiseRouter::generate(router_ast, &RANDOM_CONFIG)
+    static PROTO_ROUTER: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
+        let router_ast = &OVERWORLD_BASE_NOISE_ROUTER;
+        ProtoNoiseRouters::generate(router_ast, &RANDOM_CONFIG)
     });
 
     fn create_aquifer(
-        base_router: &GlobalProtoNoiseRouter,
+        base_router: &ProtoNoiseRouters,
     ) -> (
         WorldAquiferSampler,
         ChunkNoiseRouter,
@@ -695,7 +695,7 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let shape = &surface_config.noise;
+        let shape = &surface_config.shape;
         let chunk_pos = Vector2::new(7, 4);
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, WATER_BLOCK),
@@ -703,7 +703,7 @@ mod test {
         ));
         const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
-            base_router,
+            &base_router.noise,
             &RANDOM_CONFIG,
             CHUNK_WIDTH / shape.horizontal_cell_block_count() as usize,
             chunk_pos::start_block_x(&chunk_pos),
@@ -748,8 +748,10 @@ mod test {
             shape.max_y() as i32,
             shape.vertical_cell_block_count() as usize,
         );
-        let height_estimator =
-            SurfaceHeightEstimateSampler::generate(base_router, &surface_height_estimator_options);
+        let height_estimator = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_height_estimator_options,
+        );
 
         (aquifer, noise.router, height_estimator, options)
     }

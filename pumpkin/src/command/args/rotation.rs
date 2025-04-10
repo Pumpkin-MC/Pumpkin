@@ -39,11 +39,11 @@ impl ArgumentConsumer for RotationArgumentConsumer {
         yaw %= 360.0;
         if yaw >= 180.0 {
             yaw -= 360.0;
-        };
+        }
         pitch %= 360.0;
         if pitch >= 180.0 {
             pitch -= 360.0;
-        };
+        }
 
         Some(Arg::Rotation(yaw, pitch))
     }

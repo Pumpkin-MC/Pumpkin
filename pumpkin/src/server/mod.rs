@@ -27,6 +27,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
+use rsa::RsaPublicKey;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU32;
@@ -40,9 +41,10 @@ use tokio_util::task::TaskTracker;
 
 mod connection_cache;
 mod key_store;
+pub mod seasonal_events;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.4";
+pub const CURRENT_MC_VERSION: &str = "1.21.5";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -79,6 +81,9 @@ pub struct Server {
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
     tasks: TaskTracker,
+    /// Mojang's public keys, used for chat session signing
+    /// Pulled from Mojang API on startup
+    pub mojang_public_keys: Mutex<Vec<RsaPublicKey>>,
 }
 
 impl Server {
@@ -139,6 +144,7 @@ impl Server {
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
             tasks: TaskTracker::new(),
+            mojang_public_keys: Mutex::new(Vec::new()),
         }
     }
 
@@ -338,7 +344,7 @@ impl Server {
         &self,
         message: &TextComponent,
         sender_name: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
         send_cancellable! {{

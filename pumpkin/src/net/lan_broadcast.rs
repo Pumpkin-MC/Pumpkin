@@ -37,7 +37,7 @@ pub async fn start_lan_broadcast(bound_addr: SocketAddr) {
         );
     } else {
         motd = advanced_motd.clone();
-    };
+    }
 
     let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", &motd, bound_addr.port());
 

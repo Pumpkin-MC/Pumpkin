@@ -183,7 +183,7 @@ impl CommandExecutor for Executor {
                     }
                 }
             }
-        };
+        }
 
         sender
             .send_message(TextComponent::translate(

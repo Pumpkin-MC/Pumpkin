@@ -1,6 +1,8 @@
+pub mod biome;
 pub mod gamemode;
 pub mod loot_table;
 pub mod math;
+pub mod noise;
 pub mod permission;
 pub mod random;
 pub mod registry;
@@ -13,6 +15,36 @@ pub use gamemode::GameMode;
 pub use permission::PermissionLvl;
 
 use serde::{Deserialize, Serialize};
+
+#[macro_export]
+macro_rules! global_path {
+    ($path:expr) => {{
+        use std::path::Path;
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join(file!())
+            .parent()
+            .unwrap()
+            .join($path)
+    }};
+}
+
+#[macro_export]
+macro_rules! read_data_from_file {
+    ($path:expr) => {{
+        use std::fs;
+        use $crate::global_path;
+        serde_json::from_str(&fs::read_to_string(global_path!($path)).expect("no data file"))
+            .expect("failed to decode data")
+    }};
+}
+
+/// The minimum number of bits required to represent this number
+#[inline]
+pub fn encompassing_bits(count: usize) -> u8 {
+    count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
+}
 
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub enum Difficulty {
@@ -86,7 +118,7 @@ impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
 #[macro_export]
 macro_rules! assert_eq_delta {
     ($x:expr, $y:expr, $d:expr) => {
-        if !(2f64 * ($x - $y).abs() <= $d * ($x.abs() + $y.abs())) {
+        if 2f64 * ($x - $y).abs() > $d * ($x.abs() + $y.abs()) {
             panic!("{} vs {} ({} vs {})", $x, $y, ($x - $y).abs(), $d);
         }
     };

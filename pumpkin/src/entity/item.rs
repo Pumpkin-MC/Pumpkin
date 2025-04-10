@@ -84,7 +84,10 @@ impl EntityBase for ItemEntity {
             let mut total_pick_up = 0;
             let mut slot_updates = Vec::new();
             let remove_entity = {
-                let mut stack_size = self.item_count.lock().await;
+                let stack_size = {
+                    let stack_size = self.item_count.lock().await;
+                    *stack_size
+                };
 
                 send_cancellable! {{
                     PlayerPickupItemEvent::new(
@@ -153,7 +156,7 @@ impl EntityBase for ItemEntity {
                                 .enqueue_packet(&CTakeItemEntity::new(
                                     self.entity.entity_id.into(),
                                     player.entity_id().into(),
-                                    total_pick_up.into(),
+                                    total_pick_up.try_into().unwrap(),
                                 ))
                                 .await;
                         }

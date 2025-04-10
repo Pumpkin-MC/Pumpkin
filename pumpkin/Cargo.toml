@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin"
-version = "0.1.0-dev"
+version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
 rust-version = "1.85"
@@ -51,7 +51,7 @@ num-bigint = "0.4"
 rustyline-async = "0.4.5"
 
 # encryption
-rsa = "0.9"
+rsa = { version = "0.9", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
@@ -89,8 +89,16 @@ rustc-hash = "2.1.1"
 # Task handling
 tokio-util = { version = "0.7.14", features = ["rt"] }
 
+# Memory profiling
+dhat = { version = "0.3.3", optional = true }
+
 [build-dependencies]
 git-version = "0.3"
 # This makes it so the entire project doesn't recompile on each build on linux.
 [target.'cfg(target_os = "windows")'.build-dependencies]
 tauri-winres = "0.3"
+
+[features]
+#https://nnethercote.github.io/dh_view/dh_view.html
+#https://valgrind.org/docs/manual/dh-manual.html
+dhat-heap = ["dep:dhat"]

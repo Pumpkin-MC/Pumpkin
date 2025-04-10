@@ -3,11 +3,16 @@ use pumpkin_util::math::{floor_mod, square, vector3::Vector3};
 use super::biome_coords;
 
 // This blends biome boundaries, returning which biome to populate the surface on based on the seed
-pub fn get_biome_blend(bottom_y: i8, height: u16, seed: u64, pos: &Vector3<i32>) -> Vector3<i32> {
+pub fn get_biome_blend(
+    bottom_y: i8,
+    height: u16,
+    seed: i64,
+    global_block_pos: &Vector3<i32>,
+) -> Vector3<i32> {
     // This is the "left" side of the biome boundary
-    let offset_x = pos.x - 2;
-    let offset_y = pos.y - 2;
-    let offset_z = pos.z - 2;
+    let offset_x = global_block_pos.x - 2;
+    let offset_y = global_block_pos.y - 2;
+    let offset_z = global_block_pos.z - 2;
     let biome_x = biome_coords::from_block(offset_x);
     let biome_y = biome_coords::from_block(offset_y);
     let biome_z = biome_coords::from_block(offset_z);
@@ -59,7 +64,7 @@ pub fn get_biome_blend(bottom_y: i8, height: u16, seed: u64, pos: &Vector3<i32>)
         };
 
         let permutation_score = score_permutation(
-            seed as i64,
+            seed,
             shifted_biome_x,
             shifted_biome_y,
             shifted_biome_z,
@@ -69,8 +74,8 @@ pub fn get_biome_blend(bottom_y: i8, height: u16, seed: u64, pos: &Vector3<i32>)
         );
 
         if best_score > permutation_score {
-            best_permutation = permutation;
             best_score = permutation_score;
+            best_permutation = permutation;
         }
     }
 
@@ -122,21 +127,22 @@ fn score_permutation(
     let offset_y = scale_mix(mix);
     let mix = salt_mix(mix, seed);
     let offset_z = scale_mix(mix);
+
     square(z_part + offset_z) + square(y_part + offset_y) + square(x_part + offset_x)
 }
 
 #[inline]
 fn scale_mix(l: i64) -> f64 {
-    let d = floor_mod(l >> 24, 1024) as f64 / 1024.0;
+    let d = floor_mod(l >> 24, 1024i32 as i64) as i32 as f64 / 1024.0;
     (d - 0.5) * 0.9
 }
 
 #[inline]
 fn salt_mix(seed: i64, salt: i64) -> i64 {
-    let mixed_seed = seed
-        .wrapping_mul(6364136223846793005)
-        .wrapping_add(1442695040888963407)
-        .wrapping_mul(seed);
+    let mixed_seed = seed.wrapping_mul(
+        seed.wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407),
+    );
     mixed_seed.wrapping_add(salt)
 }
 
@@ -144,7 +150,11 @@ fn salt_mix(seed: i64, salt: i64) -> i64 {
 mod test {
     use pumpkin_util::math::vector3::Vector3;
 
-    use crate::generation::biome::{get_biome_blend, scale_mix, score_permutation};
+    use crate::{
+        biome::hash_seed,
+        generation::biome::{get_biome_blend, scale_mix, score_permutation},
+        read_data_from_file,
+    };
 
     use super::salt_mix;
 
@@ -156,8 +166,9 @@ mod test {
 
     #[test]
     fn test_permutation() {
-        let seed = score_permutation(123, 123, 456, 456, 5.5, 5.5, 5.5);
-        assert_eq!(seed, 84.45165515899657);
+        let seed = hash_seed(0);
+        let score = score_permutation(seed, 123, 456, 456, 0.25, 0.5, 0.75);
+        assert_eq!(score, 1.276986312866211);
     }
 
     #[test]
@@ -170,5 +181,22 @@ mod test {
     fn test_scale() {
         let seed = scale_mix(12345678);
         assert_eq!(seed, -0.45);
+    }
+
+    #[test]
+    fn test_chunk_wide_blend() {
+        let data: Vec<(i32, i32, i32, i32, i32, i32)> =
+            read_data_from_file!("../../assets/biome_mixer.json");
+
+        let seed = hash_seed((-777i64) as u64);
+        for (i, (x, y, z, result_x, result_y, result_z)) in data.into_iter().enumerate() {
+            let result = get_biome_blend(i8::MIN, u16::MAX, seed, &Vector3::new(x, y, z));
+            let expected = Vector3::new(result_x, result_y, result_z);
+            assert_eq!(
+                result, expected,
+                "Expected: {:?}, was: {:?} ({})",
+                expected, result, i
+            );
+        }
     }
 }
