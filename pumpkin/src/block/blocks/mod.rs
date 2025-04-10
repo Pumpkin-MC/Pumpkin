@@ -17,7 +17,6 @@ pub(crate) mod fluids;
 pub(crate) mod furnace;
 pub(crate) mod jukebox;
 pub(crate) mod logs;
-pub(crate) mod oxidizable;
 pub(crate) mod redstone;
 pub(crate) mod sugar_cane;
 pub(crate) mod tnt;

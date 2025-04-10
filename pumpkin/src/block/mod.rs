@@ -31,7 +31,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
-use crate::block::blocks::oxidizable::{Oxidation, Oxidizable};
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
@@ -76,10 +75,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     register_redstone_torch_blocks(&mut manager);
 
     Arc::new(manager)
-}
-
-pub async fn get_oxidizable() -> Box<dyn Oxidizable + Send> {
-    Box::new(Oxidation {})
 }
 
 pub async fn drop_loot(
