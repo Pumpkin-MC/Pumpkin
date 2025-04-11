@@ -66,7 +66,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TargetBlock);
     manager.register_fluid(FlowingWater);
     manager.register_fluid(FlowingLava);
-
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
     register_fence_gate_blocks(&mut manager);
