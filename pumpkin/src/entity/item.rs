@@ -85,12 +85,11 @@ impl EntityBase for ItemEntity {
             let mut total_pick_up = 0;
             let mut slot_updates = Vec::new();
             let remove_entity = {
-                let mut stack_size = self.item_stack.lock().await.item_count;
-                let max_stack = self.item_stack.lock().await.item.components.max_stack_size;
+                let item_stack = self.item_stack.lock().await.clone();
+                let mut stack_size = item_stack.item_count;
+                let max_stack = item_stack.item.components.max_stack_size;
                 while stack_size > 0 {
-                    if let Some(slot) =
-                        inv.get_pickup_item_slot(self.item_stack.lock().await.item.id)
-                    {
+                    if let Some(slot) = inv.get_pickup_item_slot(item_stack.item.id) {
                         // Fill the inventory while there are items in the stack and space in the inventory
                         let maybe_stack = inv
                             .get_slot(slot)

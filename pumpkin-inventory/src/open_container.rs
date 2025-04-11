@@ -1,5 +1,4 @@
 use crate::Container;
-use crate::crafting::check_if_matches_crafting;
 use pumpkin_data::block::Block;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::math::position::BlockPos;
@@ -162,7 +161,7 @@ impl Container for CraftingTable {
 
     fn craft(&mut self) -> bool {
         // TODO: Is there a better way to do this?
-        let check = [
+        let _check = [
             [
                 self.input[0][0].as_ref(),
                 self.input[0][1].as_ref(),
@@ -180,7 +179,7 @@ impl Container for CraftingTable {
             ],
         ];
 
-        let new_output = check_if_matches_crafting(check);
+        let new_output = None; //check_if_matches_crafting(check);
         let result = new_output != self.output
             || self.input.iter().flatten().any(|s| s.is_some())
             || new_output.is_some();
