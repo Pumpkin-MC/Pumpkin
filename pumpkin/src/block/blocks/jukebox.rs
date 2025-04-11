@@ -6,8 +6,11 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, BlockState, Boolean, JukeboxLikeProperties};
 use pumpkin_data::item::Item;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, JukeboxLikeProperties},
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
 use pumpkin_util::math::position::BlockPos;
@@ -22,7 +25,7 @@ impl JukeboxBlock {
             .await
             .expect("`location` should be a jukebox")
             .id;
-        JukeboxLikeProperties::from_state_id(state_id, block).has_record == Boolean::True
+        JukeboxLikeProperties::from_state_id(state_id, block).has_record
     }
 
     async fn set_record(
@@ -32,13 +35,7 @@ impl JukeboxBlock {
         location: BlockPos,
         world: &Arc<World>,
     ) {
-        let new_state = JukeboxLikeProperties {
-            has_record: if has_record {
-                Boolean::True
-            } else {
-                Boolean::False
-            },
-        };
+        let new_state = JukeboxLikeProperties { has_record };
         world
             .set_block_state(&location, new_state.to_state_id(block), BlockFlags::empty())
             .await;

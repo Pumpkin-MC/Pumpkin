@@ -74,7 +74,7 @@ impl CommandExecutor for Executor {
                 true
             }
             Mode::Keep => match world.get_block_state(&pos).await {
-                Ok(old_state) if old_state.air => {
+                Ok(old_state) if old_state.is_air() => {
                     world
                         .set_block_state(
                             &pos,

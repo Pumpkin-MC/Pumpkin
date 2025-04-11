@@ -26,7 +26,7 @@ use bytes::Bytes;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::Block,
+    Block,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
@@ -56,7 +56,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::block::registry::{
-    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_id,
 };
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
@@ -476,7 +476,7 @@ impl World {
             let pos = BlockPos(Vector3::new(position.x, y, position.z));
             let block = self.get_block_state(&pos).await;
             if let Ok(block) = block {
-                if block.air {
+                if block.is_air() {
                     continue;
                 }
             }
@@ -1506,7 +1506,7 @@ impl World {
     pub async fn get_block(
         &self,
         position: &BlockPos,
-    ) -> Result<pumpkin_data::block::Block, GetBlockError> {
+    ) -> Result<pumpkin_data::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1523,23 +1523,20 @@ impl World {
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
+    ) -> Result<pumpkin_data::BlockState, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
-        get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+        get_state_by_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    pub fn get_state_by_id(
-        &self,
-        id: u16,
-    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
-        get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    pub fn get_state_by_id(&self, id: u16) -> Result<pumpkin_data::BlockState, GetBlockError> {
+        get_state_by_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<(pumpkin_data::block::Block, pumpkin_data::block::BlockState), GetBlockError> {
+    ) -> Result<(pumpkin_data::Block, pumpkin_data::BlockState), GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }

@@ -1,6 +1,6 @@
 use crate::chunk::format::PaletteBlockEntry;
 
-use super::registry::{get_block, get_state_by_state_id};
+use super::registry::{get_block, get_state_by_id};
 
 #[derive(Clone, Copy, Debug, Eq)]
 pub struct ChunkBlockState {
@@ -59,7 +59,7 @@ impl ChunkBlockState {
 
     #[inline]
     pub fn is_air(&self) -> bool {
-        get_state_by_state_id(self.state_id).unwrap().air
+        get_state_by_id(self.state_id).unwrap().is_air()
     }
 
     #[inline]

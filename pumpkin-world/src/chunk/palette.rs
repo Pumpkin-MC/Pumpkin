@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
 };
 
-use pumpkin_data::{block::Block, chunk::Biome};
+use pumpkin_data::{Block, chunk::Biome};
 use pumpkin_macros::block_state;
 use pumpkin_util::encompassing_bits;
 
