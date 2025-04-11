@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::AtomicU32};
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, item::Item};
 use pumpkin_protocol::{
-    client::play::{MetaDataType, Metadata},
+    client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
@@ -80,17 +80,17 @@ impl EntityBase for ItemEntity {
             *delay == 0
         };
 
-        /*
-        TODO: Implement this
         if can_pickup {
             let mut inv = player.inventory.lock().await;
             let mut total_pick_up = 0;
             let mut slot_updates = Vec::new();
             let remove_entity = {
-                let mut stack_size = self.item_count.lock().await;
-                let max_stack = self.item.components.max_stack_size;
-                while *stack_size > 0 {
-                    if let Some(slot) = inv.get_pickup_item_slot(self.item.id) {
+                let mut stack_size = self.item_stack.lock().await.item_count;
+                let max_stack = self.item_stack.lock().await.item.components.max_stack_size;
+                while stack_size > 0 {
+                    if let Some(slot) =
+                        inv.get_pickup_item_slot(self.item_stack.lock().await.item.id)
+                    {
                         // Fill the inventory while there are items in the stack and space in the inventory
                         let maybe_stack = inv
                             .get_slot(slot)
@@ -102,7 +102,7 @@ impl EntityBase for ItemEntity {
                             // This is bounded to `u8::MAX`
                             let amount_to_fill = u32::from(max_stack - existing_stack.item_count);
                             // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
-                            let amount_to_add = amount_to_fill.min(*stack_size);
+                            let amount_to_add = amount_to_fill.min(u32::from(stack_size));
                             // Therefore this is safe
 
                             // Update referenced stack so next call to `get_pickup_item_slot` is
@@ -111,7 +111,7 @@ impl EntityBase for ItemEntity {
                             total_pick_up += amount_to_add;
 
                             debug_assert!(amount_to_add > 0);
-                            *stack_size -= amount_to_add;
+                            stack_size = stack_size.saturating_sub(amount_to_add as u8);
 
                             slot_updates.push((slot, existing_stack.clone()));
                         } else {
@@ -120,20 +120,13 @@ impl EntityBase for ItemEntity {
                             // This is bounded to `u8::MAX`
                             let amount_to_fill = u32::from(max_stack);
                             // This is also bounded to `u8::MAX` since `amount_to_fill` is max `u8::MAX`
-                            let amount_to_add = amount_to_fill.min(*stack_size);
+                            let amount_to_add = amount_to_fill.min(u32::from(stack_size));
                             total_pick_up += amount_to_add;
 
                             debug_assert!(amount_to_add > 0);
-                            *stack_size -= amount_to_add;
+                            stack_size = stack_size.saturating_sub(amount_to_add as u8);
 
-                            // Therefore this is safe
-                            let item_stack = ItemStack::new(amount_to_add as u8, self.item.clone());
-
-                            // Update referenced stack so next call to `get_pickup_item_slot` is
-                            // correct
-                            *maybe_stack = Some(item_stack.clone());
-
-                            slot_updates.push((slot, item_stack));
+                            slot_updates.push((slot, self.item_stack.lock().await.clone()));
                         }
                     } else {
                         // We can't pick anything else up
@@ -141,7 +134,7 @@ impl EntityBase for ItemEntity {
                     }
                 }
 
-                *stack_size == 0
+                stack_size == 0
             };
 
             if total_pick_up > 0 {
@@ -167,7 +160,6 @@ impl EntityBase for ItemEntity {
                 self.send_meta_packet().await;
             }
         }
-        */
     }
 
     fn get_entity(&self) -> &Entity {

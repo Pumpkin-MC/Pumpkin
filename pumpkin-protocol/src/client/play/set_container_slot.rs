@@ -11,7 +11,7 @@ pub struct CSetContainerSlot<'a> {
     window_id: i8,
     state_id: VarInt,
     slot: i16,
-    slot_data: &'a ItemStackSerializer,
+    slot_data: &'a ItemStackSerializer<'a>,
 }
 
 impl<'a> CSetContainerSlot<'a> {
@@ -19,7 +19,7 @@ impl<'a> CSetContainerSlot<'a> {
         window_id: i8,
         state_id: i32,
         slot: i16,
-        slot_data: &'a ItemStackSerializer,
+        slot_data: &'a ItemStackSerializer<'a>,
     ) -> Self {
         Self {
             window_id,

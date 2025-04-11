@@ -625,7 +625,7 @@ impl Player {
         &self,
         server: &Server,
         slot_index: usize,
-        slot: ItemStackSerializer,
+        slot: ItemStackSerializer<'_>,
     ) -> Result<(), InventoryError> {
         for player in self.get_current_players_in_container(server).await {
             let mut inventory = player.inventory().lock().await;
