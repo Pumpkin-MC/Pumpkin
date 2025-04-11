@@ -63,3 +63,7 @@ pub mod block {
 pub mod tag {
     include!(concat!(env!("OUT_DIR"), "/tag.rs"));
 }
+
+pub mod noise_router {
+    include!(concat!(env!("OUT_DIR"), "/noise_router.rs"));
+}

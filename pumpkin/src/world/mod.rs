@@ -296,12 +296,12 @@ impl World {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle: Particle,
+        particle: Particle,
     ) {
         let players = self.players.read().await;
         for (_, player) in players.iter() {
             player
-                .spawn_particle(position, offset, max_speed, particle_count, pariticle)
+                .spawn_particle(position, offset, max_speed, particle_count, particle)
                 .await;
         }
     }
@@ -1445,7 +1445,7 @@ impl World {
         flags: BlockFlags,
     ) {
         let block = self.get_block(position).await.unwrap();
-        let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
+        let event = BlockBreakEvent::new(cause.clone(), block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .lock()

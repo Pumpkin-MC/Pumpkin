@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::block::{
     Block, BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
 };
+use pumpkin_data::tag::Tagable;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
@@ -78,8 +79,9 @@ impl PumpkinBlock for SugarCaneBlock {
             return true;
         }
 
-        // TODO: use tags
-        if block == Block::DIRT || block == Block::SAND {
+        if block.is_tagged_with("minecraft:dirt").unwrap()
+            || block.is_tagged_with("minecraft:sand").unwrap()
+        {
             for direction in BlockDirection::horizontal() {
                 let block = world
                     .get_block(&pos.down().offset(direction.to_offset()))

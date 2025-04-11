@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::block::{
     Block, BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
 };
+use pumpkin_data::tag::Tagable;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
@@ -85,7 +86,7 @@ impl PumpkinBlock for CactusBlock {
         }
         let block = world.get_block(&pos.down()).await.unwrap();
         // TODO: use tags
-        (block == Block::CACTUS || block == Block::SAND)
+        (block == Block::CACTUS || block.is_tagged_with("minecraft:sand").unwrap())
             && !world.get_block_state(&pos.up()).await.unwrap().is_liquid
     }
 }

@@ -1,6 +1,6 @@
 /// Proxy implementation for Velocity <https://papermc.io/software/velocity> by `PaperMC`
 /// Sadly, `PaperMC` does not care about 3rd parties providing support for Velocity. There is no documentation.
-/// I had to understand the code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/master/patches/server/0731-Add-Velocity-IP-Forwarding-Support.patch>
+/// I had to understand the code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/0cf731589a3b6923542cdfc36dbcee9c47c51076/paper-server/src/main/java/com/destroystokyo/paper/proxy/VelocityProxy.java>
 use std::{
     io::Read,
     net::{IpAddr, SocketAddr},

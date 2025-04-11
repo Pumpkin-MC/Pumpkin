@@ -17,7 +17,7 @@ use super::{
         },
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
-        proto_noise_router::GlobalProtoNoiseRouter,
+        proto_noise_router::ProtoNoiseRouter,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
     ore_sampler::OreVeinSampler,
@@ -158,7 +158,7 @@ pub struct ChunkNoiseGenerator<'a> {
 impl<'a> ChunkNoiseGenerator<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        noise_router_base: &'a GlobalProtoNoiseRouter,
+        noise_router_base: &'a ProtoNoiseRouter,
         random_config: &GlobalRandomConfig,
         horizontal_cell_count: usize,
         start_block_x: i32,
