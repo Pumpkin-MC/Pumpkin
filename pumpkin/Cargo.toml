@@ -40,8 +40,6 @@ futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-tempfile.workspace = true
-
 bytes.workspace = true
 
 rand = "0.8"
@@ -95,6 +93,10 @@ dhat = { version = "0.3.3", optional = true }
 
 [build-dependencies]
 git-version = "0.3"
+
+[dev-dependencies]
+tempfile.workspace = true
+
 # This makes it so the entire project doesn't recompile on each build on linux.
 [target.'cfg(target_os = "windows")'.build-dependencies]
 tauri-winres = "0.3"

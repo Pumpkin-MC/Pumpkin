@@ -250,15 +250,14 @@ impl<'a> Container for OptionallyCombinedContainer<'a, 'a> {
     }
 
     fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
-        let slots = match &mut self.container {
+        match &mut self.container {
             Some(container) => {
                 let mut slots = container.all_slots().into_vec();
                 slots.extend(self.inventory.all_combinable_slots_mut());
                 slots.into_boxed_slice()
             }
             None => self.inventory.all_slots(),
-        };
-        slots
+        }
     }
 
     fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {

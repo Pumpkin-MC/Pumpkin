@@ -621,7 +621,7 @@ impl Client {
     pub async fn kick(&self, reason: TextComponent) {
         match self.connection_state.load() {
             ConnectionState::Login => {
-                // TextComponent implements Serialze and writes in bytes instead of String, thats the reasib we only use content
+                // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
                 self.send_packet_now(&CLoginDisconnect::new(
                     &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
