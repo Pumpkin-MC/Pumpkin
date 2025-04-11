@@ -3,11 +3,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::{
-    crafting::{CraftingScreenHandler, RecipeFinderScreenHandler},
-    equipment_slot::EquipmentSlot,
-    inventory::Inventory,
-    player_inventory::PlayerInventory,
-    screen_handler::ScreenHandler,
+    crafting::RecipeFinderScreenHandler, equipment_slot::EquipmentSlot, inventory::Inventory,
+    player_inventory::PlayerInventory, screen_handler::ScreenHandler,
 };
 
 pub struct PlayerScreenHandler {}
