@@ -54,6 +54,8 @@ impl ChunkData {
             .map(|section| SubChunk {
                 block_states: BlockPalette::from_disk_nbt(section.block_states),
                 biomes: BiomePalette::from_disk_nbt(section.biomes),
+                block_light: section.block_light,
+                sky_light: section.sky_light,
             })
             .collect();
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
@@ -101,11 +103,10 @@ impl ChunkData {
 struct ChunkSectionNBT {
     block_states: ChunkSectionBlockStates,
     biomes: ChunkSectionBiomes,
-    // TODO
-    // #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
-    // block_light: Option<Box<[u8]>>,
-    // #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
-    // sky_light: Option<Box<[u8]>>,
+    #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
+    block_light: Option<Box<[u8]>>,
+    #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
+    sky_light: Option<Box<[u8]>>,
     #[serde(rename = "Y")]
     y: i8,
 }

@@ -11,7 +11,6 @@ mod generation;
 pub mod item;
 pub mod level;
 mod lock;
-mod noise_router;
 pub mod world_info;
 
 #[macro_export]
@@ -40,13 +39,12 @@ macro_rules! read_data_from_file {
 
 // TODO: is there a way to do in-file benches?
 pub use generation::{
-    GlobalRandomConfig, noise_router::proto_noise_router::GlobalProtoNoiseRouter,
+    GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
-pub use noise_router::NOISE_ROUTER_ASTS;
 
 pub fn bench_create_and_populate_noise(
-    base_router: &GlobalProtoNoiseRouter,
+    base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
     settings: &GenerationSettings,
 ) {
@@ -55,7 +53,7 @@ pub fn bench_create_and_populate_noise(
 }
 
 pub fn bench_create_and_populate_biome(
-    base_router: &GlobalProtoNoiseRouter,
+    base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
     settings: &GenerationSettings,
 ) {
@@ -64,7 +62,7 @@ pub fn bench_create_and_populate_biome(
 }
 
 pub fn bench_create_and_populate_noise_with_surface(
-    base_router: &GlobalProtoNoiseRouter,
+    base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
     settings: &GenerationSettings,
 ) {

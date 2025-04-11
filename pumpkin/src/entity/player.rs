@@ -493,7 +493,7 @@ impl Player {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle: Particle,
+        particle: Particle,
     ) {
         self.client
             .enqueue_packet(&CParticle::new(
@@ -503,7 +503,7 @@ impl Player {
                 offset,
                 max_speed,
                 particle_count,
-                VarInt(pariticle as i32),
+                VarInt(particle as i32),
                 &[],
             ))
             .await;

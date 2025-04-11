@@ -1,6 +1,7 @@
 use enum_dispatch::enum_dispatch;
+use pumpkin_data::noise_router::WrapperType;
 
-use crate::{generation::biome_coords, noise_router::density_function_ast::WrapperType};
+use crate::generation::biome_coords;
 
 use super::{
     chunk_density_function::{
@@ -13,8 +14,8 @@ use super::{
         StaticIndependentChunkNoiseFunctionComponentImpl, UnblendedNoisePos,
     },
     proto_noise_router::{
-        DependentProtoNoiseFunctionComponent, GlobalProtoNoiseRouter,
-        IndependentProtoNoiseFunctionComponent, ProtoNoiseFunctionComponent,
+        DependentProtoNoiseFunctionComponent, IndependentProtoNoiseFunctionComponent,
+        ProtoNoiseFunctionComponent, ProtoNoiseRouter,
     },
 };
 
@@ -74,6 +75,91 @@ pub enum ChunkNoiseFunctionComponent<'a> {
     Panic(String),
 }
 
+/*
+impl ChunkNoiseFunctionComponent<'_> {
+    pub fn display_test(&self, stack: &[ChunkNoiseFunctionComponent<'_>]) -> String {
+        match self {
+            Self::Independent(independent) => match independent {
+                IndependentProtoNoiseFunctionComponent::ClampedYGradient(_) => {
+                    "ClampedYGradient".into()
+                }
+                IndependentProtoNoiseFunctionComponent::InterpolatedNoise(_) => {
+                    "InterpolatedNoise".into()
+                }
+                IndependentProtoNoiseFunctionComponent::EndIsland(_) => "EndIsland".into(),
+                IndependentProtoNoiseFunctionComponent::Constant(_) => "Constant".into(),
+                IndependentProtoNoiseFunctionComponent::Noise(_) => "Noise".into(),
+                IndependentProtoNoiseFunctionComponent::ShiftA(_) => "ShiftA".into(),
+                IndependentProtoNoiseFunctionComponent::ShiftB(_) => "ShiftB".into(),
+            },
+            Self::Dependent(dependent) => match dependent {
+                DependentProtoNoiseFunctionComponent::Spline(spine) => "Spline(todo)".into(),
+                DependentProtoNoiseFunctionComponent::Unary(x) => {
+                    let a = stack[x.input_index].display_test(stack);
+                    format!("Unary({})", a)
+                }
+                DependentProtoNoiseFunctionComponent::ShiftedNoise(x) => {
+                    format!("ShiftedNoise(todo)")
+                }
+                DependentProtoNoiseFunctionComponent::Linear(x) => {
+                    let a = stack[x.input_index].display_test(stack);
+                    format!("Linear({})", a)
+                }
+                DependentProtoNoiseFunctionComponent::Binary(x) => {
+                    let a = stack[x.input1_index].display_test(stack);
+                    let b = stack[x.input2_index].display_test(stack);
+                    format!("Binary({}, {})", a, b)
+                }
+                DependentProtoNoiseFunctionComponent::WeirdScaled(x) => {
+                    format!("WeirdScaled(todo)")
+                }
+                DependentProtoNoiseFunctionComponent::Clamp(x) => {
+                    format!("Clamp(todo)")
+                }
+                DependentProtoNoiseFunctionComponent::RangeChoice(x) => {
+                    let when_in = stack[x.when_in_index].display_test(stack);
+                    let when_out = stack[x.when_out_index].display_test(stack);
+                    format!("RangeChoice({}, {})", when_in, when_out)
+                }
+            },
+            Self::Chunk(chunk) => match &**chunk {
+                ChunkSpecificNoiseFunctionComponent::CellCache(x) => {
+                    let input = &stack[x.input_index];
+                    let input_display = input.display_test(stack);
+                    format!("CellCache({})", input_display)
+                }
+                ChunkSpecificNoiseFunctionComponent::Cache2D(x) => {
+                    let input = &stack[x.input_index];
+                    let input_display = input.display_test(stack);
+                    format!("Cache2D({})", input_display)
+                }
+                ChunkSpecificNoiseFunctionComponent::DensityInterpolator(x) => {
+                    let input = &stack[x.input_index];
+                    let input_display = input.display_test(stack);
+                    format!("DensityInterpolator({})", input_display)
+                }
+                ChunkSpecificNoiseFunctionComponent::FlatCache(x) => {
+                    let input = &stack[x.input_index];
+                    let input_display = input.display_test(stack);
+                    format!("FlatCache({})", input_display)
+                }
+                ChunkSpecificNoiseFunctionComponent::CacheOnce(x) => {
+                    let input = &stack[x.input_index];
+                    let input_display = input.display_test(stack);
+                    format!("CacheOnce({})", input_display)
+                }
+            },
+            Self::PassThrough(x) => {
+                let input = &stack[x.input_index()];
+                let input_display = input.display_test(stack);
+                format!("PassThrough({})", input_display)
+            }
+            Self::Panic(_) => unreachable!(),
+        }
+    }
+}
+*/
+
 impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
     #[inline]
     fn min(&self) -> f64 {
@@ -111,7 +197,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
             Self::Dependent(dependent) => dependent.sample(component_stack, pos, sample_options),
             Self::Chunk(chunk) => chunk.sample(component_stack, pos, sample_options),
             Self::PassThrough(pass_through) => ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut component_stack[..=pass_through.input_index],
+                &mut component_stack[..=pass_through.input_index()],
                 pos,
                 sample_options,
             ),
@@ -134,7 +220,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
             }
             Self::Chunk(chunk) => chunk.fill(component_stack, array, mapper, sample_options),
             Self::PassThrough(pass_through) => ChunkNoiseFunctionComponent::fill_from_stack(
-                &mut component_stack[..=pass_through.input_index],
+                &mut component_stack[..=pass_through.input_index()],
                 array,
                 mapper,
                 sample_options,
@@ -219,7 +305,6 @@ pub struct ChunkNoiseRouter<'a> {
     lava_noise: usize,
     erosion: usize,
     depth: usize,
-    initial_density_without_jaggedness: usize,
     final_density: usize,
     vein_toggle: usize,
     vein_ridged: usize,
@@ -236,7 +321,6 @@ impl ChunkNoiseRouter<'_> {
     sample_function!(lava_noise);
     sample_function!(erosion);
     sample_function!(depth);
-    sample_function!(initial_density_without_jaggedness);
     sample_function!(final_density);
     sample_function!(vein_toggle);
     sample_function!(vein_ridged);
@@ -245,36 +329,15 @@ impl ChunkNoiseRouter<'_> {
 
 impl<'a> ChunkNoiseRouter<'a> {
     pub fn generate(
-        base: &'a GlobalProtoNoiseRouter,
+        base: &'a ProtoNoiseRouter,
         build_options: &ChunkNoiseFunctionBuilderOptions,
     ) -> Self {
         let mut component_stack =
-            Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.component_stack.len());
+            Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
         let mut cell_cache_indices = Vec::new();
         let mut interpolator_indices = Vec::new();
 
-        // NOTE: Only iter what we need; we dont care about the MultiNoiseSampler functions that are
-        // pushed after due to our invariant
-        let max_index = [
-            base.barrier_noise,
-            base.fluid_level_floodedness_noise,
-            base.fluid_level_spread_noise,
-            base.lava_noise,
-            base.erosion,
-            base.depth,
-            base.initial_density_without_jaggedness,
-            base.final_density,
-            base.vein_toggle,
-            base.vein_gap,
-            base.vein_ridged,
-        ]
-        .into_iter()
-        .max()
-        .unwrap();
-
-        for (component_index, base_component) in
-            base.component_stack[..=max_index].iter().enumerate()
-        {
+        for (component_index, base_component) in base.full_component_stack.iter().enumerate() {
             let chunk_component = match base_component {
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
                     ChunkNoiseFunctionComponent::Dependent(dependent)
@@ -283,27 +346,24 @@ impl<'a> ChunkNoiseRouter<'a> {
                     ChunkNoiseFunctionComponent::Independent(independent)
                 }
                 ProtoNoiseFunctionComponent::PassThrough(pass_through) => {
-                    let min_value = component_stack[pass_through.input_index].min();
-                    let max_value = component_stack[pass_through.input_index].max();
-                    ChunkNoiseFunctionComponent::PassThrough(PassThrough {
-                        input_index: pass_through.input_index,
-                        max_value,
-                        min_value,
-                    })
+                    ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
                 }
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
                     //NOTE: Due to our previous invariant with the proto-function, it is guaranteed
                     // that the wrapped function is already on the stack
-                    let min_value = component_stack[wrapper.input_index].min();
-                    let max_value = component_stack[wrapper.input_index].max();
 
-                    match wrapper.wrapper_type {
+                    // NOTE: Current wrapped functions do not give different values than what they
+                    // wrap. If they do, maxs and mins need to be changed here
+                    let min_value = component_stack[wrapper.input_index()].min();
+                    let max_value = component_stack[wrapper.input_index()].max();
+
+                    match wrapper.wrapper_type() {
                         WrapperType::Interpolated => {
                             interpolator_indices.push(component_index);
                             ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::DensityInterpolator(
                                     DensityInterpolator::new(
-                                        wrapper.input_index,
+                                        wrapper.input_index(),
                                         min_value,
                                         max_value,
                                         build_options,
@@ -315,7 +375,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                             cell_cache_indices.push(component_index);
                             ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::CellCache(CellCache::new(
-                                    wrapper.input_index,
+                                    wrapper.input_index(),
                                     min_value,
                                     max_value,
                                     build_options,
@@ -324,21 +384,21 @@ impl<'a> ChunkNoiseRouter<'a> {
                         }
                         WrapperType::CacheOnce => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::CacheOnce(CacheOnce::new(
-                                wrapper.input_index,
+                                wrapper.input_index(),
                                 min_value,
                                 max_value,
                             )),
                         )),
                         WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
-                                wrapper.input_index,
+                                wrapper.input_index(),
                                 min_value,
                                 max_value,
                             )),
                         )),
                         WrapperType::CacheFlat => {
                             let mut flat_cache = FlatCache::new(
-                                wrapper.input_index,
+                                wrapper.input_index(),
                                 min_value,
                                 max_value,
                                 build_options.start_biome_x,
@@ -374,7 +434,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                                     //NOTE: Due to our stack invariant, what is on the stack is a
                                     // valid density function
                                     let sample = ChunkNoiseFunctionComponent::sample_from_stack(
-                                        &mut component_stack[..=wrapper.input_index],
+                                        &mut component_stack[..=wrapper.input_index()],
                                         &pos,
                                         &sample_options,
                                     );
@@ -402,7 +462,6 @@ impl<'a> ChunkNoiseRouter<'a> {
             lava_noise: base.lava_noise,
             erosion: base.erosion,
             depth: base.depth,
-            initial_density_without_jaggedness: base.initial_density_without_jaggedness,
             final_density: base.final_density,
             vein_toggle: base.vein_toggle,
             vein_ridged: base.vein_ridged,

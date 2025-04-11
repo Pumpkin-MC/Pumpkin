@@ -136,20 +136,20 @@ impl Container for CraftingTable {
     }
     fn all_slots(&mut self) -> Box<[&mut Option<ItemStack>]> {
         let slots = vec![&mut self.output];
-        let slots = slots
+
+        slots
             .into_iter()
             .chain(self.input.iter_mut().flatten())
-            .collect();
-        slots
+            .collect()
     }
 
     fn all_slots_ref(&self) -> Box<[Option<&ItemStack>]> {
         let slots = vec![self.output.as_ref()];
-        let slots = slots
+
+        slots
             .into_iter()
             .chain(self.input.iter().flatten().map(|i| i.as_ref()))
-            .collect();
-        slots
+            .collect()
     }
 
     fn all_combinable_slots(&self) -> Box<[Option<&ItemStack>]> {
