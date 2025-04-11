@@ -606,7 +606,7 @@ impl Player {
         &self,
         server: &Server,
         slot_index: usize,
-        slot: ItemStackSerializer,
+        slot: ItemStackSerializer<'_>,
     ) -> Result<(), InventoryError> {
         /*
         TODO: Inv

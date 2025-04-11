@@ -1,5 +1,4 @@
 pub mod container_click;
-mod crafting;
 pub mod drag_handler;
 pub mod entity_equipment;
 pub mod equipment_slot;

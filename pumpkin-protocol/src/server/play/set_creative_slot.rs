@@ -7,5 +7,5 @@ use crate::codec::item_stack_seralizer::ItemStackSerializer;
 #[packet(PLAY_SET_CREATIVE_MODE_SLOT)]
 pub struct SSetCreativeSlot {
     pub slot: i16,
-    pub clicked_item: ItemStackSerializer,
+    pub clicked_item: ItemStackSerializer<'static>,
 }

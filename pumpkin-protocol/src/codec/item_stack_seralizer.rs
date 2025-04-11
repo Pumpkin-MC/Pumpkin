@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::VarInt;
 use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
@@ -7,16 +9,16 @@ use serde::{
 };
 
 #[derive(Debug, Clone)]
-pub struct ItemStackSerializer(pub ItemStack);
+pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
-impl<'de> Deserialize<'de> for ItemStackSerializer {
+impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
-            type Value = ItemStackSerializer;
+            type Value = ItemStackSerializer<'static>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
@@ -31,7 +33,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer {
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
 
                 let slot = if item_count.0 == 0 {
-                    ItemStackSerializer(ItemStack::EMPTY)
+                    ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY))
                 } else {
                     let item_id = seq
                         .next_element::<VarInt>()?
@@ -44,9 +46,11 @@ impl<'de> Deserialize<'de> for ItemStackSerializer {
                         .ok_or(de::Error::custom("No component remove length VarInt!"))?;
 
                     if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
+                        /*
                         return Err(de::Error::custom(
                             "Slot components are currently unsupported",
                         ));
+                         */
                     }
 
                     let item_id: u16 = item_id
@@ -54,10 +58,10 @@ impl<'de> Deserialize<'de> for ItemStackSerializer {
                         .try_into()
                         .map_err(|_| de::Error::custom("Invalid item id!"))?;
 
-                    ItemStackSerializer(ItemStack::new(
+                    ItemStackSerializer(Cow::Owned(ItemStack::new(
                         item_count.0 as u8,
                         Item::from_id(item_id).unwrap_or(Item::AIR),
-                    ))
+                    )))
                 };
 
                 Ok(slot)
@@ -68,7 +72,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer {
     }
 }
 
-impl Serialize for ItemStackSerializer {
+impl Serialize for ItemStackSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -97,23 +101,23 @@ impl Serialize for ItemStackSerializer {
     }
 }
 
-impl ItemStackSerializer {
+impl ItemStackSerializer<'_> {
     pub fn to_stack(self) -> ItemStack {
-        self.0
+        self.0.into_owned()
     }
 }
 
-impl From<ItemStack> for ItemStackSerializer {
+impl From<ItemStack> for ItemStackSerializer<'_> {
     fn from(item: ItemStack) -> Self {
-        ItemStackSerializer(item)
+        ItemStackSerializer(Cow::Owned(item))
     }
 }
 
-impl From<Option<ItemStack>> for ItemStackSerializer {
+impl From<Option<ItemStack>> for ItemStackSerializer<'_> {
     fn from(item: Option<ItemStack>) -> Self {
         match item {
             Some(item) => ItemStackSerializer::from(item),
-            None => ItemStackSerializer::from(ItemStack::EMPTY),
+            None => ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY)),
         }
     }
 }

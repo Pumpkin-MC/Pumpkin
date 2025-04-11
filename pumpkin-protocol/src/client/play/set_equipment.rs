@@ -13,11 +13,14 @@ use crate::{
 #[packet(PLAY_SET_EQUIPMENT)]
 pub struct CSetEquipment {
     entity_id: VarInt,
-    equipment: Vec<(EquipmentSlot, ItemStackSerializer)>,
+    equipment: Vec<(EquipmentSlot, ItemStackSerializer<'static>)>,
 }
 
 impl CSetEquipment {
-    pub fn new(entity_id: VarInt, equipment: Vec<(EquipmentSlot, ItemStackSerializer)>) -> Self {
+    pub fn new(
+        entity_id: VarInt,
+        equipment: Vec<(EquipmentSlot, ItemStackSerializer<'static>)>,
+    ) -> Self {
         Self {
             entity_id,
             equipment,

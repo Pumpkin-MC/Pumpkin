@@ -14,8 +14,8 @@ pub struct SClickContainer {
     pub button: i8,
     pub mode: SlotActionType,
     pub length_of_array: VarInt,
-    pub array_of_changed_slots: Vec<(i16, ItemStackSerializer)>,
-    pub carried_item: ItemStackSerializer,
+    pub array_of_changed_slots: Vec<(i16, ItemStackSerializer<'static>)>,
+    pub carried_item: ItemStackSerializer<'static>,
 }
 
 impl<'de> Deserialize<'de> for SClickContainer {
