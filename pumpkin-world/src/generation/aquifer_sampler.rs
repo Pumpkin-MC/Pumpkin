@@ -1,4 +1,6 @@
 use enum_dispatch::enum_dispatch;
+use pumpkin_data::block::{BlockState, get_state_by_state_id};
+use pumpkin_macros::default_block_state;
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector2::Vector2, vector3::Vector3},
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
@@ -22,11 +24,11 @@ use super::{
 #[derive(Clone)]
 pub struct FluidLevel {
     max_y: i32,
-    state: ChunkBlockState,
+    state: BlockState,
 }
 
 impl FluidLevel {
-    pub fn new(max_y: i32, state: ChunkBlockState) -> Self {
+    pub fn new(max_y: i32, state: BlockState) -> Self {
         Self { max_y, state }
     }
 
@@ -34,11 +36,11 @@ impl FluidLevel {
         self.max_y
     }
 
-    fn get_block_state(&self, y: i32) -> ChunkBlockState {
+    fn get_block_state(&self, y: i32) -> &BlockState {
         if y < self.max_y {
-            self.state
+            &self.state
         } else {
-            ChunkBlockState::AIR
+            default_block_state!("air")
         }
     }
 }
@@ -289,7 +291,7 @@ impl WorldAquiferSampler {
             let bl3 = j > o;
             if bl3 || bl2 {
                 let fluid_level = self.fluid_level.get_fluid_level(x, o, z);
-                if !fluid_level.get_block_state(o).is_air() {
+                if !fluid_level.get_block_state(o).air {
                     if bl2 {
                         bl = true;
                     }
@@ -618,7 +620,7 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<BlockState> {
         let sample = router.final_density(pos, sample_options);
         //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
         if sample > 0f64 {
@@ -641,7 +643,7 @@ pub trait AquiferSamplerImpl {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState>;
+    ) -> Option<BlockState>;
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
-use crate::chunk::format::PaletteBlockEntry;
+use pumpkin_data::block::get_block;
 
-use super::registry::{get_block, get_state_by_state_id};
+use super::BlockStateCodec;
 
+/// This is used for in Memory representation, the goal is to keep this lightweight
 #[derive(Clone, Copy, Debug, Eq)]
 pub struct ChunkBlockState {
     pub state_id: u16,
@@ -29,7 +30,8 @@ impl ChunkBlockState {
         })
     }
 
-    pub fn from_palette(palette: &PaletteBlockEntry) -> Option<Self> {
+    pub fn from_palette(palette: &BlockStateCodec) -> Option<Self> {
+        // Duplicated code :C
         let block = get_block(palette.name.as_str());
 
         if let Some(block) = block {
@@ -55,11 +57,6 @@ impl ChunkBlockState {
 
     pub fn get_id(&self) -> u16 {
         self.state_id
-    }
-
-    #[inline]
-    pub fn is_air(&self) -> bool {
-        get_state_by_state_id(self.state_id).unwrap().air
     }
 
     #[inline]

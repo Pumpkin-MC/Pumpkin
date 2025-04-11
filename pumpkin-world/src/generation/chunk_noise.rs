@@ -1,4 +1,5 @@
-use pumpkin_macros::block_state;
+use pumpkin_data::block::{Block, BlockState};
+use pumpkin_macros::{block, default_block_state};
 use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2, vector3::Vector3};
 
 use crate::{block::ChunkBlockState, generation::section_coords};
@@ -24,8 +25,8 @@ use super::{
     settings::GenerationShapeConfig,
 };
 
-pub const LAVA_BLOCK: ChunkBlockState = block_state!("lava");
-pub const WATER_BLOCK: ChunkBlockState = block_state!("water");
+pub const LAVA_BLOCK: Block = block!("lava");
+pub const WATER_BLOCK: Block = block!("water");
 
 pub const CHUNK_DIM: u8 = 16;
 
@@ -42,7 +43,7 @@ impl BlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<BlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
@@ -66,7 +67,7 @@ impl ChainedBlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<BlockState> {
         self.samplers
             .iter_mut()
             .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))

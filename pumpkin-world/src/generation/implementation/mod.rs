@@ -55,6 +55,7 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_biomes();
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
+        proto_chunk.generate_features();
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             for z in 0..BiomePalette::SIZE {

@@ -1,5 +1,5 @@
-use pumpkin_data::chunk::Biome;
-use pumpkin_macros::block_state;
+use pumpkin_data::{block::BlockState, chunk::Biome};
+use pumpkin_macros::{block_state, default_block_state};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl},
@@ -50,13 +50,13 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    const ORANGE_TERRACOTTA: ChunkBlockState = block_state!("orange_terracotta");
-    const YELLOW_TERRACOTTA: ChunkBlockState = block_state!("yellow_terracotta");
-    const BROWN_TERRACOTTA: ChunkBlockState = block_state!("brown_terracotta");
-    const RED_TERRACOTTA: ChunkBlockState = block_state!("red_terracotta");
-    const WHITE_TERRACOTTA: ChunkBlockState = block_state!("white_terracotta");
-    const LIGHT_GRAY_TERRACOTTA: ChunkBlockState = block_state!("light_gray_terracotta");
-    const TERRACOTTA: ChunkBlockState = block_state!("terracotta");
+    const ORANGE_TERRACOTTA: BlockState = default_block_state!("orange_terracotta");
+    const YELLOW_TERRACOTTA: BlockState = default_block_state!("yellow_terracotta");
+    const BROWN_TERRACOTTA: BlockState = default_block_state!("brown_terracotta");
+    const RED_TERRACOTTA: BlockState = default_block_state!("red_terracotta");
+    const WHITE_TERRACOTTA: BlockState = default_block_state!("white_terracotta");
+    const LIGHT_GRAY_TERRACOTTA: BlockState = default_block_state!("light_gray_terracotta");
+    const TERRACOTTA: BlockState = default_block_state!("terracotta");
 
     fn create_terracotta_bands(mut random: RandomGenerator) -> Box<[ChunkBlockState]> {
         let mut block_states = [Self::TERRACOTTA; 192];
@@ -178,8 +178,8 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    const SNOW_BLOCK: ChunkBlockState = block_state!("snow_block");
-    const PACKED_ICE: ChunkBlockState = block_state!("packed_ice");
+    const SNOW_BLOCK: ChunkBlockState = default_block_state!("snow_block");
+    const PACKED_ICE: ChunkBlockState = default_block_state!("packed_ice");
 
     #[expect(clippy::too_many_arguments)]
     pub fn place_iceberg(

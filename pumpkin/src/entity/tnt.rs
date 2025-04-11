@@ -42,7 +42,7 @@ impl TNTEntity {
                 Metadata::new(
                     9,
                     MetaDataType::BlockState,
-                    VarInt(i32::from(block_state!("tnt").state_id)),
+                    VarInt(i32::from(default_block_state!("tnt").state_id)),
                 ),
             ])
             .await;

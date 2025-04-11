@@ -1,15 +1,19 @@
 pub mod interactive;
-pub mod registry;
 pub mod state;
 
+use std::collections::HashMap;
+
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
+use pumpkin_data::block::{
+    Axis, Block, BlockState, Facing, HorizontalFacing, get_block, get_state_by_state_id,
+};
 use pumpkin_util::math::vector3::Vector3;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 pub use state::ChunkBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug, Hash, Eq)]
+#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BlockDirection {
     Down = 0,
     Up,
@@ -37,11 +41,36 @@ impl TryFrom<i32> for BlockDirection {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct BlockStateCodec {
+    /// Block name
     pub name: String,
-    // TODO: properties...
+    /// Key-value pairs of properties
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub properties: Option<HashMap<String, String>>,
+}
+
+impl BlockStateCodec {
+    pub fn to_state(&self) -> Option<BlockState> {
+        let block = get_block(self.name.as_str());
+
+        if let Some(block) = block {
+            let mut state_id = block.default_state_id;
+
+            if let Some(properties) = self.properties.clone() {
+                let mut properties_vec = Vec::new();
+                for (key, value) in properties {
+                    properties_vec.push((key.clone(), value.clone()));
+                }
+                let block_properties = block.from_properties(properties_vec).unwrap();
+                state_id = block_properties.to_state_id(&block);
+            }
+            let state = get_state_by_state_id(state_id).unwrap();
+            return Some(state);
+        }
+        None
+    }
 }
 
 impl BlockDirection {

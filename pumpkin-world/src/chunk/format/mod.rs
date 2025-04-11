@@ -6,7 +6,7 @@ use pumpkin_nbt::{from_bytes, nbt_long_array};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::generation::section_coords;
+use crate::{block::BlockStateCodec, generation::section_coords};
 
 use super::{
     ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, ScheduledTick, SubChunk,
@@ -136,17 +136,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBlockEntry>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct PaletteBlockEntry {
-    /// Block name
-    pub name: String,
-    /// Key-value pairs of properties
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, String>>,
+    pub(crate) palette: Vec<BlockStateCodec>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
