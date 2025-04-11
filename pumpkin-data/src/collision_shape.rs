@@ -1,4 +1,4 @@
-use pumpkin_util::math::{boundingbox::BoundingBox, vector3::Vector3};
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionShape {
@@ -11,21 +11,24 @@ impl CollisionShape {
         unimplemented!()
     }
 
-    pub fn intersects(&self, bounding_box: &BoundingBox) -> bool {
-        let min = self.min;
-        let max = self.max;
-        let box_min = bounding_box.min;
-        let box_max = bounding_box.max;
+    pub fn intersects(&self, other: &BoundingBox) -> bool {
+        self.min.x < other.max.x
+            && self.max.x > other.min.x
+            && self.min.y < other.max.y
+            && self.max.y > other.min.y
+            && self.min.z < other.max.z
+            && self.max.z > other.min.z
+    }
 
-        if min.x > box_max.x || max.x < box_min.x {
-            return false;
+    pub fn at_pos(&self, pos: BlockPos) -> Self {
+        let vec3 = Vector3 {
+            x: pos.0.x as f64,
+            y: pos.0.y as f64,
+            z: pos.0.z as f64,
+        };
+        Self {
+            min: self.min + vec3,
+            max: self.max + vec3,
         }
-        if min.y > box_max.y || max.y < box_min.y {
-            return false;
-        }
-        if min.z > box_max.z || max.z < box_min.z {
-            return false;
-        }
-        true
     }
 }

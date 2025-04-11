@@ -35,10 +35,10 @@ impl ChunkBlockState {
         if let Some(block) = block {
             let mut state_id = block.default_state_id;
 
-            if let Some(properties) = palette.properties.clone() {
-                let mut properties_vec = Vec::new();
+            if let Some(properties) = &palette.properties {
+                let mut properties_vec: Vec<(&str, &str)> = Vec::with_capacity(properties.len());
                 for (key, value) in properties {
-                    properties_vec.push((key.clone(), value.clone()));
+                    properties_vec.push((key, value));
                 }
                 let block_properties = block.from_properties(properties_vec).unwrap();
                 state_id = block_properties.to_state_id(&block);

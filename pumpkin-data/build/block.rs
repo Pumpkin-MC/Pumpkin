@@ -239,14 +239,14 @@ impl ToTokens for BlockPropertyStruct {
             match &entry.property_type {
                 PropertyType::Bool => quote! {
                     #key => {
-                        block_props.#field_name = matches!(value.as_str(), "true")
+                        block_props.#field_name = matches!(value, "true")
                     }
                 },
                 PropertyType::Enum { name } => {
                     let enum_ident = Ident::new(name, Span::call_site());
                     quote! {
                         #key => {
-                            block_props.#field_name = #enum_ident::from_value(&value)
+                            block_props.#field_name = #enum_ident::from_value(value)
                         }
                     }
                 }
@@ -308,13 +308,13 @@ impl ToTokens for BlockPropertyStruct {
                     props
                 }
 
-                fn from_props(props: Vec<(String, String)>, block: &Block) -> Self {
+                fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match key.as_str() {
+                        match key {
                             #(#from_props_values),*,
                             _ => panic!("Invalid key: {}", key),
                         }
@@ -1098,7 +1098,7 @@ pub(crate) fn build() -> TokenStream {
             fn to_props(&self) -> Vec<(String, String)>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: Vec<(String, String)>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -1170,7 +1170,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: Vec<(&str, &str)>) -> Option<Box<dyn BlockProperties>> {
                 match self.id {
                     #block_properties_from_props_and_name
                     _ => None

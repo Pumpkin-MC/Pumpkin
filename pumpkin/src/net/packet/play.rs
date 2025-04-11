@@ -1732,7 +1732,7 @@ impl Player {
         'main: for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {
-                if shape.intersects(&player_box) {
+                if shape.at_pos(final_block_pos).intersects(&player_box) {
                     intersects = true;
                     break 'main;
                 }

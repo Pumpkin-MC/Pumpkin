@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, hash_map::Entry},
     hash::Hash,
+    mem::MaybeUninit,
 };
 
 use pumpkin_data::{Block, chunk::Biome};
@@ -170,7 +171,10 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             }
 
             // TODO: Can we do this all with an `array::from_fn` or something?
-            let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
+            // The uninit is totaly safe since we don't read it before we assign a proper value
+            #[allow(clippy::uninit_assumed_init)]
+            let mut cube =
+                Box::new([[[unsafe { MaybeUninit::uninit().assume_init() }; DIM]; DIM]; DIM]);
             cube.as_flattened_mut()
                 .as_flattened_mut()
                 .chunks_mut(keys_per_i64 as usize)
