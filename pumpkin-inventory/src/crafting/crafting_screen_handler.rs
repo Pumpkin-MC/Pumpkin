@@ -4,28 +4,14 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use crate::{
-    inventory::Inventory,
     screen_handler::ScreenHandler,
     slot::{NormalSlot, Slot},
 };
 
-// RecipeMatcher.java
-pub struct RecipeMatcher {}
+use super::recipies::{RecipeFinderScreenHandler, RecipeInputInventory};
 
-// RecipeFinder.java
-pub struct RecipeFinder {}
-
-// AbstractRecipeScreenHandle.java
-pub trait RecipeFinderScreenHandler {}
-
-pub trait RecipeInputInventory: Inventory {
-    fn get_width(&self) -> usize;
-    fn get_height(&self) -> usize;
-    //fn get_held_stacks(), Get a lock on the inventory instead
-    // createRecipeInput
-    // createPositionedRecipeInput
-}
-
+// TODO: Implement ResultSlot
+// CraftingResultSlot.java
 pub struct ResultSlot<I: RecipeInputInventory> {
     pub inventory: Arc<Mutex<I>>,
     pub index: usize,
@@ -61,15 +47,16 @@ impl<I: RecipeInputInventory> Slot<I> for ResultSlot<I> {
 }
 
 // AbstractCraftingScreenHandler.java
+#[async_trait]
 pub trait CraftingScreenHandler<I: RecipeInputInventory>:
     RecipeFinderScreenHandler + ScreenHandler
 {
-    async fn add_result_slot(&mut self, crafing_inventory: Arc<Mutex<I>>) {
-        let result_slot = ResultSlot::new(crafing_inventory, 0);
+    async fn add_result_slot(&mut self, crafing_inventory: &Arc<Mutex<I>>) {
+        let result_slot = ResultSlot::new(crafing_inventory.clone(), 0);
         self.add_slot(result_slot);
     }
 
-    async fn add_input_slots(&mut self, crafing_inventory: Arc<Mutex<I>>) {
+    async fn add_input_slots(&mut self, crafing_inventory: &Arc<Mutex<I>>) {
         let crafting_temp = crafing_inventory.lock().await;
         let width = crafting_temp.get_width();
         let height = crafting_temp.get_height();

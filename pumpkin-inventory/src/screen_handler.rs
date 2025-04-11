@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
 use tokio::sync::Mutex;
 
@@ -10,10 +11,8 @@ use crate::{
 
 //ScreenHandler.java
 // TODO: Fully implement this
+#[async_trait]
 pub trait ScreenHandler {
-    /// WindowType is None for the player inventory
-    fn new(window_type: Option<WindowType>, sync_id: u8) -> Self;
-
     fn window_type(&self) -> Option<WindowType>;
 
     fn size(&self) -> usize;

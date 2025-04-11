@@ -42,7 +42,8 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::{
-    entity_equipment::EntityEquipment, inventory::Inventory, player_inventory::PlayerInventory,
+    entity_equipment::EntityEquipment, inventory::Inventory,
+    player::player_inventory::PlayerInventory,
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;

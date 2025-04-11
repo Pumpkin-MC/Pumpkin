@@ -30,7 +30,7 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::player_inventory::PlayerInventory;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::{block_entity, send_cancellable};
 use pumpkin_protocol::client::play::{
     CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
