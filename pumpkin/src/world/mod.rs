@@ -26,7 +26,7 @@ use bytes::Bytes;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::Block,
+    block::{Block, get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id},
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
@@ -55,9 +55,6 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::block::registry::{
-    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
-};
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{chunk::TickPriority, level::Level};

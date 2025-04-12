@@ -226,8 +226,13 @@ impl ToTokens for BlockPropertyStruct {
                     }
                 }
 
+                #[inline]
+                fn handles_block_id(block_id: u16) -> bool where Self: Sized {
+                    [#(#block_ids),*].contains(&block_id)
+                }
+
                 fn to_state_id(&self, block: &Block) -> u16 {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -235,7 +240,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -248,7 +253,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn default(block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -265,7 +270,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_props(props: Vec<(String, String)>, block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
 
@@ -1144,6 +1149,9 @@ pub(crate) fn build() -> TokenStream {
             fn to_index(&self) -> u16;
             // Convert an index back to properties.
             fn from_index(index: u16) -> Self where Self: Sized;
+
+            // Check if a block uses this property
+            fn handles_block_id(block_id: u16) -> bool where Self: Sized;
 
             // Convert properties to a state id.
             fn to_state_id(&self, block: &Block) -> u16;
