@@ -54,10 +54,6 @@ impl FlowingFluid for FlowingLava {
         2
     }
 
-    async fn get_slope_find_distance(&self) -> i32 {
-        2
-    }
-
     async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
         //TODO add game rule check for lava conversion
         false

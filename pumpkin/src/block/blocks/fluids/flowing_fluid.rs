@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -11,39 +10,6 @@ use pumpkin_world::{BlockId, BlockStateId, block::BlockDirection};
 
 use crate::world::{BlockFlags, World};
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
-
-#[derive(Clone)]
-pub struct SpreadContext {
-    holes: HashMap<BlockPos, bool>,
-}
-
-impl SpreadContext {
-    pub fn new() -> Self {
-        Self {
-            holes: HashMap::new(),
-        }
-    }
-
-    pub async fn is_hole<T: FlowingFluid + ?Sized + std::marker::Sync>(
-        &mut self,
-        fluid: &T,
-        world: &Arc<World>,
-        fluid_type: &Fluid,
-        pos: &BlockPos,
-    ) -> bool {
-        if let Some(is_hole) = self.holes.get(pos) {
-            return *is_hole;
-        }
-
-        let below_pos = pos.down();
-        let is_hole = fluid
-            .is_water_hole(world, fluid_type, pos, &below_pos)
-            .await;
-
-        self.holes.insert(*pos, is_hole);
-        is_hole
-    }
-}
 
 #[async_trait]
 pub trait FlowingFluid {
@@ -75,8 +41,6 @@ pub trait FlowingFluid {
         };
         flowing_props
     }
-
-    async fn get_slope_find_distance(&self) -> i32;
 
     async fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
@@ -260,7 +224,7 @@ pub trait FlowingFluid {
         if new_level <= 0 {
             return;
         }
-        
+
         for direction in BlockDirection::horizontal() {
             let side_pos = block_pos.offset(direction.to_offset());
 
@@ -277,55 +241,6 @@ pub trait FlowingFluid {
         }
     }
 
-    async fn get_spread(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
-        block_pos: &BlockPos,
-    ) -> HashMap<BlockDirection, i32> {
-        let mut result = HashMap::new();
-
-        for direction in BlockDirection::horizontal() {
-            let side_pos = block_pos.offset(direction.to_offset());
-
-            if !self.can_pass_through(world, fluid, &side_pos).await {
-                continue;
-            }
-
-            let Ok(side_state_id) = world.get_block_state_id(&side_pos).await else {
-                continue;
-            };
-
-            let side_props = FlowingFluidProperties::from_state_id(side_state_id, fluid);
-            if side_props.level == Level::L8 && side_props.falling != Falling::True {
-                continue;
-            }
-
-            result.insert(direction, 1);
-        }
-
-        result
-    }
-
-    async fn get_slope_distance(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
-        block_pos: BlockPos,
-        distance: i32,
-        ctx: &mut SpreadContext,
-    ) -> i32 {
-        if distance > self.get_slope_find_distance().await {
-            return distance;
-        }
-
-        if ctx.is_hole(self, world, fluid, &block_pos).await {
-            return distance - 1;
-        }
-
-        distance
-    }
-
     async fn spread_to(
         &self,
         world: &Arc<World>,
@@ -338,18 +253,6 @@ pub trait FlowingFluid {
         world
             .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
             .await;
-    }
-
-    async fn can_pass_through(&self, world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
-        let Ok(state_id) = world.get_block_state_id(pos).await else {
-            return false;
-        };
-
-        if self.is_same_fluid(fluid, state_id) {
-            return true;
-        }
-
-        self.can_replace_block(world, pos, fluid).await
     }
 
     async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, _fluid: &Fluid) -> bool {
