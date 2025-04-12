@@ -6,18 +6,21 @@ use tokio::sync::Mutex;
 
 use crate::{
     crafting::{
-        crafting_inventory::CraftingInventory, crafting_screen_handler::CraftingScreenHandler,
-        recipies::RecipeFinderScreenHandler,
+        crafting_inventory::CraftingInventory,
+        crafting_screen_handler::CraftingScreenHandler,
+        recipies::{RecipeFinderScreenHandler, RecipeInputInventory},
     },
     equipment_slot::EquipmentSlot,
     inventory::Inventory,
     screen_handler::ScreenHandler,
-    slot::{ArmorSlot, NormalSlot},
+    slot::{ArmorSlot, NormalSlot, Slot},
 };
 
 use super::player_inventory::PlayerInventory;
 
-pub struct PlayerScreenHandler {}
+pub struct PlayerScreenHandler {
+    slots: Vec<Arc<dyn Slot>>,
+}
 
 impl PlayerScreenHandler {
     const EQUIPMENT_SLOT_ORDER: [EquipmentSlot; 4] = [
@@ -47,11 +50,12 @@ impl PlayerScreenHandler {
         window_type: Option<WindowType>,
         sync_id: u8,
     ) -> Self {
-        let mut player_screen_handler = PlayerScreenHandler {};
-        let crafting_inventory = Arc::new(Mutex::new(CraftingInventory {
-            width: 2,
-            height: 2,
-        }));
+        let mut player_screen_handler = PlayerScreenHandler { slots: Vec::new() };
+        let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
+            Arc::new(Mutex::new(CraftingInventory {
+                width: 2,
+                height: 2,
+            }));
 
         player_screen_handler
             .add_result_slot(&crafting_inventory)
@@ -69,7 +73,9 @@ impl PlayerScreenHandler {
             ));
         }
 
-        player_screen_handler.add_player_slots(player_inventory);
+        let player_inventory: Arc<Mutex<dyn Inventory>> = player_inventory.clone();
+
+        player_screen_handler.add_player_slots(&player_inventory);
 
         // Offhand
         // TODO: public void setStack(ItemStack stack, ItemStack previousStack) { owner.onEquipStack(EquipmentSlot.OFFHAND, previousStack, stack);
@@ -89,7 +95,7 @@ impl ScreenHandler for PlayerScreenHandler {
         todo!()
     }
 
-    fn add_slot_internal<S: crate::slot::Slot<I>, I: Inventory>(&mut self, slot: Arc<S>) {
-        todo!()
+    fn add_slot_internal(&mut self, slot: Arc<dyn Slot>) {
+        self.slots.push(slot.clone());
     }
 }

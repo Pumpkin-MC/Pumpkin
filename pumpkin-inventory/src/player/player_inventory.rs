@@ -1,6 +1,6 @@
 use crate::entity_equipment::EntityEquipment;
 use crate::equipment_slot::EquipmentSlot;
-use crate::inventory::{Clearable, Inventory, InventoryIterator};
+use crate::inventory::{Clearable, Inventory};
 use crate::split_stack;
 use pumpkin_world::item::ItemStack;
 use std::collections::HashMap;
@@ -149,14 +149,9 @@ impl Inventory for PlayerInventory {
     fn mark_dirty(&mut self) {
         self.change_count += 1;
     }
-}
 
-impl IntoIterator for PlayerInventory {
-    type Item = ItemStack;
-    type IntoIter = InventoryIterator<PlayerInventory>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        InventoryIterator::new(self)
+    fn clone_box(&self) -> Box<dyn Inventory> {
+        Box::new(self.clone())
     }
 }
 

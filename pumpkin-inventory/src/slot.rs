@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
@@ -9,8 +9,8 @@ use crate::{equipment_slot::EquipmentSlot, inventory::Inventory};
 // Slot.java
 // This is a trait due to crafting slots being a thing
 #[async_trait]
-pub trait Slot<I: Inventory> {
-    fn get_inventory(&self) -> &Arc<Mutex<I>>;
+pub trait Slot: Send + Sync + Debug {
+    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>>;
 
     fn get_index(&self) -> usize;
 
@@ -66,12 +66,14 @@ pub trait Slot<I: Inventory> {
 
     async fn mark_dirty(&self);
 
-    fn get_max_item_count(&self) -> u8 {
-        I::get_max_count_per_stack()
+    async fn get_max_item_count(&self) -> u8 {
+        self.get_inventory().lock().await.get_max_count_per_stack()
     }
 
-    fn get_max_item_count_for_stack(&self, stack: &ItemStack) -> u8 {
-        self.get_max_item_count().min(stack.get_max_stack_size())
+    async fn get_max_item_count_for_stack(&self, stack: &ItemStack) -> u8 {
+        self.get_max_item_count()
+            .await
+            .min(stack.get_max_stack_size())
     }
 
     async fn take_stack(&self, amount: u8) -> ItemStack {
@@ -134,7 +136,7 @@ pub trait Slot<I: Inventory> {
             let stack_self = inv.get_stack(self.get_index());
             let min_count = count
                 .min(stack.item_count)
-                .min(self.get_max_item_count_for_stack(&stack) - stack_self.item_count);
+                .min(self.get_max_item_count_for_stack(&stack).await - stack_self.item_count);
 
             if min_count <= 0 {
                 return stack;
@@ -157,14 +159,14 @@ pub trait Slot<I: Inventory> {
 
 #[derive(Debug, Clone)]
 /// Just called Slot in Vanilla
-pub struct NormalSlot<I: Inventory> {
-    pub inventory: Arc<Mutex<I>>,
+pub struct NormalSlot {
+    pub inventory: Arc<Mutex<dyn Inventory>>,
     pub index: usize,
     pub id: usize,
 }
 
-impl<I: Inventory> NormalSlot<I> {
-    pub fn new(inventory: Arc<Mutex<I>>, index: usize) -> Self {
+impl NormalSlot {
+    pub fn new(inventory: Arc<Mutex<dyn Inventory>>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -173,8 +175,8 @@ impl<I: Inventory> NormalSlot<I> {
     }
 }
 #[async_trait]
-impl<I: Inventory> Slot<I> for NormalSlot<I> {
-    fn get_inventory(&self) -> &Arc<Mutex<I>> {
+impl Slot for NormalSlot {
+    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>> {
         &self.inventory
     }
 
@@ -193,15 +195,19 @@ impl<I: Inventory> Slot<I> for NormalSlot<I> {
 
 // ArmorSlot.java
 #[derive(Debug, Clone)]
-pub struct ArmorSlot<I: Inventory> {
-    pub inventory: Arc<Mutex<I>>,
+pub struct ArmorSlot {
+    pub inventory: Arc<Mutex<dyn Inventory>>,
     pub index: usize,
     pub id: usize,
     pub equipment_slot: EquipmentSlot,
 }
 
-impl<I: Inventory> ArmorSlot<I> {
-    pub fn new(inventory: Arc<Mutex<I>>, index: usize, equipment_slot: EquipmentSlot) -> Self {
+impl ArmorSlot {
+    pub fn new(
+        inventory: Arc<Mutex<dyn Inventory>>,
+        index: usize,
+        equipment_slot: EquipmentSlot,
+    ) -> Self {
         Self {
             inventory,
             index,
@@ -212,8 +218,8 @@ impl<I: Inventory> ArmorSlot<I> {
 }
 
 #[async_trait]
-impl<I: Inventory> Slot<I> for ArmorSlot<I> {
-    fn get_inventory(&self) -> &Arc<Mutex<I>> {
+impl Slot for ArmorSlot {
+    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>> {
         &self.inventory
     }
 
@@ -225,7 +231,7 @@ impl<I: Inventory> Slot<I> for ArmorSlot<I> {
         self.id = id;
     }
 
-    fn get_max_item_count(&self) -> u8 {
+    async fn get_max_item_count(&self) -> u8 {
         1
     }
 

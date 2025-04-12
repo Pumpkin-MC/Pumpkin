@@ -1,10 +1,12 @@
+use std::fmt::Debug;
+
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
 
 // Inventory.java
 #[async_trait]
-pub trait Inventory: Send + Sync + Clone + Sized + IntoIterator<Item = ItemStack> {
+pub trait Inventory: Send + Sync + Debug {
     fn size(&self) -> usize;
 
     fn is_empty(&self) -> bool;
@@ -15,7 +17,7 @@ pub trait Inventory: Send + Sync + Clone + Sized + IntoIterator<Item = ItemStack
 
     fn remove_stack_specific(&mut self, slot: usize, amount: u8) -> ItemStack;
 
-    fn get_max_count_per_stack() -> u8 {
+    fn get_max_count_per_stack(&self) -> u8 {
         99
     }
 
@@ -40,9 +42,9 @@ pub trait Inventory: Send + Sync + Clone + Sized + IntoIterator<Item = ItemStack
         true
     }
 
-    fn can_transfer_to<I: Inventory>(
+    fn can_transfer_to(
         &self,
-        _hopper_inventory: I,
+        _hopper_inventory: &dyn Inventory,
         _slot: usize,
         _stack: &ItemStack,
     ) -> bool {
@@ -52,7 +54,8 @@ pub trait Inventory: Send + Sync + Clone + Sized + IntoIterator<Item = ItemStack
     fn count(&self, item: &Item) -> u8 {
         let mut count = 0;
 
-        for stack in self.clone().into_iter() {
+        for i in 0..self.size() {
+            let stack = self.get_stack_ref(i);
             if stack.get_item().id == item.id {
                 count += stack.item_count;
             }
@@ -61,9 +64,10 @@ pub trait Inventory: Send + Sync + Clone + Sized + IntoIterator<Item = ItemStack
         count
     }
 
-    fn contains_any_predicate(&self, predicate: impl Fn(&ItemStack) -> bool) -> bool {
-        for stack in self.clone().into_iter() {
-            if predicate(&stack) {
+    fn contains_any_predicate(&self, predicate: &dyn Fn(&ItemStack) -> bool) -> bool {
+        for i in 0..self.size() {
+            let stack = self.get_stack_ref(i);
+            if predicate(stack) {
                 return true;
             }
         }
@@ -72,50 +76,20 @@ pub trait Inventory: Send + Sync + Clone + Sized + IntoIterator<Item = ItemStack
     }
 
     fn contains_any(&self, items: &[Item]) -> bool {
-        self.contains_any_predicate(move |stack| {
-            !stack.is_empty() && items.contains(stack.get_item())
-        })
+        self.contains_any_predicate(&|stack| !stack.is_empty() && items.contains(stack.get_item()))
     }
+
+    fn clone_box(&self) -> Box<dyn Inventory>;
 
     // TODO: canPlayerUse
 }
 
+impl Clone for Box<dyn Inventory> {
+    fn clone(&self) -> Box<dyn Inventory> {
+        self.clone_box()
+    }
+}
+
 pub trait Clearable {
     fn clear(&mut self);
-}
-
-pub struct InventoryIterator<I: Inventory> {
-    inventory: I,
-    index: usize,
-    size: usize,
-}
-
-impl<T> InventoryIterator<T>
-where
-    T: Inventory,
-{
-    pub fn new(inventory: T) -> Self {
-        InventoryIterator {
-            size: inventory.size(),
-            inventory,
-            index: 0,
-        }
-    }
-}
-
-impl<T> Iterator for InventoryIterator<T>
-where
-    T: Inventory,
-{
-    type Item = ItemStack;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.size {
-            let item = self.inventory.get_stack_ref(self.index).clone();
-            self.index += 1;
-            Some(item)
-        } else {
-            None
-        }
-    }
 }

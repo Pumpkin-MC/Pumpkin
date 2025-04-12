@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use crate::{
+    inventory::Inventory,
     screen_handler::ScreenHandler,
     slot::{NormalSlot, Slot},
 };
@@ -12,14 +13,15 @@ use super::recipies::{RecipeFinderScreenHandler, RecipeInputInventory};
 
 // TODO: Implement ResultSlot
 // CraftingResultSlot.java
-pub struct ResultSlot<I: RecipeInputInventory> {
-    pub inventory: Arc<Mutex<I>>,
+#[derive(Debug)]
+pub struct ResultSlot {
+    pub inventory: Arc<Mutex<dyn Inventory>>,
     pub index: usize,
     pub id: usize,
 }
 
-impl<I: RecipeInputInventory> ResultSlot<I> {
-    pub fn new(inventory: Arc<Mutex<I>>, index: usize) -> Self {
+impl ResultSlot {
+    pub fn new(inventory: Arc<Mutex<dyn Inventory>>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -28,8 +30,8 @@ impl<I: RecipeInputInventory> ResultSlot<I> {
     }
 }
 #[async_trait]
-impl<I: RecipeInputInventory> Slot<I> for ResultSlot<I> {
-    fn get_inventory(&self) -> &Arc<Mutex<I>> {
+impl Slot for ResultSlot {
+    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>> {
         &self.inventory
     }
 
@@ -51,12 +53,12 @@ impl<I: RecipeInputInventory> Slot<I> for ResultSlot<I> {
 pub trait CraftingScreenHandler<I: RecipeInputInventory>:
     RecipeFinderScreenHandler + ScreenHandler
 {
-    async fn add_result_slot(&mut self, crafing_inventory: &Arc<Mutex<I>>) {
+    async fn add_result_slot(&mut self, crafing_inventory: &Arc<Mutex<dyn RecipeInputInventory>>) {
         let result_slot = ResultSlot::new(crafing_inventory.clone(), 0);
         self.add_slot(result_slot);
     }
 
-    async fn add_input_slots(&mut self, crafing_inventory: &Arc<Mutex<I>>) {
+    async fn add_input_slots(&mut self, crafing_inventory: &Arc<Mutex<dyn RecipeInputInventory>>) {
         let crafting_temp = crafing_inventory.lock().await;
         let width = crafting_temp.get_width();
         let height = crafting_temp.get_height();

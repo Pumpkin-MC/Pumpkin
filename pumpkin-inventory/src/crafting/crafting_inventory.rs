@@ -5,14 +5,14 @@ use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::{
-    inventory::{Inventory, InventoryIterator},
+    inventory::Inventory,
     screen_handler::ScreenHandler,
     slot::{NormalSlot, Slot},
 };
 
 use super::recipies::RecipeInputInventory;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CraftingInventory {
     pub width: u8,
     pub height: u8,
@@ -50,6 +50,10 @@ impl Inventory for CraftingInventory {
     fn mark_dirty(&mut self) {
         todo!()
     }
+
+    fn clone_box(&self) -> Box<dyn Inventory> {
+        Box::new(self.clone())
+    }
 }
 
 impl RecipeInputInventory for CraftingInventory {
@@ -59,14 +63,5 @@ impl RecipeInputInventory for CraftingInventory {
 
     fn get_height(&self) -> usize {
         self.height as usize
-    }
-}
-
-impl IntoIterator for CraftingInventory {
-    type Item = ItemStack;
-    type IntoIter = InventoryIterator<CraftingInventory>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        InventoryIterator::new(self)
     }
 }
