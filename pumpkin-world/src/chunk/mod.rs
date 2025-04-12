@@ -161,10 +161,10 @@ pub struct SubChunk {
 }
 
 impl SubChunk {
-    pub fn max_light() -> Self {
+    /// As of now we don't have light calculation when generating a new chunk
+    pub fn max_sky_light() -> Self {
         let chunk_light_len = BlockPalette::VOLUME / 2;
         Self {
-            block_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
             sky_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
             ..Default::default()
         }

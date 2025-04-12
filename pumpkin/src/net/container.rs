@@ -56,12 +56,18 @@ impl Player {
         let container = OptionallyCombinedContainer::new(&mut inventory, container);
 
         let slots: Vec<ItemStackSerializer> = container
+        let slots: Vec<ItemStackSerializer> = container
             .all_slots_ref()
             .into_iter()
+            .map(|i| ItemStackSerializer::from(i.unwrap_or(&ItemStack::EMPTY).clone()))
             .map(|i| ItemStackSerializer::from(i.unwrap_or(&ItemStack::EMPTY).clone()))
             .collect();
 
         let carried_item = self.carried_item.lock().await;
+        let carried_item = carried_item.as_ref().map_or_else(
+            || ItemStackSerializer::from(ItemStack::EMPTY.clone()),
+            |item| ItemStackSerializer::from(item.clone()),
+        );
         let carried_item = carried_item.as_ref().map_or_else(
             || ItemStackSerializer::from(ItemStack::EMPTY.clone()),
             |item| ItemStackSerializer::from(item.clone()),
@@ -192,6 +198,7 @@ impl Player {
                 let combined_container =
                     OptionallyCombinedContainer::new(&mut inventory, Some(&mut opened_container));
                 if let Some(slot) = combined_container.get_slot_excluding_inventory(slot_index) {
+                    let slot = ItemStackSerializer::from(slot.cloned());
                     let slot = ItemStackSerializer::from(slot.cloned());
                     drop(opened_container);
                     self.send_container_changes(server, slot_index, slot)
@@ -606,6 +613,7 @@ impl Player {
         &self,
         server: &Server,
         slot_index: usize,
+        slot: ItemStackSerializer<'_>,
         slot: ItemStackSerializer<'_>,
     ) -> Result<(), InventoryError> {
         /*

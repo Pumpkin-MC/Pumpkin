@@ -46,11 +46,9 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                         .ok_or(de::Error::custom("No component remove length VarInt!"))?;
 
                     if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
-                        /*
                         return Err(de::Error::custom(
                             "Slot components are currently unsupported",
                         ));
-                         */
                     }
 
                     let item_id: u16 = item_id
