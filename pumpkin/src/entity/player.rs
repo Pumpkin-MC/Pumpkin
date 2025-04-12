@@ -1311,26 +1311,33 @@ impl Player {
     }
 
     pub async fn drop_held_item(self: &Arc<Self>, drop_stack: bool) {
-        let mut inv = self.inventory.lock().await;
-        if let Some(item_stack) = inv.held_item_mut() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+        let (drop_amount, item_to_drop) = {
+            let inv = self.inventory.lock().await;
+            if let Some(item_stack) = inv.held_item() {
+                let amount = if drop_stack { item_stack.item_count } else { 1 };
+                // Clone the necessary data
+                (amount, item_stack.item.clone())
+            } else {
+                return;
+            }
+        };
 
-            // Create an item stack clone for the event
-            let event_stack = ItemStack::new(drop_amount, item_stack.item.clone());
+        // Create an item stack clone for the event
+        let event_stack = ItemStack::new(drop_amount, item_to_drop.clone());
 
-            send_cancellable! {{
-                PlayerDropItemEvent::new(
-                    self.clone(),
-                    event_stack
-                );
+        send_cancellable! {{
+            PlayerDropItemEvent::new(
+                self.clone(),
+                event_stack
+            );
 
-                'after: {
-                    self.drop_item(event.item_stack.item.id, u32::from(event.item_stack.item_count))
-                        .await;
-                    inv.decrease_current_stack(drop_amount);
-                }
-            }}
-        }
+            'after: {
+                self.drop_item(event.item_stack.item.id, u32::from(event.item_stack.item_count))
+                    .await;
+                let mut inv = self.inventory.lock().await;
+                inv.decrease_current_stack(drop_amount);
+            }
+        }}
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
