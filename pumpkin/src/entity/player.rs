@@ -716,6 +716,19 @@ impl Player {
         self.living_entity.entity.pos.load()
     }
 
+    pub fn eye_position(&self) -> Vector3<f64> {
+        Vector3::new(
+            self.living_entity.entity.pos.load().x,
+            self.living_entity.entity.pos.load().y
+                + self.living_entity.entity.standing_eye_height as f64,
+            self.living_entity.entity.pos.load().z,
+        )
+    }
+
+    pub fn rotation(&self) -> (f32, f32) {
+        (self.living_entity.entity.yaw.load(), self.living_entity.entity.pitch.load())
+    }
+
     /// Updates the current abilities the player has.
     pub async fn send_abilities_update(&self) {
         let mut b = 0i8;
@@ -1728,10 +1741,12 @@ impl Player {
                 self.handle_sign_update(SUpdateSign::read(payload)?).await;
             }
             SUseItemOn::PACKET_ID => {
+                log::info!("Use item on packet");
                 self.handle_use_item_on(SUseItemOn::read(payload)?, server)
                     .await?;
             }
             SUseItem::PACKET_ID => {
+                log::info!("Use item packet");
                 self.handle_use_item(&SUseItem::read(payload)?, server)
                     .await;
             }

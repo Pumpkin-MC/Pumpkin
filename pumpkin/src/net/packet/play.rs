@@ -1420,7 +1420,7 @@ impl Player {
                 .item_registry
                 .use_on_block(&stack.item, self, location, &face, &block, server)
                 .await;
-
+            self.update_sequence(use_item_on.sequence.0);
             let action_result = server
                 .block_registry
                 .use_with_item(&block, self, location, &stack.item, server, world)
@@ -1484,13 +1484,19 @@ impl Player {
         world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
-    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
+    pub async fn handle_use_item(&self, use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
-        if let Some(held) = self.inventory().lock().await.held_item() {
-            server.item_registry.on_use(&held.item, self).await;
+        let held = {
+            let inventory = self.inventory().lock().await;
+            inventory.held_item().cloned()
+        };
+
+        if held.is_some() {
+            server.item_registry.on_use(&held.unwrap().item, self).await;
         }
+        self.update_sequence(use_item.sequence.0);
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {

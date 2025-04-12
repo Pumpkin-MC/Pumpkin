@@ -1707,4 +1707,62 @@ impl World {
         chunk.block_entities.remove(block_pos);
         chunk.dirty = true;
     }
+    pub async fn traverse_blocks(
+        self: &Arc<Self>,
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        hit_check: impl AsyncFn(&BlockPos, &Arc<World>) -> bool,
+    ) -> Option<BlockPos> {
+        if start_pos == end_pos {
+            return None;
+        }
+
+        let adjust = -1.0e-7_f64;
+        let from = end_pos.lerp(&start_pos, adjust);
+        let to = start_pos.lerp(&end_pos, adjust);
+
+        let mut block = BlockPos::floored(to.x, to.y, to.z);
+
+        if hit_check(&block, self).await {
+            return Some(block);
+        }
+
+        let d = from.sub(&to);
+
+        let step = d.sign();
+
+        let delta = Vector3::new(
+            if step.x == 0 { f64::MAX } else { (step.x as f64) / d.x },
+            if step.y == 0 { f64::MAX } else { (step.y as f64) / d.y },
+            if step.z == 0 { f64::MAX } else { (step.z as f64) / d.z },
+        );
+
+
+
+        let mut next = Vector3::new(
+            delta.x * (if step.x > 0 { 1.0 - (to.x - to.x.floor())} else { to.x - to.x.floor()}),
+            delta.y * (if step.y > 0 { 1.0 - (to.y - to.y.floor())} else { to.y - to.y.floor()}),
+            delta.z * (if step.z > 0 { 1.0 - (to.z - to.z.floor())} else { to.z - to.z.floor()}),
+        );
+
+
+        while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
+            if next.x < next.y && next.x < next.z {
+                block.0.x += step.x;
+                next.x += delta.x;
+            } else if next.y < next.z {
+                block.0.y += step.y;
+                next.y += delta.y;
+            } else {
+                block.0.z += step.z;
+                next.z += delta.z;
+            }
+
+            if hit_check(&block, self).await {
+                return Some(block);
+            }
+        }
+
+        None
+    }
 }
