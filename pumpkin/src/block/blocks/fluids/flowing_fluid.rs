@@ -260,19 +260,20 @@ pub trait FlowingFluid {
         if new_level <= 0 {
             return;
         }
-
-        let spread_dirs = self.get_spread(world, fluid, block_pos).await;
-
-        for (direction, _slope_dist) in spread_dirs {
+        
+        for direction in BlockDirection::horizontal() {
             let side_pos = block_pos.offset(direction.to_offset());
 
-            if self.can_replace_block(world, &side_pos, fluid).await {
-                let new_props = self
-                    .get_flowing(fluid, Level::from_index(new_level as u16 - 1), false)
-                    .await;
-                self.spread_to(world, fluid, &side_pos, new_props.to_state_id(fluid))
-                    .await;
+            if !self.can_replace_block(world, &side_pos, fluid).await {
+                continue;
             }
+
+            let new_props = self
+                .get_flowing(fluid, Level::from_index(new_level as u16 - 1), false)
+                .await;
+
+            self.spread_to(world, fluid, &side_pos, new_props.to_state_id(fluid))
+                .await;
         }
     }
 
@@ -282,45 +283,27 @@ pub trait FlowingFluid {
         fluid: &Fluid,
         block_pos: &BlockPos,
     ) -> HashMap<BlockDirection, i32> {
-        let mut min_dist = 1000;
         let mut result = HashMap::new();
-        let mut ctx = None;
+
         for direction in BlockDirection::horizontal() {
             let side_pos = block_pos.offset(direction.to_offset());
+
+            if !self.can_pass_through(world, fluid, &side_pos).await {
+                continue;
+            }
+
             let Ok(side_state_id) = world.get_block_state_id(&side_pos).await else {
                 continue;
             };
 
             let side_props = FlowingFluidProperties::from_state_id(side_state_id, fluid);
-
-            if !self.can_pass_through(world, fluid, &side_pos).await
-                || (side_props.level == Level::L8 && side_props.falling != Falling::True)
-            {
+            if side_props.level == Level::L8 && side_props.falling != Falling::True {
                 continue;
             }
 
-            if ctx.is_none() {
-                ctx = Some(SpreadContext::new());
-            }
-
-            let ctx_ref = ctx.as_mut().unwrap();
-
-            let slope_dist = if ctx_ref.is_hole(self, world, fluid, &side_pos).await {
-                0
-            } else {
-                self.get_slope_distance(world, fluid, side_pos, 1, direction.opposite(), ctx_ref)
-                    .await
-            };
-
-            if slope_dist < min_dist {
-                min_dist = slope_dist;
-                result.clear();
-            }
-
-            if slope_dist <= min_dist {
-                result.insert(direction, slope_dist);
-            }
+            result.insert(direction, 1);
         }
+
         result
     }
 
@@ -330,44 +313,17 @@ pub trait FlowingFluid {
         fluid: &Fluid,
         block_pos: BlockPos,
         distance: i32,
-        exclude_dir: BlockDirection,
         ctx: &mut SpreadContext,
     ) -> i32 {
         if distance > self.get_slope_find_distance().await {
             return distance;
         }
 
-        let mut min_dist = 1000;
-
-        for direction in BlockDirection::horizontal() {
-            if direction == exclude_dir {
-                continue;
-            }
-
-            let next_pos = block_pos.offset(direction.to_offset());
-
-            if !self.can_pass_through(world, fluid, &next_pos).await {
-                continue;
-            }
-
-            if ctx.is_hole(self, world, fluid, &next_pos).await {
-                return distance;
-            }
-
-            let next_dist = self
-                .get_slope_distance(
-                    world,
-                    fluid,
-                    next_pos,
-                    distance + 1,
-                    direction.opposite(),
-                    ctx,
-                )
-                .await;
-
-            min_dist = min_dist.min(next_dist);
+        if ctx.is_hole(self, world, fluid, &block_pos).await {
+            return distance - 1;
         }
-        min_dist
+
+        distance
     }
 
     async fn spread_to(
@@ -377,7 +333,7 @@ pub trait FlowingFluid {
         pos: &BlockPos,
         state_id: BlockStateId,
     ) {
-        //TODO Implement lava water mix
+        // TODO Implement lava water mix
 
         world
             .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
@@ -419,7 +375,7 @@ pub trait FlowingFluid {
             }
         }
 
-        //TODO Add check for blocks that aren't solid
+        // TODO Add check for blocks that aren't solid
         matches!(block_id, 0)
     }
 
