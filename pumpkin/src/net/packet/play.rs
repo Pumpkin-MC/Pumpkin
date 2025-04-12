@@ -1513,7 +1513,6 @@ impl Player {
         let valid_slot = true;
         // TODO: Handle error
         let item_stack = packet.clicked_item.to_stack();
-        let item_stack = packet.clicked_item.to_stack();
         if valid_slot {
             self.inventory()
                 .lock()
