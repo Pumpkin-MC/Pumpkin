@@ -28,7 +28,10 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, block_properties::{HorizontalFacing, get_block_by_item, get_block_collision_shapes}};
+use pumpkin_data::{
+    Block,
+    block_properties::{HorizontalFacing, get_block_by_item, get_block_collision_shapes},
+};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,

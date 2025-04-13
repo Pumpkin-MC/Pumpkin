@@ -1,6 +1,6 @@
 use pumpkin_data::{
-    block_properties::{blocks_movement, get_block_by_state_id},
     BlockState,
+    block_properties::{blocks_movement, get_block_by_state_id},
     chunk::Biome,
     tag::Tagable,
 };

@@ -19,12 +19,7 @@ use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
-fn connects_to(
-    from: &Block,
-    to: &Block,
-    to_state: &BlockState,
-    direction: BlockDirection,
-) -> bool {
+fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: BlockDirection) -> bool {
     if from.id == to.id {
         return true;
     }

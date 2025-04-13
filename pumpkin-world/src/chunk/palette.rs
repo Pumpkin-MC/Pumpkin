@@ -5,11 +5,7 @@ use std::{
     mem::MaybeUninit,
 };
 
-use pumpkin_data::{
-    block_properties::get_state_by_state_id,
-    Block,
-    chunk::Biome,
-};
+use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
 use crate::block::RawBlockState;

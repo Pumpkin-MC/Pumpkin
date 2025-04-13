@@ -358,8 +358,8 @@ pub struct BlockState {
     pub luminance: u8,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
-    pub opacity: Option<u32>,
-    pub block_entity_type: Option<u32>,
+    pub opacity: Option<u8>,
+    pub block_entity_type: Option<u16>,
     // pub instrument: String, // TODO: make this an enum
 }
 
@@ -379,17 +379,17 @@ impl BlockState {
         let opacity = match self.opacity {
             Some(opacity) => {
                 let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
-                quote! { Some(#opacity) }
+                quote! { #opacity }
             }
-            None => quote! { None },
+            None => quote! { u8::MAX },
         };
         let block_entity_type = match self.block_entity_type {
             Some(block_entity_type) => {
                 let block_entity_type =
                     LitInt::new(&block_entity_type.to_string(), Span::call_site());
-                quote! { Some(#block_entity_type) }
+                quote! { #block_entity_type }
             }
-            None => quote! { None },
+            None => quote! { u16::MAX },
         };
 
         let collision_shapes = self

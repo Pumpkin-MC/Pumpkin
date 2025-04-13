@@ -5,8 +5,10 @@ pub struct BlockState {
     pub luminance: u8,
     pub hardness: f32,
     pub collision_shapes: &'static [u16],
-    pub opacity: Option<u32>,
-    pub block_entity_type: Option<u32>,
+    //u8::MAX is used as None
+    pub opacity: u8,
+    //u16::MAX is used as None
+    pub block_entity_type: u16,
 }
 
 // Add your methods here
