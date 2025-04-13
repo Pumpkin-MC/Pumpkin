@@ -11,7 +11,7 @@ use pumpkin_inventory::{ChestContainer, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block_entities::chest::ChestBlockEntity;
+use pumpkin_world::block::entities::chest::ChestBlockEntity;
 
 use crate::world::World;
 use crate::{

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
-use crate::block_entities::BlockEntity;
+use crate::block::entities::BlockEntity;
 
 use crate::BlockStateId;
 

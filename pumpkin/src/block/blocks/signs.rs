@@ -9,7 +9,7 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block_entities::sign::SignBlockEntity;
+use pumpkin_world::block::entities::sign::SignBlockEntity;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockRegistry;

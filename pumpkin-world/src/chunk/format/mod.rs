@@ -6,7 +6,7 @@ use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::{block_entities::block_entity_from_nbt, generation::section_coords};
+use crate::{block::entities::block_entity_from_nbt, generation::section_coords};
 
 use super::{
     ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, ScheduledTick, SubChunk,

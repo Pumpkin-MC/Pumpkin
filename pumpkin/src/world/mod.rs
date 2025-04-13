@@ -57,7 +57,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::{
-    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block_entities::BlockEntity,
+    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
     level::SyncChunk,
 };
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};

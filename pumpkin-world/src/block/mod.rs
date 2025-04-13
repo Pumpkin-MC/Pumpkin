@@ -1,3 +1,4 @@
+pub mod entities;
 pub mod state;
 
 use num_derive::FromPrimitive;

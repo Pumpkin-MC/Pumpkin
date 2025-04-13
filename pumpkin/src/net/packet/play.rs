@@ -66,7 +66,7 @@ use pumpkin_util::{
     text::TextComponent,
 };
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block_entities::sign::SignBlockEntity;
+use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
