@@ -168,7 +168,7 @@ impl SurfaceTerrainBuilder {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
                     let block_state = chunk.get_block_state(&pos).to_state();
-                    if !block_state.air {
+                    if !block_state.is_air() {
                         break;
                     }
 
@@ -239,7 +239,7 @@ impl SurfaceTerrainBuilder {
             for y in (estimated_surface_y..=top_y).rev() {
                 let pos = Vector3::new(x, y, z);
                 let block_state = chunk.get_block_state(&pos);
-                if (block_state.to_state().air && y < top_block && rand.next_f64() > 0.01)
+                if (block_state.to_state().is_air() && y < top_block && rand.next_f64() > 0.01)
                     || (block_state.to_block() == WATER_BLOCK.to_block()
                         && y > bottom_block
                         && y < sea_level

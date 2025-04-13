@@ -105,7 +105,7 @@ pub mod block_properties {
     }
 
     pub fn blocks_movement(block_state: &BlockState) -> bool {
-        if block_state.is_solid {
+        if block_state.is_solid() {
             if let Some(block) = get_block_by_state_id(block_state.id) {
                 return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
             }

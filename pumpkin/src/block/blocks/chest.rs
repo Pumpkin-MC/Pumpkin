@@ -7,7 +7,6 @@ use pumpkin_data::{
     block_properties::get_block
 };
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState};
 use pumpkin_data::{
     screen::WindowType,
     sound::{Sound, SoundCategory},

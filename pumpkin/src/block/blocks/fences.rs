@@ -22,7 +22,7 @@ use crate::world::World;
 fn connects_to(
     from: &Block,
     to: &Block,
-    to_state_id: BlockStateId,
+    to_state: &BlockState,
     direction: BlockDirection,
 ) -> bool {
     if from.id == to.id {

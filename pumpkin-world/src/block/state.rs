@@ -1,4 +1,4 @@
-use pumpkin_data::block::{get_block, get_block_by_state_id, get_state_by_state_id};
+use pumpkin_data::block_properties::{get_block, get_block_by_state_id, get_state_by_state_id};
 
 use crate::{BlockStateId, chunk::format::PaletteBlockEntry};
 
@@ -50,11 +50,11 @@ impl RawBlockState {
         self.state_id
     }
 
-    pub fn to_state(&self) -> pumpkin_data::block::BlockState {
+    pub fn to_state(&self) -> pumpkin_data::BlockState {
         get_state_by_state_id(self.state_id).unwrap()
     }
 
-    pub fn to_block(&self) -> pumpkin_data::block::Block {
+    pub fn to_block(&self) -> pumpkin_data::Block {
         get_block_by_state_id(self.state_id).unwrap()
     }
 }

@@ -1,6 +1,6 @@
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::{block::Block, damage::DamageType};
+use pumpkin_data::{Block, damage::DamageType};
 use pumpkin_protocol::{
     client::play::{MetaDataType, Metadata},
     codec::var_int::VarInt,

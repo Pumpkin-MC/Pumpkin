@@ -43,7 +43,6 @@ impl ItemEntity {
                 Item::from_id(item_id).expect("We passed a bad item id into ItemEntity"),
             )),
             item_age: AtomicU32::new(0),
-            item_count: Mutex::new(count),
             pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
         }
     }
