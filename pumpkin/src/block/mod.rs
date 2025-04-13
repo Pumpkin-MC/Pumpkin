@@ -15,6 +15,7 @@ use blocks::redstone::redstone_torch::register_redstone_torch_blocks;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
+use blocks::signs::register_sign_blocks;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::register_torch_blocks;
 use blocks::{
@@ -75,6 +76,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     register_button_blocks(&mut manager);
     register_torch_blocks(&mut manager);
     register_redstone_torch_blocks(&mut manager);
+    register_sign_blocks(&mut manager);
 
     Arc::new(manager)
 }

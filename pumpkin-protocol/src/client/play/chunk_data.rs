@@ -8,6 +8,8 @@ use crate::{
 
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
+use pumpkin_nbt::END_ID;
+use pumpkin_util::math::position::get_local_cord;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
@@ -147,8 +149,23 @@ impl ClientPacket for CChunkData<'_> {
         write.write_slice(&blocks_and_biomes_buf)?;
 
         // TODO: block entities
-        write.write_var_int(&VarInt(0))?;
+        write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
+        for block_entity in self.0.block_entities.values() {
+            let chunk_data_nbt = block_entity.chunk_data_nbt();
+            let pos = block_entity.get_position();
+            let block_entity_id = block_entity.get_id();
+            let local_xz = (get_local_cord(pos.0.x) << 4) | get_local_cord(pos.0.z);
+            write.write_u8_be(local_xz as u8)?;
+            write.write_i16_be(pos.0.y as i16)?;
+            write.write_var_int(&VarInt(block_entity_id as i32))?;
+            if let Some(chunk_data_nbt) = chunk_data_nbt {
+                write.write_nbt(&chunk_data_nbt.into())?;
+            } else {
+                write.write_u8_be(END_ID)?;
+            }
+        }
 
+        // Sky Light Mask
         // All of the chunks, this is not optimal and uses way more data than needed but will be
         // overhauled with a full lighting system.
 

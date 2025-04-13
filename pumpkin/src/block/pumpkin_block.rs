@@ -81,6 +81,17 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
+    async fn player_placed(
+        &self,
+        _world: &Arc<World>,
+        _block: &Block,
+        _state_id: u16,
+        _pos: &BlockPos,
+        _face: &BlockDirection,
+        _player: &Player,
+    ) {
+    }
+
     async fn broken(
         &self,
         _block: &Block,

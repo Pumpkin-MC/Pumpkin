@@ -89,14 +89,14 @@ impl OpenContainer {
     }
 }
 #[derive(Default)]
-pub struct Chest([Option<ItemStack>; 27]);
+pub struct ChestContainer([Option<ItemStack>; 27]);
 
-impl Chest {
+impl ChestContainer {
     pub fn new() -> Self {
         Self([const { None }; 27])
     }
 }
-impl Container for Chest {
+impl Container for ChestContainer {
     fn window_type(&self) -> &'static WindowType {
         &WindowType::Generic9x3
     }
