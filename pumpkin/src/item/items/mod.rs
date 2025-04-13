@@ -1,18 +1,18 @@
+mod bucket;
 mod egg;
 mod hoe;
 mod snowball;
 mod sword;
 mod trident;
-mod bucket;
 
 use std::sync::Arc;
 
+use bucket::BucketItem;
 use egg::EggItem;
 use hoe::HoeItem;
 use snowball::SnowBallItem;
 use sword::SwordItem;
 use trident::TridentItem;
-use bucket::BucketItem;
 
 use super::registry::ItemRegistry;
 #[must_use]

@@ -65,11 +65,30 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
 
     pub fn sign(&self) -> Vector3<i32>
     where
-        T: Num + PartialOrd + Copy,{
+        T: Num + PartialOrd + Copy,
+    {
         Vector3 {
-            x: if self.x > T::zero() { 1 } else if self.x < T::zero() { -1 } else { 0 },
-            y: if self.y > T::zero() { 1 } else if self.y < T::zero() { -1 } else { 0 },
-            z: if self.z > T::zero() { 1 } else if self.z < T::zero() { -1 } else { 0 },
+            x: if self.x > T::zero() {
+                1
+            } else if self.x < T::zero() {
+                -1
+            } else {
+                0
+            },
+            y: if self.y > T::zero() {
+                1
+            } else if self.y < T::zero() {
+                -1
+            } else {
+                0
+            },
+            z: if self.z > T::zero() {
+                1
+            } else if self.z < T::zero() {
+                -1
+            } else {
+                0
+            },
         }
     }
 

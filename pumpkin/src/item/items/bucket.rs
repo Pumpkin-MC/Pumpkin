@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
@@ -10,7 +11,6 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use crate::entity::player::Player;
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::world::{BlockFlags, World};
@@ -62,8 +62,7 @@ impl PumpkinItem for BucketItem {
         let end_pos = start_pos.add(&direction);
 
         if item.id == Item::BUCKET.id {
-
-            let checker = async | pos: &BlockPos, world_inner: &Arc<World> | {
+            let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
                 let Ok(state_id) = world_inner.get_block_state_id(pos).await else {
                     return false;
                 };
@@ -84,7 +83,7 @@ impl PumpkinItem for BucketItem {
             let (block_pos, _) = world.traverse_blocks(start_pos, end_pos, checker).await;
 
             if let Some(pos) = block_pos {
-                let Ok (state_id) = world.get_block_state_id(&pos).await else {
+                let Ok(state_id) = world.get_block_state_id(&pos).await else {
                     return;
                 };
 
@@ -92,22 +91,37 @@ impl PumpkinItem for BucketItem {
                     return;
                 };
 
-                if fluid.name == Fluid::FLOWING_WATER.name || fluid.name == Fluid::FLOWING_LAVA.name{
-                    world.set_block_state(&pos, Block::AIR.id, BlockFlags::NOTIFY_NEIGHBORS).await;
+                if fluid.name == Fluid::FLOWING_WATER.name || fluid.name == Fluid::FLOWING_LAVA.name
+                {
+                    world
+                        .set_block_state(&pos, Block::AIR.id, BlockFlags::NOTIFY_NEIGHBORS)
+                        .await;
                     let mut inventory = player.inventory().lock().await;
                     let selected = inventory.get_selected_slot();
-                    let item = Some(ItemStack::new(1, if fluid.name == Fluid::FLOWING_WATER.name {Item::WATER_BUCKET} else {Item::LAVA_BUCKET}));
+                    let item = Some(ItemStack::new(
+                        1,
+                        if fluid.name == Fluid::FLOWING_WATER.name {
+                            Item::WATER_BUCKET
+                        } else {
+                            Item::LAVA_BUCKET
+                        },
+                    ));
                     let slot_data = ItemStackSerializer::from(item.clone());
                     if let Err(err) = inventory.set_slot(selected, item, false) {
                         log::error!("Failed to set slot: {}", err);
-                    }else{
-                        let dest_packet = CSetContainerSlot::new(PlayerInventory::CONTAINER_ID, inventory.state_id as i32, selected as i16, &slot_data);
+                    } else {
+                        let dest_packet = CSetContainerSlot::new(
+                            PlayerInventory::CONTAINER_ID,
+                            inventory.state_id as i32,
+                            selected as i16,
+                            &slot_data,
+                        );
                         player.client.enqueue_packet(&dest_packet).await;
                     }
                 }
             }
         } else if item.id == Item::WATER_BUCKET.id || item.id == Item::LAVA_BUCKET.id {
-            let checker = async | pos: &BlockPos, world_inner: &Arc<World> | {
+            let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
                 let Ok(state_id) = world_inner.get_block_state_id(pos).await else {
                     return false;
                 };
@@ -120,36 +134,43 @@ impl PumpkinItem for BucketItem {
                 block.name != Block::AIR.name
             };
 
-            let (block_pos, block_direciton) = world.traverse_blocks(start_pos, end_pos, checker).await;
+            let (block_pos, block_direction) =
+                world.traverse_blocks(start_pos, end_pos, checker).await;
             if block_pos.is_none() {
                 return;
             }
-            if block_direciton.is_none() {
+            if block_direction.is_none() {
                 return;
             }
 
-            if let (Some(pos), Some(direction)) = (block_pos, block_direciton) {
-                world.set_block_state(
-                    &pos.offset(direction.to_offset()),
-                    if item.id == Item::WATER_BUCKET.id {
-                        Block::WATER.default_state_id
-                    } else {
-                        Block::LAVA.default_state_id
-                    },
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                ).await;
+            if let (Some(pos), Some(direction)) = (block_pos, block_direction) {
+                world
+                    .set_block_state(
+                        &pos.offset(direction.to_offset()),
+                        if item.id == Item::WATER_BUCKET.id {
+                            Block::WATER.default_state_id
+                        } else {
+                            Block::LAVA.default_state_id
+                        },
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
+                    .await;
                 let mut inventory = player.inventory().lock().await;
                 let selected = inventory.get_selected_slot();
                 let item = Some(ItemStack::new(1, Item::BUCKET));
                 let slot_data = ItemStackSerializer::from(item.clone());
                 if let Err(err) = inventory.set_slot(selected, item, false) {
                     log::error!("Failed to set slot: {}", err);
-                }else{
-                    let dest_packet = CSetContainerSlot::new(PlayerInventory::CONTAINER_ID, inventory.state_id as i32, selected as i16, &slot_data);
+                } else {
+                    let dest_packet = CSetContainerSlot::new(
+                        PlayerInventory::CONTAINER_ID,
+                        inventory.state_id as i32,
+                        selected as i16,
+                        &slot_data,
+                    );
                     player.client.enqueue_packet(&dest_packet).await;
                 }
             }
         }
     }
-
 }
