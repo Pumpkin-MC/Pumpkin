@@ -29,7 +29,6 @@ impl BlockEntity for ChestBlockEntity {
 impl ChestBlockEntity {
     pub const ID: &'static str = "minecraft:chest";
     pub fn new(position: BlockPos) -> Self {
-        println!("Chest created at {:?}", position);
         Self { position }
     }
 }

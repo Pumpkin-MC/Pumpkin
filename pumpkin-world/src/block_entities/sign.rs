@@ -121,10 +121,11 @@ impl From<NbtTag> for Text {
             has_glowing_text,
             color: DyeColor::from(color.clone()),
             messages: [
-                messages[0].clone(),
-                messages[1].clone(),
-                messages[2].clone(),
-                messages[3].clone(),
+                // its important that we use unwrap_or since otherwise we may crash on older versions
+                messages.first().unwrap_or(&"".to_string()).clone(),
+                messages.get(1).unwrap_or(&"".to_string()).clone(),
+                messages.get(2).unwrap_or(&"".to_string()).clone(),
+                messages.get(3).unwrap_or(&"".to_string()).clone(),
             ],
         }
     }
