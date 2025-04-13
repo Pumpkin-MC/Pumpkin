@@ -1741,12 +1741,10 @@ impl Player {
                 self.handle_sign_update(SUpdateSign::read(payload)?).await;
             }
             SUseItemOn::PACKET_ID => {
-                log::info!("Use item on packet");
                 self.handle_use_item_on(SUseItemOn::read(payload)?, server)
                     .await?;
             }
             SUseItem::PACKET_ID => {
-                log::info!("Use item packet");
                 self.handle_use_item(&SUseItem::read(payload)?, server)
                     .await;
             }

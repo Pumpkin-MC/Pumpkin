@@ -1712,9 +1712,9 @@ impl World {
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
         hit_check: impl AsyncFn(&BlockPos, &Arc<World>) -> bool,
-    ) -> Option<BlockPos> {
+    ) -> (Option<BlockPos>, Option<BlockDirection>) {
         if start_pos == end_pos {
-            return None;
+            return (None, None);
         }
 
         let adjust = -1.0e-7_f64;
@@ -1724,7 +1724,7 @@ impl World {
         let mut block = BlockPos::floored(to.x, to.y, to.z);
 
         if hit_check(&block, self).await {
-            return Some(block);
+            return (Some(block), None);
         }
 
         let d = from.sub(&to);
@@ -1747,22 +1747,38 @@ impl World {
 
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
+            let block_direction;
             if next.x < next.y && next.x < next.z {
                 block.0.x += step.x;
                 next.x += delta.x;
+                block_direction = if step.x > 0 {
+                    BlockDirection::West
+                } else {
+                    BlockDirection::East
+                };
             } else if next.y < next.z {
                 block.0.y += step.y;
                 next.y += delta.y;
+                block_direction = if step.y > 0 {
+                    BlockDirection::Down
+                } else {
+                    BlockDirection::Up
+                };
             } else {
                 block.0.z += step.z;
                 next.z += delta.z;
+                block_direction = if step.z > 0 {
+                    BlockDirection::North
+                } else {
+                    BlockDirection::South
+                };
             }
 
             if hit_check(&block, self).await {
-                return Some(block);
+                return (Some(block), Some(block_direction));
             }
         }
 
-        None
+        (None, None)
     }
 }
