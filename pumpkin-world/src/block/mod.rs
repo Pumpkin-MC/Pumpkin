@@ -1,4 +1,3 @@
-pub mod registry;
 pub mod state;
 
 use num_derive::FromPrimitive;

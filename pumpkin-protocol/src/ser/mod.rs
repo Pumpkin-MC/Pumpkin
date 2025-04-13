@@ -430,7 +430,7 @@ impl<W: Write> NetworkWriteExt for W {
         list: &[G],
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
-        self.write_var_int(&list.len().into())?;
+        self.write_var_int(&(list.len() as i32).into())?;
         for data in list {
             writer(self, data)?;
         }
