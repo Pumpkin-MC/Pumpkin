@@ -5,13 +5,11 @@ use pumpkin_data::block::Block;
 use pumpkin_data::fluid::{Falling, Fluid, FluidProperties, Level};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::player::PlayerInventory;
-use pumpkin_protocol::client::play::{CSetContainerSlot, CSetHeldItem};
-use pumpkin_protocol::codec::slot::Slot;
+use pumpkin_protocol::client::play::CSetContainerSlot;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::item::ItemStack;
-use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -52,8 +50,8 @@ impl PumpkinItem for BucketItem {
 
         let start_pos = player.eye_position();
         let (yaw, pitch) = player.rotation();
-        let (yaw_rad, pitch_rad) = (yaw.to_radians() as f64, pitch.to_radians() as f64);
-        let block_interaction_range = player.block_interaction_range() as f64;
+        let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
+        let block_interaction_range = player.block_interaction_range();
         let world = player.world().await.clone();
         let direction = Vector3::new(
             -yaw_rad.sin() * pitch_rad.cos() * block_interaction_range,
@@ -98,9 +96,9 @@ impl PumpkinItem for BucketItem {
                     world.set_block_state(&pos, Block::AIR.id, BlockFlags::NOTIFY_NEIGHBORS).await;
                     let mut inventory = player.inventory().lock().await;
                     let selected = inventory.get_selected_slot();
-                    let item = ItemStack::new(1, if fluid.name == Fluid::FLOWING_WATER.name {Item::WATER_BUCKET} else {Item::LAVA_BUCKET});
-                    let slot_data = Slot::from(&item);
-                    if let Err(err) = inventory.set_slot(selected, Some(item), false) {
+                    let item = Some(ItemStack::new(1, if fluid.name == Fluid::FLOWING_WATER.name {Item::WATER_BUCKET} else {Item::LAVA_BUCKET}));
+                    let slot_data = ItemStackSerializer::from(item.clone());
+                    if let Err(err) = inventory.set_slot(selected, item, false) {
                         log::error!("Failed to set slot: {}", err);
                     }else{
                         let dest_packet = CSetContainerSlot::new(PlayerInventory::CONTAINER_ID, inventory.state_id as i32, selected as i16, &slot_data);
@@ -113,7 +111,7 @@ impl PumpkinItem for BucketItem {
                 let Ok(state_id) = world_inner.get_block_state_id(pos).await else {
                     return false;
                 };
-                if let Some(_) = Fluid::from_state_id(state_id) {
+                if Fluid::from_state_id(state_id).is_some() {
                     return false;
                 };
                 let Some(block) = Block::from_state_id(state_id) else {
@@ -142,9 +140,9 @@ impl PumpkinItem for BucketItem {
                 ).await;
                 let mut inventory = player.inventory().lock().await;
                 let selected = inventory.get_selected_slot();
-                let item = ItemStack::new(1, Item::BUCKET);
-                let slot_data = Slot::from(&item);
-                if let Err(err) = inventory.set_slot(selected, Some(item), false) {
+                let item = Some(ItemStack::new(1, Item::BUCKET));
+                let slot_data = ItemStackSerializer::from(item.clone());
+                if let Err(err) = inventory.set_slot(selected, item, false) {
                     log::error!("Failed to set slot: {}", err);
                 }else{
                     let dest_packet = CSetContainerSlot::new(PlayerInventory::CONTAINER_ID, inventory.state_id as i32, selected as i16, &slot_data);
