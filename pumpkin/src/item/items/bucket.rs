@@ -42,6 +42,7 @@ impl ItemMetadata for BucketItem {
 
 #[async_trait]
 impl PumpkinItem for BucketItem {
+    #[allow(clippy::too_many_arguments)]
     async fn normal_use(&self, item: &Item, player: &Player) {
         if item.id == Item::MILK_BUCKET.id {
             // TODO implement this
@@ -108,7 +109,7 @@ impl PumpkinItem for BucketItem {
                     ));
                     let slot_data = ItemStackSerializer::from(item.clone());
                     if let Err(err) = inventory.set_slot(selected, item, false) {
-                        log::error!("Failed to set slot: {}", err);
+                        log::error!("Failed to set slot: {err}");
                     } else {
                         let dest_packet = CSetContainerSlot::new(
                             PlayerInventory::CONTAINER_ID,
@@ -127,7 +128,7 @@ impl PumpkinItem for BucketItem {
                 };
                 if Fluid::from_state_id(state_id).is_some() {
                     return false;
-                };
+                }
                 let Some(block) = Block::from_state_id(state_id) else {
                     return false;
                 };
@@ -160,7 +161,7 @@ impl PumpkinItem for BucketItem {
                 let item = Some(ItemStack::new(1, Item::BUCKET));
                 let slot_data = ItemStackSerializer::from(item.clone());
                 if let Err(err) = inventory.set_slot(selected, item, false) {
-                    log::error!("Failed to set slot: {}", err);
+                    log::error!("Failed to set slot: {err}");
                 } else {
                     let dest_packet = CSetContainerSlot::new(
                         PlayerInventory::CONTAINER_ID,
