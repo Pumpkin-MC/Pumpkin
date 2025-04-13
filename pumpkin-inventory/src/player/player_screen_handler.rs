@@ -22,6 +22,11 @@ pub struct PlayerScreenHandler {
     slots: Vec<Arc<dyn Slot>>,
 }
 
+impl RecipeFinderScreenHandler for PlayerScreenHandler {}
+
+impl CraftingScreenHandler<CraftingInventory> for PlayerScreenHandler {}
+
+// TODO: Fully implement this
 impl PlayerScreenHandler {
     const EQUIPMENT_SLOT_ORDER: [EquipmentSlot; 4] = [
         EquipmentSlot::HEAD,
@@ -30,17 +35,6 @@ impl PlayerScreenHandler {
         EquipmentSlot::FEET,
     ];
 
-    //pub fn new(player_inventory: Arc<Mutex<PlayerInventory>>) -> Self {
-
-    //}
-}
-
-impl RecipeFinderScreenHandler for PlayerScreenHandler {}
-
-impl CraftingScreenHandler<CraftingInventory> for PlayerScreenHandler {}
-
-// TODO: Fully implement this
-impl PlayerScreenHandler {
     fn is_in_hotbar(slot: u8) -> bool {
         slot >= 36 && slot < 45 || slot == 45
     }
