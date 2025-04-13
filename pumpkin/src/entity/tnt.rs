@@ -1,7 +1,6 @@
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::damage::DamageType;
-use pumpkin_macros::block_state;
+use pumpkin_data::{block::Block, damage::DamageType};
 use pumpkin_protocol::{
     client::play::{MetaDataType, Metadata},
     codec::var_int::VarInt,
@@ -42,7 +41,7 @@ impl TNTEntity {
                 Metadata::new(
                     9,
                     MetaDataType::BlockState,
-                    VarInt(i32::from(block_state!("tnt").state_id)),
+                    VarInt(i32::from(Block::TNT.default_state_id)),
                 ),
             ])
             .await;

@@ -1,11 +1,12 @@
+use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_util::assert_eq_delta;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::LazyLock;
 
 use crate::generation::GlobalRandomConfig;
+use crate::generation::noise_router::chunk_density_function::ChunkNoiseFunctionBuilderOptions;
 use crate::generation::noise_router::chunk_density_function::{
     ChunkNoiseFunctionSampleOptions, SampleAction,
 };
@@ -13,16 +14,12 @@ use crate::generation::noise_router::chunk_noise_router::{
     ChunkNoiseDensityFunction, ChunkNoiseFunctionComponent,
 };
 use crate::generation::noise_router::proto_noise_router::{
-    DoublePerlinNoiseBuilder, ProtoNoiseFunctionComponent, recursive_build_proto_stack,
+    ProtoNoiseFunctionComponent, ProtoNoiseRouters,
 };
-use crate::noise_router::NOISE_ROUTER_ASTS;
 use crate::read_data_from_file;
-use crate::{
-    generation::noise_router::chunk_density_function::ChunkNoiseFunctionBuilderOptions,
-    noise_router::density_function_ast::DensityFunctionRepr,
-};
 
-use super::{NoisePos, PassThrough};
+use super::test_deserializer::DensityFunctionRepr;
+use super::{NoiseFunctionComponentRange, NoisePos, PassThrough};
 
 #[derive(Debug)]
 struct TestNoisePos {
@@ -50,44 +47,26 @@ const SEED: u64 = 0;
 static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
     LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
 
-macro_rules! build_proto_stack {
-    ($repr:expr) => {{
-        let mut stack = Vec::<ProtoNoiseFunctionComponent>::new();
-        // Map of AST hash to index in the stack
-        let mut map = HashMap::<u64, usize>::new();
-        let mut perlin_noise_builder = DoublePerlinNoiseBuilder::new(&RANDOM_CONFIG);
-        recursive_build_proto_stack(
-            $repr,
-            &RANDOM_CONFIG,
-            &mut stack,
-            &mut map,
-            &mut perlin_noise_builder,
-        );
-
-        stack
-    }};
-}
-
 macro_rules! build_function_stack {
     ($stack:expr) => {{
         $stack
             .iter()
             .map(|component| match component {
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
-                    ChunkNoiseFunctionComponent::PassThrough(PassThrough {
-                        input_index: wrapper.input_index,
-                        min_value: wrapper.min_value,
-                        max_value: wrapper.max_value,
-                    })
+                    ChunkNoiseFunctionComponent::PassThrough(PassThrough::new(
+                        wrapper.input_index(),
+                        wrapper.min(),
+                        wrapper.max(),
+                    ))
                 }
                 ProtoNoiseFunctionComponent::PassThrough(pass_through) => {
                     ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
                 }
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
-                    ChunkNoiseFunctionComponent::Dependent(dependent)
+                    ChunkNoiseFunctionComponent::Dependent(&dependent)
                 }
                 ProtoNoiseFunctionComponent::Independent(independent) => {
-                    ChunkNoiseFunctionComponent::Independent(independent)
+                    ChunkNoiseFunctionComponent::Independent(&independent)
                 }
             })
             .collect::<Vec<_>>()
@@ -105,12 +84,41 @@ macro_rules! build_function {
 const TEST_SAMPLE_OPTIONS: ChunkNoiseFunctionSampleOptions =
     ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
 
-macro_rules! sample_router_function {
+macro_rules! sample_noise_router_function {
     ($name:ident, $pos: expr) => {{
-        let function_ast = NOISE_ROUTER_ASTS.overworld().$name();
-        let proto_stack = build_proto_stack!(function_ast);
-        let mut stack = build_function_stack!(proto_stack);
-        let mut function = build_function!(stack);
+        let base_router = &OVERWORLD_BASE_NOISE_ROUTER.noise;
+        let proto_stack = ProtoNoiseRouters::generate_proto_stack(
+            &base_router.full_component_stack,
+            &RANDOM_CONFIG,
+        );
+        let mut stack = build_function_stack!(&proto_stack[..=base_router.$name]);
+        let mut function = build_function!(&mut stack);
+        function.sample(&$pos, &TEST_SAMPLE_OPTIONS)
+    }};
+}
+
+macro_rules! sample_multi_noise_router_function {
+    ($name:ident, $pos: expr) => {{
+        let base_router = &OVERWORLD_BASE_NOISE_ROUTER.multi_noise;
+        let proto_stack = ProtoNoiseRouters::generate_proto_stack(
+            &base_router.full_component_stack,
+            &RANDOM_CONFIG,
+        );
+        let mut stack = build_function_stack!(&proto_stack[..=base_router.$name]);
+        let mut function = build_function!(&mut stack);
+        function.sample(&$pos, &TEST_SAMPLE_OPTIONS)
+    }};
+}
+
+macro_rules! sample_surface_router_function {
+    ($pos: expr) => {{
+        let base_router = &OVERWORLD_BASE_NOISE_ROUTER.surface_estimator;
+        let proto_stack = ProtoNoiseRouters::generate_proto_stack(
+            &base_router.full_component_stack,
+            &RANDOM_CONFIG,
+        );
+        let mut stack = build_function_stack!(&proto_stack);
+        let mut function = build_function!(&mut stack);
         function.sample(&$pos, &TEST_SAMPLE_OPTIONS)
     }};
 }
@@ -127,48 +135,48 @@ fn test_normal_surface_noisified() {
     let pos = TestNoisePos { x: 0, y: 0, z: 0 };
     // TODO: Move these values to a file and create an extractor for them
     assert_eq!(
-        sample_router_function!(barrier_noise, pos),
+        sample_noise_router_function!(barrier_noise, pos),
         -0.5400227274000677f64
     );
     assert_eq!(
-        sample_router_function!(fluid_level_floodedness_noise, pos),
+        sample_noise_router_function!(fluid_level_floodedness_noise, pos),
         -0.4709571987777473f64
     );
     assert_eq!(
-        sample_router_function!(fluid_level_spread_noise, pos),
+        sample_noise_router_function!(fluid_level_spread_noise, pos),
         -0.057269139961514365f64
     );
     assert_eq!(
-        sample_router_function!(lava_noise, pos),
+        sample_noise_router_function!(lava_noise, pos),
         -0.16423603877333556f64
     );
     assert_eq!(
-        sample_router_function!(temperature, pos),
+        sample_multi_noise_router_function!(temperature, pos),
         0.1182379898645608f64
     );
     assert_eq!(
-        sample_router_function!(vegetation, pos),
+        sample_multi_noise_router_function!(vegetation, pos),
         -0.0013601677416915584f64
     );
     assert_eq!(
-        sample_router_function!(continents, pos),
+        sample_multi_noise_router_function!(continents, pos),
         -0.008171952121206487f64
     );
     assert_eq!(
-        sample_router_function!(erosion, pos),
+        sample_multi_noise_router_function!(erosion, pos),
         -0.10391073889243099f64
     );
-    assert_eq!(sample_router_function!(depth, pos), 0.411882147192955f64);
     assert_eq!(
-        sample_router_function!(ridges, pos),
+        sample_multi_noise_router_function!(depth, pos),
+        0.411882147192955f64
+    );
+    assert_eq!(
+        sample_multi_noise_router_function!(ridges, pos),
         0.011110323612534296f64
     );
+    assert_eq!(sample_surface_router_function!(pos), 7.668311608489972f64);
     assert_eq!(
-        sample_router_function!(initial_density_without_jaggedness, pos),
-        7.668311608489972f64
-    );
-    assert_eq!(
-        sample_router_function!(final_density, pos),
+        sample_noise_router_function!(final_density, pos),
         0.15719144891255343f64
     );
 
@@ -301,7 +309,7 @@ fn test_normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = TestNoisePos { x, y, z };
-        assert_eq!(sample_router_function!(vein_toggle, pos), value);
+        assert_eq!(sample_noise_router_function!(vein_toggle, pos), value);
     }
 
     let values = [
@@ -433,7 +441,7 @@ fn test_normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = TestNoisePos { x, y, z };
-        assert_eq!(sample_router_function!(vein_ridged, pos), value);
+        assert_eq!(sample_noise_router_function!(vein_ridged, pos), value);
     }
 
     let values = [
@@ -565,7 +573,7 @@ fn test_normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = TestNoisePos { x, y, z };
-        assert_eq!(sample_router_function!(vein_gap, pos), value);
+        assert_eq!(sample_noise_router_function!(vein_gap, pos), value);
     }
 }
 
@@ -574,10 +582,11 @@ fn test_config_final_density() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../assets/final_density_dump_7_4.json");
 
-    let function_ast = NOISE_ROUTER_ASTS.overworld().final_density();
-    let proto_stack = build_proto_stack!(function_ast);
+    let router = &OVERWORLD_BASE_NOISE_ROUTER.noise;
+    let proto_stack =
+        ProtoNoiseRouters::generate_proto_stack(router.full_component_stack, &RANDOM_CONFIG);
     let mut stack = build_function_stack!(proto_stack);
-    let mut function = build_function!(stack);
+    let mut function = build_function!(&mut stack[..router.final_density]);
 
     // This is a lot of data it iter over, one two skip a few done
     for (x, y, z, sample) in expected_data.into_iter().step_by(5) {
@@ -589,6 +598,9 @@ fn test_config_final_density() {
         );
     }
 }
+
+// The following test the validity density function components of the density functions used in
+// terrain generation. Basically, this aides in narrowing down where errors occur with correctness.
 
 #[derive(Deserialize)]
 struct DensityFunctionReprs {
@@ -639,7 +651,8 @@ static DENSITY_FUNCTION_REPRS: LazyLock<DensityFunctionReprs> =
 
 #[test]
 fn test_base_sloped_cheese() {
-    let proto_stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.sloped_cheese);
+    let base_stack = DENSITY_FUNCTION_REPRS.sloped_cheese.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
     let mut stack = build_function_stack!(proto_stack);
     let mut function = build_function!(stack);
 
@@ -657,7 +670,8 @@ fn test_base_sloped_cheese() {
 
 #[test]
 fn test_base_factor() {
-    let proto_stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.factor);
+    let base_stack = DENSITY_FUNCTION_REPRS.factor.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
     let mut stack = build_function_stack!(proto_stack);
     let mut function = build_function!(stack);
 
@@ -675,8 +689,9 @@ fn test_base_factor() {
 
 #[test]
 fn test_base_depth() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.depth);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS.depth.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =
@@ -693,8 +708,9 @@ fn test_base_depth() {
 
 #[test]
 fn test_base_offset() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.offset);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS.offset.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =
@@ -711,8 +727,9 @@ fn test_base_offset() {
 
 #[test]
 fn test_base_cave_entrances() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.cave_entrances);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS.cave_entrances.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =
@@ -729,8 +746,9 @@ fn test_base_cave_entrances() {
 
 #[test]
 fn test_base_3d_noise() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.base_3d_noise);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS.base_3d_noise.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =
@@ -747,8 +765,11 @@ fn test_base_3d_noise() {
 
 #[test]
 fn test_base_spahetti_roughness() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.spaghetti_roughness);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS
+        .spaghetti_roughness
+        .base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> = read_data_from_file!(
@@ -766,8 +787,9 @@ fn test_base_spahetti_roughness() {
 
 #[test]
 fn test_base_cave_noodle() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.cave_noodle);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS.cave_noodle.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =
@@ -784,8 +806,9 @@ fn test_base_cave_noodle() {
 
 #[test]
 fn test_base_cave_pillars() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.cave_pillars);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS.cave_pillars.base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =
@@ -802,8 +825,11 @@ fn test_base_cave_pillars() {
 
 #[test]
 fn test_base_spaghetti_2d_thickness() {
-    let stack = build_proto_stack!(&DENSITY_FUNCTION_REPRS.spaghetti_2d_thickness);
-    let mut function_stack = build_function_stack!(stack);
+    let base_stack = DENSITY_FUNCTION_REPRS
+        .spaghetti_2d_thickness
+        .base_component_stack();
+    let proto_stack = ProtoNoiseRouters::generate_proto_stack(&base_stack, &RANDOM_CONFIG);
+    let mut function_stack = build_function_stack!(proto_stack);
     let mut function = build_function!(function_stack);
 
     let expected_data: Vec<(i32, i32, i32, f64)> =

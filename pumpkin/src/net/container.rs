@@ -13,7 +13,7 @@ use pumpkin_inventory::{InventoryError, OptionallyCombinedContainer, container_c
 use pumpkin_protocol::client::play::{
     CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
 };
-use pumpkin_protocol::codec::slot::Slot;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::SClickContainer;
 use pumpkin_util::text::TextComponent;
@@ -61,21 +61,22 @@ impl Player {
 
         let container = OptionallyCombinedContainer::new(&mut inventory, container);
 
-        let slots: Vec<Slot> = container
+        let slots: Vec<ItemStackSerializer> = container
             .all_slots_ref()
             .into_iter()
-            .map(Slot::from)
+            .map(|i| ItemStackSerializer::from(i.unwrap_or(&ItemStack::EMPTY).clone()))
             .collect();
 
         let carried_item = self.carried_item.lock().await;
-        let carried_item = carried_item
-            .as_ref()
-            .map_or_else(Slot::empty, std::convert::Into::into);
+        let carried_item = carried_item.as_ref().map_or_else(
+            || ItemStackSerializer::from(ItemStack::EMPTY.clone()),
+            |item| ItemStackSerializer::from(item.clone()),
+        );
 
         inventory.increment_state_id();
         let packet = CSetContainerContent::new(
             id.into(),
-            (inventory.state_id).into(),
+            (inventory.state_id).try_into().unwrap(),
             &slots,
             &carried_item,
         );
@@ -192,7 +193,7 @@ impl Player {
                 let combined_container =
                     OptionallyCombinedContainer::new(&mut inventory, Some(&mut opened_container));
                 if let Some(slot) = combined_container.get_slot_excluding_inventory(slot_index) {
-                    let slot = Slot::from(slot);
+                    let slot = ItemStackSerializer::from(slot.cloned());
                     drop(opened_container);
                     self.send_container_changes(server, slot_index, slot)
                         .await?;
@@ -211,7 +212,7 @@ impl Player {
     ) -> Result<(), InventoryError> {
         // TODO: this will not update hotbar when server admin is peeking
         // TODO: check and iterate over all players in player inventory
-        let slot = Slot::from(item_stack);
+        let slot = ItemStackSerializer::from(item_stack.cloned());
         *state_id += 1;
         let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, &slot);
         self.client.enqueue_packet(&packet).await;
@@ -600,8 +601,7 @@ impl Player {
         // TODO: Figure out better way to get only the players from player_ids
         // Also refactor out a better method to get individual advanced state ids
 
-        let players = self
-            .living_entity
+        self.living_entity
             .entity
             .world
             .read()
@@ -618,15 +618,14 @@ impl Player {
                     player_ids.contains(&entity_id).then(|| player.clone())
                 }
             })
-            .collect();
-        players
+            .collect()
     }
 
     pub async fn send_container_changes(
         &self,
         server: &Server,
         slot_index: usize,
-        slot: Slot,
+        slot: ItemStackSerializer<'_>,
     ) -> Result<(), InventoryError> {
         for player in self.get_current_players_in_container(server).await {
             let mut inventory = player.inventory().lock().await;

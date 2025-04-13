@@ -340,8 +340,8 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
 
 mod block_state;
 #[proc_macro]
-pub fn block_state(item: TokenStream) -> TokenStream {
-    block_state::block_state_impl(item)
+pub fn default_block_state(item: TokenStream) -> TokenStream {
+    block_state::default_block_state_impl(item)
 }
 mod block;
 #[proc_macro]

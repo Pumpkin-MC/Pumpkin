@@ -6,6 +6,7 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -45,7 +46,7 @@ pub fn register_log_blocks(manager: &mut BlockRegistry) {
                 _use_item_on: &SUseItemOn,
                 _player_direction: &HorizontalFacing,
                 _other: bool,
-            ) -> u16 {
+            ) -> BlockStateId {
                 let mut log_props = LogProperties::default(block);
                 log_props.axis = face.to_axis();
 

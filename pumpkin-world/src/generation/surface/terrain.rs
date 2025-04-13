@@ -1,5 +1,5 @@
 use pumpkin_data::chunk::Biome;
-use pumpkin_macros::block_state;
+use pumpkin_macros::default_block_state;
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl},
@@ -7,7 +7,7 @@ use pumpkin_util::{
 
 use crate::{
     ProtoChunk,
-    block::ChunkBlockState,
+    block::RawBlockState,
     generation::{
         chunk_noise::WATER_BLOCK, height_limit::HeightLimitView,
         noise::perlin::DoublePerlinNoiseSampler,
@@ -17,7 +17,7 @@ use crate::{
 
 pub struct SurfaceTerrainBuilder {
     // Badlands stuff
-    terracotta_bands: Box<[ChunkBlockState]>,
+    terracotta_bands: Box<[RawBlockState]>,
     terracotta_bands_offset_noise: DoublePerlinNoiseSampler,
     badlands_pillar_noise: DoublePerlinNoiseSampler,
     badlands_surface_noise: DoublePerlinNoiseSampler,
@@ -50,15 +50,15 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    const ORANGE_TERRACOTTA: ChunkBlockState = block_state!("orange_terracotta");
-    const YELLOW_TERRACOTTA: ChunkBlockState = block_state!("yellow_terracotta");
-    const BROWN_TERRACOTTA: ChunkBlockState = block_state!("brown_terracotta");
-    const RED_TERRACOTTA: ChunkBlockState = block_state!("red_terracotta");
-    const WHITE_TERRACOTTA: ChunkBlockState = block_state!("white_terracotta");
-    const LIGHT_GRAY_TERRACOTTA: ChunkBlockState = block_state!("light_gray_terracotta");
-    const TERRACOTTA: ChunkBlockState = block_state!("terracotta");
+    const ORANGE_TERRACOTTA: RawBlockState = default_block_state!("orange_terracotta");
+    const YELLOW_TERRACOTTA: RawBlockState = default_block_state!("yellow_terracotta");
+    const BROWN_TERRACOTTA: RawBlockState = default_block_state!("brown_terracotta");
+    const RED_TERRACOTTA: RawBlockState = default_block_state!("red_terracotta");
+    const WHITE_TERRACOTTA: RawBlockState = default_block_state!("white_terracotta");
+    const LIGHT_GRAY_TERRACOTTA: RawBlockState = default_block_state!("light_gray_terracotta");
+    const TERRACOTTA: RawBlockState = default_block_state!("terracotta");
 
-    fn create_terracotta_bands(mut random: RandomGenerator) -> Box<[ChunkBlockState]> {
+    fn create_terracotta_bands(mut random: RandomGenerator) -> Box<[RawBlockState]> {
         let mut block_states = [Self::TERRACOTTA; 192];
 
         let mut i = 0;
@@ -99,9 +99,9 @@ impl SurfaceTerrainBuilder {
 
     fn add_terracotta_bands(
         random: &mut RandomGenerator,
-        terracotta_bands: &mut [ChunkBlockState],
+        terracotta_bands: &mut [RawBlockState],
         min_band_size: i32,
-        state: ChunkBlockState,
+        state: RawBlockState,
     ) {
         let band_count = random.next_inbetween_i32(6, 15);
 
@@ -125,7 +125,7 @@ impl SurfaceTerrainBuilder {
         global_x: i32,
         global_z: i32,
         surface_y: i32,
-        default_state: ChunkBlockState,
+        default_state: RawBlockState,
     ) {
         let surface_noise =
             (self
@@ -155,31 +155,31 @@ impl SurfaceTerrainBuilder {
             if surface_y <= elevation_y {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
-                    let block_state = chunk.get_block_state(&pos);
-                    if block_state.of_block(default_state.block_id) {
+                    let block_state = chunk.get_block_state(&pos).to_block();
+                    if block_state == default_state.to_block() {
                         break;
                     }
 
-                    if block_state.of_block(WATER_BLOCK.block_id) {
+                    if block_state == WATER_BLOCK.to_block() {
                         return;
                     }
                 }
 
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
-                    let block_state = chunk.get_block_state(&pos);
-                    if !block_state.is_air() {
+                    let block_state = chunk.get_block_state(&pos).to_state();
+                    if !block_state.air {
                         break;
                     }
 
-                    chunk.set_block_state(&pos, default_state);
+                    chunk.set_block_state(&pos, default_state.to_state());
                 }
             }
         }
     }
 
-    const SNOW_BLOCK: ChunkBlockState = block_state!("snow_block");
-    const PACKED_ICE: ChunkBlockState = block_state!("packed_ice");
+    const SNOW_BLOCK: RawBlockState = default_block_state!("snow_block");
+    const PACKED_ICE: RawBlockState = default_block_state!("packed_ice");
 
     #[expect(clippy::too_many_arguments)]
     pub fn place_iceberg(
@@ -239,25 +239,25 @@ impl SurfaceTerrainBuilder {
             for y in (estimated_surface_y..=top_y).rev() {
                 let pos = Vector3::new(x, y, z);
                 let block_state = chunk.get_block_state(&pos);
-                if (block_state.is_air() && y < top_block && rand.next_f64() > 0.01)
-                    || (block_state.of_block(WATER_BLOCK.block_id)
+                if (block_state.to_state().air && y < top_block && rand.next_f64() > 0.01)
+                    || (block_state.to_block() == WATER_BLOCK.to_block()
                         && y > bottom_block
                         && y < sea_level
                         && bottom_block != 0
                         && rand.next_f64() > 0.15)
                 {
                     if snow_blocks <= snow_block_count && y > snow_bottom {
-                        chunk.set_block_state(&pos, Self::SNOW_BLOCK);
+                        chunk.set_block_state(&pos, Self::SNOW_BLOCK.to_state());
                         snow_blocks += 1;
                     } else {
-                        chunk.set_block_state(&pos, Self::PACKED_ICE);
+                        chunk.set_block_state(&pos, Self::PACKED_ICE.to_state());
                     }
                 }
             }
         }
     }
 
-    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> ChunkBlockState {
+    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> RawBlockState {
         let offset = (self
             .terracotta_bands_offset_noise
             .sample(pos.x as f64, 0.0, pos.z as f64)

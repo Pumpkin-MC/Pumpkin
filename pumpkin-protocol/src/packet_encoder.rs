@@ -144,7 +144,12 @@ impl<W: AsyncWrite + Unpin> NetworkEncoder<W> {
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
         }
-        let data_len_var_int: VarInt = data_len.into();
+        let data_len_var_int: VarInt = data_len.try_into().map_err(|_| {
+            PacketEncodeError::Message(format!(
+                "Packet data length is too large to fit in VarInt! ({})",
+                data_len
+            ))
+        })?;
 
         if let Some((compression_threshold, compression_level)) = self.compression {
             if data_len >= compression_threshold {
@@ -170,8 +175,15 @@ impl<W: AsyncWrite + Unpin> NetworkEncoder<W> {
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 debug_assert!(!compressed_buf.is_empty());
 
-                let full_packet_len_var_int: VarInt =
-                    (data_len_var_int.written_size() + compressed_buf.len()).into();
+                let full_packet_len_var_int: VarInt = (data_len_var_int.written_size()
+                    + compressed_buf.len())
+                .try_into()
+                .map_err(|_| {
+                    PacketEncodeError::Message(format!(
+                        "Full packet length is too large to fit in VarInt! ({})",
+                        data_len
+                    ))
+                })?;
 
                 let complete_serialization_length =
                     full_packet_len_var_int.written_size() + full_packet_len_var_int.0 as usize;
@@ -197,8 +209,14 @@ impl<W: AsyncWrite + Unpin> NetworkEncoder<W> {
                 // 0 to indicate uncompressed
 
                 let data_len_var_int: VarInt = 0.into();
-                let full_packet_len_var_int: VarInt =
-                    (data_len_var_int.written_size() + data_len).into();
+                let full_packet_len_var_int: VarInt = (data_len_var_int.written_size() + data_len)
+                    .try_into()
+                    .map_err(|_| {
+                        PacketEncodeError::Message(format!(
+                            "Full packet length is too large to fit in VarInt! ({})",
+                            data_len
+                        ))
+                    })?;
 
                 let complete_serialization_length =
                     full_packet_len_var_int.written_size() + full_packet_len_var_int.0 as usize;

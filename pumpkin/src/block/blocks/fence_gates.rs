@@ -8,6 +8,7 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -21,7 +22,7 @@ use pumpkin_data::item::Item;
 
 type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
 
-pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> u16 {
+pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> BlockStateId {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
@@ -67,7 +68,7 @@ pub fn register_fence_gate_blocks(manager: &mut BlockRegistry) {
                 _use_item_on: &SUseItemOn,
                 player_direction: &HorizontalFacing,
                 _other: bool,
-            ) -> u16 {
+            ) -> BlockStateId {
                 let mut fence_gate_props = FenceGateProperties::default(block);
                 fence_gate_props.facing = *player_direction;
                 fence_gate_props.to_state_id(block)

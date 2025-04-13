@@ -41,7 +41,8 @@ impl Explosion {
                     let mut h = self.power * (0.7 + rand::random::<f32>() * 0.6);
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
-                        let block = world.get_block(&block_pos).await.unwrap();
+                        let (block, state) =
+                            world.get_block_and_block_state(&block_pos).await.unwrap();
 
                         // if !world.is_in_build_limit(&block_pos) {
                         //     // Pass by reference
@@ -49,8 +50,7 @@ impl Explosion {
                         // }
 
                         // TODO: This should only check air & fluid
-                        // AIR has blast_resistance of 0
-                        if block.blast_resistance > 0.0 {
+                        if !state.air {
                             h -= (block.blast_resistance + 0.3) * 0.3;
                         }
                         if h > 0.0 {

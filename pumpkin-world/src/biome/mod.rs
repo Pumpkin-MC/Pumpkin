@@ -1,18 +1,12 @@
 use sha2::{Digest, Sha256};
-use std::{cell::RefCell, sync::LazyLock};
+use std::cell::RefCell;
 
 use enum_dispatch::enum_dispatch;
-use multi_noise::BiomeTree;
-use pumpkin_data::chunk::Biome;
+use pumpkin_data::chunk::{Biome, BiomeTree, OVERWORLD_BIOME_SOURCE};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::generation::noise_router::multi_noise_sampler::MultiNoiseSampler;
 pub mod multi_noise;
-
-pub static BIOME_SEARCH_TREE: LazyLock<BiomeTree> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../assets/multi_noise_biome_tree.json"))
-        .expect("Could not parse multi_noise_biome_tree.json")
-});
 
 thread_local! {
     /// A shortcut; check if last used biome is what we should use
@@ -31,7 +25,9 @@ pub struct MultiNoiseBiomeSupplier;
 impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(global_biome_pos: &Vector3<i32>, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(global_biome_pos.x, global_biome_pos.y, global_biome_pos.z);
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| BIOME_SEARCH_TREE.get(&point, last_result))
+        let point_list = point.convert_to_list();
+        LAST_RESULT_NODE
+            .with_borrow_mut(|last_result| OVERWORLD_BIOME_SOURCE.get(&point_list, last_result))
     }
 }
 
@@ -44,16 +40,16 @@ pub fn hash_seed(seed: u64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::chunk::Biome;
+    use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
     use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
     use serde::Deserialize;
 
     use crate::{
-        GENERATION_SETTINGS, GeneratorSetting, GlobalProtoNoiseRouter, GlobalRandomConfig,
-        NOISE_ROUTER_ASTS, ProtoChunk,
+        GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
-        generation::noise_router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        generation::noise_router::{
+            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+            proto_noise_router::ProtoNoiseRouters,
         },
         read_data_from_file,
     };
@@ -64,10 +60,11 @@ mod test {
     fn test_biome_desert() {
         let seed = 13579;
         let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        let noise_router =
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let mut sampler =
+            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
         let biome = MultiNoiseBiomeSupplier::biome(
             &pumpkin_util::math::vector3::Vector3 { x: -24, y: 1, z: 8 },
             &mut sampler,
@@ -90,7 +87,7 @@ mod test {
         let seed = 0;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let surface_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();

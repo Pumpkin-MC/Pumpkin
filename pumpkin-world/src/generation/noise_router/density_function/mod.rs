@@ -1,8 +1,7 @@
 use std::fmt::Debug;
 
 use enum_dispatch::enum_dispatch;
-
-use crate::noise_router::density_function_ast::WrapperType;
+use pumpkin_data::noise_router::WrapperType;
 
 // These are for enum_dispatch
 use super::chunk_density_function::{
@@ -16,6 +15,10 @@ pub(crate) mod spline;
 
 #[cfg(test)]
 mod test;
+
+// Helper functions for deserializing unique density functions for testing
+#[cfg(test)]
+mod test_deserializer;
 
 pub trait NoisePos: Debug {
     fn x(&self) -> i32;
@@ -80,10 +83,10 @@ pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionCompone
 
 #[derive(Clone)]
 pub struct Wrapper {
-    pub input_index: usize,
-    pub wrapper_type: WrapperType,
-    pub min_value: f64,
-    pub max_value: f64,
+    input_index: usize,
+    wrapper_type: WrapperType,
+    min_value: f64,
+    max_value: f64,
 }
 
 impl Wrapper {
@@ -122,9 +125,23 @@ impl NoiseFunctionComponentRange for Wrapper {
 
 #[derive(Clone)]
 pub struct PassThrough {
-    pub input_index: usize,
-    pub min_value: f64,
-    pub max_value: f64,
+    input_index: usize,
+    min_value: f64,
+    max_value: f64,
+}
+
+impl PassThrough {
+    pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
+        Self {
+            input_index,
+            min_value,
+            max_value,
+        }
+    }
+
+    pub fn input_index(&self) -> usize {
+        self.input_index
+    }
 }
 
 impl NoiseFunctionComponentRange for PassThrough {

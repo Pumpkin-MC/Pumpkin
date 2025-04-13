@@ -411,7 +411,7 @@ impl Entity {
         self.world
             .read()
             .await
-            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf))
+            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
             .await;
     }
 

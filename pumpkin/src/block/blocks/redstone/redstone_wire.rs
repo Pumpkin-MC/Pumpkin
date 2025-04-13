@@ -11,6 +11,7 @@ use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
 use crate::block::registry::BlockActionResult;
@@ -46,7 +47,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _use_item_on: &SUseItemOn,
         _player_direction: &HorizontalFacing,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut wire = RedstoneWireProperties::default(block);
         wire.power = Integer0To15::from_index(calculate_power(world, block_pos).await.into());
         wire = get_regulated_sides(wire, world, block_pos).await;
@@ -61,12 +62,12 @@ impl PumpkinBlock for RedstoneWireBlock {
         &self,
         world: &World,
         block: &Block,
-        state: u16,
+        state: BlockStateId,
         block_pos: &BlockPos,
         direction: &BlockDirection,
         _neighbor_pos: &BlockPos,
-        _neighbor_state: u16,
-    ) -> u16 {
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
         let mut wire = RedstoneWireProperties::from_state_id(state, block);
         let old_state = wire;
         let new_side: WireConnection;
@@ -118,7 +119,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         world: &Arc<World>,
         block_pos: &BlockPos,
         _block: &Block,
-        state_id: u16,
+        state_id: BlockStateId,
         flags: BlockFlags,
     ) {
         let wire_props = RedstoneWireLikeProperties::from_state_id(state_id, &Block::REDSTONE_WIRE);
@@ -250,9 +251,9 @@ impl PumpkinBlock for RedstoneWireBlock {
         &self,
         world: &Arc<World>,
         _block: &Block,
-        _state_id: u16,
+        _state_id: BlockStateId,
         block_pos: &BlockPos,
-        _old_state_id: u16,
+        _old_state_id: BlockStateId,
         _notify: bool,
     ) {
         update_wire_neighbors(world, block_pos).await;

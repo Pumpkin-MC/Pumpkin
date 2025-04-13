@@ -1,5 +1,6 @@
 use pumpkin_data::block::Block;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -19,6 +20,9 @@ pub struct BlockBreakEvent {
     /// The block that is being broken.
     pub block: Block,
 
+    /// The position of the block that is being broken.
+    pub block_position: BlockPos,
+
     /// The amount of experience gained from breaking the block.
     pub exp: u32,
 
@@ -32,16 +36,24 @@ impl BlockBreakEvent {
     /// # Arguments
     /// - `player`: An optional reference to the player breaking the block.
     /// - `block`: The block that is being broken.
+    /// - `block_position`: The position of the block that is being broken.
     /// - `exp`: The amount of experience gained from breaking the block.
     /// - `drop`: A boolean indicating whether the block should drop items.
     ///
     /// # Returns
     /// A new instance of `BlockBreakEvent`.
     #[must_use]
-    pub fn new(player: Option<Arc<Player>>, block: Block, exp: u32, drop: bool) -> Self {
+    pub fn new(
+        player: Option<Arc<Player>>,
+        block: Block,
+        block_position: BlockPos,
+        exp: u32,
+        drop: bool,
+    ) -> Self {
         Self {
             player,
             block,
+            block_position,
             exp,
             drop,
             cancelled: false,

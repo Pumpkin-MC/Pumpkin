@@ -1,8 +1,8 @@
+use pumpkin_data::noise_router::WrapperType;
+
 use crate::{
-    GlobalProtoNoiseRouter,
     biome::multi_noise::{NoiseValuePoint, to_long},
     generation::biome_coords,
-    noise_router::density_function_ast::WrapperType,
 };
 
 use super::{
@@ -12,7 +12,7 @@ use super::{
     },
     chunk_noise_router::ChunkNoiseFunctionComponent,
     density_function::{NoiseFunctionComponentRange, PassThrough, UnblendedNoisePos},
-    proto_noise_router::ProtoNoiseFunctionComponent,
+    proto_noise_router::{ProtoMultiNoiseRouter, ProtoNoiseFunctionComponent},
 };
 
 pub struct MultiNoiseSamplerBuilderOptions {
@@ -102,15 +102,15 @@ impl<'a> MultiNoiseSampler<'a> {
     }
 
     pub fn generate(
-        base: &'a GlobalProtoNoiseRouter,
+        base: &'a ProtoMultiNoiseRouter,
         build_options: &MultiNoiseSamplerBuilderOptions,
     ) -> Self {
         // TODO: It seems kind of wasteful to iter over all components (even those we dont need
         // because they're for chunk population), but this is the best I've got for now.
         // (Should we traverse the functions and update the indices?)
         let mut component_stack =
-            Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.component_stack.len());
-        for base_component in base.component_stack.iter() {
+            Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
+        for base_component in base.full_component_stack.iter() {
             let chunk_component = match base_component {
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
                     ChunkNoiseFunctionComponent::Dependent(dependent)
@@ -119,31 +119,25 @@ impl<'a> MultiNoiseSampler<'a> {
                     ChunkNoiseFunctionComponent::Independent(independent)
                 }
                 ProtoNoiseFunctionComponent::PassThrough(pass_through) => {
-                    let min_value = component_stack[pass_through.input_index].min();
-                    let max_value = component_stack[pass_through.input_index].max();
-                    ChunkNoiseFunctionComponent::PassThrough(PassThrough {
-                        input_index: pass_through.input_index,
-                        max_value,
-                        min_value,
-                    })
+                    ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
                 }
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
                     //NOTE: Due to our previous invariant with the proto-function, it is guaranteed
                     // that the wrapped function is already on the stack
-                    let min_value = component_stack[wrapper.input_index].min();
-                    let max_value = component_stack[wrapper.input_index].max();
+                    let min_value = component_stack[wrapper.input_index()].min();
+                    let max_value = component_stack[wrapper.input_index()].max();
 
-                    match wrapper.wrapper_type {
+                    match wrapper.wrapper_type() {
                         WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
-                                wrapper.input_index,
+                                wrapper.input_index(),
                                 min_value,
                                 max_value,
                             )),
                         )),
                         WrapperType::CacheFlat => {
                             let mut flat_cache = FlatCache::new(
-                                wrapper.input_index,
+                                wrapper.input_index(),
                                 min_value,
                                 max_value,
                                 build_options.start_biome_x,
@@ -179,7 +173,7 @@ impl<'a> MultiNoiseSampler<'a> {
                                     //NOTE: Due to our stack invariant, what is on the stack is a
                                     // valid density function
                                     let sample = ChunkNoiseFunctionComponent::sample_from_stack(
-                                        &mut component_stack[..=wrapper.input_index],
+                                        &mut component_stack[..=wrapper.input_index()],
                                         &pos,
                                         &sample_options,
                                     );
@@ -196,11 +190,11 @@ impl<'a> MultiNoiseSampler<'a> {
                         }
                         // Java passes thru if the noise pos is not the chunk itself, which it is
                         // never for the MultiNoiseSampler
-                        _ => ChunkNoiseFunctionComponent::PassThrough(PassThrough {
-                            input_index: wrapper.input_index,
+                        _ => ChunkNoiseFunctionComponent::PassThrough(PassThrough::new(
+                            wrapper.input_index(),
                             min_value,
                             max_value,
-                        }),
+                        )),
                     }
                 }
             };
@@ -221,9 +215,11 @@ impl<'a> MultiNoiseSampler<'a> {
 
 #[cfg(test)]
 mod test {
+    use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
+
     use crate::{
-        GlobalProtoNoiseRouter, GlobalRandomConfig, NOISE_ROUTER_ASTS,
-        biome::multi_noise::NoiseValuePoint,
+        GlobalRandomConfig, biome::multi_noise::NoiseValuePoint,
+        generation::noise_router::proto_noise_router::ProtoNoiseRouters,
     };
 
     use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
@@ -233,9 +229,10 @@ mod test {
         let seed = 123;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let mut sampler =
+            MultiNoiseSampler::generate(&noise_rounter.multi_noise, &multi_noise_config);
         let expected = NoiseValuePoint {
             temperature: -5727,
             humidity: 55,
@@ -253,9 +250,10 @@ mod test {
         let seed = 13579;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler = MultiNoiseSampler::generate(&noise_rounter, &multi_noise_config);
+        let mut sampler =
+            MultiNoiseSampler::generate(&noise_rounter.multi_noise, &multi_noise_config);
         let expected = NoiseValuePoint {
             temperature: 7489,
             humidity: 3502,

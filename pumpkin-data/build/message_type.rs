@@ -34,16 +34,16 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
 
     for (name, typee) in json.iter() {
-        let i = typee.id;
+        let i = typee.id as u8;
         let name = format_ident!("{}", name.to_uppercase());
         variants.extend([quote! {
-            pub const #name: u32 = #i;
+            pub const #name: u8 = #i;
         }]);
     }
 
-    let raw_id = json.len() as u32;
+    let raw_id = json.len() as u8;
     variants.extend([quote! {
-        pub const RAW: u32 = #raw_id; // One higher than highest vanilla id
+        pub const RAW: u8 = #raw_id; // One higher than highest vanilla id
     }]);
 
     quote! {

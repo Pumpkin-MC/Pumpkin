@@ -127,7 +127,7 @@ impl NonLeafNodeBuilder {
     }
 }
 
-/// Matches a sting literal.
+/// Matches a string literal.
 #[must_use]
 pub fn literal(string: impl Into<String>) -> NonLeafNodeBuilder {
     NonLeafNodeBuilder {

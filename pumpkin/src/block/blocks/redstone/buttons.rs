@@ -11,6 +11,7 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
@@ -77,7 +78,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 _use_item_on: &SUseItemOn,
                 player_direction: &HorizontalFacing,
                 _other: bool,
-            ) -> u16 {
+            ) -> BlockStateId {
                 let mut props = ButtonLikeProperties::default(block);
 
                 match face {
@@ -180,7 +181,7 @@ pub fn register_button_blocks(manager: &mut BlockRegistry) {
                 world: &Arc<World>,
                 block: &Block,
                 location: BlockPos,
-                old_state_id: u16,
+                old_state_id: BlockStateId,
                 moved: bool,
             ) {
                 if !moved {

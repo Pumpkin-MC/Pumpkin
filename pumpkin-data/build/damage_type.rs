@@ -7,7 +7,7 @@ use syn::{Ident, LitInt};
 
 #[derive(Deserialize)]
 struct DamageTypeEntry {
-    id: u32,
+    id: u8,
     components: DamageTypeData,
 }
 
@@ -111,7 +111,7 @@ pub(crate) fn build() -> TokenStream {
             pub effects: Option<DamageEffects>,
             pub message_id: &'static str,
             pub scaling: DamageScaling,
-            pub id: u32,
+            pub id: u8,
         }
 
         #[derive(Clone, Copy, Debug, PartialEq)]

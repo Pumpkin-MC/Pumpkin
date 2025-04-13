@@ -1,9 +1,17 @@
 services:
   pumpkin:
+    # Make sure to change the tag to the pumpkin version you want to use.
+    # https://github.com/Pumpkin-MC/Pumpkin/pkgs/container/pumpkin/versions?filters%5Bversion_type%5D=tagged
+    #image: ghcr.io/pumpkin-mc/pumpkin:master
     build: .
     ports:
       - "25565:25565"
     volumes:
       - ./data:/pumpkin
+      # Use the following, if you want to make your config immutable
+      #- ./config:/pumpkin/config:ro
     stdin_open: true
     tty: true
+    cap_drop:
+      - ALL
+    read_only: true

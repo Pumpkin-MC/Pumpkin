@@ -1,5 +1,5 @@
 use crate::VarInt;
-use crate::codec::slot::Slot;
+use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
 use pumpkin_macros::packet;
 use serde::de::SeqAccess;
@@ -14,8 +14,8 @@ pub struct SClickContainer {
     pub button: i8,
     pub mode: SlotActionType,
     pub length_of_array: VarInt,
-    pub array_of_changed_slots: Vec<(i16, Slot)>,
-    pub carried_item: Slot,
+    pub array_of_changed_slots: Vec<(i16, ItemStackSerializer<'static>)>,
+    pub carried_item: ItemStackSerializer<'static>,
 }
 
 impl<'de> Deserialize<'de> for SClickContainer {
@@ -60,13 +60,13 @@ impl<'de> Deserialize<'de> for SClickContainer {
                         .next_element::<i16>()?
                         .ok_or(de::Error::custom("Unable to parse slot"))?;
                     let slot = seq
-                        .next_element::<Slot>()?
+                        .next_element::<ItemStackSerializer>()?
                         .ok_or(de::Error::custom("Unable to parse item"))?;
                     array_of_changed_slots.push((slot_number, slot));
                 }
 
                 let carried_item = seq
-                    .next_element::<Slot>()?
+                    .next_element::<ItemStackSerializer>()?
                     .ok_or(de::Error::custom("Failed to decode carried item"))?;
 
                 Ok(SClickContainer {

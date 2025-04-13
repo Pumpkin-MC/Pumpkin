@@ -31,17 +31,15 @@ pub struct Texture {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct JsonPublicKey {
-    #[serde(rename = "publicKey")]
     pub public_key: String,
 }
 #[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct MojangPublicKeys {
-    #[serde(rename = "profilePropertyKeys")]
     pub profile_property_keys: Vec<JsonPublicKey>,
-    #[serde(rename = "playerCertificateKeys")]
     pub player_certificate_keys: Vec<JsonPublicKey>,
-    #[serde(rename = "authenticationKeys")]
     pub authentication_keys: Option<Vec<JsonPublicKey>>,
 }
 

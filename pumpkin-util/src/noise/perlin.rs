@@ -134,40 +134,35 @@ impl PerlinNoiseSampler {
     }
 }
 
-#[derive(Clone)]
+pub struct SamplerData {
+    pub sampler: PerlinNoiseSampler,
+    pub amplitude: f64,
+    pub persistence: f64,
+    pub lacunarity: f64,
+}
+
 pub struct OctavePerlinNoiseSampler {
-    octave_samplers: Box<[Option<PerlinNoiseSampler>]>,
-    amplitudes: Box<[f64]>,
-    persistences: Box<[f64]>,
-    lacunarities: Box<[f64]>,
+    pub samplers: Box<[SamplerData]>,
     max_value: f64,
 }
 
 impl OctavePerlinNoiseSampler {
-    pub fn get_octave(&self, octave: i32) -> Option<&PerlinNoiseSampler> {
-        match self
-            .octave_samplers
-            .get(self.octave_samplers.len() - 1 - octave as usize)
-        {
-            Some(octave) => octave.as_ref(),
-            None => None,
-        }
-    }
-
     pub fn max_value(&self) -> f64 {
         self.max_value
     }
 
-    pub(crate) fn get_total_amplitude(scale: f64, persistence: f64, amplitudes: &[f64]) -> f64 {
-        let mut d = 0f64;
-        let mut e = persistence;
-
-        for amplitude in amplitudes.iter() {
-            d += amplitude * scale * e;
-            e /= 2f64;
-        }
-
-        d
+    fn get_total_amplitude_generic(scale: f64, persistences: &[f64], amplitudes: &[f64]) -> f64 {
+        amplitudes
+            .iter()
+            .zip(persistences)
+            .map(|(amplitude, persistence)| {
+                if *amplitude != 0.0 {
+                    scale * *amplitude * *persistence
+                } else {
+                    0.0
+                }
+            })
+            .sum()
     }
 
     #[inline]
@@ -204,10 +199,7 @@ impl OctavePerlinNoiseSampler {
         let i = amplitudes.len();
         let j = -first_octave;
 
-        let mut samplers: Vec<Option<PerlinNoiseSampler>> = Vec::with_capacity(i);
-        for _ in 0..i {
-            samplers.push(None);
-        }
+        let mut samplers: Box<[Option<PerlinNoiseSampler>]> = vec![None; i].into();
 
         if legacy {
             let sampler = PerlinNoiseSampler::new(random);
@@ -244,7 +236,6 @@ impl OctavePerlinNoiseSampler {
 
         let mut persistence = 2f64.powi(i as i32 - 1) / (2f64.powi(i as i32) - 1f64);
         let mut lacunarity = 2f64.powi(-j);
-        let max_value = Self::get_total_amplitude(2f64, persistence, amplitudes);
 
         let persistences: Vec<f64> = (0..amplitudes.len())
             .map(|_| {
@@ -261,38 +252,53 @@ impl OctavePerlinNoiseSampler {
             })
             .collect();
 
+        let max_value = Self::get_total_amplitude_generic(2f64, &persistences, amplitudes);
+
+        let samplers = samplers
+            .into_iter()
+            .zip(amplitudes)
+            .zip(persistences)
+            .zip(lacunarities)
+            .filter_map(|(((sampler, amplitude), persistence), lacunarity)| {
+                sampler.map(|sampler| SamplerData {
+                    sampler,
+                    amplitude: *amplitude,
+                    persistence,
+                    lacunarity,
+                })
+            })
+            .collect();
+
         Self {
-            octave_samplers: samplers.into(),
-            amplitudes: amplitudes.into(),
-            persistences: persistences.into(),
-            lacunarities: lacunarities.into(),
+            samplers,
             max_value,
         }
     }
 
+    #[inline]
+    pub fn get_total_amplitude(&self, scale: f64) -> f64 {
+        self.samplers
+            .iter()
+            .map(|data| data.amplitude * scale * data.persistence)
+            .sum()
+    }
+
+    #[inline]
     pub fn sample(&self, x: f64, y: f64, z: f64) -> f64 {
-        let mut d = 0f64;
+        self.samplers
+            .iter()
+            .map(|data| {
+                let mapped_x = Self::maintain_precision(x * data.lacunarity);
+                let mapped_y = Self::maintain_precision(y * data.lacunarity);
+                let mapped_z = Self::maintain_precision(z * data.lacunarity);
 
-        let num_octaves = self.octave_samplers.len();
-        for i in 0..num_octaves {
-            if let Some(sampler) = &self.octave_samplers[i] {
-                let lacunarity = self.lacunarities[i];
-                let amplitude = self.amplitudes[i];
-                let persistence = self.persistences[i];
+                let sample = data
+                    .sampler
+                    .sample_no_fade(mapped_x, mapped_y, mapped_z, 0.0, 0.0);
 
-                let g = sampler.sample_no_fade(
-                    Self::maintain_precision(x * lacunarity),
-                    Self::maintain_precision(y * lacunarity),
-                    Self::maintain_precision(z * lacunarity),
-                    0f64,
-                    0f64,
-                );
-
-                d += amplitude * g * persistence;
-            }
-        }
-
-        d
+                data.amplitude * sample * data.persistence
+            })
+            .sum()
     }
 }
 
@@ -316,8 +322,9 @@ mod tests {
 
         let sampler = OctavePerlinNoiseSampler::new(&mut rand, start, &amplitudes, false);
 
-        assert_eq!(sampler.persistences[0], 0.5714285714285714f64);
-        assert_eq!(sampler.lacunarities[0], 2f64);
+        let first = sampler.samplers.first().unwrap();
+        assert_eq!(first.persistence, 0.5714285714285714f64);
+        assert_eq!(first.lacunarity, 2f64);
         assert_eq!(sampler.max_value, 2f64);
 
         let coords = [
@@ -326,15 +333,10 @@ mod tests {
             (21.65886467061867, 97.80131502331685, 225.9273676334467),
         ];
 
-        for (sampler, (x, y, z)) in sampler.octave_samplers.iter().zip(coords) {
-            match sampler {
-                Some(sampler) => {
-                    assert_eq!(sampler.x_origin, x);
-                    assert_eq!(sampler.y_origin, y);
-                    assert_eq!(sampler.z_origin, z);
-                }
-                None => panic!(),
-            }
+        for (data, (x, y, z)) in sampler.samplers.iter().zip(coords) {
+            assert_eq!(data.sampler.x_origin, x);
+            assert_eq!(data.sampler.y_origin, y);
+            assert_eq!(data.sampler.z_origin, z);
         }
     }
 
@@ -348,21 +350,17 @@ mod tests {
         assert_eq!(amplitudes, [1f64]);
 
         let sampler = OctavePerlinNoiseSampler::new(&mut rand, start, &amplitudes, true);
-        assert_eq!(sampler.persistences[0], 1f64);
-        assert_eq!(sampler.lacunarities[0], 1f64);
+        let first = sampler.samplers.first().unwrap();
+        assert_eq!(first.persistence, 1f64);
+        assert_eq!(first.lacunarity, 1f64);
         assert_eq!(sampler.max_value, 2f64);
 
         let coords = [(226.220117499588, 32.67924779023767, 202.84067325597647)];
 
-        for (sampler, (x, y, z)) in sampler.octave_samplers.iter().zip(coords) {
-            match sampler {
-                Some(sampler) => {
-                    assert_eq!(sampler.x_origin, x);
-                    assert_eq!(sampler.y_origin, y);
-                    assert_eq!(sampler.z_origin, z);
-                }
-                None => panic!(),
-            }
+        for (data, (x, y, z)) in sampler.samplers.iter().zip(coords) {
+            assert_eq!(data.sampler.x_origin, x);
+            assert_eq!(data.sampler.y_origin, y);
+            assert_eq!(data.sampler.z_origin, z);
         }
     }
 
@@ -579,7 +577,7 @@ mod tests {
         let (first, amplitudes) =
             OctavePerlinNoiseSampler::calculate_amplitudes(&(-15..=0).collect::<Vec<i32>>());
         let sampler = OctavePerlinNoiseSampler::new(&mut rand, first, &amplitudes, true);
-        let sampler = sampler.get_octave(0).unwrap();
+        let sampler = &sampler.samplers.last().unwrap().sampler;
 
         assert_eq!(sampler.x_origin, 18.223354299069797);
         assert_eq!(sampler.y_origin, 93.99298907803595);
@@ -821,7 +819,7 @@ mod tests {
         let (first, amplitudes) =
             OctavePerlinNoiseSampler::calculate_amplitudes(&(-15..=0).collect::<Vec<i32>>());
         let sampler = OctavePerlinNoiseSampler::new(&mut rand, first, &amplitudes, true);
-        let sampler = sampler.get_octave(0).unwrap();
+        let sampler = &sampler.samplers.last().unwrap().sampler;
 
         assert_eq!(sampler.x_origin, 18.223354299069797);
         assert_eq!(sampler.y_origin, 93.99298907803595);
@@ -855,7 +853,7 @@ mod tests {
         let (first, amplitudes) =
             OctavePerlinNoiseSampler::calculate_amplitudes(&(-15..=0).collect::<Vec<i32>>());
         let sampler = OctavePerlinNoiseSampler::new(&mut rand, first, &amplitudes, true);
-        let sampler = sampler.get_octave(0).unwrap();
+        let sampler = &sampler.samplers.last().unwrap().sampler;
 
         for x in -512..512 {
             let y = sampler.map(x);

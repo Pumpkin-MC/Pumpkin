@@ -30,6 +30,8 @@ pub struct ItemComponents {
     pub attribute_modifiers: Option<Vec<Modifier>>,
     #[serde(rename = "minecraft:tool")]
     pub tool: Option<ToolComponent>,
+    #[serde(rename = "minecraft:food")]
+    pub food: Option<FoodComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -150,6 +152,27 @@ impl ToTokens for ItemComponents {
             None => quote! { None },
         };
 
+        let food = match &self.food {
+            Some(food) => {
+                let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
+                let saturation =
+                    LitFloat::new(&format!("{:.1}", food.saturation), Span::call_site());
+                let can_always_eat = match food.can_always_eat {
+                    Some(can) => {
+                        let can = LitBool::new(can, Span::call_site());
+                        quote! { Some(#can) }
+                    }
+                    None => quote! { None },
+                };
+                quote! { Some(FoodComponent {
+                    nutrition: #nutrition,
+                    saturation: #saturation,
+                    can_always_eat: #can_always_eat,
+                } ) }
+            }
+            None => quote! { None },
+        };
+
         tokens.extend(quote! {
             ItemComponents {
                 item_name: #item_name,
@@ -158,7 +181,8 @@ impl ToTokens for ItemComponents {
                 damage: #damage,
                 max_damage: #max_damage,
                 attribute_modifiers: #attribute_modifiers,
-                tool: #tool
+                tool: #tool,
+                food: #food
             }
         });
     }
@@ -168,6 +192,13 @@ pub struct ToolComponent {
     rules: Vec<ToolRule>,
     default_mining_speed: Option<f32>,
     damage_per_block: Option<u32>,
+}
+
+#[derive(Deserialize, Copy, Clone, Debug)]
+pub struct FoodComponent {
+    nutrition: u8,
+    saturation: f32,
+    can_always_eat: Option<bool>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -258,7 +289,8 @@ pub(crate) fn build() -> TokenStream {
             pub damage: Option<u16>,
             pub max_damage: Option<u16>,
             pub attribute_modifiers: Option<&'static [Modifier]>,
-            pub tool: Option<ToolComponent>
+            pub tool: Option<ToolComponent>,
+            pub food: Option<FoodComponent>
         }
 
         #[derive(Clone, Copy, Debug)]
@@ -290,6 +322,13 @@ pub(crate) fn build() -> TokenStream {
             pub blocks: &'static [&'static str],
             pub speed: Option<f32>,
             pub correct_for_drops: Option<bool>,
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct FoodComponent {
+            pub nutrition: u8,
+            pub saturation: f32,
+            pub can_always_eat: Option<bool>,
         }
 
         impl Item {

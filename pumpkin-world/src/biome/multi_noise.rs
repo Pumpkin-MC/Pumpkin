@@ -1,4 +1,3 @@
-use pumpkin_data::chunk::Biome;
 use serde::{Deserialize, Serialize};
 
 pub fn to_long(float: f32) -> i64 {
@@ -29,125 +28,17 @@ impl NoiseValuePoint {
     }
 }
 
-#[derive(Deserialize, PartialEq)]
-pub struct ParameterRange {
-    min: i64,
-    max: i64,
-}
-
-impl ParameterRange {
-    fn calc_distance(&self, noise: i64) -> i64 {
-        if noise > self.max {
-            noise - self.max
-        } else if noise < self.min {
-            self.min - noise
-        } else {
-            0
-        }
-    }
-
-    pub fn combine(&self, other: &Self) -> Self {
-        Self {
-            min: self.min.min(other.min),
-            max: self.max.max(other.max),
-        }
-    }
-}
-
-#[derive(Deserialize, PartialEq)]
-#[serde(tag = "_type", rename_all = "lowercase")]
-pub enum BiomeTree {
-    Leaf {
-        parameters: [ParameterRange; 7],
-        biome: &'static Biome,
-    },
-    Branch {
-        parameters: [ParameterRange; 7],
-        #[serde(rename = "subTree")]
-        nodes: Box<[BiomeTree]>,
-    },
-}
-
-impl BiomeTree {
-    pub fn get<'a>(
-        &'a self,
-        point: &NoiseValuePoint,
-        previous_result_node: &mut Option<&'a BiomeTree>,
-    ) -> &'static Biome {
-        let point_as_list = point.convert_to_list();
-        let result_node = self.get_resulting_node(&point_as_list, *previous_result_node);
-        match result_node {
-            BiomeTree::Leaf { biome, .. } => {
-                *previous_result_node = Some(result_node);
-                biome
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn get_resulting_node<'a>(
-        &'a self,
-        point_list: &[i64; 7],
-        previous_result_node: Option<&'a BiomeTree>,
-    ) -> &'a BiomeTree {
-        match self {
-            Self::Leaf { .. } => self,
-            Self::Branch { nodes, .. } => {
-                let mut distance = previous_result_node
-                    .map(|node| node.get_squared_distance(point_list))
-                    .unwrap_or(i64::MAX);
-                let mut best_node = previous_result_node;
-
-                for node in nodes {
-                    let node_distance = node.get_squared_distance(point_list);
-                    if distance > node_distance {
-                        let node2 = node.get_resulting_node(point_list, best_node);
-                        let node2_distance = if node == node2 {
-                            node_distance
-                        } else {
-                            node2.get_squared_distance(point_list)
-                        };
-
-                        if distance > node2_distance {
-                            distance = node2_distance;
-                            best_node = Some(node2);
-                        }
-                    }
-                }
-
-                best_node.expect("This should be populated after traversing the tree")
-            }
-        }
-    }
-
-    fn get_squared_distance(&self, point_list: &[i64; 7]) -> i64 {
-        let parameters = match self {
-            Self::Leaf { parameters, .. } => parameters,
-            Self::Branch { parameters, .. } => parameters,
-        };
-
-        parameters
-            .iter()
-            .zip(point_list)
-            .map(|(bound, value)| {
-                let distance = bound.calc_distance(*value);
-                distance * distance
-            })
-            .sum()
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use pumpkin_data::chunk::Biome;
+    use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
     use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
     use crate::{
-        GENERATION_SETTINGS, GeneratorSetting, GlobalProtoNoiseRouter, GlobalRandomConfig,
-        NOISE_ROUTER_ASTS, ProtoChunk,
+        GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-        generation::noise_router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        generation::noise_router::{
+            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+            proto_noise_router::ProtoNoiseRouters,
         },
         read_data_from_file,
     };
@@ -162,7 +53,7 @@ mod test {
         let chunk_pos = Vector2::new(0, 0);
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_rounter =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
@@ -189,10 +80,10 @@ mod test {
         let seed = 0;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
-            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
         let mut sampler = MultiNoiseSampler::generate(
-            &noise_router,
+            &noise_router.multi_noise,
             &MultiNoiseSamplerBuilderOptions::new(0, 0, 4),
         );
 

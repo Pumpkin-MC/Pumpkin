@@ -1,8 +1,8 @@
 use std::io::Write;
 
+use crate::ClientPacket;
 use crate::client::play::bossevent_action::BosseventAction;
 use crate::ser::{NetworkWriteExt, WritingError};
-use crate::{ClientPacket, VarInt};
 use pumpkin_data::packet::clientbound::PLAY_BOSS_EVENT;
 use pumpkin_macros::packet;
 
@@ -32,29 +32,29 @@ impl ClientPacket for CBossEvent<'_> {
                 division,
                 flags,
             } => {
-                write.write_var_int(&VarInt::from(0u8))?;
+                write.write_var_int(&0.into())?;
                 write.write_slice(&title.encode())?;
                 write.write_f32_be(*health)?;
                 write.write_var_int(color)?;
                 write.write_var_int(division)?;
                 write.write_u8_be(*flags)
             }
-            BosseventAction::Remove => write.write_var_int(&VarInt::from(1u8)),
+            BosseventAction::Remove => write.write_var_int(&1.into()),
             BosseventAction::UpdateHealth(health) => {
-                write.write_var_int(&VarInt::from(2u8))?;
+                write.write_var_int(&2.into())?;
                 write.write_f32_be(*health)
             }
             BosseventAction::UpdateTile(title) => {
-                write.write_var_int(&VarInt::from(3u8))?;
+                write.write_var_int(&3.into())?;
                 write.write_slice(&title.encode())
             }
             BosseventAction::UpdateStyle { color, dividers } => {
-                write.write_var_int(&VarInt::from(4u8))?;
+                write.write_var_int(&4.into())?;
                 write.write_var_int(color)?;
                 write.write_var_int(dividers)
             }
             BosseventAction::UpdateFlags(flags) => {
-                write.write_var_int(&VarInt::from(5u8))?;
+                write.write_var_int(&5.into())?;
                 write.write_u8_be(*flags)
             }
         }
