@@ -720,7 +720,7 @@ impl Player {
         Vector3::new(
             self.living_entity.entity.pos.load().x,
             self.living_entity.entity.pos.load().y
-                + self.living_entity.entity.standing_eye_height as f64,
+                + f64::from(self.living_entity.entity.standing_eye_height),
             self.living_entity.entity.pos.load().z,
         )
     }

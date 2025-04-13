@@ -1711,13 +1711,13 @@ impl World {
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
-        hit_check: impl AsyncFn(&BlockPos, &Arc<World>) -> bool,
+        hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
     ) -> (Option<BlockPos>, Option<BlockDirection>) {
         if start_pos == end_pos {
             return (None, None);
         }
 
-        let adjust = -1.0e-7_f64;
+        let adjust = -1.0e-7f64;
         let from = end_pos.lerp(&start_pos, adjust);
         let to = start_pos.lerp(&end_pos, adjust);
 
@@ -1732,9 +1732,9 @@ impl World {
         let step = d.sign();
 
         let delta = Vector3::new(
-            if step.x == 0 { f64::MAX } else { (step.x as f64) / d.x },
-            if step.y == 0 { f64::MAX } else { (step.y as f64) / d.y },
-            if step.z == 0 { f64::MAX } else { (step.z as f64) / d.z },
+            if step.x == 0 { f64::MAX } else { (f64::from(step.x)) / d.x },
+            if step.y == 0 { f64::MAX } else { (f64::from(step.y)) / d.y },
+            if step.z == 0 { f64::MAX } else { (f64::from(step.z)) / d.z },
         );
 
 
