@@ -42,6 +42,7 @@ impl<'a> CPlayerInfoUpdate<'a> {
     }
 }
 
+// TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerInfoUpdate<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
@@ -63,9 +64,19 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                         p.write_option(init_chat, |p, v| {
                             p.write_uuid(&v.session_id)?;
                             p.write_i64_be(v.expires_at)?;
-                            p.write_var_int(&v.public_key.len().into())?;
+                            p.write_var_int(&v.public_key.len().try_into().map_err(|_| {
+                                WritingError::Message(format!(
+                                    "{} isn't representable as a VarInt",
+                                    v.public_key.len()
+                                ))
+                            })?)?;
                             p.write_slice(&v.public_key)?;
-                            p.write_var_int(&v.signature.len().into())?;
+                            p.write_var_int(&v.signature.len().try_into().map_err(|_| {
+                                WritingError::Message(format!(
+                                    "{} isn't representable as a VarInt",
+                                    v.signature.len()
+                                ))
+                            })?)?;
                             p.write_slice(&v.signature)
                         })?;
                     }

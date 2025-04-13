@@ -11,7 +11,6 @@ use crate::{VarInt, codec::identifier::Identifier};
 pub struct CLogin<'a> {
     entity_id: i32,
     is_hardcore: bool,
-    dimension_count: VarInt,
     dimension_names: &'a [Identifier],
     max_players: VarInt,
     view_distance: VarInt,
@@ -61,7 +60,6 @@ impl<'a> CLogin<'a> {
         Self {
             entity_id,
             is_hardcore,
-            dimension_count: VarInt(dimension_names.len() as i32),
             dimension_names,
             max_players,
             view_distance,

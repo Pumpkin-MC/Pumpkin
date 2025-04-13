@@ -287,7 +287,7 @@ impl PumpkinServer {
             } else {
                 format!("{client_addr}")
             };
-            log::info!(
+            log::debug!(
                 "Accepted connection from: {} (id {})",
                 formatted_address,
                 id

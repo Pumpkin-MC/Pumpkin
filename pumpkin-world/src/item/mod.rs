@@ -28,8 +28,54 @@ impl PartialEq for ItemStack {
 }
 
 impl ItemStack {
+    pub const EMPTY: ItemStack = ItemStack {
+        item_count: 0,
+        item: Item::AIR,
+    };
+
     pub fn new(item_count: u8, item: Item) -> Self {
         Self { item_count, item }
+    }
+
+    pub fn get_max_stack_size(&self) -> u8 {
+        self.item.components.max_stack_size
+    }
+
+    pub fn get_item(&self) -> &Item {
+        if self.is_empty() {
+            &Item::AIR
+        } else {
+            &self.item
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.item_count == 0 || self.item.id == Item::AIR.id
+    }
+
+    pub fn split(&mut self, amount: u8) -> Self {
+        let min = amount.min(self.item_count);
+        let stack = self.copy_with_count(min);
+        self.decrement(min);
+        stack
+    }
+
+    pub fn copy_with_count(&self, count: u8) -> Self {
+        let mut stack = self.clone();
+        stack.item_count = count;
+        stack
+    }
+
+    pub fn decrement(&mut self, amount: u8) {
+        self.item_count = self.item_count.saturating_sub(amount);
+    }
+
+    pub fn increment(&mut self, amount: u8) {
+        self.item_count = self.item_count.saturating_add(amount);
+    }
+
+    pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
+        self.item == other.item //TODO: && self.item.components == other.item.components
     }
 
     /// Determines the mining speed for a block based on tool rules.
@@ -57,7 +103,7 @@ impl ItemStack {
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
                     {
-                        if blocks.iter().any(|s| *s == block) {
+                        if blocks.contains(&block) {
                             return speed;
                         }
                     }
@@ -92,7 +138,7 @@ impl ItemStack {
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
                     {
-                        if blocks.iter().any(|s| *s == block) {
+                        if blocks.contains(&block) {
                             return correct_for_drops;
                         }
                     }

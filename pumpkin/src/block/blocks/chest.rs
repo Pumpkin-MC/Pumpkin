@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::block::{Block, BlockState, get_block};
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     screen::WindowType,

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::{BlockStateId, block::BlockDirection};
 
 use crate::{server::Server, world::World};
 
@@ -38,9 +38,9 @@ pub trait PumpkinFluid: Send + Sync {
         &self,
         _world: &World,
         _fluid: &Fluid,
-        _state_id: u16,
+        _state_id: BlockStateId,
         _block_pos: &BlockPos,
-        _old_state_id: u16,
+        _old_state_id: BlockStateId,
         _notify: bool,
     ) {
     }
@@ -55,7 +55,7 @@ pub trait PumpkinFluid: Send + Sync {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         fluid.default_state_index
     }
 
@@ -65,7 +65,7 @@ pub trait PumpkinFluid: Send + Sync {
         _fluid: &Fluid,
         _block_pos: &BlockPos,
         _notify: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         0
     }
 

@@ -7,6 +7,7 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
 type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
@@ -17,7 +18,12 @@ use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
-fn connects_to(from: &Block, to: &Block, to_state_id: u16, direction: BlockDirection) -> bool {
+fn connects_to(
+    from: &Block,
+    to: &Block,
+    to_state_id: BlockStateId,
+    direction: BlockDirection,
+) -> bool {
     if from.id == to.id {
         return true;
     }
@@ -100,12 +106,12 @@ pub fn register_fence_blocks(manager: &mut BlockRegistry) {
                 &self,
                 world: &World,
                 block: &Block,
-                _state: u16,
+                _state: BlockStateId,
                 block_pos: &BlockPos,
                 _direction: &BlockDirection,
                 _neighbor_pos: &BlockPos,
-                _neighbor_state: u16,
-            ) -> u16 {
+                _neighbor_state: BlockStateId,
+            ) -> BlockStateId {
                 fence_state(world, block, block_pos).await
             }
         }

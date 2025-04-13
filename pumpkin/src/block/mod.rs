@@ -29,6 +29,7 @@ use pumpkin_util::loot_table::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
@@ -85,7 +86,7 @@ pub async fn drop_loot(
     block: &Block,
     pos: &BlockPos,
     experience: bool,
-    state_id: u16,
+    state_id: BlockStateId,
 ) {
     if let Some(table) = &block.loot_table {
         let props =

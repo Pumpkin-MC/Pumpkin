@@ -7,6 +7,8 @@ use thiserror::Error;
 
 use crate::block_entities::BlockEntity;
 
+use crate::BlockStateId;
+
 pub mod format;
 pub mod io;
 pub mod palette;
@@ -133,6 +135,7 @@ pub struct ChunkSections {
 impl ChunkSections {
     #[cfg(test)]
     pub fn dump_blocks(&self) -> Vec<u16> {
+        // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
         for section in self.sections.iter() {
             section.block_states.for_each(|raw_id| {
@@ -144,6 +147,7 @@ impl ChunkSections {
 
     #[cfg(test)]
     pub fn dump_biomes(&self) -> Vec<u8> {
+        // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
         for section in self.sections.iter() {
             section.biomes.for_each(|raw_id| {
@@ -158,6 +162,19 @@ impl ChunkSections {
 pub struct SubChunk {
     pub block_states: BlockPalette,
     pub biomes: BiomePalette,
+    pub block_light: Option<Box<[u8]>>,
+    pub sky_light: Option<Box<[u8]>>,
+}
+
+impl SubChunk {
+    /// As of now we don't have light calculation when generating a new chunk
+    pub fn max_sky_light() -> Self {
+        let chunk_light_len = BlockPalette::VOLUME / 2;
+        Self {
+            sky_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -191,7 +208,7 @@ impl ChunkSections {
         relative_x: usize,
         y: i32,
         relative_z: usize,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         let y = y - self.min_y;
         if y < 0 {
             None
@@ -206,13 +223,13 @@ impl ChunkSections {
         relative_x: usize,
         y: i32,
         relative_z: usize,
-        block_state_id: u16,
+        block_state: BlockStateId,
     ) {
         let y = y - self.min_y;
         debug_assert!(y > 0);
         let relative_y = y as usize;
 
-        self.set_relative_block(relative_x, relative_y, relative_z, block_state_id);
+        self.set_relative_block(relative_x, relative_y, relative_z, block_state);
     }
 
     /// Gets the given block in the chunk
@@ -221,7 +238,7 @@ impl ChunkSections {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
 
@@ -239,7 +256,7 @@ impl ChunkSections {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         // TODO @LUK_ESC? update the heightmap
         self.set_block_no_heightmap_update(relative_x, relative_y, relative_z, block_state_id);
@@ -255,7 +272,7 @@ impl ChunkSections {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
@@ -296,7 +313,7 @@ impl ChunkData {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         self.section
             .get_relative_block(relative_x, relative_y, relative_z)
     }
@@ -308,7 +325,7 @@ impl ChunkData {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         // TODO @LUK_ESC? update the heightmap
         self.section
@@ -326,7 +343,7 @@ impl ChunkData {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);

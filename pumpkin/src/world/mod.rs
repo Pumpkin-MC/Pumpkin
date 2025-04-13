@@ -26,7 +26,7 @@ use bytes::Bytes;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::Block,
+    block::{Block, get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id},
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
@@ -210,7 +210,7 @@ impl World {
         &self,
         message: &TextComponent,
         sender_name: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
         self.broadcast_packet_all(&CDisguisedChatMessage::new(
@@ -299,12 +299,12 @@ impl World {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle: Particle,
+        particle: Particle,
     ) {
         let players = self.players.read().await;
         for (_, player) in players.iter() {
             player
-                .spawn_particle(position, offset, max_speed, particle_count, pariticle)
+                .spawn_particle(position, offset, max_speed, particle_count, particle)
                 .await;
         }
     }
@@ -323,14 +323,7 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().r#gen::<f64>();
-        let packet = CSoundEffect::new(
-            IdOr::Id(u32::from(sound_id)),
-            category,
-            position,
-            volume,
-            pitch,
-            seed,
-        );
+        let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
 
@@ -521,7 +514,7 @@ impl World {
                 entity_id,
                 base_config.hardcore,
                 &dimensions,
-                base_config.max_players.into(),
+                base_config.max_players.try_into().unwrap(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance
                 false,
@@ -814,7 +807,7 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u32);
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for (_, player) in self.players.read().await.iter() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
@@ -1203,11 +1196,8 @@ impl World {
             .remove(&player.gameprofile.id)
             .unwrap();
         let uuid = player.gameprofile.id;
-        self.broadcast_packet_except(
-            &[player.gameprofile.id],
-            &CRemovePlayerInfo::new(1.into(), &[uuid]),
-        )
-        .await;
+        self.broadcast_packet_except(&[player.gameprofile.id], &CRemovePlayerInfo::new(&[uuid]))
+            .await;
         self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
             .await;
 
@@ -1267,14 +1257,14 @@ impl World {
         .await;
     }
 
-    /// Sets a block
-    #[allow(clippy::too_many_lines)]
+    /// Sets a block and returns the old block id
+    #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> u16 {
+    ) -> BlockStateId {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
         let mut chunk = chunk.write().await;
@@ -1458,7 +1448,7 @@ impl World {
         flags: BlockFlags,
     ) {
         let block = self.get_block(position).await.unwrap();
-        let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
+        let event = BlockBreakEvent::new(cause.clone(), block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .lock()
@@ -1492,14 +1482,17 @@ impl World {
 
     pub async fn get_chunk(&self, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
         let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
-        let chunk = match self.level.try_get_chunk(chunk_coordinate) {
+
+        match self.level.try_get_chunk(chunk_coordinate) {
             Some(chunk) => chunk.clone(),
             None => self.receive_chunk(chunk_coordinate).await.0,
-        };
-        chunk
+        }
     }
 
-    pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
+    pub async fn get_block_state_id(
+        &self,
+        position: &BlockPos,
+    ) -> Result<BlockStateId, GetBlockError> {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
 

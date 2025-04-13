@@ -16,6 +16,7 @@ mod game_event;
 mod item;
 mod message_type;
 mod noise_parameter;
+mod noise_router;
 mod packet;
 mod particle;
 mod scoreboard_slot;
@@ -50,6 +51,7 @@ pub fn main() {
     write_generated_file(entity_status::build(), "entity_status.rs");
     write_generated_file(block::build(), "block.rs");
     write_generated_file(tag::build(), "tag.rs");
+    write_generated_file(noise_router::build(), "noise_router.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

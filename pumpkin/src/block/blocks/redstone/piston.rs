@@ -5,7 +5,10 @@ use pumpkin_data::block::{Block, BlockProperties, Boolean, HorizontalFacing};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_world::{
+    BlockStateId,
+    block::{BlockDirection, HorizontalFacingExt},
+};
 
 use crate::{
     block::pumpkin_block::PumpkinBlock,
@@ -32,7 +35,7 @@ impl PumpkinBlock for PistonBlock {
         _use_item_on: &SUseItemOn,
         player_direction: &HorizontalFacing,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut props = PistonProps::default(block);
         props.extended = Boolean::from_bool(block_receives_redstone_power(world, block_pos).await);
         props.facing = player_direction.to_block_direction().to_facing();

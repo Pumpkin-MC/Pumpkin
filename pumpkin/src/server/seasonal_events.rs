@@ -2,7 +2,7 @@ use chrono::{Datelike, Local};
 use pumpkin_config::advanced_config;
 use rand::{seq::SliceRandom, thread_rng};
 
-// Infact Mojang also has some Seasonal Events, so we can use that later to match Vanilla :D
+// In fact Mojang also has some Seasonal Events, so we can use that later to match Vanilla :D
 
 #[must_use]
 pub fn is_april() -> bool {

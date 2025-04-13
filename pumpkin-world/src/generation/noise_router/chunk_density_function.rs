@@ -280,7 +280,7 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
 }
 
 pub struct FlatCache {
-    input_index: usize,
+    pub(crate) input_index: usize,
 
     pub(crate) cache: Box<[f64]>,
     start_biome_x: i32,
@@ -365,7 +365,7 @@ impl FlatCache {
 
 #[derive(Clone)]
 pub struct Cache2D {
-    input_index: usize,
+    pub(crate) input_index: usize,
     last_sample_column: u64,
     last_sample_result: f64,
 
@@ -413,7 +413,7 @@ impl Cache2D {
     pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
         Self {
             input_index,
-            // I know this is because theres is definitely world coords that are this marker, but this
+            // I know this is because there's is definitely world coords that are this marker, but this
             // is how vanilla does it, so I'm going to for pairity
             last_sample_column: chunk_pos::MARKER,
             last_sample_result: Default::default(),
@@ -424,7 +424,7 @@ impl Cache2D {
 }
 
 pub struct CacheOnce {
-    input_index: usize,
+    pub(crate) input_index: usize,
     cache_result_unique_id: u64,
     cache_fill_unique_id: u64,
     last_sample_result: f64,

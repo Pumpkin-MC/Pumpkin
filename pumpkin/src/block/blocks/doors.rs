@@ -9,6 +9,7 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
@@ -94,7 +95,7 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 _use_item_on: &SUseItemOn,
                 player_direction: &HorizontalFacing,
                 _other: bool,
-            ) -> u16 {
+            ) -> BlockStateId {
                 let mut door_props = DoorProperties::default(block);
                 door_props.half = DoubleBlockHalf::Lower;
                 door_props.facing = *player_direction;
@@ -118,9 +119,9 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 &self,
                 world: &Arc<World>,
                 block: &Block,
-                state_id: u16,
+                state_id: BlockStateId,
                 block_pos: &BlockPos,
-                _old_state_id: u16,
+                _old_state_id: BlockStateId,
                 _notify: bool,
             ) {
                 let mut door_props = DoorProperties::from_state_id(state_id, block);

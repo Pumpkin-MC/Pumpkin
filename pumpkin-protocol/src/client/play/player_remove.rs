@@ -2,22 +2,16 @@ use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_REMOVE;
 use pumpkin_macros::packet;
 use serde::{Serialize, ser::SerializeSeq};
 
-use crate::VarInt;
-
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_INFO_REMOVE)]
 pub struct CRemovePlayerInfo<'a> {
-    players_count: VarInt,
     #[serde(serialize_with = "serialize_slice_uuids")]
     players: &'a [uuid::Uuid],
 }
 
 impl<'a> CRemovePlayerInfo<'a> {
-    pub fn new(players_count: VarInt, players: &'a [uuid::Uuid]) -> Self {
-        Self {
-            players_count,
-            players,
-        }
+    pub fn new(players: &'a [uuid::Uuid]) -> Self {
+        Self { players }
     }
 }
 

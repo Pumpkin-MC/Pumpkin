@@ -5,7 +5,7 @@ use serde::Deserialize;
 use super::{MaterialCondition, MaterialRuleContext};
 use crate::{
     ProtoChunk,
-    block::{BlockStateCodec, ChunkBlockState},
+    block::{BlockStateCodec, RawBlockState},
 };
 
 #[derive(Deserialize)]
@@ -26,7 +26,7 @@ impl MaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => block.try_apply(),
@@ -40,7 +40,7 @@ impl MaterialRule {
 pub struct BadLandsMaterialRule;
 
 impl BadLandsMaterialRule {
-    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<ChunkBlockState> {
+    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<RawBlockState> {
         Some(
             context
                 .terrain_builder
@@ -53,14 +53,14 @@ impl BadLandsMaterialRule {
 pub struct BlockMaterialRule {
     result_state: BlockStateCodec,
     #[serde(skip)]
-    block_state: OnceLock<Option<ChunkBlockState>>,
+    block_state: OnceLock<Option<RawBlockState>>,
 }
 
 impl BlockMaterialRule {
-    pub fn try_apply(&self) -> Option<ChunkBlockState> {
+    pub fn try_apply(&self) -> Option<RawBlockState> {
         *self
             .block_state
-            .get_or_init(|| ChunkBlockState::new(&self.result_state.name))
+            .get_or_init(|| RawBlockState::new(&self.result_state.name))
     }
 }
 
@@ -74,7 +74,7 @@ impl SequenceMaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         for seq in &self.sequence {
             if let Some(state) = seq.try_apply(chunk, context) {
                 return Some(state);
@@ -95,7 +95,7 @@ impl ConditionMaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         if self.if_true.test(chunk, context) {
             return self.then_run.try_apply(chunk, context);
         }

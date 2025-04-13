@@ -4,7 +4,7 @@ use pumpkin_util::{
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
-use crate::block::ChunkBlockState;
+use crate::block::RawBlockState;
 
 use super::{
     chunk_noise::{LAVA_BLOCK, WATER_BLOCK},
@@ -22,11 +22,11 @@ use super::{
 #[derive(Clone)]
 pub struct FluidLevel {
     max_y: i32,
-    state: ChunkBlockState,
+    state: RawBlockState,
 }
 
 impl FluidLevel {
-    pub fn new(max_y: i32, state: ChunkBlockState) -> Self {
+    pub fn new(max_y: i32, state: RawBlockState) -> Self {
         Self { max_y, state }
     }
 
@@ -34,11 +34,11 @@ impl FluidLevel {
         self.max_y
     }
 
-    fn get_block_state(&self, y: i32) -> ChunkBlockState {
+    fn get_block_state(&self, y: i32) -> RawBlockState {
         if y < self.max_y {
             self.state
         } else {
-            ChunkBlockState::AIR
+            RawBlockState::AIR
         }
     }
 }
@@ -51,11 +51,11 @@ pub enum FluidLevelSampler {
 
 pub struct StaticFluidLevelSampler {
     y: i32,
-    state: ChunkBlockState,
+    state: RawBlockState,
 }
 
 impl StaticFluidLevelSampler {
-    pub fn new(y: i32, state: ChunkBlockState) -> Self {
+    pub fn new(y: i32, state: RawBlockState) -> Self {
         Self { y, state }
     }
 }
@@ -196,13 +196,11 @@ impl WorldAquiferSampler {
         level_2: FluidLevel,
     ) -> f64 {
         let y = pos.y();
-        let block_state1 = level_1.get_block_state(y);
-        let block_state2 = level_2.get_block_state(y);
+        let block_state1 = level_1.get_block_state(y).to_block();
+        let block_state2 = level_2.get_block_state(y).to_block();
 
-        if (!block_state1.of_block(LAVA_BLOCK.block_id)
-            || !block_state2.of_block(WATER_BLOCK.block_id))
-            && (!block_state1.of_block(WATER_BLOCK.block_id)
-                || !block_state2.of_block(LAVA_BLOCK.block_id))
+        if (block_state1 != LAVA_BLOCK.to_block() || block_state2 != WATER_BLOCK.to_block())
+            && (block_state1 != WATER_BLOCK.to_block() || block_state2 != LAVA_BLOCK.to_block())
         {
             let level_diff = (level_1.max_y - level_2.max_y).abs();
             if level_diff == 0 {
@@ -289,7 +287,7 @@ impl WorldAquiferSampler {
             let bl3 = j > o;
             if bl3 || bl2 {
                 let fluid_level = self.fluid_level.get_fluid_level(x, o, z);
-                if !fluid_level.get_block_state(o).is_air() {
+                if !fluid_level.get_block_state(o).to_state().air {
                     if bl2 {
                         bl = true;
                     }
@@ -413,10 +411,10 @@ impl WorldAquiferSampler {
         level: i32,
         router: &mut ChunkNoiseRouter,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> ChunkBlockState {
+    ) -> RawBlockState {
         if level <= -10
             && level != MIN_HEIGHT_CELL
-            && !default_level.state.of_block(LAVA_BLOCK.block_id)
+            && default_level.state.to_block() != LAVA_BLOCK.to_block()
         {
             let x = floor_div(block_x, 64);
             let y = floor_div(block_y, 40);
@@ -439,7 +437,7 @@ impl WorldAquiferSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         if density > 0f64 {
             None
         } else {
@@ -448,7 +446,7 @@ impl WorldAquiferSampler {
             let k = pos.z();
 
             let fluid_level = self.fluid_level.get_fluid_level(i, j, k);
-            if fluid_level.get_block_state(j).of_block(LAVA_BLOCK.block_id) {
+            if fluid_level.get_block_state(j).to_block() == LAVA_BLOCK.to_block() {
                 Some(LAVA_BLOCK)
             } else {
                 let scaled_x = floor_div(i - 5, 16);
@@ -509,12 +507,13 @@ impl WorldAquiferSampler {
                     // TODO: Handle fluid tick
 
                     Some(block_state)
-                } else if block_state.of_block(WATER_BLOCK.block_id)
+                } else if block_state.to_block() == WATER_BLOCK.to_block()
                     && self
                         .fluid_level
                         .get_fluid_level(i, j - 1, k)
                         .get_block_state(j - 1)
-                        .of_block(LAVA_BLOCK.block_id)
+                        .to_block()
+                        == LAVA_BLOCK.to_block()
                 {
                     Some(block_state)
                 } else {
@@ -595,7 +594,7 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         let density = router.final_density(pos, sample_options);
         self.apply_internal(router, pos, sample_options, height_estimator, density)
     }
@@ -618,7 +617,7 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         let sample = router.final_density(pos, sample_options);
         //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
         if sample > 0f64 {
@@ -641,17 +640,18 @@ pub trait AquiferSamplerImpl {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState>;
+    ) -> Option<RawBlockState>;
 }
 
 #[cfg(test)]
 mod test {
     use std::{mem, sync::LazyLock};
 
+    use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
     use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
-        block::ChunkBlockState,
+        block::RawBlockState,
         generation::{
             GlobalRandomConfig, biome_coords,
             chunk_noise::{
@@ -662,7 +662,7 @@ mod test {
                 chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
                 chunk_noise_router::ChunkNoiseRouter,
                 density_function::UnblendedNoisePos,
-                proto_noise_router::GlobalProtoNoiseRouter,
+                proto_noise_router::ProtoNoiseRouters,
                 surface_height_sampler::{
                     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
                 },
@@ -671,7 +671,6 @@ mod test {
             proto_chunk::StandardChunkFluidLevelSampler,
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        noise_router::NOISE_ROUTER_ASTS,
     };
 
     use super::{AquiferSampler, FluidLevel, FluidLevelSampler, WorldAquiferSampler};
@@ -679,13 +678,13 @@ mod test {
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
-    static PROTO_ROUTER: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
-        let router_ast = NOISE_ROUTER_ASTS.overworld();
-        GlobalProtoNoiseRouter::generate(router_ast, &RANDOM_CONFIG)
+    static PROTO_ROUTER: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
+        let router_ast = &OVERWORLD_BASE_NOISE_ROUTER;
+        ProtoNoiseRouters::generate(router_ast, &RANDOM_CONFIG)
     });
 
     fn create_aquifer(
-        base_router: &GlobalProtoNoiseRouter,
+        base_router: &ProtoNoiseRouters,
     ) -> (
         WorldAquiferSampler,
         ChunkNoiseRouter,
@@ -703,7 +702,7 @@ mod test {
         ));
         const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
-            base_router,
+            &base_router.noise,
             &RANDOM_CONFIG,
             CHUNK_WIDTH / shape.horizontal_cell_block_count() as usize,
             chunk_pos::start_block_x(&chunk_pos),
@@ -748,8 +747,10 @@ mod test {
             shape.max_y() as i32,
             shape.vertical_cell_block_count() as usize,
         );
-        let height_estimator =
-            SurfaceHeightEstimateSampler::generate(base_router, &surface_height_estimator_options);
+        let height_estimator = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_height_estimator_options,
+        );
 
         (aquifer, noise.router, height_estimator, options)
     }
@@ -1652,51 +1653,42 @@ mod test {
             ((112, 60, 74, 0.20387997189913717), None),
             (
                 (112, 80, 64, -0.28931054817132484),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (112, 80, 66, -0.2808098154769529),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (112, 80, 68, -0.2806908647477032),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((112, 80, 66, -0.2808098154769529), Some(RawBlockState::AIR)),
+            ((112, 80, 68, -0.2806908647477032), Some(RawBlockState::AIR)),
             (
                 (112, 80, 70, -0.28068300576359284),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (112, 80, 72, -0.2805878392398348),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((112, 80, 72, -0.2805878392398348), Some(RawBlockState::AIR)),
             (
                 (112, 80, 74, -0.27824504138444317),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (112, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (112, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (112, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (112, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (112, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (112, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((114, -100, 64, 0.037482421875), None),
             ((114, -100, 66, 0.037482421875), None),
@@ -1752,53 +1744,38 @@ mod test {
             ((114, 60, 70, 0.10529675531043547), None),
             ((114, 60, 72, 0.1261191394093652), None),
             ((114, 60, 74, 0.15323465023530602), None),
-            (
-                (114, 80, 64, -0.3135251519473628),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (114, 80, 66, -0.3092766951165722),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (114, 80, 68, -0.3063751991759311),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (114, 80, 70, -0.3004342091280733),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((114, 80, 64, -0.3135251519473628), Some(RawBlockState::AIR)),
+            ((114, 80, 66, -0.3092766951165722), Some(RawBlockState::AIR)),
+            ((114, 80, 68, -0.3063751991759311), Some(RawBlockState::AIR)),
+            ((114, 80, 70, -0.3004342091280733), Some(RawBlockState::AIR)),
             (
                 (114, 80, 72, -0.29703745590700253),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (114, 80, 74, -0.2920638815250855),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((114, 80, 74, -0.2920638815250855), Some(RawBlockState::AIR)),
             (
                 (114, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (114, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (114, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (114, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (114, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (114, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((116, -100, 64, 0.037482421875), None),
             ((116, -100, 66, 0.037482421875), None),
@@ -1845,11 +1822,11 @@ mod test {
             ((116, 40, 64, -0.009355588931802767), None),
             (
                 (116, 40, 66, -0.006094366713842806),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 40, 68, -0.0027537988904787606),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((116, 40, 70, 6.165942717199293E-4), None),
             ((116, 40, 72, 0.00396682662711753), None),
@@ -1860,53 +1837,44 @@ mod test {
             ((116, 60, 70, 0.053305618429865455), None),
             ((116, 60, 72, 0.06694547220363958), None),
             ((116, 60, 74, 0.08711813973093903), None),
-            (
-                (116, 80, 64, -0.3326652310213258),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((116, 80, 64, -0.3326652310213258), Some(RawBlockState::AIR)),
             (
                 (116, 80, 66, -0.32962834810938174),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 80, 68, -0.32236370014057947),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 80, 70, -0.31670491006554574),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (116, 80, 72, -0.3130639601887072),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (116, 80, 74, -0.3124769234268471),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((116, 80, 72, -0.3130639601887072), Some(RawBlockState::AIR)),
+            ((116, 80, 74, -0.3124769234268471), Some(RawBlockState::AIR)),
             (
                 (116, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (116, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((118, -100, 64, 0.037482421875), None),
             ((118, -100, 66, 0.037482421875), None),
@@ -1953,23 +1921,23 @@ mod test {
             ((118, 40, 64, -0.016298811685686653), None),
             (
                 (118, 40, 66, -0.016656636719901533),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 40, 68, -0.01330299024830442),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 40, 70, -0.009864486324034218),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 40, 72, -0.006380723268648157),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 40, 74, -0.002886835272463701),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((118, 60, 64, 0.006086790713922152), None),
             ((118, 60, 66, 0.006014479808113486), None),
@@ -1977,53 +1945,47 @@ mod test {
             ((118, 60, 70, 0.011915636473415587), None),
             ((118, 60, 72, 0.01001192490238903), None),
             ((118, 60, 74, 0.0075500927486281426), None),
-            (
-                (118, 80, 64, -0.3462118919745469),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((118, 80, 64, -0.3462118919745469), Some(RawBlockState::AIR)),
             (
                 (118, 80, 66, -0.34419241078645835),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 80, 68, -0.33580861045450133),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 80, 70, -0.33008534054566163),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (118, 80, 72, -0.333649815109498),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((118, 80, 72, -0.333649815109498), Some(RawBlockState::AIR)),
             (
                 (118, 80, 74, -0.33771329428807284),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (118, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((120, -100, 64, 0.037482421875), None),
             ((120, -100, 66, 0.037482421875), None),
@@ -2070,23 +2032,23 @@ mod test {
             ((120, 40, 64, -0.017456523705167773), None),
             (
                 (120, 40, 66, -0.020044623482270124),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 40, 68, -0.022372181411266172),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 40, 70, -0.020228945291907708),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 40, 72, -0.01664436674077766),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 40, 74, -0.013001583733654043),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((120, 60, 64, -0.010805185122555435), Some(WATER_BLOCK)),
             ((120, 60, 66, -0.011684313707812422), Some(WATER_BLOCK)),
@@ -2094,53 +2056,41 @@ mod test {
             ((120, 60, 70, -0.012326309226980426), Some(WATER_BLOCK)),
             ((120, 60, 72, -0.019043795741958334), Some(WATER_BLOCK)),
             ((120, 60, 74, -0.023185441889689514), Some(WATER_BLOCK)),
-            (
-                (120, 80, 64, -0.3611328625547435),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (120, 80, 66, -0.3586517592327399),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (120, 80, 68, -0.3524534485283812),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((120, 80, 64, -0.3611328625547435), Some(RawBlockState::AIR)),
+            ((120, 80, 66, -0.3586517592327399), Some(RawBlockState::AIR)),
+            ((120, 80, 68, -0.3524534485283812), Some(RawBlockState::AIR)),
             (
                 (120, 80, 70, -0.35323218454039057),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 80, 72, -0.36213549677301105),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (120, 80, 74, -0.3684474143996314),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((120, 80, 74, -0.3684474143996314), Some(RawBlockState::AIR)),
             (
                 (120, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (120, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((122, -100, 64, 0.037482421875), None),
             ((122, -100, 66, 0.037482421875), None),
@@ -2187,19 +2137,19 @@ mod test {
             ((122, 40, 64, -0.013498316953033454), None),
             (
                 (122, 40, 66, -0.016896390550754353),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 40, 68, -0.01994683889106233),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 40, 70, -0.022658183924480487),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 40, 72, -0.02460705550987633),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((122, 40, 74, -0.02133677750482264), None),
             ((122, 60, 64, -0.02580014098083049), Some(WATER_BLOCK)),
@@ -2210,51 +2160,39 @@ mod test {
             ((122, 60, 74, -0.04490159197647781), Some(WATER_BLOCK)),
             (
                 (122, 80, 64, -0.37247525946547166),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (122, 80, 66, -0.3727266378002749),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((122, 80, 66, -0.3727266378002749), Some(RawBlockState::AIR)),
             (
                 (122, 80, 68, -0.36804742745663505),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (122, 80, 70, -0.3736723706537362),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (122, 80, 72, -0.3860951288334311),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (122, 80, 74, -0.3923721309133264),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((122, 80, 70, -0.3736723706537362), Some(RawBlockState::AIR)),
+            ((122, 80, 72, -0.3860951288334311), Some(RawBlockState::AIR)),
+            ((122, 80, 74, -0.3923721309133264), Some(RawBlockState::AIR)),
             (
                 (122, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (122, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((124, -100, 64, 0.037482421875), None),
             ((124, -100, 66, 0.037482421875), None),
@@ -2310,53 +2248,44 @@ mod test {
             ((124, 60, 70, -0.04106936165998065), Some(WATER_BLOCK)),
             ((124, 60, 72, -0.048715160337165046), Some(WATER_BLOCK)),
             ((124, 60, 74, -0.053817378732386144), Some(WATER_BLOCK)),
-            (
-                (124, 80, 64, -0.378513110274629),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((124, 80, 64, -0.378513110274629), Some(RawBlockState::AIR)),
             (
                 (124, 80, 66, -0.37887533037235366),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (124, 80, 68, -0.3755672366866089),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (124, 80, 70, -0.3806264904596738),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((124, 80, 68, -0.3755672366866089), Some(RawBlockState::AIR)),
+            ((124, 80, 70, -0.3806264904596738), Some(RawBlockState::AIR)),
             (
                 (124, 80, 72, -0.39139114552312176),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 80, 74, -0.39905004304932734),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (124, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             ((126, -100, 64, 0.037482421875), None),
             ((126, -100, 66, 0.037482421875), None),
@@ -2414,51 +2343,42 @@ mod test {
             ((126, 60, 74, -0.05663750895047857), Some(WATER_BLOCK)),
             (
                 (126, 80, 64, -0.37931742687180287),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (126, 80, 66, -0.38265481838544235),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (126, 80, 68, -0.3808041835281554),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((126, 80, 68, -0.3808041835281554), Some(RawBlockState::AIR)),
             (
                 (126, 80, 70, -0.38160238129796925),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
-            (
-                (126, 80, 72, -0.387746448733821),
-                Some(ChunkBlockState::AIR),
-            ),
-            (
-                (126, 80, 74, -0.3990668807989283),
-                Some(ChunkBlockState::AIR),
-            ),
+            ((126, 80, 72, -0.387746448733821), Some(RawBlockState::AIR)),
+            ((126, 80, 74, -0.3990668807989283), Some(RawBlockState::AIR)),
             (
                 (126, 100, 64, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (126, 100, 66, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (126, 100, 68, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (126, 100, 70, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (126, 100, 72, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
             (
                 (126, 100, 74, -0.4583333333333333),
-                Some(ChunkBlockState::AIR),
+                Some(RawBlockState::AIR),
             ),
         ];
 

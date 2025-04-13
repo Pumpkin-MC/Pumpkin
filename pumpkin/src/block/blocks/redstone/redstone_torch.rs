@@ -7,6 +7,7 @@ use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::HorizontalFacingExt;
 use pumpkin_world::chunk::TickPriority;
@@ -50,7 +51,7 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 _use_item_on: &SUseItemOn,
                 _player_direction: &HorizontalFacing,
                 _other: bool,
-            ) -> u16 {
+            ) -> BlockStateId {
                 if face.is_horizontal() {
                     let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
                     torch_props.facing = face.to_horizontal_facing().unwrap().opposite();
@@ -208,9 +209,9 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 &self,
                 world: &Arc<World>,
                 _block: &Block,
-                _state_id: u16,
+                _state_id: BlockStateId,
                 block_pos: &BlockPos,
-                _old_state_id: u16,
+                _old_state_id: BlockStateId,
                 _notify: bool,
             ) {
                 update_neighbors(world, block_pos).await;
@@ -221,7 +222,7 @@ pub fn register_redstone_torch_blocks(manager: &mut BlockRegistry) {
                 world: &Arc<World>,
                 _block: &Block,
                 location: BlockPos,
-                _old_state_id: u16,
+                _old_state_id: BlockStateId,
                 _moved: bool,
             ) {
                 update_neighbors(world, &location).await;
