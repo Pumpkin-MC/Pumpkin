@@ -1732,19 +1732,43 @@ impl World {
         let step = d.sign();
 
         let delta = Vector3::new(
-            if step.x == 0 { f64::MAX } else { (f64::from(step.x)) / d.x },
-            if step.y == 0 { f64::MAX } else { (f64::from(step.y)) / d.y },
-            if step.z == 0 { f64::MAX } else { (f64::from(step.z)) / d.z },
+            if step.x == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.x)) / d.x
+            },
+            if step.y == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.y)) / d.y
+            },
+            if step.z == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.z)) / d.z
+            },
         );
-
-
 
         let mut next = Vector3::new(
-            delta.x * (if step.x > 0 { 1.0 - (to.x - to.x.floor())} else { to.x - to.x.floor()}),
-            delta.y * (if step.y > 0 { 1.0 - (to.y - to.y.floor())} else { to.y - to.y.floor()}),
-            delta.z * (if step.z > 0 { 1.0 - (to.z - to.z.floor())} else { to.z - to.z.floor()}),
+            delta.x
+                * (if step.x > 0 {
+                    1.0 - (to.x - to.x.floor())
+                } else {
+                    to.x - to.x.floor()
+                }),
+            delta.y
+                * (if step.y > 0 {
+                    1.0 - (to.y - to.y.floor())
+                } else {
+                    to.y - to.y.floor()
+                }),
+            delta.z
+                * (if step.z > 0 {
+                    1.0 - (to.z - to.z.floor())
+                } else {
+                    to.z - to.z.floor()
+                }),
         );
-
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
             let block_direction;

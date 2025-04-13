@@ -726,7 +726,10 @@ impl Player {
     }
 
     pub fn rotation(&self) -> (f32, f32) {
-        (self.living_entity.entity.yaw.load(), self.living_entity.entity.pitch.load())
+        (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        )
     }
 
     /// Updates the current abilities the player has.
