@@ -42,7 +42,7 @@ impl ItemMetadata for BucketItem {
 
 #[async_trait]
 impl PumpkinItem for BucketItem {
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     async fn normal_use(&self, item: &Item, player: &Player) {
         if item.id == Item::MILK_BUCKET.id {
             // TODO implement this
