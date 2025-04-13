@@ -62,7 +62,6 @@ use pumpkin_world::{
     level::SyncChunk,
     BlockStateId,
     GeneratorSetting,
-    BlockStateId,
     block::entities::BlockEntity,
     GENERATION_SETTINGS
 };
