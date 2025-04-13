@@ -7,6 +7,7 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -105,7 +106,7 @@ impl BlockRegistry {
         use_item_on: &SUseItemOn,
         player_direction: &HorizontalFacing,
         other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
@@ -124,6 +125,23 @@ impl BlockRegistry {
         block.default_state_id
     }
 
+    pub async fn player_placed(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        state_id: u16,
+        pos: &BlockPos,
+        face: &BlockDirection,
+        player: &Player,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .player_placed(world, block, state_id, pos, face, player)
+                .await;
+        }
+    }
+
     pub async fn can_place_at(&self, world: &World, block: &Block, block_pos: &BlockPos) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -136,9 +154,9 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        state_id: u16,
+        state_id: BlockStateId,
         block_pos: &BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         notify: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -153,9 +171,9 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         fluid: &Fluid,
-        state_id: u16,
+        state_id: BlockStateId,
         block_pos: &BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         notify: bool,
     ) {
         let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
@@ -188,7 +206,7 @@ impl BlockRegistry {
         world: &Arc<World>,
         block: &Block,
         location: BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         moved: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -234,7 +252,7 @@ impl BlockRegistry {
         world: &Arc<World>,
         block_pos: &BlockPos,
         block: &Block,
-        state_id: u16,
+        state_id: BlockStateId,
         flags: BlockFlags,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -250,12 +268,12 @@ impl BlockRegistry {
         &self,
         world: &World,
         block: &Block,
-        state: u16,
+        state: BlockStateId,
         block_pos: &BlockPos,
         direction: &BlockDirection,
         neighbor_pos: &BlockPos,
-        neighbor_state: u16,
-    ) -> u16 {
+        neighbor_state: BlockStateId,
+    ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block

@@ -1,11 +1,11 @@
-use crate::chunk::format::PaletteBlockEntry;
+use pumpkin_data::block::{get_block, get_block_by_state_id, get_state_by_state_id};
 
-use super::registry::{get_block, get_block_by_state_id, get_state_by_state_id};
+use crate::{BlockStateId, chunk::format::PaletteBlockEntry};
 
 /// Instead of using a memory heavy normal BlockState This is used for internal representation in chunks to save memory
 #[derive(Clone, Copy, Debug, Eq)]
 pub struct RawBlockState {
-    pub state_id: u16,
+    pub state_id: BlockStateId,
 }
 
 impl PartialEq for RawBlockState {
@@ -46,7 +46,7 @@ impl RawBlockState {
         None
     }
 
-    pub fn get_id(&self) -> u16 {
+    pub fn get_state_id(&self) -> BlockStateId {
         self.state_id
     }
 

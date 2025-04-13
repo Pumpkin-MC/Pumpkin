@@ -1,12 +1,12 @@
 use std::io::Write;
 
 use pumpkin_data::{
+    block::get_block,
     fluid::Fluid,
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::packet;
-use pumpkin_world::block::registry;
 
 use crate::{
     ClientPacket,
@@ -41,7 +41,7 @@ impl ClientPacket for CUpdateTags<'_> {
                 p.write_string_bounded(key, u16::MAX as usize)?;
                 p.write_list(values, |p, string_id| {
                     let id = match registry_key {
-                        RegistryKey::Block => registry::get_block(string_id).unwrap().id as i32,
+                        RegistryKey::Block => get_block(string_id).unwrap().id as i32,
                         RegistryKey::Fluid => Fluid::ident_to_fluid_id(string_id).unwrap() as i32,
                         _ => unimplemented!(),
                     };

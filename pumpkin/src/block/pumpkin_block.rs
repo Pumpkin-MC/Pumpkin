@@ -7,6 +7,7 @@ use pumpkin_data::block::{Block, BlockState, HorizontalFacing};
 use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
@@ -57,7 +58,7 @@ pub trait PumpkinBlock: Send + Sync {
         _use_item_on: &SUseItemOn,
         _player_direction: &HorizontalFacing,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         block.default_state_id
     }
 
@@ -72,10 +73,21 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _world: &Arc<World>,
         _block: &Block,
+        _state_id: BlockStateId,
+        _pos: &BlockPos,
+        _old_state_id: BlockStateId,
+        _notify: bool,
+    ) {
+    }
+
+    async fn player_placed(
+        &self,
+        _world: &Arc<World>,
+        _block: &Block,
         _state_id: u16,
         _pos: &BlockPos,
-        _old_state_id: u16,
-        _notify: bool,
+        _face: &BlockDirection,
+        _player: &Player,
     ) {
     }
 
@@ -106,7 +118,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &Arc<World>,
         _pos: &BlockPos,
         _block: &Block,
-        _state_id: u16,
+        _state_id: BlockStateId,
         _flags: BlockFlags,
     ) {
     }
@@ -116,12 +128,12 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _world: &World,
         _block: &Block,
-        state: u16,
+        state: BlockStateId,
         _pos: &BlockPos,
         _direction: &BlockDirection,
         _neighbor_pos: &BlockPos,
-        _neighbor_state: u16,
-    ) -> u16 {
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
         state
     }
 
@@ -132,7 +144,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &Arc<World>,
         _block: &Block,
         _location: BlockPos,
-        _old_state_id: u16,
+        _old_state_id: BlockStateId,
         _moved: bool,
     ) {
     }

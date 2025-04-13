@@ -15,6 +15,7 @@ use blocks::redstone::redstone_torch::register_redstone_torch_blocks;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
+use blocks::signs::register_sign_blocks;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::register_torch_blocks;
 use blocks::{
@@ -28,6 +29,7 @@ use pumpkin_util::loot_table::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
@@ -74,6 +76,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     register_button_blocks(&mut manager);
     register_torch_blocks(&mut manager);
     register_redstone_torch_blocks(&mut manager);
+    register_sign_blocks(&mut manager);
 
     Arc::new(manager)
 }
@@ -83,7 +86,7 @@ pub async fn drop_loot(
     block: &Block,
     pos: &BlockPos,
     experience: bool,
-    state_id: u16,
+    state_id: BlockStateId,
 ) {
     if let Some(table) = &block.loot_table {
         let props =

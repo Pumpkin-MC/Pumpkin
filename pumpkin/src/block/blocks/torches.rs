@@ -4,6 +4,7 @@ use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::HorizontalFacing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
 type WallTorchProps = pumpkin_data::block::WallTorchLikeProperties;
@@ -41,7 +42,7 @@ pub fn register_torch_blocks(manager: &mut BlockRegistry) {
                 _use_item_on: &SUseItemOn,
                 _player_direction: &HorizontalFacing,
                 _other: bool,
-            ) -> u16 {
+            ) -> BlockStateId {
                 if face.is_horizontal() {
                     let wall_block = match block.name {
                         "torch" => Block::WALL_TORCH,

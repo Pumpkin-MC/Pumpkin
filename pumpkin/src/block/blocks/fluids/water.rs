@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 
 use crate::{block::pumpkin_fluid::PumpkinFluid, world::World};
 
@@ -20,9 +21,9 @@ impl PumpkinFluid for FlowingWater {
         &self,
         world: &World,
         fluid: &Fluid,
-        _state_id: u16,
+        _state_id: BlockStateId,
         block_pos: &BlockPos,
-        _old_state_id: u16,
+        _old_state_id: BlockStateId,
         _notify: bool,
     ) {
         world
