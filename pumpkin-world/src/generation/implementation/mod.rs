@@ -43,7 +43,7 @@ impl WorldGenerator for VanillaGenerator {
             .unwrap();
 
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
-        let sections = (0..sub_chunks).map(|_| SubChunk::max_light()).collect();
+        let sections = (0..sub_chunks).map(|_| SubChunk::max_sky_light()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
         let mut proto_chunk = ProtoChunk::new(

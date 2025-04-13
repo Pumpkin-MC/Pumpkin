@@ -8,7 +8,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{block::BlockDirection, chunk::TickPriority};
+use pumpkin_world::{BlockStateId, block::BlockDirection, chunk::TickPriority};
 
 use crate::{
     block::pumpkin_block::PumpkinBlock,
@@ -35,7 +35,7 @@ impl PumpkinBlock for RedstoneLamp {
         _use_item_on: &SUseItemOn,
         _player_direction: &HorizontalFacing,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut props = RedstoneLampProperties::default(block);
         props.lit = block_receives_redstone_power(world, block_pos).await;
         props.to_state_id(block)

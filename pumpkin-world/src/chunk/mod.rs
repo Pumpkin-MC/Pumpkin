@@ -4,6 +4,8 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::BlockStateId;
+
 pub mod format;
 pub mod io;
 pub mod palette;
@@ -161,10 +163,10 @@ pub struct SubChunk {
 }
 
 impl SubChunk {
-    pub fn max_light() -> Self {
+    /// As of now we don't have light calculation when generating a new chunk
+    pub fn max_sky_light() -> Self {
         let chunk_light_len = BlockPalette::VOLUME / 2;
         Self {
-            block_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
             sky_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
             ..Default::default()
         }
@@ -202,7 +204,7 @@ impl ChunkSections {
         relative_x: usize,
         y: i32,
         relative_z: usize,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         let y = y - self.min_y;
         if y < 0 {
             None
@@ -217,13 +219,13 @@ impl ChunkSections {
         relative_x: usize,
         y: i32,
         relative_z: usize,
-        block_state_id: u16,
+        block_state: BlockStateId,
     ) {
         let y = y - self.min_y;
         debug_assert!(y > 0);
         let relative_y = y as usize;
 
-        self.set_relative_block(relative_x, relative_y, relative_z, block_state_id);
+        self.set_relative_block(relative_x, relative_y, relative_z, block_state);
     }
 
     /// Gets the given block in the chunk
@@ -232,7 +234,7 @@ impl ChunkSections {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
 
@@ -250,7 +252,7 @@ impl ChunkSections {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         // TODO @LUK_ESC? update the heightmap
         self.set_block_no_heightmap_update(relative_x, relative_y, relative_z, block_state_id);
@@ -266,7 +268,7 @@ impl ChunkSections {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
@@ -307,7 +309,7 @@ impl ChunkData {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         self.section
             .get_relative_block(relative_x, relative_y, relative_z)
     }
@@ -319,7 +321,7 @@ impl ChunkData {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         // TODO @LUK_ESC? update the heightmap
         self.section
@@ -337,7 +339,7 @@ impl ChunkData {
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
     ) {
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);

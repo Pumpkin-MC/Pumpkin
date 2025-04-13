@@ -27,6 +27,7 @@ use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
     Block,
+    block_properties::{get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id},
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
@@ -56,7 +57,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::block::registry::{
-    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_id,
+    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
 };
 use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
@@ -1254,14 +1255,14 @@ impl World {
         .await;
     }
 
-    /// Sets a block
-    #[allow(clippy::too_many_lines)]
+    /// Sets a block and returns the old block id
+    #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> u16 {
+    ) -> BlockStateId {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
         let mut chunk = chunk.write().await;
@@ -1445,7 +1446,7 @@ impl World {
         flags: BlockFlags,
     ) {
         let block = self.get_block(position).await.unwrap();
-        let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
+        let event = BlockBreakEvent::new(cause.clone(), block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .lock()
@@ -1486,7 +1487,10 @@ impl World {
         }
     }
 
-    pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
+    pub async fn get_block_state_id(
+        &self,
+        position: &BlockPos,
+    ) -> Result<BlockStateId, GetBlockError> {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
 

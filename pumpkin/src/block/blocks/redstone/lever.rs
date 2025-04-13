@@ -11,6 +11,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
 use crate::{
@@ -50,7 +51,7 @@ impl PumpkinBlock for LeverBlock {
         _use_item_on: &SUseItemOn,
         player_direction: &HorizontalFacing,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 
         match face {
@@ -134,7 +135,7 @@ impl PumpkinBlock for LeverBlock {
         world: &Arc<World>,
         block: &Block,
         location: BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         moved: bool,
     ) {
         if !moved {

@@ -4,7 +4,6 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_world::item::ItemStack;
 
 pub mod container_click;
-mod crafting;
 pub mod drag_handler;
 mod error;
 mod open_container;

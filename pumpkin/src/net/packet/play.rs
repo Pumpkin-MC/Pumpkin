@@ -28,7 +28,7 @@ use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, block_properties::HorizontalFacing};
+use pumpkin_data::{Block, block_properties::{HorizontalFacing, get_block_by_item, get_block_collision_shapes}};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
@@ -38,7 +38,7 @@ use pumpkin_protocol::client::play::{
     CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
     CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
-use pumpkin_protocol::codec::slot::Slot;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
     SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
@@ -64,9 +64,8 @@ use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
 };
+use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_world::block::registry::get_block_collision_shapes;
-use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
@@ -553,7 +552,7 @@ impl Player {
         stack: ItemStack,
     ) {
         inventory.increment_state_id();
-        let slot_data = Slot::from(&stack);
+        let slot_data = ItemStackSerializer::from(stack.clone());
         if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
             log::error!("Pick item set slot error: {err}");
         } else {
@@ -1510,13 +1509,13 @@ impl Player {
         }
         let valid_slot = packet.slot >= 0 && packet.slot as usize <= SLOT_OFFHAND;
         // TODO: Handle error
-        let item_stack = packet.clicked_item.to_stack().unwrap();
+        let item_stack = packet.clicked_item.to_stack();
         if valid_slot {
             self.inventory()
                 .lock()
                 .await
-                .set_slot(packet.slot as usize, item_stack, true)?;
-        } else if let Some(item_stack) = item_stack {
+                .set_slot(packet.slot as usize, Some(item_stack), true)?;
+        } else {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;

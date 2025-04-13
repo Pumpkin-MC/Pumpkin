@@ -14,6 +14,7 @@ use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::BlockStateId;
 use rand::Rng;
 
 use super::redstone::block_receives_redstone_power;
@@ -68,9 +69,9 @@ impl PumpkinBlock for TNTBlock {
         &self,
         world: &Arc<World>,
         _block: &Block,
-        _state_id: u16,
+        _state_id: BlockStateId,
         pos: &BlockPos,
-        _old_state_id: u16,
+        _old_state_id: BlockStateId,
         _notify: bool,
     ) {
         if block_receives_redstone_power(world, pos).await {

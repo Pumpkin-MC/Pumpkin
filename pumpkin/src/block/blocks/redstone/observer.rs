@@ -9,6 +9,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
+    BlockStateId,
     block::{BlockDirection, FacingExt, HorizontalFacingExt},
     chunk::TickPriority,
 };
@@ -34,7 +35,7 @@ impl PumpkinBlock for ObserverBlock {
         _use_item_on: &SUseItemOn,
         player_direction: &HorizontalFacing,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(block);
         props.facing = player_direction.to_block_direction().to_facing();
         props.to_state_id(block)
@@ -84,12 +85,12 @@ impl PumpkinBlock for ObserverBlock {
         &self,
         world: &World,
         block: &Block,
-        state: u16,
+        state: BlockStateId,
         block_pos: &BlockPos,
         direction: &BlockDirection,
         _neighbor_pos: &BlockPos,
-        _neighbor_state: u16,
-    ) -> u16 {
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
         let props = ObserverLikeProperties::from_state_id(state, block);
 
         if &props.facing.to_block_direction() == direction && !props.powered {
@@ -142,7 +143,7 @@ impl PumpkinBlock for ObserverBlock {
         world: &Arc<World>,
         block: &Block,
         location: BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         moved: bool,
     ) {
         if !moved {
