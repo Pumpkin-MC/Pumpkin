@@ -193,8 +193,8 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
             fn namespace(&self) -> &'static str {
                 #namespace
             }
-            fn id(&self) -> &'static str {
-                #id
+            fn ids(&self) -> &'static [&'static str] {
+                &[#id]
             }
         }
     };
@@ -342,9 +342,4 @@ mod block_state;
 #[proc_macro]
 pub fn default_block_state(item: TokenStream) -> TokenStream {
     block_state::default_block_state_impl(item)
-}
-mod block;
-#[proc_macro]
-pub fn block_entity(item: TokenStream) -> TokenStream {
-    block::block_entity_impl(item)
 }

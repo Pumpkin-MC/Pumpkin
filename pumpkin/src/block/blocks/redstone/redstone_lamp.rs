@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, Boolean, HorizontalFacing};
+use pumpkin_data::block::{Block, BlockProperties, Boolean};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -30,7 +31,7 @@ impl PumpkinBlock for RedstoneLamp {
         _face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut props = RedstoneLampProperties::default(block);

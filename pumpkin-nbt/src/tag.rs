@@ -1,6 +1,7 @@
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use io::Read;
+use serde::{Deserialize, Serialize};
 use serializer::WriteAdaptor;
 
 use crate::*;
@@ -388,5 +389,130 @@ impl From<f64> for NbtTag {
 impl From<bool> for NbtTag {
     fn from(value: bool) -> Self {
         NbtTag::Byte(value as i8)
+    }
+}
+
+impl Serialize for NbtTag {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            NbtTag::End => serializer.serialize_unit(),
+            NbtTag::Byte(v) => serializer.serialize_i8(*v),
+            NbtTag::Short(v) => serializer.serialize_i16(*v),
+            NbtTag::Int(v) => serializer.serialize_i32(*v),
+            NbtTag::Long(v) => serializer.serialize_i64(*v),
+            NbtTag::Float(v) => serializer.serialize_f32(*v),
+            NbtTag::Double(v) => serializer.serialize_f64(*v),
+            NbtTag::ByteArray(v) => {
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(v.len()))?;
+                for byte in v.iter() {
+                    seq.serialize_element(byte)?;
+                }
+                seq.end()
+            }
+            NbtTag::String(v) => serializer.serialize_str(v),
+            NbtTag::List(v) => {
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(v.len()))?;
+                for item in v.iter() {
+                    seq.serialize_element(item)?;
+                }
+                seq.end()
+            }
+            NbtTag::Compound(v) => v.serialize(serializer),
+            NbtTag::IntArray(v) => {
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(v.len()))?;
+                for int in v.iter() {
+                    seq.serialize_element(int)?;
+                }
+                seq.end()
+            }
+            NbtTag::LongArray(v) => {
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(v.len()))?;
+                for long in v.iter() {
+                    seq.serialize_element(long)?;
+                }
+                seq.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for NbtTag {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct NbtTagVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for NbtTagVisitor {
+            type Value = NbtTag;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an NBT tag")
+            }
+
+            fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(NbtTag::Byte(v as i8))
+            }
+
+            fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E> {
+                Ok(NbtTag::Byte(v))
+            }
+
+            fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E> {
+                Ok(NbtTag::Short(v))
+            }
+
+            fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E> {
+                Ok(NbtTag::Int(v))
+            }
+
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(NbtTag::Long(v))
+            }
+
+            fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E> {
+                Ok(NbtTag::Float(v))
+            }
+
+            fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(NbtTag::Double(v))
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(NbtTag::String(v.to_string()))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut vec = Vec::new();
+                while let Some(value) = seq.next_element()? {
+                    vec.push(value);
+                }
+                Ok(NbtTag::List(vec.into_boxed_slice()))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                Ok(NbtTag::Compound(NbtCompound::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )?))
+            }
+        }
+
+        deserializer.deserialize_any(NbtTagVisitor)
     }
 }

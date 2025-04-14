@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, BlockState, Boolean, HorizontalFacing, ObserverLikeProperties,
-};
+use pumpkin_data::block::{Block, BlockProperties, BlockState, Boolean, ObserverLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
-    block::{BlockDirection, FacingExt, HorizontalFacingExt},
+    block::{BlockDirection, FacingExt},
     chunk::TickPriority,
 };
 
@@ -32,11 +31,11 @@ impl PumpkinBlock for ObserverBlock {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(block);
-        props.facing = player_direction.to_block_direction().to_facing();
+        props.facing = player.living_entity.entity.get_facing();
         props.to_state_id(block)
     }
 

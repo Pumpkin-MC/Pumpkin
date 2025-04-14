@@ -2,7 +2,10 @@ use palette::{BiomePalette, BlockPalette};
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
+
+use crate::block::entities::BlockEntity;
 
 use crate::BlockStateId;
 
@@ -112,6 +115,7 @@ pub struct ChunkData {
     pub position: Vector2<i32>,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
+    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
 
     pub dirty: bool,
 }
