@@ -4,6 +4,7 @@
 use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter, Log};
+use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
@@ -33,6 +34,10 @@ pub mod server;
 pub mod world;
 
 const GIT_VERSION: &str = env!("GIT_VERSION");
+
+#[cfg(feature = "dhat-heap")]
+pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
@@ -220,6 +225,13 @@ impl PumpkinServer {
             server.spawn_task(lan_broadcast::start_lan_broadcast(addr));
         }
 
+        if BASIC_CONFIG.allow_chat_reports {
+            let mojang_public_keys = fetch_mojang_public_keys(server.auth_client.as_ref().unwrap())
+                .await
+                .unwrap();
+            *server.mojang_public_keys.lock().await = mojang_public_keys;
+        }
+
         // Ticker
         {
             let ticker_server = server.clone();
@@ -275,7 +287,7 @@ impl PumpkinServer {
             } else {
                 format!("{client_addr}")
             };
-            log::info!(
+            log::debug!(
                 "Accepted connection from: {} (id {})",
                 formatted_address,
                 id

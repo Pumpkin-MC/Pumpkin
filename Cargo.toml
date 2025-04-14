@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-dev+1.21.5"
 edition = "2024"
 
 
@@ -60,4 +60,4 @@ serde_json = "1.0"
 
 async-trait = "0.1"
 
-tempfile = "3.17.1"
+tempfile = "3.19.1"

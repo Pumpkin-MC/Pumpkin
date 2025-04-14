@@ -1,4 +1,11 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use dashmap::{DashMap, Entry};
 use log::trace;
@@ -7,7 +14,7 @@ use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use tokio::{
     sync::{Mutex, Notify, RwLock, mpsc},
-    task::{JoinHandle, JoinSet},
+    task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
 
@@ -47,7 +54,7 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
@@ -56,6 +63,7 @@ pub struct Level {
     // TODO: Make this a trait
     _locker: Arc<AnvilLevelLocker>,
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
+    fluid_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
@@ -136,6 +144,7 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             block_ticks: Arc::new(Mutex::new(Vec::new())),
+            fluid_ticks: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -343,10 +352,12 @@ impl Level {
             return;
         }
         let mut block_ticks = self.block_ticks.lock().await;
+        let mut fluid_ticks = self.fluid_ticks.lock().await;
 
         for (coord, chunk) in &chunks_to_write {
             let mut chunk_data = chunk.write().await;
             chunk_data.block_ticks.clear();
+            chunk_data.fluid_ticks.clear();
             // Only keep ticks that are not saved in the chunk
             block_ticks.retain(|tick| {
                 let (chunk_coord, _relative_coord) =
@@ -358,8 +369,19 @@ impl Level {
                     true
                 }
             });
+            fluid_ticks.retain(|tick| {
+                let (chunk_coord, _relative_coord) =
+                    tick.block_pos.chunk_and_chunk_relative_position();
+                if chunk_coord == *coord {
+                    chunk_data.fluid_ticks.push(tick.clone());
+                    false
+                } else {
+                    true
+                }
+            });
         }
         drop(block_ticks);
+        drop(fluid_ticks);
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
@@ -400,28 +422,32 @@ impl Level {
             return;
         }
 
+        // If false, stop loading chunks because the channel has closed.
         let send_chunk =
             move |is_new: bool,
                   chunk: SyncChunk,
                   channel: &mpsc::UnboundedSender<(SyncChunk, bool)>| {
-                let _ = channel
-                    .send((chunk, is_new))
-                    .inspect_err(|err| log::error!("unable to send chunk to channel: {}", err));
+                channel.send((chunk, is_new)).is_ok()
             };
 
         // First send all chunks that we have cached
         // We expect best case scenario to have all cached
         let mut remaining_chunks = Vec::new();
         for chunk in chunks {
-            if let Some(chunk) = self.loaded_chunks.get(chunk) {
-                send_chunk(false, chunk.value().clone(), &channel);
+            let is_ok = if let Some(chunk) = self.loaded_chunks.get(chunk) {
+                send_chunk(false, chunk.value().clone(), &channel)
             } else if let Some(spawn_chunk) = self.spawn_chunks.get(chunk) {
                 // Also clone the arc into the loaded chunks
                 self.loaded_chunks
                     .insert(*chunk, spawn_chunk.value().clone());
-                send_chunk(false, spawn_chunk.value().clone(), &channel);
+                send_chunk(false, spawn_chunk.value().clone(), &channel)
             } else {
                 remaining_chunks.push(*chunk);
+                true
+            };
+
+            if !is_ok {
+                return;
             }
         }
 
@@ -438,9 +464,10 @@ impl Level {
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
         let level_block_ticks = self.block_ticks.clone();
+        let level_fluid_ticks = self.fluid_ticks.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
-                match data {
+                let is_ok = match data {
                     LoadedData::Loaded(chunk) => {
                         let position = chunk.read().await.position;
 
@@ -450,17 +477,20 @@ impl Level {
                         level_block_ticks.extend(block_ticks);
                         drop(level_block_ticks);
 
+                        // Load the fluid ticks from the chunk
+                        let fluid_ticks = chunk.read().await.fluid_ticks.clone();
+                        let mut level_fluid_ticks = level_fluid_ticks.lock().await;
+                        level_fluid_ticks.extend(fluid_ticks);
+                        drop(level_fluid_ticks);
+
                         let value = loaded_chunks
                             .entry(position)
                             .or_insert(chunk)
                             .value()
                             .clone();
-                        send_chunk(false, value, &load_channel);
+                        send_chunk(false, value, &load_channel)
                     }
-                    LoadedData::Missing(pos) => generate_bridge_send
-                        .send(pos)
-                        .await
-                        .expect("Failed to send position to generation handler"),
+                    LoadedData::Missing(pos) => generate_bridge_send.send(pos).await.is_ok(),
                     LoadedData::Error((pos, error)) => {
                         match error {
                             // this is expected, and is not an error
@@ -478,11 +508,13 @@ impl Level {
                             }
                         };
 
-                        generate_bridge_send
-                            .send(pos)
-                            .await
-                            .expect("Failed to send position to generation handler");
+                        generate_bridge_send.send(pos).await.is_ok()
                     }
+                };
+
+                if !is_ok {
+                    // This isn't recoverable, so stop listening
+                    return;
                 }
             }
         };
@@ -490,34 +522,50 @@ impl Level {
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
         let handle_generate = async move {
+            let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
+                if !continue_to_generate.load(Ordering::Relaxed) {
+                    return;
+                }
+
                 let loaded_chunks = loaded_chunks.clone();
                 let world_gen = world_gen.clone();
                 let channel = channel.clone();
+                let cloned_continue_to_generate = continue_to_generate.clone();
                 rayon::spawn(move || {
+                    // Rayon tasks are queued, so also check it here
+                    if !cloned_continue_to_generate.load(Ordering::Relaxed) {
+                        return;
+                    }
+
                     let result = loaded_chunks
                         .entry(pos)
                         .or_insert_with(|| {
                             // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk = world_gen.generate_chunk(pos);
+                            let generated_chunk = world_gen.generate_chunk(&pos);
                             Arc::new(RwLock::new(generated_chunk))
                         })
                         .value()
                         .clone();
 
-                    send_chunk(true, result, &channel);
+                    if !send_chunk(true, result, &channel) {
+                        // Stop any additional queued generations
+                        cloned_continue_to_generate.store(false, Ordering::Relaxed);
+                    }
                 });
             }
         };
 
-        let mut set = JoinSet::new();
-        set.spawn(handle_load);
-        set.spawn(handle_generate);
+        let tracker = TaskTracker::new();
+        tracker.spawn(handle_load);
+        tracker.spawn(handle_generate);
 
         self.chunk_saver
             .fetch_chunks(&self.level_folder, &remaining_chunks, load_bridge_send)
             .await;
-        let _ = set.join_all().await;
+
+        tracker.close();
+        tracker.wait().await;
     }
 
     pub fn try_get_chunk(
@@ -545,11 +593,31 @@ impl Level {
         ticks
     }
 
+    pub async fn get_and_tick_fluid_ticks(&self) -> Vec<ScheduledTick> {
+        let mut fluid_ticks = self.fluid_ticks.lock().await;
+        let mut ticks = Vec::new();
+        fluid_ticks.retain_mut(|tick| {
+            tick.delay = tick.delay.saturating_sub(1);
+            if tick.delay == 0 {
+                ticks.push(tick.clone());
+                false
+            } else {
+                true
+            }
+        });
+        ticks
+    }
+
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
         let block_ticks = self.block_ticks.lock().await;
         block_ticks
             .iter()
             .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
+    }
+
+    pub async fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos) -> bool {
+        let fluid_ticks = self.fluid_ticks.lock().await;
+        fluid_ticks.iter().any(|tick| tick.block_pos == *block_pos)
     }
 
     pub async fn schedule_block_tick(
@@ -564,6 +632,16 @@ impl Level {
             block_pos,
             delay,
             priority,
+            target_block_id: block_id,
+        });
+    }
+
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: &BlockPos, delay: u16) {
+        let mut fluid_ticks = self.fluid_ticks.lock().await;
+        fluid_ticks.push(ScheduledTick {
+            block_pos: *block_pos,
+            delay,
+            priority: TickPriority::Normal,
             target_block_id: block_id,
         });
     }

@@ -8,6 +8,9 @@
 !/pumpkin*/
 !/assets
 
+# Allow build.rs to read git commit sha
+!/.git
+
 # Dependencies
 !Cargo.lock
 !Cargo.toml

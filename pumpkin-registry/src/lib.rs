@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use banner_pattern::BannerPattern;
 use biome::Biome;
 use cat::CatVariant;
-use chat_type::ChatType;
+use chat_type::{ChatType, Decoration};
 use chicken::ChickenVariant;
 use cow::CowVariant;
 use damage_type::DamageType;
@@ -16,7 +16,6 @@ use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pig::PigVariant;
 use pumpkin_protocol::{client::config::RegistryEntry, codec::identifier::Identifier};
-pub use recipe::{RECIPES, Recipe, RecipeResult, RecipeType, flatten_3x3};
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;
@@ -36,7 +35,6 @@ mod instrument;
 mod jukebox_song;
 mod paint;
 mod pig;
-mod recipe;
 mod trim_material;
 mod trim_pattern;
 mod wolf;
@@ -111,11 +109,28 @@ impl Registry {
             registry_entries,
         };
 
-        let registry_entries = SYNCED_REGISTRIES
+        let mut registry_entries: Vec<RegistryEntry> = SYNCED_REGISTRIES
             .chat_type
             .iter()
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
+
+        // Custom RAW registry type that removes the vanilla sender name. Allows custom formatting.
+        registry_entries.push(RegistryEntry::from_nbt_custom(
+            "raw",
+            &ChatType {
+                chat: Decoration {
+                    translation_key: "%s".to_string(),
+                    parameters: vec!["content".to_string()],
+                    style: None,
+                },
+                narration: Decoration {
+                    translation_key: "%s says %s".to_string(),
+                    parameters: vec!["sender".to_string(), "content".to_string()],
+                    style: None,
+                },
+            },
+        ));
 
         let chat_type = Registry {
             registry_id: Identifier::vanilla("chat_type"),

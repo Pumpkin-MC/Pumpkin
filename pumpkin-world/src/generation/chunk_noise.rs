@@ -1,7 +1,7 @@
-use pumpkin_macros::block_state;
+use pumpkin_macros::default_block_state;
 use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2, vector3::Vector3};
 
-use crate::{block::ChunkBlockState, generation::section_coords};
+use crate::{block::RawBlockState, generation::section_coords};
 
 use super::{
     GlobalRandomConfig,
@@ -17,15 +17,15 @@ use super::{
         },
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
-        proto_noise_router::GlobalProtoNoiseRouter,
+        proto_noise_router::ProtoNoiseRouter,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
     ore_sampler::OreVeinSampler,
     settings::GenerationShapeConfig,
 };
 
-pub const LAVA_BLOCK: ChunkBlockState = block_state!("lava");
-pub const WATER_BLOCK: ChunkBlockState = block_state!("water");
+pub const LAVA_BLOCK: RawBlockState = default_block_state!("lava");
+pub const WATER_BLOCK: RawBlockState = default_block_state!("water");
 
 pub const CHUNK_DIM: u8 = 16;
 
@@ -42,7 +42,7 @@ impl BlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
@@ -66,7 +66,7 @@ impl ChainedBlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         self.samplers
             .iter_mut()
             .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))
@@ -158,7 +158,7 @@ pub struct ChunkNoiseGenerator<'a> {
 impl<'a> ChunkNoiseGenerator<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        noise_router_base: &'a GlobalProtoNoiseRouter,
+        noise_router_base: &'a ProtoNoiseRouter,
         random_config: &GlobalRandomConfig,
         horizontal_cell_count: usize,
         start_block_x: i32,
@@ -369,7 +369,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         start_pos: Vector3<i32>,
         cell_pos: Vector3<i32>,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         //TODO: Fix this when Blender is added
         let pos = UnblendedNoisePos::new(
             start_pos.x + cell_pos.x,

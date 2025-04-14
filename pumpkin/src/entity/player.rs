@@ -4,7 +4,7 @@ use std::{
     ops::AddAssign,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -48,7 +48,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CSetHeldItem;
+use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -64,8 +64,8 @@ use pumpkin_protocol::{
         SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
         SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
         SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-        SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
+        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
     },
 };
 use pumpkin_protocol::{
@@ -90,6 +90,10 @@ use pumpkin_util::{
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
+use uuid::Uuid;
+
+const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
+const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 enum BatchState {
     Initial,
@@ -216,7 +220,7 @@ pub struct Player {
     /// The player's last known experience level.
     pub last_sent_xp: AtomicI32,
     pub last_sent_health: AtomicI32,
-    pub last_sent_food: AtomicU32,
+    pub last_sent_food: AtomicU8,
     pub last_food_saturation: AtomicBool,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
@@ -233,7 +237,8 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
-    pub global_chat_message_index: AtomicU32,
+    pub chat_session: Arc<Mutex<ChatSession>>,
+    pub signature_cache: Mutex<MessageCache>,
 }
 
 impl Player {
@@ -286,7 +291,7 @@ impl Player {
             // (We left shift by one so we can search around that chunk)
             watched_section: AtomicCell::new(Cylindrical::new(
                 Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
-                unsafe { NonZeroU8::new_unchecked(1) },
+                NonZeroU8::new(1).unwrap(),
             )),
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicI64::new(0),
@@ -314,10 +319,11 @@ impl Player {
             chunk_manager: Mutex::new(ChunkManager::new(16)),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
-            last_sent_food: AtomicU32::new(0),
+            last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
-            global_chat_message_index: AtomicU32::new(0),
+            chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
+            signature_cache: Mutex::new(MessageCache::default()),
         }
     }
 
@@ -458,7 +464,7 @@ impl Player {
                     combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
                 }
                 _ => {}
-            };
+            }
             if config.knockback {
                 combat::handle_knockback(
                     attacker_entity,
@@ -487,7 +493,7 @@ impl Player {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle: Particle,
+        particle: Particle,
     ) {
         self.client
             .enqueue_packet(&CParticle::new(
@@ -497,7 +503,7 @@ impl Player {
                 offset,
                 max_speed,
                 particle_count,
-                VarInt(pariticle as i32),
+                VarInt(particle as i32),
                 &[],
             ))
             .await;
@@ -514,7 +520,7 @@ impl Player {
     ) {
         self.client
             .enqueue_packet(&CSoundEffect::new(
-                IdOr::Id(u32::from(sound_id)),
+                IdOr::Id(sound_id),
                 category,
                 position,
                 volume,
@@ -575,7 +581,7 @@ impl Player {
                 self.client.send_packet_now(&CChunkData(&chunk)).await;
             }
             self.client
-                .send_packet_now(&CChunkBatchEnd::new(chunk_count))
+                .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
                 .await;
         }
 
@@ -806,7 +812,7 @@ impl Player {
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
-            unsafe { NonZeroU8::new_unchecked(1) },
+            NonZeroU8::new(1).unwrap(),
         ));
     }
 
@@ -1131,8 +1137,7 @@ impl Player {
                     .read()
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                        // TODO: Remove magic number
-                        0x04,
+                        PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
@@ -1227,7 +1232,7 @@ impl Player {
     pub async fn send_message(
         &self,
         message: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         sender_name: &TextComponent,
         target_name: Option<&TextComponent>,
     ) {
@@ -1697,12 +1702,16 @@ impl Player {
             SChunkBatch::PACKET_ID => {
                 self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
             }
+            SPlayerSession::PACKET_ID => {
+                self.handle_chat_session_update(server, SPlayerSession::read(payload)?)
+                    .await;
+            }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
                 // TODO: We give an error if all play packets are implemented
                 //  return Err(Box::new(DeserializerError::UnknownPacket));
             }
-        };
+        }
         Ok(())
     }
 }
@@ -1846,5 +1855,134 @@ impl TryFrom<i32> for ChatMode {
             2 => Ok(Self::Hidden),
             _ => Err(InvalidChatMode),
         }
+    }
+}
+
+/// Player's current chat session
+pub struct ChatSession {
+    pub session_id: uuid::Uuid,
+    pub expires_at: i64,
+    pub public_key: Box<[u8]>,
+    pub signature: Box<[u8]>,
+    pub messages_sent: i32,
+    pub messages_received: i32,
+    pub signature_cache: Vec<Box<[u8]>>,
+}
+
+impl Default for ChatSession {
+    fn default() -> Self {
+        Self::new(Uuid::nil(), 0, Box::new([]), Box::new([]))
+    }
+}
+
+impl ChatSession {
+    #[must_use]
+    pub fn new(
+        session_id: Uuid,
+        expires_at: i64,
+        public_key: Box<[u8]>,
+        key_signature: Box<[u8]>,
+    ) -> Self {
+        Self {
+            session_id,
+            expires_at,
+            public_key,
+            signature: key_signature,
+            messages_sent: 0,
+            messages_received: 0,
+            signature_cache: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct LastSeen(Vec<Box<[u8]>>);
+
+impl From<LastSeen> for Vec<Box<[u8]>> {
+    fn from(seen: LastSeen) -> Self {
+        seen.0
+    }
+}
+
+impl AsRef<[Box<[u8]>]> for LastSeen {
+    fn as_ref(&self) -> &[Box<[u8]>] {
+        &self.0
+    }
+}
+
+impl LastSeen {
+    /// The sender's `last_seen` signatures are sent as ID's if the recipient has them in their cache.
+    /// Otherwise, the full signature is sent. (ID:0 indicates full signature is being sent)
+    pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
+        let mut indexed = Vec::new();
+        for signature in &self.0 {
+            if let Some(index) = recipient
+                .signature_cache
+                .lock()
+                .await
+                .full_cache
+                .iter()
+                .position(|s| s == signature)
+            {
+                indexed.push(PreviousMessage {
+                    // Send ID reference to recipient's cache (index + 1 because 0 is reserved for full signature)
+                    id: VarInt(1 + index as i32),
+                    signature: None,
+                });
+            } else {
+                indexed.push(PreviousMessage {
+                    // Send ID as 0 for full signature
+                    id: VarInt(0),
+                    signature: Some(signature.clone()),
+                });
+            }
+        }
+        indexed.into_boxed_slice()
+    }
+}
+
+pub struct MessageCache {
+    /// max 128 cached message signatures. Most recent FIRST.
+    /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
+    /// Must be 1:1 with client's signature cache.
+    full_cache: VecDeque<Box<[u8]>>,
+    /// max 20 last seen messages by the sender. Most Recent LAST
+    pub last_seen: LastSeen,
+}
+
+impl Default for MessageCache {
+    fn default() -> Self {
+        Self {
+            full_cache: VecDeque::with_capacity(MAX_CACHED_SIGNATURES as usize),
+            last_seen: LastSeen::default(),
+        }
+    }
+}
+
+impl MessageCache {
+    /// Not used for caching seen messages. Only for non-indexed signatures from senders.
+    pub fn cache_signatures(&mut self, signatures: &[Box<[u8]>]) {
+        for sig in signatures.iter().rev() {
+            if self.full_cache.contains(sig) {
+                continue;
+            }
+            // If the cache is maxed, and someone sends a signature older than the oldest in cache, ignore it
+            if self.full_cache.len() < MAX_CACHED_SIGNATURES as usize {
+                self.full_cache.push_back(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
+            }
+        }
+    }
+
+    /// Adds a seen signature to `last_seen` and `full_cache`.
+    pub fn add_seen_signature(&mut self, signature: &[u8]) {
+        if self.last_seen.0.len() >= MAX_PREVIOUS_MESSAGES as usize {
+            self.last_seen.0.remove(0);
+        }
+        self.last_seen.0.push(signature.into());
+        // This probably doesn't need to be a loop, but better safe than sorry
+        while self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
+            self.full_cache.pop_back();
+        }
+        self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }

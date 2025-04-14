@@ -10,12 +10,12 @@ use crate::{
 
 #[packet(PLAY_COMMANDS)]
 pub struct CCommands<'a> {
-    pub nodes: Vec<ProtoNode<'a>>,
+    pub nodes: Box<[ProtoNode<'a>]>,
     pub root_node_index: VarInt,
 }
 
 impl<'a> CCommands<'a> {
-    pub fn new(nodes: Vec<ProtoNode<'a>>, root_node_index: VarInt) -> Self {
+    pub fn new(nodes: Box<[ProtoNode<'a>]>, root_node_index: VarInt) -> Self {
         Self {
             nodes,
             root_node_index,
@@ -34,7 +34,7 @@ impl ClientPacket for CCommands<'_> {
 }
 
 pub struct ProtoNode<'a> {
-    pub children: Vec<VarInt>,
+    pub children: Box<[VarInt]>,
     pub node_type: ProtoNodeType<'a>,
 }
 
@@ -207,6 +207,8 @@ impl ArgumentType<'_> {
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     pub fn write_to_buffer(&self, write: &mut impl Write) -> Result<(), WritingError> {
+        // Safety: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
+        // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
         let id = unsafe { *(self as *const Self as *const i32) };
         write.write_var_int(&(id).into())?;
         match self {

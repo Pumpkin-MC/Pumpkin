@@ -6,7 +6,6 @@ use std::{
 
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-use super::Codec;
 use bytes::BufMut;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
@@ -22,20 +21,20 @@ pub type VarIntType = i32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VarInt(pub VarIntType);
 
-impl Codec<Self> for VarInt {
+impl VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
-    const MAX_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
+    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
     /// Returns the exact number of bytes this VarInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    fn written_size(&self) -> usize {
+    pub fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
         }
     }
 
-    fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
+    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0;
         for _ in 0..Self::MAX_SIZE.get() {
             let b: u8 = val as u8 & 0b01111111;
@@ -48,7 +47,8 @@ impl Codec<Self> for VarInt {
         Ok(())
     }
 
-    fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
+    // TODO: Validate that the first byte will not overflow a i32
+    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8_be()?;
@@ -100,35 +100,40 @@ impl VarInt {
     }
 }
 
-impl From<i32> for VarInt {
-    fn from(value: i32) -> Self {
-        VarInt(value)
-    }
+// Macros are needed because traits over generics succccccccccck
+macro_rules! gen_from {
+    ($ty: ty) => {
+        impl From<$ty> for VarInt {
+            fn from(value: $ty) -> Self {
+                VarInt(value.into())
+            }
+        }
+    };
 }
 
-impl From<u32> for VarInt {
-    fn from(value: u32) -> Self {
-        VarInt(value as i32)
-    }
+gen_from!(i8);
+gen_from!(u8);
+gen_from!(i16);
+gen_from!(u16);
+gen_from!(i32);
+
+macro_rules! gen_try_from {
+    ($ty: ty) => {
+        impl TryFrom<$ty> for VarInt {
+            type Error = <i32 as TryFrom<$ty>>::Error;
+
+            fn try_from(value: $ty) -> Result<Self, Self::Error> {
+                Ok(VarInt(value.try_into()?))
+            }
+        }
+    };
 }
 
-impl From<u8> for VarInt {
-    fn from(value: u8) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<usize> for VarInt {
-    fn from(value: usize) -> Self {
-        VarInt(value as i32)
-    }
-}
-
-impl From<VarInt> for i32 {
-    fn from(value: VarInt) -> Self {
-        value.0
-    }
-}
+gen_try_from!(u32);
+gen_try_from!(i64);
+gen_try_from!(u64);
+gen_try_from!(isize);
+gen_try_from!(usize);
 
 impl AsRef<i32> for VarInt {
     fn as_ref(&self) -> &i32 {

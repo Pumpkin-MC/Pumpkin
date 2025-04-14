@@ -198,7 +198,7 @@ impl CommandExecutor for SelfToEntityExecutor {
                     .send_message(TextComponent::translate("permissions.requires.player", []))
                     .await;
             }
-        };
+        }
 
         Ok(())
     }
@@ -226,7 +226,7 @@ impl CommandExecutor for SelfToPosExecutor {
                     .send_message(TextComponent::translate("permissions.requires.player", []))
                     .await;
             }
-        };
+        }
 
         Ok(())
     }

@@ -4,9 +4,10 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 
+// TODO: This entire thing should be atomic, not individual fields
 pub struct HungerManager {
     /// The current hunger level.
-    pub level: AtomicCell<u32>,
+    pub level: AtomicCell<u8>,
     /// The food saturation level.
     pub saturation: AtomicCell<f32>,
     pub exhaustion: AtomicCell<f32>,
@@ -67,8 +68,10 @@ impl HungerManager {
 
 #[async_trait]
 impl NBTStorage for HungerManager {
+    // TODO: Proper value checks
+
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_int("foodLevel", self.level.load() as i32);
+        nbt.put_int("foodLevel", self.level.load().into());
         nbt.put_float("foodSaturationLevel", self.saturation.load());
         nbt.put_float("foodExhaustionLevel", self.exhaustion.load());
         nbt.put_int("foodTickTimer", self.tick_timer.load() as i32);
@@ -76,7 +79,7 @@ impl NBTStorage for HungerManager {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.level
-            .store(nbt.get_int("foodLevel").unwrap_or(20) as u32);
+            .store(nbt.get_int("foodLevel").unwrap_or(20) as u8);
         self.saturation
             .store(nbt.get_float("foodSaturationLevel").unwrap_or(5.0));
         self.exhaustion
