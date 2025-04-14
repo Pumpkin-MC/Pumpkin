@@ -8,9 +8,9 @@ use pumpkin_data::item::Item;
 use pumpkin_inventory::player::PlayerInventory;
 use pumpkin_protocol::client::play::CSetContainerSlot;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::GameMode;
 use pumpkin_world::item::ItemStack;
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -21,10 +21,7 @@ pub struct FilledBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
-        [
-            Item::BUCKET.id,
-        ]
-        .into()
+        [Item::BUCKET.id].into()
     }
 }
 
@@ -48,9 +45,7 @@ impl ItemMetadata for FilledBucketItem {
     }
 }
 
-fn get_start_and_end_pos(
-    player: &Player,
-) -> (Vector3<f64>, Vector3<f64>) {
+fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
     let (yaw, pitch) = player.rotation();
     let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
@@ -78,8 +73,7 @@ impl PumpkinItem for EmptyBucketItem {
                 return false;
             };
 
-            state_id == Block::WATER.default_state_id
-                || state_id == Block::LAVA.default_state_id
+            state_id == Block::WATER.default_state_id || state_id == Block::LAVA.default_state_id
         };
 
         let (block_pos, _) = world.traverse_blocks(start_pos, end_pos, checker).await;
@@ -99,10 +93,7 @@ impl PumpkinItem for EmptyBucketItem {
             } else {
                 Item::LAVA_BUCKET
             };
-            let item_stack = Some(ItemStack::new(
-                    1,
-                    item_type.clone(),
-            ));
+            let item_stack = Some(ItemStack::new(1, item_type.clone()));
             let slot_data = ItemStackSerializer::from(item_stack.clone());
             let game_mode = player.gamemode.load();
             if game_mode == GameMode::Survival {
@@ -157,8 +148,7 @@ impl PumpkinItem for FilledBucketItem {
             state_id != Block::AIR.id
         };
 
-        let (block_pos, block_direction) =
-            world.traverse_blocks(start_pos, end_pos, checker).await;
+        let (block_pos, block_direction) = world.traverse_blocks(start_pos, end_pos, checker).await;
 
         if let (Some(pos), Some(direction)) = (block_pos, block_direction) {
             log::info!("Setting block at {pos:?}");
@@ -169,20 +159,22 @@ impl PumpkinItem for FilledBucketItem {
                     BlockFlags::NOTIFY_NEIGHBORS,
                 )
                 .await;
-            let mut inventory = player.inventory().lock().await;
-            let selected = inventory.get_selected_slot();
-            let item = Some(ItemStack::new(1, Item::BUCKET));
-            let slot_data = ItemStackSerializer::from(item.clone());
-            if let Err(err) = inventory.set_slot(selected, item, false) {
-                log::error!("Failed to set slot: {err}");
-            } else {
-                let dest_packet = CSetContainerSlot::new(
-                    PlayerInventory::CONTAINER_ID,
-                    inventory.state_id as i32,
-                    selected as i16,
-                    &slot_data,
-                );
-                player.client.enqueue_packet(&dest_packet).await;
+            if player.gamemode.load() == GameMode::Survival {
+                let mut inventory = player.inventory().lock().await;
+                let selected = inventory.get_selected_slot();
+                let item = Some(ItemStack::new(1, Item::BUCKET));
+                let slot_data = ItemStackSerializer::from(item.clone());
+                if let Err(err) = inventory.set_slot(selected, item, false) {
+                    log::error!("Failed to set slot: {err}");
+                } else {
+                    let dest_packet = CSetContainerSlot::new(
+                        PlayerInventory::CONTAINER_ID,
+                        inventory.state_id as i32,
+                        selected as i16,
+                        &slot_data,
+                    );
+                    player.client.enqueue_packet(&dest_packet).await;
+                }
             }
         }
     }
