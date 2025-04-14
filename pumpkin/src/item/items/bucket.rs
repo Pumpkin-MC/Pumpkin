@@ -64,7 +64,6 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
 impl PumpkinItem for EmptyBucketItem {
     #[allow(clippy::too_many_lines)]
     async fn normal_use(&self, _item: &Item, player: &Player) {
-        log::info!("Empty bucket use");
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
 
@@ -151,7 +150,6 @@ impl PumpkinItem for FilledBucketItem {
         let (block_pos, block_direction) = world.traverse_blocks(start_pos, end_pos, checker).await;
 
         if let (Some(pos), Some(direction)) = (block_pos, block_direction) {
-            log::info!("Setting block at {pos:?}");
             world
                 .set_block_state(
                     &pos.offset(direction.to_offset()),
