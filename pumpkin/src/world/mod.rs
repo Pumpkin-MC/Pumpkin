@@ -1718,84 +1718,88 @@ impl World {
         }
 
         let adjust = -1.0e-7f64;
-        let from = end_pos.lerp(&start_pos, adjust);
-        let to = start_pos.lerp(&end_pos, adjust);
+        let to = end_pos.lerp(&start_pos, adjust);
+        let from = start_pos.lerp(&end_pos, adjust);
 
-        let mut block = BlockPos::floored(to.x, to.y, to.z);
+        let mut block = BlockPos::floored(from.x, from.y, from.z);
 
         if hit_check(&block, self).await {
             return (Some(block), None);
         }
 
-        let d = from.sub(&to);
+        let differance = to.sub(&from);
 
-        let step = d.sign();
+        let step = differance.sign();
 
         let delta = Vector3::new(
             if step.x == 0 {
                 f64::MAX
             } else {
-                (f64::from(step.x)) / d.x
+                (f64::from(step.x)) / differance.x
             },
             if step.y == 0 {
                 f64::MAX
             } else {
-                (f64::from(step.y)) / d.y
+                (f64::from(step.y)) / differance.y
             },
             if step.z == 0 {
                 f64::MAX
             } else {
-                (f64::from(step.z)) / d.z
+                (f64::from(step.z)) / differance.z
             },
         );
 
         let mut next = Vector3::new(
             delta.x
                 * (if step.x > 0 {
-                    1.0 - (to.x - to.x.floor())
+                    1.0 - (from.x - from.x.floor())
                 } else {
-                    to.x - to.x.floor()
+                    from.x - from.x.floor()
                 }),
             delta.y
                 * (if step.y > 0 {
-                    1.0 - (to.y - to.y.floor())
+                    1.0 - (from.y - from.y.floor())
                 } else {
-                    to.y - to.y.floor()
+                    from.y - from.y.floor()
                 }),
             delta.z
                 * (if step.z > 0 {
-                    1.0 - (to.z - to.z.floor())
+                    1.0 - (from.z - from.z.floor())
                 } else {
-                    to.z - to.z.floor()
+                    from.z - from.z.floor()
                 }),
         );
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
             let block_direction;
-            if next.x < next.y && next.x < next.z {
-                block.0.x += step.x;
-                next.x += delta.x;
-                block_direction = if step.x > 0 {
-                    BlockDirection::West
-                } else {
-                    BlockDirection::East
-                };
-            } else if next.y < next.z {
-                block.0.y += step.y;
-                next.y += delta.y;
-                block_direction = if step.y > 0 {
-                    BlockDirection::Down
-                } else {
-                    BlockDirection::Up
-                };
-            } else {
-                block.0.z += step.z;
-                next.z += delta.z;
-                block_direction = if step.z > 0 {
-                    BlockDirection::North
-                } else {
-                    BlockDirection::South
-                };
+            match (next.x, next.y, next.z) {
+                (x, y, z) if x < y && x < z => {
+                    block.0.x += step.x;
+                    next.x += delta.x;
+                    block_direction = if step.x > 0 {
+                        BlockDirection::West
+                    } else {
+                        BlockDirection::East
+                    };
+                }
+                (_, y, z) if y < z => {
+                    block.0.y += step.y;
+                    next.y += delta.y;
+                    block_direction = if step.y > 0 {
+                        BlockDirection::Down
+                    } else {
+                        BlockDirection::Up
+                    };
+                }
+                _ => {
+                    block.0.z += step.z;
+                    next.z += delta.z;
+                    block_direction = if step.z > 0 {
+                        BlockDirection::North
+                    } else {
+                        BlockDirection::South
+                    };
+                }
             }
 
             if hit_check(&block, self).await {
