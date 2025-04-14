@@ -31,7 +31,7 @@ impl PumpkinItem for HoneyCombItem {
         let world = player.world().await;
 
         // First we try to strip the block. by getting his equivalent and applying it the axis.
-        let replacement_block = get_waxed_equivalent(&block);
+        let replacement_block = get_waxed_equivalent(block);
         // If there is a strip equivalent.
         if replacement_block.is_some() {
             // get block state of the old log.

@@ -94,17 +94,17 @@ impl PumpkinItem for AxeItem {
 }
 fn try_use_axe(block: &Block) -> Option<u16> {
     // Trying to get the strip equivalent
-    let block_id = get_stripped_equivalent(&block);
+    let block_id = get_stripped_equivalent(block);
     if block_id.is_some() {
         return block_id;
     }
     // Else decrease the level of oxidation
-    let block_id = get_deoxidized_equivalent(&block);
+    let block_id = get_deoxidized_equivalent(block);
     if block_id.is_some() {
         return block_id;
     }
     // Else unwax the block
-    let block_id = get_unwaxed_equivalent(&block);
+    let block_id = get_unwaxed_equivalent(block);
     if block_id.is_some() {
         return block_id;
     }
