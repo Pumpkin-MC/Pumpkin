@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::{from_bytes, nbt_long_array};
+use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::generation::section_coords;
+use crate::{block::entities::block_entity_from_nbt, generation::section_coords};
 
 use super::{
     ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, ScheduledTick, SubChunk,
@@ -54,6 +54,8 @@ impl ChunkData {
             .map(|section| SubChunk {
                 block_states: BlockPalette::from_disk_nbt(section.block_states),
                 biomes: BiomePalette::from_disk_nbt(section.biomes),
+                block_light: section.block_light,
+                sky_light: section.sky_light,
             })
             .collect();
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
@@ -93,6 +95,16 @@ impl ChunkData {
                     .id,
                 })
                 .collect(),
+            block_entities: {
+                let mut block_entities = HashMap::new();
+                for nbt in chunk_data.block_entities {
+                    let block_entity = block_entity_from_nbt(&nbt);
+                    if let Some(block_entity) = block_entity {
+                        block_entities.insert(block_entity.get_position(), block_entity);
+                    }
+                }
+                block_entities
+            },
         })
     }
 }
@@ -101,11 +113,10 @@ impl ChunkData {
 struct ChunkSectionNBT {
     block_states: ChunkSectionBlockStates,
     biomes: ChunkSectionBiomes,
-    // TODO
-    // #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
-    // block_light: Option<Box<[u8]>>,
-    // #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
-    // sky_light: Option<Box<[u8]>>,
+    #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
+    block_light: Option<Box<[u8]>>,
+    #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
+    sky_light: Option<Box<[u8]>>,
     #[serde(rename = "Y")]
     y: i8,
 }
@@ -182,4 +193,6 @@ struct ChunkNbt {
     block_ticks: Vec<SerializedScheduledTick>,
     #[serde(rename = "fluid_ticks")]
     fluid_ticks: Vec<SerializedScheduledTick>,
+    #[serde(rename = "block_entities")]
+    block_entities: Vec<NbtCompound>,
 }

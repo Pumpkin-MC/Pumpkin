@@ -24,7 +24,7 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::{Block, HorizontalFacing};
+use pumpkin_data::block::{Block, HorizontalFacing, get_block_by_item, get_block_collision_shapes};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
@@ -33,12 +33,12 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
-use pumpkin_macros::{block_entity, send_cancellable};
+use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
-    CBlockEntityData, CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
-    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
+    CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSetContainerSlot,
+    CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
-use pumpkin_protocol::codec::slot::Slot;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
     SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
@@ -65,9 +65,8 @@ use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
 };
-use pumpkin_world::block::interactive::sign::Sign;
-use pumpkin_world::block::registry::get_block_collision_shapes;
-use pumpkin_world::block::{BlockDirection, registry::get_block_by_item};
+use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 
 use thiserror::Error;
@@ -554,7 +553,7 @@ impl Player {
         stack: ItemStack,
     ) {
         inventory.increment_state_id();
-        let slot_data = Slot::from(&stack);
+        let slot_data = ItemStackSerializer::from(stack.clone());
         if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
             log::error!("Pick item set slot error: {err}");
         } else {
@@ -1457,7 +1456,7 @@ impl Player {
 
     pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
         let world = &self.living_entity.entity.world.read().await;
-        let updated_sign = Sign::new(
+        let updated_sign = SignBlockEntity::new(
             sign_data.location,
             sign_data.is_front_text,
             [
@@ -1468,15 +1467,7 @@ impl Player {
             ],
         );
 
-        let mut sign_buf = Vec::new();
-        pumpkin_nbt::serializer::to_bytes_unnamed(&updated_sign, &mut sign_buf).unwrap();
-        world
-            .broadcast_packet_all(&CBlockEntityData::new(
-                sign_data.location,
-                VarInt(block_entity!("sign") as i32),
-                sign_buf.into_boxed_slice(),
-            ))
-            .await;
+        world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
     pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
@@ -1511,13 +1502,13 @@ impl Player {
         }
         let valid_slot = packet.slot >= 0 && packet.slot as usize <= SLOT_OFFHAND;
         // TODO: Handle error
-        let item_stack = packet.clicked_item.to_stack().unwrap();
+        let item_stack = packet.clicked_item.to_stack();
         if valid_slot {
             self.inventory()
                 .lock()
                 .await
-                .set_slot(packet.slot as usize, item_stack, true)?;
-        } else if let Some(item_stack) = item_stack {
+                .set_slot(packet.slot as usize, Some(item_stack), true)?;
+        } else {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;
@@ -1751,7 +1742,11 @@ impl Player {
                 .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
                 .await;
 
-            self.send_sign_packet(block, final_block_pos, face).await;
+            server
+                .block_registry
+                .player_placed(world, &block, new_state, &final_block_pos, face, self)
+                .await;
+
             // The block was placed successfully, so decrement their inventory
             return Ok(true);
         }
@@ -1760,22 +1755,9 @@ impl Player {
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.
-    async fn send_sign_packet(
-        &self,
-        block: Block,
-        block_position: BlockPos,
-        selected_face: &BlockDirection,
-    ) {
-        if block.states.iter().any(|state| {
-            state.get_state().block_entity_type == Some(block_entity!("sign"))
-                || state.get_state().block_entity_type == Some(block_entity!("hanging_sign"))
-        }) {
-            self.client
-                .enqueue_packet(&COpenSignEditor::new(
-                    block_position,
-                    selected_face.to_offset().z == 1,
-                ))
-                .await;
-        }
+    pub async fn send_sign_packet(&self, block_position: BlockPos) {
+        self.client
+            .enqueue_packet(&COpenSignEditor::new(block_position, true))
+            .await;
     }
 }

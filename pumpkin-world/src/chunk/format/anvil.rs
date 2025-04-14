@@ -4,7 +4,7 @@ use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::serializer::to_bytes;
+use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
@@ -326,7 +326,7 @@ impl AnvilChunkData {
         let compression = compression
             .unwrap_or_else(|| advanced_config().chunk.compression.algorithm.clone().into());
 
-        // We need to buffer here anyway so theres no use in making an impl Write for this
+        // We need to buffer here anyway so there's no use in making an impl Write for this
         let compressed_data = compression
             .compress_data(&raw_bytes, advanced_config().chunk.compression.level)
             .map_err(ChunkWritingError::Compression)?;
@@ -675,7 +675,7 @@ impl ChunkSerializer for AnvilChunkFile {
                             });
                             write_action.maybe_update_chunk_index(index);
                         } else {
-                            // Walk back the end of the list; seeing if theres something that can fit
+                            // Walk back the end of the list; seeing if there's something that can fit
                             // in our spot. Here we play a game between is it worth it to do all
                             // this swapping. I figure if we don't find it after 64 chunks, just
                             // re-write the whole file instead
@@ -772,7 +772,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 }
 
                                 // If the shift is negative then there will be trailing data, but i
-                                // think thats fine
+                                // think that's fine
 
                                 let new_end = self.end_sector as i64 + offset;
                                 self.end_sector = new_end as u32;
@@ -827,6 +827,8 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
             block_states,
             biomes,
+            block_light: section.block_light.clone(), // :c
+            sky_light: section.sky_light.clone(),     // :c
         });
     }
 
@@ -872,6 +874,15 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 })
                 .collect()
         },
+        block_entities: chunk_data
+            .block_entities
+            .values()
+            .map(|block_entity| {
+                let mut nbt = NbtCompound::new();
+                block_entity.write_internal(&mut nbt);
+                nbt
+            })
+            .collect(),
     };
 
     let mut result = Vec::new();

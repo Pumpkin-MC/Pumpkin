@@ -1,5 +1,4 @@
 use crate::container_click::MouseClick;
-use crate::crafting::check_if_matches_crafting;
 use crate::{Container, InventoryError, WindowType, handle_item_change};
 use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
@@ -366,9 +365,9 @@ impl Container for PlayerInventory {
         let v1 = [self.crafting[0].as_ref(), self.crafting[1].as_ref(), None];
         let v2 = [self.crafting[2].as_ref(), self.crafting[3].as_ref(), None];
         let v3 = [const { None }; 3];
-        let together = [v1, v2, v3];
+        let _together = [v1, v2, v3];
 
-        self.crafting_output = check_if_matches_crafting(together);
+        self.crafting_output = None; //check_if_matches_crafting(together);
         self.crafting.iter().any(|s| s.is_some())
     }
 

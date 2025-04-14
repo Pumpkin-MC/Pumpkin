@@ -959,7 +959,7 @@ pub(crate) fn build() -> TokenStream {
                 property_enum: renamed_property.clone(),
             });
 
-            // If this property doesnt have an `enum` yet, make one.
+            // If this property doesn't have an `enum` yet, make one.
             let _ = property_enums
                 .entry(renamed_property.clone())
                 .or_insert_with(|| PropertyStruct {

@@ -1,5 +1,4 @@
-pub mod interactive;
-pub mod registry;
+pub mod entities;
 pub mod state;
 
 use num_derive::FromPrimitive;
@@ -7,7 +6,7 @@ use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 use serde::Deserialize;
-pub use state::ChunkBlockState;
+pub use state::RawBlockState;
 
 #[derive(FromPrimitive, PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum BlockDirection {

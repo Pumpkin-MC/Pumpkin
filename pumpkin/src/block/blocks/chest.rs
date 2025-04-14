@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::block::{Block, BlockState, get_block};
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     screen::WindowType,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_inventory::{Chest, OpenContainer};
+use pumpkin_inventory::{ChestContainer, OpenContainer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::registry::get_block;
+use pumpkin_world::block::entities::chest::ChestBlockEntity;
 
 use crate::world::World;
 use crate::{
@@ -41,6 +41,30 @@ impl PumpkinBlock for ChestBlock {
     ) {
         self.open_chest_block(block, player, _location, server)
             .await;
+    }
+
+    async fn placed(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        _state_id: u16,
+        pos: &BlockPos,
+        _old_state_id: u16,
+        _notify: bool,
+    ) {
+        let chest = ChestBlockEntity::new(*pos);
+        world.add_block_entity(Arc::new(chest)).await;
+    }
+
+    async fn on_state_replaced(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        location: BlockPos,
+        _old_state_id: u16,
+        _moved: bool,
+    ) {
+        world.remove_block_entity(&location).await;
     }
 
     async fn use_with_item(
@@ -92,7 +116,7 @@ impl ChestBlock {
         server: &Server,
     ) {
         // TODO: shouldn't Chest and window type be constrained together to avoid errors?
-        super::standard_open_container::<Chest>(
+        super::standard_open_container::<ChestContainer>(
             block,
             player,
             location,

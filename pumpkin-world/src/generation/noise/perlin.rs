@@ -1,7 +1,6 @@
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_util::{noise::perlin::OctavePerlinNoiseSampler, random::RandomGenerator};
 
-#[derive(Clone)]
 pub struct DoublePerlinNoiseSampler {
     first_sampler: OctavePerlinNoiseSampler,
     second_sampler: OctavePerlinNoiseSampler,
