@@ -22,7 +22,6 @@ pub(crate) mod signs;
 pub(crate) mod sugar_cane;
 pub(crate) mod tnt;
 pub(crate) mod torches;
-
 /// The standard destroy with container removes the player forcibly from the container,
 /// drops items to the floor, and back to the player's inventory if the item stack is in movement.
 pub async fn standard_on_broken_with_container(
