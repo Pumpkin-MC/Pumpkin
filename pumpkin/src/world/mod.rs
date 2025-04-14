@@ -1727,25 +1727,25 @@ impl World {
             return (Some(block), None);
         }
 
-        let differance = to.sub(&from);
+        let difference = to.sub(&from);
 
-        let step = differance.sign();
+        let step = difference.sign();
 
         let delta = Vector3::new(
             if step.x == 0 {
                 f64::MAX
             } else {
-                (f64::from(step.x)) / differance.x
+                (f64::from(step.x)) / difference.x
             },
             if step.y == 0 {
                 f64::MAX
             } else {
-                (f64::from(step.y)) / differance.y
+                (f64::from(step.y)) / difference.y
             },
             if step.z == 0 {
                 f64::MAX
             } else {
-                (f64::from(step.z)) / differance.z
+                (f64::from(step.z)) / difference.z
             },
         );
 
@@ -1771,36 +1771,35 @@ impl World {
         );
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
-            let block_direction;
-            match (next.x, next.y, next.z) {
+            let block_direction = match (next.x, next.y, next.z) {
                 (x, y, z) if x < y && x < z => {
                     block.0.x += step.x;
                     next.x += delta.x;
-                    block_direction = if step.x > 0 {
+                    if step.x > 0 {
                         BlockDirection::West
                     } else {
                         BlockDirection::East
-                    };
+                    }
                 }
                 (_, y, z) if y < z => {
                     block.0.y += step.y;
                     next.y += delta.y;
-                    block_direction = if step.y > 0 {
+                    if step.y > 0 {
                         BlockDirection::Down
                     } else {
                         BlockDirection::Up
-                    };
+                    }
                 }
                 _ => {
                     block.0.z += step.z;
                     next.z += delta.z;
-                    block_direction = if step.z > 0 {
+                    if step.z > 0 {
                         BlockDirection::North
                     } else {
                         BlockDirection::South
-                    };
+                    }
                 }
-            }
+            };
 
             if hit_check(&block, self).await {
                 return (Some(block), Some(block_direction));
