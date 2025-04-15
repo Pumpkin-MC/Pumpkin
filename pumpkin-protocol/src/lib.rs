@@ -410,6 +410,7 @@ pub enum NumberFormat {
     Fixed(TextComponent),
 }
 
+/// For the first 8 values set means relative value while unset means absolute
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum PositionFlag {
     X,
