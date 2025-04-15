@@ -4,7 +4,7 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;

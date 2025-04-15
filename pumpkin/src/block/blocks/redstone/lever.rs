@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockFace, BlockState, LeverLikeProperties};
 use pumpkin_data::{block::BlockProperties, item::Item};

@@ -6,13 +6,9 @@ use pumpkin_data::block::{Block, BlockProperties, Boolean};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, block::BlockDirection, chunk::TickPriority};
+use pumpkin_world::{BlockStateId, block::BlockDirection, chunk::TickPriority, world::BlockFlags};
 
-use crate::{
-    block::pumpkin_block::PumpkinBlock,
-    server::Server,
-    world::{BlockFlags, World},
-};
+use crate::{block::pumpkin_block::PumpkinBlock, server::Server, world::World};
 
 use super::block_receives_redstone_power;
 

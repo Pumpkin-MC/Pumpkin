@@ -626,7 +626,7 @@ impl Level {
             let mut chunk = chunk.read().await;
             let cloned_entities = chunk.block_entities.clone();
             for block_entity in &cloned_entities {
-                block_entity.1.tick().await;
+                //lock_entity.1.tick().await;
             }
         }
     }

@@ -14,13 +14,14 @@ use pumpkin_world::{
     BlockStateId,
     block::{BlockDirection, HorizontalFacingExt},
     chunk::TickPriority,
+    world::BlockFlags,
 };
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,
     server::Server,
-    world::{BlockFlags, World},
+    world::World,
 };
 
 use super::{diode_get_input_strength, get_weak_power, is_diode};

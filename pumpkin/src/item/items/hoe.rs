@@ -2,7 +2,7 @@ use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::entity::EntityType;

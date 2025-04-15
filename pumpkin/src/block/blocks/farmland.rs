@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;

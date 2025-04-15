@@ -8,7 +8,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
-use crate::world::World;
+use crate::world::SimpleWorld;
 
 pub mod bed;
 pub mod chest;
@@ -24,7 +24,7 @@ pub trait BlockEntity: Send + Sync {
         Self: Sized;
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
-    async fn tick(&self, world: Arc<impl World>) {}
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {}
     fn write_internal(&self, nbt: &mut NbtCompound) {
         nbt.put_string("id", self.identifier().to_string());
         let position = self.get_position();

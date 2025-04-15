@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::chunk::ChunkData;
 use crate::level::Level;
-use crate::world::World;
+use crate::world::SimpleWorld;
 
 use super::BlockEntity;
 
@@ -38,7 +38,7 @@ impl BlockEntity for PistonBlockEntity {
         self.position
     }
 
-    async fn tick(&self, world: Arc<impl World>) {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
         let mut last_progress = self.last_progress.lock().await;
         let mut current_progress = self.current_progress.lock().await;
         *last_progress = *current_progress;

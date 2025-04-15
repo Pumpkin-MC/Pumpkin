@@ -11,7 +11,7 @@ use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
 use crate::block::pumpkin_block::PumpkinBlock;
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 use crate::world::World;
 use pumpkin_util::math::position::BlockPos;
 

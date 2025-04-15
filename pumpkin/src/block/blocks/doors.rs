@@ -15,7 +15,7 @@ use std::sync::Arc;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 

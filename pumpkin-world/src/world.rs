@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bitflags::bitflags;
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
@@ -33,9 +34,10 @@ impl std::fmt::Display for GetBlockError {
     }
 }
 
-pub trait World {
+#[async_trait]
+pub trait SimpleWorld: Send + Sync {
     async fn set_block_state(
-        self: &Arc<Self>,
+        self: Arc<Self>,
         position: &BlockPos,
         block_state_id: BlockStateId,
         flags: BlockFlags,

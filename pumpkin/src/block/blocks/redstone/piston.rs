@@ -11,12 +11,13 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
     block::{BlockDirection, FacingExt, entities::piston::PistonBlockEntity},
+    world::BlockFlags,
 };
 
 use crate::{
     block::pumpkin_block::{BlockMetadata, PumpkinBlock},
     server::Server,
-    world::{BlockFlags, World},
+    world::World,
 };
 
 use super::is_emitting_redstone_power;
@@ -181,7 +182,7 @@ async fn move_piston(
                 BlockFlags::MOVED,
             )
             .await;
-        world.add_block_entity(PistonBlockEntity).await;
+        //world.add_block_entity(PistonBlockEntity).await;
     }
     true
 }

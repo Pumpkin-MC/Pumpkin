@@ -1,7 +1,7 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
@@ -10,6 +10,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockFlags;
 use std::collections::HashMap;
 use std::sync::Arc;
 

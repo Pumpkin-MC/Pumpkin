@@ -20,6 +20,7 @@ use crate::{
     },
     server::Server,
 };
+use async_trait::async_trait;
 use bitflags::bitflags;
 use border::Worldborder;
 use bytes::Bytes;
@@ -57,8 +58,10 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::{
-    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    level::SyncChunk, world::GetBlockError,
+    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome,
+    block::entities::BlockEntity,
+    level::SyncChunk,
+    world::{BlockFlags, GetBlockError},
 };
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{chunk::TickPriority, level::Level};
@@ -1655,4 +1658,18 @@ impl World {
     }
 }
 
-impl pumpkin_world::world::World for World {}
+#[async_trait]
+impl pumpkin_world::world::SimpleWorld for World {
+    async fn set_block_state(
+        self: Arc<Self>,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+    ) -> BlockStateId {
+        World::set_block_state(&self, position, block_state_id, flags).await
+    }
+
+    async fn remove_block_entity(&self, block_pos: &BlockPos) {
+        self.remove_block_entity(block_pos).await;
+    }
+}
