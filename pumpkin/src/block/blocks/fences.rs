@@ -1,6 +1,6 @@
+use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
@@ -14,7 +14,6 @@ type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
 type FenceLikeProperties = pumpkin_data::block::OakFenceLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::block::registry::BlockRegistry;
 use crate::server::Server;
 use crate::world::World;
 
@@ -68,54 +67,43 @@ pub async fn fence_state(world: &World, block: &Block, block_pos: &BlockPos) -> 
     block_properties.to_state_id(block)
 }
 
-pub fn register_fence_blocks(manager: &mut BlockRegistry) {
-    let tag_values: &'static [&'static str] =
-        get_tag_values(RegistryKey::Block, "c:fences").unwrap();
+pub struct FenceBlock;
+impl BlockMetadata for FenceBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
 
-    for block in tag_values {
-        pub struct FenceBlock {
-            id: &'static str,
-        }
-        impl BlockMetadata for FenceBlock {
-            fn namespace(&self) -> &'static str {
-                "minecraft"
-            }
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "c:fences").unwrap()
+    }
+}
 
-            fn id(&self) -> &'static str {
-                self.id
-            }
-        }
+#[async_trait]
+impl PumpkinBlock for FenceBlock {
+    async fn on_place(
+        &self,
+        _server: &Server,
+        world: &World,
+        block: &Block,
+        _face: &BlockDirection,
+        block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        _player: &Player,
+        _other: bool,
+    ) -> u16 {
+        fence_state(world, block, block_pos).await
+    }
 
-        #[async_trait]
-        impl PumpkinBlock for FenceBlock {
-            async fn on_place(
-                &self,
-                _server: &Server,
-                world: &World,
-                block: &Block,
-                _face: &BlockDirection,
-                block_pos: &BlockPos,
-                _use_item_on: &SUseItemOn,
-                _player_direction: &HorizontalFacing,
-                _other: bool,
-            ) -> u16 {
-                fence_state(world, block, block_pos).await
-            }
-
-            async fn get_state_for_neighbor_update(
-                &self,
-                world: &World,
-                block: &Block,
-                _state: BlockStateId,
-                block_pos: &BlockPos,
-                _direction: &BlockDirection,
-                _neighbor_pos: &BlockPos,
-                _neighbor_state: BlockStateId,
-            ) -> BlockStateId {
-                fence_state(world, block, block_pos).await
-            }
-        }
-
-        manager.register(FenceBlock { id: block });
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        _state: BlockStateId,
+        block_pos: &BlockPos,
+        _direction: &BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        fence_state(world, block, block_pos).await
     }
 }

@@ -1284,6 +1284,19 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
+        impl Facing {
+            pub fn opposite(&self) -> Self {
+                match self {
+                    Facing::North => Facing::South,
+                    Facing::South => Facing::North,
+                    Facing::East => Facing::West,
+                    Facing::West => Facing::East,
+                    Facing::Up => Facing::Down,
+                    Facing::Down => Facing::Up,
+                }
+            }
+        }
+
         impl Boolean {
             pub fn flip(&self) -> Self {
                 match self {

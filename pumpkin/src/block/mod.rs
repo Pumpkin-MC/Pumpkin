@@ -1,23 +1,23 @@
 use blocks::cactus::CactusBlock;
 use blocks::dirt_path::DirtPathBlock;
-use blocks::doors::register_door_blocks;
+use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
-use blocks::fence_gates::register_fence_gate_blocks;
-use blocks::fences::register_fence_blocks;
+use blocks::fence_gates::FenceGateBlock;
+use blocks::fences::FenceBlock;
 use blocks::fluids::{lava::FlowingLava, water::FlowingWater};
-use blocks::logs::register_log_blocks;
-use blocks::redstone::buttons::register_button_blocks;
+use blocks::logs::LogBlock;
+use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
-use blocks::redstone::redstone_torch::register_redstone_torch_blocks;
+use blocks::redstone::redstone_torch::RedstoneTorchBlock;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
-use blocks::signs::register_sign_blocks;
+use blocks::signs::SignBlock;
 use blocks::sugar_cane::SugarCaneBlock;
-use blocks::torches::register_torch_blocks;
+use blocks::torches::TorchBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
@@ -66,17 +66,18 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
     manager.register(TargetBlock);
+
+    manager.register(DoorBlock);
+    manager.register(FenceBlock);
+    manager.register(FenceGateBlock);
+    manager.register(TorchBlock);
+    manager.register(LogBlock);
+    manager.register(ButtonBlock);
+    manager.register(RedstoneTorchBlock);
+    manager.register(SignBlock);
+
     manager.register_fluid(FlowingWater);
     manager.register_fluid(FlowingLava);
-
-    register_door_blocks(&mut manager);
-    register_fence_blocks(&mut manager);
-    register_fence_gate_blocks(&mut manager);
-    register_log_blocks(&mut manager);
-    register_button_blocks(&mut manager);
-    register_torch_blocks(&mut manager);
-    register_redstone_torch_blocks(&mut manager);
-    register_sign_blocks(&mut manager);
 
     Arc::new(manager)
 }
