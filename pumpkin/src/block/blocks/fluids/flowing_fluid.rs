@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    block::Block,
+    Block,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;

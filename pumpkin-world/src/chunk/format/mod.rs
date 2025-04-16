@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
+use pumpkin_data::{Block, chunk::ChunkStatus};
 use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};

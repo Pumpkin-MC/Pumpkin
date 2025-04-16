@@ -28,7 +28,7 @@ pub trait BlockEntity: Send + Sync {
         self.write_nbt(nbt);
     }
     fn get_id(&self) -> u32 {
-        pumpkin_data::block::BLOCK_ENTITY_TYPES
+        pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
             .iter()
             .position(|block_entity_name| {
                 *block_entity_name == self.identifier().split(":").last().unwrap()

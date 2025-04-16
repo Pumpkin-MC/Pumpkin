@@ -287,7 +287,7 @@ impl WorldAquiferSampler {
             let bl3 = j > o;
             if bl3 || bl2 {
                 let fluid_level = self.fluid_level.get_fluid_level(x, o, z);
-                if !fluid_level.get_block_state(o).to_state().air {
+                if !fluid_level.get_block_state(o).to_state().is_air() {
                     if bl2 {
                         bl = true;
                     }

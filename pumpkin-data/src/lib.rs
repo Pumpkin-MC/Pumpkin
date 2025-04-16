@@ -56,7 +56,7 @@ pub mod fluid {
     include!(concat!(env!("OUT_DIR"), "/fluid.rs"));
 }
 
-pub mod block {
+pub mod block_properties {
     include!(concat!(env!("OUT_DIR"), "/block.rs"));
 
     pub fn get_block(registry_id: &str) -> Option<Block> {
@@ -105,7 +105,7 @@ pub mod block {
     }
 
     pub fn blocks_movement(block_state: &BlockState) -> bool {
-        if block_state.is_solid {
+        if block_state.is_solid() {
             if let Some(block) = get_block_by_state_id(block_state.id) {
                 return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
             }
@@ -121,3 +121,12 @@ pub mod tag {
 pub mod noise_router {
     include!(concat!(env!("OUT_DIR"), "/noise_router.rs"));
 }
+
+mod block_state;
+mod blocks;
+mod collision_shape;
+
+pub use block_state::BlockState;
+pub use block_state::BlockStateRef;
+pub use blocks::Block;
+pub use collision_shape::CollisionShape;

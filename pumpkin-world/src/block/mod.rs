@@ -2,7 +2,7 @@ pub mod entities;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
+use pumpkin_data::block_properties::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 use serde::Deserialize;
@@ -206,8 +206,8 @@ impl HorizontalFacingExt for HorizontalFacing {
         match self {
             HorizontalFacing::North => HorizontalFacing::West,
             HorizontalFacing::South => HorizontalFacing::East,
-            HorizontalFacing::West => HorizontalFacing::North,
-            HorizontalFacing::East => HorizontalFacing::South,
+            HorizontalFacing::West => HorizontalFacing::South,
+            HorizontalFacing::East => HorizontalFacing::North,
         }
     }
 }
@@ -231,7 +231,7 @@ impl FacingExt for Facing {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::block::Block;
+    use pumpkin_data::Block;
 
     use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
 

@@ -7,7 +7,7 @@ use crate::entity::tnt::TNTEntity;
 use crate::server::Server;
 use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;

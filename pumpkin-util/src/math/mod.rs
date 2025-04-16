@@ -8,7 +8,6 @@ pub mod position;
 pub mod vector2;
 pub mod vector3;
 pub mod vertical_surface_type;
-pub mod voxel_shape;
 
 pub fn wrap_degrees(degrees: f32) -> f32 {
     let mut var1 = degrees % 360.0;

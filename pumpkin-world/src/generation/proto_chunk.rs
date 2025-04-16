@@ -1,5 +1,6 @@
 use pumpkin_data::{
-    block::{BlockState, blocks_movement, get_block_by_state_id},
+    BlockState,
+    block_properties::{blocks_movement, get_block_by_state_id},
     chunk::Biome,
     tag::Tagable,
 };
@@ -325,7 +326,7 @@ impl<'a> ProtoChunk<'a> {
     }
 
     pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: BlockState) {
-        if !block_state.air {
+        if !block_state.is_air() {
             self.maybe_update_surface_height_map(local_pos);
         }
 
@@ -333,7 +334,7 @@ impl<'a> ProtoChunk<'a> {
             self.maybe_update_ocean_floor_height_map(local_pos);
         }
 
-        if blocks_movement(&block_state) || block_state.is_liquid {
+        if blocks_movement(&block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(local_pos);
             if let Some(block) = get_block_by_state_id(block_state.id) {
                 if !block.is_tagged_with("minecraft:leaves").unwrap() {
@@ -564,12 +565,12 @@ impl<'a> ProtoChunk<'a> {
                 for y in (min_y as i32..top_block).rev() {
                     let pos = Vector3::new(x, y, z);
                     let state = self.get_block_state(&pos).to_state();
-                    if state.air {
+                    if state.is_air() {
                         stone_depth_above = 0;
                         fluid_height = i32::MIN;
                         continue;
                     }
-                    if state.is_liquid {
+                    if state.is_liquid() {
                         if fluid_height == i32::MIN {
                             fluid_height = y + 1;
                         }

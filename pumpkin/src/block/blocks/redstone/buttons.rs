@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockFace;
-use pumpkin_data::block::BlockState;
-use pumpkin_data::block::{BlockProperties, Boolean};
+use pumpkin_data::Block;
+use pumpkin_data::BlockState;
+use pumpkin_data::block_properties::BlockFace;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
@@ -14,7 +14,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
-type ButtonLikeProperties = pumpkin_data::block::LeverLikeProperties;
+type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -28,8 +28,8 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
     let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
-    if !button_props.powered.to_bool() {
-        button_props.powered = Boolean::True;
+    if !button_props.powered {
+        button_props.powered = true;
         world
             .set_block_state(
                 block_pos,
@@ -114,7 +114,7 @@ impl PumpkinBlock for ButtonBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = ButtonLikeProperties::from_state_id(state.id, block);
-        props.powered = Boolean::False;
+        props.powered = false;
         world
             .set_block_state(block_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
             .await;
@@ -139,11 +139,7 @@ impl PumpkinBlock for ButtonBlock {
         _direction: &BlockDirection,
     ) -> u8 {
         let button_props = ButtonLikeProperties::from_state_id(state.id, block);
-        if button_props.powered.to_bool() {
-            15
-        } else {
-            0
-        }
+        if button_props.powered { 15 } else { 0 }
     }
 
     async fn get_strong_redstone_power(
@@ -155,7 +151,7 @@ impl PumpkinBlock for ButtonBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let button_props = ButtonLikeProperties::from_state_id(state.id, block);
-        if button_props.powered.to_bool() && button_props.get_direction() == *direction {
+        if button_props.powered && button_props.get_direction() == *direction {
             15
         } else {
             0
@@ -172,7 +168,7 @@ impl PumpkinBlock for ButtonBlock {
     ) {
         if !moved {
             let button_props = ButtonLikeProperties::from_state_id(old_state_id, block);
-            if button_props.powered.to_bool() {
+            if button_props.powered {
                 Self::update_neighbors(world, &location, &button_props).await;
             }
         }
