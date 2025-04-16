@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicU8};
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -17,7 +17,7 @@ use super::recipies::{RecipeFinderScreenHandler, RecipeInputInventory};
 pub struct ResultSlot {
     pub inventory: Arc<Mutex<dyn Inventory>>,
     pub index: usize,
-    pub id: usize,
+    pub id: AtomicU8,
 }
 
 impl ResultSlot {
@@ -25,7 +25,7 @@ impl ResultSlot {
         Self {
             inventory,
             index,
-            id: 0,
+            id: AtomicU8::new(0),
         }
     }
 }
@@ -39,8 +39,9 @@ impl Slot for ResultSlot {
         self.index
     }
 
-    fn set_id(&mut self, id: usize) {
-        self.id = id;
+    fn set_id(&self, id: usize) {
+        self.id
+            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
     async fn mark_dirty(&self) {
@@ -55,7 +56,7 @@ pub trait CraftingScreenHandler<I: RecipeInputInventory>:
 {
     async fn add_result_slot(&mut self, crafing_inventory: &Arc<Mutex<dyn RecipeInputInventory>>) {
         let result_slot = ResultSlot::new(crafing_inventory.clone(), 0);
-        self.add_slot(result_slot);
+        self.add_slot(Arc::new(result_slot));
     }
 
     async fn add_input_slots(&mut self, crafing_inventory: &Arc<Mutex<dyn RecipeInputInventory>>) {
@@ -66,7 +67,7 @@ pub trait CraftingScreenHandler<I: RecipeInputInventory>:
         for i in 0..width {
             for j in 0..height {
                 let input_slot = NormalSlot::new(crafing_inventory.clone(), j + i * width);
-                self.add_slot(input_slot);
+                self.add_slot(Arc::new(input_slot));
             }
         }
     }

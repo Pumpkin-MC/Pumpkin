@@ -88,7 +88,11 @@ impl Inventory for PlayerInventory {
             }
         }
 
-        // TODO: Check equipment slots
+        for slot in self.equipment_slots.values() {
+            if !self.entity_equipment.get(slot).is_empty() {
+                return false;
+            }
+        }
 
         true
     }

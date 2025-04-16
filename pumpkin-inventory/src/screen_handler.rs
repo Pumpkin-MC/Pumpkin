@@ -12,7 +12,7 @@ use crate::{
 //ScreenHandler.java
 // TODO: Fully implement this
 #[async_trait]
-pub trait ScreenHandler {
+pub trait ScreenHandler: Send + Sync {
     fn window_type(&self) -> Option<WindowType>;
 
     fn size(&self) -> usize;
@@ -20,23 +20,25 @@ pub trait ScreenHandler {
     /// Add it into array
     fn add_slot_internal(&mut self, slot: Arc<dyn Slot>);
 
-    fn add_slot<S: Slot + 'static>(&mut self, mut slot: S) -> Arc<S> {
+    fn add_slot(&mut self, slot: Arc<dyn Slot>) -> Arc<dyn Slot> {
         slot.set_id(self.size());
-        let slot = Arc::new(slot);
         self.add_slot_internal(slot.clone());
         slot
     }
 
     fn add_player_hotbar_slots(&mut self, player_inventory: &Arc<Mutex<dyn Inventory>>) {
         for i in 0..9 {
-            self.add_slot(NormalSlot::new(player_inventory.clone(), i));
+            self.add_slot(Arc::new(NormalSlot::new(player_inventory.clone(), i)));
         }
     }
 
     fn add_player_inventory_slots(&mut self, player_inventory: &Arc<Mutex<dyn Inventory>>) {
         for i in 0..3 {
             for j in 0..9 {
-                self.add_slot(NormalSlot::new(player_inventory.clone(), j + (i + 1) * 9));
+                self.add_slot(Arc::new(NormalSlot::new(
+                    player_inventory.clone(),
+                    j + (i + 1) * 9,
+                )));
             }
         }
     }

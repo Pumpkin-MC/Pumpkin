@@ -43,7 +43,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::{
     entity_equipment::EntityEquipment, inventory::Inventory,
-    player::player_inventory::PlayerInventory,
+    player::player_inventory::PlayerInventory, screen_handler::ScreenHandler,
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
@@ -239,6 +239,8 @@ pub struct Player {
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
+    pub current_screen_handler: Mutex<Option<Arc<dyn ScreenHandler>>>,
+    pub screen_handler_sync_id: AtomicU8,
 }
 
 impl Player {
@@ -325,6 +327,8 @@ impl Player {
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
+            current_screen_handler: Mutex::new(None),
+            screen_handler_sync_id: AtomicU8::new(0),
         }
     }
 
@@ -1414,6 +1418,9 @@ impl Player {
             .await;
         */
     }
+
+    //pub async fn open_handeled_screen(&self, screen_handler: dyn Fn(sync_id: u8) -> Arc<dyn ScreenHandler>) {
+    //}
 }
 
 #[async_trait]

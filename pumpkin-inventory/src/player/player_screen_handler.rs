@@ -60,11 +60,11 @@ impl PlayerScreenHandler {
             .await;
 
         for i in 0..4 {
-            player_screen_handler.add_slot(ArmorSlot::new(
+            player_screen_handler.add_slot(Arc::new(ArmorSlot::new(
                 player_inventory.clone(),
                 39 - i,
                 Self::EQUIPMENT_SLOT_ORDER[i].clone(),
-            ));
+            )));
         }
 
         let player_inventory: Arc<Mutex<dyn Inventory>> = player_inventory.clone();
@@ -73,7 +73,7 @@ impl PlayerScreenHandler {
 
         // Offhand
         // TODO: public void setStack(ItemStack stack, ItemStack previousStack) { owner.onEquipStack(EquipmentSlot.OFFHAND, previousStack, stack);
-        player_screen_handler.add_slot(NormalSlot::new(player_inventory.clone(), 40));
+        player_screen_handler.add_slot(Arc::new(NormalSlot::new(player_inventory.clone(), 40)));
 
         player_screen_handler
     }
@@ -81,12 +81,12 @@ impl PlayerScreenHandler {
 
 #[async_trait]
 impl ScreenHandler for PlayerScreenHandler {
-    fn window_type(&self) -> Option<pumpkin_data::screen::WindowType> {
-        todo!()
+    fn window_type(&self) -> Option<WindowType> {
+        None
     }
 
     fn size(&self) -> usize {
-        todo!()
+        self.slots.len()
     }
 
     fn add_slot_internal(&mut self, slot: Arc<dyn Slot>) {

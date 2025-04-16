@@ -1,4 +1,7 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{Arc, atomic::AtomicU8},
+};
 
 use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
@@ -14,7 +17,7 @@ pub trait Slot: Send + Sync + Debug {
 
     fn get_index(&self) -> usize;
 
-    fn set_id(&mut self, index: usize);
+    fn set_id(&self, index: usize);
 
     fn on_quick_transfer(&self, new_item: ItemStack, original: ItemStack) {
         let diff = new_item.item_count - original.item_count;
@@ -157,12 +160,12 @@ pub trait Slot: Send + Sync + Debug {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// Just called Slot in Vanilla
 pub struct NormalSlot {
     pub inventory: Arc<Mutex<dyn Inventory>>,
     pub index: usize,
-    pub id: usize,
+    pub id: AtomicU8,
 }
 
 impl NormalSlot {
@@ -170,7 +173,7 @@ impl NormalSlot {
         Self {
             inventory,
             index,
-            id: 0,
+            id: AtomicU8::new(0),
         }
     }
 }
@@ -184,8 +187,9 @@ impl Slot for NormalSlot {
         self.index
     }
 
-    fn set_id(&mut self, id: usize) {
-        self.id = id;
+    fn set_id(&self, id: usize) {
+        self.id
+            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
     async fn mark_dirty(&self) {
@@ -194,11 +198,11 @@ impl Slot for NormalSlot {
 }
 
 // ArmorSlot.java
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ArmorSlot {
     pub inventory: Arc<Mutex<dyn Inventory>>,
     pub index: usize,
-    pub id: usize,
+    pub id: AtomicU8,
     pub equipment_slot: EquipmentSlot,
 }
 
@@ -211,7 +215,7 @@ impl ArmorSlot {
         Self {
             inventory,
             index,
-            id: 0,
+            id: AtomicU8::new(0),
             equipment_slot,
         }
     }
@@ -227,8 +231,9 @@ impl Slot for ArmorSlot {
         self.index
     }
 
-    fn set_id(&mut self, id: usize) {
-        self.id = id;
+    fn set_id(&self, id: usize) {
+        self.id
+            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
     async fn get_max_item_count(&self) -> u8 {
