@@ -14,9 +14,12 @@ use std::sync::Arc;
 
 pub trait BlockMetadata {
     fn namespace(&self) -> &'static str;
-    fn id(&self) -> &'static str;
-    fn name(&self) -> String {
-        format!("{}:{}", self.namespace(), self.id())
+    fn ids(&self) -> &'static [&'static str];
+    fn names(&self) -> Vec<String> {
+        self.ids()
+            .iter()
+            .map(|f| format!("{}:{}", self.namespace(), f))
+            .collect()
     }
 }
 
@@ -57,7 +60,7 @@ pub trait PumpkinBlock: Send + Sync {
         _face: &BlockDirection,
         _pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player: &Player,
         _other: bool,
     ) -> BlockStateId {
         block.default_state_id

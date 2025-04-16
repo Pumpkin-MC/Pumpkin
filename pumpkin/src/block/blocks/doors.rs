@@ -19,7 +19,6 @@ use std::sync::Arc;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
-use crate::block::registry::BlockRegistry;
 use crate::entity::player::Player;
 use crate::world::BlockFlags;
 use pumpkin_data::item::Item;
@@ -150,51 +149,118 @@ async fn get_hinge(
     }
 }
 
-#[allow(clippy::too_many_lines)]
-pub fn register_door_blocks(manager: &mut BlockRegistry) {
-    let tag_values = get_tag_values(RegistryKey::Block, "minecraft:doors").unwrap();
-
-    for block in tag_values {
-        pub struct DoorBlock {
-            id: &'static str,
+// Todo: The sounds should be from BlockSetType
+fn get_sound(block: &Block, open: bool) -> Sound {
+    if open {
+        if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+            Sound::BlockWoodenDoorOpen
+        } else if block.id == Block::IRON_DOOR.id {
+            Sound::BlockIronDoorOpen
+        } else {
+            Sound::BlockCopperDoorOpen
         }
-        impl BlockMetadata for DoorBlock {
-            fn namespace(&self) -> &'static str {
-                "minecraft"
-            }
+    } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+        Sound::BlockWoodenDoorClose
+    } else if block.id == Block::IRON_DOOR.id {
+        Sound::BlockIronDoorClose
+    } else {
+        Sound::BlockCopperDoorClose
+    }
+}
 
-            fn id(&self) -> &'static str {
-                self.id
+#[allow(clippy::pedantic)]
+#[inline]
+async fn get_hinge(
+    world: &World,
+    block: &Block,
+    pos: &BlockPos,
+    use_item: &SUseItemOn,
+    facing: &HorizontalFacing,
+) -> DoorHinge {
+    let top_pos = pos.up();
+    let left_dir = facing.rotate_ccw();
+    let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
+    let left_state = world.get_block_state(&left_pos).await.unwrap();
+    let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_state = world.get_block_state(&top_facing).await.unwrap();
+    let right_dir = facing.rotate();
+    let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
+    let right_state = world.get_block_state(&right_pos).await.unwrap();
+    let top_right = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_right_state = world.get_block_state(&top_right).await.unwrap();
+
+    let has_left_door = world
+        .get_block(&left_pos)
+        .await
+        .unwrap()
+        .is_tagged_with("minecraft:doors")
+        .unwrap()
+        && DoorProperties::from_state_id(left_state.id, block).half == DoubleBlockHalf::Lower;
+
+    let has_right_door = world
+        .get_block(&right_pos)
+        .await
+        .unwrap()
+        .is_tagged_with("minecraft:doors")
+        .unwrap()
+        && DoorProperties::from_state_id(right_state.id, block).half == DoubleBlockHalf::Lower;
+
+    let score = -(left_state.is_full_cube() as i32) - (top_state.is_full_cube() as i32)
+        + right_state.is_full_cube() as i32
+        + top_right_state.is_full_cube() as i32;
+
+    if (!has_left_door || has_right_door) && score <= 0 {
+        if (!has_right_door || has_left_door) && score >= 0 {
+            let offset = facing.to_block_direction().to_offset();
+            let hit = use_item.cursor_pos;
+            if (offset.x >= 0 || hit.z > 0.5)
+                && (offset.x <= 0 || hit.z < 0.5)
+                && (offset.z >= 0 || hit.x < 0.5)
+                && (offset.z <= 0 || hit.x > 0.5)
+            {
+                DoorHinge::Left
+            } else {
+                DoorHinge::Right
             }
+        } else {
+            DoorHinge::Left
         }
+    } else {
+        DoorHinge::Right
+    }
+}
+
+pub struct DoorBlock;
+impl BlockMetadata for DoorBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
+
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "minecraft:doors").unwrap()
+    }
+}
 
         #[async_trait]
         impl PumpkinBlock for DoorBlock {
             async fn on_place(
                 &self,
                 _server: &Server,
-                world: &World,
+                _world: &World,
                 block: &Block,
                 _face: &BlockDirection,
-                block_pos: &BlockPos,
-                use_item_on: &SUseItemOn,
+                _block_pos: &BlockPos,
+                _use_item_on: &SUseItemOn,
                 player_direction: &HorizontalFacing,
                 _other: bool,
             ) -> BlockStateId {
-                let powered = block_receives_redstone_power(world, block_pos).await
-                    || block_receives_redstone_power(world, &block_pos.up()).await;
-
-                let hinge = get_hinge(world, block, block_pos, use_item_on, player_direction).await;
-
                 let mut door_props = DoorProperties::default(block);
                 door_props.half = DoubleBlockHalf::Lower;
                 door_props.facing = *player_direction;
-                door_props.hinge = hinge;
-                door_props.powered = powered;
-                door_props.open = powered;
+                door_props.hinge = DoorHinge::Left;
 
-                door_props.to_state_id(block)
-            }
+        door_props.to_state_id(block)
+    }
 
             async fn can_place_at(&self, world: &World, block_pos: &BlockPos) -> bool {
                 if world
@@ -211,26 +277,26 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                 false
             }
 
-            async fn placed(
-                &self,
-                world: &Arc<World>,
-                block: &Block,
-                state_id: BlockStateId,
-                block_pos: &BlockPos,
-                _old_state_id: BlockStateId,
-                _notify: bool,
-            ) {
-                let mut door_props = DoorProperties::from_state_id(state_id, block);
-                door_props.half = DoubleBlockHalf::Upper;
+    async fn placed(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        state_id: BlockStateId,
+        block_pos: &BlockPos,
+        _old_state_id: BlockStateId,
+        _notify: bool,
+    ) {
+        let mut door_props = DoorProperties::from_state_id(state_id, block);
+        door_props.half = DoubleBlockHalf::Upper;
 
-                world
-                    .set_block_state(
-                        &block_pos.offset(BlockDirection::Up.to_offset()),
-                        door_props.to_state_id(block),
-                        BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-                    )
-                    .await;
-            }
+        world
+            .set_block_state(
+                &block_pos.offset(BlockDirection::Up.to_offset()),
+                door_props.to_state_id(block),
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            )
+            .await;
+    }
 
             async fn use_with_item(
                 &self,
@@ -245,10 +311,10 @@ pub fn register_door_blocks(manager: &mut BlockRegistry) {
                     return BlockActionResult::Continue;
                 }
 
-                toggle_door(world, &location).await;
+        toggle_door(world, &location).await;
 
-                BlockActionResult::Consume
-            }
+        BlockActionResult::Consume
+    }
 
             async fn normal_use(
                 &self,

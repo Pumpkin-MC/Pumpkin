@@ -10,50 +10,38 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::block::registry::BlockRegistry;
-use crate::server::Server;
 use crate::world::World;
+use crate::{entity::player::Player, server::Server};
 
 type LogProperties = pumpkin_data::block_properties::PaleOakWoodLikeProperties;
 
-pub fn register_log_blocks(manager: &mut BlockRegistry) {
-    let tag_values: &'static [&'static str] =
-        get_tag_values(RegistryKey::Block, "minecraft:logs").unwrap();
+pub struct LogBlock;
+impl BlockMetadata for LogBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
 
-    for block in tag_values {
-        pub struct LogBlock {
-            id: &'static str,
-        }
-        impl BlockMetadata for LogBlock {
-            fn namespace(&self) -> &'static str {
-                "minecraft"
-            }
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "minecraft:logs").unwrap()
+    }
+}
 
-            fn id(&self) -> &'static str {
-                self.id
-            }
-        }
+#[async_trait]
+impl PumpkinBlock for LogBlock {
+    async fn on_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        block: &Block,
+        face: &BlockDirection,
+        _block_pos: &BlockPos,
+        _use_item_on: &SUseItemOn,
+        _player: &Player,
+        _other: bool,
+    ) -> BlockStateId {
+        let mut log_props = LogProperties::default(block);
+        log_props.axis = face.to_axis();
 
-        #[async_trait]
-        impl PumpkinBlock for LogBlock {
-            async fn on_place(
-                &self,
-                _server: &Server,
-                _world: &World,
-                block: &Block,
-                face: &BlockDirection,
-                _block_pos: &BlockPos,
-                _use_item_on: &SUseItemOn,
-                _player_direction: &HorizontalFacing,
-                _other: bool,
-            ) -> BlockStateId {
-                let mut log_props = LogProperties::default(block);
-                log_props.axis = face.to_axis();
-
-                log_props.to_state_id(block)
-            }
-        }
-
-        manager.register(LogBlock { id: block });
+        log_props.to_state_id(block)
     }
 }

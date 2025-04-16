@@ -45,7 +45,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut wire = RedstoneWireProperties::default(block);

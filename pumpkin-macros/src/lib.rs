@@ -193,8 +193,8 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
             fn namespace(&self) -> &'static str {
                 #namespace
             }
-            fn id(&self) -> &'static str {
-                #id
+            fn ids(&self) -> &'static [&'static str] {
+                &[#id]
             }
         }
     };

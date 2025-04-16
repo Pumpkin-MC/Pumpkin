@@ -49,7 +49,7 @@ impl PumpkinBlock for LeverBlock {
         face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
@@ -61,7 +61,7 @@ impl PumpkinBlock for LeverBlock {
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
-            lever_props.facing = *player_direction;
+            lever_props.facing = player.living_entity.entity.get_horizontal_facing();
         } else {
             lever_props.facing = face.opposite().to_cardinal_direction();
         }
