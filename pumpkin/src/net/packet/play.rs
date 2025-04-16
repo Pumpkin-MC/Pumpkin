@@ -30,7 +30,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{
     Block,
-    block_properties::{HorizontalFacing, get_block_by_item, get_block_collision_shapes},
+    block_properties::{get_block_by_item, get_block_collision_shapes},
 };
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
@@ -1705,7 +1705,7 @@ impl Player {
                 &final_block_pos,
                 &use_item_on,
                 self,
-                !(clicked_block_state.replaceable || updateable),
+                !(clicked_block_state.replaceable() || updateable),
             )
             .await;
 

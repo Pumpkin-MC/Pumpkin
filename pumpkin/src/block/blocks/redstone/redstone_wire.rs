@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{
-    BlockProperties, EastWireConnection, EnumVariants, HorizontalFacing, Integer0To15,
-    NorthWireConnection, ObserverLikeProperties, RedstoneWireLikeProperties,
-    RepeaterLikeProperties, SouthWireConnection, WestWireConnection,
+    BlockProperties, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
+    ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
+    SouthWireConnection, WestWireConnection,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockState};

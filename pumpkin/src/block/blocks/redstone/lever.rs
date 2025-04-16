@@ -5,7 +5,7 @@ use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockFace, BlockProperties, HorizontalFacing, LeverLikeProperties},
+    block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;

@@ -49,7 +49,7 @@ impl PumpkinBlock for RepeaterBlock {
             .get_horizontal_facing()
             .opposite();
         props.facing = dir;
-        props.locked = Boolean::from_bool(should_be_locked(&dir, world, block_pos).await);
+        props.locked = should_be_locked(&dir, world, block_pos).await;
         props.to_state_id(block)
     }
 

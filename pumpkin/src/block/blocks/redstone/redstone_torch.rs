@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -51,12 +50,11 @@ impl PumpkinBlock for RedstoneTorchBlock {
         if face.is_horizontal() {
             let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
             torch_props.facing = face.to_horizontal_facing().unwrap().opposite();
-            torch_props.lit = Boolean::from_bool(should_be_lit(world, block_pos, face).await);
+            torch_props.lit = should_be_lit(world, block_pos, face).await;
             return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
         }
         let mut torch_props = RTorchProps::default(&Block::REDSTONE_TORCH);
-        torch_props.lit =
-            Boolean::from_bool(should_be_lit(world, block_pos, &BlockDirection::Down).await);
+        torch_props.lit = should_be_lit(world, block_pos, &BlockDirection::Down).await;
         return torch_props.to_state_id(&Block::REDSTONE_TORCH);
     }
 
@@ -76,7 +74,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 
         if block == &Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(state.id, block);
-            if props.lit.to_bool()
+            if props.lit
                 != should_be_lit(
                     world,
                     block_pos,
@@ -90,7 +88,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
             }
         } else if block == &Block::REDSTONE_TORCH {
             let props = RTorchProps::from_state_id(state.id, block);
-            if props.lit.to_bool() != should_be_lit(world, block_pos, &BlockDirection::Down).await {
+            if props.lit != should_be_lit(world, block_pos, &BlockDirection::Down).await {
                 world
                     .schedule_block_tick(block, *block_pos, 2, TickPriority::Normal)
                     .await;
@@ -117,12 +115,12 @@ impl PumpkinBlock for RedstoneTorchBlock {
     ) -> u8 {
         if block == &Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(state.id, block);
-            if props.lit.to_bool() && direction != &props.facing.to_block_direction() {
+            if props.lit && direction != &props.facing.to_block_direction() {
                 return 15;
             }
         } else if block == &Block::REDSTONE_TORCH {
             let props = RTorchProps::from_state_id(state.id, block);
-            if props.lit.to_bool() && direction != &BlockDirection::Up {
+            if props.lit && direction != &BlockDirection::Up {
                 return 15;
             }
         }
@@ -140,12 +138,12 @@ impl PumpkinBlock for RedstoneTorchBlock {
         if direction == &BlockDirection::Down {
             if block == &Block::REDSTONE_WALL_TORCH {
                 let props = RWallTorchProps::from_state_id(state.id, block);
-                if props.lit.to_bool() {
+                if props.lit {
                     return 15;
                 }
             } else if block == &Block::REDSTONE_TORCH {
                 let props = RTorchProps::from_state_id(state.id, block);
-                if props.lit.to_bool() {
+                if props.lit {
                     return 15;
                 }
             }
@@ -163,8 +161,8 @@ impl PumpkinBlock for RedstoneTorchBlock {
                 &props.facing.to_block_direction().opposite(),
             )
             .await;
-            if props.lit.to_bool() != should_be_lit_now {
-                props.lit = Boolean::from_bool(should_be_lit_now);
+            if props.lit != should_be_lit_now {
+                props.lit = should_be_lit_now;
                 world
                     .set_block_state(block_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                     .await;
@@ -173,8 +171,8 @@ impl PumpkinBlock for RedstoneTorchBlock {
         } else if block == &Block::REDSTONE_TORCH {
             let mut props = RTorchProps::from_state_id(state.id, block);
             let should_be_lit_now = should_be_lit(world, block_pos, &BlockDirection::Down).await;
-            if props.lit.to_bool() != should_be_lit_now {
-                props.lit = Boolean::from_bool(should_be_lit_now);
+            if props.lit != should_be_lit_now {
+                props.lit = should_be_lit_now;
                 world
                     .set_block_state(block_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                     .await;

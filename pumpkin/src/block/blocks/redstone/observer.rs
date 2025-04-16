@@ -4,7 +4,7 @@ use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, HorizontalFacing, ObserverLikeProperties},
+    block_properties::{BlockProperties, ObserverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
