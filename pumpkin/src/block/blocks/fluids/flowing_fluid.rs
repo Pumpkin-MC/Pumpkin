@@ -23,8 +23,7 @@ impl SpreadContext {
             holes: HashMap::new(),
         }
     }
-
-    pub async fn is_hole<T: FlowingFluid + ?Sized + std::marker::Sync>(
+    pub async fn is_hole<T: FlowingFluid + ?Sized + Sync>(
         &mut self,
         fluid: &T,
         world: &Arc<World>,
@@ -313,12 +312,12 @@ pub trait FlowingFluid {
             };
 
             if slope_dist < min_dist {
-                min_dist = slope_dist;
                 result.clear();
             }
 
             if slope_dist <= min_dist {
                 result.insert(direction, slope_dist);
+                min_dist = slope_dist;
             }
         }
         result
@@ -334,7 +333,7 @@ pub trait FlowingFluid {
         ctx: &mut SpreadContext,
     ) -> i32 {
         if distance > self.get_slope_find_distance().await {
-            return distance;
+            return 1000;
         }
 
         let mut min_dist = 1000;
@@ -348,6 +347,17 @@ pub trait FlowingFluid {
 
             if !self.can_pass_through(world, fluid, &next_pos).await {
                 continue;
+            }
+
+            let Ok(next_state_id) = world.get_block_state_id(&next_pos).await else {
+                continue;
+            };
+
+            if self.is_same_fluid(fluid, next_state_id) {
+                let next_props = FlowingFluidProperties::from_state_id(next_state_id, fluid);
+                if next_props.level == Level::L8 && next_props.falling == Falling::False {
+                    return 1000;
+                }
             }
 
             if ctx.is_hole(self, world, fluid, &next_pos).await {
