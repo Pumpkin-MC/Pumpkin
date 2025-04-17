@@ -183,6 +183,8 @@ pub struct Player {
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
+    /// The player's previous gamemode
+    pub previous_gamemode: AtomicCell<Option<GameMode>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -286,6 +288,7 @@ impl Player {
             mining_pos: Mutex::new(BlockPos(Vector3::new(0, 0, 0))),
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
+            previous_gamemode: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -1120,6 +1123,9 @@ impl Player {
             'after: {
                 let gamemode = event.new_gamemode;
                 self.gamemode.store(gamemode);
+                // TODO: Fix this when mojang fixes it
+                // This is intentional to keep the pure vanilla mojang experience
+                // self.previous_gamemode.store(self.previous_gamemode.load());
                 {
                     // Use another scope so that we instantly unlock `abilities`.
                     let mut abilities = self.abilities.lock().await;
@@ -1426,6 +1432,9 @@ impl NBTStorage for Player {
             + self.experience_points.load(Ordering::Relaxed);
         nbt.put_int("XpTotal", total_exp);
         nbt.put_byte("playerGameType", self.gamemode.load() as i8);
+        if let Some(previous_gamemode) = self.previous_gamemode.load() {
+            nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
+        }
 
         nbt.put_bool(
             "HasPlayedBefore",
@@ -1444,6 +1453,11 @@ impl NBTStorage for Player {
         self.gamemode.store(
             GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
                 .unwrap_or(GameMode::Survival),
+        );
+
+        self.previous_gamemode.store(
+            nbt.get_byte("previousPlayerGameType")
+                .and_then(|byte| GameMode::try_from(byte).ok()),
         );
 
         self.has_played_before.store(
