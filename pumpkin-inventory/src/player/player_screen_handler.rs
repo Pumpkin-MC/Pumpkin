@@ -1,4 +1,10 @@
-use std::sync::Arc;
+use std::{
+    any::Any,
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    },
+};
 
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
@@ -20,6 +26,7 @@ use super::player_inventory::PlayerInventory;
 
 pub struct PlayerScreenHandler {
     slots: Vec<Arc<dyn Slot>>,
+    sync_id: AtomicU8,
 }
 
 impl RecipeFinderScreenHandler for PlayerScreenHandler {}
@@ -44,7 +51,10 @@ impl PlayerScreenHandler {
         window_type: Option<WindowType>,
         sync_id: u8,
     ) -> Self {
-        let mut player_screen_handler = PlayerScreenHandler { slots: Vec::new() };
+        let mut player_screen_handler = PlayerScreenHandler {
+            slots: Vec::new(),
+            sync_id: AtomicU8::new(sync_id),
+        };
         let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
             Arc::new(Mutex::new(CraftingInventory {
                 width: 2,
@@ -81,8 +91,8 @@ impl PlayerScreenHandler {
 
 #[async_trait]
 impl ScreenHandler for PlayerScreenHandler {
-    fn window_type(&self) -> Option<WindowType> {
-        None
+    fn window_type(&self) -> WindowType {
+        unreachable!()
     }
 
     fn size(&self) -> usize {
@@ -91,5 +101,13 @@ impl ScreenHandler for PlayerScreenHandler {
 
     fn add_slot_internal(&mut self, slot: Arc<dyn Slot>) {
         self.slots.push(slot.clone());
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn sync_id(&self) -> u8 {
+        self.sync_id.load(Ordering::Relaxed)
     }
 }

@@ -8,6 +8,7 @@ pub mod inventory;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
+pub mod sync_handler;
 pub mod window_property;
 
 pub use error::InventoryError;

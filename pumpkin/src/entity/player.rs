@@ -42,13 +42,17 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::{
-    entity_equipment::EntityEquipment, inventory::Inventory,
-    player::player_inventory::PlayerInventory, screen_handler::ScreenHandler,
+    entity_equipment::EntityEquipment,
+    inventory::Inventory,
+    player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory},
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{PlayerInfoFlags, PreviousMessage};
+use pumpkin_protocol::client::play::{
+    CCloseContainer, COpenScreen, PlayerInfoFlags, PreviousMessage,
+};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -178,7 +182,7 @@ pub struct Player {
     /// The client connection associated with the player.
     pub client: Client,
     /// The player's inventory.
-    pub inventory: Mutex<PlayerInventory>,
+    pub inventory: Arc<Mutex<PlayerInventory>>,
     /// The player's configuration settings. Changes when the player changes their settings.
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
@@ -239,7 +243,8 @@ pub struct Player {
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
-    pub current_screen_handler: Mutex<Option<Arc<dyn ScreenHandler>>>,
+    pub player_screen_handler: Arc<Mutex<PlayerScreenHandler>>,
+    pub current_screen_handler: Mutex<Arc<Mutex<dyn ScreenHandler>>>,
     pub screen_handler_sync_id: AtomicU8,
 }
 
@@ -261,6 +266,12 @@ impl Player {
 
         let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
+
+        let inventory = Arc::new(Mutex::new(PlayerInventory::new(EntityEquipment::new())));
+
+        let player_screen_handler = Arc::new(Mutex::new(
+            PlayerScreenHandler::new(&inventory, None, 0).await,
+        ));
 
         Self {
             living_entity: LivingEntity::new(Entity::new(
@@ -313,7 +324,7 @@ impl Player {
                     AtomicCell::new(advanced_config().commands.default_op_level),
                     |op| AtomicCell::new(op.level),
                 ),
-            inventory: Mutex::new(PlayerInventory::new(EntityEquipment::new())),
+            inventory,
             // TODO: enderChestInventory
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
@@ -327,7 +338,8 @@ impl Player {
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
-            current_screen_handler: Mutex::new(None),
+            player_screen_handler: player_screen_handler.clone(),
+            current_screen_handler: Mutex::new(player_screen_handler),
             screen_handler_sync_id: AtomicU8::new(0),
         }
     }
@@ -1419,8 +1431,95 @@ impl Player {
         */
     }
 
-    //pub async fn open_handeled_screen(&self, screen_handler: dyn Fn(sync_id: u8) -> Arc<dyn ScreenHandler>) {
-    //}
+    pub async fn increment_screen_handler_sync_id(&self) {
+        let current_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
+        self.screen_handler_sync_id
+            .store(current_id % 100 + 1, Ordering::Relaxed);
+    }
+
+    pub async fn close_handeled_screen(&self) {
+        self.client
+            .enqueue_packet(&CCloseContainer::new(
+                self.current_screen_handler
+                    .lock()
+                    .await
+                    .lock()
+                    .await
+                    .sync_id()
+                    .into(),
+            ))
+            .await;
+        self.on_handeled_screen_closed().await;
+    }
+
+    pub async fn on_handeled_screen_closed(&self) {
+        self.current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .on_closed(self);
+
+        self.player_screen_handler
+            .lock()
+            .await
+            .copy_shared_slots(self.current_screen_handler.lock().await.clone())
+            .await;
+
+        *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
+    }
+
+    pub async fn on_handeled_screen_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
+        //screenHandler.addListener(this.screenHandlerListener);
+        //screen_handler.update_sync_handler(self.screen_handler_sync_handler.clone());
+    }
+
+    pub async fn open_handeled_screen(
+        &self,
+        screen_handler_factory: Option<&dyn ScreenHandlerFactory>,
+    ) -> Option<u8> {
+        if screen_handler_factory.is_none() {
+            return None;
+        }
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handeled_screen().await;
+        }
+
+        self.increment_screen_handler_sync_id().await;
+
+        let screen_handler = screen_handler_factory.unwrap().crate_menu(
+            self.screen_handler_sync_id.load(Ordering::Relaxed),
+            self.inventory.clone(),
+            self,
+        );
+
+        if let Some(screen_handler) = screen_handler {
+            let screen_handler_temp = screen_handler.lock().await;
+            self.client
+                .enqueue_packet(&COpenScreen::new(
+                    screen_handler_temp.sync_id().into(),
+                    (screen_handler_temp.window_type() as i32).into(),
+                    &screen_handler_factory.unwrap().get_display_name(),
+                ))
+                .await;
+            drop(screen_handler_temp);
+            self.on_handeled_screen_opened(screen_handler.clone()).await;
+            *self.current_screen_handler.lock().await = screen_handler;
+            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+        } else {
+            // TODO: Send message if player is in spectator mode
+
+            None
+        }
+    }
 }
 
 #[async_trait]
@@ -1980,3 +2079,5 @@ impl MessageCache {
         self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }
+
+impl InventoryPlayer for Player {}
