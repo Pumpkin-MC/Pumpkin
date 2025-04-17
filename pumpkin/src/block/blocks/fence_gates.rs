@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -13,7 +13,6 @@ use pumpkin_world::block::BlockDirection;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
-use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
@@ -58,11 +57,11 @@ impl PumpkinBlock for FenceGateBlock {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut fence_gate_props = FenceGateProperties::default(block);
-        fence_gate_props.facing = *player_direction;
+        fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
         fence_gate_props.to_state_id(block)
     }
 

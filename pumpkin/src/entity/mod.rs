@@ -6,6 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
+    block::{Facing, HorizontalFacing},
     damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -28,9 +29,12 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use serde::Serialize;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicI32, Ordering},
+use std::{
+    f32::consts::PI,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicI32, Ordering},
+    },
 };
 use tokio::sync::RwLock;
 
@@ -354,6 +358,52 @@ impl Entity {
             self.set_pose(EntityPose::Crouching).await;
         } else {
             self.set_pose(EntityPose::Standing).await;
+        }
+    }
+
+    pub fn get_horizontal_facing(&self) -> HorizontalFacing {
+        let adjusted_yaw = (self.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
+
+        match adjusted_yaw {
+            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
+            45.0..=135.0 => HorizontalFacing::West,
+            135.0..=225.0 => HorizontalFacing::North,
+            225.0..=315.0 => HorizontalFacing::East,
+            _ => HorizontalFacing::South, // Default case, should not occur
+        }
+    }
+
+    pub fn get_facing(&self) -> Facing {
+        let pitch = self.pitch.load() * (PI / 180.0);
+        let yaw = -self.yaw.load() * (PI / 180.0);
+
+        let sin_pitch = pitch.sin();
+        let cos_pitch = pitch.cos();
+        let sin_yaw = yaw.sin();
+        let cos_yaw = yaw.cos();
+
+        let abs_sin_yaw = sin_yaw.abs();
+        let abs_sin_pitch = sin_pitch.abs();
+        let abs_cos_yaw = cos_yaw.abs();
+
+        let o = abs_sin_yaw * cos_pitch.abs();
+
+        if abs_sin_yaw > abs_cos_yaw {
+            if abs_sin_pitch > o {
+                if sin_pitch < 0.0 {
+                    Facing::Up
+                } else {
+                    Facing::Down
+                }
+            } else if sin_yaw > 0.0 {
+                Facing::East
+            } else {
+                Facing::West
+            }
+        } else if cos_yaw > 0.0 {
+            Facing::South
+        } else {
+            Facing::North
         }
     }
 

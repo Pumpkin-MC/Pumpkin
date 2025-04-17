@@ -1,6 +1,6 @@
+use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
@@ -88,7 +88,7 @@ impl PumpkinBlock for FenceBlock {
         _face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player: &Player,
         _other: bool,
     ) -> u16 {
         fence_state(world, block, block_pos).await

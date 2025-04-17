@@ -4,7 +4,6 @@ use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::BlockState;
 use pumpkin_data::block::DoorHinge;
 use pumpkin_data::block::DoubleBlockHalf;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
@@ -85,12 +84,12 @@ impl PumpkinBlock for DoorBlock {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut door_props = DoorProperties::default(block);
         door_props.half = DoubleBlockHalf::Lower;
-        door_props.facing = *player_direction;
+        door_props.facing = player.living_entity.entity.get_horizontal_facing();
         door_props.hinge = DoorHinge::Left;
 
         door_props.to_state_id(block)

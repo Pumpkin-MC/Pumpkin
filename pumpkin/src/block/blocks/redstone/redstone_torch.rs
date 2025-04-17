@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockState;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -44,7 +44,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player: &Player,
         _other: bool,
     ) -> BlockStateId {
         if face.is_horizontal() {

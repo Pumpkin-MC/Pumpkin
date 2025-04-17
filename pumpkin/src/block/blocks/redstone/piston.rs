@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, Boolean, HorizontalFacing};
+use pumpkin_data::block::{Block, BlockProperties, Boolean};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    block::{BlockDirection, HorizontalFacingExt},
-};
+use pumpkin_world::{BlockStateId, block::BlockDirection};
 
 use crate::{
     block::pumpkin_block::{BlockMetadata, PumpkinBlock},
@@ -41,12 +39,12 @@ impl PumpkinBlock for PistonBlock {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut props = PistonProps::default(block);
         props.extended = Boolean::False;
-        props.facing = player_direction.opposite().to_block_direction().to_facing();
+        props.facing = player.living_entity.entity.get_facing().opposite();
         props.to_state_id(block)
     }
 

@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockFace;
 use pumpkin_data::block::BlockState;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::{BlockProperties, Boolean};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::RegistryKey;
@@ -68,7 +67,7 @@ impl PumpkinBlock for ButtonBlock {
         face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
     ) -> BlockStateId {
         let mut props = ButtonLikeProperties::default(block);
@@ -80,7 +79,7 @@ impl PumpkinBlock for ButtonBlock {
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
-            props.facing = *player_direction;
+            props.facing = player.living_entity.entity.get_horizontal_facing();
         } else {
             props.facing = face.opposite().to_cardinal_direction();
         }
