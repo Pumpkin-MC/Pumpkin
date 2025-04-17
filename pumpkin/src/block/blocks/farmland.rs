@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
-use pumpkin_data::block::HorizontalFacing;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -34,7 +34,7 @@ impl PumpkinBlock for FarmLandBlock {
         _face: &BlockDirection,
         pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        _player_direction: &Player,
         _other: bool,
     ) -> BlockStateId {
         if !self.can_place_at(world, pos).await {

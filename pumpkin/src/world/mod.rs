@@ -34,10 +34,11 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_macros::send_cancellable;
+use pumpkin_nbt::to_bytes_unnamed;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
+        CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
         FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
     },
@@ -55,7 +56,10 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::{BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
+use pumpkin_world::{
+    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
+    level::SyncChunk,
+};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
@@ -518,7 +522,10 @@ impl World {
                 self.dimension_type.name(),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
-                base_config.default_gamemode as i8,
+                player
+                    .previous_gamemode
+                    .load()
+                    .map_or(-1, |gamemode| gamemode as i8),
                 false,
                 false,
                 None,
@@ -1645,5 +1652,40 @@ impl World {
         if new_state_id != block_state.id {
             self.set_block_state(block_pos, new_state_id, flags).await;
         }
+    }
+
+    pub async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        let chunk = self.get_chunk(block_pos).await;
+        let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
+
+        chunk.block_entities.get(block_pos).cloned()
+    }
+
+    pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+        let block_pos = block_entity.get_position();
+        let chunk = self.get_chunk(&block_pos).await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        let block_entity_nbt = block_entity.chunk_data_nbt();
+
+        if let Some(nbt) = block_entity_nbt {
+            let mut bytes = Vec::new();
+            to_bytes_unnamed(&nbt, &mut bytes).unwrap();
+            self.broadcast_packet_all(&CBlockEntityData::new(
+                block_entity.get_position(),
+                VarInt(block_entity.get_id() as i32),
+                bytes.into_boxed_slice(),
+            ))
+            .await;
+        }
+
+        chunk.block_entities.insert(block_pos, block_entity);
+        chunk.dirty = true;
+    }
+
+    pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
+        let chunk = self.get_chunk(block_pos).await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        chunk.block_entities.remove(block_pos);
+        chunk.dirty = true;
     }
 }

@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub mod deserializer;
+use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
 use thiserror::Error;
 pub mod packet;
 pub mod serializer;
@@ -322,6 +323,8 @@ pub trait NetworkWriteExt {
 
         Ok(())
     }
+
+    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError>;
 }
 
 impl<W: Write> NetworkWriteExt for W {
@@ -407,6 +410,40 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
         data.encode(self)
+    }
+
+    fn write_option<G>(
+        &mut self,
+        data: &Option<G>,
+        writer: impl FnOnce(&mut Self, &G) -> Result<(), WritingError>,
+    ) -> Result<(), WritingError> {
+        if let Some(data) = data {
+            self.write_bool(true)?;
+            writer(self, data)
+        } else {
+            self.write_bool(false)
+        }
+    }
+
+    fn write_list<G>(
+        &mut self,
+        list: &[G],
+        writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
+    ) -> Result<(), WritingError> {
+        self.write_var_int(&(list.len() as i32).into())?;
+        for data in list {
+            writer(self, data)?;
+        }
+
+        Ok(())
+    }
+
+    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError> {
+        let mut write_adaptor = WriteAdaptor::new(self);
+        data.serialize(&mut write_adaptor)
+            .map_err(|e| WritingError::Message(e.to_string()))?;
+
+        Ok(())
     }
 }
 
