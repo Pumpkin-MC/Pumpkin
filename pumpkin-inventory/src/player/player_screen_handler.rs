@@ -8,6 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
+use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -20,7 +21,7 @@ use crate::{
     inventory::Inventory,
     screen_handler::{ScreenHandler, ScreenHandlerListener},
     slot::{ArmorSlot, NormalSlot, Slot},
-    sync_handler::SyncHandler,
+    sync_handler::{AlwaysInSyncTrackedSlot, SyncHandler, TrackedSlot},
 };
 
 use super::player_inventory::PlayerInventory;
@@ -30,6 +31,12 @@ pub struct PlayerScreenHandler {
     sync_id: AtomicU8,
     listeners: Vec<Arc<dyn ScreenHandlerListener>>,
     sync_handler: Option<Arc<SyncHandler>>,
+    tracked_slots: Vec<Arc<dyn TrackedSlot>>,
+    tracked_stacks: Vec<ItemStack>,
+    cursor_stack: Arc<Mutex<ItemStack>>,
+    tracked_cursor_slot: Arc<dyn TrackedSlot>,
+    revision: u32,
+    disable_sync: bool,
 }
 
 impl RecipeFinderScreenHandler for PlayerScreenHandler {}
@@ -59,6 +66,12 @@ impl PlayerScreenHandler {
             sync_id: AtomicU8::new(sync_id),
             listeners: Vec::new(),
             sync_handler: None,
+            tracked_slots: Vec::new(),
+            tracked_stacks: Vec::new(),
+            cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
+            tracked_cursor_slot: Arc::new(AlwaysInSyncTrackedSlot::ALWAYS_IN_SYNC_TRACKED_SLOT),
+            revision: 0,
+            disable_sync: false,
         };
         let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
             Arc::new(Mutex::new(CraftingInventory {
@@ -123,9 +136,38 @@ impl ScreenHandler for PlayerScreenHandler {
 
     async fn update_sync_handler(&mut self, sync_handler: Arc<SyncHandler>) {
         self.sync_handler = Some(sync_handler);
-        // TODO:
-        //self.tracked_cursor_slot = self.sync_handler.create_tracked_slot();
-        //self.tracked_slots.replace_all(slot -> handler.createTrackedSlot());
+        self.tracked_cursor_slot = self.sync_handler.as_ref().unwrap().create_tracked_slot();
+        self.tracked_slots.iter_mut().for_each(|slot| {
+            *slot = self.sync_handler.as_ref().unwrap().create_tracked_slot();
+        });
         //self.sync_state();
+    }
+
+    fn get_sync_handler(&self) -> Option<Arc<SyncHandler>> {
+        self.sync_handler.clone()
+    }
+
+    fn add_tracked_slot_internal(&mut self, slot: Arc<dyn TrackedSlot>) {
+        self.tracked_slots.push(slot);
+    }
+
+    fn add_tracked_stack_internal(&mut self, stack: ItemStack) {
+        self.tracked_stacks.push(stack);
+    }
+
+    fn get_slot(&self, index: usize) -> Arc<dyn Slot> {
+        self.slots[index].clone()
+    }
+
+    fn get_tracked_slot(&self, index: usize) -> Arc<dyn TrackedSlot> {
+        self.tracked_slots[index].clone()
+    }
+
+    fn get_cursor_stack(&self) -> Arc<Mutex<ItemStack>> {
+        self.cursor_stack.clone()
+    }
+
+    fn get_tracked_cursor_slot(&self) -> Arc<dyn TrackedSlot> {
+        self.tracked_cursor_slot.clone()
     }
 }

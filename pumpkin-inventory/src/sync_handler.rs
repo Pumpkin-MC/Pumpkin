@@ -1,8 +1,28 @@
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::Arc,
+};
+
+use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
+use tokio::sync::Mutex;
 
 use crate::screen_handler::ScreenHandler;
 
 pub struct SyncHandler {}
+#[async_trait]
+pub trait TrackedSlot: Send + Sync {
+    async fn set_recived_hash(&self, hash: u64) {}
+    async fn set_recived_stack(&self, stack: Arc<Mutex<ItemStack>>) {}
+    async fn is_in_sync(&self, actual_stack: Arc<Mutex<ItemStack>>) -> bool {
+        true
+    }
+}
+
+pub struct NormalTrackedSlot {
+    recived_hash: Mutex<Option<u64>>,
+    recived_stack: Mutex<Option<Arc<Mutex<ItemStack>>>>,
+}
 
 impl SyncHandler {
     pub fn update_state(
@@ -28,5 +48,61 @@ impl SyncHandler {
     ) {
     }
 
-    pub fn create_tracked_slot(&self) {}
+    pub fn create_tracked_slot(&self) -> Arc<dyn TrackedSlot> {
+        Arc::new(NormalTrackedSlot::new())
+    }
+}
+
+pub struct AlwaysInSyncTrackedSlot {}
+
+impl AlwaysInSyncTrackedSlot {
+    pub const ALWAYS_IN_SYNC_TRACKED_SLOT: AlwaysInSyncTrackedSlot = AlwaysInSyncTrackedSlot {};
+}
+
+#[async_trait]
+impl TrackedSlot for AlwaysInSyncTrackedSlot {}
+
+impl NormalTrackedSlot {
+    pub fn new() -> Self {
+        NormalTrackedSlot {
+            recived_hash: Mutex::new(None),
+            recived_stack: Mutex::new(None),
+        }
+    }
+}
+
+#[async_trait]
+impl TrackedSlot for NormalTrackedSlot {
+    async fn set_recived_hash(&self, hash: u64) {
+        *self.recived_stack.lock().await = None;
+        *self.recived_hash.lock().await = Some(hash);
+    }
+
+    async fn set_recived_stack(&self, stack: Arc<Mutex<ItemStack>>) {
+        *self.recived_hash.lock().await = None;
+        *self.recived_stack.lock().await = Some(stack);
+    }
+
+    async fn is_in_sync(&self, actual_stack: Arc<Mutex<ItemStack>>) -> bool {
+        if let Some(received_stack) = self.recived_stack.lock().await.as_ref() {
+            return received_stack
+                .lock()
+                .await
+                .are_items_and_components_equal(&actual_stack.lock().await.clone());
+        } else if let Some(received_hash) = self.recived_hash.lock().await.as_ref() {
+            let hash_equal = calculate_hash(&actual_stack.lock().await.clone()) == *received_hash;
+            if hash_equal {
+                *self.recived_stack.lock().await = Some(actual_stack.clone());
+            }
+            return hash_equal;
+        } else {
+            return false;
+        }
+    }
+}
+
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
 }
