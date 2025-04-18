@@ -41,11 +41,14 @@ pub trait Slot: Send + Sync + Debug {
         true
     }
 
-    /* Not used due to Rust's borrow checker, use get_inventory() instead
-    async fn get_stack(&self) -> &mut ItemStack {
-
+    /// Not used due to Rust's borrow checker, use get_inventory() instead
+    async fn get_cloned_stack(&self) -> ItemStack {
+        self.get_inventory()
+            .lock()
+            .await
+            .get_stack(self.get_index())
+            .clone()
     }
-     */
 
     async fn has_stack(&self) -> bool {
         let mut inv = self.get_inventory().lock().await;

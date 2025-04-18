@@ -13,8 +13,8 @@ pub struct SyncHandler {}
 #[async_trait]
 pub trait TrackedSlot: Send + Sync {
     async fn set_recived_hash(&self, hash: u64) {}
-    async fn set_recived_stack(&self, stack: Arc<Mutex<ItemStack>>) {}
-    async fn is_in_sync(&self, actual_stack: Arc<Mutex<ItemStack>>) -> bool {
+    async fn set_recived_stack(&self, stack: ItemStack) {}
+    async fn is_in_sync(&self, actual_stack: ItemStack) -> bool {
         true
     }
 }
@@ -28,7 +28,7 @@ impl SyncHandler {
     pub fn update_state(
         &self,
         screen_handler: &dyn ScreenHandler,
-        stacks: &[ItemStack],
+        stacks: &Vec<ItemStack>,
         cursor_stack: &ItemStack,
         properties: Vec<i32>,
     ) {
@@ -78,21 +78,21 @@ impl TrackedSlot for NormalTrackedSlot {
         *self.recived_hash.lock().await = Some(hash);
     }
 
-    async fn set_recived_stack(&self, stack: Arc<Mutex<ItemStack>>) {
+    async fn set_recived_stack(&self, stack: ItemStack) {
         *self.recived_hash.lock().await = None;
-        *self.recived_stack.lock().await = Some(stack);
+        *self.recived_stack.lock().await = Some(Arc::new(Mutex::new(stack)));
     }
 
-    async fn is_in_sync(&self, actual_stack: Arc<Mutex<ItemStack>>) -> bool {
+    async fn is_in_sync(&self, actual_stack: ItemStack) -> bool {
         if let Some(received_stack) = self.recived_stack.lock().await.as_ref() {
             return received_stack
                 .lock()
                 .await
-                .are_items_and_components_equal(&actual_stack.lock().await.clone());
+                .are_items_and_components_equal(&actual_stack);
         } else if let Some(received_hash) = self.recived_hash.lock().await.as_ref() {
-            let hash_equal = calculate_hash(&actual_stack.lock().await.clone()) == *received_hash;
+            let hash_equal = calculate_hash(&actual_stack) == *received_hash;
             if hash_equal {
-                *self.recived_stack.lock().await = Some(actual_stack.clone());
+                *self.recived_stack.lock().await = Some(Arc::new(Mutex::new(actual_stack)));
             }
             return hash_equal;
         } else {

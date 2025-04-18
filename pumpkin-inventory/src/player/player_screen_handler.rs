@@ -19,7 +19,7 @@ use crate::{
     },
     equipment_slot::EquipmentSlot,
     inventory::Inventory,
-    screen_handler::{ScreenHandler, ScreenHandlerListener},
+    screen_handler::{ScreenHandler, ScreenHandlerListener, ScreenProperty},
     slot::{ArmorSlot, NormalSlot, Slot},
     sync_handler::{AlwaysInSyncTrackedSlot, SyncHandler, TrackedSlot},
 };
@@ -37,6 +37,8 @@ pub struct PlayerScreenHandler {
     tracked_cursor_slot: Arc<dyn TrackedSlot>,
     revision: u32,
     disable_sync: bool,
+    properties: Vec<ScreenProperty>,
+    tracked_properties: Vec<i32>,
 }
 
 impl RecipeFinderScreenHandler for PlayerScreenHandler {}
@@ -72,6 +74,8 @@ impl PlayerScreenHandler {
             tracked_cursor_slot: Arc::new(AlwaysInSyncTrackedSlot::ALWAYS_IN_SYNC_TRACKED_SLOT),
             revision: 0,
             disable_sync: false,
+            properties: Vec::new(),
+            tracked_properties: Vec::new(),
         };
         let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
             Arc::new(Mutex::new(CraftingInventory {
@@ -140,7 +144,80 @@ impl ScreenHandler for PlayerScreenHandler {
         self.tracked_slots.iter_mut().for_each(|slot| {
             *slot = self.sync_handler.as_ref().unwrap().create_tracked_slot();
         });
-        //self.sync_state();
+        self.sync_state().await;
+    }
+
+    async fn update_to_client(&mut self) {
+        for i in 0..self.size() {
+            let slot = self.get_slot(i);
+            let stack = slot.get_cloned_stack().await;
+            self.update_tracked_slot(i, stack).await;
+        }
+
+        /* TODO: Implement this
+        for i in 0..self.prop_size() {
+            let property = self.get_property(i);
+            self.set_tracked_property(i, property);
+        } */
+
+        self.sync_state().await;
+    }
+
+    async fn update_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
+        let other_stack = &self.tracked_stacks[slot];
+        if other_stack != &stack {
+            self.tracked_stacks[slot] = stack.clone();
+
+            for listener in self.listeners.iter() {
+                listener.on_slot_update(self, slot as u8, stack.clone());
+            }
+        }
+    }
+
+    async fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) {
+        if !self.disable_sync {
+            let tracked_slot = self.get_tracked_slot(slot);
+            if !tracked_slot.is_in_sync(stack.clone()).await {
+                if let Some(sync_handler) = self.get_sync_handler() {
+                    sync_handler.update_slot(self, slot, &stack);
+                }
+            }
+        }
+    }
+
+    async fn check_cursor_stack_updates(&mut self) {
+        if !self.disable_sync {
+            let cursor_stack = self.get_cursor_stack();
+            if !self
+                .get_tracked_cursor_slot()
+                .is_in_sync(cursor_stack.lock().await.clone())
+                .await
+            {
+                self.tracked_cursor_slot
+                    .set_recived_stack(cursor_stack.lock().await.clone())
+                    .await;
+                if let Some(sync_handler) = self.get_sync_handler() {
+                    sync_handler.update_cursor_stack(self, &cursor_stack.lock().await.clone());
+                }
+            }
+        }
+    }
+
+    async fn send_content_updates(&mut self) {
+        for i in 0..self.size() {
+            let slot = self.get_slot(i);
+            let stack = slot.get_cloned_stack().await;
+            self.update_tracked_slot(i, stack.clone()).await;
+            self.check_slot_updates(i, stack).await;
+        }
+
+        self.check_cursor_stack_updates().await;
+
+        /* TODO: Implement this
+        for i in 0..self.prop_size() {
+            let property = self.get_property(i);
+            self.set_tracked_property(i, property);
+        } */
     }
 
     fn get_sync_handler(&self) -> Option<Arc<SyncHandler>> {
@@ -169,5 +246,26 @@ impl ScreenHandler for PlayerScreenHandler {
 
     fn get_tracked_cursor_slot(&self) -> Arc<dyn TrackedSlot> {
         self.tracked_cursor_slot.clone()
+    }
+
+    fn add_property(&mut self, property: ScreenProperty) {
+        self.properties.push(property);
+        self.tracked_properties.push(0);
+    }
+
+    fn prop_size(&self) -> usize {
+        self.properties.len()
+    }
+
+    fn get_property(&self, index: usize) -> i32 {
+        self.properties[index].get()
+    }
+
+    fn set_tracked_property(&mut self, index: usize, value: i32) {
+        self.tracked_properties[index] = value;
+    }
+
+    fn get_tracked_properties(&self) -> Vec<i32> {
+        self.tracked_properties.clone()
     }
 }
