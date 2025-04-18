@@ -36,7 +36,7 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
     CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
+    CSetHeldItem, CSystemChatMessage, CWorldEvent, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -1733,6 +1733,14 @@ impl Player {
             server
                 .block_registry
                 .player_placed(world, &block, new_state, &final_block_pos, face, self)
+                .await;
+
+            // Block place particles + sound
+            world
+                .broadcast_packet_except(
+                    &[self.gameprofile.id],
+                    &CWorldEvent::new(2001, location, i32::from(new_state), false),
+                )
                 .await;
 
             // The block was placed successfully, so decrement their inventory
