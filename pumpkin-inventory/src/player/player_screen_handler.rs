@@ -18,8 +18,9 @@ use crate::{
     },
     equipment_slot::EquipmentSlot,
     inventory::Inventory,
-    screen_handler::ScreenHandler,
+    screen_handler::{ScreenHandler, ScreenHandlerListener},
     slot::{ArmorSlot, NormalSlot, Slot},
+    sync_handler::SyncHandler,
 };
 
 use super::player_inventory::PlayerInventory;
@@ -27,6 +28,8 @@ use super::player_inventory::PlayerInventory;
 pub struct PlayerScreenHandler {
     slots: Vec<Arc<dyn Slot>>,
     sync_id: AtomicU8,
+    listeners: Vec<Arc<dyn ScreenHandlerListener>>,
+    sync_handler: Option<Arc<SyncHandler>>,
 }
 
 impl RecipeFinderScreenHandler for PlayerScreenHandler {}
@@ -54,6 +57,8 @@ impl PlayerScreenHandler {
         let mut player_screen_handler = PlayerScreenHandler {
             slots: Vec::new(),
             sync_id: AtomicU8::new(sync_id),
+            listeners: Vec::new(),
+            sync_handler: None,
         };
         let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
             Arc::new(Mutex::new(CraftingInventory {
@@ -109,5 +114,18 @@ impl ScreenHandler for PlayerScreenHandler {
 
     fn sync_id(&self) -> u8 {
         self.sync_id.load(Ordering::Relaxed)
+    }
+
+    async fn add_listener(&mut self, listener: Arc<dyn ScreenHandlerListener>) {
+        self.listeners.push(listener);
+        //TODO: self.send_content_updates();
+    }
+
+    async fn update_sync_handler(&mut self, sync_handler: Arc<SyncHandler>) {
+        self.sync_handler = Some(sync_handler);
+        // TODO:
+        //self.tracked_cursor_slot = self.sync_handler.create_tracked_slot();
+        //self.tracked_slots.replace_all(slot -> handler.createTrackedSlot());
+        //self.sync_state();
     }
 }

@@ -45,7 +45,8 @@ use pumpkin_inventory::{
     entity_equipment::EntityEquipment,
     inventory::Inventory,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
-    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory},
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory, ScreenHandlerListener},
+    sync_handler::SyncHandler,
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
@@ -248,6 +249,8 @@ pub struct Player {
     pub player_screen_handler: Arc<Mutex<PlayerScreenHandler>>,
     pub current_screen_handler: Mutex<Arc<Mutex<dyn ScreenHandler>>>,
     pub screen_handler_sync_id: AtomicU8,
+    pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
+    pub screen_handler_sync_handler: Arc<SyncHandler>,
 }
 
 impl Player {
@@ -274,6 +277,19 @@ impl Player {
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
         ));
+
+        struct ScreenListener {}
+
+        impl ScreenHandlerListener for ScreenListener {
+            fn on_slot_update(
+                &self,
+                screen_handler: &dyn ScreenHandler,
+                slot: u8,
+                stack: ItemStack,
+            ) {
+                println!("Slot updated: {:?}, {:?}", slot, stack);
+            }
+        }
 
         Self {
             living_entity: LivingEntity::new(Entity::new(
@@ -344,6 +360,8 @@ impl Player {
             player_screen_handler: player_screen_handler.clone(),
             current_screen_handler: Mutex::new(player_screen_handler),
             screen_handler_sync_id: AtomicU8::new(0),
+            screen_handler_listener: Arc::new(ScreenListener {}),
+            screen_handler_sync_handler: Arc::new(SyncHandler {}),
         }
     }
 
@@ -1425,18 +1443,6 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    /// Send the player's inventory to the client.
-    pub async fn send_inventory(&self) {
-        /* TODO: Inv
-        self.set_container_content(None).await;
-        self.client
-            .send_packet_now(&CSetHeldItem::new(
-                self.inventory.lock().await.selected as i8,
-            ))
-            .await;
-        */
-    }
-
     pub async fn increment_screen_handler_sync_id(&self) {
         let current_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
         self.screen_handler_sync_id
@@ -1475,9 +1481,14 @@ impl Player {
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
     }
 
-    pub async fn on_handeled_screen_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
-        //screenHandler.addListener(this.screenHandlerListener);
-        //screen_handler.update_sync_handler(self.screen_handler_sync_handler.clone());
+    pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
+        let mut screen_handler = screen_handler.lock().await;
+        screen_handler
+            .add_listener(self.screen_handler_listener.clone())
+            .await;
+        screen_handler
+            .update_sync_handler(self.screen_handler_sync_handler.clone())
+            .await;
     }
 
     pub async fn open_handeled_screen(
@@ -1517,7 +1528,7 @@ impl Player {
                 ))
                 .await;
             drop(screen_handler_temp);
-            self.on_handeled_screen_opened(screen_handler.clone()).await;
+            self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {

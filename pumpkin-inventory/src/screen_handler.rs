@@ -3,12 +3,14 @@ use std::{any::Any, collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::{
     inventory::Inventory,
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
+    sync_handler::SyncHandler,
 };
 
 pub trait InventoryPlayer {}
@@ -64,9 +66,13 @@ pub trait ScreenHandler: Send + Sync {
 
         todo!()
     }
+
+    async fn add_listener(&mut self, listener: Arc<dyn ScreenHandlerListener>);
+
+    async fn update_sync_handler(&mut self, sync_handler: Arc<SyncHandler>);
 }
 
-pub trait ScreenHandlerFactory {
+pub trait ScreenHandlerFactory: Send + Sync {
     fn crate_menu(
         &self,
         sync_id: u8,
@@ -75,4 +81,9 @@ pub trait ScreenHandlerFactory {
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>>;
 
     fn get_display_name(&self) -> TextComponent;
+}
+
+pub trait ScreenHandlerListener: Send + Sync {
+    fn on_slot_update(&self, screen_handler: &dyn ScreenHandler, slot: u8, stack: ItemStack) {}
+    fn on_property_update(&self, screen_handler: &dyn ScreenHandler, property: u8, value: i32) {}
 }
