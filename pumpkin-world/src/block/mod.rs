@@ -1,14 +1,49 @@
 pub mod entities;
 pub mod state;
 
-use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
+use std::collections::HashMap;
+
+use pumpkin_data::block::{
+    Axis, BlockState, Facing, HorizontalFacing, get_block, get_state_by_state_id,
+};
 use pumpkin_util::math::vector3::Vector3;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 pub use state::RawBlockState;
 
-#[derive(FromPrimitive, PartialEq, Clone, Copy, Debug, Hash, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub struct BlockStateCodec {
+    /// Block name
+    pub name: String,
+    /// Key-value pairs of properties
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub properties: Option<HashMap<String, String>>,
+}
+
+impl BlockStateCodec {
+    pub fn get_state(&self) -> Option<BlockState> {
+        let block = get_block(self.name.as_str());
+
+        if let Some(block) = block {
+            let mut state_id = block.default_state_id;
+
+            if let Some(properties) = &self.properties {
+                let mut properties_vec = Vec::new();
+                for (key, value) in properties {
+                    properties_vec.push((key.clone(), value.clone()));
+                }
+                let block_properties = block.from_properties(properties_vec).unwrap();
+                state_id = block_properties.to_state_id(&block);
+            }
+
+            return get_state_by_state_id(state_id);
+        }
+        None
+    }
+}
+
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq)]
 pub enum BlockDirection {
     Down = 0,
     Up,
@@ -36,13 +71,6 @@ impl TryFrom<i32> for BlockDirection {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct BlockStateCodec {
-    pub name: String,
-    // TODO: properties...
-}
-
 impl BlockDirection {
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
@@ -55,6 +83,30 @@ impl BlockDirection {
         }
         .into()
     }
+
+    pub fn to_index(&self) -> u8 {
+        match self {
+            BlockDirection::Down => 0,
+            BlockDirection::Up => 1,
+            BlockDirection::North => 2,
+            BlockDirection::South => 3,
+            BlockDirection::West => 4,
+            BlockDirection::East => 5,
+        }
+    }
+
+    pub fn from_index(index: u8) -> Option<Self> {
+        match index {
+            0 => Some(Self::Down),
+            1 => Some(Self::Up),
+            2 => Some(Self::North),
+            3 => Some(Self::South),
+            4 => Some(Self::West),
+            5 => Some(Self::East),
+            _ => None,
+        }
+    }
+
     pub fn opposite(&self) -> BlockDirection {
         match self {
             BlockDirection::Down => BlockDirection::Up,

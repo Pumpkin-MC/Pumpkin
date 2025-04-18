@@ -317,6 +317,7 @@ pub struct BlockState {
     pub luminance: u8,
     pub burnable: bool,
     pub tool_required: bool,
+    pub piston_behavior: PistonBehavior,
     pub hardness: f32,
     pub sided_transparency: bool,
     pub replaceable: bool,
@@ -326,6 +327,28 @@ pub struct BlockState {
     // pub instrument: String, // TODO: make this an enum
     pub is_solid: bool,
     pub is_liquid: bool,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PistonBehavior {
+    Normal,
+    Destroy,
+    Block,
+    Ignore,
+    PushOnly,
+}
+
+impl PistonBehavior {
+    fn to_tokens(&self) -> TokenStream {
+        match self {
+            PistonBehavior::Normal => quote! { PistonBehavior::Normal },
+            PistonBehavior::Destroy => quote! { PistonBehavior::Destroy },
+            PistonBehavior::Block => quote! { PistonBehavior::Block },
+            PistonBehavior::Ignore => quote! { PistonBehavior::Ignore },
+            PistonBehavior::PushOnly => quote! { PistonBehavior::PushOnly },
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -368,6 +391,7 @@ impl BlockState {
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
 
         let is_solid = LitBool::new(self.is_solid, Span::call_site());
+        let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
             PartialBlockState {
@@ -375,6 +399,7 @@ impl BlockState {
                 luminance: #luminance,
                 burnable: #burnable,
                 tool_required: #tool_required,
+                piston_behavior: #piston_behavior,
                 hardness: #hardness,
                 sided_transparency: #sided_transparency,
                 replaceable: #replaceable,
@@ -1071,6 +1096,7 @@ pub(crate) fn build() -> TokenStream {
             pub luminance: u8,
             pub burnable: bool,
             pub tool_required: bool,
+            pub piston_behavior: PistonBehavior,
             pub hardness: f32,
             pub sided_transparency: bool,
             pub replaceable: bool,
@@ -1088,6 +1114,7 @@ pub(crate) fn build() -> TokenStream {
             pub luminance: u8,
             pub burnable: bool,
             pub tool_required: bool,
+            pub piston_behavior: PistonBehavior,
             pub hardness: f32,
             pub sided_transparency: bool,
             pub replaceable: bool,
@@ -1096,6 +1123,15 @@ pub(crate) fn build() -> TokenStream {
             pub block_entity_type: Option<u32>,
             pub is_liquid: bool,
             pub is_solid: bool,
+        }
+
+        #[derive(PartialEq, Clone, Debug)]
+        pub enum PistonBehavior {
+            Normal,
+            Destroy,
+            Block,
+            Ignore,
+            PushOnly
         }
 
         #[derive(Clone, Debug)]
@@ -1249,6 +1285,7 @@ pub(crate) fn build() -> TokenStream {
                     luminance: partial_state.luminance,
                     burnable: partial_state.burnable,
                     tool_required: partial_state.tool_required,
+                    piston_behavior: partial_state.piston_behavior.clone(),
                     hardness: partial_state.hardness,
                     sided_transparency: partial_state.sided_transparency,
                     replaceable: partial_state.replaceable,

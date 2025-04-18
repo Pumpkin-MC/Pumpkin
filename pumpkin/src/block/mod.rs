@@ -8,7 +8,8 @@ use blocks::fluids::{lava::FlowingLava, water::FlowingWater};
 use blocks::logs::LogBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
-use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::piston::piston::PistonBlock;
+use blocks::redstone::piston::piston_extension::PistonExtensionBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
 use blocks::redstone::redstone_torch::RedstoneTorchBlock;
@@ -65,6 +66,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(RepeaterBlock);
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
+    manager.register(PistonExtensionBlock);
     manager.register(TargetBlock);
 
     manager.register(DoorBlock);
@@ -80,6 +82,12 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register_fluid(FlowingLava);
 
     Arc::new(manager)
+}
+
+pub struct BlockEvent {
+    pub pos: BlockPos,
+    pub r#type: u8,
+    pub data: u8,
 }
 
 pub async fn drop_loot(

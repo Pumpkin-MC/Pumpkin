@@ -41,20 +41,30 @@ pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     }
 }
 
+pub async fn is_emitting_redstone_power(
+    block: &Block,
+    state: &BlockState,
+    world: &World,
+    pos: &BlockPos,
+    facing: &BlockDirection,
+) -> bool {
+    get_redstone_power(block, state, world, pos, facing).await > 0
+}
+
 pub async fn get_redstone_power(
     block: &Block,
     state: &BlockState,
     world: &World,
-    pos: BlockPos,
+    pos: &BlockPos,
     facing: &BlockDirection,
 ) -> u8 {
     if state.is_solid {
         return std::cmp::max(
-            get_max_strong_power(world, &pos, true).await,
-            get_weak_power(block, state, world, &pos, facing, true).await,
+            get_max_strong_power(world, pos, true).await,
+            get_weak_power(block, state, world, pos, facing, true).await,
         );
     }
-    get_weak_power(block, state, world, &pos, facing, true).await
+    get_weak_power(block, state, world, pos, facing, true).await
 }
 
 async fn get_redstone_power_no_dust(
@@ -158,7 +168,7 @@ pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> boo
             .get_block_and_block_state(&neighbor_pos)
             .await
             .unwrap();
-        if get_redstone_power(&block, &state, world, neighbor_pos, face).await > 0 {
+        if is_emitting_redstone_power(&block, &state, world, &neighbor_pos, face).await {
             return true;
         }
     }
@@ -176,7 +186,7 @@ pub async fn diode_get_input_strength(
 ) -> u8 {
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
-    let power: u8 = get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
+    let power: u8 = get_redstone_power(&input_block, &input_state, world, &input_pos, facing).await;
     if power == 0 && input_state.is_solid {
         return get_max_weak_power(world, &input_pos, true).await;
     }

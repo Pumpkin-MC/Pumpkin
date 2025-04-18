@@ -16,8 +16,8 @@ use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
 use crate::{block::pumpkin_block::PumpkinBlock, server::Server, world::World};
+use pumpkin_world::world::BlockFlags;
 
 use super::turbo::RedstoneWireTurbo;
 use super::{get_redstone_power_no_dust, update_wire_neighbors};

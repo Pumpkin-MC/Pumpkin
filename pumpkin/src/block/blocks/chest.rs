@@ -9,7 +9,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::{ChestContainer, OpenContainer};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
+use pumpkin_protocol::{client::play::CBlockEvent, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
 
@@ -158,8 +158,9 @@ impl ChestBlock {
         }
 
         if let Some(e) = get_block("minecraft:chest") {
+            // TODO: replace with world function
             server
-                .broadcast_packet_all(&CBlockAction::new(
+                .broadcast_packet_all(&CBlockEvent::new(
                     location,
                     1,
                     num_players,

@@ -21,8 +21,8 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
+use pumpkin_world::world::BlockFlags;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();

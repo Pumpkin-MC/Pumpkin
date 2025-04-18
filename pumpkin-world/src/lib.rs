@@ -11,6 +11,7 @@ mod generation;
 pub mod item;
 pub mod level;
 mod lock;
+pub mod world;
 pub mod world_info;
 
 pub type BlockId = u16;

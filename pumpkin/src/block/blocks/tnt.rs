@@ -5,7 +5,7 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::entity::tnt::TNTEntity;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::entity::EntityType;
@@ -15,6 +15,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockFlags;
 use rand::Rng;
 
 use super::redstone::block_receives_redstone_power;

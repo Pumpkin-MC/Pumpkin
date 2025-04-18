@@ -14,9 +14,9 @@ use pumpkin_world::block::BlockDirection;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 use pumpkin_data::item::Item;
+use pumpkin_world::world::BlockFlags;
 
 type FenceGateProperties = pumpkin_data::block::OakFenceGateLikeProperties;
 

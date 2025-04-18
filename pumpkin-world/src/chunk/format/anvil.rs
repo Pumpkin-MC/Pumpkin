@@ -879,7 +879,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             .values()
             .map(|block_entity| {
                 let mut nbt = NbtCompound::new();
-                block_entity.write_internal(&mut nbt);
+                block_entity.1.write_internal(&mut nbt);
                 nbt
             })
             .collect(),

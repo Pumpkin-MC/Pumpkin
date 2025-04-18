@@ -4,13 +4,14 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockProperties, BlockState, Boolean, JukeboxLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:jukebox")]
 pub struct JukeboxBlock;

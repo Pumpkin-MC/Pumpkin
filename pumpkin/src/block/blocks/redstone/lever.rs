@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockFace, BlockState, LeverLikeProperties};
 use pumpkin_data::{block::BlockProperties, item::Item};
@@ -10,6 +9,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},

@@ -75,6 +75,10 @@ impl BlockPos {
         BlockPos(self.0 + offset)
     }
 
+    pub fn offset_dir(&self, offset: Vector3<i32>, scale: i32) -> Self {
+        BlockPos(self.0 + Vector3::new(offset.x * scale, offset.y * scale, offset.z * scale))
+    }
+
     pub fn up(&self) -> Self {
         self.offset(Vector3::new(0, 1, 0))
     }

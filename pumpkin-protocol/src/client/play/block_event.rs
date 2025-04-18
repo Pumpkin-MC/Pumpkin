@@ -8,24 +8,19 @@ use crate::VarInt;
 
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_EVENT)]
-pub struct CBlockAction {
+pub struct CBlockEvent {
     location: BlockPos,
-    action_id: u8,
-    action_parameter: u8,
+    r#type: u8,
+    data: u8,
     block_type: VarInt,
 }
 
-impl CBlockAction {
-    pub fn new(
-        location: BlockPos,
-        action_id: u8,
-        action_parameter: u8,
-        block_type: VarInt,
-    ) -> Self {
+impl CBlockEvent {
+    pub fn new(location: BlockPos, r#type: u8, data: u8, block_type: VarInt) -> Self {
         Self {
             location,
-            action_id,
-            action_parameter,
+            r#type,
+            data,
             block_type,
         }
     }

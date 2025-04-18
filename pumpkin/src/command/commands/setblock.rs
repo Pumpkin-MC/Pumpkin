@@ -7,7 +7,7 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
-use crate::world::BlockFlags;
+use pumpkin_world::world::BlockFlags;
 
 const NAMES: [&str; 1] = ["setblock"];
 
