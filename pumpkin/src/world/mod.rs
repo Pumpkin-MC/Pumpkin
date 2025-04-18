@@ -522,7 +522,10 @@ impl World {
                 self.dimension_type.name(),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
-                base_config.default_gamemode as i8,
+                player
+                    .previous_gamemode
+                    .load()
+                    .map_or(-1, |gamemode| gamemode as i8),
                 false,
                 false,
                 None,

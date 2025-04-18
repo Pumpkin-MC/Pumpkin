@@ -193,9 +193,9 @@ impl Entity {
         if pos != new_position {
             self.pos.store(new_position);
             self.bounding_box.store(BoundingBox::new_from_pos(
-                pos.x,
-                pos.y,
-                pos.z,
+                new_position.x,
+                new_position.y,
+                new_position.z,
                 &self.bounding_box_size.load(),
             ));
 
