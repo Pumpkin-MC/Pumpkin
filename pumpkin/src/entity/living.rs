@@ -256,7 +256,9 @@ impl EntityBase for LivingEntity {
             let time = self
                 .death_time
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if time >= 20 {
+
+            // Only remove entity and send remove packets once
+            if time == 20 {
                 // Spawn Death particles
                 self.entity
                     .world
