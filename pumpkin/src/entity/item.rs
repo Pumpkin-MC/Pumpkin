@@ -80,6 +80,8 @@ impl EntityBase for ItemEntity {
             *delay == 0
         };
 
+        /*
+        TODO: Inv
         if can_pickup {
             let mut inv = player.inventory.lock().await;
             let mut total_pick_up = 0;
@@ -159,6 +161,7 @@ impl EntityBase for ItemEntity {
                 self.send_meta_packet().await;
             }
         }
+        */
     }
 
     fn get_entity(&self) -> &Entity {

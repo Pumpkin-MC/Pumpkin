@@ -751,7 +751,9 @@ impl World {
 
         player.has_played_before.store(true, Ordering::Relaxed);
         player.send_mobs(self).await;
-        player.send_inventory().await;
+        player
+            .on_screen_handler_opened(player.player_screen_handler.clone())
+            .await;
     }
 
     pub async fn send_world_info(

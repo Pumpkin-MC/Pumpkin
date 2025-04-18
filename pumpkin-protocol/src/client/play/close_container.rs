@@ -7,11 +7,11 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_CONTAINER_CLOSE)]
 pub struct CCloseContainer {
-    window_id: VarInt,
+    sync_id: VarInt,
 }
 
 impl CCloseContainer {
     pub const fn new(window_id: VarInt) -> Self {
-        Self { window_id }
+        Self { sync_id: window_id }
     }
 }

@@ -41,14 +41,19 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_inventory::player::{
-    PlayerInventory, SLOT_BOOT, SLOT_CRAFT_INPUT_END, SLOT_CRAFT_INPUT_START, SLOT_HELM,
-    SLOT_HOTBAR_END, SLOT_INV_START, SLOT_OFFHAND,
+use pumpkin_inventory::{
+    entity_equipment::EntityEquipment,
+    inventory::Inventory,
+    player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory, ScreenHandlerListener},
+    sync_handler::SyncHandler,
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
+use pumpkin_protocol::client::play::{
+    CCloseContainer, COpenScreen, PlayerInfoFlags, PreviousMessage,
+};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -178,7 +183,7 @@ pub struct Player {
     /// The client connection associated with the player.
     pub client: Client,
     /// The player's inventory.
-    pub inventory: Mutex<PlayerInventory>,
+    pub inventory: Arc<Mutex<PlayerInventory>>,
     /// The player's configuration settings. Changes when the player changes their settings.
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
@@ -241,6 +246,11 @@ pub struct Player {
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
+    pub player_screen_handler: Arc<Mutex<PlayerScreenHandler>>,
+    pub current_screen_handler: Mutex<Arc<Mutex<dyn ScreenHandler>>>,
+    pub screen_handler_sync_id: AtomicU8,
+    pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
+    pub screen_handler_sync_handler: Arc<SyncHandler>,
 }
 
 impl Player {
@@ -261,6 +271,25 @@ impl Player {
 
         let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
+
+        let inventory = Arc::new(Mutex::new(PlayerInventory::new(EntityEquipment::new())));
+
+        let player_screen_handler = Arc::new(Mutex::new(
+            PlayerScreenHandler::new(&inventory, None, 0).await,
+        ));
+
+        struct ScreenListener {}
+
+        impl ScreenHandlerListener for ScreenListener {
+            fn on_slot_update(
+                &self,
+                screen_handler: &dyn ScreenHandler,
+                slot: u8,
+                stack: ItemStack,
+            ) {
+                println!("Slot updated: {:?}, {:?}", slot, stack);
+            }
+        }
 
         Self {
             living_entity: LivingEntity::new(Entity::new(
@@ -314,7 +343,8 @@ impl Player {
                     AtomicCell::new(advanced_config().commands.default_op_level),
                     |op| AtomicCell::new(op.level),
                 ),
-            inventory: Mutex::new(PlayerInventory::new()),
+            inventory,
+            // TODO: enderChestInventory
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
@@ -327,6 +357,11 @@ impl Player {
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
+            player_screen_handler: player_screen_handler.clone(),
+            current_screen_handler: Mutex::new(player_screen_handler),
+            screen_handler_sync_id: AtomicU8::new(0),
+            screen_handler_listener: Arc::new(ScreenListener {}),
+            screen_handler_sync_handler: Arc::new(SyncHandler {}),
         }
     }
 
@@ -395,7 +430,7 @@ impl Player {
         let config = &advanced_config().pvp;
 
         let inventory = self.inventory().lock().await;
-        let item_slot = inventory.held_item();
+        let item_stack = inventory.held_item();
 
         let base_damage = 1.0;
         let base_attack_speed = 4.0;
@@ -405,17 +440,15 @@ impl Player {
         let mut add_speed = 0.0;
 
         // Get the attack damage
-        if let Some(item_stack) = item_slot {
-            // TODO: this should be cached in memory
-            if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
-                for item_mod in modifiers {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        }
-                        if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+        // TODO: this should be cached in memory, we shouldn't just use default here either
+        if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
+            for item_mod in modifiers {
+                if item_mod.operation == Operation::AddValue {
+                    if item_mod.id == "minecraft:base_attack_damage" {
+                        add_damage = item_mod.amount;
+                    }
+                    if item_mod.id == "minecraft:base_attack_speed" {
+                        add_speed = item_mod.amount;
                     }
                 }
             }
@@ -1179,7 +1212,7 @@ impl Player {
                 .lock()
                 .await
                 .held_item()
-                .map_or_else(|| false, |e| e.is_correct_for_drops(block_name))
+                .is_correct_for_drops(block_name)
     }
 
     pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
@@ -1187,8 +1220,8 @@ impl Player {
             .inventory
             .lock()
             .await
-            .get_mining_speed(block_name)
-            .await;
+            .held_item()
+            .get_speed(block_name);
         // Haste
         if self.living_entity.has_effect(EffectType::Haste).await
             || self
@@ -1266,11 +1299,13 @@ impl Player {
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
         let mut inv = self.inventory.lock().await;
-        if let Some(item_stack) = inv.held_item_mut() {
+        let item_stack = inv.held_item_mut();
+
+        if !item_stack.is_empty() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
             self.drop_item(item_stack.item.id, u32::from(drop_amount))
                 .await;
-            inv.decrease_current_stack(drop_amount);
+            item_stack.decrement(drop_amount);
         }
     }
 
@@ -1408,14 +1443,99 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    /// Send the player's inventory to the client.
-    pub async fn send_inventory(&self) {
-        self.set_container_content(None).await;
+    pub async fn increment_screen_handler_sync_id(&self) {
+        let current_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
+        self.screen_handler_sync_id
+            .store(current_id % 100 + 1, Ordering::Relaxed);
+    }
+
+    pub async fn close_handeled_screen(&self) {
         self.client
-            .send_packet_now(&CSetHeldItem::new(
-                self.inventory.lock().await.selected as i8,
+            .enqueue_packet(&CCloseContainer::new(
+                self.current_screen_handler
+                    .lock()
+                    .await
+                    .lock()
+                    .await
+                    .sync_id()
+                    .into(),
             ))
             .await;
+        self.on_handeled_screen_closed().await;
+    }
+
+    pub async fn on_handeled_screen_closed(&self) {
+        self.current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .on_closed(self);
+
+        self.player_screen_handler
+            .lock()
+            .await
+            .copy_shared_slots(self.current_screen_handler.lock().await.clone())
+            .await;
+
+        *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
+    }
+
+    pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
+        let mut screen_handler = screen_handler.lock().await;
+        screen_handler
+            .add_listener(self.screen_handler_listener.clone())
+            .await;
+        screen_handler
+            .update_sync_handler(self.screen_handler_sync_handler.clone())
+            .await;
+    }
+
+    pub async fn open_handeled_screen(
+        &self,
+        screen_handler_factory: Option<&dyn ScreenHandlerFactory>,
+    ) -> Option<u8> {
+        if screen_handler_factory.is_none() {
+            return None;
+        }
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handeled_screen().await;
+        }
+
+        self.increment_screen_handler_sync_id().await;
+
+        let screen_handler = screen_handler_factory.unwrap().crate_menu(
+            self.screen_handler_sync_id.load(Ordering::Relaxed),
+            self.inventory.clone(),
+            self,
+        );
+
+        if let Some(screen_handler) = screen_handler {
+            let screen_handler_temp = screen_handler.lock().await;
+            self.client
+                .enqueue_packet(&COpenScreen::new(
+                    screen_handler_temp.sync_id().into(),
+                    (screen_handler_temp.window_type() as i32).into(),
+                    &screen_handler_factory.unwrap().get_display_name(),
+                ))
+                .await;
+            drop(screen_handler_temp);
+            self.on_screen_handler_opened(screen_handler.clone()).await;
+            *self.current_screen_handler.lock().await = screen_handler;
+            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+        } else {
+            // TODO: Send message if player is in spectator mode
+
+            None
+        }
     }
 }
 
@@ -1482,13 +1602,13 @@ impl NBTStorage for Player {
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Save the selected slot (hotbar)
-        nbt.put_int("SelectedItemSlot", self.selected as i32);
+        nbt.put_int("SelectedItemSlot", self.get_selected_slot() as i32);
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::with_capacity(SLOT_OFFHAND);
+        let mut vec: Vec<NbtTag> = Vec::with_capacity(36);
 
         // Helper function to add items to the vector
-        let mut add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
+        let add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
             if let Some(stack) = stack_ref {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", slot as i8);
@@ -1497,23 +1617,7 @@ impl NBTStorage for PlayerInventory {
             }
         };
 
-        // Crafting input slots
-        for slot in SLOT_CRAFT_INPUT_START..=SLOT_CRAFT_INPUT_END {
-            add_item(slot, self.crafting_slots()[slot - SLOT_CRAFT_INPUT_START]);
-        }
-
-        // Armor slots
-        for slot in SLOT_HELM..=SLOT_BOOT {
-            add_item(slot, self.armor_slots()[slot - SLOT_HELM]);
-        }
-
-        // Main inventory slots (includes hotbar in the data structure)
-        for slot in SLOT_INV_START..=SLOT_HOTBAR_END {
-            add_item(slot, self.item_slots()[slot - SLOT_INV_START]);
-        }
-
-        // Offhand
-        add_item(SLOT_OFFHAND, self.offhand_slot());
+        // TODO: Inv
 
         // Save the inventory list
         nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
@@ -1521,7 +1625,7 @@ impl NBTStorage for PlayerInventory {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
-        self.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
+        self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
 
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
@@ -1530,7 +1634,7 @@ impl NBTStorage for PlayerInventory {
                     if let Some(slot_byte) = item_compound.get_byte("Slot") {
                         let slot = slot_byte as usize;
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                            let _ = self.set_slot(slot, Some(item_stack), true);
+                            self.set_stack(slot, item_stack);
                         }
                     }
                 }
@@ -2000,3 +2104,5 @@ impl MessageCache {
         self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }
+
+impl InventoryPlayer for Player {}

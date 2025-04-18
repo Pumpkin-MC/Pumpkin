@@ -1,6 +1,7 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_nbt::compound::NbtCompound;
+use std::hash::Hash;
 
 mod categories;
 
@@ -19,6 +20,13 @@ pub struct ItemStack {
     pub item_count: u8,
     // TODO: Should this be a ref? all of our items are const
     pub item: Item,
+}
+
+impl Hash for ItemStack {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.item_count.hash(state);
+        self.item.id.hash(state);
+    }
 }
 
 impl PartialEq for ItemStack {
