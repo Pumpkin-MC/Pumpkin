@@ -727,6 +727,22 @@ impl Player {
         self.living_entity.entity.pos.load()
     }
 
+    pub fn eye_position(&self) -> Vector3<f64> {
+        Vector3::new(
+            self.living_entity.entity.pos.load().x,
+            self.living_entity.entity.pos.load().y
+                + f64::from(self.living_entity.entity.standing_eye_height),
+            self.living_entity.entity.pos.load().z,
+        )
+    }
+
+    pub fn rotation(&self) -> (f32, f32) {
+        (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        )
+    }
+
     /// Updates the current abilities the player has.
     pub async fn send_abilities_update(&self) {
         let mut b = 0i8;

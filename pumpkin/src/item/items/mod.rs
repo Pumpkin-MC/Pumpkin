@@ -1,3 +1,4 @@
+mod bucket;
 mod egg;
 mod hoe;
 mod snowball;
@@ -6,6 +7,7 @@ mod trident;
 
 use std::sync::Arc;
 
+use bucket::{EmptyBucketItem, FilledBucketItem};
 use egg::EggItem;
 use hoe::HoeItem;
 use snowball::SnowBallItem;
@@ -22,6 +24,8 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(EggItem);
     manager.register(SwordItem);
     manager.register(TridentItem);
+    manager.register(EmptyBucketItem);
+    manager.register(FilledBucketItem);
 
     Arc::new(manager)
 }
