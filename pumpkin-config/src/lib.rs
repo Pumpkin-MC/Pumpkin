@@ -36,6 +36,7 @@ pub mod op;
 mod player_data;
 mod pvp;
 mod server_links;
+pub mod whitelist;
 
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
@@ -147,6 +148,10 @@ pub struct BasicConfiguration {
     pub default_level_name: String,
     /// Whether chat messages should be signed or not
     pub allow_chat_reports: bool,
+    /// Whether to enable the whitelist
+    pub white_list: bool,
+    /// Whether to enforce the whitelist
+    pub enforce_whitelist: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -172,6 +177,8 @@ impl Default for BasicConfiguration {
             favicon_path: "icon.png".to_string(),
             default_level_name: "world".to_string(),
             allow_chat_reports: false,
+            white_list: false,
+            enforce_whitelist: false,
         }
     }
 }

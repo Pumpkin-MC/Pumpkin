@@ -159,11 +159,11 @@ impl Client {
         self.send_packet_now(&CFinishConfig).await;
     }
 
-    pub async fn handle_config_acknowledged(&self) {
+    pub async fn handle_config_acknowledged(&self, server: &Server) {
         log::debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
-        if let Some(reason) = self.can_not_join().await {
+        if let Some(reason) = self.can_not_join(server).await {
             self.kick(reason).await;
             return;
         }

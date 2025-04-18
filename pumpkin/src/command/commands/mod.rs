@@ -40,6 +40,7 @@ mod time;
 mod title;
 mod transfer;
 mod weather;
+mod whitelist;
 mod worldborder;
 
 #[cfg(feature = "dhat-heap")]
@@ -90,6 +91,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(banlist::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(pardon::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(pardonip::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(whitelist::init_command_tree(), PermissionLvl::Three);
     // Four
     dispatcher.register(stop::init_command_tree(), PermissionLvl::Four);
 
