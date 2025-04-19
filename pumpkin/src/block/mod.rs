@@ -75,10 +75,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ButtonBlock);
     manager.register(RedstoneTorchBlock);
     manager.register(SignBlock);
-
     manager.register_fluid(FlowingWater);
     manager.register_fluid(FlowingLava);
-
     Arc::new(manager)
 }
 
