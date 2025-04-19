@@ -67,7 +67,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
         for target in targets {
             let yaw = target.living_entity.entity.yaw.load();
             let pitch = target.living_entity.entity.pitch.load();
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -92,7 +92,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
 
         for target in targets {
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -119,7 +119,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
 
         for target in targets {
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -143,7 +143,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
         for target in targets {
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -167,7 +167,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
         for target in targets {
             let yaw = target.living_entity.entity.yaw.load();
             let pitch = target.living_entity.entity.pitch.load();
-            target.living_entity.entity.teleport(pos, yaw, pitch).await;
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -191,7 +191,7 @@ impl CommandExecutor for SelfToEntityExecutor {
             CommandSender::Player(player) => {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                player.living_entity.entity.teleport(pos, yaw, pitch).await;
+                player.teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender
@@ -219,7 +219,7 @@ impl CommandExecutor for SelfToPosExecutor {
                 let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                player.living_entity.entity.teleport(pos, yaw, pitch).await;
+                player.teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender

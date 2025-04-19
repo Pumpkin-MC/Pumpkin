@@ -281,8 +281,7 @@ impl Entity {
                 yaw,
                 pitch,
                 // TODO
-                &[],
-                self.on_ground.load(std::sync::atomic::Ordering::SeqCst),
+                self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
         self.set_pos(position);

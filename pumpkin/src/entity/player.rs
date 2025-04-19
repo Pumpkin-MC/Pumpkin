@@ -48,15 +48,17 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
+use pumpkin_protocol::client::play::{
+    CSetHeldItem, CTeleportEntity, PlayerInfoFlags, PreviousMessage,
+};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
         CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
-        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+        GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
     ser::packet::Packet,
@@ -954,30 +956,23 @@ impl Player {
                 to: position,
                 cancelled: false,
             };
-
             'after: {
                 let position = event.to;
-                self.living_entity
-                    .entity
+                let entity = self.get_entity();
+                self.request_teleport(position, yaw, pitch).await;
+                entity
                     .world
                     .read()
                     .await
-                    .broadcast_packet_all(&CTeleportEntity::new(
+                    .broadcast_packet_except(&[self.gameprofile.id], &CTeleportEntity::new(
                         self.living_entity.entity.entity_id.into(),
                         position,
                         Vector3::new(0.0, 0.0, 0.0),
                         yaw,
                         pitch,
-                        // TODO
-                        &[],
-                        self.living_entity
-                            .entity
-                            .on_ground
-                            .load(std::sync::atomic::Ordering::SeqCst),
+                        entity.on_ground.load(Ordering::SeqCst),
                     ))
                     .await;
-                self.living_entity.entity.set_pos(position);
-                self.living_entity.entity.set_rotation(yaw, pitch);
             }
         }}
     }
