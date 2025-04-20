@@ -1,7 +1,7 @@
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
@@ -10,6 +10,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 pub trait BlockMetadata {
@@ -82,6 +83,17 @@ pub trait PumpkinBlock: Send + Sync {
         _old_state_id: BlockStateId,
         _notify: bool,
     ) {
+    }
+
+    async fn on_synced_block_event(
+        &self,
+        _block: &Block,
+        _world: &Arc<World>,
+        _pos: &BlockPos,
+        _type: u8,
+        _data: u8,
+    ) -> bool {
+        false
     }
 
     async fn player_placed(

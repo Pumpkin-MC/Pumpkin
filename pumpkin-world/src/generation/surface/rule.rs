@@ -58,9 +58,11 @@ pub struct BlockMaterialRule {
 
 impl BlockMaterialRule {
     pub fn try_apply(&self) -> Option<RawBlockState> {
-        *self
-            .block_state
-            .get_or_init(|| RawBlockState::new(&self.result_state.name))
+        *self.block_state.get_or_init(|| {
+            self.result_state
+                .get_state()
+                .map(|b| RawBlockState { state_id: b.id })
+        })
     }
 }
 

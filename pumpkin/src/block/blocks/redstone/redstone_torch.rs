@@ -17,10 +17,10 @@ type RTorchProps = pumpkin_data::block::RedstoneOreLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
+use pumpkin_world::world::BlockFlags;
 
-use super::get_redstone_power;
+use super::is_emitting_redstone_power;
 
 pub struct RedstoneTorchBlock;
 
@@ -209,7 +209,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 pub async fn should_be_lit(world: &World, pos: &BlockPos, face: &BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
     let (block, state) = world.get_block_and_block_state(&other_pos).await.unwrap();
-    get_redstone_power(&block, &state, world, other_pos, face).await == 0
+    !is_emitting_redstone_power(&block, &state, world, &other_pos, face).await
 }
 
 pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {

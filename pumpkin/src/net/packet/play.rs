@@ -15,7 +15,6 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::seasonal_events;
-use crate::world::BlockFlags;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -68,6 +67,7 @@ use pumpkin_util::{
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
 
 use thiserror::Error;
 

@@ -6,7 +6,10 @@ use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::{block::entities::block_entity_from_nbt, generation::section_coords};
+use crate::{
+    block::{BlockStateCodec, entities::block_entity_from_nbt},
+    generation::section_coords,
+};
 
 use super::{
     ChunkData, ChunkHeightmaps, ChunkParsingError, ChunkSections, ScheduledTick, SubChunk,
@@ -100,7 +103,7 @@ impl ChunkData {
                 for nbt in chunk_data.block_entities {
                     let block_entity = block_entity_from_nbt(&nbt);
                     if let Some(block_entity) = block_entity {
-                        block_entities.insert(block_entity.get_position(), block_entity);
+                        block_entities.insert(block_entity.get_position(), (nbt, block_entity));
                     }
                 }
                 block_entities
@@ -146,17 +149,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBlockEntry>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct PaletteBlockEntry {
-    /// Block name
-    pub name: String,
-    /// Key-value pairs of properties
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, String>>,
+    pub(crate) palette: Vec<BlockStateCodec>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

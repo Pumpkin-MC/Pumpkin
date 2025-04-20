@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
@@ -7,11 +8,15 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::world::SimpleWorld;
+
 pub mod bed;
 pub mod chest;
 pub mod comparator;
+pub mod piston;
 pub mod sign;
 
+#[async_trait]
 pub trait BlockEntity: Send + Sync {
     fn write_nbt(&self, nbt: &mut NbtCompound);
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
@@ -19,6 +24,7 @@ pub trait BlockEntity: Send + Sync {
         Self: Sized;
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
+    async fn tick(&self, _world: &Arc<dyn SimpleWorld>) {}
     fn write_internal(&self, nbt: &mut NbtCompound) {
         nbt.put_string("id", self.identifier().to_string());
         let position = self.get_position();

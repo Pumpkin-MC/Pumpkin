@@ -10,8 +10,13 @@ pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-data = { path = "../pumpkin-data" }
 
+crossbeam.workspace = true
+
+
 async-trait.workspace = true
 futures.workspace = true
+
+bitflags = "2.9.0"
 
 bytes.workspace = true
 

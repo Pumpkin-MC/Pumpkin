@@ -10,13 +10,10 @@ use pumpkin_world::{
     BlockStateId,
     block::{BlockDirection, FacingExt},
     chunk::TickPriority,
+    world::BlockFlags,
 };
 
-use crate::{
-    block::pumpkin_block::PumpkinBlock,
-    server::Server,
-    world::{BlockFlags, World},
-};
+use crate::{block::pumpkin_block::PumpkinBlock, server::Server, world::World};
 
 #[pumpkin_block("minecraft:observer")]
 pub struct ObserverBlock;
