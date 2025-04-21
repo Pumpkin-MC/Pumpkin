@@ -45,7 +45,10 @@ use pumpkin_inventory::{
     entity_equipment::EntityEquipment,
     inventory::Inventory,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
-    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory, ScreenHandlerListener},
+    screen_handler::{
+        DefaultScreenHandlerBehaviour, InventoryPlayer, ScreenHandler, ScreenHandlerFactory,
+        ScreenHandlerListener,
+    },
     sync_handler::SyncHandler,
 };
 use pumpkin_macros::send_cancellable;
@@ -283,7 +286,7 @@ impl Player {
         impl ScreenHandlerListener for ScreenListener {
             fn on_slot_update(
                 &self,
-                screen_handler: &dyn ScreenHandler,
+                screen_handler: &DefaultScreenHandlerBehaviour,
                 slot: u8,
                 stack: ItemStack,
             ) {

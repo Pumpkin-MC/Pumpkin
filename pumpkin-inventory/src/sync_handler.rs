@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::screen_handler::ScreenHandler;
+use crate::screen_handler::{DefaultScreenHandlerBehaviour, ScreenHandler};
 
 pub struct SyncHandler {}
 #[async_trait]
@@ -27,22 +27,39 @@ pub struct NormalTrackedSlot {
 impl SyncHandler {
     pub fn update_state(
         &self,
-        screen_handler: &dyn ScreenHandler,
+        screen_handler: &DefaultScreenHandlerBehaviour,
         stacks: &Vec<ItemStack>,
         cursor_stack: &ItemStack,
         properties: Vec<i32>,
     ) {
     }
 
-    pub fn update_slot(&self, screen_handler: &dyn ScreenHandler, slot: usize, stack: &ItemStack) {}
+    pub fn update_slot(
+        &self,
+        screen_handler: &DefaultScreenHandlerBehaviour,
+        slot: usize,
+        stack: &ItemStack,
+    ) {
+    }
 
-    pub fn update_cursor_stack(&self, screen_handler: &dyn ScreenHandler, stack: &ItemStack) {}
+    pub fn update_cursor_stack(
+        &self,
+        screen_handler: &DefaultScreenHandlerBehaviour,
+        stack: &ItemStack,
+    ) {
+    }
 
-    pub fn update_property(&self, screen_handler: &dyn ScreenHandler, property: i32, value: i32) {}
+    pub fn update_property(
+        &self,
+        screen_handler: &DefaultScreenHandlerBehaviour,
+        property: i32,
+        value: i32,
+    ) {
+    }
 
     pub fn send_property_update(
         &self,
-        screen_handler: &dyn ScreenHandler,
+        screen_handler: &DefaultScreenHandlerBehaviour,
         property: i32,
         value: i32,
     ) {
