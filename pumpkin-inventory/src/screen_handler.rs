@@ -400,6 +400,8 @@ pub trait ScreenHandler: Send + Sync {
                         }
                     }
                 }
+
+                slot.mark_dirty().await;
             }
 
             /*
