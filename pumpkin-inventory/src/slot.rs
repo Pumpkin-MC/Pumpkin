@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{equipment_slot::EquipmentSlot, inventory::Inventory};
+use crate::{equipment_slot::EquipmentSlot, inventory::Inventory, screen_handler::InventoryPlayer};
 
 // Slot.java
 // This is a trait due to crafting slots being a thing
@@ -37,7 +37,7 @@ pub trait Slot: Send + Sync + Debug {
         self.mark_dirty().await;
     }
 
-    fn can_insert(&self, _stack: &ItemStack) -> bool {
+    async fn can_insert(&self, _stack: &ItemStack) -> bool {
         true
     }
 
@@ -89,8 +89,7 @@ pub trait Slot: Send + Sync + Debug {
         stack
     }
 
-    // TODO: Source takes player as parameter
-    fn can_take_items(&self) -> bool {
+    async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         true
     }
 
@@ -98,9 +97,12 @@ pub trait Slot: Send + Sync + Debug {
         true
     }
 
-    async fn try_take_stack_range(&self, min: u8, max: u8) -> Option<ItemStack> {
-        // TODO: Player is passed in here
-
+    async fn try_take_stack_range(
+        &self,
+        min: u8,
+        max: u8,
+        _player: &dyn InventoryPlayer,
+    ) -> Option<ItemStack> {
         let min = min.min(max);
         let stack = self.take_stack(min).await;
 
@@ -121,11 +123,11 @@ pub trait Slot: Send + Sync + Debug {
         }
     }
 
-    async fn take_stack_range(&self, min: u8, max: u8) -> ItemStack {
-        let stack = self.try_take_stack_range(min, max).await;
+    async fn take_stack_range(&self, min: u8, max: u8, player: &dyn InventoryPlayer) -> ItemStack {
+        let stack = self.try_take_stack_range(min, max, player).await;
 
         if let Some(stack) = &stack {
-            self.on_take_item(stack);
+            self.on_take_item(stack).await;
         }
 
         stack.unwrap_or(ItemStack::EMPTY)
@@ -137,7 +139,7 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn insert_stack_count(&self, mut stack: ItemStack, count: u8) -> ItemStack {
-        if !stack.is_empty() && self.can_insert(&stack) {
+        if !stack.is_empty() && self.can_insert(&stack).await {
             let mut inv = self.get_inventory().lock().await;
             let stack_self = inv.get_stack(self.get_index());
             let min_count = count
@@ -248,12 +250,12 @@ impl Slot for ArmorSlot {
         Slot::set_stack_prev(self, stack, previous_stack).await;
     }
 
-    fn can_insert(&self, _stack: &ItemStack) -> bool {
+    async fn can_insert(&self, _stack: &ItemStack) -> bool {
         // TODO: return this.entity.canEquip(stack, this.equipmentSlot);
         true
     }
 
-    fn can_take_items(&self) -> bool {
+    async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         // TODO: Check enchantments
         true
     }

@@ -2,16 +2,20 @@ use std::{any::Any, collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
+use pumpkin_protocol::server::play::SlotActionType;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::{
+    container_click::{ClickType, MouseClick},
     inventory::Inventory,
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
     sync_handler::{AlwaysInSyncTrackedSlot, SyncHandler, TrackedSlot},
 };
+
+const SLOT_INDEX_OUTSIDE: i32 = -999;
 
 pub struct ScreenProperty {
     old_value: i32,
@@ -29,7 +33,10 @@ impl ScreenProperty {
     }
 }
 
-pub trait InventoryPlayer {}
+#[async_trait]
+pub trait InventoryPlayer: Send + Sync {
+    async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
+}
 
 //ScreenHandler.java
 // TODO: Fully implement this
@@ -242,6 +249,235 @@ pub trait ScreenHandler: Send + Sync {
             let property = self.get_property(i);
             self.set_tracked_property(i, property);
         } */
+    }
+
+    async fn is_slot_valid(&self, slot: i32) -> bool {
+        slot == -1 || slot == -999 || slot < self.size() as i32
+    }
+
+    async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack;
+
+    async fn handle_slot_click(
+        &self,
+        _player: &dyn InventoryPlayer,
+        _click_type: MouseClick,
+        _slot: Arc<dyn Slot>,
+        _slot_stack: ItemStack,
+        _cursor_stack: ItemStack,
+    ) -> bool {
+        // TODO: required for bundle in the future
+        false
+    }
+
+    async fn internal_on_slot_click(
+        &mut self,
+        slot_index: i32,
+        button: i32,
+        action_type: SlotActionType,
+        player: &dyn InventoryPlayer,
+    ) {
+        if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
+            && (button == 0 || button == 1)
+        {
+            let click_type = if button == 0 {
+                MouseClick::Left
+            } else {
+                MouseClick::Right
+            };
+
+            // Drop item if outside inventory
+            if slot_index == SLOT_INDEX_OUTSIDE {
+                let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
+                if !cursor_stack.is_empty() {
+                    if click_type == MouseClick::Left {
+                        player.drop_item(cursor_stack.clone(), true).await;
+                        *cursor_stack = ItemStack::EMPTY;
+                    } else {
+                        player.drop_item(cursor_stack.split(1), true).await;
+                    }
+                }
+            } else if action_type == SlotActionType::QuickMove {
+                if slot_index < 0 {
+                    return;
+                }
+
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+                if !slot.can_take_items(player).await {
+                    return;
+                }
+
+                let mut moved_stack = self.quick_move(player, slot_index).await;
+
+                while !moved_stack.is_empty()
+                    && ItemStack::are_items_and_components_equal(
+                        &slot.get_cloned_stack().await,
+                        &moved_stack,
+                    )
+                {
+                    moved_stack = self.quick_move(player, slot_index).await;
+                }
+            } else {
+                if slot_index < 0 {
+                    return;
+                }
+
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+                let mut inventory = slot.get_inventory().lock().await;
+                let slot_stack = inventory.get_stack(slot_index as usize);
+                let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
+
+                if self
+                    .handle_slot_click(
+                        player,
+                        click_type.clone(),
+                        slot.clone(),
+                        slot_stack.clone(),
+                        cursor_stack.clone(),
+                    )
+                    .await
+                {
+                    return;
+                }
+
+                if slot_stack.is_empty() {
+                    if !cursor_stack.is_empty() {
+                        let transfer_count = if click_type == MouseClick::Left {
+                            cursor_stack.item_count
+                        } else {
+                            1
+                        };
+                        *cursor_stack = slot
+                            .insert_stack_count(cursor_stack.clone(), transfer_count)
+                            .await;
+                    }
+                } else if slot.can_take_items(player).await {
+                    if cursor_stack.is_empty() {
+                        let take_count = if click_type == MouseClick::Left {
+                            slot_stack.item_count
+                        } else {
+                            (slot_stack.item_count + 1) / 2
+                        };
+                        let taken = slot.try_take_stack_range(take_count, u8::MAX, player).await;
+
+                        if let Some(taken) = taken {
+                            // Reverse order of operations, shouldn't affect anything
+                            slot.on_take_item(&taken).await;
+                            *cursor_stack = taken;
+                        }
+                    } else if slot.can_insert(&cursor_stack).await {
+                        if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
+                            let insert_count = if click_type == MouseClick::Left {
+                                cursor_stack.item_count
+                            } else {
+                                1
+                            };
+                            *cursor_stack = slot
+                                .insert_stack_count(cursor_stack.clone(), insert_count)
+                                .await;
+                        } else if cursor_stack.item_count
+                            <= slot.get_max_item_count_for_stack(&cursor_stack).await
+                        {
+                            let old_cursor_stack = cursor_stack.clone();
+                            *cursor_stack = slot_stack.clone();
+                            slot.set_stack(old_cursor_stack).await;
+                        }
+                    } else if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
+                    {
+                        let taken = slot
+                            .try_take_stack_range(
+                                slot_stack.item_count,
+                                cursor_stack
+                                    .get_max_stack_size()
+                                    .saturating_sub(cursor_stack.item_count),
+                                player,
+                            )
+                            .await;
+
+                        if let Some(taken) = taken {
+                            cursor_stack.increment(taken.item_count);
+                            slot.on_take_item(&taken).await;
+                        }
+                    }
+                }
+            }
+
+            /*
+                        {
+                ClickType clickType = button == 0 ? ClickType.LEFT : ClickType.RIGHT;
+
+                if (slotIndex == EMPTY_SPACE_SLOT_INDEX) {
+                    ItemStack cursorStack = this.getCursorStack();
+                    if (!cursorStack.isEmpty()) {
+                        if (clickType == ClickType.LEFT) {
+                            player.dropItem(cursorStack, true);
+                            this.setCursorStack(ItemStack.EMPTY);
+                        } else {
+                            player.dropItem(cursorStack.split(1), true);
+                        }
+                    }
+                } else if (actionType == SlotActionType.QUICK_MOVE) {
+                    if (slotIndex < 0) {
+                        return;
+                    }
+
+                    Slot slot = this.slots.get(slotIndex);
+                    if (!slot.canTakeItems(player)) {
+                        return;
+                    }
+
+                    ItemStack movedStack = this.quickMove(player, slotIndex);
+
+                    while (!movedStack.isEmpty() && ItemStack.areItemsEqual(slot.getStack(), movedStack)) {
+                        movedStack = this.quickMove(player, slotIndex);
+                    }
+                } else {
+                    if (slotIndex < 0) {
+                        return;
+                    }
+
+                    Slot slot = this.slots.get(slotIndex);
+                    ItemStack slotStack = slot.getStack();
+                    ItemStack cursorStack = this.getCursorStack();
+
+                    player.onPickupSlotClick(cursorStack, slotStack, clickType);
+
+                    if (!this.handleSlotClick(player, clickType, slot, slotStack, cursorStack)) {
+                        if (slotStack.isEmpty()) {
+                            if (!cursorStack.isEmpty()) {
+                                int transferCount = clickType == ClickType.LEFT ? cursorStack.getCount() : 1;
+                                this.setCursorStack(slot.insertStack(cursorStack, transferCount));
+                            }
+                        } else if (slot.canTakeItems(player)) {
+                            if (cursorStack.isEmpty()) {
+                                int takeCount = clickType == ClickType.LEFT ? slotStack.getCount() : (slotStack.getCount() + 1) / 2;
+                                Optional<ItemStack> taken = slot.tryTakeStackRange(takeCount, Integer.MAX_VALUE, player);
+                                taken.ifPresent(stack -> {
+                                    this.setCursorStack(stack);
+                                    slot.onTakeItem(player, stack);
+                                });
+                            } else if (slot.canInsert(cursorStack)) {
+                                if (ItemStack.areItemsAndComponentsEqual(slotStack, cursorStack)) {
+                                    int insertCount = clickType == ClickType.LEFT ? cursorStack.getCount() : 1;
+                                    this.setCursorStack(slot.insertStack(cursorStack, insertCount));
+                                } else if (cursorStack.getCount() <= slot.getMaxItemCount(cursorStack)) {
+                                    this.setCursorStack(slotStack);
+                                    slot.setStack(cursorStack);
+                                }
+                            } else if (ItemStack.areItemsAndComponentsEqual(slotStack, cursorStack)) {
+                                Optional<ItemStack> taken = slot.tryTakeStackRange(slotStack.getCount(), cursorStack.getMaxCount() - cursorStack.getCount(), player);
+                                taken.ifPresent(stack -> {
+                                    cursorStack.increment(stack.getCount());
+                                    slot.onTakeItem(player, stack);
+                                });
+                            }
+                        }
+                    }
+
+                    slot.markDirty();
+                }
+            } */
+        }
     }
 }
 

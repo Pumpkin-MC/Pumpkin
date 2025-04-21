@@ -87,7 +87,7 @@ impl<'de> Deserialize<'de> for SClickContainer {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub enum SlotActionType {
     /// Performs a normal slot click. This can pick up or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
     Pickup,

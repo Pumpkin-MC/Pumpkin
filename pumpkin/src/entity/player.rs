@@ -2108,4 +2108,9 @@ impl MessageCache {
     }
 }
 
-impl InventoryPlayer for Player {}
+#[async_trait]
+impl InventoryPlayer for Player {
+    async fn drop_item(&self, item: ItemStack, retain_ownership: bool) {
+        todo!()
+    }
+}

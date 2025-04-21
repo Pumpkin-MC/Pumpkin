@@ -124,7 +124,7 @@ pub enum ClickType {
     MouseDrag { drag_state: MouseDragState },
     DoubleClick,
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MouseClick {
     Left,
     Right,

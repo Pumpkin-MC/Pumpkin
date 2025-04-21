@@ -20,7 +20,8 @@ use crate::{
     equipment_slot::EquipmentSlot,
     inventory::Inventory,
     screen_handler::{
-        DefaultScreenHandlerBehaviour, ScreenHandler, ScreenHandlerListener, ScreenProperty,
+        DefaultScreenHandlerBehaviour, InventoryPlayer, ScreenHandler, ScreenHandlerListener,
+        ScreenProperty,
     },
     slot::{ArmorSlot, NormalSlot, Slot},
     sync_handler::{AlwaysInSyncTrackedSlot, SyncHandler, TrackedSlot},
@@ -116,5 +117,9 @@ impl ScreenHandler for PlayerScreenHandler {
 
     fn get_behaviour_mut(&mut self) -> &mut DefaultScreenHandlerBehaviour {
         &mut self.behaviour
+    }
+
+    async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        todo!()
     }
 }
