@@ -137,6 +137,59 @@ impl CommandExecutor for GiveExecutor {
     }
 }
 
+struct ClearExecutor;
+
+#[async_trait]
+impl CommandExecutor for ClearExecutor  {
+    async fn execute<'a>(
+        &self,
+        sender: &mut CommandSender,
+        _server: &Server,
+        args: &ConsumedArgs<'a>,
+    ) -> Result<(), CommandError> {
+        let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        };
+
+        let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
+            return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+        };
+
+        for target in targets{
+            target.remove_effect(effect.clone()).await;
+        }
+
+        let translation_name =
+            TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
+        if targets.len() == 1 {
+            // TODO: use entity name
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.clear.success.single",
+                    [
+                        translation_name,
+                        TextComponent::text(targets[0].gameprofile.name.clone()),
+                    ],
+                ))
+                .await;
+        } else {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.clear.success.multiple",
+                    [
+                        translation_name,
+                        TextComponent::text(targets.len().to_string()),
+                    ],
+                ))
+                .await;
+        }
+
+        Ok(())
+
+
+    }
+}
+
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(

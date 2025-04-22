@@ -1370,6 +1370,19 @@ impl Player {
         self.living_entity.add_effect(effect).await;
     }
 
+    pub async fn remove_effect(&self, effect_type: EffectType) {
+        let effect_id = VarInt(effect_type as i32);
+        self.client
+            .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                self.entity_id().into(),
+                effect_id,
+            ))
+            .await;
+        self.living_entity.remove_effect(effect_type).await;
+
+        // TODO broadcast metadata
+    }
+
     /// Add experience levels to the player.
     pub async fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);

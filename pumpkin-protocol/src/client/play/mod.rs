@@ -80,6 +80,7 @@ mod update_mob_effect;
 mod update_objectives;
 mod update_score;
 mod worldevent;
+mod remove_mob_effect;
 
 pub use acknowledge_block::*;
 pub use actionbar::*;
