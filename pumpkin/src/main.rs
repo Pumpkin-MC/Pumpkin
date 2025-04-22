@@ -81,7 +81,7 @@ const GIT_VERSION: &str = env!("GIT_VERSION");
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     #[cfg(feature = "dhat-heap")]
     {

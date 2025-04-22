@@ -2,10 +2,11 @@ use std::borrow::Cow;
 
 use crate::VarInt;
 use pumpkin_data::item::Item;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::item::ItemStack;
 use serde::{
     Deserialize, Serialize, Serializer,
-    de::{self, SeqAccess},
+    de::{self, SeqAccess, value::SeqAccessDeserializer},
 };
 
 #[derive(Debug, Clone)]
@@ -45,10 +46,18 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                         .next_element::<VarInt>()?
                         .ok_or(de::Error::custom("No component remove length VarInt!"))?;
 
+                    println!("item_id: {:?}", item_id);
+                    println!("num_components_to_add: {:?}", num_components_to_add);
+                    println!("num_components_to_remove: {:?}", num_components_to_remove);
+
                     if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
+                        let id = seq.next_element::<VarInt>()?;
+                        println!("id: {:?}", id);
+
+                        /*
                         return Err(de::Error::custom(
                             "Slot components are currently unsupported",
-                        ));
+                        )); */
                     }
 
                     let item_id: u16 = item_id

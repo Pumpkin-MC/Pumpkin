@@ -1545,7 +1545,7 @@ impl Player {
         }
     }
 
-    pub async fn on_slot_click(&self, packet: &SClickSlot) {
+    pub async fn on_slot_click(&self, packet: SClickSlot) {
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
@@ -1582,6 +1582,8 @@ impl Player {
         }
 
         let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
+
+        println!("not_in_sync: {:?}", not_in_sync);
 
         screen_handler.disable_sync().await;
         screen_handler
@@ -1832,9 +1834,7 @@ impl Player {
                     .await;
             }
             SClickSlot::PACKET_ID => {
-                println!("SClickSlot::PACKET_ID");
-                self.handle_click_container(server, SClickSlot::read(payload)?)
-                    .await?;
+                self.on_slot_click(SClickSlot::read(payload)?).await;
             }
             SSetHeldItem::PACKET_ID => {
                 self.handle_set_held_item(SSetHeldItem::read(payload)?)
