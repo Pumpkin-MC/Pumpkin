@@ -226,7 +226,7 @@ impl Server {
                     if let Some(config) = player.client.config.lock().await.as_ref() {
                         // TODO: Config so we can also just ignore this hehe
                         if config.server_listing {
-                            self.listing.lock().await.add_player(&player).await;
+                            self.listing.lock().await.add_player(&player);
                         }
                     }
 
@@ -245,7 +245,7 @@ impl Server {
 
     pub async fn remove_player(&self, player: &Player) {
         // TODO: Config if we want decrease online
-        self.listing.lock().await.remove_player(player).await;
+        self.listing.lock().await.remove_player(player);
     }
 
     pub async fn shutdown(&self) {

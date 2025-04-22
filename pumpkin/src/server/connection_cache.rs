@@ -90,7 +90,7 @@ impl CachedStatus {
     }
 
     // TODO: Player samples
-    pub async fn add_player(&mut self, player: &Player) {
+    pub fn add_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
             player
@@ -104,7 +104,7 @@ impl CachedStatus {
             .expect("Failed to parse status response into JSON");
     }
 
-    pub async fn remove_player(&mut self, player: &Player) {
+    pub fn remove_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
             if player
