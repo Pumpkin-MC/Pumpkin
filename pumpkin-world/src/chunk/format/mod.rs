@@ -52,10 +52,11 @@ impl ChunkData {
             .sections
             .into_iter()
             .map(|section| SubChunk {
-                block_states: BlockPalette::from_disk_nbt(section.block_states),
-                biomes: BiomePalette::from_disk_nbt(section.biomes),
+                block_states: section.block_states.map(BlockPalette::from_disk_nbt),
+                biomes: section.biomes.map(BiomePalette::from_disk_nbt),
                 block_light: section.block_light,
                 sky_light: section.sky_light,
+                y: section.y,
             })
             .collect();
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
@@ -111,12 +112,15 @@ impl ChunkData {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChunkSectionNBT {
-    block_states: ChunkSectionBlockStates,
-    biomes: ChunkSectionBiomes,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_states: Option<ChunkSectionBlockStates>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    biomes: Option<ChunkSectionBiomes>,
     #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
     block_light: Option<Box<[u8]>>,
     #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
     sky_light: Option<Box<[u8]>>,
+    // TODO: This can also be an INT in 1.18+ but here it is not yet supported
     #[serde(rename = "Y")]
     y: i8,
 }

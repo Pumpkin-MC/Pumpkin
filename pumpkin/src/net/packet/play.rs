@@ -36,7 +36,8 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
     CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
+    CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction, WORLD_HIGHEST_Y,
+    WORLD_LOWEST_Y,
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -1630,9 +1631,6 @@ impl Player {
         // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
-    const WORLD_LOWEST_Y: i8 = -64;
-    const WORLD_MAX_Y: u16 = 384;
-
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -1650,16 +1648,16 @@ impl Player {
         let _clicked_block = world.get_block(&clicked_block_pos).await?;
 
         // Check if the block is under the world
-        if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
+        if location.0.y + face.to_offset().y < i32::from(WORLD_LOWEST_Y) {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
         }
 
         // Check the world's max build height
-        if location.0.y + face.to_offset().y >= i32::from(Self::WORLD_MAX_Y) {
+        if location.0.y + face.to_offset().y >= WORLD_HIGHEST_Y {
             self.send_system_message_raw(
                 &TextComponent::translate(
                     "build.tooHigh",
-                    vec![TextComponent::text((Self::WORLD_MAX_Y - 1).to_string())],
+                    vec![TextComponent::text((WORLD_HIGHEST_Y - 1).to_string())],
                 )
                 .color_named(NamedColor::Red),
                 true,

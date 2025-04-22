@@ -18,6 +18,7 @@ pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
 pub const CHUNK_AREA: usize = CHUNK_WIDTH * CHUNK_WIDTH;
 pub const BIOME_VOLUME: usize = BiomePalette::VOLUME;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
+pub const SUBCHUNK_HEIGHT: usize = CHUNK_WIDTH;
 
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
@@ -138,7 +139,11 @@ impl ChunkSections {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
         for section in self.sections.iter() {
-            section.block_states.for_each(|raw_id| {
+            let Some(block_states) = &section.block_states else {
+                continue;
+            };
+
+            block_states.for_each(|raw_id| {
                 dump.push(raw_id);
             });
         }
@@ -150,7 +155,11 @@ impl ChunkSections {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
         for section in self.sections.iter() {
-            section.biomes.for_each(|raw_id| {
+            let Some(biomes) = &section.biomes else {
+                continue;
+            };
+
+            biomes.for_each(|raw_id| {
                 dump.push(raw_id);
             });
         }
@@ -158,22 +167,20 @@ impl ChunkSections {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SubChunk {
-    pub block_states: BlockPalette,
-    pub biomes: BiomePalette,
+    pub block_states: Option<BlockPalette>,
+    pub biomes: Option<BiomePalette>,
     pub block_light: Option<Box<[u8]>>,
     pub sky_light: Option<Box<[u8]>>,
+    // TODO: This can also be an INT in 1.18+ but here it is not yet supported
+    pub y: i8,
 }
 
 impl SubChunk {
-    /// As of now we don't have light calculation when generating a new chunk
-    pub fn max_sky_light() -> Self {
+    pub fn max_sky_light_data() -> Box<[u8]> {
         let chunk_light_len = BlockPalette::VOLUME / 2;
-        Self {
-            sky_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
-            ..Default::default()
-        }
+        vec![0xFFu8; chunk_light_len].into_boxed_slice()
     }
 }
 
@@ -244,9 +251,14 @@ impl ChunkSections {
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        self.sections
-            .get(section_index)
-            .map(|section| section.block_states.get(relative_x, relative_y, relative_z))
+        self.sections.get(section_index).map(|section| {
+            if let Some(block_states) = &section.block_states {
+                block_states.get(relative_x, relative_y, relative_z)
+            } else {
+                // TODO: What to do or return here? If this happens, we are likely trying to get a block from a "light only" section above or below the world.
+                0u16
+            }
+        })
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -280,9 +292,9 @@ impl ChunkSections {
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
         if let Some(section) = self.sections.get_mut(section_index) {
-            section
-                .block_states
-                .set(relative_x, relative_y, relative_z, block_state_id);
+            if let Some(block_states) = section.block_states.as_mut() {
+                block_states.set(relative_x, relative_y, relative_z, block_state_id);
+            }
         }
     }
 
@@ -299,9 +311,9 @@ impl ChunkSections {
 
         let section_index = relative_y / BiomePalette::SIZE;
         let relative_y = relative_y % BiomePalette::SIZE;
-        self.sections[section_index]
-            .biomes
-            .set(relative_x, relative_y, relative_z, biome_id);
+        if let Some(biomes) = self.sections[section_index].biomes.as_mut() {
+            biomes.set(relative_x, relative_y, relative_z, biome_id);
+        }
     }
 }
 

@@ -820,8 +820,8 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
     let mut sections = Vec::new();
 
     for (i, section) in chunk_data.section.sections.iter().enumerate() {
-        let block_states = section.block_states.to_disk_nbt();
-        let biomes = section.biomes.to_disk_nbt();
+        let block_states = section.block_states.as_ref().map(|bs| bs.to_disk_nbt());
+        let biomes = section.biomes.as_ref().map(|b| b.to_disk_nbt());
 
         sections.push(ChunkSectionNBT {
             y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
