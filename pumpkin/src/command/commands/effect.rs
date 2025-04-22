@@ -1,11 +1,8 @@
 use crate::TextComponent;
-use crate::command::args::players::PlayersArgumentConsumer;
-use crate::command::args::resource::effect::EffectTypeArgumentConsumer;
-use async_trait::async_trait;
-use pumpkin_protocol::client::play::ArgumentType;
-
 use crate::command::args::bool::BoolArgConsumer;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
+use crate::command::args::players::PlayersArgumentConsumer;
+use crate::command::args::resource::effect::EffectTypeArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
@@ -13,6 +10,10 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
+use async_trait::async_trait;
+use pumpkin_data::particle::Particle;
+use pumpkin_protocol::client::play::ArgumentType;
+use pumpkin_util::text::color::{Color, NamedColor};
 
 const NAMES: [&str; 1] = ["effect"];
 
@@ -36,6 +37,11 @@ enum Time {
 enum Amplifier {
     Base,
     Specified,
+}
+
+enum Particles {
+    Show,
+    Choose,
 }
 
 struct GiveExecutor(Time, Amplifier, bool);
@@ -76,29 +82,29 @@ impl CommandExecutor for GiveExecutor {
                 .unwrap(),
         };
 
-        let hide_particule = self.2;
+        let mut hide_particles = self.2;
+        //if false -> parameter is referred
+        if !hide_particles {
+            let Some(Arg::Bool(hide_particle)) = args.get(ARG_HIDE_PARTICLE) else {
+                return Err(InvalidConsumption(Some(ARG_HIDE_PARTICLE.into())));
+            };
 
-        sender
-            .send_message(TextComponent::text(second.to_string()))
-            .await;
-        sender
-            .send_message(TextComponent::text(amplifier.to_string()))
-            .await;
+            hide_particles = *hide_particle;
+        }
+
         let target_count = targets.len();
 
         for target in targets {
             target
-                .add_effect(
-                    crate::entity::effect::Effect {
-                        r#type: *effect,
-                        duration: second*20,  //duration is in tick
-                        amplifier: amplifier as u8,
-                        ambient: false, //this is not a beacon effect
-                        show_particles: hide_particule,
-                        show_icon: true,
-                    },
-                    true,
-                )
+                .add_effect(crate::entity::effect::Effect {
+                    r#type: *effect,
+                    duration: second * 20, //duration is in tick
+                    amplifier: amplifier as u8,
+                    ambient: false, //this is not a beacon effect
+                    show_particles: hide_particles,
+                    show_icon: true,
+                    blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
+                })
                 .await;
         }
 
@@ -135,20 +141,40 @@ impl CommandExecutor for GiveExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         literal(ARG_GIVE).then(
-            argument(ARG_TARGET, PlayersArgumentConsumer)
-                .then(
-                    argument(ARG_EFFECT, EffectTypeArgumentConsumer)
-                        .execute(GiveExecutor(Time::Base, Amplifier::Base, true))
-                        //for specified time
+            argument(ARG_TARGET, PlayersArgumentConsumer).then(
+                argument(ARG_EFFECT, EffectTypeArgumentConsumer)
+                    .execute(GiveExecutor(Time::Base, Amplifier::Base, true))
+                    //for specified time
+                    .then(
+                        argument(
+                            ARG_SECONDE,
+                            BoundedNumArgumentConsumer::new()
+                                .name("seconds")
+                                .min(0)
+                                .max(10000000),
+                        )
+                        .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
                         .then(
                             argument(
-                                ARG_SECONDE,
+                                ARG_AMPLIFIER,
                                 BoundedNumArgumentConsumer::new()
-                                    .name("seconds")
-                                    .min(0)
-                                    .max(10000000),
+                                    .name("amplifier")
+                                    .min(1)
+                                    .max(255),
                             )
-                            .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
+                            .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
+                            .then(
+                                argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(GiveExecutor(
+                                    Time::Specified,
+                                    Amplifier::Specified,
+                                    false,
+                                )),
+                            ),
+                        ),
+                    )
+                    .then(
+                        literal(ARG_INFINITE)
+                            .execute(GiveExecutor(Time::Infinite, Amplifier::Base, true))
                             .then(
                                 argument(
                                     ARG_AMPLIFIER,
@@ -157,16 +183,15 @@ pub fn init_command_tree() -> CommandTree {
                                         .min(1)
                                         .max(255),
                                 )
-                                .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
+                                .execute(GiveExecutor(Time::Infinite, Amplifier::Specified, true))
                                 .then(
                                     argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
-                                        GiveExecutor(Time::Specified, Amplifier::Specified, true),
+                                        GiveExecutor(Time::Infinite, Amplifier::Specified, false),
                                     ),
                                 ),
                             ),
-                        ),
-                )
-                //For infinite time
+                    ),
+            ),
         ),
     )
     // TODO: Add more things

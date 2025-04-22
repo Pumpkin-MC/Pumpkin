@@ -1341,7 +1341,7 @@ impl Player {
         self.set_experience(new_level, progress, points).await;
     }
 
-    pub async fn add_effect(&self, effect: Effect, keep_fading: bool) {
+    pub async fn add_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1353,9 +1353,10 @@ impl Player {
         if effect.show_icon {
             flag |= 4;
         }
-        if keep_fading {
+        if effect.blend {
             flag |= 8;
         }
+
         let effect_id = VarInt(effect.r#type as i32);
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(

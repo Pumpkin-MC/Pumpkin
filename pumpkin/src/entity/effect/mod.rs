@@ -8,4 +8,5 @@ pub struct Effect {
     pub ambient: bool,
     pub show_particles: bool,
     pub show_icon: bool,
+    pub blend: bool,
 }
