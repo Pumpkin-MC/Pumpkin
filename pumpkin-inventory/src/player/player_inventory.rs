@@ -142,6 +142,7 @@ impl Inventory for PlayerInventory {
     }
 
     fn set_stack(&mut self, slot: usize, stack: ItemStack) {
+        println!("set_stack: {:?}, slot: {}", stack, slot);
         if slot < self.main_inventory.len() {
             self.main_inventory[slot] = stack;
         } else {

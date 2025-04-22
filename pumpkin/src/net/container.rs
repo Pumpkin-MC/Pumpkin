@@ -8,7 +8,7 @@ use pumpkin_inventory::window_property::{WindowProperty, WindowPropertyTrait};
 use pumpkin_inventory::{InventoryError, container_click};
 use pumpkin_protocol::client::play::CSetContainerSlot;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_protocol::server::play::SClickContainer;
+use pumpkin_protocol::server::play::SClickSlot;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
@@ -116,7 +116,7 @@ impl Player {
     pub async fn handle_click_container(
         &self,
         server: &Arc<Server>,
-        packet: SClickContainer,
+        packet: SClickSlot,
     ) -> Result<(), InventoryError> {
         /* TODO: Inv
         let opened_container = self.get_open_container(server).await;

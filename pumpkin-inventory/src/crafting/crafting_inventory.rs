@@ -16,11 +16,18 @@ use super::recipies::RecipeInputInventory;
 pub struct CraftingInventory {
     pub width: u8,
     pub height: u8,
+    pub slots: Vec<ItemStack>,
+}
+
+impl CraftingInventory {
+    pub fn new(width: u8, height: u8) -> Self {
+        Self { width, height, slots: vec![ItemStack::EMPTY; width as usize * height as usize] }
+    }
 }
 
 impl Inventory for CraftingInventory {
     fn size(&self) -> usize {
-        todo!()
+        self.slots.len()
     }
 
     fn is_empty(&self) -> bool {
@@ -28,7 +35,7 @@ impl Inventory for CraftingInventory {
     }
 
     fn get_stack(&mut self, slot: usize) -> &mut ItemStack {
-        todo!()
+        &mut self.slots[slot]
     }
 
     fn get_stack_ref(&self, slot: usize) -> &ItemStack {

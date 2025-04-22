@@ -46,8 +46,18 @@ impl PlayerScreenHandler {
         EquipmentSlot::FEET,
     ];
 
-    fn is_in_hotbar(slot: u8) -> bool {
+    pub fn is_in_hotbar(slot: u8) -> bool {
         slot >= 36 && slot < 45 || slot == 45
+    }
+
+    pub fn get_slot(&self, slot: usize) -> Arc<dyn Slot> {
+        self.behaviour.slots[slot].clone()
+    }
+
+    pub async fn set_recived_stack(&self, slot: usize, stack: ItemStack) {
+        self.behaviour.tracked_slots[slot]
+            .set_recived_stack(stack)
+            .await;
     }
 
     pub async fn new(
@@ -60,10 +70,7 @@ impl PlayerScreenHandler {
         };
 
         let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
-            Arc::new(Mutex::new(CraftingInventory {
-                width: 2,
-                height: 2,
-            }));
+            Arc::new(Mutex::new(CraftingInventory::new(2, 2)));
 
         player_screen_handler
             .add_result_slot(&crafting_inventory)
@@ -95,12 +102,8 @@ impl PlayerScreenHandler {
 
 #[async_trait]
 impl ScreenHandler for PlayerScreenHandler {
-    fn window_type(&self) -> WindowType {
-        unreachable!()
-    }
-
-    fn size(&self) -> usize {
-        self.behaviour.slots.len()
+    fn window_type(&self) -> Option<WindowType> {
+        None
     }
 
     fn as_any(&self) -> &dyn Any {

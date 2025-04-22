@@ -43,9 +43,7 @@ pub trait InventoryPlayer: Send + Sync {
 #[async_trait]
 pub trait ScreenHandler: Send + Sync {
     /// Get the window type of the screen handler, otherwise panics
-    fn window_type(&self) -> WindowType;
-
-    fn size(&self) -> usize;
+    fn window_type(&self) -> Option<WindowType>;
 
     fn as_any(&self) -> &dyn Any;
 
@@ -53,15 +51,22 @@ pub trait ScreenHandler: Send + Sync {
 
     fn on_closed(&self, player: &dyn InventoryPlayer) {}
 
+    fn can_use(&self, player: &dyn InventoryPlayer) -> bool {
+        true
+    }
+
     fn get_behaviour(&self) -> &DefaultScreenHandlerBehaviour;
 
     fn get_behaviour_mut(&mut self) -> &mut DefaultScreenHandlerBehaviour;
 
     fn add_slot(&mut self, slot: Arc<dyn Slot>) -> Arc<dyn Slot> {
-        slot.set_id(self.size());
         let behaviour = self.get_behaviour_mut();
+        slot.set_id(behaviour.slots.len());
         behaviour.slots.push(slot.clone());
+        behaviour.tracked_stacks.push(ItemStack::EMPTY);
+
         let sync_handler = behaviour.sync_handler.as_ref();
+
         if let Some(sync_handler) = sync_handler {
             behaviour
                 .tracked_slots
@@ -103,20 +108,19 @@ pub trait ScreenHandler: Send + Sync {
     }
 
     async fn sync_state(&mut self) {
-        let mut item_stacks: Vec<ItemStack> = Vec::with_capacity(self.size());
+        let behaviour = self.get_behaviour_mut();
 
-        for i in 0..self.size() {
-            let behaviour = self.get_behaviour_mut();
+        let mut item_stacks: Vec<ItemStack> = Vec::with_capacity(behaviour.slots.len());
+
+        for i in 0..behaviour.slots.len() {
             //TODO: Look into the cloning of itemstacks
             let slot = behaviour.slots[i].clone();
             let mut inv = slot.get_inventory().lock().await;
-            let item_stack = inv.get_stack(i);
+            let item_stack = inv.get_stack(slot.get_index());
             item_stacks.push(item_stack.clone());
             let tracked_slot = behaviour.tracked_slots[i].clone();
             tracked_slot.set_recived_stack(item_stack.clone()).await;
         }
-
-        let behaviour = self.get_behaviour_mut();
 
         let cursor_stack = behaviour.cursor_stack.clone();
         behaviour
@@ -170,7 +174,7 @@ pub trait ScreenHandler: Send + Sync {
     }
 
     async fn update_to_client(&mut self) {
-        for i in 0..self.size() {
+        for i in 0..self.get_behaviour().slots.len() {
             let behaviour = self.get_behaviour_mut();
             let slot = behaviour.slots[i].clone();
             let stack = slot.get_cloned_stack().await;
@@ -252,7 +256,7 @@ pub trait ScreenHandler: Send + Sync {
     }
 
     async fn is_slot_valid(&self, slot: i32) -> bool {
-        slot == -1 || slot == -999 || slot < self.size() as i32
+        slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
     }
 
     async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack;
@@ -267,6 +271,17 @@ pub trait ScreenHandler: Send + Sync {
     ) -> bool {
         // TODO: required for bundle in the future
         false
+    }
+
+    async fn on_slot_click(
+        &mut self,
+        slot_index: i32,
+        button: i32,
+        action_type: SlotActionType,
+        player: &dyn InventoryPlayer,
+    ) {
+        self.internal_on_slot_click(slot_index, button, action_type, player)
+            .await;
     }
 
     async fn internal_on_slot_click(
@@ -324,7 +339,7 @@ pub trait ScreenHandler: Send + Sync {
 
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
                 let mut inventory = slot.get_inventory().lock().await;
-                let slot_stack = inventory.get_stack(slot_index as usize);
+                let slot_stack = inventory.get_stack(slot.get_index());
                 let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
 
                 if self
@@ -403,83 +418,18 @@ pub trait ScreenHandler: Send + Sync {
 
                 slot.mark_dirty().await;
             }
-
-            /*
-                        {
-                ClickType clickType = button == 0 ? ClickType.LEFT : ClickType.RIGHT;
-
-                if (slotIndex == EMPTY_SPACE_SLOT_INDEX) {
-                    ItemStack cursorStack = this.getCursorStack();
-                    if (!cursorStack.isEmpty()) {
-                        if (clickType == ClickType.LEFT) {
-                            player.dropItem(cursorStack, true);
-                            this.setCursorStack(ItemStack.EMPTY);
-                        } else {
-                            player.dropItem(cursorStack.split(1), true);
-                        }
-                    }
-                } else if (actionType == SlotActionType.QUICK_MOVE) {
-                    if (slotIndex < 0) {
-                        return;
-                    }
-
-                    Slot slot = this.slots.get(slotIndex);
-                    if (!slot.canTakeItems(player)) {
-                        return;
-                    }
-
-                    ItemStack movedStack = this.quickMove(player, slotIndex);
-
-                    while (!movedStack.isEmpty() && ItemStack.areItemsEqual(slot.getStack(), movedStack)) {
-                        movedStack = this.quickMove(player, slotIndex);
-                    }
-                } else {
-                    if (slotIndex < 0) {
-                        return;
-                    }
-
-                    Slot slot = this.slots.get(slotIndex);
-                    ItemStack slotStack = slot.getStack();
-                    ItemStack cursorStack = this.getCursorStack();
-
-                    player.onPickupSlotClick(cursorStack, slotStack, clickType);
-
-                    if (!this.handleSlotClick(player, clickType, slot, slotStack, cursorStack)) {
-                        if (slotStack.isEmpty()) {
-                            if (!cursorStack.isEmpty()) {
-                                int transferCount = clickType == ClickType.LEFT ? cursorStack.getCount() : 1;
-                                this.setCursorStack(slot.insertStack(cursorStack, transferCount));
-                            }
-                        } else if (slot.canTakeItems(player)) {
-                            if (cursorStack.isEmpty()) {
-                                int takeCount = clickType == ClickType.LEFT ? slotStack.getCount() : (slotStack.getCount() + 1) / 2;
-                                Optional<ItemStack> taken = slot.tryTakeStackRange(takeCount, Integer.MAX_VALUE, player);
-                                taken.ifPresent(stack -> {
-                                    this.setCursorStack(stack);
-                                    slot.onTakeItem(player, stack);
-                                });
-                            } else if (slot.canInsert(cursorStack)) {
-                                if (ItemStack.areItemsAndComponentsEqual(slotStack, cursorStack)) {
-                                    int insertCount = clickType == ClickType.LEFT ? cursorStack.getCount() : 1;
-                                    this.setCursorStack(slot.insertStack(cursorStack, insertCount));
-                                } else if (cursorStack.getCount() <= slot.getMaxItemCount(cursorStack)) {
-                                    this.setCursorStack(slotStack);
-                                    slot.setStack(cursorStack);
-                                }
-                            } else if (ItemStack.areItemsAndComponentsEqual(slotStack, cursorStack)) {
-                                Optional<ItemStack> taken = slot.tryTakeStackRange(slotStack.getCount(), cursorStack.getMaxCount() - cursorStack.getCount(), player);
-                                taken.ifPresent(stack -> {
-                                    cursorStack.increment(stack.getCount());
-                                    slot.onTakeItem(player, stack);
-                                });
-                            }
-                        }
-                    }
-
-                    slot.markDirty();
-                }
-            } */
         }
+        todo!()
+    }
+
+    async fn disable_sync(&mut self) {
+        let behaviour = self.get_behaviour_mut();
+        behaviour.disable_sync = true;
+    }
+
+    async fn enable_sync(&mut self) {
+        let behaviour = self.get_behaviour_mut();
+        behaviour.disable_sync = false;
     }
 }
 

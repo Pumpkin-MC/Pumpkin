@@ -32,6 +32,7 @@ use crate::{
 use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use log::warn;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::{
     block::BlockState,
@@ -55,7 +56,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CCloseContainer, COpenScreen, PlayerInfoFlags, PreviousMessage,
+    CCloseContainer, COpenScreen, CSetContainerSlot, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -85,7 +86,7 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{client::play::CUpdateTime, codec::var_int::VarInt};
 use pumpkin_protocol::{
     client::play::Metadata,
-    server::play::{SClickContainer, SKeepAlive},
+    server::play::{SClickSlot, SKeepAlive},
 };
 use pumpkin_util::{
     GameMode,
@@ -1526,7 +1527,10 @@ impl Player {
             self.client
                 .enqueue_packet(&COpenScreen::new(
                     screen_handler_temp.sync_id().into(),
-                    (screen_handler_temp.window_type() as i32).into(),
+                    (screen_handler_temp
+                        .window_type()
+                        .expect("Can't open PlayerScreenHandler") as i32)
+                        .into(),
                     &screen_handler_factory.unwrap().get_display_name(),
                 ))
                 .await;
@@ -1539,6 +1543,50 @@ impl Player {
 
             None
         }
+    }
+
+    pub async fn on_slot_click(&self, packet: &SClickSlot) {
+        let screen_handler = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler.lock().await;
+        let behaviour = screen_handler.get_behaviour();
+
+        // behaviour is dropped here
+        if behaviour.sync_id as i32 != packet.sync_id.0 {
+            return;
+        }
+
+        if self.gamemode.load() == GameMode::Spectator {
+            screen_handler.sync_state().await;
+            return;
+        }
+
+        if !screen_handler.can_use(self) {
+            warn!(
+                "Player {} interacted with invalid menu {:?}",
+                self.gameprofile.name,
+                screen_handler.window_type()
+            );
+            return;
+        }
+
+        let slot = packet.slot;
+
+        if !screen_handler.is_slot_valid(slot as i32).await {
+            warn!(
+                "Player {} clicked invalid slot index: {}, available slots: {}",
+                self.gameprofile.name,
+                slot,
+                screen_handler.get_behaviour().slots.len()
+            );
+            return;
+        }
+
+        let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
+
+        screen_handler.disable_sync().await;
+        screen_handler
+            .on_slot_click(slot as i32, packet.button as i32, packet.mode.clone(), self)
+            .await;
     }
 }
 
@@ -1783,8 +1831,9 @@ impl Player {
                 self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
                     .await;
             }
-            SClickContainer::PACKET_ID => {
-                self.handle_click_container(server, SClickContainer::read(payload)?)
+            SClickSlot::PACKET_ID => {
+                println!("SClickSlot::PACKET_ID");
+                self.handle_click_container(server, SClickSlot::read(payload)?)
                     .await?;
             }
             SSetHeldItem::PACKET_ID => {

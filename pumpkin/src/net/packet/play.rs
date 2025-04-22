@@ -1,4 +1,5 @@
 use pumpkin_inventory::inventory::Inventory;
+use pumpkin_inventory::screen_handler::ScreenHandler;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -1500,16 +1501,23 @@ impl Player {
         if self.gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
-        //let valid_slot = packet.slot >= 0 && packet.slot as usize <= SLOT_OFFHAND; TODO: Inv
-        let valid_slot = true;
-        // TODO: Handle error
+        let is_negative = packet.slot < 0;
+        let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
         let item_stack = packet.clicked_item.to_stack();
-        if valid_slot {
-            self.inventory()
-                .lock()
-                .await
-                .set_stack(packet.slot as usize, item_stack);
-        } else {
+        let is_legal =
+            item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
+
+        if valid_slot && is_legal {
+            let mut player_screen_handler = self.player_screen_handler.lock().await;
+            player_screen_handler
+                .get_slot(packet.slot as usize)
+                .set_stack(item_stack.clone())
+                .await;
+            player_screen_handler
+                .set_recived_stack(packet.slot as usize, item_stack)
+                .await;
+            player_screen_handler.send_content_updates().await;
+        } else if is_negative && is_legal {
             // Item drop
             self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
                 .await;
