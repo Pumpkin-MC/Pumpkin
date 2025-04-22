@@ -9,7 +9,7 @@ use pumpkin_protocol::{
     client::{config::CPluginMessage, status::CStatusResponse},
     codec::var_int::VarInt,
 };
-use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::{
     fs::File,
     io::{Cursor, Read},
@@ -90,10 +90,13 @@ impl CachedStatus {
     }
 
     // TODO: Player samples
-    pub async fn add_player(&mut self, player: Arc<Player>) {
+    pub async fn add_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            *player.client.added_to_server_listing.lock().await = true;
+            player
+                .client
+                .added_to_server_listing
+                .store(false, Ordering::Relaxed);
             players.online += 1;
         }
 
@@ -101,13 +104,19 @@ impl CachedStatus {
             .expect("Failed to parse status response into JSON");
     }
 
-    pub async fn remove_player(&mut self, player: Arc<Player>) {
+    pub async fn remove_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            let mut added = player.client.added_to_server_listing.lock().await;
-            if *added {
+            if player
+                .client
+                .added_to_server_listing
+                .load(Ordering::Relaxed)
+            {
                 players.online -= 1;
-                *added = false;
+                player
+                    .client
+                    .added_to_server_listing
+                    .store(false, Ordering::Relaxed);
             }
         }
 

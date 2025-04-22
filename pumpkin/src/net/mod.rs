@@ -146,7 +146,7 @@ pub struct Client {
     pub closed: Arc<AtomicBool>,
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
-    pub added_to_server_listing: Mutex<bool>,
+    pub added_to_server_listing: AtomicBool,
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<NetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -185,7 +185,7 @@ impl Client {
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-            added_to_server_listing: Mutex::new(false),
+            added_to_server_listing: AtomicBool::new(false),
         }
     }
 
