@@ -20,10 +20,8 @@ const DESCRIPTION: &str = "Adds or removes the status effects of players and oth
 
 // const ARG_CLEAR: &str = "clear";
 const ARG_GIVE: &str = "give";
-
 const ARG_TARGET: &str = "target";
 const ARG_EFFECT: &str = "effect";
-
 const ARG_SECONDE: &str = "seconds";
 const ARG_INFINITE: &str = "infinite";
 const ARG_AMPLIFIER: &str = "amplifier";
@@ -93,7 +91,7 @@ impl CommandExecutor for GiveExecutor {
                 .add_effect(
                     crate::entity::effect::Effect {
                         r#type: *effect,
-                        duration: second,
+                        duration: second*20,  //duration is in tick
                         amplifier: amplifier as u8,
                         ambient: false, //this is not a beacon effect
                         show_particles: hide_particule,
