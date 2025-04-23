@@ -1383,6 +1383,28 @@ impl Player {
         // TODO broadcast metadata
     }
 
+    pub async fn remove_all_effect(&self) -> u8 {
+        let mut count = 0;
+        let mut idk = vec![];
+        for effect in self.living_entity.active_effects.lock().await.keys() {
+            idk.push(effect.clone());
+            let effect_id = VarInt(*effect as i32);
+            self.client
+                .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    effect_id,
+                ))
+                .await;
+            count+=1
+        }
+        //Need to remove effect after because the player effect are lock in the for before
+        for effect in idk{
+            self.living_entity.remove_effect(effect).await;
+        }
+
+        count
+    }
+
     /// Add experience levels to the player.
     pub async fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);

@@ -19,7 +19,7 @@ const NAMES: [&str; 1] = ["effect"];
 
 const DESCRIPTION: &str = "Adds or removes the status effects of players and other entities.";
 
-// const ARG_CLEAR: &str = "clear";
+const ARG_CLEAR: &str = "clear";
 const ARG_GIVE: &str = "give";
 const ARG_TARGET: &str = "target";
 const ARG_EFFECT: &str = "effect";
@@ -137,10 +137,10 @@ impl CommandExecutor for GiveExecutor {
     }
 }
 
-struct ClearExecutor;
+struct ClearExecutor(bool); //the param -> true = delete every effect, false = only one
 
 #[async_trait]
-impl CommandExecutor for ClearExecutor  {
+impl CommandExecutor for ClearExecutor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender,
@@ -151,15 +151,94 @@ impl CommandExecutor for ClearExecutor  {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
-        let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
-            return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
-        };
+        let effect;
+        //Only one effect
+        if !self.0 {
+            //println!("seul");
+            let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
+                return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+            };
 
-        for target in targets{
-            target.remove_effect(effect.clone()).await;
+            effect = *effect_type;
+            let mut haseffect = false;
+
+            for target in targets {
+                haseffect = target.living_entity.has_effect(effect).await;
+                target.remove_effect(effect).await;
+            }
+
+            if targets.len() == 1 {
+                //Don't have the effect
+                if !haseffect {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.specific.failed",
+                            [],
+                        ))
+                        .await;
+                }
+                else{
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.specific.success.single",
+                            [TextComponent::text(effect.to_name()),
+                            TextComponent::text(targets[0].gameprofile.name.to_string())],
+                        ))
+                        .await;
+                }
+
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.clear.specific.success.single",
+                        [TextComponent::text(effect.to_name()),
+                            TextComponent::text(targets.len().to_string()),],
+                    ))
+                    .await;
+            }
+
+        }
+        //All the effect
+        else {
+            let mut effect_number = 0;
+            for target in targets {
+                let effect_number_temp = target.remove_all_effect().await;
+                if effect_number_temp > effect_number{
+                    effect_number = effect_number_temp;
+                }
+            }
+            //For only one player
+            if targets.len() == 1 {
+                if effect_number == 0 {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.everything.failed",
+                            [],
+                        ))
+                        .await;
+                }
+                else{
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.everything.success.single",
+                            [TextComponent::text(targets[0].gameprofile.name.to_string())],
+                        ))
+                        .await;
+                }
+
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.clear.everything.success.multiple",
+                        [
+                            TextComponent::text(targets.len().to_string()),
+                        ],
+                    ))
+                    .await;
+            }
         }
 
-        let translation_name =
+        /*let translation_name =
             TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
         if targets.len() == 1 {
             // TODO: use entity name
@@ -182,52 +261,40 @@ impl CommandExecutor for ClearExecutor  {
                     ],
                 ))
                 .await;
-        }
+        }*/
 
         Ok(())
-
-
     }
 }
 
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        literal(ARG_GIVE).then(
-            argument(ARG_TARGET, PlayersArgumentConsumer).then(
-                argument(ARG_EFFECT, EffectTypeArgumentConsumer)
-                    .execute(GiveExecutor(Time::Base, Amplifier::Base, true))
-                    //for specified time
+    CommandTree::new(NAMES, DESCRIPTION)
+        .then(
+            literal(ARG_CLEAR).then(
+                argument(ARG_TARGET, PlayersArgumentConsumer)
+                    .execute(ClearExecutor(true))
                     .then(
-                        argument(
-                            ARG_SECONDE,
-                            BoundedNumArgumentConsumer::new()
-                                .name("seconds")
-                                .min(0)
-                                .max(10000000),
-                        )
-                        .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
+                        argument(ARG_EFFECT, EffectTypeArgumentConsumer)
+                            .execute(ClearExecutor(false)),
+                    ),
+            ),
+        )
+        .then(
+            literal(ARG_GIVE).then(
+                argument(ARG_TARGET, PlayersArgumentConsumer).then(
+                    argument(ARG_EFFECT, EffectTypeArgumentConsumer)
+                        .execute(GiveExecutor(Time::Base, Amplifier::Base, true))
+                        //for specified time
                         .then(
                             argument(
-                                ARG_AMPLIFIER,
+                                ARG_SECONDE,
                                 BoundedNumArgumentConsumer::new()
-                                    .name("amplifier")
-                                    .min(1)
-                                    .max(255),
+                                    .name("seconds")
+                                    .min(0)
+                                    .max(10000000),
                             )
-                            .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
-                            .then(
-                                argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(GiveExecutor(
-                                    Time::Specified,
-                                    Amplifier::Specified,
-                                    false,
-                                )),
-                            ),
-                        ),
-                    )
-                    .then(
-                        literal(ARG_INFINITE)
-                            .execute(GiveExecutor(Time::Infinite, Amplifier::Base, true))
+                            .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
                             .then(
                                 argument(
                                     ARG_AMPLIFIER,
@@ -236,16 +303,43 @@ pub fn init_command_tree() -> CommandTree {
                                         .min(1)
                                         .max(255),
                                 )
-                                .execute(GiveExecutor(Time::Infinite, Amplifier::Specified, true))
+                                .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
                                 .then(
                                     argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
-                                        GiveExecutor(Time::Infinite, Amplifier::Specified, false),
+                                        GiveExecutor(Time::Specified, Amplifier::Specified, false),
                                     ),
                                 ),
                             ),
-                    ),
+                        )
+                        .then(
+                            literal(ARG_INFINITE)
+                                .execute(GiveExecutor(Time::Infinite, Amplifier::Base, true))
+                                .then(
+                                    argument(
+                                        ARG_AMPLIFIER,
+                                        BoundedNumArgumentConsumer::new()
+                                            .name("amplifier")
+                                            .min(1)
+                                            .max(255),
+                                    )
+                                    .execute(GiveExecutor(
+                                        Time::Infinite,
+                                        Amplifier::Specified,
+                                        true,
+                                    ))
+                                    .then(
+                                        argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                            GiveExecutor(
+                                                Time::Infinite,
+                                                Amplifier::Specified,
+                                                false,
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                        ),
+                ),
             ),
-        ),
-    )
+        )
     // TODO: Add more things
 }
