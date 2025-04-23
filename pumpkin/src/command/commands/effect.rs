@@ -53,14 +53,15 @@ impl CommandExecutor for GiveExecutor {
             return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
         };
 
+        //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
         let second = match self.0 {
-            Time::Base => 30,
+            Time::Base => 30*20,
             Time::Specified => BoundedNumArgumentConsumer::new()
                 .name("seconds")
                 .min(1)
                 .max(10000000)
                 .find_arg_default_name(args)?
-                .unwrap(),
+                .unwrap()*20,
             Time::Infinite => -1,
         };
 
@@ -100,7 +101,7 @@ impl CommandExecutor for GiveExecutor {
                 target
                     .add_effect(crate::entity::effect::Effect {
                         r#type: *effect,
-                        duration: second * 20, //duration is in tick
+                        duration: second,
                         amplifier: amplifier as u8,
                         ambient: false, //this is not a beacon effect
                         show_particles: hide_particles,
