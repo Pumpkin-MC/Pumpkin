@@ -12,6 +12,11 @@ use serde::{
 #[derive(Debug, Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ComponentType {
+    pub id: VarInt,
+}
+
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -51,11 +56,19 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                     println!("num_components_to_remove: {:?}", num_components_to_remove);
 
                     if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
-                        let id = seq.next_element::<VarInt>()?;
-                        println!("id: {:?}", id);
+                        for _ in 0..num_components_to_add.0 {
+                            let component_type = seq.next_element::<ComponentType>()?;
+                            println!("component_type_to_add: {:?}", component_type);
+                        }
 
-                        /*
-                        return Err(de::Error::custom(
+                        // Read components to remove
+                        for _ in 0..num_components_to_remove.0 {
+                            let component_type = seq.next_element::<ComponentType>()?;
+                            println!("component_type_to_remove: {:?}", component_type);
+                        }
+
+                        
+                        /*return Err(de::Error::custom(
                             "Slot components are currently unsupported",
                         )); */
                     }
