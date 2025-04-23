@@ -3,7 +3,7 @@ use crate::command::args::bool::BoolArgConsumer;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::effect::EffectTypeArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs, FindArg, FindArgDefaultName};
+use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::CommandTree;
@@ -11,9 +11,6 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::particle::Particle;
-use pumpkin_protocol::client::play::ArgumentType;
-use pumpkin_util::text::color::{Color, NamedColor};
 
 const NAMES: [&str; 1] = ["effect"];
 
@@ -37,11 +34,6 @@ enum Time {
 enum Amplifier {
     Base,
     Specified,
-}
-
-enum Particles {
-    Show,
-    Choose,
 }
 
 struct GiveExecutor(Time, Amplifier, bool);
@@ -93,34 +85,55 @@ impl CommandExecutor for GiveExecutor {
         }
 
         let target_count = targets.len();
+        let mut end = false;
 
         for target in targets {
-            target
-                .add_effect(crate::entity::effect::Effect {
-                    r#type: *effect,
-                    duration: second * 20, //duration is in tick
-                    amplifier: amplifier as u8,
-                    ambient: false, //this is not a beacon effect
-                    show_particles: hide_particles,
-                    show_icon: true,
-                    blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
-                })
-                .await;
+            if !(target.living_entity.has_effect(*effect).await
+                && target
+                    .living_entity
+                    .get_effect(*effect)
+                    .await
+                    .unwrap()
+                    .amplifier
+                    > amplifier as u8)
+            {
+                target
+                    .add_effect(crate::entity::effect::Effect {
+                        r#type: *effect,
+                        duration: second * 20, //duration is in tick
+                        amplifier: amplifier as u8,
+                        ambient: false, //this is not a beacon effect
+                        show_particles: hide_particles,
+                        show_icon: true,
+                        blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
+                    })
+                    .await;
+            } else {
+                if targets.len() == 1 {
+                    end = true
+                }
+            }
         }
 
         let translation_name =
             TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
         if target_count == 1 {
-            // TODO: use entity name
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.effect.give.success.single",
-                    [
-                        translation_name,
-                        TextComponent::text(targets[0].gameprofile.name.clone()),
-                    ],
-                ))
-                .await;
+            if end {
+                sender
+                    .send_message(TextComponent::translate("commands.effect.give.failed", []))
+                    .await;
+            } else {
+                // TODO: use entity name
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.give.success.single",
+                        [
+                            translation_name,
+                            TextComponent::text(targets[0].gameprofile.name.clone()),
+                        ],
+                    ))
+                    .await;
+            }
         } else {
             sender
                 .send_message(TextComponent::translate(
@@ -176,34 +189,35 @@ impl CommandExecutor for ClearExecutor {
                             [],
                         ))
                         .await;
-                }
-                else{
+                } else {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.single",
-                            [TextComponent::text(effect.to_name()),
-                            TextComponent::text(targets[0].gameprofile.name.to_string())],
+                            [
+                                TextComponent::text(effect.to_name()),
+                                TextComponent::text(targets[0].gameprofile.name.to_string()),
+                            ],
                         ))
                         .await;
                 }
-
             } else {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.clear.specific.success.single",
-                        [TextComponent::text(effect.to_name()),
-                            TextComponent::text(targets.len().to_string()),],
+                        [
+                            TextComponent::text(effect.to_name()),
+                            TextComponent::text(targets.len().to_string()),
+                        ],
                     ))
                     .await;
             }
-
         }
         //All the effect
         else {
             let mut effect_number = 0;
             for target in targets {
                 let effect_number_temp = target.remove_all_effect().await;
-                if effect_number_temp > effect_number{
+                if effect_number_temp > effect_number {
                     effect_number = effect_number_temp;
                 }
             }
@@ -216,8 +230,7 @@ impl CommandExecutor for ClearExecutor {
                             [],
                         ))
                         .await;
-                }
-                else{
+                } else {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.everything.success.single",
@@ -225,14 +238,11 @@ impl CommandExecutor for ClearExecutor {
                         ))
                         .await;
                 }
-
             } else {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.clear.everything.success.multiple",
-                        [
-                            TextComponent::text(targets.len().to_string()),
-                        ],
+                        [TextComponent::text(targets.len().to_string())],
                     ))
                     .await;
             }

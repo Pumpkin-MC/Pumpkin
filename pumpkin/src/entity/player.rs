@@ -1395,10 +1395,10 @@ impl Player {
                     effect_id,
                 ))
                 .await;
-            count+=1
+            count += 1
         }
         //Need to remove effect after because the player effect are lock in the for before
-        for effect in idk{
+        for effect in idk {
             self.living_entity.remove_effect(effect).await;
         }
 
