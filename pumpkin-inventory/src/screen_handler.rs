@@ -9,10 +9,10 @@ use tokio::sync::Mutex;
 
 use crate::{
     container_click::{ClickType, MouseClick},
-    inventory::Inventory,
+    inventory::{self, Inventory},
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
-    sync_handler::{AlwaysInSyncTrackedSlot, SyncHandler, TrackedSlot},
+    sync_handler::SyncHandler,
 };
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
@@ -64,18 +64,8 @@ pub trait ScreenHandler: Send + Sync {
         slot.set_id(behaviour.slots.len());
         behaviour.slots.push(slot.clone());
         behaviour.tracked_stacks.push(ItemStack::EMPTY);
+        behaviour.previous_tracked_stacks.push(ItemStack::EMPTY);
 
-        let sync_handler = behaviour.sync_handler.as_ref();
-
-        if let Some(sync_handler) = sync_handler {
-            behaviour
-                .tracked_slots
-                .push(sync_handler.create_tracked_slot());
-        } else {
-            behaviour.tracked_slots.push(Arc::new(
-                AlwaysInSyncTrackedSlot::ALWAYS_IN_SYNC_TRACKED_SLOT,
-            ));
-        }
         slot
     }
 
@@ -110,38 +100,26 @@ pub trait ScreenHandler: Send + Sync {
     async fn sync_state(&mut self) {
         let behaviour = self.get_behaviour_mut();
 
-        let mut item_stacks: Vec<ItemStack> = Vec::with_capacity(behaviour.slots.len());
-
         for i in 0..behaviour.slots.len() {
-            //TODO: Look into the cloning of itemstacks
-            let slot = behaviour.slots[i].clone();
-            let mut inv = slot.get_inventory().lock().await;
-            let item_stack = inv.get_stack(slot.get_index());
-            item_stacks.push(item_stack.clone());
-            let tracked_slot = behaviour.tracked_slots[i].clone();
-            tracked_slot.set_recived_stack(item_stack.clone()).await;
+            behaviour.previous_tracked_stacks[i] = behaviour.slots[i].get_cloned_stack().await;
         }
 
-        let cursor_stack = behaviour.cursor_stack.clone();
-        behaviour
-            .tracked_cursor_slot
-            .set_recived_stack(cursor_stack.lock().await.clone())
-            .await;
+        behaviour.previous_cursor_stack = behaviour.cursor_stack.lock().await.clone();
 
         for i in 0..behaviour.properties.len() {
             let property_val = behaviour.properties[i].get();
-            behaviour.tracked_properties.push(property_val);
+            behaviour.tracked_property_values[i] = property_val;
         }
 
         if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-            let sync_handler = sync_handler.clone();
-            let tracked_properties = behaviour.tracked_properties.clone();
-            sync_handler.update_state(
-                &behaviour,
-                &item_stacks,
-                &cursor_stack.lock().await.clone(),
-                tracked_properties,
-            );
+            sync_handler
+                .update_state(
+                    &behaviour,
+                    &behaviour.previous_tracked_stacks,
+                    &behaviour.previous_cursor_stack,
+                    behaviour.tracked_property_values.clone(),
+                )
+                .await;
         }
     }
 
@@ -154,17 +132,13 @@ pub trait ScreenHandler: Send + Sync {
     async fn update_sync_handler(&mut self, sync_handler: Arc<SyncHandler>) {
         let behaviour = self.get_behaviour_mut();
         behaviour.sync_handler = Some(sync_handler.clone());
-        behaviour.tracked_cursor_slot = sync_handler.create_tracked_slot();
-        behaviour.tracked_slots.iter_mut().for_each(|slot| {
-            *slot = sync_handler.create_tracked_slot();
-        });
         self.sync_state().await;
     }
 
     fn add_property(&mut self, property: ScreenProperty) {
         let behaviour = self.get_behaviour_mut();
         behaviour.properties.push(property);
-        behaviour.tracked_properties.push(0);
+        behaviour.tracked_property_values.push(0);
     }
 
     fn add_properties(&mut self, properties: Vec<ScreenProperty>) {
@@ -205,10 +179,12 @@ pub trait ScreenHandler: Send + Sync {
     async fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.disable_sync {
-            let tracked_slot = behaviour.tracked_slots[slot].clone();
-            if !tracked_slot.is_in_sync(stack.clone()).await {
+            let prev_stack = behaviour.previous_tracked_stacks[slot].clone();
+
+            if prev_stack != stack {
+                behaviour.previous_tracked_stacks[slot] = stack.clone();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                    sync_handler.update_slot(&behaviour, slot, &stack);
+                    sync_handler.update_slot(&behaviour, slot, &stack).await;
                 }
             }
         }
@@ -217,19 +193,13 @@ pub trait ScreenHandler: Send + Sync {
     async fn check_cursor_stack_updates(&mut self) {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.disable_sync {
-            let cursor_stack = behaviour.cursor_stack.clone();
-            if !behaviour
-                .tracked_cursor_slot
-                .is_in_sync(cursor_stack.lock().await.clone())
-                .await
-            {
-                behaviour
-                    .tracked_cursor_slot
-                    .set_recived_stack(cursor_stack.lock().await.clone())
-                    .await;
+            let cursor_stack = behaviour.cursor_stack.lock().await;
+            if !cursor_stack.are_equal(&behaviour.previous_cursor_stack) {
+                behaviour.previous_cursor_stack = cursor_stack.clone();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
-                        .update_cursor_stack(&behaviour, &cursor_stack.lock().await.clone());
+                        .update_cursor_stack(&behaviour, &behaviour.previous_cursor_stack)
+                        .await;
                 }
             }
         }
@@ -240,6 +210,7 @@ pub trait ScreenHandler: Send + Sync {
 
         for i in 0..slots_len {
             let slot = self.get_behaviour().slots[i].clone();
+            //TODO: We might need to avoid using clone here
             let stack = slot.get_cloned_stack().await;
 
             self.update_tracked_slot(i, stack.clone()).await;
@@ -338,8 +309,8 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
-                let mut inventory = slot.get_inventory().lock().await;
-                let slot_stack = inventory.get_stack(slot.get_index());
+                //TODO: Check if we can really use clone here
+                let slot_stack = slot.get_cloned_stack().await;
                 let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
 
                 if self
@@ -415,7 +386,6 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
-                drop(inventory);
                 slot.mark_dirty().await;
             }
         }
@@ -465,14 +435,14 @@ pub struct DefaultScreenHandlerBehaviour {
     pub sync_id: u8,
     pub listeners: Vec<Arc<dyn ScreenHandlerListener>>,
     pub sync_handler: Option<Arc<SyncHandler>>,
-    pub tracked_slots: Vec<Arc<dyn TrackedSlot>>,
     pub tracked_stacks: Vec<ItemStack>,
     pub cursor_stack: Arc<Mutex<ItemStack>>,
-    pub tracked_cursor_slot: Arc<dyn TrackedSlot>,
+    pub previous_tracked_stacks: Vec<ItemStack>,
+    pub previous_cursor_stack: ItemStack,
     pub revision: u32,
     pub disable_sync: bool,
     pub properties: Vec<ScreenProperty>,
-    pub tracked_properties: Vec<i32>,
+    pub tracked_property_values: Vec<i32>,
     pub window_type: Option<WindowType>,
 }
 
@@ -483,14 +453,14 @@ impl DefaultScreenHandlerBehaviour {
             sync_id,
             listeners: Vec::new(),
             sync_handler: None,
-            tracked_slots: Vec::new(),
             tracked_stacks: Vec::new(),
             cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
-            tracked_cursor_slot: Arc::new(AlwaysInSyncTrackedSlot::ALWAYS_IN_SYNC_TRACKED_SLOT),
+            previous_tracked_stacks: Vec::new(),
+            previous_cursor_stack: ItemStack::EMPTY,
             revision: 0,
             disable_sync: false,
             properties: Vec::new(),
-            tracked_properties: Vec::new(),
+            tracked_property_values: Vec::new(),
             window_type,
         }
     }

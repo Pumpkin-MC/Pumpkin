@@ -1589,6 +1589,9 @@ impl Player {
         screen_handler
             .on_slot_click(slot as i32, packet.button as i32, packet.mode.clone(), self)
             .await;
+
+        for (key, value) in packet.array_of_changed_slots {
+        }
     }
 }
 

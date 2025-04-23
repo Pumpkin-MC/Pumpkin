@@ -86,6 +86,10 @@ impl ItemStack {
         self.item == other.item //TODO: && self.item.components == other.item.components
     }
 
+    pub fn are_equal(&self, other: &Self) -> bool {
+        self.item == other.item && self.item_count == other.item_count
+    }
+
     /// Determines the mining speed for a block based on tool rules.
     /// Direct matches return immediately, tagged blocks are checked separately.
     /// If no match is found, returns the tool's default mining speed or `1.0`.

@@ -24,7 +24,7 @@ use crate::{
         ScreenProperty,
     },
     slot::{ArmorSlot, NormalSlot, Slot},
-    sync_handler::{AlwaysInSyncTrackedSlot, SyncHandler, TrackedSlot},
+    sync_handler::SyncHandler,
 };
 
 use super::player_inventory::PlayerInventory;
@@ -54,10 +54,8 @@ impl PlayerScreenHandler {
         self.behaviour.slots[slot].clone()
     }
 
-    pub async fn set_recived_stack(&self, slot: usize, stack: ItemStack) {
-        self.behaviour.tracked_slots[slot]
-            .set_recived_stack(stack)
-            .await;
+    pub async fn set_previous_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
+        self.behaviour.previous_tracked_stacks[slot] = stack;
     }
 
     pub async fn new(
