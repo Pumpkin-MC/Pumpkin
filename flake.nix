@@ -13,10 +13,8 @@
     flake-parts.lib.mkFlake {inherit inputs;} {
       systems = nixpkgs.lib.systems.flakeExposed;
       perSystem = {
-        lib,
         pkgs,
         system,
-        config,
         ...
       }:
       let
@@ -25,7 +23,6 @@
       in
       {
         formatter = pkgs.nixfmt-rfc-style;
-
         _module.args.pkgs = import nixpkgs {
           inherit system;
           overlays = [
