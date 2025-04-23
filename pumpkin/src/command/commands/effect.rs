@@ -18,8 +18,8 @@ const DESCRIPTION: &str = "Adds or removes the status effects of players and oth
 
 const ARG_CLEAR: &str = "clear";
 const ARG_GIVE: &str = "give";
-const ARG_TARGET: &str = "target";
 const ARG_EFFECT: &str = "effect";
+const ARG_TARGET: &str = "target";
 const ARG_SECONDE: &str = "seconds";
 const ARG_INFINITE: &str = "infinite";
 const ARG_AMPLIFIER: &str = "amplifier";
@@ -85,8 +85,7 @@ impl CommandExecutor for GiveExecutor {
             hide_particles = *hide_particle;
         }
 
-        let target_count = targets.len();
-        let mut end = false;
+        let mut failed = false;
 
         for target in targets {
             if !(target.living_entity.has_effect(*effect).await
@@ -111,20 +110,19 @@ impl CommandExecutor for GiveExecutor {
                     .await;
             } else {
                 if targets.len() == 1 {
-                    end = true
+                    failed = true
                 }
             }
         }
 
         let translation_name =
             TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
-        if target_count == 1 {
-            if end {
+        if targets.len() == 1 {
+            if failed {
                 sender
                     .send_message(TextComponent::translate("commands.effect.give.failed", []))
                     .await;
             } else {
-                // TODO: use entity name
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.give.success.single",
@@ -141,7 +139,7 @@ impl CommandExecutor for GiveExecutor {
                     "commands.effect.give.success.multiple",
                     [
                         translation_name,
-                        TextComponent::text(target_count.to_string()),
+                        TextComponent::text(targets.len().to_string()),
                     ],
                 ))
                 .await;
@@ -168,7 +166,6 @@ impl CommandExecutor for ClearExecutor {
         let effect;
         //Only one effect
         if !self.0 {
-            //println!("seul");
             let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
                 return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
             };
@@ -249,31 +246,6 @@ impl CommandExecutor for ClearExecutor {
             }
         }
 
-        /*let translation_name =
-            TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
-        if targets.len() == 1 {
-            // TODO: use entity name
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.clear.success.single",
-                    [
-                        translation_name,
-                        TextComponent::text(targets[0].gameprofile.name.clone()),
-                    ],
-                ))
-                .await;
-        } else {
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.clear.success.multiple",
-                    [
-                        translation_name,
-                        TextComponent::text(targets.len().to_string()),
-                    ],
-                ))
-                .await;
-        }*/
-
         Ok(())
     }
 }
@@ -352,5 +324,4 @@ pub fn init_command_tree() -> CommandTree {
                 ),
             ),
         )
-    // TODO: Add more things
 }
