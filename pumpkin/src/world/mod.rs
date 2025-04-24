@@ -658,14 +658,7 @@ impl World {
 
         // Spawn players for our client.
         let id = player.gameprofile.id;
-        for (_, existing_player) in self
-            .players
-            .read()
-            .await
-            .iter()
-            .filter(|c| c.0 != &id)
-            .collect::<Vec<_>>()
-        {
+        for (_, existing_player) in self.players.read().await.iter().filter(|c| c.0 != &id) {
             let entity = &existing_player.living_entity.entity;
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
