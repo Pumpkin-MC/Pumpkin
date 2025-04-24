@@ -103,6 +103,19 @@ impl PumpkinBlock for RedstoneWireBlock {
             }
         }
 
+        if new_side.is_connected() && wire.power != Integer0To15::L0 {
+            let block_pos = block_pos.offset(direction.to_offset());
+            let block = world.get_block(&block_pos).await.unwrap();
+            world
+                .schedule_block_tick(
+                    &block,
+                    block_pos,
+                    0,
+                    pumpkin_world::chunk::TickPriority::ExtremelyHigh, // TODO which is the priority of the tick?
+                )
+                .await;
+        }
+
         wire = get_regulated_sides(wire, world, block_pos).await;
         if is_cross(old_state) && new_side.is_none() {
             return wire.to_state_id(block);
