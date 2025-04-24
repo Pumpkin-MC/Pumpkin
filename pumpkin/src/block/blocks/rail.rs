@@ -346,13 +346,12 @@ impl PumpkinBlock for RailBlock {
                     if connections.first().unwrap() != &direction.opposite() {
                         connections.push(direction.opposite());
                     } else {
-                        connections.push(direction);
-                    }
+                        direction
+                    };
+
+                    [*first, direction]
                 }
-                0 => {
-                    connections.push(direction);
-                    connections.push(direction.opposite());
-                }
+                0 => [direction, direction.opposite()],
                 _ => unreachable!("Rails only have two sides"),
             }
 
