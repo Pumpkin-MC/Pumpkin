@@ -68,21 +68,24 @@ enum RailElevation {
     Down,
 }
 
-fn get_rail_shape(directions: &[BlockDirection]) -> RailShape {
-    match directions {
-        [BlockDirection::North, BlockDirection::South] => RailShape::NorthSouth,
-        [BlockDirection::South, BlockDirection::North] => RailShape::NorthSouth,
-        [BlockDirection::East, BlockDirection::West] => RailShape::EastWest,
-        [BlockDirection::West, BlockDirection::East] => RailShape::EastWest,
-        [BlockDirection::South, BlockDirection::East] => RailShape::SouthEast,
-        [BlockDirection::East, BlockDirection::South] => RailShape::SouthEast,
-        [BlockDirection::South, BlockDirection::West] => RailShape::SouthWest,
-        [BlockDirection::West, BlockDirection::South] => RailShape::SouthWest,
-        [BlockDirection::North, BlockDirection::West] => RailShape::NorthWest,
-        [BlockDirection::West, BlockDirection::North] => RailShape::NorthWest,
-        [BlockDirection::North, BlockDirection::East] => RailShape::NorthEast,
-        [BlockDirection::East, BlockDirection::North] => RailShape::NorthEast,
-        _ => unreachable!("Invalid rail direction combination: {:?}", directions),
+fn get_rail_shape(first: &BlockDirection, second: &BlockDirection) -> RailShape {
+    match (first, second) {
+        (BlockDirection::North, BlockDirection::South) => RailShape::NorthSouth,
+        (BlockDirection::South, BlockDirection::North) => RailShape::NorthSouth,
+        (BlockDirection::East, BlockDirection::West) => RailShape::EastWest,
+        (BlockDirection::West, BlockDirection::East) => RailShape::EastWest,
+        (BlockDirection::South, BlockDirection::East) => RailShape::SouthEast,
+        (BlockDirection::East, BlockDirection::South) => RailShape::SouthEast,
+        (BlockDirection::South, BlockDirection::West) => RailShape::SouthWest,
+        (BlockDirection::West, BlockDirection::South) => RailShape::SouthWest,
+        (BlockDirection::North, BlockDirection::West) => RailShape::NorthWest,
+        (BlockDirection::West, BlockDirection::North) => RailShape::NorthWest,
+        (BlockDirection::North, BlockDirection::East) => RailShape::NorthEast,
+        (BlockDirection::East, BlockDirection::North) => RailShape::NorthEast,
+        _ => unreachable!(
+            "Invalid rail direction combination: {:?}, {:?}",
+            first, second
+        ),
     }
 }
 
@@ -269,55 +272,19 @@ impl PumpkinBlock for RailBlock {
                 continue;
             };
 
-            if neighbor_rail
-                .directions()
-                .into_iter()
-                .all(|d| d == direction || d == direction.opposite())
-            {
-                // Lazy update straight rails pointing to the placed rail
-                if neighbor_rail.elevation == RailElevation::Down {
-                    neighbor_rail.properties.shape = match direction {
-                        BlockDirection::North => RailShape::AscendingSouth,
-                        BlockDirection::South => {
-                            if neighbor_rail.properties.shape == RailShape::NorthSouth {
-                                RailShape::AscendingNorth
-                            } else {
-                                RailShape::AscendingSouth
-                            }
-                        }
-                        BlockDirection::East => RailShape::AscendingWest,
-                        BlockDirection::West => {
-                            if neighbor_rail.properties.shape == RailShape::EastWest {
-                                RailShape::AscendingEast
-                            } else {
-                                RailShape::AscendingWest
-                            }
-                        }
-                        _ => unreachable!("Rail cannot point vertically"),
-                    }
-                }
-
-                world
-                    .set_block_state(
-                        &neighbor_rail.position,
-                        neighbor_rail.properties.to_state_id(&neighbor_rail.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                continue;
-            }
-
-            let mut connections = Vec::with_capacity(2);
-            for other_direction in neighbor_rail.directions() {
-                if other_direction == direction.opposite() {
-                    // Rails pointing to where the player placed are connected
-                    connections.push(other_direction);
+            let mut neighbor_connected_torwards = Vec::with_capacity(2);
+            let mut neighbor_already_connected_to_elevated = false;
+            for neighbor_direction in neighbor_rail.directions() {
+                if neighbor_direction == direction.opposite() {
+                    // Rails pointing to where the player placed are not connected
                     continue;
                 }
 
                 let Some(maybe_connected_rail) = get_rail_with_elevation(
                     world,
-                    neighbor_rail.position.offset(other_direction.to_offset()),
+                    neighbor_rail
+                        .position
+                        .offset(neighbor_direction.to_offset()),
                 )
                 .await
                 else {
@@ -325,54 +292,80 @@ impl PumpkinBlock for RailBlock {
                     continue;
                 };
 
-                if !maybe_connected_rail
+                if maybe_connected_rail
                     .directions()
                     .into_iter()
-                    .any(|d| d == other_direction.opposite())
+                    .any(|d| d == neighbor_direction.opposite())
                 {
-                    // Rails pointing to other rails that are not pointing back are not connected
-                    continue;
+                    // Rails pointing to other rails that are pointing back are connected
+                    neighbor_connected_torwards.push(neighbor_direction);
+                    neighbor_already_connected_to_elevated =
+                        maybe_connected_rail.elevation == RailElevation::Up;
                 }
-
-                connections.push(other_direction);
             }
 
-            match connections.len() {
+            let new_neighbor_directions = match neighbor_connected_torwards.len() {
                 2 => {
-                    // Skip locked rails
+                    // Do not update rails that are locked (aka fully connected)
                     continue;
                 }
-                1 => {
-                    if connections.first().unwrap() != &direction.opposite() {
-                        connections.push(direction.opposite());
-                    } else {
-                        direction
-                    };
-
-                    [*first, direction]
-                }
+                1 => [neighbor_connected_torwards[0], direction.opposite()],
                 0 => [direction, direction.opposite()],
                 _ => unreachable!("Rails only have two sides"),
-            }
+            };
 
-            neighbor_rail.properties.shape = get_rail_shape(&connections);
-            if neighbor_rail.elevation == RailElevation::Down {
-                neighbor_rail.properties.shape = match direction {
-                    BlockDirection::North => RailShape::AscendingSouth,
-                    BlockDirection::South => RailShape::AscendingNorth,
-                    BlockDirection::West => RailShape::AscendingEast,
-                    BlockDirection::East => RailShape::AscendingWest,
-                    _ => unreachable!("Rail cannot point vertically"),
+            // Get the final rail shape
+            let new_shape = if new_neighbor_directions
+                .iter()
+                .all(|d| d == &direction || d == &direction.opposite())
+            {
+                if neighbor_rail.elevation == RailElevation::Down {
+                    // The rail is down so it should be ascending
+                    match direction {
+                        BlockDirection::North => RailShape::AscendingSouth,
+                        BlockDirection::South => {
+                            if neighbor_already_connected_to_elevated {
+                                RailShape::AscendingSouth
+                            } else {
+                                RailShape::AscendingNorth
+                            }
+                        }
+                        BlockDirection::East => RailShape::AscendingWest,
+                        BlockDirection::West => {
+                            if neighbor_already_connected_to_elevated {
+                                RailShape::AscendingWest
+                            } else {
+                                RailShape::AscendingEast
+                            }
+                        }
+                        _ => unreachable!("Rail cannot point vertically"),
+                    }
+                } else if neighbor_already_connected_to_elevated {
+                    match neighbor_connected_torwards[0] {
+                        BlockDirection::North => RailShape::AscendingNorth,
+                        BlockDirection::South => RailShape::AscendingSouth,
+                        BlockDirection::East => RailShape::AscendingEast,
+                        BlockDirection::West => RailShape::AscendingWest,
+                        _ => unreachable!("Rail cannot point vertically"),
+                    }
+                } else {
+                    // Reset the shape to flat even if the rail already had good directions
+                    get_rail_shape(&new_neighbor_directions[0], &new_neighbor_directions[1])
                 }
-            }
+            } else {
+                get_rail_shape(&new_neighbor_directions[0], &new_neighbor_directions[1])
+            };
 
-            world
-                .set_block_state(
-                    &neighbor_rail.position,
-                    neighbor_rail.properties.to_state_id(&neighbor_rail.block),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            if new_shape != neighbor_rail.properties.shape {
+                neighbor_rail.properties.shape = new_shape;
+                world
+                    .set_block_state(
+                        &neighbor_rail.position,
+                        neighbor_rail.properties.to_state_id(&neighbor_rail.block),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+            }
         }
     }
 
