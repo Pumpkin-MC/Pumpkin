@@ -4,8 +4,8 @@ use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::FenceGateBlock;
 use blocks::fences::FenceBlock;
-use blocks::fluids::{lava::FlowingLava, water::FlowingWater};
 use blocks::logs::LogBlock;
+use blocks::rail::RailBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
@@ -21,6 +21,8 @@ use blocks::torches::TorchBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
+use fluids::lava::FlowingLava;
+use fluids::water::FlowingWater;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -41,6 +43,7 @@ use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::Experi
 use std::sync::Arc;
 
 mod blocks;
+mod fluids;
 pub mod pumpkin_block;
 pub mod pumpkin_fluid;
 pub mod registry;
@@ -49,33 +52,39 @@ pub mod registry;
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
-    manager.register(JukeboxBlock);
-    manager.register(SugarCaneBlock);
+    // Blocks
     manager.register(CactusBlock);
-    manager.register(CraftingTableBlock);
-    manager.register(FurnaceBlock);
     manager.register(ChestBlock);
-    manager.register(TNTBlock);
-    manager.register(LeverBlock);
+    manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
+    manager.register(DoorBlock);
     manager.register(FarmLandBlock);
-    manager.register(RedstoneWireBlock);
-    manager.register(RedstoneBlock);
-    manager.register(RedstoneLamp);
-    manager.register(RepeaterBlock);
+    manager.register(FenceGateBlock);
+    manager.register(FenceBlock);
+    manager.register(FurnaceBlock);
+    manager.register(JukeboxBlock);
+    manager.register(LogBlock);
+    manager.register(SignBlock);
+    manager.register(SugarCaneBlock);
+    manager.register(TNTBlock);
+    manager.register(TorchBlock);
+    
+    // Rails
+    manager.register(RailBlock);
+
+    // Redstone
+    manager.register(ButtonBlock);
+    manager.register(LeverBlock);
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
+    manager.register(RedstoneBlock);
+    manager.register(RedstoneLamp);
+    manager.register(RedstoneTorchBlock);
+    manager.register(RedstoneWireBlock);
+    manager.register(RepeaterBlock);
     manager.register(TargetBlock);
 
-    manager.register(DoorBlock);
-    manager.register(FenceBlock);
-    manager.register(FenceGateBlock);
-    manager.register(TorchBlock);
-    manager.register(LogBlock);
-    manager.register(ButtonBlock);
-    manager.register(RedstoneTorchBlock);
-    manager.register(SignBlock);
-
+    // Fluids
     manager.register_fluid(FlowingWater);
     manager.register_fluid(FlowingLava);
 
