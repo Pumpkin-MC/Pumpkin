@@ -336,8 +336,11 @@ impl Server {
         }
         let packet_data: Bytes = packet_buf.into();
 
-        for player in self.get_all_players().await {
-            player.client.enqueue_packet_data(packet_data.clone()).await;
+        for world in self.worlds.read().await.iter() {
+            let current_players = world.players.read().await;
+            for player in current_players.values() {
+                player.client.enqueue_packet_data(packet_data.clone()).await;
+            }
         }
     }
 
@@ -385,9 +388,11 @@ impl Server {
     pub async fn get_players_by_ip(&self, ip: IpAddr) -> Vec<Arc<Player>> {
         let mut players = Vec::<Arc<Player>>::new();
 
-        for player in self.get_all_players().await {
-            if player.client.address.lock().await.ip() == ip {
-                players.push(player.clone());
+        for world in self.worlds.read().await.iter() {
+            for player in world.players.read().await.values() {
+                if player.client.address.lock().await.ip() == ip {
+                    players.push(player.clone());
+                }
             }
         }
 
