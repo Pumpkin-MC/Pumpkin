@@ -111,7 +111,7 @@ impl ServerPlayerData {
         // Save players from all worlds
         for world in server.worlds.read().await.iter() {
             for player in world.players.read().await.values() {
-                self.extract_data_and_save_player(player.as_ref()).await?;
+                self.extract_data_and_save_player(player).await?;
                 total_players += 1;
             }
         }
