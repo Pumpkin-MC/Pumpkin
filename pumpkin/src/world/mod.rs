@@ -232,14 +232,7 @@ impl World {
             cache.last_seen.clone()
         };
 
-        let current_players = self
-            .players
-            .read()
-            .await
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        for recipient in current_players {
+        for recipient in self.players.read().await.values() {
             let messages_received: i32 = recipient.chat_session.lock().await.messages_received;
             let packet = &CPlayerChatMessage::new(
                 VarInt(messages_received),
@@ -249,7 +242,7 @@ impl World {
                 chat_message.message.clone(),
                 chat_message.timestamp,
                 chat_message.salt,
-                sender_last_seen.indexed_for(&recipient).await,
+                sender_last_seen.indexed_for(recipient).await,
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
@@ -275,7 +268,7 @@ impl World {
         sender.chat_session.lock().await.messages_sent += 1;
     }
 
-    pub async fn current_players(&self) -> Vec<Arc<Player>> {
+    pub async fn current_players_clone(&self) -> Vec<Arc<Player>> {
         self.players.read().await.values().cloned().collect()
     }
 
@@ -295,16 +288,8 @@ impl World {
         }
         let packet_data: Bytes = packet_buf.into();
 
-        let current_players = self
-            .players
-            .read()
-            .await
-            .clone()
-            .into_iter()
-            .filter(|c| !except.contains(&c.0))
-            .map(|c| c.1)
-            .collect::<Vec<_>>();
-        for player in current_players {
+        let current_players = self.players.read().await;
+        for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
             player.client.enqueue_packet_data(packet_data.clone()).await;
         }
     }
@@ -317,8 +302,8 @@ impl World {
         particle_count: i32,
         particle: Particle,
     ) {
-        let players = self.current_players().await;
-        for player in players {
+        let players = self.players.read().await;
+        for player in players.values() {
             player
                 .spawn_particle(position, offset, max_speed, particle_count, particle)
                 .await;
@@ -397,7 +382,7 @@ impl World {
         self.tick_scheduled_block_ticks().await;
 
         // player ticks
-        for player in self.current_players().await {
+        for player in self.current_players_clone().await {
             player.tick(server).await;
         }
 
@@ -406,9 +391,7 @@ impl World {
         // Entity ticks
         for entity in entities_to_tick {
             entity.tick(server).await;
-            // This boolean thing prevents deadlocks. Since we lock players, we can't broadcast packets.
-            let mut collied_player = None;
-            for player in self.current_players().await {
+            for player in self.current_players_clone().await {
                 if player
                     .living_entity
                     .entity
@@ -418,12 +401,9 @@ impl World {
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
-                    collied_player = Some(player.clone());
+                    entity.on_player_collision(player).await;
                     break;
                 }
-            }
-            if let Some(player) = collied_player {
-                entity.on_player_collision(player).await;
             }
         }
     }
@@ -708,7 +688,7 @@ impl World {
         }
 
         // Set skin parts and tablist
-        for player in self.current_players().await {
+        for player in self.current_players_clone().await {
             //Set / Update skin part for every player
             player.send_client_information().await;
 
@@ -834,7 +814,7 @@ impl World {
             Particle::ExplosionEmitter
         };
         let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
-        for player in self.current_players().await {
+        for player in self.players.read().await.values() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
             }
@@ -1037,7 +1017,7 @@ impl World {
 
     /// Gets a `Player` by an entity id
     pub async fn get_player_by_id(&self, id: EntityId) -> Option<Arc<Player>> {
-        for player in self.current_players().await {
+        for player in self.players.read().await.values() {
             if player.entity_id() == id {
                 return Some(player.clone());
             }
@@ -1057,8 +1037,9 @@ impl World {
 
     /// Gets a `Player` by a username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
-        for player in self.current_players().await {
-            if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
+        let lowercase = name.to_lowercase();
+        for player in self.players.read().await.values() {
+            if player.gameprofile.name.to_lowercase() == lowercase {
                 return Some(player.clone());
             }
         }
