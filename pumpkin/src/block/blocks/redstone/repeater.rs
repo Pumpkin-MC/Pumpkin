@@ -51,6 +51,15 @@ impl PumpkinBlock for RepeaterBlock {
             .opposite();
         props.facing = dir;
         props.locked = Boolean::from_bool(should_be_locked(&dir, world, block_pos).await);
+
+        // copied from on_neighbor_update
+        if !props.locked.to_bool() && !world.is_block_tick_scheduled(block_pos, block).await {
+            props.powered = match should_be_powered(props, world, block_pos).await {
+                true => Boolean::True,
+                false => Boolean::False,
+            };
+        }
+
         props.to_state_id(block)
     }
 
