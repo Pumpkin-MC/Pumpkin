@@ -5,10 +5,11 @@ use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::FenceGateBlock;
 use blocks::fences::FenceBlock;
 use blocks::logs::LogBlock;
-use blocks::rail::RailBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::rail::powered_rail::PoweredRailBlock;
+use blocks::redstone::rail::rail::RailBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
 use blocks::redstone::redstone_torch::RedstoneTorchBlock;
@@ -68,9 +69,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);
     manager.register(TorchBlock);
-    
-    // Rails
-    manager.register(RailBlock);
 
     // Redstone
     manager.register(ButtonBlock);
@@ -83,6 +81,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(RedstoneWireBlock);
     manager.register(RepeaterBlock);
     manager.register(TargetBlock);
+
+    // Rails
+    manager.register(RailBlock);
+    manager.register(PoweredRailBlock);
 
     // Fluids
     manager.register_fluid(FlowingWater);
