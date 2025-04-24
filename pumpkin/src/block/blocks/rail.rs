@@ -2,7 +2,9 @@ use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
 use pumpkin_data::block::HorizontalFacing;
+use pumpkin_data::block::RailLikeProperties;
 use pumpkin_data::block::RailShape;
+use pumpkin_data::block::StraightRailShape;
 use pumpkin_data::tag::Tagable;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -16,7 +18,94 @@ use crate::world::BlockFlags;
 use crate::world::World;
 use crate::{entity::player::Player, server::Server};
 
-type RailProperties = pumpkin_data::block::RailLikeProperties;
+enum RailProperties {
+    Rail(pumpkin_data::block::RailLikeProperties),
+    StraightRail(pumpkin_data::block::PoweredRailLikeProperties),
+}
+
+impl RailProperties {
+    pub fn new(state_id: u16, block: &Block) -> Self {
+        if *block == Block::RAIL {
+            RailProperties::Rail(pumpkin_data::block::RailLikeProperties::from_state_id(
+                state_id, block,
+            ))
+        } else {
+            RailProperties::StraightRail(
+                pumpkin_data::block::PoweredRailLikeProperties::from_state_id(state_id, block),
+            )
+        }
+    }
+
+    fn can_curve(&self) -> bool {
+        match self {
+            RailProperties::Rail(_) => true,
+            RailProperties::StraightRail(_) => false,
+        }
+    }
+
+    fn shape(&self) -> RailShape {
+        match self {
+            RailProperties::Rail(props) => props.shape,
+            RailProperties::StraightRail(props) => match props.shape {
+                StraightRailShape::NorthSouth => RailShape::NorthSouth,
+                StraightRailShape::EastWest => RailShape::EastWest,
+                StraightRailShape::AscendingEast => RailShape::AscendingEast,
+                StraightRailShape::AscendingWest => RailShape::AscendingWest,
+                StraightRailShape::AscendingNorth => RailShape::AscendingNorth,
+                StraightRailShape::AscendingSouth => RailShape::AscendingSouth,
+            },
+        }
+    }
+
+    fn directions(&self) -> [BlockDirection; 2] {
+        match self {
+            RailProperties::Rail(props) => match props.shape {
+                RailShape::NorthSouth => [BlockDirection::North, BlockDirection::South],
+                RailShape::EastWest => [BlockDirection::East, BlockDirection::West],
+                RailShape::AscendingEast => [BlockDirection::East, BlockDirection::West],
+                RailShape::AscendingWest => [BlockDirection::West, BlockDirection::East],
+                RailShape::AscendingNorth => [BlockDirection::North, BlockDirection::South],
+                RailShape::AscendingSouth => [BlockDirection::South, BlockDirection::North],
+                RailShape::SouthEast => [BlockDirection::South, BlockDirection::East],
+                RailShape::SouthWest => [BlockDirection::South, BlockDirection::West],
+                RailShape::NorthWest => [BlockDirection::North, BlockDirection::West],
+                RailShape::NorthEast => [BlockDirection::North, BlockDirection::East],
+            },
+            RailProperties::StraightRail(props) => match props.shape {
+                StraightRailShape::NorthSouth => [BlockDirection::North, BlockDirection::South],
+                StraightRailShape::EastWest => [BlockDirection::East, BlockDirection::West],
+                StraightRailShape::AscendingEast => [BlockDirection::East, BlockDirection::West],
+                StraightRailShape::AscendingWest => [BlockDirection::West, BlockDirection::East],
+                StraightRailShape::AscendingNorth => [BlockDirection::North, BlockDirection::South],
+                StraightRailShape::AscendingSouth => [BlockDirection::South, BlockDirection::North],
+            },
+        }
+    }
+
+    fn to_state_id(&self, block: &Block) -> BlockStateId {
+        match self {
+            RailProperties::Rail(props) => props.to_state_id(block),
+            RailProperties::StraightRail(props) => props.to_state_id(block),
+        }
+    }
+
+    fn set_shape(&mut self, shape: RailShape) {
+        match self {
+            RailProperties::Rail(props) => props.shape = shape,
+            RailProperties::StraightRail(props) => {
+                props.shape = match shape {
+                    RailShape::NorthSouth => StraightRailShape::NorthSouth,
+                    RailShape::EastWest => StraightRailShape::EastWest,
+                    RailShape::AscendingEast => StraightRailShape::AscendingEast,
+                    RailShape::AscendingWest => StraightRailShape::AscendingWest,
+                    RailShape::AscendingNorth => StraightRailShape::AscendingNorth,
+                    RailShape::AscendingSouth => StraightRailShape::AscendingSouth,
+                    _ => unreachable!("Trying to make a straight rail curved: {:?}", shape),
+                }
+            }
+        }
+    }
+}
 
 struct Rail {
     block: Block,
@@ -26,38 +115,67 @@ struct Rail {
 }
 
 impl Rail {
+    async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Rail> {
+        let (block, block_state) = world.get_block_and_block_state(&position).await.unwrap();
+        if block.is_tagged_with("#minecraft:rails").unwrap() {
+            let properties = RailProperties::new(block_state.id, &block);
+            return Some(Rail {
+                block,
+                position,
+                properties,
+                elevation: RailElevation::Flat,
+            });
+        }
+
+        let pos = position.up();
+        let (block, block_state) = world.get_block_and_block_state(&pos).await.unwrap();
+        if block.is_tagged_with("#minecraft:rails").unwrap() {
+            let properties = RailProperties::new(block_state.id, &block);
+            return Some(Rail {
+                block,
+                position: pos,
+                properties,
+                elevation: RailElevation::Up,
+            });
+        }
+
+        let pos = position.down();
+        let (block, block_state) = world.get_block_and_block_state(&pos).await.unwrap();
+        if block.is_tagged_with("#minecraft:rails").unwrap() {
+            let properties = RailProperties::new(block_state.id, &block);
+            return Some(Rail {
+                block,
+                position: pos,
+                properties,
+                elevation: RailElevation::Down,
+            });
+        }
+
+        None
+    }
+
     async fn locked(&self, world: &World) -> bool {
-        for direction in self.directions() {
+        for direction in self.properties.directions() {
             let Some(other_rail) =
-                get_rail_with_elevation(world, self.position.offset(direction.to_offset())).await
+                Rail::find_with_elevation(world, self.position.offset(direction.to_offset())).await
             else {
                 // Rails pointing to non-rail blocks are not locked
                 return false;
             };
 
             let direction = direction.opposite();
-            if !other_rail.directions().into_iter().any(|d| d == direction) {
+            if !other_rail
+                .properties
+                .directions()
+                .into_iter()
+                .any(|d| d == direction)
+            {
                 // Rails pointing to other rails that are not pointing back are not locked
                 return false;
             }
         }
 
         true
-    }
-
-    fn directions(&self) -> [BlockDirection; 2] {
-        match self.properties.shape {
-            RailShape::NorthSouth => [BlockDirection::North, BlockDirection::South],
-            RailShape::EastWest => [BlockDirection::East, BlockDirection::West],
-            RailShape::AscendingEast => [BlockDirection::East, BlockDirection::West],
-            RailShape::AscendingWest => [BlockDirection::West, BlockDirection::East],
-            RailShape::AscendingNorth => [BlockDirection::North, BlockDirection::South],
-            RailShape::AscendingSouth => [BlockDirection::South, BlockDirection::North],
-            RailShape::SouthEast => [BlockDirection::South, BlockDirection::East],
-            RailShape::SouthWest => [BlockDirection::South, BlockDirection::West],
-            RailShape::NorthWest => [BlockDirection::North, BlockDirection::West],
-            RailShape::NorthEast => [BlockDirection::North, BlockDirection::East],
-        }
     }
 }
 
@@ -89,56 +207,13 @@ fn get_rail_shape(first: &BlockDirection, second: &BlockDirection) -> RailShape 
     }
 }
 
-async fn get_rail_with_elevation(world: &World, position: BlockPos) -> Option<Rail> {
-    let (block, block_state) = world.get_block_and_block_state(&position).await.unwrap();
-    if block.is_tagged_with("#minecraft:rails").unwrap() {
-        let properties = RailProperties::from_state_id(block_state.id, &block);
-        return Some(Rail {
-            block,
-            position,
-            properties,
-            elevation: RailElevation::Flat,
-        });
-    }
-
-    let (block, block_state) = world
-        .get_block_and_block_state(&position.up())
-        .await
-        .unwrap();
-    if block.is_tagged_with("#minecraft:rails").unwrap() {
-        let properties = RailProperties::from_state_id(block_state.id, &block);
-        return Some(Rail {
-            block,
-            position: position.up(),
-            properties,
-            elevation: RailElevation::Up,
-        });
-    }
-
-    let (block, block_state) = world
-        .get_block_and_block_state(&position.down())
-        .await
-        .unwrap();
-    if block.is_tagged_with("#minecraft:rails").unwrap() {
-        let properties = RailProperties::from_state_id(block_state.id, &block);
-        return Some(Rail {
-            block,
-            position: position.down(),
-            properties,
-            elevation: RailElevation::Down,
-        });
-    }
-
-    None
-}
-
 async fn get_unlocked_rail(
     world: &World,
     place_pos: &BlockPos,
     direction: BlockDirection,
 ) -> Option<Rail> {
     let rail_position = place_pos.offset(direction.to_offset());
-    let Some(rail) = get_rail_with_elevation(world, rail_position).await else {
+    let Some(rail) = Rail::find_with_elevation(world, rail_position).await else {
         return None;
     };
 
@@ -164,7 +239,7 @@ impl PumpkinBlock for RailBlock {
         player: &Player,
         _other: bool,
     ) -> BlockStateId {
-        let mut rail_props = RailProperties::default(block);
+        let mut rail_props = RailLikeProperties::default(block);
 
         rail_props.shape = if let Some(east_rail) =
             get_unlocked_rail(world, block_pos, BlockDirection::East).await
@@ -257,16 +332,9 @@ impl PumpkinBlock for RailBlock {
         _old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        let rail = Rail {
-            block: block.clone(),
-            position: *block_pos,
-            properties: RailProperties::from_state_id(state_id, block),
-            elevation: RailElevation::Flat,
-        };
-
-        for direction in rail.directions() {
+        for direction in RailProperties::new(state_id, block).directions() {
             let Some(mut neighbor_rail) =
-                get_rail_with_elevation(world, block_pos.offset(direction.to_offset())).await
+                Rail::find_with_elevation(world, block_pos.offset(direction.to_offset())).await
             else {
                 // Skip non-rail blocks
                 continue;
@@ -274,13 +342,13 @@ impl PumpkinBlock for RailBlock {
 
             let mut neighbor_connected_torwards = Vec::with_capacity(2);
             let mut neighbor_already_connected_to_elevated = false;
-            for neighbor_direction in neighbor_rail.directions() {
+            for neighbor_direction in neighbor_rail.properties.directions() {
                 if neighbor_direction == direction.opposite() {
                     // Rails pointing to where the player placed are not connected
                     continue;
                 }
 
-                let Some(maybe_connected_rail) = get_rail_with_elevation(
+                let Some(maybe_connected_rail) = Rail::find_with_elevation(
                     world,
                     neighbor_rail
                         .position
@@ -293,6 +361,7 @@ impl PumpkinBlock for RailBlock {
                 };
 
                 if maybe_connected_rail
+                    .properties
                     .directions()
                     .into_iter()
                     .any(|d| d == neighbor_direction.opposite())
@@ -356,8 +425,8 @@ impl PumpkinBlock for RailBlock {
                 get_rail_shape(&new_neighbor_directions[0], &new_neighbor_directions[1])
             };
 
-            if new_shape != neighbor_rail.properties.shape {
-                neighbor_rail.properties.shape = new_shape;
+            if new_shape != neighbor_rail.properties.shape() {
+                neighbor_rail.properties.set_shape(new_shape);
                 world
                     .set_block_state(
                         &neighbor_rail.position,
