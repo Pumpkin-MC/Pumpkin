@@ -11,6 +11,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 use async_trait::async_trait;
+use pumpkin_util::text::color::{Color, NamedColor};
 
 const NAMES: [&str; 1] = ["effect"];
 
@@ -20,7 +21,7 @@ const ARG_CLEAR: &str = "clear";
 const ARG_GIVE: &str = "give";
 const ARG_EFFECT: &str = "effect";
 const ARG_TARGET: &str = "target";
-const ARG_SECONDE: &str = "seconds";
+const ARG_SECOND: &str = "seconds";
 const ARG_INFINITE: &str = "infinite";
 const ARG_AMPLIFIER: &str = "amplifier";
 const ARG_HIDE_PARTICLE: &str = "hideParticles";
@@ -55,13 +56,16 @@ impl CommandExecutor for GiveExecutor {
 
         //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
         let second = match self.0 {
-            Time::Base => 30*20,
-            Time::Specified => BoundedNumArgumentConsumer::new()
-                .name("seconds")
-                .min(1)
-                .max(10000000)
-                .find_arg_default_name(args)?
-                .unwrap()*20,
+            Time::Base => 30 * 20,
+            Time::Specified => {
+                BoundedNumArgumentConsumer::new()
+                    .name("seconds")
+                    .min(1)
+                    .max(1_000_000)
+                    .find_arg_default_name(args)?
+                    .unwrap()
+                    * 20
+            }
             Time::Infinite => -1,
         };
 
@@ -85,18 +89,20 @@ impl CommandExecutor for GiveExecutor {
             hide_particles = *hide_particle;
         }
 
-        let mut failed = false;
+        let mut failed = 0;
 
         for target in targets {
-            if !(target.living_entity.has_effect(*effect).await
+            if target.living_entity.has_effect(*effect).await
                 && target
                     .living_entity
                     .get_effect(*effect)
                     .await
                     .unwrap()
                     .amplifier
-                    > amplifier as u8)
+                    > amplifier as u8
             {
+                failed += 1;
+            } else {
                 target
                     .add_effect(crate::entity::effect::Effect {
                         r#type: *effect,
@@ -108,31 +114,29 @@ impl CommandExecutor for GiveExecutor {
                         blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
                     })
                     .await;
-            } else {
-                if targets.len() == 1 {
-                    failed = true
-                }
             }
         }
 
         let translation_name =
             TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
-        if targets.len() == 1 {
-            if failed {
-                sender
-                    .send_message(TextComponent::translate("commands.effect.give.failed", []))
-                    .await;
-            } else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.effect.give.success.single",
-                        [
-                            translation_name,
-                            TextComponent::text(targets[0].gameprofile.name.clone()),
-                        ],
-                    ))
-                    .await;
-            }
+
+        if failed == targets.len() {
+            sender
+                .send_message(
+                    TextComponent::translate("commands.effect.give.failed", [])
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
+        } else if targets.len() == 1 {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.effect.give.success.single",
+                    [
+                        translation_name,
+                        TextComponent::text(targets[0].gameprofile.name.clone()),
+                    ],
+                ))
+                .await;
         } else {
             sender
                 .send_message(TextComponent::translate(
@@ -165,29 +169,68 @@ impl CommandExecutor for ClearExecutor {
 
         let effect;
         //Only one effect
-        if !self.0 {
+        if self.0 {
+            let mut effect_number = 0;
+            for target in targets {
+                let effect_number_temp = target.remove_all_effect().await;
+                if effect_number_temp > effect_number {
+                    effect_number = effect_number_temp;
+                }
+            }
+
+            //if the player or everyplayer don't have any effect
+            if effect_number == 0 {
+                sender
+                    .send_message(
+                        TextComponent::translate("commands.effect.clear.everything.failed", [])
+                            .color(Color::Named(NamedColor::Red)),
+                    )
+                    .await;
+            }
+            //a player have at least 1 effect
+            else if targets.len() == 1 {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.clear.everything.success.single",
+                        [TextComponent::text(targets[0].gameprofile.name.to_string())],
+                    ))
+                    .await;
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.clear.everything.success.multiple",
+                        [TextComponent::text(targets.len().to_string())],
+                    ))
+                    .await;
+            }
+        } else {
             let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
                 return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
             };
 
             effect = *effect_type;
-            let mut haseffect = false;
+            let mut has_effect = vec![];
 
             for target in targets {
-                haseffect = target.living_entity.has_effect(effect).await;
-                target.remove_effect(effect).await;
+                if !target.living_entity.has_effect(effect).await {
+                    target.remove_effect(effect).await;
+                }
+                has_effect.push(target.living_entity.has_effect(effect).await);
             }
 
-            if targets.len() == 1 {
-                //Don't have the effect
-                if !haseffect {
+            if has_effect.contains(&false) {
+                //contain false for 1 player == don't have
+                if targets.len() == 1 || !has_effect.contains(&true) {
                     sender
-                        .send_message(TextComponent::translate(
-                            "commands.effect.clear.specific.failed",
-                            [],
-                        ))
+                        .send_message(
+                            TextComponent::translate("commands.effect.clear.specific.failed", [])
+                                .color(Color::Named(NamedColor::Red)),
+                        )
                         .await;
-                } else {
+                }
+            } else {
+                //true for 1 player = have the effect
+                if targets.len() == 1 {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.single",
@@ -198,51 +241,18 @@ impl CommandExecutor for ClearExecutor {
                         ))
                         .await;
                 }
-            } else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.effect.clear.specific.success.single",
-                        [
-                            TextComponent::text(effect.to_name()),
-                            TextComponent::text(targets.len().to_string()),
-                        ],
-                    ))
-                    .await;
-            }
-        }
-        //All the effect
-        else {
-            let mut effect_number = 0;
-            for target in targets {
-                let effect_number_temp = target.remove_all_effect().await;
-                if effect_number_temp > effect_number {
-                    effect_number = effect_number_temp;
-                }
-            }
-            //For only one player
-            if targets.len() == 1 {
-                if effect_number == 0 {
+                //contain true for everyplayer = at least 1 player have the effect
+                else {
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.effect.clear.everything.failed",
-                            [],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.effect.clear.everything.success.single",
-                            [TextComponent::text(targets[0].gameprofile.name.to_string())],
+                            "commands.effect.clear.specific.success.multiple",
+                            [
+                                TextComponent::text(effect.to_name()),
+                                TextComponent::text(targets.len().to_string()),
+                            ],
                         ))
                         .await;
                 }
-            } else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.effect.clear.everything.success.multiple",
-                        [TextComponent::text(targets.len().to_string())],
-                    ))
-                    .await;
             }
         }
 
@@ -271,11 +281,11 @@ pub fn init_command_tree() -> CommandTree {
                         //for specified time
                         .then(
                             argument(
-                                ARG_SECONDE,
+                                ARG_SECOND,
                                 BoundedNumArgumentConsumer::new()
                                     .name("seconds")
                                     .min(0)
-                                    .max(10000000),
+                                    .max(1_000_000),
                             )
                             .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
                             .then(

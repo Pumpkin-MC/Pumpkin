@@ -1387,7 +1387,7 @@ impl Player {
         let mut count = 0;
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
-            effect_list.push(effect.clone());
+            effect_list.push(*effect);
             let effect_id = VarInt(*effect as i32);
             self.client
                 .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
@@ -1395,7 +1395,7 @@ impl Player {
                     effect_id,
                 ))
                 .await;
-            count += 1
+            count += 1;
         }
         //Need to remove effect after because the player effect are lock in the for before
         for effect in effect_list {
