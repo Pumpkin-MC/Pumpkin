@@ -54,10 +54,11 @@ impl PumpkinBlock for RepeaterBlock {
 
         // check if the repeater should be powered
         if !props.locked.to_bool() && !world.is_block_tick_scheduled(block_pos, block).await {
-            props.powered = match should_be_powered(props, world, block_pos).await {
-                true => Boolean::True,
-                false => Boolean::False,
-            };
+            props.powered = if should_be_powered(props, world, block_pos).await {
+                Boolean::True
+            } else {
+                Boolean::False
+            }
         }
 
         props.to_state_id(block)
