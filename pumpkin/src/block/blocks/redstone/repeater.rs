@@ -52,7 +52,6 @@ impl PumpkinBlock for RepeaterBlock {
         props.facing = dir;
         props.locked = Boolean::from_bool(should_be_locked(&dir, world, block_pos).await);
 
-        // check if the repeater should be powered
         if !props.locked.to_bool() {
             props.powered = if should_be_powered(props, world, block_pos).await {
                 Boolean::True
