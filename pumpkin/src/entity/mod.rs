@@ -33,7 +33,7 @@ use std::{
     f32::consts::PI,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, Ordering::Relaxed},
+        atomic::{AtomicBool, AtomicI32, Ordering::{Relaxed, SeqCst}},
     },
 };
 use tokio::sync::RwLock;
@@ -281,7 +281,7 @@ impl Entity {
                 yaw,
                 pitch,
                 // TODO
-                self.on_ground.load(Ordering::SeqCst),
+                self.on_ground.load(SeqCst),
             ))
             .await;
         self.set_pos(position);
