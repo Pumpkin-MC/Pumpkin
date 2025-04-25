@@ -36,8 +36,8 @@ use pumpkin_inventory::player::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
-    CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, CSystemChatMessage, CTeleportEntity, EquipmentSlot, InitChat, PlayerAction,
+    CBlockUpdate, CEntityPositionSync, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
+    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -236,7 +236,7 @@ impl Player {
         world
             .broadcast_packet_except(
                 &[self.gameprofile.id],
-                &CTeleportEntity::new(
+                &CEntityPositionSync::new(
                     entity_id.into(),
                     pos,
                     Vector3::new(0.0, 0.0, 0.0),

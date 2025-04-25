@@ -14,7 +14,7 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     client::play::{
-        CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
+        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
         CUpdateEntityRot, MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
@@ -274,7 +274,7 @@ impl Entity {
         self.world
             .read()
             .await
-            .broadcast_packet_all(&CTeleportEntity::new(
+            .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),

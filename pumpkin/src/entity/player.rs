@@ -49,7 +49,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CSetHeldItem, CTeleportEntity, PlayerInfoFlags, PreviousMessage,
+    CEntityPositionSync, CSetHeldItem, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -957,7 +957,7 @@ impl Player {
                     .world
                     .read()
                     .await
-                    .broadcast_packet_except(&[self.gameprofile.id], &CTeleportEntity::new(
+                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                         self.living_entity.entity.entity_id.into(),
                         position,
                         Vector3::new(0.0, 0.0, 0.0),
