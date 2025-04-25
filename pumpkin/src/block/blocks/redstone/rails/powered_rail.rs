@@ -1,13 +1,10 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
-use pumpkin_data::block::HorizontalFacing;
-use pumpkin_data::block::RailShape;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::HorizontalFacingExt;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::PumpkinBlock;
@@ -16,8 +13,10 @@ use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
 
-use super::{
-    HorizontalFacingRailExt, Rail, RailElevation, RailProperties, compute_neighbor_rail_new_shape,
+use super::RailProperties;
+use super::common::{
+    can_place_rail_at, compute_placed_rail_shape, rail_placement_is_valid,
+    update_flanking_rails_shape,
 };
 
 #[pumpkin_block("minecraft:powered_rail")]
@@ -37,43 +36,10 @@ impl PumpkinBlock for PoweredRailBlock {
         _other: bool,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
+        let player_facing = player.living_entity.entity.get_horizontal_facing();
 
-        rail_props.set_shape(
-            player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .to_rail_shape_flat(),
-        );
-
-        for direction in rail_props.directions() {
-            if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
-                if neighbor_rail.elevation == RailElevation::Up {
-                    rail_props.set_shape(direction.to_rail_shape_ascending_towards());
-                }
-
-                return rail_props.to_state_id(block);
-            }
-        }
-
-        for direction in rail_props.directions() {
-            let direction = match direction {
-                HorizontalFacing::North => HorizontalFacing::East,
-                HorizontalFacing::South => HorizontalFacing::West,
-                HorizontalFacing::West => HorizontalFacing::South,
-                HorizontalFacing::East => HorizontalFacing::North,
-            };
-
-            if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
-                if neighbor_rail.elevation == RailElevation::Up {
-                    rail_props.set_shape(direction.to_rail_shape_ascending_towards());
-                } else {
-                    rail_props.set_shape(direction.to_rail_shape_flat());
-                }
-
-                return rail_props.to_state_id(block);
-            }
-        }
+        rail_props
+            .set_straight_shape(compute_placed_rail_shape(world, block_pos, player_facing).await);
 
         rail_props.to_state_id(block)
     }
@@ -87,28 +53,7 @@ impl PumpkinBlock for PoweredRailBlock {
         _old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        for direction in RailProperties::new(state_id, block).directions() {
-            let Some(mut neighbor_rail) =
-                Rail::find_with_elevation(world, block_pos.offset(direction.to_offset())).await
-            else {
-                // Skip non-rail blocks
-                continue;
-            };
-
-            let new_shape =
-                compute_neighbor_rail_new_shape(world, &direction, &neighbor_rail).await;
-
-            if new_shape != neighbor_rail.properties.shape() {
-                neighbor_rail.properties.set_shape(new_shape);
-                world
-                    .set_block_state(
-                        &neighbor_rail.position,
-                        neighbor_rail.properties.to_state_id(&neighbor_rail.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-        }
+        update_flanking_rails_shape(world, block, state_id, block_pos).await;
     }
 
     async fn on_neighbor_update(
@@ -119,33 +64,13 @@ impl PumpkinBlock for PoweredRailBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        if !self.can_place_at(world, pos).await {
+        if !rail_placement_is_valid(world, block, pos).await {
             world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
             return;
-        }
-
-        let state_id = world.get_block_state_id(&pos).await.unwrap();
-        let rail_props = RailProperties::new(state_id, block);
-        let rail_leaning_direction = match rail_props.shape() {
-            RailShape::AscendingNorth => Some(HorizontalFacing::North),
-            RailShape::AscendingSouth => Some(HorizontalFacing::South),
-            RailShape::AscendingEast => Some(HorizontalFacing::East),
-            RailShape::AscendingWest => Some(HorizontalFacing::West),
-            _ => None,
-        };
-
-        if let Some(direction) = rail_leaning_direction {
-            if !self
-                .can_place_at(world, &pos.offset(direction.to_offset()).up())
-                .await
-            {
-                world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
-            }
         }
     }
 
     async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
-        let state = world.get_block_state(&pos.down()).await.unwrap();
-        state.is_solid
+        can_place_rail_at(world, pos).await
     }
 }

@@ -10,6 +10,7 @@ use pumpkin_world::block::HorizontalFacingExt;
 
 use crate::world::World;
 
+pub(crate) mod common;
 pub(crate) mod powered_rail;
 pub(crate) mod rail;
 
@@ -258,6 +259,13 @@ impl RailProperties {
             }
         }
     }
+
+    fn set_straight_shape(&mut self, shape: StraightRailShape) {
+        match self {
+            Self::Rail(props) => props.shape = shape.as_shape(),
+            Self::StraightRail(props) => props.shape = shape,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -267,127 +275,42 @@ enum RailElevation {
     Down,
 }
 
-async fn compute_neighbor_rail_new_shape(
-    world: &World,
-    direction: &HorizontalFacing,
-    neighbor_rail: &Rail,
-) -> RailShape {
-    let mut neighbor_connected_torwards = Vec::with_capacity(2);
-    let mut neighbor_already_connected_to_elevated = false;
+pub trait StraightRailShapeExt {
+    fn as_shape(self) -> RailShape;
+}
 
-    for neighbor_direction in neighbor_rail.properties.directions() {
-        if neighbor_direction == direction.opposite() {
-            // Rails pointing to where the player placed are not connected
-            continue;
-        }
-
-        let Some(maybe_connected_rail) = Rail::find_with_elevation(
-            world,
-            neighbor_rail
-                .position
-                .offset(neighbor_direction.to_offset()),
-        )
-        .await
-        else {
-            // Rails pointing to non-rail blocks are not connected
-            continue;
-        };
-
-        if maybe_connected_rail
-            .properties
-            .directions()
-            .into_iter()
-            .any(|d| d == neighbor_direction.opposite())
-        {
-            // Rails pointing to other rails that are pointing back are connected
-            neighbor_connected_torwards.push(neighbor_direction);
-            neighbor_already_connected_to_elevated =
-                maybe_connected_rail.elevation == RailElevation::Up;
+impl StraightRailShapeExt for StraightRailShape {
+    fn as_shape(self) -> RailShape {
+        match self {
+            StraightRailShape::NorthSouth => RailShape::NorthSouth,
+            StraightRailShape::EastWest => RailShape::EastWest,
+            StraightRailShape::AscendingNorth => RailShape::AscendingNorth,
+            StraightRailShape::AscendingSouth => RailShape::AscendingSouth,
+            StraightRailShape::AscendingEast => RailShape::AscendingEast,
+            StraightRailShape::AscendingWest => RailShape::AscendingWest,
         }
     }
-
-    let new_neighbor_directions = match neighbor_connected_torwards.len() {
-        2 => {
-            // Do not update rails that are locked (aka fully connected)
-            return neighbor_rail.properties.shape();
-        }
-        1 => [neighbor_connected_torwards[0], direction.opposite()],
-        0 => [*direction, direction.opposite()],
-        _ => unreachable!("Rails only have two sides"),
-    };
-
-    // Handle rails that want to be straight
-    if new_neighbor_directions
-        .iter()
-        .all(|d| d == direction || *d == direction.opposite())
-    {
-        return if neighbor_rail.elevation == RailElevation::Down {
-            // The rail is down so it should be ascending
-            match direction {
-                HorizontalFacing::North => RailShape::AscendingSouth,
-                HorizontalFacing::South => {
-                    if neighbor_already_connected_to_elevated {
-                        RailShape::AscendingSouth
-                    } else {
-                        RailShape::AscendingNorth
-                    }
-                }
-                HorizontalFacing::East => RailShape::AscendingWest,
-                HorizontalFacing::West => {
-                    if neighbor_already_connected_to_elevated {
-                        RailShape::AscendingWest
-                    } else {
-                        RailShape::AscendingEast
-                    }
-                }
-            }
-        } else if neighbor_already_connected_to_elevated {
-            neighbor_connected_torwards[0].to_rail_shape_ascending_towards()
-        } else {
-            // Reset the shape to flat even if the rail already had good directions
-            neighbor_rail.get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
-        };
-    }
-
-    // Handle straight rails that want to curve
-    if !neighbor_rail.properties.can_curve() {
-        return if new_neighbor_directions[0] == HorizontalFacing::North
-            || new_neighbor_directions[0] == HorizontalFacing::South
-        {
-            if neighbor_rail.elevation == RailElevation::Down {
-                // The rail is down so it should be ascending
-                direction.opposite().to_rail_shape_ascending_towards()
-            } else {
-                neighbor_rail
-                    .get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
-            }
-        } else {
-            neighbor_rail.properties.shape()
-        };
-    }
-
-    neighbor_rail.get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
 }
 
 pub trait HorizontalFacingRailExt {
-    fn to_rail_shape_flat(&self) -> RailShape;
-    fn to_rail_shape_ascending_towards(&self) -> RailShape;
+    fn to_rail_shape_flat(&self) -> StraightRailShape;
+    fn to_rail_shape_ascending_towards(&self) -> StraightRailShape;
 }
 
 impl HorizontalFacingRailExt for HorizontalFacing {
-    fn to_rail_shape_flat(&self) -> RailShape {
+    fn to_rail_shape_flat(&self) -> StraightRailShape {
         match self {
-            Self::North | Self::South => RailShape::NorthSouth,
-            Self::East | Self::West => RailShape::EastWest,
+            Self::North | Self::South => StraightRailShape::NorthSouth,
+            Self::East | Self::West => StraightRailShape::EastWest,
         }
     }
 
-    fn to_rail_shape_ascending_towards(&self) -> RailShape {
+    fn to_rail_shape_ascending_towards(&self) -> StraightRailShape {
         match self {
-            Self::North => RailShape::AscendingNorth,
-            Self::South => RailShape::AscendingSouth,
-            Self::East => RailShape::AscendingEast,
-            Self::West => RailShape::AscendingWest,
+            Self::North => StraightRailShape::AscendingNorth,
+            Self::South => StraightRailShape::AscendingSouth,
+            Self::East => StraightRailShape::AscendingEast,
+            Self::West => StraightRailShape::AscendingWest,
         }
     }
 }
