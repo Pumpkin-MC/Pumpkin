@@ -8,6 +8,8 @@ use blocks::logs::LogBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::rails::activator_rail::ActivatorRailBlock;
+use blocks::redstone::rails::detector_rail::DetectorRailBlock;
 use blocks::redstone::rails::powered_rail::PoweredRailBlock;
 use blocks::redstone::rails::rail::RailBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
@@ -84,6 +86,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Rails
     manager.register(RailBlock);
+    manager.register(ActivatorRailBlock);
+    manager.register(DetectorRailBlock);
     manager.register(PoweredRailBlock);
 
     // Fluids

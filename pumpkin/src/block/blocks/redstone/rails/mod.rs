@@ -10,7 +10,10 @@ use pumpkin_world::block::HorizontalFacingExt;
 
 use crate::world::World;
 
-pub(crate) mod common;
+mod common;
+
+pub(crate) mod activator_rail;
+pub(crate) mod detector_rail;
 pub(crate) mod powered_rail;
 pub(crate) mod rail;
 
