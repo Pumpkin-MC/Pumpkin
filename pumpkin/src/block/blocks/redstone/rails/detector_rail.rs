@@ -60,12 +60,14 @@ impl PumpkinBlock for DetectorRailBlock {
         &self,
         world: &Arc<World>,
         block: &Block,
-        pos: &BlockPos,
+        block_pos: &BlockPos,
         _source_block: &Block,
         _notify: bool,
     ) {
-        if !rail_placement_is_valid(world, block, pos).await {
-            world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
+        if !rail_placement_is_valid(world, block, block_pos).await {
+            world
+                .break_block(block_pos, None, BlockFlags::NOTIFY_ALL)
+                .await;
             return;
         }
     }

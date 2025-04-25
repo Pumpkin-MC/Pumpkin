@@ -215,12 +215,12 @@ impl RailProperties {
                     [HorizontalFacing::West, HorizontalFacing::East]
                 }
                 RailShape::NorthSouth | RailShape::AscendingNorth | RailShape::AscendingSouth => {
-                    [HorizontalFacing::South, HorizontalFacing::North]
+                    [HorizontalFacing::North, HorizontalFacing::South]
                 }
-                RailShape::SouthEast => [HorizontalFacing::South, HorizontalFacing::East],
-                RailShape::SouthWest => [HorizontalFacing::South, HorizontalFacing::West],
-                RailShape::NorthWest => [HorizontalFacing::North, HorizontalFacing::West],
-                RailShape::NorthEast => [HorizontalFacing::North, HorizontalFacing::East],
+                RailShape::SouthEast => [HorizontalFacing::East, HorizontalFacing::South],
+                RailShape::SouthWest => [HorizontalFacing::West, HorizontalFacing::South],
+                RailShape::NorthWest => [HorizontalFacing::West, HorizontalFacing::North],
+                RailShape::NorthEast => [HorizontalFacing::East, HorizontalFacing::North],
             },
 
             Self::StraightRail(props) => match props.shape {
@@ -233,7 +233,7 @@ impl RailProperties {
                 StraightRailShape::NorthSouth
                 | StraightRailShape::AscendingNorth
                 | StraightRailShape::AscendingSouth => {
-                    [HorizontalFacing::South, HorizontalFacing::North]
+                    [HorizontalFacing::North, HorizontalFacing::South]
                 }
             },
         }
