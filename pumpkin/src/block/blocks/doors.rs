@@ -97,12 +97,12 @@ async fn get_hinge(
     facing: HorizontalFacing,
 ) -> DoorHinge {
     let top_pos = pos.up();
-    let left_dir = facing.rotate_ccw();
+    let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
     let left_state = world.get_block_state(&left_pos).await.unwrap();
     let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
     let top_state = world.get_block_state(&top_facing).await.unwrap();
-    let right_dir = facing.rotate();
+    let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
     let right_state = world.get_block_state(&right_pos).await.unwrap();
     let top_right = top_pos.offset(facing.to_block_direction().to_offset());

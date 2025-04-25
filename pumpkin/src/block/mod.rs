@@ -26,10 +26,9 @@ use blocks::{
 };
 use fluids::lava::FlowingLava;
 use fluids::water::FlowingWater;
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState};
 use pumpkin_util::loot_table::{
     AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
 };

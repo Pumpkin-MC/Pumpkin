@@ -1,8 +1,10 @@
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::HorizontalFacing;
-use pumpkin_data::block::RailShape;
-use pumpkin_data::block::StraightRailShape;
+use pumpkin_data::block_properties::PoweredRailLikeProperties;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::block_properties::RailShape;
+use pumpkin_data::block_properties::StraightRailShape;
+use pumpkin_data::block_properties::RailLikeProperties;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -160,16 +162,16 @@ impl Rail {
 }
 
 enum RailProperties {
-    Rail(pumpkin_data::block::RailLikeProperties),
-    StraightRail(pumpkin_data::block::PoweredRailLikeProperties),
+    Rail(RailLikeProperties),
+    StraightRail(PoweredRailLikeProperties),
 }
 
 impl RailProperties {
     pub fn default(block: &Block) -> Self {
         if *block == Block::RAIL {
-            Self::Rail(pumpkin_data::block::RailLikeProperties::default(block))
+            Self::Rail(RailLikeProperties::default(block))
         } else {
-            Self::StraightRail(pumpkin_data::block::PoweredRailLikeProperties::default(
+            Self::StraightRail(PoweredRailLikeProperties::default(
                 block,
             ))
         }
@@ -177,12 +179,12 @@ impl RailProperties {
 
     pub fn new(state_id: u16, block: &Block) -> Self {
         if *block == Block::RAIL {
-            Self::Rail(pumpkin_data::block::RailLikeProperties::from_state_id(
+            Self::Rail(RailLikeProperties::from_state_id(
                 state_id, block,
             ))
         } else {
             Self::StraightRail(
-                pumpkin_data::block::PoweredRailLikeProperties::from_state_id(state_id, block),
+                PoweredRailLikeProperties::from_state_id(state_id, block),
             )
         }
     }
