@@ -685,7 +685,7 @@ impl World {
                     entity.velocity.load(),
                 ))
                 .await;
-            let config = existing_player.config.lock().await;
+            let config = existing_player.config.read().await;
             let mut buf = Vec::new();
             for meta in [
                 Metadata::new(17, MetaDataType::Byte, config.skin_parts),

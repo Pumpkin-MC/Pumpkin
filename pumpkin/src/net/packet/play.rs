@@ -716,7 +716,7 @@ impl Player {
             }
         };
         // Invert hand if player is left handed
-        let animation = match self.config.lock().await.main_hand {
+        let animation = match self.config.read().await.main_hand {
             Hand::Left => match animation {
                 Animation::SwingMainArm => Animation::SwingOffhand,
                 Animation::SwingOffhand => Animation::SwingMainArm,
@@ -958,7 +958,7 @@ impl Player {
             }
 
             let (update_settings, update_watched) = {
-                let mut config = self.config.lock().await;
+                let mut config = self.config.write().await;
                 let update_settings = config.main_hand != main_hand
                     || config.skin_parts != client_information.skin_parts;
 
