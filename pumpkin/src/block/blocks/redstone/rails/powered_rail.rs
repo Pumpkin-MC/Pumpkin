@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
 use pumpkin_data::block::HorizontalFacing;
+use pumpkin_data::block::RailShape;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -113,13 +114,33 @@ impl PumpkinBlock for PoweredRailBlock {
     async fn on_neighbor_update(
         &self,
         world: &Arc<World>,
-        _block: &Block,
+        block: &Block,
         pos: &BlockPos,
         _source_block: &Block,
         _notify: bool,
     ) {
         if !self.can_place_at(world, pos).await {
             world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
+            return;
+        }
+
+        let state_id = world.get_block_state_id(&pos).await.unwrap();
+        let rail_props = RailProperties::new(state_id, block);
+        let rail_leaning_direction = match rail_props.shape() {
+            RailShape::AscendingNorth => Some(HorizontalFacing::North),
+            RailShape::AscendingSouth => Some(HorizontalFacing::South),
+            RailShape::AscendingEast => Some(HorizontalFacing::East),
+            RailShape::AscendingWest => Some(HorizontalFacing::West),
+            _ => None,
+        };
+
+        if let Some(direction) = rail_leaning_direction {
+            if !self
+                .can_place_at(world, &pos.offset(direction.to_offset()).up())
+                .await
+            {
+                world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
+            }
         }
     }
 
