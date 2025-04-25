@@ -268,10 +268,6 @@ impl World {
         sender.chat_session.lock().await.messages_sent += 1;
     }
 
-    pub async fn current_players_clone(&self) -> Vec<Arc<Player>> {
-        self.players.read().await.values().cloned().collect()
-    }
-
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
     ///
     /// Sends the specified packet to every player currently logged in to the world, excluding the players listed in the `except` parameter.
@@ -382,7 +378,7 @@ impl World {
         self.tick_scheduled_block_ticks().await;
 
         // player ticks
-        for player in self.current_players_clone().await {
+        for player in self.players.read().await.values() {
             player.tick(server).await;
         }
 
@@ -680,21 +676,24 @@ impl World {
                 .await;
         }
 
-        // Set skin parts and tablist
-        for player in self.current_players_clone().await {
-            //Set / Update skin part for every player
-            player.send_client_information().await;
+        {
+            let players: Vec<_> = self.players.read().await.values().cloned().collect();
+            // Set skin parts and tablist
+            for player in players {
+                //Set / Update skin part for every player
+                player.send_client_information().await;
 
-            //Update tablist
-            //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
-            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-                0x08,
-                &[pumpkin_protocol::client::play::Player {
-                    uuid: player.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListed(true)],
-                }],
-            ))
-            .await;
+                //Update tablist
+                //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
+                self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+                    0x08,
+                    &[pumpkin_protocol::client::play::Player {
+                        uuid: player.gameprofile.id,
+                        actions: &[PlayerAction::UpdateListed(true)],
+                    }],
+                ))
+                .await;
+            }
         }
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
@@ -1139,12 +1138,7 @@ impl World {
     /// * `uuid`: The unique UUID of the player to add.
     /// * `player`: An `Arc<Player>` reference to the player object.
     pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) -> Result<(), String> {
-        if let Ok(mut players) = self.players.try_write() {
-            players.insert(uuid, player.clone());
-        } else {
-            log::warn!("[add_player] Failed to get write lock on players, waiting...");
-            self.players.write().await.insert(uuid, player.clone());
-        }
+        self.players.write().await.insert(uuid, player.clone());
 
         let current_players = self.players.clone();
         player.clone().spawn_task(async move {
