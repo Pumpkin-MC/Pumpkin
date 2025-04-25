@@ -105,7 +105,7 @@ async fn compute_flanking_rail_new_shape(
     rail: &Rail,
     flanking_from: HorizontalFacing,
 ) -> RailShape {
-    let mut connected_torwards = Vec::with_capacity(2);
+    let mut connected_towards = Vec::with_capacity(2);
     let mut is_already_connected_to_elevated_rail = false;
 
     for neighbor_direction in rail.properties.directions() {
@@ -129,18 +129,18 @@ async fn compute_flanking_rail_new_shape(
             .any(|d| d == neighbor_direction.opposite())
         {
             // Rails pointing to other rails that are pointing back are connected
-            connected_torwards.push(neighbor_direction);
+            connected_towards.push(neighbor_direction);
             is_already_connected_to_elevated_rail =
                 maybe_connected_rail.elevation == RailElevation::Up;
         }
     }
 
-    let new_neighbor_directions = match connected_torwards.len() {
+    let new_neighbor_directions = match connected_towards.len() {
         2 => {
             // Do not update rails that are locked (aka fully connected)
             return rail.properties.shape();
         }
-        1 => [connected_torwards[0], flanking_from],
+        1 => [connected_towards[0], flanking_from],
         0 => [flanking_from, flanking_from.opposite()],
         _ => unreachable!("Rails only have two sides"),
     };
@@ -161,7 +161,7 @@ async fn compute_flanking_rail_new_shape(
 
             return flanking_from.to_rail_shape_ascending_towards().as_shape();
         } else if is_already_connected_to_elevated_rail {
-            return connected_torwards[0]
+            return connected_towards[0]
                 .to_rail_shape_ascending_towards()
                 .as_shape();
         }
