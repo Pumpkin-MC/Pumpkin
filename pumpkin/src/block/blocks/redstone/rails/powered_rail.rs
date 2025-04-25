@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
+use pumpkin_data::block::HorizontalFacing;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -54,8 +55,14 @@ impl PumpkinBlock for PoweredRailBlock {
             }
         }
 
-        for direction in rail_props.directions().iter().rev() {
-            let direction = direction.rotate_clockwise();
+        for direction in rail_props.directions() {
+            let direction = match direction {
+                HorizontalFacing::North => HorizontalFacing::East,
+                HorizontalFacing::South => HorizontalFacing::West,
+                HorizontalFacing::West => HorizontalFacing::South,
+                HorizontalFacing::East => HorizontalFacing::North,
+            };
+
             if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
                 if neighbor_rail.elevation == RailElevation::Up {
                     rail_props.set_shape(direction.to_rail_shape_ascending_towards());
