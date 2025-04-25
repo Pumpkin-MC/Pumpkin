@@ -3,8 +3,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
-use crate::VarInt;
-use crate::ser::network_serialize_no_prefix;
+use crate::{VarInt, ser::network_serialize_no_prefix};
 
 #[derive(Serialize)]
 #[packet(PLAY_LEVEL_PARTICLES)]

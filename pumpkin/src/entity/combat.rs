@@ -26,6 +26,7 @@ impl AttackType {
 
         let sprinting = entity.sprinting.load(std::sync::atomic::Ordering::Relaxed);
         let on_ground = entity.on_ground.load(std::sync::atomic::Ordering::Relaxed);
+        let fall_distance = player.living_entity.fall_distance.load();
         let sword = player
             .inventory()
             .lock()
@@ -39,7 +40,7 @@ impl AttackType {
         }
 
         // TODO: even more checks
-        if is_strong && !on_ground {
+        if is_strong && !on_ground && fall_distance > 0.0 {
             // !sprinting omitted
             return Self::Critical;
         }
