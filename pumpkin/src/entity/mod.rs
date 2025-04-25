@@ -33,7 +33,10 @@ use std::{
     f32::consts::PI,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, Ordering::{Relaxed, SeqCst}},
+        atomic::{
+            AtomicBool, AtomicI32,
+            Ordering::{Relaxed, SeqCst},
+        },
     },
 };
 use tokio::sync::RwLock;
