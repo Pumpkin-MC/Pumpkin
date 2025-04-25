@@ -13,7 +13,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
         return false;
     }
 
-    let state_id = world.get_block_state_id(&pos).await.unwrap();
+    let state_id = world.get_block_state_id(pos).await.unwrap();
     let rail_props = RailProperties::new(state_id, block);
     let rail_leaning_direction = match rail_props.shape() {
         RailShape::AscendingNorth => Some(HorizontalFacing::North),
@@ -61,9 +61,9 @@ pub(super) async fn compute_placed_rail_shape(
         if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
             if neighbor_rail.elevation == RailElevation::Up {
                 return direction.to_rail_shape_ascending_towards();
-            } else {
-                return direction.to_rail_shape_flat();
             }
+
+            return direction.to_rail_shape_flat();
         }
     }
 
@@ -150,26 +150,24 @@ async fn compute_flanking_rail_new_shape(
         .iter()
         .all(|d| *d == flanking_from || *d == flanking_from.opposite())
     {
-        return if rail.elevation == RailElevation::Down {
-            // The rail is down so it should be ascending
-
+        if rail.elevation == RailElevation::Down {
             if is_already_connected_to_elevated_rail {
                 // Prioritize the South/West ascending
-                match flanking_from {
+                return match flanking_from {
                     HorizontalFacing::South | HorizontalFacing::North => RailShape::AscendingSouth,
                     HorizontalFacing::West | HorizontalFacing::East => RailShape::AscendingWest,
-                }
-            } else {
-                flanking_from.to_rail_shape_ascending_towards().as_shape()
+                };
             }
+
+            return flanking_from.to_rail_shape_ascending_towards().as_shape();
         } else if is_already_connected_to_elevated_rail {
-            connected_torwards[0]
+            return connected_torwards[0]
                 .to_rail_shape_ascending_towards()
-                .as_shape()
-        } else {
-            // Reset the shape to flat even if the rail already had good directions
-            rail.get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
-        };
+                .as_shape();
+        }
+
+        // Reset the shape to flat even if the rail already had good directions
+        return rail.get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1]);
     }
 
     // Handle straight rails that want to curve

@@ -279,18 +279,18 @@ enum RailElevation {
 }
 
 pub trait StraightRailShapeExt {
-    fn as_shape(self) -> RailShape;
+    fn as_shape(&self) -> RailShape;
 }
 
 impl StraightRailShapeExt for StraightRailShape {
-    fn as_shape(self) -> RailShape {
+    fn as_shape(&self) -> RailShape {
         match self {
-            StraightRailShape::NorthSouth => RailShape::NorthSouth,
-            StraightRailShape::EastWest => RailShape::EastWest,
-            StraightRailShape::AscendingNorth => RailShape::AscendingNorth,
-            StraightRailShape::AscendingSouth => RailShape::AscendingSouth,
-            StraightRailShape::AscendingEast => RailShape::AscendingEast,
-            StraightRailShape::AscendingWest => RailShape::AscendingWest,
+            Self::NorthSouth => RailShape::NorthSouth,
+            Self::EastWest => RailShape::EastWest,
+            Self::AscendingNorth => RailShape::AscendingNorth,
+            Self::AscendingSouth => RailShape::AscendingSouth,
+            Self::AscendingEast => RailShape::AscendingEast,
+            Self::AscendingWest => RailShape::AscendingWest,
         }
     }
 }
