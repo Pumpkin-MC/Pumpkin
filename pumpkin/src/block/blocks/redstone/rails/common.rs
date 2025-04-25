@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, block_properties::{HorizontalFacing, RailShape, StraightRailShape}};
+use pumpkin_data::{
+    Block,
+    block_properties::{HorizontalFacing, RailShape, StraightRailShape},
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, block::HorizontalFacingExt};
 
