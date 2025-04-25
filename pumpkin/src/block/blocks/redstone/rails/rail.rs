@@ -7,6 +7,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::HorizontalFacingExt;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::PumpkinBlock;
@@ -15,7 +16,9 @@ use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
 
-use super::{Rail, RailElevation, RailProperties, compute_neighbor_rail_new_shape};
+use super::{
+    HorizontalFacingRailExt, Rail, RailElevation, RailProperties, compute_neighbor_rail_new_shape,
+};
 
 #[pumpkin_block("minecraft:rail")]
 pub struct RailBlock;
@@ -36,20 +39,20 @@ impl PumpkinBlock for RailBlock {
         let mut rail_props = RailProperties::default(block);
 
         let shape = if let Some(east_rail) =
-            Rail::find_if_unlocked(world, block_pos, BlockDirection::East).await
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East).await
         {
-            if Rail::find_if_unlocked(world, block_pos, BlockDirection::South)
+            if Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South)
                 .await
                 .is_some()
             {
                 RailShape::SouthEast
-            } else if Rail::find_if_unlocked(world, block_pos, BlockDirection::North)
+            } else if Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North)
                 .await
                 .is_some()
             {
                 RailShape::NorthEast
             } else {
-                match Rail::find_if_unlocked(world, block_pos, BlockDirection::West).await {
+                match Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await {
                     Some(west_rail) if west_rail.elevation == RailElevation::Up => {
                         RailShape::AscendingWest
                     }
@@ -63,9 +66,9 @@ impl PumpkinBlock for RailBlock {
                 }
             }
         } else if let Some(south_rail) =
-            Rail::find_if_unlocked(world, block_pos, BlockDirection::South).await
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South).await
         {
-            if Rail::find_if_unlocked(world, block_pos, BlockDirection::West)
+            if Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West)
                 .await
                 .is_some()
             {
@@ -73,7 +76,7 @@ impl PumpkinBlock for RailBlock {
             } else if south_rail.elevation == RailElevation::Up {
                 RailShape::AscendingSouth
             } else {
-                match Rail::find_if_unlocked(world, block_pos, BlockDirection::North).await {
+                match Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await {
                     Some(north_rail) if north_rail.elevation == RailElevation::Up => {
                         RailShape::AscendingNorth
                     }
@@ -81,9 +84,9 @@ impl PumpkinBlock for RailBlock {
                 }
             }
         } else if let Some(west_rail) =
-            Rail::find_if_unlocked(world, block_pos, BlockDirection::West).await
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
         {
-            if Rail::find_if_unlocked(world, block_pos, BlockDirection::North)
+            if Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North)
                 .await
                 .is_some()
             {
@@ -94,7 +97,7 @@ impl PumpkinBlock for RailBlock {
                 RailShape::EastWest
             }
         } else if let Some(north_rail) =
-            Rail::find_if_unlocked(world, block_pos, BlockDirection::North).await
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
         {
             if north_rail.elevation == RailElevation::Up {
                 RailShape::AscendingNorth
@@ -102,12 +105,11 @@ impl PumpkinBlock for RailBlock {
                 RailShape::NorthSouth
             }
         } else {
-            match player.living_entity.entity.get_horizontal_facing() {
-                HorizontalFacing::North => RailShape::NorthSouth,
-                HorizontalFacing::South => RailShape::NorthSouth,
-                HorizontalFacing::West => RailShape::EastWest,
-                HorizontalFacing::East => RailShape::EastWest,
-            }
+            player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .to_rail_shape_flat()
         };
 
         rail_props.set_shape(shape);

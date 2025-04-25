@@ -1,11 +1,12 @@
 use pumpkin_data::block::Block;
 use pumpkin_data::block::BlockProperties;
+use pumpkin_data::block::HorizontalFacing;
 use pumpkin_data::block::RailShape;
 use pumpkin_data::block::StraightRailShape;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::HorizontalFacingExt;
 
 use crate::world::World;
 
@@ -20,11 +21,11 @@ struct Rail {
 }
 
 impl Rail {
-    async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Rail> {
+    async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
         let (block, block_state) = world.get_block_and_block_state(&position).await.unwrap();
         if block.is_tagged_with("#minecraft:rails").unwrap() {
             let properties = RailProperties::new(block_state.id, &block);
-            return Some(Rail {
+            return Some(Self {
                 block,
                 position,
                 properties,
@@ -36,7 +37,7 @@ impl Rail {
         let (block, block_state) = world.get_block_and_block_state(&pos).await.unwrap();
         if block.is_tagged_with("#minecraft:rails").unwrap() {
             let properties = RailProperties::new(block_state.id, &block);
-            return Some(Rail {
+            return Some(Self {
                 block,
                 position: pos,
                 properties,
@@ -48,7 +49,7 @@ impl Rail {
         let (block, block_state) = world.get_block_and_block_state(&pos).await.unwrap();
         if block.is_tagged_with("#minecraft:rails").unwrap() {
             let properties = RailProperties::new(block_state.id, &block);
-            return Some(Rail {
+            return Some(Self {
                 block,
                 position: pos,
                 properties,
@@ -62,21 +63,22 @@ impl Rail {
     async fn find_if_unlocked(
         world: &World,
         place_pos: &BlockPos,
-        direction: BlockDirection,
-    ) -> Option<Rail> {
+        direction: HorizontalFacing,
+    ) -> Option<Self> {
         let rail_position = place_pos.offset(direction.to_offset());
-        let rail = Rail::find_with_elevation(world, rail_position).await?;
+        let rail = Self::find_with_elevation(world, rail_position).await?;
 
-        match rail.is_locked(world).await {
-            true => None,
-            false => Some(rail),
+        if rail.is_locked(world).await {
+            return None;
         }
+
+        Some(rail)
     }
 
     async fn is_locked(&self, world: &World) -> bool {
         for direction in self.properties.directions() {
             let Some(other_rail) =
-                Rail::find_with_elevation(world, self.position.offset(direction.to_offset())).await
+                Self::find_with_elevation(world, self.position.offset(direction.to_offset())).await
             else {
                 // Rails pointing to non-rail blocks are not locked
                 return false;
@@ -97,16 +99,20 @@ impl Rail {
         true
     }
 
-    pub fn get_new_rail_shape(&self, first: &BlockDirection, second: &BlockDirection) -> RailShape {
+    pub fn get_new_rail_shape(
+        &self,
+        first: HorizontalFacing,
+        second: HorizontalFacing,
+    ) -> RailShape {
         match (first, second) {
-            (BlockDirection::North, BlockDirection::South)
-            | (BlockDirection::South, BlockDirection::North) => RailShape::NorthSouth,
+            (HorizontalFacing::North, HorizontalFacing::South)
+            | (HorizontalFacing::South, HorizontalFacing::North) => RailShape::NorthSouth,
 
-            (BlockDirection::East, BlockDirection::West)
-            | (BlockDirection::West, BlockDirection::East) => RailShape::EastWest,
+            (HorizontalFacing::East, HorizontalFacing::West)
+            | (HorizontalFacing::West, HorizontalFacing::East) => RailShape::EastWest,
 
-            (BlockDirection::South, BlockDirection::East)
-            | (BlockDirection::East, BlockDirection::South) => {
+            (HorizontalFacing::South, HorizontalFacing::East)
+            | (HorizontalFacing::East, HorizontalFacing::South) => {
                 if self.properties.can_curve() {
                     RailShape::SouthEast
                 } else {
@@ -114,8 +120,8 @@ impl Rail {
                 }
             }
 
-            (BlockDirection::South, BlockDirection::West)
-            | (BlockDirection::West, BlockDirection::South) => {
+            (HorizontalFacing::South, HorizontalFacing::West)
+            | (HorizontalFacing::West, HorizontalFacing::South) => {
                 if self.properties.can_curve() {
                     RailShape::SouthWest
                 } else {
@@ -123,8 +129,8 @@ impl Rail {
                 }
             }
 
-            (BlockDirection::North, BlockDirection::West)
-            | (BlockDirection::West, BlockDirection::North) => {
+            (HorizontalFacing::North, HorizontalFacing::West)
+            | (HorizontalFacing::West, HorizontalFacing::North) => {
                 if self.properties.can_curve() {
                     RailShape::NorthWest
                 } else {
@@ -132,8 +138,8 @@ impl Rail {
                 }
             }
 
-            (BlockDirection::North, BlockDirection::East)
-            | (BlockDirection::East, BlockDirection::North) => {
+            (HorizontalFacing::North, HorizontalFacing::East)
+            | (HorizontalFacing::East, HorizontalFacing::North) => {
                 if self.properties.can_curve() {
                     RailShape::NorthEast
                 } else {
@@ -157,9 +163,9 @@ enum RailProperties {
 impl RailProperties {
     pub fn default(block: &Block) -> Self {
         if *block == Block::RAIL {
-            RailProperties::Rail(pumpkin_data::block::RailLikeProperties::default(block))
+            Self::Rail(pumpkin_data::block::RailLikeProperties::default(block))
         } else {
-            RailProperties::StraightRail(pumpkin_data::block::PoweredRailLikeProperties::default(
+            Self::StraightRail(pumpkin_data::block::PoweredRailLikeProperties::default(
                 block,
             ))
         }
@@ -167,11 +173,11 @@ impl RailProperties {
 
     pub fn new(state_id: u16, block: &Block) -> Self {
         if *block == Block::RAIL {
-            RailProperties::Rail(pumpkin_data::block::RailLikeProperties::from_state_id(
+            Self::Rail(pumpkin_data::block::RailLikeProperties::from_state_id(
                 state_id, block,
             ))
         } else {
-            RailProperties::StraightRail(
+            Self::StraightRail(
                 pumpkin_data::block::PoweredRailLikeProperties::from_state_id(state_id, block),
             )
         }
@@ -179,15 +185,15 @@ impl RailProperties {
 
     fn can_curve(&self) -> bool {
         match self {
-            RailProperties::Rail(_) => true,
-            RailProperties::StraightRail(_) => false,
+            Self::Rail(_) => true,
+            Self::StraightRail(_) => false,
         }
     }
 
     fn shape(&self) -> RailShape {
         match self {
-            RailProperties::Rail(props) => props.shape,
-            RailProperties::StraightRail(props) => match props.shape {
+            Self::Rail(props) => props.shape,
+            Self::StraightRail(props) => match props.shape {
                 StraightRailShape::NorthSouth => RailShape::NorthSouth,
                 StraightRailShape::EastWest => RailShape::EastWest,
                 StraightRailShape::AscendingEast => RailShape::AscendingEast,
@@ -198,42 +204,48 @@ impl RailProperties {
         }
     }
 
-    fn directions(&self) -> [BlockDirection; 2] {
+    fn directions(&self) -> [HorizontalFacing; 2] {
         match self {
-            RailProperties::Rail(props) => match props.shape {
-                RailShape::NorthSouth => [BlockDirection::North, BlockDirection::South],
-                RailShape::EastWest => [BlockDirection::East, BlockDirection::West],
-                RailShape::AscendingEast => [BlockDirection::East, BlockDirection::West],
-                RailShape::AscendingWest => [BlockDirection::West, BlockDirection::East],
-                RailShape::AscendingNorth => [BlockDirection::North, BlockDirection::South],
-                RailShape::AscendingSouth => [BlockDirection::South, BlockDirection::North],
-                RailShape::SouthEast => [BlockDirection::South, BlockDirection::East],
-                RailShape::SouthWest => [BlockDirection::South, BlockDirection::West],
-                RailShape::NorthWest => [BlockDirection::North, BlockDirection::West],
-                RailShape::NorthEast => [BlockDirection::North, BlockDirection::East],
+            Self::Rail(props) => match props.shape {
+                RailShape::EastWest | RailShape::AscendingEast | RailShape::AscendingWest => {
+                    [HorizontalFacing::West, HorizontalFacing::East]
+                }
+                RailShape::NorthSouth | RailShape::AscendingNorth | RailShape::AscendingSouth => {
+                    [HorizontalFacing::South, HorizontalFacing::North]
+                }
+                RailShape::SouthEast => [HorizontalFacing::South, HorizontalFacing::East],
+                RailShape::SouthWest => [HorizontalFacing::South, HorizontalFacing::West],
+                RailShape::NorthWest => [HorizontalFacing::North, HorizontalFacing::West],
+                RailShape::NorthEast => [HorizontalFacing::North, HorizontalFacing::East],
             },
-            RailProperties::StraightRail(props) => match props.shape {
-                StraightRailShape::NorthSouth => [BlockDirection::South, BlockDirection::North],
-                StraightRailShape::EastWest => [BlockDirection::West, BlockDirection::East],
-                StraightRailShape::AscendingEast => [BlockDirection::West, BlockDirection::East],
-                StraightRailShape::AscendingWest => [BlockDirection::West, BlockDirection::East],
-                StraightRailShape::AscendingNorth => [BlockDirection::South, BlockDirection::North],
-                StraightRailShape::AscendingSouth => [BlockDirection::South, BlockDirection::North],
+
+            Self::StraightRail(props) => match props.shape {
+                StraightRailShape::EastWest
+                | StraightRailShape::AscendingEast
+                | StraightRailShape::AscendingWest => {
+                    [HorizontalFacing::West, HorizontalFacing::East]
+                }
+
+                StraightRailShape::NorthSouth
+                | StraightRailShape::AscendingNorth
+                | StraightRailShape::AscendingSouth => {
+                    [HorizontalFacing::South, HorizontalFacing::North]
+                }
             },
         }
     }
 
     fn to_state_id(&self, block: &Block) -> BlockStateId {
         match self {
-            RailProperties::Rail(props) => props.to_state_id(block),
-            RailProperties::StraightRail(props) => props.to_state_id(block),
+            Self::Rail(props) => props.to_state_id(block),
+            Self::StraightRail(props) => props.to_state_id(block),
         }
     }
 
     fn set_shape(&mut self, shape: RailShape) {
         match self {
-            RailProperties::Rail(props) => props.shape = shape,
-            RailProperties::StraightRail(props) => {
+            Self::Rail(props) => props.shape = shape,
+            Self::StraightRail(props) => {
                 props.shape = match shape {
                     RailShape::NorthSouth => StraightRailShape::NorthSouth,
                     RailShape::EastWest => StraightRailShape::EastWest,
@@ -257,7 +269,7 @@ enum RailElevation {
 
 async fn compute_neighbor_rail_new_shape(
     world: &World,
-    direction: &BlockDirection,
+    direction: &HorizontalFacing,
     neighbor_rail: &Rail,
 ) -> RailShape {
     let mut neighbor_connected_torwards = Vec::with_capacity(2);
@@ -312,61 +324,70 @@ async fn compute_neighbor_rail_new_shape(
         return if neighbor_rail.elevation == RailElevation::Down {
             // The rail is down so it should be ascending
             match direction {
-                BlockDirection::North => RailShape::AscendingSouth,
-                BlockDirection::South => {
+                HorizontalFacing::North => RailShape::AscendingSouth,
+                HorizontalFacing::South => {
                     if neighbor_already_connected_to_elevated {
                         RailShape::AscendingSouth
                     } else {
                         RailShape::AscendingNorth
                     }
                 }
-                BlockDirection::East => RailShape::AscendingWest,
-                BlockDirection::West => {
+                HorizontalFacing::East => RailShape::AscendingWest,
+                HorizontalFacing::West => {
                     if neighbor_already_connected_to_elevated {
                         RailShape::AscendingWest
                     } else {
                         RailShape::AscendingEast
                     }
                 }
-                _ => unreachable!("Rail cannot point vertically"),
             }
         } else if neighbor_already_connected_to_elevated {
-            match neighbor_connected_torwards[0] {
-                BlockDirection::North => RailShape::AscendingNorth,
-                BlockDirection::South => RailShape::AscendingSouth,
-                BlockDirection::East => RailShape::AscendingEast,
-                BlockDirection::West => RailShape::AscendingWest,
-                _ => unreachable!("Rail cannot point vertically"),
-            }
+            neighbor_connected_torwards[0].to_rail_shape_ascending_towards()
         } else {
             // Reset the shape to flat even if the rail already had good directions
-            neighbor_rail
-                .get_new_rail_shape(&new_neighbor_directions[0], &new_neighbor_directions[1])
+            neighbor_rail.get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
         };
     }
 
     // Handle straight rails that want to curve
     if !neighbor_rail.properties.can_curve() {
-        return if new_neighbor_directions[0] == BlockDirection::North
-            || new_neighbor_directions[0] == BlockDirection::South
+        return if new_neighbor_directions[0] == HorizontalFacing::North
+            || new_neighbor_directions[0] == HorizontalFacing::South
         {
             if neighbor_rail.elevation == RailElevation::Down {
                 // The rail is down so it should be ascending
-                match direction {
-                    BlockDirection::North => RailShape::AscendingSouth,
-                    BlockDirection::South => RailShape::AscendingNorth,
-                    BlockDirection::East => RailShape::AscendingWest,
-                    BlockDirection::West => RailShape::AscendingEast,
-                    _ => unreachable!("Rail cannot point vertically"),
-                }
+                direction.opposite().to_rail_shape_ascending_towards()
             } else {
                 neighbor_rail
-                    .get_new_rail_shape(&new_neighbor_directions[0], &new_neighbor_directions[1])
+                    .get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
             }
         } else {
             neighbor_rail.properties.shape()
         };
     }
 
-    neighbor_rail.get_new_rail_shape(&new_neighbor_directions[0], &new_neighbor_directions[1])
+    neighbor_rail.get_new_rail_shape(new_neighbor_directions[0], new_neighbor_directions[1])
+}
+
+pub trait HorizontalFacingRailExt {
+    fn to_rail_shape_flat(&self) -> RailShape;
+    fn to_rail_shape_ascending_towards(&self) -> RailShape;
+}
+
+impl HorizontalFacingRailExt for HorizontalFacing {
+    fn to_rail_shape_flat(&self) -> RailShape {
+        match self {
+            Self::North | Self::South => RailShape::NorthSouth,
+            Self::East | Self::West => RailShape::EastWest,
+        }
+    }
+
+    fn to_rail_shape_ascending_towards(&self) -> RailShape {
+        match self {
+            Self::North => RailShape::AscendingNorth,
+            Self::South => RailShape::AscendingSouth,
+            Self::East => RailShape::AscendingEast,
+            Self::West => RailShape::AscendingWest,
+        }
+    }
 }

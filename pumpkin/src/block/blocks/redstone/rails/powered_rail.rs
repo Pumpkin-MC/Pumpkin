@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 use pumpkin_data::block::Block;
-use pumpkin_data::block::HorizontalFacing;
-use pumpkin_data::block::RailShape;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::HorizontalFacingExt;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::PumpkinBlock;
@@ -15,8 +14,9 @@ use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
 
-use super::RailElevation;
-use super::{Rail, RailProperties, compute_neighbor_rail_new_shape};
+use super::{
+    HorizontalFacingRailExt, Rail, RailElevation, RailProperties, compute_neighbor_rail_new_shape,
+};
 
 #[pumpkin_block("minecraft:powered_rail")]
 pub struct PoweredRailBlock;
@@ -36,52 +36,31 @@ impl PumpkinBlock for PoweredRailBlock {
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
 
-        rail_props.set_shape(match player.living_entity.entity.get_horizontal_facing() {
-            HorizontalFacing::North => RailShape::NorthSouth,
-            HorizontalFacing::South => RailShape::NorthSouth,
-            HorizontalFacing::West => RailShape::EastWest,
-            HorizontalFacing::East => RailShape::EastWest,
-        });
+        rail_props.set_shape(
+            player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .to_rail_shape_flat(),
+        );
 
         for direction in rail_props.directions() {
             if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
                 if neighbor_rail.elevation == RailElevation::Up {
-                    rail_props.set_shape(match direction {
-                        BlockDirection::South => RailShape::AscendingSouth,
-                        BlockDirection::North => RailShape::AscendingNorth,
-                        BlockDirection::East => RailShape::AscendingEast,
-                        BlockDirection::West => RailShape::AscendingWest,
-                        _ => unreachable!("Bruh"),
-                    });
+                    rail_props.set_shape(direction.to_rail_shape_ascending_towards());
                 }
 
                 return rail_props.to_state_id(block);
             }
         }
 
-        for direction in rail_props
-            .directions()
-            .iter()
-            .map(|d| d.rotate_clockwise())
-            .rev()
-        {
+        for direction in rail_props.directions().iter().rev() {
+            let direction = direction.rotate_clockwise();
             if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
                 if neighbor_rail.elevation == RailElevation::Up {
-                    rail_props.set_shape(match direction {
-                        BlockDirection::South => RailShape::AscendingSouth,
-                        BlockDirection::North => RailShape::AscendingNorth,
-                        BlockDirection::East => RailShape::AscendingEast,
-                        BlockDirection::West => RailShape::AscendingWest,
-                        _ => unreachable!("Bruh"),
-                    });
+                    rail_props.set_shape(direction.to_rail_shape_ascending_towards());
                 } else {
-                    rail_props.set_shape(match direction {
-                        BlockDirection::North => RailShape::NorthSouth,
-                        BlockDirection::South => RailShape::NorthSouth,
-                        BlockDirection::West => RailShape::EastWest,
-                        BlockDirection::East => RailShape::EastWest,
-                        _ => unreachable!("Bruh"),
-                    });
+                    rail_props.set_shape(direction.to_rail_shape_flat());
                 }
 
                 return rail_props.to_state_id(block);
