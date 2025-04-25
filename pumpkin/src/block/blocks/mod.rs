@@ -18,6 +18,7 @@ pub(crate) mod jukebox;
 pub(crate) mod logs;
 pub(crate) mod redstone;
 pub(crate) mod signs;
+pub(crate) mod stairs;
 pub(crate) mod sugar_cane;
 pub(crate) mod tnt;
 pub(crate) mod torches;
