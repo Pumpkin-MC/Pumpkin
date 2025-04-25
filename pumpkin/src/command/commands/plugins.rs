@@ -23,7 +23,7 @@ impl CommandExecutor for Executor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let plugin_manager = PLUGIN_MANAGER.lock().await;
-        let plugins = plugin_manager.list_plugins();
+        let plugins = plugin_manager.active_plugins();
 
         let message_text = if plugins.is_empty() {
             "There are no loaded plugins.".to_string()
@@ -34,7 +34,7 @@ impl CommandExecutor for Executor {
         };
         let mut message = TextComponent::text(message_text);
 
-        for (i, (metadata, loaded)) in plugins.clone().into_iter().enumerate() {
+        for (i, metadata) in plugins.clone().into_iter().enumerate() {
             let fmt = if i == plugins.len() - 1 {
                 metadata.name.to_string()
             } else {
@@ -44,15 +44,9 @@ impl CommandExecutor for Executor {
                 "Version: {}\nAuthors: {}\nDescription: {}",
                 metadata.version, metadata.authors, metadata.description
             );
-            let component = if *loaded {
-                TextComponent::text(fmt)
-                    .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
-            } else {
-                TextComponent::text(fmt)
-                    .color_named(NamedColor::Red)
-                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)))
-            };
+            let component = TextComponent::text(fmt)
+                .color_named(NamedColor::Green)
+                .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
             message = message.add_child(component);
         }
 

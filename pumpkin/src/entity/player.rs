@@ -265,7 +265,6 @@ impl Player {
         );
         let player_uuid = gameprofile.id;
 
-        let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
 
         Self {
@@ -310,16 +309,10 @@ impl Player {
             client_loaded_timeout: AtomicU32::new(60),
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
-            permission_lvl: OPERATOR_CONFIG
-                .read()
-                .await
-                .ops
-                .iter()
-                .find(|op| op.uuid == gameprofile_clone.id)
-                .map_or(
-                    AtomicCell::new(advanced_config().commands.default_op_level),
-                    |op| AtomicCell::new(op.level),
-                ),
+            permission_lvl: OPERATOR_CONFIG.read().await.get_entry(&player_uuid).map_or(
+                AtomicCell::new(advanced_config().commands.default_op_level),
+                |op| AtomicCell::new(op.level),
+            ),
             inventory: Mutex::new(PlayerInventory::new()),
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),

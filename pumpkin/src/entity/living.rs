@@ -258,8 +258,10 @@ impl EntityBase for LivingEntity {
             self.time_until_regen.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
-            let time = self.death_time.fetch_add(1, Relaxed);
-            if time >= 20 {
+            let time = self
+                .death_time
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if time == 20 {
                 // Spawn Death particles
                 self.entity
                     .world

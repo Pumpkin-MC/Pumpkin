@@ -30,7 +30,7 @@ use rand::prelude::SliceRandom;
 use rsa::RsaPublicKey;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::{
     sync::{Arc, atomic::Ordering},
     time::Duration,
@@ -83,6 +83,8 @@ pub struct Server {
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    // Whether the server whitelist is on or off
+    pub white_list: AtomicBool,
     tasks: TaskTracker,
 }
 
@@ -143,6 +145,7 @@ impl Server {
                 format!("{world_name}/playerdata"),
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
+            white_list: AtomicBool::new(BASIC_CONFIG.white_list),
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
         }
