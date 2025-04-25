@@ -1330,7 +1330,7 @@ impl Player {
         self.set_experience(new_level, progress, points).await;
     }
 
-    pub async fn add_effect(&self, effect: Effect, keep_fading: bool) {
+    pub async fn add_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1342,9 +1342,10 @@ impl Player {
         if effect.show_icon {
             flag |= 4;
         }
-        if keep_fading {
+        if effect.blend {
             flag |= 8;
         }
+
         let effect_id = VarInt(effect.r#type as i32);
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(
@@ -1356,6 +1357,41 @@ impl Player {
             ))
             .await;
         self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn remove_effect(&self, effect_type: EffectType) {
+        let effect_id = VarInt(effect_type as i32);
+        self.client
+            .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                self.entity_id().into(),
+                effect_id,
+            ))
+            .await;
+        self.living_entity.remove_effect(effect_type).await;
+
+        // TODO broadcast metadata
+    }
+
+    pub async fn remove_all_effect(&self) -> u8 {
+        let mut count = 0;
+        let mut effect_list = vec![];
+        for effect in self.living_entity.active_effects.lock().await.keys() {
+            effect_list.push(*effect);
+            let effect_id = VarInt(*effect as i32);
+            self.client
+                .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    effect_id,
+                ))
+                .await;
+            count += 1;
+        }
+        //Need to remove effect after because the player effect are lock in the for before
+        for effect in effect_list {
+            self.living_entity.remove_effect(effect).await;
+        }
+
+        count
     }
 
     /// Add experience levels to the player.
