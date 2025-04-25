@@ -49,15 +49,17 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
+use pumpkin_protocol::client::play::{
+    CSetHeldItem, CTeleportEntity, PlayerInfoFlags, PreviousMessage,
+};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
         CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
-        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+        GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
     ser::packet::Packet,
@@ -184,6 +186,8 @@ pub struct Player {
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
+    /// The player's previous gamemode
+    pub previous_gamemode: AtomicCell<Option<GameMode>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -287,6 +291,7 @@ impl Player {
             mining_pos: Mutex::new(BlockPos(Vector3::new(0, 0, 0))),
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
+            previous_gamemode: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -938,30 +943,23 @@ impl Player {
                 to: position,
                 cancelled: false,
             };
-
             'after: {
                 let position = event.to;
-                self.living_entity
-                    .entity
+                let entity = self.get_entity();
+                self.request_teleport(position, yaw, pitch).await;
+                entity
                     .world
                     .read()
                     .await
-                    .broadcast_packet_all(&CTeleportEntity::new(
+                    .broadcast_packet_except(&[self.gameprofile.id], &CTeleportEntity::new(
                         self.living_entity.entity.entity_id.into(),
                         position,
                         Vector3::new(0.0, 0.0, 0.0),
                         yaw,
                         pitch,
-                        // TODO
-                        &[],
-                        self.living_entity
-                            .entity
-                            .on_ground
-                            .load(std::sync::atomic::Ordering::SeqCst),
+                        entity.on_ground.load(Ordering::SeqCst),
                     ))
                     .await;
-                self.living_entity.entity.set_pos(position);
-                self.living_entity.entity.set_rotation(yaw, pitch);
             }
         }}
     }
@@ -1102,6 +1100,9 @@ impl Player {
             'after: {
                 let gamemode = event.new_gamemode;
                 self.gamemode.store(gamemode);
+                // TODO: Fix this when mojang fixes it
+                // This is intentional to keep the pure vanilla mojang experience
+                // self.previous_gamemode.store(self.previous_gamemode.load());
                 {
                     // Use another scope so that we instantly unlock `abilities`.
                     let mut abilities = self.abilities.lock().await;
@@ -1424,6 +1425,9 @@ impl NBTStorage for Player {
             + self.experience_points.load(Relaxed);
         nbt.put_int("XpTotal", total_exp);
         nbt.put_byte("playerGameType", self.gamemode.load() as i8);
+        if let Some(previous_gamemode) = self.previous_gamemode.load() {
+            nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
+        }
 
         nbt.put_bool("HasPlayedBefore", self.has_played_before.load(Relaxed));
 
@@ -1441,8 +1445,15 @@ impl NBTStorage for Player {
                 .unwrap_or(GameMode::Survival),
         );
 
-        self.has_played_before
-            .store(nbt.get_bool("HasPlayedBefore").unwrap_or(false), Relaxed);
+        self.previous_gamemode.store(
+            nbt.get_byte("previousPlayerGameType")
+                .and_then(|byte| GameMode::try_from(byte).ok()),
+        );
+
+        self.has_played_before.store(
+            nbt.get_bool("HasPlayedBefore").unwrap_or(false),
+            Relaxed,
+        );
 
         // Load food level, saturation, exhaustion, and tick timer
         self.hunger_manager.read_nbt(nbt).await;
