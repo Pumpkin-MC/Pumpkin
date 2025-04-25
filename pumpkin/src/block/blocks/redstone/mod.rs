@@ -14,6 +14,7 @@ pub(crate) mod buttons;
 pub(crate) mod lever;
 pub(crate) mod observer;
 pub(crate) mod piston;
+pub(crate) mod rails;
 pub(crate) mod redstone_block;
 pub(crate) mod redstone_lamp;
 pub(crate) mod redstone_torch;
