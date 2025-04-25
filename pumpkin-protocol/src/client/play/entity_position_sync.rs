@@ -5,8 +5,8 @@ use serde::Serialize;
 
 use crate::VarInt;
 
-// https://minecraft.wiki/w/Java_Edition_protocol#Synchronize_Vehicle_Position
-// Badly documented and confusing packet imo
+/// Synchronize entity position and rotation to the client.
+/// The entity must not be the player itself, nor its vehicles.
 #[packet(PLAY_ENTITY_POSITION_SYNC)]
 #[derive(Serialize)]
 pub struct CEntityPositionSync {
