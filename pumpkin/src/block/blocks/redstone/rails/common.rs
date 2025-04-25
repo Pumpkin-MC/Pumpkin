@@ -42,7 +42,7 @@ pub(super) async fn compute_placed_rail_shape(
     block_pos: &BlockPos,
     player_facing: HorizontalFacing,
 ) -> StraightRailShape {
-    let prefered_directions = match player_facing {
+    let preferred_directions = match player_facing {
         HorizontalFacing::North | HorizontalFacing::South => [
             HorizontalFacing::South,
             HorizontalFacing::North,
@@ -57,7 +57,7 @@ pub(super) async fn compute_placed_rail_shape(
         ],
     };
 
-    for direction in prefered_directions {
+    for direction in preferred_directions {
         if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
             if neighbor_rail.elevation == RailElevation::Up {
                 return direction.to_rail_shape_ascending_towards();
