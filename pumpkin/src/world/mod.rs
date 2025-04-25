@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -22,7 +23,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use border::Worldborder;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
@@ -35,6 +36,8 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::to_bytes_unnamed;
+use pumpkin_protocol::client::play::{CSetEntityMetadata, MetaDataType, Metadata};
+use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
@@ -64,6 +67,7 @@ use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
+use serde::Serialize;
 use thiserror::Error;
 use time::LevelTime;
 use tokio::sync::{RwLock, mpsc};
@@ -569,7 +573,10 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            (PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_GAME_MODE).bits(),
+            (PlayerInfoFlags::ADD_PLAYER
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_LISTED)
+                .bits(),
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
@@ -578,6 +585,7 @@ impl World {
                         properties: &gameprofile.properties,
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
+                    PlayerAction::UpdateListed(true),
                 ],
             }],
         ))
@@ -595,10 +603,13 @@ impl World {
             {
                 let chat_session = player.chat_session.lock().await;
 
-                let mut player_actions = vec![PlayerAction::AddPlayer {
-                    name: &player.gameprofile.name,
-                    properties: &player.gameprofile.properties,
-                }];
+                let mut player_actions = vec![
+                    PlayerAction::AddPlayer {
+                        name: &player.gameprofile.name,
+                        properties: &player.gameprofile.properties,
+                    },
+                    PlayerAction::UpdateListed(true),
+                ];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -612,7 +623,7 @@ impl World {
                 current_player_data.push((&player.gameprofile.id, player_actions));
             }
 
-            let mut action_flags = PlayerInfoFlags::ADD_PLAYER;
+            let mut action_flags = PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_LISTED;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -674,27 +685,28 @@ impl World {
                     entity.velocity.load(),
                 ))
                 .await;
-        }
+            let config = existing_player.config.lock().await;
+            let mut buf = Vec::new();
+            for meta in [
+                Metadata::new(17, MetaDataType::Byte, config.skin_parts),
+                Metadata::new(18, MetaDataType::Byte, config.main_hand as u8),
+            ] {
+                let mut serializer_buf = Vec::new();
 
-        {
-            let players: Vec<_> = self.players.read().await.values().cloned().collect();
-            // Set skin parts and tablist
-            for player in players {
-                //Set / Update skin part for every player
-                player.send_client_information().await;
-
-                //Update tablist
-                //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
-                self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-                    0x08,
-                    &[pumpkin_protocol::client::play::Player {
-                        uuid: player.gameprofile.id,
-                        actions: &[PlayerAction::UpdateListed(true)],
-                    }],
+                let mut serializer = Serializer::new(&mut serializer_buf);
+                meta.serialize(&mut serializer).unwrap();
+                buf.extend(serializer_buf);
+            }
+            buf.put_u8(255);
+            player
+                .client
+                .enqueue_packet(&CSetEntityMetadata::new(
+                    existing_player.get_entity().entity_id.into(),
+                    buf.into(),
                 ))
                 .await;
-            }
         }
+        player.send_client_information().await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
