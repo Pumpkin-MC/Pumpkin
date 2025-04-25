@@ -5,7 +5,7 @@ use std::{
     ops::AddAssign,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering::Relaxed},
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering::{self, Relaxed}},
     },
     time::{Duration, Instant},
 };
@@ -1450,13 +1450,10 @@ impl NBTStorage for Player {
                 .and_then(|byte| GameMode::try_from(byte).ok()),
         );
 
-        self.previous_gamemode.store(
-            nbt.get_byte("previousPlayerGameType")
-                .and_then(|byte| GameMode::try_from(byte).ok()),
+        self.has_played_before.store(
+            nbt.get_bool("HasPlayedBefore").unwrap_or(false),
+            Relaxed,
         );
-
-        self.has_played_before
-            .store(nbt.get_bool("HasPlayedBefore").unwrap_or(false), Relaxed);
 
         // Load food level, saturation, exhaustion, and tick timer
         self.hunger_manager.read_nbt(nbt).await;
