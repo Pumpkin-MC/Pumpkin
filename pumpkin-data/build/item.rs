@@ -16,7 +16,6 @@ pub struct Item {
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemComponents {
     #[serde(rename = "minecraft:item_name")]
-    // TODO: TextComponent
     pub item_name: TextComponent,
     #[serde(rename = "minecraft:max_stack_size")]
     pub max_stack_size: u8,
