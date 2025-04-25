@@ -5,7 +5,7 @@ use std::{
     ops::AddAssign,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering::Relaxed},
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering::{self, Relaxed}},
     },
     time::{Duration, Instant},
 };
