@@ -13,7 +13,6 @@ pub(crate) mod doors;
 pub(crate) mod farmland;
 pub(crate) mod fence_gates;
 pub(crate) mod fences;
-pub(crate) mod fluids;
 pub(crate) mod furnace;
 pub(crate) mod jukebox;
 pub(crate) mod logs;
@@ -22,6 +21,7 @@ pub(crate) mod signs;
 pub(crate) mod sugar_cane;
 pub(crate) mod tnt;
 pub(crate) mod torches;
+
 /// The standard destroy with container removes the player forcibly from the container,
 /// drops items to the floor, and back to the player's inventory if the item stack is in movement.
 pub async fn standard_on_broken_with_container(
