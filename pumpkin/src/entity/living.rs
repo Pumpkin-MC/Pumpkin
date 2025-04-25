@@ -1,10 +1,13 @@
 use std::sync::atomic::AtomicU8;
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
+use super::EntityBase;
+use super::{Entity, EntityId, NBTStorage, effect::Effect};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
+use pumpkin_data::block::Block;
 use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
@@ -17,9 +20,6 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
-
-use super::EntityBase;
-use super::{Entity, EntityId, NBTStorage, effect::Effect};
 
 /// Represents a living entity within the game world.
 ///
@@ -151,6 +151,12 @@ impl LivingEntity {
         // TODO broadcast metadata
     }
 
+    pub async fn remove_effect(&self, effect_type: EffectType) {
+        let mut effects = self.active_effects.lock().await;
+        effects.remove(&effect_type);
+        // TODO broadcast metadata
+    }
+
     pub async fn has_effect(&self, effect: EffectType) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)
@@ -182,6 +188,16 @@ impl LivingEntity {
         amount > 0.0
     }
 
+    // Check if the entity is in water
+    pub async fn is_in_water(&self) -> bool {
+        let world = self.entity.world.read().await;
+        let block_pos = self.entity.block_pos.load();
+        world
+            .get_block(&block_pos)
+            .await
+            .is_ok_and(|block| block == Block::WATER)
+    }
+
     pub async fn update_fall_distance(
         &self,
         height_difference: f64,
@@ -190,7 +206,7 @@ impl LivingEntity {
     ) {
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
-            if fall_distance <= 0.0 || dont_damage {
+            if fall_distance <= 0.0 || dont_damage || self.is_in_water().await {
                 return;
             }
 
@@ -256,7 +272,9 @@ impl EntityBase for LivingEntity {
             let time = self
                 .death_time
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if time >= 20 {
+
+            // Only remove entity and send remove packets once
+            if time == 20 {
                 // Spawn Death particles
                 self.entity
                     .world

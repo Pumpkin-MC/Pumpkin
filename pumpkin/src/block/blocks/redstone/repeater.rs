@@ -51,6 +51,15 @@ impl PumpkinBlock for RepeaterBlock {
             .opposite();
         props.facing = dir;
         props.locked = Boolean::from_bool(should_be_locked(&dir, world, block_pos).await);
+
+        if !props.locked.to_bool() {
+            props.powered = if should_be_powered(props, world, block_pos).await {
+                Boolean::True
+            } else {
+                Boolean::False
+            }
+        }
+
         props.to_state_id(block)
     }
 
@@ -197,8 +206,8 @@ async fn on_use(props: RepeaterProperties, world: &Arc<World>, block_pos: BlockP
 }
 
 async fn should_be_locked(facing: &HorizontalFacing, world: &World, pos: &BlockPos) -> bool {
-    let right_side = get_power_on_side(world, pos, facing.rotate()).await;
-    let left_side = get_power_on_side(world, pos, facing.rotate_ccw()).await;
+    let right_side = get_power_on_side(world, pos, facing.rotate_clockwise()).await;
+    let left_side = get_power_on_side(world, pos, facing.rotate_counter_clockwise()).await;
     std::cmp::max(right_side, left_side) > 0
 }
 
