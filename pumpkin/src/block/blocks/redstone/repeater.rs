@@ -52,7 +52,7 @@ impl PumpkinBlock for RepeaterBlock {
         props.locked = should_be_locked(&dir, world, block_pos).await;
 
         if !props.locked {
-            props.powered = should_be_powered(props, world, block_pos).await
+            props.powered = should_be_powered(props, world, block_pos).await;
         }
 
         props.to_state_id(block)
