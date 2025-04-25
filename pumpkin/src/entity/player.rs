@@ -48,15 +48,17 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CSetHeldItem, PlayerInfoFlags, PreviousMessage};
+use pumpkin_protocol::client::play::{
+    CSetHeldItem, CTeleportEntity, PlayerInfoFlags, PreviousMessage,
+};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
         CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
-        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+        GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
     ser::packet::Packet,
@@ -259,7 +261,6 @@ impl Player {
         );
         let player_uuid = gameprofile.id;
 
-        let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
 
         Self {
@@ -304,16 +305,10 @@ impl Player {
             client_loaded_timeout: AtomicU32::new(60),
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
-            permission_lvl: OPERATOR_CONFIG
-                .read()
-                .await
-                .ops
-                .iter()
-                .find(|op| op.uuid == gameprofile_clone.id)
-                .map_or(
-                    AtomicCell::new(advanced_config().commands.default_op_level),
-                    |op| AtomicCell::new(op.level),
-                ),
+            permission_lvl: OPERATOR_CONFIG.read().await.get_entry(&player_uuid).map_or(
+                AtomicCell::new(advanced_config().commands.default_op_level),
+                |op| AtomicCell::new(op.level),
+            ),
             inventory: Mutex::new(PlayerInventory::new()),
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
@@ -954,30 +949,23 @@ impl Player {
                 to: position,
                 cancelled: false,
             };
-
             'after: {
                 let position = event.to;
-                self.living_entity
-                    .entity
+                let entity = self.get_entity();
+                self.request_teleport(position, yaw, pitch).await;
+                entity
                     .world
                     .read()
                     .await
-                    .broadcast_packet_all(&CTeleportEntity::new(
+                    .broadcast_packet_except(&[self.gameprofile.id], &CTeleportEntity::new(
                         self.living_entity.entity.entity_id.into(),
                         position,
                         Vector3::new(0.0, 0.0, 0.0),
                         yaw,
                         pitch,
-                        // TODO
-                        &[],
-                        self.living_entity
-                            .entity
-                            .on_ground
-                            .load(std::sync::atomic::Ordering::SeqCst),
+                        entity.on_ground.load(Ordering::SeqCst),
                     ))
                     .await;
-                self.living_entity.entity.set_pos(position);
-                self.living_entity.entity.set_rotation(yaw, pitch);
             }
         }}
     }
@@ -1341,7 +1329,7 @@ impl Player {
         self.set_experience(new_level, progress, points).await;
     }
 
-    pub async fn add_effect(&self, effect: Effect, keep_fading: bool) {
+    pub async fn add_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1353,9 +1341,10 @@ impl Player {
         if effect.show_icon {
             flag |= 4;
         }
-        if keep_fading {
+        if effect.blend {
             flag |= 8;
         }
+
         let effect_id = VarInt(effect.r#type as i32);
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(
@@ -1367,6 +1356,41 @@ impl Player {
             ))
             .await;
         self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn remove_effect(&self, effect_type: EffectType) {
+        let effect_id = VarInt(effect_type as i32);
+        self.client
+            .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                self.entity_id().into(),
+                effect_id,
+            ))
+            .await;
+        self.living_entity.remove_effect(effect_type).await;
+
+        // TODO broadcast metadata
+    }
+
+    pub async fn remove_all_effect(&self) -> u8 {
+        let mut count = 0;
+        let mut effect_list = vec![];
+        for effect in self.living_entity.active_effects.lock().await.keys() {
+            effect_list.push(*effect);
+            let effect_id = VarInt(*effect as i32);
+            self.client
+                .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    effect_id,
+                ))
+                .await;
+            count += 1;
+        }
+        //Need to remove effect after because the player effect are lock in the for before
+        for effect in effect_list {
+            self.living_entity.remove_effect(effect).await;
+        }
+
+        count
     }
 
     /// Add experience levels to the player.
