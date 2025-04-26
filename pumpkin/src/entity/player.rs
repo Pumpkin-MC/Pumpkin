@@ -1019,7 +1019,7 @@ impl Player {
         if abilities.invulnerable {
             return;
         }
-        self.hunger_manager.add_exhausten(exhaustion);
+        self.hunger_manager.add_exhaustion(exhaustion);
     }
 
     pub async fn heal(&self, additional_health: f32) {
