@@ -41,18 +41,26 @@ pub trait Slot: Send + Sync + Debug {
         true
     }
 
-    /// Not used due to Rust's borrow checker, use get_inventory() instead
+    async fn get_stack(&self) -> Arc<Mutex<ItemStack>> {
+        self.get_inventory()
+            .lock()
+            .await
+            .get_stack(self.get_index())
+    }
+
     async fn get_cloned_stack(&self) -> ItemStack {
         self.get_inventory()
             .lock()
             .await
             .get_stack(self.get_index())
+            .lock()
+            .await
             .clone()
     }
 
     async fn has_stack(&self) -> bool {
-        let mut inv = self.get_inventory().lock().await;
-        !inv.get_stack(self.get_index()).is_empty()
+        let inv = self.get_inventory().lock().await;
+        !inv.get_stack(self.get_index()).lock().await.is_empty()
     }
 
     async fn set_stack(&self, stack: ItemStack) {
@@ -83,9 +91,8 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn take_stack(&self, amount: u8) -> ItemStack {
-        let mut inv = self.get_inventory().lock().await;
-        let stack = inv.remove_stack_specific(self.get_index(), amount);
-        drop(inv);
+        let inv = self.get_inventory().lock().await;
+        let stack = inv.remove_stack_specific(self.get_index(), amount).await;
         stack
     }
 
@@ -114,6 +121,8 @@ pub trait Slot: Send + Sync + Debug {
                 .lock()
                 .await
                 .get_stack(self.get_index())
+                .lock()
+                .await
                 .is_empty()
             {
                 self.set_stack_prev(ItemStack::EMPTY, stack.clone()).await;
@@ -140,8 +149,9 @@ pub trait Slot: Send + Sync + Debug {
 
     async fn insert_stack_count(&self, mut stack: ItemStack, count: u8) -> ItemStack {
         if !stack.is_empty() && self.can_insert(&stack).await {
-            let mut inv = self.get_inventory().lock().await;
-            let stack_self = inv.get_stack(self.get_index());
+            let inv = self.get_inventory().lock().await;
+            let stack_mutex = inv.get_stack(self.get_index());
+            let mut stack_self = stack_mutex.lock().await;
             let min_count = count
                 .min(stack.item_count)
                 .min(self.get_max_item_count_for_stack(&stack).await - stack_self.item_count);

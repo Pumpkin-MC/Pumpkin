@@ -1,13 +1,14 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use pumpkin_world::item::ItemStack;
+use tokio::sync::Mutex;
 
 use crate::equipment_slot::EquipmentSlot;
 
 // EntityEquipment.java
 #[derive(Debug, Clone)]
 pub struct EntityEquipment {
-    pub equipment: HashMap<EquipmentSlot, ItemStack>,
+    pub equipment: HashMap<EquipmentSlot, Arc<Mutex<ItemStack>>>,
 }
 
 impl EntityEquipment {
@@ -17,27 +18,25 @@ impl EntityEquipment {
         }
     }
 
-    pub fn put(&mut self, slot: &EquipmentSlot, stack: ItemStack) {
-        self.equipment.insert(slot.clone(), stack);
-    }
-
-    pub fn remove(&mut self, slot: &EquipmentSlot) -> ItemStack {
-        self.equipment.remove(slot).unwrap_or(ItemStack::EMPTY)
-    }
-
-    pub fn get(&self, slot: &EquipmentSlot) -> &ItemStack {
-        self.equipment.get(slot).unwrap_or(&ItemStack::EMPTY)
-    }
-
-    pub fn get_mut(&mut self, slot: &EquipmentSlot) -> &mut ItemStack {
+    pub async fn put(&mut self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
         self.equipment
-            .entry(slot.clone())
-            .or_insert(ItemStack::EMPTY)
+            .insert(slot.clone(), Arc::new(Mutex::new(stack)))
+            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY)))
+            .lock()
+            .await
+            .clone()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn get(&self, slot: &EquipmentSlot) -> Arc<Mutex<ItemStack>> {
+        self.equipment
+            .get(slot)
+            .cloned()
+            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY)))
+    }
+
+    pub async fn is_empty(&self) -> bool {
         for stack in self.equipment.values() {
-            if !stack.is_empty() {
+            if !stack.lock().await.is_empty() {
                 return false;
             }
         }

@@ -67,7 +67,6 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                             println!("component_type_to_remove: {:?}", component_type);
                         }
 
-                        
                         /*return Err(de::Error::custom(
                             "Slot components are currently unsupported",
                         )); */
@@ -80,7 +79,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                     ItemStackSerializer(Cow::Owned(ItemStack::new(
                         item_count.0 as u8,
-                        Item::from_id(item_id).unwrap_or(Item::AIR),
+                        Item::from_id(item_id).unwrap_or(&Item::AIR),
                     )))
                 };
 

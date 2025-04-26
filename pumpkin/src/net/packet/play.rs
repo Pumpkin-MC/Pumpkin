@@ -1153,7 +1153,7 @@ impl Player {
 
                     let inventory = self.inventory().lock().await;
                     let held = inventory.held_item();
-                    if !server.item_registry.can_mine(&held.item, self) {
+                    if !server.item_registry.can_mine(held.lock().await.item, self) {
                         self.client
                             .enqueue_packet(&CBlockUpdate::new(
                                 location,
@@ -1380,7 +1380,8 @@ impl Player {
         };
 
         let inventory = self.inventory().lock().await;
-        let held_item = inventory.held_item().clone();
+        let binding = inventory.held_item();
+        let mut held_item = binding.lock().await;
         drop(inventory);
 
         let entity = &self.living_entity.entity;
@@ -1436,9 +1437,7 @@ impl Player {
             // TODO: Config
             // Decrease block count
             if self.gamemode.load() != GameMode::Creative {
-                let mut inventory = self.inventory().lock().await;
-
-                inventory.held_item_mut().decrement(1);
+                held_item.decrement(1);
                 // TODO: this should be by use item on not currently selected as they might be different
                 /* TODO: Inv
                 let _ = self
@@ -1477,7 +1476,8 @@ impl Player {
             return;
         }
         let inventory = self.inventory().lock().await;
-        let held = inventory.held_item();
+        let binding = inventory.held_item();
+        let held = binding.lock().await;
         server.item_registry.on_use(&held.item, self).await;
     }
 
@@ -1489,8 +1489,9 @@ impl Player {
         }
         let mut inv = self.inventory().lock().await;
         inv.set_selected_slot(slot as u8);
-        let stack = inv.held_item();
-        let equipment = &[(EquipmentSlot::MainHand, stack.clone())];
+        let stack = inv.held_item().lock().await.clone();
+        drop(inv);
+        let equipment = &[(EquipmentSlot::MainHand, stack)];
         self.living_entity.send_equipment_changes(equipment).await;
     }
 

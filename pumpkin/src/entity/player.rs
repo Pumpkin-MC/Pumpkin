@@ -445,7 +445,7 @@ impl Player {
 
         // Get the attack damage
         // TODO: this should be cached in memory, we shouldn't just use default here either
-        if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
+        if let Some(modifiers) = item_stack.lock().await.item.components.attribute_modifiers {
             for item_mod in modifiers {
                 if item_mod.operation == Operation::AddValue {
                     if item_mod.id == "minecraft:base_attack_damage" {
@@ -1216,6 +1216,8 @@ impl Player {
                 .lock()
                 .await
                 .held_item()
+                .lock()
+                .await
                 .is_correct_for_drops(block_name)
     }
 
@@ -1225,6 +1227,8 @@ impl Player {
             .lock()
             .await
             .held_item()
+            .lock()
+            .await
             .get_speed(block_name);
         // Haste
         if self.living_entity.has_effect(EffectType::Haste).await
@@ -1302,8 +1306,9 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        let mut inv = self.inventory.lock().await;
-        let item_stack = inv.held_item_mut();
+        let inv = self.inventory.lock().await;
+        let binding = inv.held_item();
+        let mut item_stack = binding.lock().await;
 
         if !item_stack.is_empty() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
@@ -1590,8 +1595,7 @@ impl Player {
             .on_slot_click(slot as i32, packet.button as i32, packet.mode.clone(), self)
             .await;
 
-        for (key, value) in packet.array_of_changed_slots {
-        }
+        for (key, value) in packet.array_of_changed_slots {}
     }
 }
 

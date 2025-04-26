@@ -15,11 +15,10 @@ pub enum Rarity {
     Epic,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct ItemStack {
     pub item_count: u8,
-    // TODO: Should this be a ref? all of our items are const
-    pub item: Item,
+    pub item: &'static Item,
 }
 
 impl Hash for ItemStack {
@@ -38,10 +37,10 @@ impl PartialEq for ItemStack {
 impl ItemStack {
     pub const EMPTY: ItemStack = ItemStack {
         item_count: 0,
-        item: Item::AIR,
+        item: &Item::AIR,
     };
 
-    pub fn new(item_count: u8, item: Item) -> Self {
+    pub fn new(item_count: u8, item: &'static Item) -> Self {
         Self { item_count, item }
     }
 
