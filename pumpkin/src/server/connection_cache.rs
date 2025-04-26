@@ -93,11 +93,14 @@ impl CachedStatus {
     pub fn add_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            player
+            if player
                 .client
                 .added_to_server_listing
-                .store(false, Ordering::Relaxed);
-            players.online += 1;
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+            {
+                players.online += 1;
+            }
         }
 
         self.status_response_json = serde_json::to_string(&status_response)
