@@ -63,6 +63,7 @@ pub trait Slot: Send + Sync + Debug {
         !inv.get_stack(self.get_index()).lock().await.is_empty()
     }
 
+    /// Make sure to drop any locks to the slot stack before calling this
     async fn set_stack(&self, stack: ItemStack) {
         self.set_stack_no_callbacks(stack).await;
     }
@@ -149,8 +150,7 @@ pub trait Slot: Send + Sync + Debug {
 
     async fn insert_stack_count(&self, mut stack: ItemStack, count: u8) -> ItemStack {
         if !stack.is_empty() && self.can_insert(&stack).await {
-            let inv = self.get_inventory().lock().await;
-            let stack_mutex = inv.get_stack(self.get_index());
+            let stack_mutex = self.get_stack().await;
             let mut stack_self = stack_mutex.lock().await;
             let min_count = count
                 .min(stack.item_count)
@@ -160,11 +160,14 @@ pub trait Slot: Send + Sync + Debug {
                 return stack;
             } else {
                 if stack_self.is_empty() {
+                    drop(stack_self);
                     self.set_stack(stack.split(min_count)).await;
                 } else if stack.are_items_and_components_equal(&stack_self) {
                     stack.decrement(min_count);
                     stack_self.increment(min_count);
-                    self.set_stack(*stack_self).await;
+                    let cloned_stack = stack_self.clone();
+                    drop(stack_self);
+                    self.set_stack(cloned_stack).await;
                 }
 
                 return stack;

@@ -347,7 +347,6 @@ pub trait ScreenHandler: Send + Sync {
                         };
                         let taken = slot.try_take_stack_range(take_count, u8::MAX, player).await;
                         if let Some(taken) = taken {
-                            println!("Taken: {:?}", taken);
                             // Reverse order of operations, shouldn't affect anything
                             slot.on_take_item(&taken).await;
                             *cursor_stack = taken;
@@ -387,6 +386,7 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
+                println!("Done");
                 slot.mark_dirty().await;
             }
         }
