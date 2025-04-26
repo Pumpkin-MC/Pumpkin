@@ -1248,7 +1248,8 @@ impl Player {
         );
 
         // TODO: Merge stacks together
-        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count, velocity, 40).await);
+        let item_entity =
+            Arc::new(ItemEntity::new_with_velocity(entity, item_id, count, velocity, 40).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }

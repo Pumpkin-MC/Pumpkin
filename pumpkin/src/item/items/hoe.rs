@@ -9,7 +9,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
@@ -95,20 +94,8 @@ impl PumpkinItem for HoeItem {
                 };
                 let entity = world.create_entity(location, EntityType::ITEM);
                 // TODO: Merge stacks together
-                let item_entity = Arc::new(
-                    ItemEntity::new(
-                        entity,
-                        Block::HANGING_ROOTS.item_id,
-                        1,
-                        Vector3::new(
-                            rand::random::<f64>() * 0.2 - 0.1,
-                            0.2,
-                            rand::random::<f64>() * 0.2 - 0.1,
-                        ),
-                        10,
-                    )
-                    .await,
-                );
+                let item_entity =
+                    Arc::new(ItemEntity::new(entity, Block::HANGING_ROOTS.item_id, 1).await);
                 world.spawn_entity(item_entity.clone()).await;
                 item_entity.send_meta_packet().await;
             }

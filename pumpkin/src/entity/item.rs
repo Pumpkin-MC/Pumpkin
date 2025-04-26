@@ -27,7 +27,27 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
-    pub async fn new(
+    pub async fn new(entity: Entity, item_id: u16, count: u32) -> Self {
+        entity
+            .set_velocity(Vector3::new(
+                rand::random::<f64>() * 0.2 - 0.1,
+                0.2,
+                rand::random::<f64>() * 0.2 - 0.1,
+            ))
+            .await;
+        entity.yaw.store(rand::random::<f32>() * 360.0);
+        Self {
+            entity,
+            item_stack: Mutex::new(ItemStack::new(
+                count as u8,
+                Item::from_id(item_id).expect("We passed a bad item id into ItemEntity"),
+            )),
+            item_age: AtomicU32::new(0),
+            pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
+        }
+    }
+
+    pub async fn new_with_velocity(
         entity: Entity,
         item_id: u16,
         count: u32,
@@ -46,6 +66,7 @@ impl ItemEntity {
             pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
         }
     }
+
     pub async fn send_meta_packet(&self) {
         self.entity
             .send_meta_data(&[Metadata::new(
