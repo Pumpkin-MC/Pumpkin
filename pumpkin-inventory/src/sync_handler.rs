@@ -1,13 +1,6 @@
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    sync::Arc,
-};
-
-use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
 
-use crate::screen_handler::{DefaultScreenHandlerBehaviour, ScreenHandler};
+use crate::screen_handler::DefaultScreenHandlerBehaviour;
 
 pub struct SyncHandler {}
 

@@ -2,11 +2,10 @@ use std::borrow::Cow;
 
 use crate::VarInt;
 use pumpkin_data::item::Item;
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::item::ItemStack;
 use serde::{
     Deserialize, Serialize, Serializer,
-    de::{self, SeqAccess, value::SeqAccessDeserializer},
+    de::{self, SeqAccess},
 };
 
 #[derive(Debug, Clone)]

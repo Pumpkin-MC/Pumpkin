@@ -1,10 +1,4 @@
-use std::{
-    any::Any,
-    sync::{
-        Arc,
-        atomic::{AtomicU8, Ordering},
-    },
-};
+use std::{any::Any, sync::Arc};
 
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
@@ -19,12 +13,8 @@ use crate::{
     },
     equipment_slot::EquipmentSlot,
     inventory::Inventory,
-    screen_handler::{
-        DefaultScreenHandlerBehaviour, InventoryPlayer, ScreenHandler, ScreenHandlerListener,
-        ScreenProperty,
-    },
+    screen_handler::{DefaultScreenHandlerBehaviour, InventoryPlayer, ScreenHandler},
     slot::{ArmorSlot, NormalSlot, Slot},
-    sync_handler::SyncHandler,
 };
 
 use super::player_inventory::PlayerInventory;
@@ -47,10 +37,10 @@ impl PlayerScreenHandler {
     ];
 
     pub fn is_in_hotbar(slot: u8) -> bool {
-        slot >= 36 && slot < 45 || slot == 45
+        (36..45).contains(&slot) || slot == 45
     }
 
-    pub fn get_slot(&self, slot: usize) -> Arc<dyn Slot> {
+    pub async fn get_slot(&self, slot: usize) -> Arc<dyn Slot> {
         self.behaviour.slots[slot].clone()
     }
 

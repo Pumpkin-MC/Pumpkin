@@ -219,7 +219,7 @@ impl Player {
     ) -> Result<(), InventoryError> {
         // TODO: this will not update hotbar when server admin is peeking
         // TODO: check and iterate over all players in player inventory
-        let slot = ItemStackSerializer::from(item_stack.clone());
+        let slot = ItemStackSerializer::from(*item_stack);
         *state_id += 1;
         let packet = CSetContainerSlot::new(0, *state_id as i32, slot_index, &slot);
         self.client.enqueue_packet(&packet).await;

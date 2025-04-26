@@ -1407,12 +1407,12 @@ impl Player {
         if !sneaking {
             server
                 .item_registry
-                .use_on_block(&held_item.item, self, location, &face, &block, server)
+                .use_on_block(held_item.item, self, location, &face, &block, server)
                 .await;
 
             let action_result = server
                 .block_registry
-                .use_with_item(&block, self, location, &held_item.item, server, world)
+                .use_with_item(&block, self, location, held_item.item, server, world)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1478,7 +1478,7 @@ impl Player {
         let inventory = self.inventory().lock().await;
         let binding = inventory.held_item();
         let held = binding.lock().await;
-        server.item_registry.on_use(&held.item, self).await;
+        server.item_registry.on_use(held.item, self).await;
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
@@ -1489,7 +1489,7 @@ impl Player {
         }
         let mut inv = self.inventory().lock().await;
         inv.set_selected_slot(slot as u8);
-        let stack = inv.held_item().lock().await.clone();
+        let stack = *inv.held_item().lock().await;
         drop(inv);
         let equipment = &[(EquipmentSlot::MainHand, stack)];
         self.living_entity.send_equipment_changes(equipment).await;
@@ -1512,7 +1512,8 @@ impl Player {
             let mut player_screen_handler = self.player_screen_handler.lock().await;
             player_screen_handler
                 .get_slot(packet.slot as usize)
-                .set_stack(item_stack.clone())
+                .await
+                .set_stack(item_stack)
                 .await;
             player_screen_handler
                 .set_previous_tracked_slot(packet.slot as usize, item_stack)

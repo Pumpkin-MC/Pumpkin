@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::AtomicU32};
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, item::Item};
 use pumpkin_protocol::{
-    client::play::{CTakeItemEntity, MetaDataType, Metadata},
+    client::play::{MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
@@ -48,7 +48,7 @@ impl ItemEntity {
             .send_meta_data(&[Metadata::new(
                 8,
                 MetaDataType::ItemStack,
-                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                &ItemStackSerializer::from(*self.item_stack.lock().await),
             )])
             .await;
     }

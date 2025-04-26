@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 
 // These are some utility functions found in Inventories.java
 pub async fn split_stack(stacks: &[Arc<Mutex<ItemStack>>], slot: usize, amount: u8) -> ItemStack {
-    if slot == 0 && slot < stacks.len() && !stacks[slot].lock().await.is_empty() && amount > 0 {
+    if slot < stacks.len() && !stacks[slot].lock().await.is_empty() && amount > 0 {
         stacks[slot].lock().await.split(amount)
     } else {
         ItemStack::EMPTY

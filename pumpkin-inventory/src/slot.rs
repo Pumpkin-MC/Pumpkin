@@ -49,13 +49,13 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn get_cloned_stack(&self) -> ItemStack {
-        self.get_inventory()
+        *self
+            .get_inventory()
             .lock()
             .await
             .get_stack(self.get_index())
             .lock()
             .await
-            .clone()
     }
 
     async fn has_stack(&self) -> bool {
@@ -73,7 +73,7 @@ pub trait Slot: Send + Sync + Debug {
 
     async fn set_stack_no_callbacks(&self, stack: ItemStack) {
         let mut inv = self.get_inventory().lock().await;
-        inv.set_stack(self.get_index(), stack);
+        inv.set_stack(self.get_index(), stack).await;
         drop(inv);
         self.mark_dirty().await;
     }
@@ -92,8 +92,8 @@ pub trait Slot: Send + Sync + Debug {
 
     async fn take_stack(&self, amount: u8) -> ItemStack {
         let inv = self.get_inventory().lock().await;
-        let stack = inv.remove_stack_specific(self.get_index(), amount).await;
-        stack
+
+        inv.remove_stack_specific(self.get_index(), amount).await
     }
 
     async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
@@ -125,7 +125,7 @@ pub trait Slot: Send + Sync + Debug {
                 .await
                 .is_empty()
             {
-                self.set_stack_prev(ItemStack::EMPTY, stack.clone()).await;
+                self.set_stack_prev(ItemStack::EMPTY, stack).await;
             }
 
             Some(stack)
@@ -164,7 +164,7 @@ pub trait Slot: Send + Sync + Debug {
                 } else if stack.are_items_and_components_equal(&stack_self) {
                     stack.decrement(min_count);
                     stack_self.increment(min_count);
-                    self.set_stack(stack_self.clone()).await;
+                    self.set_stack(*stack_self).await;
                 }
 
                 return stack;

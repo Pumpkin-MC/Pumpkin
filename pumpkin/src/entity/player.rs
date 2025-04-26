@@ -56,7 +56,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CCloseContainer, COpenScreen, CSetContainerSlot, PlayerInfoFlags, PreviousMessage,
+    CCloseContainer, COpenScreen, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -291,7 +291,7 @@ impl Player {
                 slot: u8,
                 stack: ItemStack,
             ) {
-                println!("Slot updated: {:?}, {:?}", slot, stack);
+                println!("Slot updated: {slot:?}, {stack:?}");
             }
         }
 
@@ -1504,9 +1504,7 @@ impl Player {
         &self,
         screen_handler_factory: Option<&dyn ScreenHandlerFactory>,
     ) -> Option<u8> {
-        if screen_handler_factory.is_none() {
-            return None;
-        }
+        screen_handler_factory?;
         if !self
             .current_screen_handler
             .lock()
@@ -1556,7 +1554,7 @@ impl Player {
         let behaviour = screen_handler.get_behaviour();
 
         // behaviour is dropped here
-        if behaviour.sync_id as i32 != packet.sync_id.0 {
+        if i32::from(behaviour.sync_id) != packet.sync_id.0 {
             return;
         }
 
@@ -1576,7 +1574,7 @@ impl Player {
 
         let slot = packet.slot;
 
-        if !screen_handler.is_slot_valid(slot as i32).await {
+        if !screen_handler.is_slot_valid(i32::from(slot)).await {
             warn!(
                 "Player {} clicked invalid slot index: {}, available slots: {}",
                 self.gameprofile.name,
@@ -1588,11 +1586,16 @@ impl Player {
 
         let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
 
-        println!("not_in_sync: {:?}", not_in_sync);
+        println!("not_in_sync: {not_in_sync:?}");
 
         screen_handler.disable_sync().await;
         screen_handler
-            .on_slot_click(slot as i32, packet.button as i32, packet.mode.clone(), self)
+            .on_slot_click(
+                i32::from(slot),
+                i32::from(packet.button),
+                packet.mode.clone(),
+                self,
+            )
             .await;
 
         for (key, value) in packet.array_of_changed_slots {}
@@ -1662,7 +1665,7 @@ impl NBTStorage for Player {
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Save the selected slot (hotbar)
-        nbt.put_int("SelectedItemSlot", self.get_selected_slot() as i32);
+        nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
         // Create inventory list with the correct capacity (inventory size)
         let mut vec: Vec<NbtTag> = Vec::with_capacity(36);
@@ -1694,7 +1697,7 @@ impl NBTStorage for PlayerInventory {
                     if let Some(slot_byte) = item_compound.get_byte("Slot") {
                         let slot = slot_byte as usize;
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                            self.set_stack(slot, item_stack);
+                            self.set_stack(slot, item_stack).await;
                         }
                     }
                 }

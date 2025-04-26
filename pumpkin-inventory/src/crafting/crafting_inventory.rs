@@ -4,11 +4,7 @@ use async_trait::async_trait;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{
-    inventory::Inventory,
-    screen_handler::ScreenHandler,
-    slot::{NormalSlot, Slot},
-};
+use crate::inventory::Inventory;
 
 use super::recipies::RecipeInputInventory;
 
@@ -16,7 +12,7 @@ use super::recipies::RecipeInputInventory;
 pub struct CraftingInventory {
     pub width: u8,
     pub height: u8,
-    pub slots: Vec<ItemStack>,
+    pub slots: Vec<Arc<Mutex<ItemStack>>>,
 }
 
 impl CraftingInventory {
@@ -24,7 +20,7 @@ impl CraftingInventory {
         Self {
             width,
             height,
-            slots: vec![ItemStack::EMPTY; width as usize * height as usize],
+            slots: vec![Arc::new(Mutex::new(ItemStack::EMPTY)); width as usize * height as usize],
         }
     }
 }
@@ -40,7 +36,7 @@ impl Inventory for CraftingInventory {
     }
 
     fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
-        todo!()
+        self.slots[slot].clone()
     }
 
     async fn remove_stack(&mut self, slot: usize) -> ItemStack {

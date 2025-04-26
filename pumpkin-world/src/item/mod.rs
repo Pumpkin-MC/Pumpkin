@@ -52,7 +52,7 @@ impl ItemStack {
         if self.is_empty() {
             &Item::AIR
         } else {
-            &self.item
+            self.item
         }
     }
 
@@ -68,7 +68,7 @@ impl ItemStack {
     }
 
     pub fn copy_with_count(&self, count: u8) -> Self {
-        let mut stack = self.clone();
+        let mut stack = *self;
         stack.item_count = count;
         stack
     }
