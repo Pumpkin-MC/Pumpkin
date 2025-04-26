@@ -73,7 +73,12 @@ pub trait PumpkinBlock: Send + Sync {
 
     async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}
 
-    async fn can_place_at(&self, _world: &World, _pos: &BlockPos) -> bool {
+    async fn can_place_at(
+        &self,
+        _world: &World,
+        _block_pos: &BlockPos,
+        _face: &BlockDirection,
+    ) -> bool {
         true
     }
 

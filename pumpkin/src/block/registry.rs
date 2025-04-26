@@ -144,10 +144,16 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn can_place_at(&self, world: &World, block: &Block, block_pos: &BlockPos) -> bool {
+    pub async fn can_place_at(
+        &self,
+        world: &World,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: &BlockDirection,
+    ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.can_place_at(world, block_pos).await;
+            return pumpkin_block.can_place_at(world, block_pos, face).await;
         }
         true
     }

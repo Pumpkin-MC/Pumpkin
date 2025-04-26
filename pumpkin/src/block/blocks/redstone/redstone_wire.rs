@@ -32,7 +32,12 @@ pub struct RedstoneWireBlock;
 impl PumpkinBlock for RedstoneWireBlock {
     // Start of placement
 
-    async fn can_place_at(&self, world: &World, block_pos: &BlockPos) -> bool {
+    async fn can_place_at(
+        &self,
+        world: &World,
+        block_pos: &BlockPos,
+        _face: &BlockDirection,
+    ) -> bool {
         let floor = world.get_block_state(&block_pos.down()).await.unwrap();
         // TODO: Only check face instead of block
         return floor.is_full_cube();
@@ -196,7 +201,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        if self.can_place_at(world, pos).await {
+        if self.can_place_at(world, pos, &BlockDirection::Down).await {
             let state = world.get_block_state(pos).await.unwrap();
             let mut wire = RedstoneWireProperties::from_state_id(state.id, block);
             let new_power = calculate_power(world, pos).await;

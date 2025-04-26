@@ -38,7 +38,7 @@ impl PumpkinBlock for DirtPathBlock {
         _player: &Player,
         _replacing: BlockIsReplacing,
     ) -> BlockStateId {
-        if !self.can_place_at(world, pos).await {
+        if !self.can_place_at(world, pos, &BlockDirection::Down).await {
             return Block::DIRT.default_state_id;
         }
         block.default_state_id
@@ -54,7 +54,9 @@ impl PumpkinBlock for DirtPathBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if direction == &BlockDirection::Up && !self.can_place_at(world, pos).await {
+        if direction == &BlockDirection::Up
+            && !self.can_place_at(world, pos, &BlockDirection::Down).await
+        {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
@@ -62,7 +64,7 @@ impl PumpkinBlock for DirtPathBlock {
         state
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
+    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: &BlockDirection) -> bool {
         let state = world.get_block_state(&pos.up()).await.unwrap();
         !state.is_solid() // TODO: add fence gata block
     }

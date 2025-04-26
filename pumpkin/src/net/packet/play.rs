@@ -1760,7 +1760,7 @@ impl Player {
 
         if !server
             .block_registry
-            .can_place_at(world, &block, &final_block_pos)
+            .can_place_at(world, &block, &final_block_pos, face)
             .await
         {
             return Ok(false);

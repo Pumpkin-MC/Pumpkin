@@ -73,7 +73,7 @@ impl PumpkinBlock for ActivatorRailBlock {
         }
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
+    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: &BlockDirection) -> bool {
         can_place_rail_at(world, pos).await
     }
 }
