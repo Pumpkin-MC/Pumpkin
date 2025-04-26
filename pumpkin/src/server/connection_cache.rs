@@ -110,13 +110,10 @@ impl CachedStatus {
             if player
                 .client
                 .added_to_server_listing
-                .load(Ordering::Relaxed)
+                .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
             {
                 players.online -= 1;
-                player
-                    .client
-                    .added_to_server_listing
-                    .store(false, Ordering::Relaxed);
             }
         }
 
