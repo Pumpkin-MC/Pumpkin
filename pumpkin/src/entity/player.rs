@@ -88,6 +88,9 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
+use pumpkin_world::entity::entity_data_flags::{
+    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
+};
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::RwLock;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -1167,8 +1170,16 @@ impl Player {
         self.living_entity
             .entity
             .send_meta_data(&[
-                Metadata::new(17, MetaDataType::Byte, config.skin_parts),
-                Metadata::new(18, MetaDataType::Byte, config.main_hand as u8),
+                Metadata::new(
+                    DATA_PLAYER_MODE_CUSTOMISATION,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    DATA_PLAYER_MAIN_HAND,
+                    MetaDataType::Byte,
+                    config.main_hand as u8,
+                ),
             ])
             .await;
     }
