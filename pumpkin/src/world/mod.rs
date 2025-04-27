@@ -1595,16 +1595,18 @@ impl World {
     pub async fn update_neighbors(
         self: &Arc<Self>,
         block_pos: &BlockPos,
-        except: Option<&BlockDirection>,
+        except: Option<BlockDirection>,
     ) {
         let source_block = self.get_block(block_pos).await.unwrap();
         for direction in BlockDirection::update_order() {
-            if Some(&direction) == except {
+            if except.is_some_and(|d| d == direction) {
                 continue;
             }
+
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let neighbor_block = self.get_block(&neighbor_pos).await;
             let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
+
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
                     self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1620,6 +1622,7 @@ impl World {
                         .await;
                 }
             }
+
             if let Ok(neighbor_fluid) = neighbor_fluid {
                 if let Some(neighbor_pumpkin_fluid) =
                     self.block_registry.get_pumpkin_fluid(&neighbor_fluid)

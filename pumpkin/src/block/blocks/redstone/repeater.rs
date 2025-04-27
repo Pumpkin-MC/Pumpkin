@@ -224,7 +224,8 @@ async fn on_state_change(rep: RepeaterProperties, world: &Arc<World>, pos: &Bloc
     let front_pos = pos.offset(rep.facing.opposite().to_block_direction().to_offset());
     let front_block = world.get_block(&front_pos).await.unwrap();
     world.update_neighbor(&front_pos, &front_block).await;
-    for direction in &BlockDirection::all() {
+
+    for direction in BlockDirection::all() {
         let neighbor_pos = front_pos.offset(direction.to_offset());
         let block = world.get_block(&neighbor_pos).await.unwrap();
         world.update_neighbor(&neighbor_pos, &block).await;

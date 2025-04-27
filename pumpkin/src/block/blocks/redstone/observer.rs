@@ -172,7 +172,7 @@ impl ObserverBlock {
             block_pos.offset(facing.to_block_direction().opposite().to_offset());
         world.update_neighbor(&opposite_facing_pos, block).await;
         world
-            .update_neighbors(&opposite_facing_pos, Some(&facing.to_block_direction()))
+            .update_neighbors(&opposite_facing_pos, Some(facing.to_block_direction()))
             .await;
     }
 
