@@ -153,7 +153,7 @@ impl CommandDispatcher {
         suggestions
     }
 
-    pub(crate) fn parse_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
+    pub(crate) fn split_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
         if cmd.is_empty() {
             return Err(GeneralCommandIssue("Empty Command".to_string()));
         }
@@ -223,8 +223,7 @@ impl CommandDispatcher {
         server: &'a Server,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
-        // Other languages dont use the ascii whitespace
-        let (key, raw_args) = Self::parse_parts(cmd)?;
+        let (key, raw_args) = Self::split_parts(cmd)?;
 
         if !self.commands.contains_key(key) {
             return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
