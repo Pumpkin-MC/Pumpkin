@@ -108,6 +108,7 @@ impl PumpkinItem for EmptyBucketItem {
                     player.client.enqueue_packet(&dest_packet).await;
                 }
             } else {
+                log::info!("Setting slot");
                 let slot = inventory.get_pickup_item_slot(item_type.id);
                 if let Some(slot) = slot {
                     if let Err(err) = inventory.set_slot(slot, item_stack, false) {
@@ -153,7 +154,12 @@ impl PumpkinItem for FilledBucketItem {
             world
                 .set_block_state(
                     &pos.offset(direction.to_offset()),
-                    Block::WATER.default_state_id,
+                    // Block::WATER.default_state_id,
+                    if item.id == Item::WATER_BUCKET.id {
+                        Block::WATER.default_state_id
+                    } else {
+                        Block::LAVA.default_state_id
+                    },
                     BlockFlags::NOTIFY_NEIGHBORS,
                 )
                 .await;
