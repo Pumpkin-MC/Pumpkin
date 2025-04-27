@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockHalf;
-use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::StairShape;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockHalf;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::block_properties::StairShape;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
@@ -18,7 +19,7 @@ use crate::world::BlockFlags;
 use crate::world::World;
 use crate::{entity::player::Player, server::Server};
 
-type StairsProperties = pumpkin_data::block::OakStairsLikeProperties;
+type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
 
 pub struct StairBlock;
 
@@ -54,51 +55,15 @@ impl PumpkinBlock for StairBlock {
             _ => match use_item_on.cursor_pos.y {
                 0.0...0.5 => BlockHalf::Bottom,
                 0.5...1.0 => BlockHalf::Top,
-                _ => BlockHalf::Top,
+
+                // This cannot happen normally
+                #[allow(clippy::match_same_arms)]
+                _ => BlockHalf::Bottom,
             },
         };
 
-        let (other_block, other_block_state) = world
-            .get_block_and_block_state(&block_pos.offset(stair_props.facing.to_offset()))
-            .await
-            .unwrap();
-        if other_block.is_tagged_with("#minecraft:stairs").unwrap() {
-            let other_stair_props =
-                StairsProperties::from_state_id(other_block_state.id, &other_block);
-
-            if stair_props.half == other_stair_props.half {
-                if stair_props.facing.rotate_clockwise() == other_stair_props.facing {
-                    stair_props.shape = StairShape::OuterRight;
-                    return stair_props.to_state_id(block);
-                }
-
-                if stair_props.facing.rotate_counter_clockwise() == other_stair_props.facing {
-                    stair_props.shape = StairShape::OuterLeft;
-                    return stair_props.to_state_id(block);
-                }
-            }
-        }
-
-        let (other_block, other_block_state) = world
-            .get_block_and_block_state(&block_pos.offset(stair_props.facing.opposite().to_offset()))
-            .await
-            .unwrap();
-        if other_block.is_tagged_with("#minecraft:stairs").unwrap() {
-            let other_stair_props =
-                StairsProperties::from_state_id(other_block_state.id, &other_block);
-
-            if stair_props.half == other_stair_props.half {
-                if stair_props.facing.rotate_clockwise() == other_stair_props.facing {
-                    stair_props.shape = StairShape::InnerRight;
-                    return stair_props.to_state_id(block);
-                }
-
-                if stair_props.facing.rotate_counter_clockwise() == other_stair_props.facing {
-                    stair_props.shape = StairShape::InnerLeft;
-                    return stair_props.to_state_id(block);
-                }
-            }
-        }
+        stair_props.shape =
+            compute_stair_shape(world, block_pos, stair_props.facing, stair_props.half).await;
 
         stair_props.to_state_id(block)
     }
@@ -118,74 +83,83 @@ impl PumpkinBlock for StairBlock {
             compute_stair_shape(world, block_pos, stair_props.facing, stair_props.half).await;
 
         if stair_props.shape != new_shape {
-            stair_props.shape = StairShape::Straight;
+            stair_props.shape = new_shape;
             world
                 .set_block_state(
-                    &block_pos,
-                    stair_props.to_state_id(&block),
+                    block_pos,
+                    stair_props.to_state_id(block),
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
         }
+    }
+}
 
-        let side = stair_props.facing.rotate_clockwise();
-        let pos = block_pos.offset(side.to_offset());
-        let (other_block, other_block_state) = world.get_block_and_block_state(&pos).await.unwrap();
-        if other_block.is_tagged_with("#minecraft:stairs").unwrap() {
-            let mut other_stair_props =
-                StairsProperties::from_state_id(other_block_state.id, &other_block);
+async fn compute_stair_shape(
+    world: &World,
+    block_pos: &BlockPos,
+    facing: HorizontalFacing,
+    half: BlockHalf,
+) -> StairShape {
+    let right_locked = get_stair_properties_if_exists(
+        world,
+        &block_pos.offset(facing.rotate_clockwise().to_offset()),
+    )
+    .await
+    .is_some_and(|other_stair_props| {
+        other_stair_props.half == half && other_stair_props.facing == facing
+    });
 
-            if stair_props.half == other_stair_props.half {
-                if side == other_stair_props.facing {
-                    other_stair_props.shape = StairShape::InnerLeft;
-                    world
-                        .set_block_state(
-                            &pos,
-                            other_stair_props.to_state_id(&other_block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                } else if side.opposite() == other_stair_props.facing {
-                    other_stair_props.shape = StairShape::OuterRight;
-                    world
-                        .set_block_state(
-                            &pos,
-                            other_stair_props.to_state_id(&other_block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                }
-            }
-        }
+    let left_locked = get_stair_properties_if_exists(
+        world,
+        &block_pos.offset(facing.rotate_counter_clockwise().to_offset()),
+    )
+    .await
+    .is_some_and(|other_stair_props| {
+        other_stair_props.half == half && other_stair_props.facing == facing
+    });
 
-        let side = stair_props.facing.rotate_counter_clockwise();
-        let pos = block_pos.offset(side.to_offset());
-        let (other_block, other_block_state) = world.get_block_and_block_state(&pos).await.unwrap();
-        if other_block.is_tagged_with("#minecraft:stairs").unwrap() {
-            let mut other_stair_props =
-                StairsProperties::from_state_id(other_block_state.id, &other_block);
+    if left_locked && right_locked {
+        return StairShape::Straight;
+    }
 
-            if stair_props.half == other_stair_props.half {
-                if side == other_stair_props.facing {
-                    other_stair_props.shape = StairShape::InnerRight;
-                    world
-                        .set_block_state(
-                            &pos,
-                            other_stair_props.to_state_id(&other_block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                } else if side.opposite() == other_stair_props.facing {
-                    other_stair_props.shape = StairShape::OuterLeft;
-                    world
-                        .set_block_state(
-                            &pos,
-                            other_stair_props.to_state_id(&other_block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                }
+    if let Some(other_stair_props) =
+        get_stair_properties_if_exists(world, &block_pos.offset(facing.to_offset())).await
+    {
+        if other_stair_props.half == half {
+            if !left_locked && other_stair_props.facing == facing.rotate_clockwise() {
+                return StairShape::OuterRight;
+            } else if !right_locked && other_stair_props.facing == facing.rotate_counter_clockwise()
+            {
+                return StairShape::OuterLeft;
             }
         }
     }
+
+    if let Some(other_stair_props) =
+        get_stair_properties_if_exists(world, &block_pos.offset(facing.opposite().to_offset()))
+            .await
+    {
+        if other_stair_props.half == half {
+            if !right_locked && other_stair_props.facing == facing.rotate_clockwise() {
+                return StairShape::InnerRight;
+            } else if !left_locked && other_stair_props.facing == facing.rotate_counter_clockwise()
+            {
+                return StairShape::InnerLeft;
+            }
+        }
+    }
+
+    StairShape::Straight
+}
+
+async fn get_stair_properties_if_exists(
+    world: &World,
+    block_pos: &BlockPos,
+) -> Option<StairsProperties> {
+    let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    block
+        .is_tagged_with("#minecraft:stairs")
+        .unwrap()
+        .then(|| StairsProperties::from_state_id(block_state.id, &block))
 }
