@@ -387,8 +387,7 @@ fn setup_stdin_console(server: Arc<Server>) {
     tokio::spawn(async move {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
             let mut line = String::new();
-            if let Ok(_) = stdin().read_line(&mut line) {
-            } else {
+            if stdin().read_line(&mut line).is_err() {
                 break;
             };
             let command = &line[..line.len() - 1]; // Remove the newline
