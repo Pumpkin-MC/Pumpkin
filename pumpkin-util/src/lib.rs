@@ -1,3 +1,11 @@
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::ops::{Index, IndexMut};
+
+pub use gamemode::GameMode;
+pub use permission::PermissionLvl;
+
 pub mod biome;
 pub mod gamemode;
 pub mod loot_table;
@@ -8,13 +16,6 @@ pub mod random;
 pub mod registry;
 pub mod text;
 pub mod translation;
-
-use std::ops::{Index, IndexMut};
-
-pub use gamemode::GameMode;
-pub use permission::PermissionLvl;
-
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[macro_export]
 macro_rules! global_path {
@@ -50,7 +51,7 @@ pub fn encompassing_bits(count: usize) -> u8 {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(FromPrimitive, ToPrimitive, PartialEq, Clone, Debug)]
 pub enum Difficulty {
     Peaceful,
     Easy,
@@ -63,13 +64,10 @@ impl Serialize for Difficulty {
     where
         S: Serializer,
     {
-        let value = match self {
-            Difficulty::Peaceful => 0,
-            Difficulty::Easy => 1,
-            Difficulty::Normal => 2,
-            Difficulty::Hard => 3,
-        };
-        serializer.serialize_i8(value)
+        let value = self
+            .to_i8()
+            .ok_or_else(|| serde::ser::Error::custom("Invalid difficulty value"))?;
+        value.serialize(serializer)
     }
 }
 
@@ -78,14 +76,9 @@ impl<'de> Deserialize<'de> for Difficulty {
     where
         D: Deserializer<'de>,
     {
-        let value: i8 = Deserialize::deserialize(deserializer)?;
-        match value {
-            0 => Ok(Difficulty::Peaceful),
-            1 => Ok(Difficulty::Easy),
-            2 => Ok(Difficulty::Normal),
-            3 => Ok(Difficulty::Hard),
-            _ => Err(serde::de::Error::custom("Invalid value for Difficulty")),
-        }
+        let value = Deserialize::deserialize(deserializer)?;
+        Difficulty::from_i8(value)
+            .ok_or_else(|| serde::de::Error::custom("Invalid difficulty value"))
     }
 }
 
