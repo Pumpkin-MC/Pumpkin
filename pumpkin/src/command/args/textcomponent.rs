@@ -5,7 +5,7 @@ use crate::command::tree::RawArgs;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
-use pumpkin_util::text::{TextComponent, TextContent};
+use pumpkin_util::text::TextComponent;
 
 pub(crate) struct TextComponentArgConsumer;
 
