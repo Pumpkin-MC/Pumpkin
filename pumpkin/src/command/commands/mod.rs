@@ -45,6 +45,7 @@ mod worldborder;
 
 #[cfg(feature = "dhat-heap")]
 mod profile;
+mod tellraw;
 
 #[must_use]
 pub fn default_dispatcher() -> CommandDispatcher {
@@ -69,6 +70,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(seed::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(fill::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(playsound::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(tellraw::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(title::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(summon::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(experience::init_command_tree(), PermissionLvl::Two);
