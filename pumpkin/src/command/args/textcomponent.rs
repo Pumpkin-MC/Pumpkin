@@ -64,10 +64,5 @@ impl FindArg<'_> for TextComponentArgConsumer {
 }
 
 fn parse_text_component(input: &str) -> Option<TextComponent> {
-    if input.starts_with('{') && input.ends_with('}') {
-        let text_component: Option<TextContent> = serde_json::from_str(input).unwrap_or(None);
-        Some(TextComponent::from_content(text_component?))
-    } else {
-        serde_json::from_str(input).unwrap_or(None)
-    }
+    serde_json::from_str(input).unwrap_or(None)
 }

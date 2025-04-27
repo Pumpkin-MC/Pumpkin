@@ -157,7 +157,6 @@ impl CommandDispatcher {
         &'a self,
         cmd: &'a str,
     ) -> Result<(&'a str, Vec<&'a str>), CommandError> {
-        // consider single and double quotes, separate by whitespace
         if cmd.len() == 0 {
             return Err(GeneralCommandIssue("Empty Command".to_string()));
         };
@@ -165,8 +164,22 @@ impl CommandDispatcher {
         let mut current_arg_start = 0usize;
         let mut in_single_quotes = false;
         let mut in_double_quotes = false;
+        let mut in_braces = 0u32;
         for (i, c) in cmd.char_indices() {
             match c {
+                '{' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        in_braces += 1;
+                    }
+                }
+                '}' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        if in_braces == 0 {
+                            return Err(GeneralCommandIssue("Unmatched braces".to_string()));
+                        }
+                        in_braces -= 1;
+                    }
+                }
                 '\'' => {
                     if !in_double_quotes {
                         in_single_quotes = !in_single_quotes;
@@ -177,7 +190,7 @@ impl CommandDispatcher {
                         in_double_quotes = !in_double_quotes;
                     }
                 }
-                ' ' if !in_single_quotes && !in_double_quotes => {
+                ' ' if !in_single_quotes && !in_double_quotes && in_braces == 0 => {
                     if current_arg_start != i {
                         args.push(&cmd[current_arg_start..i]);
                     }
@@ -190,13 +203,20 @@ impl CommandDispatcher {
             args.push(&cmd[current_arg_start..]);
         }
         if in_single_quotes || in_double_quotes {
-            return Err(GeneralCommandIssue("Unmatched quotes".to_string()));
+            return Err(GeneralCommandIssue(
+                "Unmatched quotes at the end".to_string(),
+            ));
+        }
+        if in_braces != 0 {
+            return Err(GeneralCommandIssue(
+                "Unmatched braces at the end".to_string(),
+            ));
         }
         if args.is_empty() {
             return Err(GeneralCommandIssue("Empty Command".to_string()));
         }
-        let first_arg = args.remove(0);
-        Ok((first_arg, args))
+        let key = args.remove(0);
+        Ok((key, args.into_iter().rev().collect()))
     }
 
     /// Execute a command using its corresponding [`CommandTree`].
@@ -297,7 +317,7 @@ impl CommandDispatcher {
                         }
                         None => {
                             log::debug!(
-                                "Error while parsing command: {raw_args:?}: argument {name} missing"
+                                "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
                             );
                             return Ok(false);
                         }
