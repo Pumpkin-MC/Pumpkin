@@ -7,7 +7,6 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
-    block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -30,14 +29,11 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use serde::Serialize;
-use std::{
-    f32::consts::PI,
-    sync::{
-        Arc,
-        atomic::{
-            AtomicBool, AtomicI32,
-            Ordering::{Relaxed, SeqCst},
-        },
+use std::sync::{
+    Arc,
+    atomic::{
+        AtomicBool, AtomicI32,
+        Ordering::{Relaxed, SeqCst},
     },
 };
 use tokio::sync::RwLock;
