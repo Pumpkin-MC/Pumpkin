@@ -1,6 +1,5 @@
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
-use tokio::sync::RwLock;
 
 use super::{
     biome_coords,
@@ -84,10 +83,10 @@ impl WorldGenerator for VanillaGenerator {
         ChunkData {
             light_engine: ChunkLightEngine {
                 sky_light: (0..sections.sections.len() + 2)
-                    .map(|_| RwLock::new(LightContainer::new_filled(15)))
+                    .map(|_| LightContainer::new_filled(15))
                     .collect(),
                 block_light: (0..sections.sections.len() + 2)
-                    .map(|_| RwLock::new(LightContainer::new_empty(15)))
+                    .map(|_| LightContainer::new_empty(15))
                     .collect(),
                 sections: &sections.sections.len() + 2,
             },

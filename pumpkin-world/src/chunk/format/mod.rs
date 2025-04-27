@@ -95,7 +95,6 @@ impl ChunkData {
                         .and_then(|section| section.block_light.clone())
                         .map(LightContainer::new)
                         .unwrap_or_default()
-                        .into()
                 })
                 .collect(),
             sky_light: (0..chunk_data.sections.len() + 2)
@@ -109,7 +108,6 @@ impl ChunkData {
                         .and_then(|section| section.sky_light.clone())
                         .map(LightContainer::new)
                         .unwrap_or_default()
-                        .into()
                 })
                 .collect(),
         };
@@ -223,16 +221,14 @@ pub struct ChunkSectionBlockStates {
 }
 
 #[derive(Debug, Clone)]
-pub enum LightContainer<const DIM: usize> {
+pub enum LightContainer {
     Empty(u8),
     Full(Box<[u8]>),
 }
 
-impl LightContainer<16> {
-    pub const fn array_size() -> usize {
-        // custom DIM not allowed in stable rust
-        4096 / 2
-    }
+impl LightContainer {
+    pub const DIM: usize = 16;
+    pub const ARRAY_SIZE: usize = Self::DIM * Self::DIM * Self::DIM / 2;
 
     pub fn new_empty(default: u8) -> Self {
         if default > 15 {
@@ -242,8 +238,8 @@ impl LightContainer<16> {
     }
 
     pub fn new(data: Box<[u8]>) -> Self {
-        if data.len() != Self::array_size() {
-            panic!("Data length must be {}", Self::array_size());
+        if data.len() != Self::ARRAY_SIZE {
+            panic!("Data length must be {}", Self::ARRAY_SIZE);
         }
         Self::Full(data)
     }
@@ -253,7 +249,7 @@ impl LightContainer<16> {
             panic!("Default value must be between 0 and 15");
         }
         let value = default << 4 | default;
-        Self::Full([value; Self::array_size()].into())
+        Self::Full([value; Self::ARRAY_SIZE].into())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -292,7 +288,7 @@ impl LightContainer<16> {
     }
 }
 
-impl Default for LightContainer<16> {
+impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
     }

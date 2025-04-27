@@ -5,7 +5,6 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 use crate::BlockStateId;
 use crate::chunk::format::LightContainer;
@@ -168,8 +167,8 @@ pub struct SubChunk {
 
 #[derive(Debug, Default)]
 pub struct ChunkLightEngine {
-    pub sky_light: Box<[RwLock<LightContainer<16>>]>,
-    pub block_light: Box<[RwLock<LightContainer<16>>]>,
+    pub sky_light: Box<[LightContainer]>,
+    pub block_light: Box<[LightContainer]>,
     /// The number of light sections in the chunk,
     /// always be chunk sections + 2
     pub sections: usize,
