@@ -62,8 +62,7 @@ impl CommandExecutor for GiveExecutor {
                     .name("seconds")
                     .min(1)
                     .max(1_000_000)
-                    .find_arg_default_name(args)?
-                    .unwrap()
+                    .find_arg_default_name(args)??
                     * 20
             }
             Time::Infinite => -1,
@@ -75,8 +74,7 @@ impl CommandExecutor for GiveExecutor {
                 .name("amplifier")
                 .min(0)
                 .max(255)
-                .find_arg_default_name(args)?
-                .unwrap(),
+                .find_arg_default_name(args)??,
         };
 
         let mut hide_particles = self.2;

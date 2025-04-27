@@ -4,7 +4,7 @@ use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
+use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::item::ItemArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
@@ -42,12 +42,18 @@ impl CommandExecutor for Executor {
         let item_count = match item_count_consumer().find_arg_default_name(args) {
             Err(_) => 1,
             Ok(Ok(count)) => count,
-            Ok(Err(())) => {
+            Ok(Err(err)) => {
+                let err_msg = match err {
+                    NotInBounds::LowerBound(_, min) => {
+                        format!("Can't give less than {min} of {item_name}")
+                    }
+                    NotInBounds::UpperBound(_, max) => {
+                        format!("Can't give more than {max} of {item_name}")
+                    }
+                };
+
                 sender
-                    .send_message(
-                        TextComponent::text("Item count is too large or too small.")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
+                    .send_message(TextComponent::text(err_msg).color(Color::Named(NamedColor::Red)))
                     .await;
                 return Ok(());
             }

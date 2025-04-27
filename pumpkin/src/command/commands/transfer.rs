@@ -46,7 +46,7 @@ impl CommandExecutor for TargetSelfExecutor {
         let port = match port_consumer().find_arg_default_name(args) {
             Err(_) => 25565,
             Ok(Ok(count)) => count,
-            Ok(Err(())) => {
+            Ok(Err(_)) => {
                 sender
                     .send_message(
                         TextComponent::text("Port must be between 1 and 65535.")
@@ -88,7 +88,7 @@ impl CommandExecutor for TargetPlayerExecutor {
         let port = match port_consumer().find_arg_default_name(args) {
             Err(_) => 25565,
             Ok(Ok(count)) => count,
-            Ok(Err(())) => {
+            Ok(Err(_)) => {
                 sender
                     .send_message(
                         TextComponent::text("Port must be between 1 and 65535.")
