@@ -112,42 +112,20 @@ impl PumpkinBlock for StairBlock {
         _notify: bool,
     ) {
         let state_id = world.get_block_state_id(block_pos).await.unwrap();
-        let stair_props = StairsProperties::from_state_id(state_id, block);
+        let mut stair_props = StairsProperties::from_state_id(state_id, block);
 
-        let (other_block, other_block_state) = world
-            .get_block_and_block_state(
-                &block_pos.offset(stair_props.facing.rotate_clockwise().to_offset()),
-            )
-            .await
-            .unwrap();
-        let right_locked = if other_block.is_tagged_with("#minecraft:stairs").unwrap() {
-            let other_stair_props =
-                StairsProperties::from_state_id(other_block_state.id, &other_block);
+        let new_shape =
+            compute_stair_shape(world, block_pos, stair_props.facing, stair_props.half).await;
 
-            stair_props.half == other_stair_props.half
-                && stair_props.facing == other_stair_props.facing
-        } else {
-            false
-        };
-
-        let (other_block, other_block_state) = world
-            .get_block_and_block_state(
-                &block_pos.offset(stair_props.facing.rotate_counter_clockwise().to_offset()),
-            )
-            .await
-            .unwrap();
-        let left_locked = if other_block.is_tagged_with("#minecraft:stairs").unwrap() {
-            let other_stair_props =
-                StairsProperties::from_state_id(other_block_state.id, &other_block);
-
-            stair_props.half == other_stair_props.half
-                && stair_props.facing == other_stair_props.facing
-        } else {
-            false
-        };
-
-        if right_locked && left_locked {
-            // Straight
+        if stair_props.shape != new_shape {
+            stair_props.shape = StairShape::Straight;
+            world
+                .set_block_state(
+                    &block_pos,
+                    stair_props.to_state_id(&block),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
         }
 
         let side = stair_props.facing.rotate_clockwise();
