@@ -42,16 +42,6 @@ impl CommandExecutor for TellRawExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    // TEST
-    let text = TextComponent(TextComponentBase {
-        content: TextContent::Text {
-            text: "Hello, World".into(),
-        },
-        style: Style::default().color(Color::Named(NamedColor::Green)),
-        extra: vec![],
-    });
-    println!("text: {}", serde_json::to_string(&text).unwrap_or_default());
-
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGETS, PlayersArgumentConsumer)
             .then(argument(ARG_MESSAGE, TextComponentArgConsumer).execute(TellRawExecutor)),

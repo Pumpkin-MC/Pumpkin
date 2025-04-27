@@ -153,13 +153,10 @@ impl CommandDispatcher {
         suggestions
     }
 
-    pub(crate) fn parse_parts<'a>(
-        &'a self,
-        cmd: &'a str,
-    ) -> Result<(&'a str, Vec<&'a str>), CommandError> {
-        if cmd.len() == 0 {
+    pub(crate) fn parse_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
+        if cmd.is_empty() {
             return Err(GeneralCommandIssue("Empty Command".to_string()));
-        };
+        }
         let mut args = Vec::new();
         let mut current_arg_start = 0usize;
         let mut in_single_quotes = false;
@@ -227,7 +224,7 @@ impl CommandDispatcher {
         cmd: &'a str,
     ) -> Result<(), CommandError> {
         // Other languages dont use the ascii whitespace
-        let (key, raw_args) = self.parse_parts(cmd)?;
+        let (key, raw_args) = Self::parse_parts(cmd)?;
 
         if !self.commands.contains_key(key) {
             return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
@@ -311,16 +308,13 @@ impl CommandDispatcher {
                     }
                 }
                 NodeType::Argument { consumer, name, .. } => {
-                    match consumer.consume(src, server, raw_args).await {
-                        Some(consumed) => {
-                            parsed_args.insert(name, consumed);
-                        }
-                        None => {
-                            log::debug!(
-                                "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
-                            );
-                            return Ok(false);
-                        }
+                    if let Some(consumed) = consumer.consume(src, server, raw_args).await {
+                        parsed_args.insert(name, consumed);
+                    } else {
+                        log::debug!(
+                            "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
+                        );
+                        return Ok(false);
                     }
                 }
                 NodeType::Require { predicate, .. } => {
