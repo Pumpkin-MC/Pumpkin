@@ -51,7 +51,7 @@ pub trait PumpkinFluid: Send + Sync {
         _server: &Server,
         _world: &World,
         fluid: &Fluid,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _replacing: BlockIsReplacing,

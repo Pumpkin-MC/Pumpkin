@@ -46,7 +46,7 @@ impl PumpkinBlock for LeverBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
@@ -60,7 +60,7 @@ impl PumpkinBlock for LeverBlock {
             _ => lever_props.face = BlockFace::Wall,
         }
 
-        if face == &BlockDirection::Up || face == &BlockDirection::Down {
+        if face == BlockDirection::Up || face == BlockDirection::Down {
             lever_props.facing = player.living_entity.entity.get_horizontal_facing();
         } else {
             lever_props.facing = face.opposite().to_cardinal_direction();
@@ -97,7 +97,7 @@ impl PumpkinBlock for LeverBlock {
         &self,
         _block: &Block,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> bool {
         true
     }
@@ -108,7 +108,7 @@ impl PumpkinBlock for LeverBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> u8 {
         let lever_props = LeverLikeProperties::from_state_id(state.id, block);
         if lever_props.powered { 15 } else { 0 }
@@ -120,10 +120,10 @@ impl PumpkinBlock for LeverBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let lever_props = LeverLikeProperties::from_state_id(state.id, block);
-        if lever_props.powered && &lever_props.get_direction() == direction {
+        if lever_props.powered && lever_props.get_direction() == direction {
             15
         } else {
             0

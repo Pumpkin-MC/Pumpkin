@@ -41,7 +41,7 @@ impl PumpkinBlock for StairBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,

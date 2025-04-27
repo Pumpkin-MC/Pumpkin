@@ -33,7 +33,7 @@ impl PumpkinItem for ShovelItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
@@ -46,7 +46,7 @@ impl PumpkinItem for ShovelItem {
             || block == &Block::MYCELIUM
         {
             let world = player.world().await;
-            if face != &BlockDirection::Down
+            if face != BlockDirection::Down
                 && world
                     .get_block_state(&location.up())
                     .await

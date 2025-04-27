@@ -28,7 +28,7 @@ impl PumpkinBlock for RedstoneLamp {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,

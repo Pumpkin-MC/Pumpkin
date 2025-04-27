@@ -83,7 +83,7 @@ impl PumpkinBlock for FenceBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
@@ -98,7 +98,7 @@ impl PumpkinBlock for FenceBlock {
         block: &Block,
         _state: BlockStateId,
         block_pos: &BlockPos,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {

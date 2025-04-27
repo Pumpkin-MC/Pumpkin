@@ -103,7 +103,7 @@ impl BlockRegistry {
         server: &Server,
         world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
@@ -133,7 +133,7 @@ impl BlockRegistry {
         block: &Block,
         state_id: u16,
         pos: &BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         player: &Player,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -149,7 +149,7 @@ impl BlockRegistry {
         world: &World,
         block: &Block,
         block_pos: &BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -279,7 +279,7 @@ impl BlockRegistry {
                         block,
                         state.id,
                         location,
-                        &direction.opposite(),
+                        direction.opposite(),
                         &neighbor_pos,
                         neighbor_state.id,
                     )
@@ -312,7 +312,7 @@ impl BlockRegistry {
         block: &Block,
         state: BlockStateId,
         block_pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         neighbor_pos: &BlockPos,
         neighbor_state: BlockStateId,
     ) -> BlockStateId {
@@ -345,7 +345,7 @@ impl BlockRegistry {
 
             Box::pin(world.replace_with_state_for_neighbor_update(
                 &pos,
-                &direction.opposite(),
+                direction.opposite(),
                 flags,
             ))
             .await;
@@ -388,7 +388,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -405,7 +405,7 @@ impl BlockRegistry {
         world: &World,
         block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -422,7 +422,7 @@ impl BlockRegistry {
         world: &World,
         block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {

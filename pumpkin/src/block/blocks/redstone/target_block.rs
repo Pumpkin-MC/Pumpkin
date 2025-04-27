@@ -15,7 +15,7 @@ impl PumpkinBlock for TargetBlock {
         &self,
         _block: &Block,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> bool {
         true
     }

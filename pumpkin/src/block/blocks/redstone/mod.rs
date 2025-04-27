@@ -47,7 +47,7 @@ pub async fn get_redstone_power(
     state: &BlockState,
     world: &World,
     pos: BlockPos,
-    facing: &BlockDirection,
+    facing: BlockDirection,
 ) -> u8 {
     if state.is_solid() {
         return std::cmp::max(
@@ -63,7 +63,7 @@ async fn get_redstone_power_no_dust(
     state: &BlockState,
     world: &World,
     pos: BlockPos,
-    facing: &BlockDirection,
+    facing: BlockDirection,
 ) -> u8 {
     if state.is_solid() {
         return std::cmp::max(
@@ -76,7 +76,7 @@ async fn get_redstone_power_no_dust(
 
 async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -> u8 {
     let mut max_power = 0;
-    for side in &BlockDirection::all() {
+    for side in BlockDirection::all() {
         let (block, state) = world
             .get_block_and_block_state(&pos.offset(side.to_offset()))
             .await
@@ -98,7 +98,7 @@ async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -
 
 async fn get_max_weak_power(world: &World, pos: &BlockPos, dust_power: bool) -> u8 {
     let mut max_power = 0;
-    for side in &BlockDirection::all() {
+    for side in BlockDirection::all() {
         let (block, state) = world
             .get_block_and_block_state(&pos.offset(side.to_offset()))
             .await
@@ -123,7 +123,7 @@ async fn get_weak_power(
     state: &BlockState,
     world: &World,
     pos: &BlockPos,
-    side: &BlockDirection,
+    side: BlockDirection,
     dust_power: bool,
 ) -> u8 {
     if !dust_power && block == &Block::REDSTONE_WIRE {
@@ -140,7 +140,7 @@ async fn get_strong_power(
     state: &BlockState,
     world: &World,
     pos: &BlockPos,
-    side: &BlockDirection,
+    side: BlockDirection,
     dust_power: bool,
 ) -> u8 {
     if !dust_power && block == &Block::REDSTONE_WIRE {
@@ -153,7 +153,7 @@ async fn get_strong_power(
 }
 
 pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> bool {
-    for face in &BlockDirection::all() {
+    for face in BlockDirection::all() {
         let neighbor_pos = pos.offset(face.to_offset());
         let (block, state) = world
             .get_block_and_block_state(&neighbor_pos)
@@ -170,11 +170,7 @@ pub fn is_diode(block: &Block) -> bool {
     block == &Block::REPEATER || block == &Block::COMPARATOR
 }
 
-pub async fn diode_get_input_strength(
-    world: &World,
-    pos: &BlockPos,
-    facing: &BlockDirection,
-) -> u8 {
+pub async fn diode_get_input_strength(world: &World, pos: &BlockPos, facing: BlockDirection) -> u8 {
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
     let power: u8 = get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;

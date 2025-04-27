@@ -37,7 +37,7 @@ impl PumpkinBlock for SignBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
@@ -68,7 +68,7 @@ impl PumpkinBlock for SignBlock {
         _block: &Block,
         _state_id: u16,
         pos: &BlockPos,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         player: &Player,
     ) {
         player.send_sign_packet(*pos).await;

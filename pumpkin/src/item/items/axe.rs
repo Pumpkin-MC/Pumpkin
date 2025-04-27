@@ -36,7 +36,7 @@ impl PumpkinItem for AxeItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {

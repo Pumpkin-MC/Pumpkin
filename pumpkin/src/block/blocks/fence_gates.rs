@@ -55,7 +55,7 @@ impl PumpkinBlock for FenceGateBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,

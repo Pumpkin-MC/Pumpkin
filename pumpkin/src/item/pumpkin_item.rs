@@ -19,7 +19,7 @@ pub trait PumpkinItem: Send + Sync {
         _item: &Item,
         _player: &Player,
         _location: BlockPos,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block: &Block,
         _server: &Server,
     ) {

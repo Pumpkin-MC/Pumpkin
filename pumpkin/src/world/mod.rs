@@ -1656,7 +1656,7 @@ impl World {
     pub async fn replace_with_state_for_neighbor_update(
         self: &Arc<Self>,
         block_pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         flags: BlockFlags,
     ) {
         let (block, block_state) = match self.get_block_and_block_state(block_pos).await {

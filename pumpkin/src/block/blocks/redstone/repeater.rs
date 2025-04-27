@@ -36,7 +36,7 @@ impl PumpkinBlock for RepeaterBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
@@ -146,10 +146,10 @@ impl PumpkinBlock for RepeaterBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        if &repeater_props.facing.to_block_direction() == direction && repeater_props.powered {
+        if repeater_props.facing.to_block_direction() == direction && repeater_props.powered {
             return 15;
         }
         0
@@ -161,10 +161,10 @@ impl PumpkinBlock for RepeaterBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        if &repeater_props.facing.to_block_direction() == direction && repeater_props.powered {
+        if repeater_props.facing.to_block_direction() == direction && repeater_props.powered {
             return 15;
         }
         0
@@ -174,10 +174,10 @@ impl PumpkinBlock for RepeaterBlock {
         &self,
         block: &Block,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> bool {
         let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        &repeater_props.facing.to_block_direction() == direction
+        repeater_props.facing.to_block_direction() == direction
             || repeater_props.facing.to_block_direction() == direction.opposite()
     }
 }
@@ -211,7 +211,7 @@ async fn get_power_on_side(world: &World, pos: &BlockPos, side: HorizontalFacing
             &side_state,
             world,
             &side_pos,
-            &side.to_block_direction(),
+            side.to_block_direction(),
             false,
         )
         .await
@@ -260,5 +260,5 @@ async fn schedule_tick(
 }
 
 async fn should_be_powered(rep: RepeaterProperties, world: &World, pos: &BlockPos) -> bool {
-    diode_get_input_strength(world, pos, &rep.facing.to_block_direction()).await > 0
+    diode_get_input_strength(world, pos, rep.facing.to_block_direction()).await > 0
 }

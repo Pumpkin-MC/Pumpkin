@@ -1416,7 +1416,7 @@ impl Player {
         if !sneaking {
             server
                 .item_registry
-                .use_on_block(&stack.item, self, location, &face, &block, server)
+                .use_on_block(&stack.item, self, location, face, &block, server)
                 .await;
 
             let action_result = server
@@ -1434,13 +1434,13 @@ impl Player {
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(stack.item.id) {
             should_try_decrement = self
-                .run_is_block_place(block, server, use_item_on, location, &face)
+                .run_is_block_place(block, server, use_item_on, location, face)
                 .await?;
         }
 
         // Check if the item is a spawn egg
         if let Some(entity) = entity_from_egg(stack.item.id) {
-            self.spawn_entity_from_egg(entity, location, &face).await;
+            self.spawn_entity_from_egg(entity, location, face).await;
             should_try_decrement = true;
         }
 
@@ -1619,7 +1619,7 @@ impl Player {
         &self,
         entity_type: EntityType,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
     ) {
         let world_pos = BlockPos(location.0 + face.to_offset());
         // Align the position like Vanilla does
@@ -1654,7 +1654,7 @@ impl Player {
         server: &Server,
         use_item_on: SUseItemOn,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
     ) -> Result<bool, Box<dyn PumpkinError>> {
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1697,7 +1697,7 @@ impl Player {
                     &clicked_block,
                     clicked_block_state.id,
                     &clicked_block_pos,
-                    *face,
+                    face,
                     &use_item_on,
                 )
                 .await
@@ -1750,7 +1750,7 @@ impl Player {
                 };
 
                 match replace_previous_block {
-                    Some(replacing) => (block_pos, &face.opposite(), replacing),
+                    Some(replacing) => (block_pos, face.opposite(), replacing),
                     None => {
                         // Don't place and don't decrement if the previous block is not replaceable
                         return Ok(false);

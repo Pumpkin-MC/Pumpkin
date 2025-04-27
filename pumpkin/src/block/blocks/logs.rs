@@ -33,7 +33,7 @@ impl PumpkinBlock for LogBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,

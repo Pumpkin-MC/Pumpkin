@@ -36,7 +36,7 @@ impl PumpkinItem for HoeItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
@@ -51,7 +51,7 @@ impl PumpkinItem for HoeItem {
             let world = player.world().await;
 
             //Only rooted can be right-clicked on the bottom of the block
-            if face == &BlockDirection::Down {
+            if face == BlockDirection::Down {
                 if block == &Block::ROOTED_DIRT {
                     future_block = &Block::DIRT;
                 }

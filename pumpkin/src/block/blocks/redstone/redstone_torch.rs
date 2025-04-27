@@ -42,7 +42,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _server: &Server,
         world: &World,
         _block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
@@ -55,7 +55,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
             return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
         }
         let mut torch_props = RTorchProps::default(&Block::REDSTONE_TORCH);
-        torch_props.lit = should_be_lit(world, block_pos, &BlockDirection::Down).await;
+        torch_props.lit = should_be_lit(world, block_pos, BlockDirection::Down).await;
         return torch_props.to_state_id(&Block::REDSTONE_TORCH);
     }
 
@@ -79,7 +79,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
                 != should_be_lit(
                     world,
                     block_pos,
-                    &props.facing.to_block_direction().opposite(),
+                    props.facing.to_block_direction().opposite(),
                 )
                 .await
             {
@@ -89,7 +89,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
             }
         } else if block == &Block::REDSTONE_TORCH {
             let props = RTorchProps::from_state_id(state.id, block);
-            if props.lit != should_be_lit(world, block_pos, &BlockDirection::Down).await {
+            if props.lit != should_be_lit(world, block_pos, BlockDirection::Down).await {
                 world
                     .schedule_block_tick(block, *block_pos, 2, TickPriority::Normal)
                     .await;
@@ -101,7 +101,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         &self,
         _block: &Block,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> bool {
         true
     }
@@ -112,16 +112,16 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         if block == &Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(state.id, block);
-            if props.lit && direction != &props.facing.to_block_direction() {
+            if props.lit && direction != props.facing.to_block_direction() {
                 return 15;
             }
         } else if block == &Block::REDSTONE_TORCH {
             let props = RTorchProps::from_state_id(state.id, block);
-            if props.lit && direction != &BlockDirection::Up {
+            if props.lit && direction != BlockDirection::Up {
                 return 15;
             }
         }
@@ -134,9 +134,9 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
-        if direction == &BlockDirection::Down {
+        if direction == BlockDirection::Down {
             if block == &Block::REDSTONE_WALL_TORCH {
                 let props = RWallTorchProps::from_state_id(state.id, block);
                 if props.lit {
@@ -159,7 +159,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
             let should_be_lit_now = should_be_lit(
                 world,
                 block_pos,
-                &props.facing.to_block_direction().opposite(),
+                props.facing.to_block_direction().opposite(),
             )
             .await;
             if props.lit != should_be_lit_now {
@@ -171,7 +171,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
             }
         } else if block == &Block::REDSTONE_TORCH {
             let mut props = RTorchProps::from_state_id(state.id, block);
-            let should_be_lit_now = should_be_lit(world, block_pos, &BlockDirection::Down).await;
+            let should_be_lit_now = should_be_lit(world, block_pos, BlockDirection::Down).await;
             if props.lit != should_be_lit_now {
                 props.lit = should_be_lit_now;
                 world
@@ -206,7 +206,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
     }
 }
 
-pub async fn should_be_lit(world: &World, pos: &BlockPos, face: &BlockDirection) -> bool {
+pub async fn should_be_lit(world: &World, pos: &BlockPos, face: BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
     let (block, state) = world.get_block_and_block_state(&other_pos).await.unwrap();
     get_redstone_power(&block, &state, world, other_pos, face).await == 0
