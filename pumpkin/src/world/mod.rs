@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -22,7 +23,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use border::Worldborder;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
@@ -38,6 +39,8 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::to_bytes_unnamed;
+use pumpkin_protocol::client::play::{CSetEntityMetadata, MetaDataType, Metadata};
+use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
@@ -59,6 +62,9 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_world::entity::entity_data_flags::{
+    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
+};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
     level::SyncChunk,
@@ -67,6 +73,7 @@ use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
+use serde::Serialize;
 use thiserror::Error;
 use time::LevelTime;
 use tokio::sync::{RwLock, mpsc};
@@ -235,8 +242,7 @@ impl World {
             cache.last_seen.clone()
         };
 
-        let current_players = self.players.read().await;
-        for (_, recipient) in current_players.iter() {
+        for recipient in self.players.read().await.values() {
             let messages_received: i32 = recipient.chat_session.lock().await.messages_received;
             let packet = &CPlayerChatMessage::new(
                 VarInt(messages_received),
@@ -303,7 +309,7 @@ impl World {
         particle: Particle,
     ) {
         let players = self.players.read().await;
-        for (_, player) in players.iter() {
+        for player in players.values() {
             player
                 .spawn_particle(position, offset, max_speed, particle_count, particle)
                 .await;
@@ -391,8 +397,6 @@ impl World {
         // Entity ticks
         for entity in entities_to_tick {
             entity.tick(server).await;
-            // This boolean thing prevents deadlocks. Since we lock players, we can't broadcast packets.
-            let mut collied_player = None;
             for player in self.players.read().await.values() {
                 if player
                     .living_entity
@@ -403,12 +407,9 @@ impl World {
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
-                    collied_player = Some(player.clone());
+                    entity.on_player_collision(player.clone()).await;
                     break;
                 }
-            }
-            if let Some(player) = collied_player {
-                entity.on_player_collision(player).await;
             }
         }
     }
@@ -578,7 +579,10 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            (PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_GAME_MODE).bits(),
+            (PlayerInfoFlags::ADD_PLAYER
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_LISTED)
+                .bits(),
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
@@ -587,6 +591,7 @@ impl World {
                         properties: &gameprofile.properties,
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
+                    PlayerAction::UpdateListed(true),
                 ],
             }],
         ))
@@ -604,10 +609,13 @@ impl World {
             {
                 let chat_session = player.chat_session.lock().await;
 
-                let mut player_actions = vec![PlayerAction::AddPlayer {
-                    name: &player.gameprofile.name,
-                    properties: &player.gameprofile.properties,
-                }];
+                let mut player_actions = vec![
+                    PlayerAction::AddPlayer {
+                        name: &player.gameprofile.name,
+                        properties: &player.gameprofile.properties,
+                    },
+                    PlayerAction::UpdateListed(true),
+                ];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -621,7 +629,7 @@ impl World {
                 current_player_data.push((&player.gameprofile.id, player_actions));
             }
 
-            let mut action_flags = PlayerInfoFlags::ADD_PLAYER;
+            let mut action_flags = PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_LISTED;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -683,24 +691,36 @@ impl World {
                     entity.velocity.load(),
                 ))
                 .await;
-        }
+            let config = existing_player.config.read().await;
+            let mut buf = Vec::new();
+            for meta in [
+                Metadata::new(
+                    DATA_PLAYER_MODE_CUSTOMISATION,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    DATA_PLAYER_MAIN_HAND,
+                    MetaDataType::Byte,
+                    config.main_hand as u8,
+                ),
+            ] {
+                let mut serializer_buf = Vec::new();
 
-        // Set skin parts and tablist
-        for player in self.players.read().await.values() {
-            //Set / Update skin part for every player
-            player.send_client_information().await;
-
-            //Update tablist
-            //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
-            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-                0x08,
-                &[pumpkin_protocol::client::play::Player {
-                    uuid: player.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListed(true)],
-                }],
-            ))
-            .await;
+                let mut serializer = Serializer::new(&mut serializer_buf);
+                meta.serialize(&mut serializer).unwrap();
+                buf.extend(serializer_buf);
+            }
+            buf.put_u8(255);
+            player
+                .client
+                .enqueue_packet(&CSetEntityMetadata::new(
+                    existing_player.get_entity().entity_id.into(),
+                    buf.into(),
+                ))
+                .await;
         }
+        player.send_client_information().await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
@@ -812,7 +832,7 @@ impl World {
             Particle::ExplosionEmitter
         };
         let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
-        for (_, player) in self.players.read().await.iter() {
+        for player in self.players.read().await.values() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
             }
@@ -1035,8 +1055,9 @@ impl World {
 
     /// Gets a `Player` by a username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
+        let lowercase = name.to_lowercase();
         for player in self.players.read().await.values() {
-            if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
+            if player.gameprofile.name.to_lowercase() == lowercase {
                 return Some(player.clone());
             }
         }
@@ -1056,7 +1077,7 @@ impl World {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not.
     pub async fn get_player_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<Player>> {
-        return self.players.read().await.get(&id).cloned();
+        self.players.read().await.get(&id).cloned()
     }
 
     /// Gets a list of players whose location equals the given position in the world.
@@ -1142,11 +1163,8 @@ impl World {
     ///
     /// * `uuid`: The unique UUID of the player to add.
     /// * `player`: An `Arc<Player>` reference to the player object.
-    pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) {
-        {
-            let mut current_players = self.players.write().await;
-            current_players.insert(uuid, player.clone())
-        };
+    pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) -> Result<(), String> {
+        self.players.write().await.insert(uuid, player.clone());
 
         let current_players = self.players.clone();
         player.clone().spawn_task(async move {
@@ -1172,6 +1190,7 @@ impl World {
                 log::info!("{}", event.join_message.clone().to_pretty_console());
             }
         });
+        Ok(())
     }
 
     /// Removes a player from the world and broadcasts a disconnect message if enabled.

@@ -7,6 +7,7 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
+    block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -14,7 +15,7 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     client::play::{
-        CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
+        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
         CUpdateEntityRot, MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
@@ -277,7 +278,7 @@ impl Entity {
         self.world
             .read()
             .await
-            .broadcast_packet_all(&CTeleportEntity::new(
+            .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),
@@ -375,33 +376,25 @@ impl Entity {
     }
 
     pub fn get_facing(&self) -> Facing {
-        let pitch = self.pitch.load() * (PI / 180.0);
-        let yaw = -self.yaw.load() * (PI / 180.0);
+        let pitch = self.pitch.load().to_radians();
+        let yaw = -self.yaw.load().to_radians();
 
-        let sin_pitch = pitch.sin();
-        let cos_pitch = pitch.cos();
-        let sin_yaw = yaw.sin();
-        let cos_yaw = yaw.cos();
+        let (sin_p, cos_p) = pitch.sin_cos();
+        let (sin_y, cos_y) = yaw.sin_cos();
 
-        let abs_sin_yaw = sin_yaw.abs();
-        let abs_sin_pitch = sin_pitch.abs();
-        let abs_cos_yaw = cos_yaw.abs();
+        let x = sin_y * cos_p;
+        let y = -sin_p;
+        let z = cos_y * cos_p;
 
-        let o = abs_sin_yaw * cos_pitch.abs();
+        let ax = x.abs();
+        let ay = y.abs();
+        let az = z.abs();
 
-        if abs_sin_yaw > abs_cos_yaw {
-            if abs_sin_pitch > o {
-                if sin_pitch < 0.0 {
-                    Facing::Up
-                } else {
-                    Facing::Down
-                }
-            } else if sin_yaw > 0.0 {
-                Facing::East
-            } else {
-                Facing::West
-            }
-        } else if cos_yaw > 0.0 {
+        if ax > ay && ax > az {
+            if x > 0.0 { Facing::East } else { Facing::West }
+        } else if ay > ax && ay > az {
+            if y > 0.0 { Facing::Up } else { Facing::Down }
+        } else if z > 0.0 {
             Facing::South
         } else {
             Facing::North

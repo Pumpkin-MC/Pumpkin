@@ -329,7 +329,7 @@ impl PumpkinServer {
                         // Remove the player from its world
                         player.remove().await;
                         // Tick down the online count
-                        server.remove_player().await;
+                        server.remove_player(&player).await;
                     }
                 } else {
                     // Also handle case of client connects but does not become a player (like a server

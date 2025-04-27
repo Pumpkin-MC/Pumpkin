@@ -7,6 +7,7 @@ pub mod chunk;
 pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
+pub mod entity;
 mod generation;
 pub mod item;
 pub mod level;

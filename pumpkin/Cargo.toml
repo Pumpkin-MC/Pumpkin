@@ -47,7 +47,7 @@ rand = "0.8"
 num-bigint = "0.4"
 
 # Console line reading
-rustyline-async = { git = "https://github.com/zyansheep/rustyline-async.git", rev = "6dda63402becfcfa11968a3531e8a17aed3ec994" }
+rustyline-async = "0.4.6"
 
 # encryption
 rsa = { version = "0.9", features = ["sha1"] }
@@ -86,7 +86,7 @@ bitflags = "2.9.0"
 rustc-hash = "2.1.1"
 
 # Task handling
-tokio-util = { version = "0.7.14", features = ["rt"] }
+tokio-util = { version = "0.7.15", features = ["rt"] }
 
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
