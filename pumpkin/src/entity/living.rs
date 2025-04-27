@@ -44,7 +44,7 @@ impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             entity,
-            last_pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            last_pos: AtomicCell::new(entity.pos.load()),
             time_until_regen: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
