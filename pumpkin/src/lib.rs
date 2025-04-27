@@ -11,6 +11,7 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
+use std::io::stdin;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::{
@@ -133,7 +134,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if advanced_config().commands.use_console {
+        if advanced_config().commands.use_tty {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
@@ -202,9 +203,13 @@ impl PumpkinServer {
 
         let mut ticker = Ticker::new(BASIC_CONFIG.tps);
 
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
+        if advanced_config().commands.use_console {
+            if let Some((wrapper, _)) = &*LOGGER_IMPL {
+                if let Some(rl) = wrapper.take_readline() {
+                    setup_console(rl, server.clone());
+                } else {
+                    setup_stdin_console(server.clone());
+                }
             }
         }
 
@@ -376,6 +381,30 @@ impl PumpkinServer {
             }
         }
     }
+}
+
+fn setup_stdin_console(server: Arc<Server>) {
+    tokio::spawn(async move {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut line = String::new();
+            if let Ok(_) = stdin().read_line(&mut line) {
+            } else {
+                break;
+            };
+            let command = &line[..line.len() - 1]; // Remove the newline
+            send_cancellable! {{
+                ServerCommandEvent::new(command.to_string());
+
+                'after: {
+                    let dispatcher = server.command_dispatcher.read().await;
+
+                    dispatcher
+                        .handle_command(&mut command::CommandSender::Console, &server, command)
+                        .await;
+                }
+            }}
+        }
+    });
 }
 
 fn setup_console(rl: Readline, server: Arc<Server>) {
