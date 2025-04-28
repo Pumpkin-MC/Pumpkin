@@ -1,10 +1,13 @@
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
+use super::EntityBase;
+use super::{Entity, EntityId, NBTStorage, effect::Effect};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
+use pumpkin_data::Block;
 use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_nbt::tag::NbtTag;
@@ -12,14 +15,11 @@ use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::{
     client::play::{CDamageEvent, CSetEquipment, EquipmentSlot, MetaDataType, Metadata},
-    codec::slot::Slot,
+    codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
-
-use super::EntityBase;
-use super::{Entity, EntityId, NBTStorage, effect::Effect};
 
 /// Represents a living entity within the game world.
 ///
@@ -42,9 +42,10 @@ pub struct LivingEntity {
 }
 impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
+        let pos = entity.pos.load();
         Self {
             entity,
-            last_pos: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            last_pos: AtomicCell::new(pos),
             time_until_regen: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
@@ -55,9 +56,9 @@ impl LivingEntity {
     }
 
     pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
-        let equipment: Vec<(EquipmentSlot, Slot)> = equipment
+        let equipment: Vec<(EquipmentSlot, ItemStackSerializer)> = equipment
             .iter()
-            .map(|(slot, stack)| (*slot, Slot::from(stack)))
+            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
             .collect();
         self.entity
             .world
@@ -80,7 +81,7 @@ impl LivingEntity {
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
-                stack_amount.into(),
+                stack_amount.try_into().unwrap(),
             ))
             .await;
     }
@@ -151,6 +152,12 @@ impl LivingEntity {
         // TODO broadcast metadata
     }
 
+    pub async fn remove_effect(&self, effect_type: EffectType) {
+        let mut effects = self.active_effects.lock().await;
+        effects.remove(&effect_type);
+        // TODO broadcast metadata
+    }
+
     pub async fn has_effect(&self, effect: EffectType) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)
@@ -163,9 +170,7 @@ impl LivingEntity {
 
     /// Returns if the entity was damaged or not
     pub fn check_damage(&self, amount: f32) -> bool {
-        let regen = self
-            .time_until_regen
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let regen = self.time_until_regen.load(Relaxed);
 
         let last_damage = self.last_damage_taken.load();
         // TODO: check if bypasses iframe
@@ -174,12 +179,21 @@ impl LivingEntity {
                 return false;
             }
         } else {
-            self.time_until_regen
-                .store(20, std::sync::atomic::Ordering::Relaxed);
+            self.time_until_regen.store(20, Relaxed);
         }
 
         self.last_damage_taken.store(amount);
         amount > 0.0
+    }
+
+    // Check if the entity is in water
+    pub async fn is_in_water(&self) -> bool {
+        let world = self.entity.world.read().await;
+        let block_pos = self.entity.block_pos.load();
+        world
+            .get_block(&block_pos)
+            .await
+            .is_ok_and(|block| block == Block::WATER)
     }
 
     pub async fn update_fall_distance(
@@ -190,22 +204,21 @@ impl LivingEntity {
     ) {
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
-            if fall_distance <= 0.0 || dont_damage {
+            if fall_distance <= 0.0 || dont_damage || self.is_in_water().await {
                 return;
             }
 
             let safe_fall_distance = 3.0;
             let mut damage = fall_distance - safe_fall_distance;
-            damage = (damage).round();
-            if !self.check_damage(damage) {
-                return;
-            }
+            damage = (damage).ceil();
 
-            self.entity
-                .play_sound(Self::get_fall_sound(fall_distance as i32))
-                .await;
             // TODO: Play block fall sound
-            self.damage(damage, DamageType::FALL).await; // Fall
+            let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
+            if check_damage {
+                self.entity
+                    .play_sound(Self::get_fall_sound(fall_distance as i32))
+                    .await;
+            }
         } else if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance
@@ -238,26 +251,34 @@ impl LivingEntity {
             )
             .await;
     }
+
+    fn tick_move(&self) {
+        let velo = self.entity.velocity.load();
+        let pos = self.entity.pos.load();
+        self.entity
+            .pos
+            .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
+        let multiplier = f64::from(Entity::velocity_multiplier(pos));
+        self.entity
+            .velocity
+            .store(velo.multiply(multiplier, 1.0, multiplier));
+    }
 }
 
 #[async_trait]
 impl EntityBase for LivingEntity {
     async fn tick(&self, server: &Server) {
         self.entity.tick(server).await;
+        self.tick_move();
 
-        if self
-            .time_until_regen
-            .load(std::sync::atomic::Ordering::Relaxed)
-            > 0
-        {
-            self.time_until_regen
-                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        if self.time_until_regen.load(Relaxed) > 0 {
+            self.time_until_regen.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
             let time = self
                 .death_time
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if time >= 20 {
+            if time == 20 {
                 // Spawn Death particles
                 self.entity
                     .world

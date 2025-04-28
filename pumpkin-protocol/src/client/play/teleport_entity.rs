@@ -9,6 +9,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
+/// Only used when teleporting a player's vehicle, this packet is sent to the player.
 #[packet(PLAY_TELEPORT_ENTITY)]
 pub struct CTeleportEntity<'a> {
     entity_id: VarInt,
@@ -42,6 +43,7 @@ impl<'a> CTeleportEntity<'a> {
     }
 }
 
+// TODO: Do we need a custom impl?
 impl ClientPacket for CTeleportEntity<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;

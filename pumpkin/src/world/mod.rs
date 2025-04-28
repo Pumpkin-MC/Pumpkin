@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -22,23 +23,30 @@ use crate::{
 };
 use bitflags::bitflags;
 use border::Worldborder;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::{
-    block::Block,
+    Block,
+    block_properties::{
+        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+    },
     entity::{EntityStatus, EntityType},
+    fluid::Fluid,
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
 use pumpkin_macros::send_cancellable;
+use pumpkin_nbt::to_bytes_unnamed;
+use pumpkin_protocol::client::play::{CSetEntityMetadata, MetaDataType, Metadata};
+use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     client::play::{
-        CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
+        CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        FilterType, GameEvent, InitChat, PlayerAction, PreviousMessage,
+        FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
     },
     server::play::SChatMessage,
 };
@@ -54,14 +62,18 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::block::registry::{
-    get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+use pumpkin_world::entity::entity_data_flags::{
+    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
 };
-use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting, biome, level::SyncChunk};
+use pumpkin_world::{
+    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
+    level::SyncChunk,
+};
 use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
+use serde::Serialize;
 use thiserror::Error;
 use time::LevelTime;
 use tokio::sync::{RwLock, mpsc};
@@ -152,9 +164,6 @@ pub struct World {
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
-    /// A log of the last 20 chat messages (or attempted chat messages) from players.
-    /// Used for previous message acknowledgement.
-    pub chat_log: Mutex<Box<[PreviousMessage]>>,
 }
 
 impl World {
@@ -180,7 +189,6 @@ impl World {
             block_registry,
             sea_level: generation_settings.sea_level,
             unsent_block_changes: Mutex::new(HashMap::new()),
-            chat_log: Mutex::new(Box::new([])),
         }
     }
 
@@ -210,7 +218,7 @@ impl World {
         &self,
         message: &TextComponent,
         sender_name: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
         self.broadcast_packet_all(&CDisguisedChatMessage::new(
@@ -228,105 +236,46 @@ impl World {
         chat_message: &SChatMessage,
         decorated_message: &TextComponent,
     ) {
-        // Todo: Proper ACK handling, handle signature chain de-sync
-
-        // Don't leave this locked in case sender is also recipient
-        let sender_messages_sent = {
-            let sender_chat_session = sender.chat_session.lock().await;
-            sender_chat_session.messages_sent
+        let messages_sent: i32 = sender.chat_session.lock().await.messages_sent;
+        let sender_last_seen = {
+            let cache = sender.signature_cache.lock().await;
+            cache.last_seen.clone()
         };
 
-        let current_players = self.players.read().await;
-
-        for (_, recipient) in current_players.iter() {
-            let mut recipient_chat_session = recipient.chat_session.lock().await;
-            let filtered_chat_log = self
-                .get_filtered_chat_log(
-                    chat_message.acknowledged.clone(),
-                    recipient_chat_session.messages_received == 0,
-                )
-                .await;
-
+        for recipient in self.players.read().await.values() {
+            let messages_received: i32 = recipient.chat_session.lock().await.messages_received;
             let packet = &CPlayerChatMessage::new(
-                VarInt(recipient_chat_session.messages_received),
+                VarInt(messages_received),
                 sender.gameprofile.id,
-                VarInt(sender_messages_sent),
+                VarInt(messages_sent),
                 chat_message.signature.clone(),
                 chat_message.message.clone(),
                 chat_message.timestamp,
                 chat_message.salt,
-                filtered_chat_log.clone(),
+                sender_last_seen.indexed_for(recipient).await,
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
                 TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
                 None,
             );
-
             recipient.client.enqueue_packet(packet).await;
 
-            recipient_chat_session.messages_received += 1;
+            recipient
+                .signature_cache
+                .lock()
+                .await
+                .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+
+            let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
+            if recipient.gameprofile.id != sender.gameprofile.id {
+                // Sender may update recipient on signatures recipient hasn't seen
+                recipient_signature_cache.cache_signatures(sender_last_seen.as_ref());
+            }
+            recipient.chat_session.lock().await.messages_received += 1;
         }
 
         sender.chat_session.lock().await.messages_sent += 1;
-
-        self.append_to_chat_log(chat_message.signature.clone())
-            .await;
-    }
-
-    /// Adds a message to the chat log and updates ids in the chat log
-    /// id 1 is most recent, id 20 is oldest
-    pub async fn append_to_chat_log(&self, signature: Option<Box<[u8]>>) {
-        let new_message = PreviousMessage {
-            id: VarInt(1),
-            signature,
-        };
-
-        let mut messages = Vec::from(self.chat_log.lock().await.as_ref());
-        messages.push(new_message);
-        if messages.len() > 20 {
-            messages.remove(0);
-        }
-        let messages_len = messages.len();
-
-        for (i, message) in messages.iter_mut().enumerate() {
-            message.id = VarInt((messages_len - i) as i32);
-        }
-
-        *self.chat_log.lock().await = messages.into_boxed_slice();
-    }
-
-    /// Returns a log of the last 20 messages, filtered by ACK bitset
-    /// Message ID should only be 0 if signatures are being sent
-    /// Signatures should only be sent in the first chat to each player
-    pub async fn get_filtered_chat_log(
-        &self,
-        acknowledged: Box<[u8]>,
-        first_message: bool,
-    ) -> Box<[PreviousMessage]> {
-        let bitset = format!(
-            "{:04b}{:08b}{:08b}",
-            acknowledged[2], acknowledged[1], acknowledged[0]
-        );
-
-        let filtered_log: Vec<PreviousMessage> = self
-            .chat_log
-            .lock()
-            .await
-            .iter()
-            .filter(|v| bitset.chars().nth(v.id.0 as usize - 1).unwrap_or('0') == '1') // Filter based on bitset
-            .map(|message| {
-                let mut message = message.clone();
-                if first_message {
-                    message.id = VarInt(0);
-                } else {
-                    message.signature = None;
-                }
-                message
-            }) // Clone the messages
-            .collect();
-
-        filtered_log.into_boxed_slice()
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
@@ -357,12 +306,12 @@ impl World {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle: Particle,
+        particle: Particle,
     ) {
         let players = self.players.read().await;
-        for (_, player) in players.iter() {
+        for player in players.values() {
             player
-                .spawn_particle(position, offset, max_speed, particle_count, pariticle)
+                .spawn_particle(position, offset, max_speed, particle_count, particle)
                 .await;
         }
     }
@@ -381,14 +330,7 @@ impl World {
         pitch: f32,
     ) {
         let seed = thread_rng().r#gen::<f64>();
-        let packet = CSoundEffect::new(
-            IdOr::Id(u32::from(sound_id)),
-            category,
-            position,
-            volume,
-            pitch,
-            seed,
-        );
+        let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
 
@@ -455,8 +397,6 @@ impl World {
         // Entity ticks
         for entity in entities_to_tick {
             entity.tick(server).await;
-            // This boolean thing prevents deadlocks. Since we lock players, we can't broadcast packets.
-            let mut collied_player = None;
             for player in self.players.read().await.values() {
                 if player
                     .living_entity
@@ -467,12 +407,9 @@ impl World {
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
-                    collied_player = Some(player.clone());
+                    entity.on_player_collision(player.clone()).await;
                     break;
                 }
-            }
-            if let Some(player) = collied_player {
-                entity.on_player_collision(player).await;
             }
         }
     }
@@ -509,6 +446,7 @@ impl World {
 
     pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
+        let fluids_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
         for scheduled_tick in blocks_to_tick {
             let block = self.get_block(&scheduled_tick.block_pos).await.unwrap();
@@ -521,6 +459,20 @@ impl World {
                     .await;
             }
         }
+
+        for scheduled_tick in fluids_to_tick {
+            let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
+                continue;
+            };
+            if scheduled_tick.target_block_id != fluid.id {
+                continue;
+            }
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
+                pumpkin_fluid
+                    .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
+                    .await;
+            }
+        }
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -529,7 +481,7 @@ impl World {
             let pos = BlockPos(Vector3::new(position.x, y, position.z));
             let block = self.get_block_state(&pos).await;
             if let Ok(block) = block {
-                if block.air {
+                if block.is_air() {
                     continue;
                 }
             }
@@ -564,7 +516,7 @@ impl World {
                 entity_id,
                 base_config.hardcore,
                 &dimensions,
-                base_config.max_players.into(),
+                base_config.max_players.try_into().unwrap(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance
                 false,
@@ -574,7 +526,10 @@ impl World {
                 self.dimension_type.name(),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
-                base_config.default_gamemode as i8,
+                player
+                    .previous_gamemode
+                    .load()
+                    .map_or(-1, |gamemode| gamemode as i8),
                 false,
                 false,
                 None,
@@ -624,8 +579,10 @@ impl World {
         // and also send their info to everyone else.
         log::debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-            // TODO: Remove magic numbers
-            0x01 | 0x04,
+            (PlayerInfoFlags::ADD_PLAYER
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_LISTED)
+                .bits(),
             &[pumpkin_protocol::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
@@ -634,6 +591,7 @@ impl World {
                         properties: &gameprofile.properties,
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
+                    PlayerAction::UpdateListed(true),
                 ],
             }],
         ))
@@ -651,10 +609,13 @@ impl World {
             {
                 let chat_session = player.chat_session.lock().await;
 
-                let mut player_actions = vec![PlayerAction::AddPlayer {
-                    name: &player.gameprofile.name,
-                    properties: &player.gameprofile.properties,
-                }];
+                let mut player_actions = vec![
+                    PlayerAction::AddPlayer {
+                        name: &player.gameprofile.name,
+                        properties: &player.gameprofile.properties,
+                    },
+                    PlayerAction::UpdateListed(true),
+                ];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -668,10 +629,9 @@ impl World {
                 current_player_data.push((&player.gameprofile.id, player_actions));
             }
 
-            // TODO: Remove magic numbers
-            let mut action_flags = 0x01;
+            let mut action_flags = PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_LISTED;
             if base_config.allow_chat_reports {
-                action_flags |= 0x02;
+                action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
 
             let entries = current_player_data
@@ -685,7 +645,7 @@ impl World {
             log::debug!("Sending player info to {}", player.gameprofile.name);
             player
                 .client
-                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags, &entries))
+                .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
         };
 
@@ -731,24 +691,36 @@ impl World {
                     entity.velocity.load(),
                 ))
                 .await;
-        }
+            let config = existing_player.config.read().await;
+            let mut buf = Vec::new();
+            for meta in [
+                Metadata::new(
+                    DATA_PLAYER_MODE_CUSTOMISATION,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    DATA_PLAYER_MAIN_HAND,
+                    MetaDataType::Byte,
+                    config.main_hand as u8,
+                ),
+            ] {
+                let mut serializer_buf = Vec::new();
 
-        // Set skin parts and tablist
-        for player in self.players.read().await.values() {
-            //Set / Update skin part for every player
-            player.send_client_information().await;
-
-            //Update tablist
-            //For the tablist to update, the player (who is not on the tablist) needs to send the packet and the tablist will be updated for every player
-            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-                0x08,
-                &[pumpkin_protocol::client::play::Player {
-                    uuid: player.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListed(true)],
-                }],
-            ))
-            .await;
+                let mut serializer = Serializer::new(&mut serializer_buf);
+                meta.serialize(&mut serializer).unwrap();
+                buf.extend(serializer_buf);
+            }
+            buf.put_u8(255);
+            player
+                .client
+                .enqueue_packet(&CSetEntityMetadata::new(
+                    existing_player.get_entity().entity_id.into(),
+                    buf.into(),
+                ))
+                .await;
         }
+        player.send_client_information().await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
@@ -859,8 +831,8 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u32);
-        for (_, player) in self.players.read().await.iter() {
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
+        for player in self.players.read().await.values() {
             if player.position().squared_distance_to_vec(position) > 4096.0 {
                 continue;
             }
@@ -1083,8 +1055,9 @@ impl World {
 
     /// Gets a `Player` by a username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
+        let lowercase = name.to_lowercase();
         for player in self.players.read().await.values() {
-            if player.gameprofile.name.to_lowercase() == name.to_lowercase() {
+            if player.gameprofile.name.to_lowercase() == lowercase {
                 return Some(player.clone());
             }
         }
@@ -1104,7 +1077,7 @@ impl World {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not.
     pub async fn get_player_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<Player>> {
-        return self.players.read().await.get(&id).cloned();
+        self.players.read().await.get(&id).cloned()
     }
 
     /// Gets a list of players whose location equals the given position in the world.
@@ -1190,11 +1163,8 @@ impl World {
     ///
     /// * `uuid`: The unique UUID of the player to add.
     /// * `player`: An `Arc<Player>` reference to the player object.
-    pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) {
-        {
-            let mut current_players = self.players.write().await;
-            current_players.insert(uuid, player.clone())
-        };
+    pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) -> Result<(), String> {
+        self.players.write().await.insert(uuid, player.clone());
 
         let current_players = self.players.clone();
         player.clone().spawn_task(async move {
@@ -1220,6 +1190,7 @@ impl World {
                 log::info!("{}", event.join_message.clone().to_pretty_console());
             }
         });
+        Ok(())
     }
 
     /// Removes a player from the world and broadcasts a disconnect message if enabled.
@@ -1248,11 +1219,8 @@ impl World {
             .remove(&player.gameprofile.id)
             .unwrap();
         let uuid = player.gameprofile.id;
-        self.broadcast_packet_except(
-            &[player.gameprofile.id],
-            &CRemovePlayerInfo::new(1.into(), &[uuid]),
-        )
-        .await;
+        self.broadcast_packet_except(&[player.gameprofile.id], &CRemovePlayerInfo::new(&[uuid]))
+            .await;
         self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
             .await;
 
@@ -1312,13 +1280,14 @@ impl World {
         .await;
     }
 
-    /// Sets a block
+    /// Sets a block and returns the old block id
+    #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
-        block_state_id: u16,
+        block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> u16 {
+    ) -> BlockStateId {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
         let mut chunk = chunk.write().await;
@@ -1365,6 +1334,7 @@ impl World {
 
         let block_state = self.get_block_state(position).await.unwrap();
         let new_block = Block::from_state_id(block_state_id).unwrap();
+        let new_fluid = self.get_fluid(position).await.unwrap_or(Fluid::EMPTY);
 
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
@@ -1372,6 +1342,16 @@ impl World {
                 .on_placed(
                     self,
                     &new_block,
+                    block_state_id,
+                    position,
+                    replaced_block_state_id,
+                    block_moved,
+                )
+                .await;
+            self.block_registry
+                .on_placed_fluid(
+                    self,
+                    &new_fluid,
                     block_state_id,
                     position,
                     replaced_block_state_id,
@@ -1439,6 +1419,12 @@ impl World {
             .await;
     }
 
+    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
+        self.level
+            .schedule_fluid_tick(block_id, &block_pos, delay)
+            .await;
+    }
+
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
         self.level
             .is_block_tick_scheduled(block_pos, block.id)
@@ -1485,7 +1471,7 @@ impl World {
         flags: BlockFlags,
     ) {
         let block = self.get_block(position).await.unwrap();
-        let event = BlockBreakEvent::new(cause.clone(), block.clone(), 0, false);
+        let event = BlockBreakEvent::new(cause.clone(), block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .lock()
@@ -1519,14 +1505,17 @@ impl World {
 
     pub async fn get_chunk(&self, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
         let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
-        let chunk = match self.level.try_get_chunk(chunk_coordinate) {
+
+        match self.level.try_get_chunk(chunk_coordinate) {
             Some(chunk) => chunk.clone(),
             None => self.receive_chunk(chunk_coordinate).await.0,
-        };
-        chunk
+        }
     }
 
-    pub async fn get_block_state_id(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
+    pub async fn get_block_state_id(
+        &self,
+        position: &BlockPos,
+    ) -> Result<BlockStateId, GetBlockError> {
         let chunk = self.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
 
@@ -1546,24 +1535,29 @@ impl World {
     pub async fn get_block(
         &self,
         position: &BlockPos,
-    ) -> Result<pumpkin_data::block::Block, GetBlockError> {
+    ) -> Result<pumpkin_data::Block, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    pub async fn get_fluid(
+        &self,
+        position: &BlockPos,
+    ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
+        let id = self.get_block_state_id(position).await?;
+        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
     pub async fn get_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
+    ) -> Result<pumpkin_data::BlockState, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
-    pub fn get_state_by_id(
-        &self,
-        id: u16,
-    ) -> Result<pumpkin_data::block::BlockState, GetBlockError> {
+    pub fn get_state_by_id(&self, id: u16) -> Result<pumpkin_data::BlockState, GetBlockError> {
         get_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
@@ -1571,7 +1565,7 @@ impl World {
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> Result<(pumpkin_data::block::Block, pumpkin_data::block::BlockState), GetBlockError> {
+    ) -> Result<(pumpkin_data::Block, pumpkin_data::BlockState), GetBlockError> {
         let id = self.get_block_state_id(position).await?;
         get_block_and_state_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
@@ -1589,6 +1583,7 @@ impl World {
             }
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let neighbor_block = self.get_block(&neighbor_pos).await;
+            let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
                     self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1601,6 +1596,15 @@ impl World {
                             &source_block,
                             false,
                         )
+                        .await;
+                }
+            }
+            if let Ok(neighbor_fluid) = neighbor_fluid {
+                if let Some(neighbor_pumpkin_fluid) =
+                    self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
+                {
+                    neighbor_pumpkin_fluid
+                        .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
                         .await;
                 }
             }
@@ -1667,5 +1671,40 @@ impl World {
         if new_state_id != block_state.id {
             self.set_block_state(block_pos, new_state_id, flags).await;
         }
+    }
+
+    pub async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        let chunk = self.get_chunk(block_pos).await;
+        let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
+
+        chunk.block_entities.get(block_pos).cloned()
+    }
+
+    pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+        let block_pos = block_entity.get_position();
+        let chunk = self.get_chunk(&block_pos).await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        let block_entity_nbt = block_entity.chunk_data_nbt();
+
+        if let Some(nbt) = block_entity_nbt {
+            let mut bytes = Vec::new();
+            to_bytes_unnamed(&nbt, &mut bytes).unwrap();
+            self.broadcast_packet_all(&CBlockEntityData::new(
+                block_entity.get_position(),
+                VarInt(block_entity.get_id() as i32),
+                bytes.into_boxed_slice(),
+            ))
+            .await;
+        }
+
+        chunk.block_entities.insert(block_pos, block_entity);
+        chunk.dirty = true;
+    }
+
+    pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
+        let chunk = self.get_chunk(block_pos).await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        chunk.block_entities.remove(block_pos);
+        chunk.dirty = true;
     }
 }

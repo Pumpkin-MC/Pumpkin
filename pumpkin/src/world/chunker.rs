@@ -9,7 +9,7 @@ use crate::entity::player::Player;
 pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
     player
         .config
-        .lock()
+        .read()
         .await
         .view_distance
         .clamp(NonZeroU8::new(2).unwrap(), BASIC_CONFIG.view_distance)

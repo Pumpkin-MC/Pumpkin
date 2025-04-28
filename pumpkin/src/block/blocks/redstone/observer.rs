@@ -1,14 +1,17 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, BlockState, Boolean, HorizontalFacing, ObserverLikeProperties,
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, ObserverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
-    block::{BlockDirection, FacingExt, HorizontalFacingExt},
+    BlockStateId,
+    block::{BlockDirection, FacingExt},
     chunk::TickPriority,
 };
 
@@ -31,11 +34,11 @@ impl PumpkinBlock for ObserverBlock {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(block);
-        props.facing = player_direction.to_block_direction().to_facing();
+        props.facing = player.living_entity.entity.get_facing();
         props.to_state_id(block)
     }
 
@@ -53,8 +56,8 @@ impl PumpkinBlock for ObserverBlock {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = ObserverLikeProperties::from_state_id(state.id, block);
 
-        if props.powered.to_bool() {
-            props.powered = Boolean::False;
+        if props.powered {
+            props.powered = false;
             world
                 .set_block_state(
                     block_pos,
@@ -63,7 +66,7 @@ impl PumpkinBlock for ObserverBlock {
                 )
                 .await;
         } else {
-            props.powered = Boolean::True;
+            props.powered = true;
             world
                 .set_block_state(
                     block_pos,
@@ -83,15 +86,15 @@ impl PumpkinBlock for ObserverBlock {
         &self,
         world: &World,
         block: &Block,
-        state: u16,
+        state: BlockStateId,
         block_pos: &BlockPos,
         direction: &BlockDirection,
         _neighbor_pos: &BlockPos,
-        _neighbor_state: u16,
-    ) -> u16 {
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
         let props = ObserverLikeProperties::from_state_id(state, block);
 
-        if &props.facing.to_block_direction() == direction && !props.powered.to_bool() {
+        if &props.facing.to_block_direction() == direction && !props.powered {
             Self::schedule_tick(world, block_pos).await;
         }
 
@@ -117,7 +120,7 @@ impl PumpkinBlock for ObserverBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let props = ObserverLikeProperties::from_state_id(state.id, block);
-        if &props.facing.to_block_direction() == direction && props.powered.to_bool() {
+        if &props.facing.to_block_direction() == direction && props.powered {
             15
         } else {
             0
@@ -141,12 +144,12 @@ impl PumpkinBlock for ObserverBlock {
         world: &Arc<World>,
         block: &Block,
         location: BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         moved: bool,
     ) {
         if !moved {
             let props = ObserverLikeProperties::from_state_id(old_state_id, block);
-            if props.powered.to_bool()
+            if props.powered
                 && world
                     .is_block_tick_scheduled(&location, &Block::OBSERVER)
                     .await

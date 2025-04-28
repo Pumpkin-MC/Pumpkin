@@ -1,32 +1,41 @@
 use blocks::cactus::CactusBlock;
 use blocks::dirt_path::DirtPathBlock;
-use blocks::doors::register_door_blocks;
+use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
-use blocks::fence_gates::register_fence_gate_blocks;
-use blocks::fences::register_fence_blocks;
-use blocks::logs::register_log_blocks;
-use blocks::redstone::buttons::register_button_blocks;
+use blocks::fence_gates::FenceGateBlock;
+use blocks::fences::FenceBlock;
+use blocks::logs::LogBlock;
+use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::rails::activator_rail::ActivatorRailBlock;
+use blocks::redstone::rails::detector_rail::DetectorRailBlock;
+use blocks::redstone::rails::powered_rail::PoweredRailBlock;
+use blocks::redstone::rails::rail::RailBlock;
 use blocks::redstone::redstone_block::RedstoneBlock;
 use blocks::redstone::redstone_lamp::RedstoneLamp;
-use blocks::redstone::redstone_torch::register_redstone_torch_blocks;
+use blocks::redstone::redstone_torch::RedstoneTorchBlock;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
+use blocks::signs::SignBlock;
+use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
-use blocks::torches::register_torch_blocks;
+use blocks::torches::TorchBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
-use pumpkin_data::block::{Block, BlockState};
+use fluids::lava::FlowingLava;
+use fluids::water::FlowingWater;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::loot_table::{
     AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
@@ -38,38 +47,54 @@ use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::Experi
 use std::sync::Arc;
 
 mod blocks;
+mod fluids;
 pub mod pumpkin_block;
+pub mod pumpkin_fluid;
 pub mod registry;
 
 #[must_use]
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
-    manager.register(JukeboxBlock);
-    manager.register(SugarCaneBlock);
+    // Blocks
     manager.register(CactusBlock);
-    manager.register(CraftingTableBlock);
-    manager.register(FurnaceBlock);
     manager.register(ChestBlock);
-    manager.register(TNTBlock);
-    manager.register(LeverBlock);
+    manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
+    manager.register(DoorBlock);
     manager.register(FarmLandBlock);
-    manager.register(RedstoneWireBlock);
-    manager.register(RedstoneBlock);
-    manager.register(RedstoneLamp);
-    manager.register(RepeaterBlock);
+    manager.register(FenceGateBlock);
+    manager.register(FenceBlock);
+    manager.register(FurnaceBlock);
+    manager.register(JukeboxBlock);
+    manager.register(LogBlock);
+    manager.register(SignBlock);
+    manager.register(StairBlock);
+    manager.register(SugarCaneBlock);
+    manager.register(TNTBlock);
+    manager.register(TorchBlock);
+
+    // Redstone
+    manager.register(ButtonBlock);
+    manager.register(LeverBlock);
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
+    manager.register(RedstoneBlock);
+    manager.register(RedstoneLamp);
+    manager.register(RedstoneTorchBlock);
+    manager.register(RedstoneWireBlock);
+    manager.register(RepeaterBlock);
     manager.register(TargetBlock);
 
-    register_door_blocks(&mut manager);
-    register_fence_blocks(&mut manager);
-    register_fence_gate_blocks(&mut manager);
-    register_log_blocks(&mut manager);
-    register_button_blocks(&mut manager);
-    register_torch_blocks(&mut manager);
-    register_redstone_torch_blocks(&mut manager);
+    // Rails
+    manager.register(RailBlock);
+    manager.register(ActivatorRailBlock);
+    manager.register(DetectorRailBlock);
+    manager.register(PoweredRailBlock);
+
+    // Fluids
+    manager.register_fluid(FlowingWater);
+    manager.register_fluid(FlowingLava);
 
     Arc::new(manager)
 }
@@ -79,7 +104,7 @@ pub async fn drop_loot(
     block: &Block,
     pos: &BlockPos,
     experience: bool,
-    state_id: u16,
+    state_id: BlockStateId,
 ) {
     if let Some(table) = &block.loot_table {
         let props =

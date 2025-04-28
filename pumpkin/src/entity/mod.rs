@@ -6,6 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
+    block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -13,7 +14,7 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     client::play::{
-        CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity, CTeleportEntity,
+        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
         CUpdateEntityRot, MetaDataType, Metadata,
     },
     codec::var_int::VarInt,
@@ -30,7 +31,10 @@ use pumpkin_util::math::{
 use serde::Serialize;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicI32, Ordering},
+    atomic::{
+        AtomicBool, AtomicI32,
+        Ordering::{Relaxed, SeqCst},
+    },
 };
 use tokio::sync::RwLock;
 
@@ -143,7 +147,7 @@ impl Entity {
         };
 
         Self {
-            entity_id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            entity_id: CURRENT_ID.fetch_add(1, Relaxed),
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
@@ -189,9 +193,9 @@ impl Entity {
         if pos != new_position {
             self.pos.store(new_position);
             self.bounding_box.store(BoundingBox::new_from_pos(
-                pos.x,
-                pos.y,
-                pos.z,
+                new_position.x,
+                new_position.y,
+                new_position.z,
                 &self.bounding_box_size.load(),
             ));
 
@@ -256,7 +260,7 @@ impl Entity {
                 self.entity_id.into(),
                 yaw as u8,
                 pitch as u8,
-                self.on_ground.load(std::sync::atomic::Ordering::Relaxed),
+                self.on_ground.load(Relaxed),
             ))
             .await;
         self.world
@@ -270,15 +274,14 @@ impl Entity {
         self.world
             .read()
             .await
-            .broadcast_packet_all(&CTeleportEntity::new(
+            .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),
                 yaw,
                 pitch,
                 // TODO
-                &[],
-                self.on_ground.load(std::sync::atomic::Ordering::SeqCst),
+                self.on_ground.load(SeqCst),
             ))
             .await;
         self.set_pos(position);
@@ -336,7 +339,7 @@ impl Entity {
         let velocity = self.velocity.load();
         self.velocity.store(Vector3::new(
             velocity.x / 2.0 - var8.x,
-            if self.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
+            if self.on_ground.load(Relaxed) {
                 (velocity.y / 2.0 + strength).min(0.4)
             } else {
                 velocity.y
@@ -346,9 +349,8 @@ impl Entity {
     }
 
     pub async fn set_sneaking(&self, sneaking: bool) {
-        assert!(self.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking);
-        self.sneaking
-            .store(sneaking, std::sync::atomic::Ordering::Relaxed);
+        assert!(self.sneaking.load(Relaxed) != sneaking);
+        self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
         if sneaking {
             self.set_pose(EntityPose::Crouching).await;
@@ -357,21 +359,57 @@ impl Entity {
         }
     }
 
+    pub fn get_horizontal_facing(&self) -> HorizontalFacing {
+        let adjusted_yaw = (self.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
+
+        match adjusted_yaw {
+            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
+            45.0..=135.0 => HorizontalFacing::West,
+            135.0..=225.0 => HorizontalFacing::North,
+            225.0..=315.0 => HorizontalFacing::East,
+            _ => HorizontalFacing::South, // Default case, should not occur
+        }
+    }
+
+    pub fn get_facing(&self) -> Facing {
+        let pitch = self.pitch.load().to_radians();
+        let yaw = -self.yaw.load().to_radians();
+
+        let (sin_p, cos_p) = pitch.sin_cos();
+        let (sin_y, cos_y) = yaw.sin_cos();
+
+        let x = sin_y * cos_p;
+        let y = -sin_p;
+        let z = cos_y * cos_p;
+
+        let ax = x.abs();
+        let ay = y.abs();
+        let az = z.abs();
+
+        if ax > ay && ax > az {
+            if x > 0.0 { Facing::East } else { Facing::West }
+        } else if ay > ax && ay > az {
+            if y > 0.0 { Facing::Up } else { Facing::Down }
+        } else if z > 0.0 {
+            Facing::South
+        } else {
+            Facing::North
+        }
+    }
+
     pub async fn set_sprinting(&self, sprinting: bool) {
-        assert!(self.sprinting.load(std::sync::atomic::Ordering::Relaxed) != sprinting);
-        self.sprinting
-            .store(sprinting, std::sync::atomic::Ordering::Relaxed);
+        assert!(self.sprinting.load(Relaxed) != sprinting);
+        self.sprinting.store(sprinting, Relaxed);
         self.set_flag(Flag::Sprinting, sprinting).await;
     }
 
     pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+        !self.on_ground.load(Relaxed)
     }
 
     pub async fn set_fall_flying(&self, fall_flying: bool) {
-        assert!(self.fall_flying.load(std::sync::atomic::Ordering::Relaxed) != fall_flying);
-        self.fall_flying
-            .store(fall_flying, std::sync::atomic::Ordering::Relaxed);
+        assert!(self.fall_flying.load(Relaxed) != fall_flying);
+        self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying).await;
     }
 
@@ -411,7 +449,7 @@ impl Entity {
         self.world
             .read()
             .await
-            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf))
+            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
             .await;
     }
 
@@ -423,8 +461,7 @@ impl Entity {
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        self.invulnerable.load(std::sync::atomic::Ordering::Relaxed)
-            || self.damage_immunities.contains(damage_type)
+        self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type)
     }
 
     fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {
@@ -432,7 +469,7 @@ impl Entity {
         // TODO: handle when player is outside world
         // let block = world.get_block(&self.block_pos.load()).await;
         // block.velocity_multiplier
-        0.0
+        1.0
         // if velo_multiplier == 1.0 {
         //     const VELOCITY_OFFSET: f64 = 0.500001; // Vanilla
         //     let pos_with_y_offset = BlockPos(Vector3::new(
@@ -445,16 +482,6 @@ impl Entity {
         // } else {
         // }
     }
-
-    fn tick_move(&self) {
-        let velo = self.velocity.load();
-        let pos = self.pos.load();
-        self.pos
-            .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
-        let multiplier = f64::from(Self::velocity_multiplier(pos));
-        self.velocity
-            .store(velo.multiply(multiplier, 1.0, multiplier));
-    }
 }
 
 #[async_trait]
@@ -464,7 +491,7 @@ impl EntityBase for Entity {
     }
 
     async fn tick(&self, _: &Server) {
-        self.tick_move();
+        //Todo! Tick
     }
 
     fn get_entity(&self) -> &Entity {
@@ -497,7 +524,7 @@ impl NBTStorage for Entity {
             "Rotation",
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
         );
-        nbt.put_bool("OnGround", self.on_ground.load(Ordering::Relaxed));
+        nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
 
         // todo more...
     }
@@ -519,7 +546,7 @@ impl NBTStorage for Entity {
         self.set_rotation(yaw, pitch);
         self.head_yaw.store(yaw);
         self.on_ground
-            .store(nbt.get_bool("OnGround").unwrap_or(false), Ordering::Relaxed);
+            .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
         // todo more...
     }
 }

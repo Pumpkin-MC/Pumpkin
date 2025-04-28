@@ -3,9 +3,7 @@ use pumpkin_util::{
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
-use crate::{
-    block::ChunkBlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter,
-};
+use crate::{block::RawBlockState, generation::noise_router::chunk_noise_router::ChunkNoiseRouter};
 
 use super::noise_router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions, density_function::NoisePos,
@@ -25,7 +23,7 @@ impl OreVeinSampler {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> Option<ChunkBlockState> {
+    ) -> Option<RawBlockState> {
         let vein_toggle = router.vein_toggle(pos, sample_options);
         let vein_type: &VeinType = if vein_toggle > 0f64 {
             &vein_type::COPPER
@@ -73,29 +71,29 @@ impl OreVeinSampler {
 }
 
 pub struct VeinType {
-    ore: ChunkBlockState,
-    raw_ore: ChunkBlockState,
-    stone: ChunkBlockState,
+    ore: RawBlockState,
+    raw_ore: RawBlockState,
+    stone: RawBlockState,
     min_y: i32,
     max_y: i32,
 }
 
 // One of the victims of removing compile time blocks
 pub mod vein_type {
-    use pumpkin_macros::block_state;
+    use pumpkin_macros::default_block_state;
 
     use super::*;
     pub const COPPER: VeinType = VeinType {
-        ore: block_state!("copper_ore"),
-        raw_ore: block_state!("raw_copper_block"),
-        stone: block_state!("granite"),
+        ore: default_block_state!("copper_ore"),
+        raw_ore: default_block_state!("raw_copper_block"),
+        stone: default_block_state!("granite"),
         min_y: 0,
         max_y: 50,
     };
     pub const IRON: VeinType = VeinType {
-        ore: block_state!("deepslate_iron_ore"),
-        raw_ore: block_state!("raw_iron_block"),
-        stone: block_state!("tuff"),
+        ore: default_block_state!("deepslate_iron_ore"),
+        raw_ore: default_block_state!("raw_iron_block"),
+        stone: default_block_state!("tuff"),
         min_y: -60,
         max_y: -8,
     };

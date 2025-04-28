@@ -43,7 +43,7 @@ impl CommandExecutor for Executor {
                     .add_child(
                         TextComponent::text(format!(
                             "{}\n{}\n",
-                            &CARGO_PKG_DESCRIPTION[0..35],
+                            &CARGO_PKG_DESCRIPTION[0..36],
                             &CARGO_PKG_DESCRIPTION[37..]
                         ))
                         .click_event(ClickEvent::CopyToClipboard {

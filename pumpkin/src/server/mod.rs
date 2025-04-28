@@ -15,7 +15,7 @@ use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_inventory::drag_handler::DragHandler;
 use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_macros::send_cancellable;
@@ -27,9 +27,10 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
+use rsa::RsaPublicKey;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::{
     sync::{Arc, atomic::Ordering},
     time::Duration,
@@ -50,9 +51,9 @@ pub struct Server {
     /// Handles cryptographic keys for secure communication.
     key_store: KeyStore,
     /// Manages server status information.
-    server_listing: Mutex<CachedStatus>,
+    listing: Mutex<CachedStatus>,
     /// Saves server branding information.
-    server_branding: CachedBranding,
+    branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
     pub command_dispatcher: RwLock<CommandDispatcher>,
     /// Block behaviour.
@@ -73,12 +74,17 @@ pub struct Server {
     container_id: AtomicU32,
     /// Manages authentication with an authentication server, if enabled.
     pub auth_client: Option<reqwest::Client>,
+    /// Mojang's public keys, used for chat session signing
+    /// Pulled from Mojang API on startup
+    pub mojang_public_keys: Mutex<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    // Whether the server whitelist is on or off
+    pub white_list: AtomicBool,
     tasks: TaskTracker,
 }
 
@@ -129,8 +135,8 @@ impl Server {
             item_registry: super::item::items::default_registry(),
             auth_client,
             key_store: KeyStore::new(),
-            server_listing: Mutex::new(CachedStatus::new()),
-            server_branding: CachedBranding::new(),
+            listing: Mutex::new(CachedStatus::new()),
+            branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
             defaultgamemode: Mutex::new(DefaultGamemode {
                 gamemode: BASIC_CONFIG.default_gamemode,
@@ -139,7 +145,9 @@ impl Server {
                 format!("{world_name}/playerdata"),
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
+            white_list: AtomicBool::new(BASIC_CONFIG.white_list),
             tasks: TaskTracker::new(),
+            mojang_public_keys: Mutex::new(Vec::new()),
         }
     }
 
@@ -165,6 +173,7 @@ impl Server {
         self.tasks.spawn(task)
     }
 
+    #[allow(clippy::if_then_some_else_none)]
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -213,18 +222,21 @@ impl Server {
         send_cancellable! {{
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                world
+                if world
                     .add_player(player.gameprofile.id, player.clone())
-                    .await;
-                // TODO: Config if we want increase online
-                if let Some(config) = player.client.config.lock().await.as_ref() {
-                    // TODO: Config so we can also just ignore this hehe
-                    if config.server_listing {
-                        self.server_listing.lock().await.add_player();
+                    .await.is_ok() {
+                    // TODO: Config if we want increase online
+                    if let Some(config) = player.client.config.lock().await.as_ref() {
+                        // TODO: Config so we can also just ignore this hehe
+                        if config.server_listing {
+                            self.listing.lock().await.add_player(&player);
+                        }
                     }
-                }
 
-                Some((player, world.clone()))
+                    Some((player, world.clone()))
+                } else {
+                    None
+                }
             }
 
             'cancelled: {
@@ -234,9 +246,9 @@ impl Server {
         }}
     }
 
-    pub async fn remove_player(&self) {
+    pub async fn remove_player(&self, player: &Player) {
         // TODO: Config if we want decrease online
-        self.server_listing.lock().await.remove_player();
+        self.listing.lock().await.remove_player(player);
     }
 
     pub async fn shutdown(&self) {
@@ -339,7 +351,7 @@ impl Server {
         &self,
         message: &TextComponent,
         sender_name: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
         send_cancellable! {{
@@ -464,11 +476,11 @@ impl Server {
     }
 
     pub fn get_branding(&self) -> CPluginMessage<'_> {
-        self.server_branding.get_branding()
+        self.branding.get_branding()
     }
 
     pub fn get_status(&self) -> &Mutex<CachedStatus> {
-        &self.server_listing
+        &self.listing
     }
 
     pub fn encryption_request<'a>(

@@ -11,7 +11,6 @@ use ser::{NetworkWriteExt, ReadingError, WritingError, packet::Packet};
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{DeserializeSeed, Visitor},
-    ser::SerializeSeq,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -86,7 +85,7 @@ where
     {
         enum IdOrStateDeserializer<T> {
             Init,
-            Id(u32),
+            Id(u16),
             Value(T),
         }
 
@@ -104,11 +103,15 @@ where
                     IdOrStateDeserializer::Init => {
                         // Get the VarInt
                         let id = VarInt::deserialize(deserializer)?;
-                        assert!(id.0 >= 0);
-                        *self = IdOrStateDeserializer::<T>::Id(id.0 as u32);
+                        *self = IdOrStateDeserializer::<T>::Id(id.0.try_into().map_err(|_| {
+                            serde::de::Error::custom(format!(
+                                "{} cannot be mapped to a registry id",
+                                id.0
+                            ))
+                        })?);
                     }
                     IdOrStateDeserializer::Id(id) => {
-                        assert!(*id == 0);
+                        debug_assert!(*id == 0);
                         // Get the data
                         let value = T::deserialize(deserializer)?;
                         *self = IdOrStateDeserializer::Value(value);
@@ -144,7 +147,7 @@ where
 
 #[derive(PartialEq, Clone)]
 pub enum IdOr<T> {
-    Id(u32),
+    Id(u16),
     Value(T),
 }
 
@@ -168,10 +171,16 @@ impl<T: Serialize> Serialize for IdOr<T> {
         match self {
             IdOr::Id(id) => VarInt::from(*id + 1).serialize(serializer),
             IdOr::Value(value) => {
-                let mut seq = serializer.serialize_seq(None)?;
-                seq.serialize_element(&VarInt::from(0))?;
-                seq.serialize_element(value)?;
-                seq.end()
+                #[derive(Serialize)]
+                struct NetworkRepr<T: Serialize> {
+                    zero_id: VarInt,
+                    value: T,
+                }
+                NetworkRepr {
+                    zero_id: 0.into(),
+                    value,
+                }
+                .serialize(serializer)
             }
         }
     }
@@ -231,15 +240,16 @@ type Aes128Cfb8Enc = cfb8::Encryptor<aes::Aes128>;
 pub struct StreamEncryptor<W: AsyncWrite + Unpin> {
     cipher: Aes128Cfb8Enc,
     write: W,
-    last_unwritten_encrypted_block: Option<Box<[u8]>>,
+    last_unwritten_encrypted_byte: Option<u8>,
 }
 
 impl<W: AsyncWrite + Unpin> StreamEncryptor<W> {
     pub fn new(cipher: Aes128Cfb8Enc, stream: W) -> Self {
+        debug_assert_eq!(Aes128Cfb8Enc::block_size(), 1);
         Self {
             cipher,
             write: stream,
-            last_unwritten_encrypted_block: None,
+            last_unwritten_encrypted_byte: None,
         }
     }
 }
@@ -256,14 +266,14 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
         let mut total_written = 0;
         // Decrypt the raw data, note that our block size is 1 byte, so this is always safe
         for block in buf.chunks(Aes128Cfb8Enc::block_size()) {
-            let mut out = vec![0u8; Aes128Cfb8Enc::block_size()];
+            let mut out = [0u8];
 
-            if let Some(out_to_use) = ref_self.last_unwritten_encrypted_block.as_ref() {
+            if let Some(out_to_use) = ref_self.last_unwritten_encrypted_byte {
                 // This assumes that this `poll_write` is called on the same stream of bytes which I
                 // think is a fair assumption, since thats an invariant for the TCP stream anyway.
 
                 // This should never panic
-                out.copy_from_slice(out_to_use);
+                out[0] = out_to_use;
             } else {
                 // This is a stream cipher, so this value must be used
                 let out_block = GenericArray::from_mut_slice(&mut out);
@@ -273,7 +283,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
             let write = std::pin::Pin::new(&mut ref_self.write);
             match write.poll_write(cx, &out) {
                 std::task::Poll::Pending => {
-                    ref_self.last_unwritten_encrypted_block = Some(out.into_boxed_slice());
+                    ref_self.last_unwritten_encrypted_byte = Some(out[0]);
                     if total_written == 0 {
                         //If we didn't write anything, return pending
                         return std::task::Poll::Pending;
@@ -283,7 +293,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                     }
                 }
                 std::task::Poll::Ready(result) => {
-                    ref_self.last_unwritten_encrypted_block = None;
+                    ref_self.last_unwritten_encrypted_byte = None;
                     match result {
                         Ok(written) => total_written += written,
                         Err(err) => return std::task::Poll::Ready(Err(err)),
@@ -383,6 +393,7 @@ pub struct Property {
     pub signature: Option<String>,
 }
 
+#[derive(Serialize)]
 pub struct KnownPack<'a> {
     pub namespace: &'a str,
     pub id: &'a str,
@@ -399,6 +410,7 @@ pub enum NumberFormat {
     Fixed(TextComponent),
 }
 
+/// For the first 8 values set means relative value while unset means absolute
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum PositionFlag {
     X,

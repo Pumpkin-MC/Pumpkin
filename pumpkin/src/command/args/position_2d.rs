@@ -14,7 +14,7 @@ use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
 /// x and z coordinates only
 ///
-/// todo: implememnt ~ ^ notations
+/// todo: implement ~ ^ notations
 pub struct Position2DArgumentConsumer;
 
 impl GetClientSideArgParser for Position2DArgumentConsumer {

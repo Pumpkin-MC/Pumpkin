@@ -1,10 +1,14 @@
 use std::{
     collections::VecDeque,
+    f64::{self, consts::TAU},
     num::NonZeroU8,
     ops::AddAssign,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering},
+        atomic::{
+            AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32,
+            Ordering::{self, Relaxed},
+        },
     },
     time::{Duration, Instant},
 };
@@ -34,7 +38,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::{
-    block::BlockState,
+    BlockState,
     damage::DamageType,
     entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
@@ -48,15 +52,17 @@ use pumpkin_inventory::player::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::CSetHeldItem;
+use pumpkin_protocol::client::play::{
+    CEntityPositionSync, CSetHeldItem, PlayerInfoFlags, PreviousMessage,
+};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
         CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
         CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
         CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTeleportEntity, CTitleText, CUnloadChunk,
-        CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
+        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+        GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
     ser::packet::Packet,
@@ -88,9 +94,16 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
+use pumpkin_world::entity::entity_data_flags::{
+    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
+};
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
+use tokio::sync::RwLock;
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
+
+const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
+const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 enum BatchState {
     Initial,
@@ -177,9 +190,11 @@ pub struct Player {
     /// The player's inventory.
     pub inventory: Mutex<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
-    pub config: Mutex<PlayerConfig>,
+    pub config: RwLock<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
+    /// The player's previous gamemode
+    pub previous_gamemode: AtomicCell<Option<GameMode>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -217,7 +232,7 @@ pub struct Player {
     /// The player's last known experience level.
     pub last_sent_xp: AtomicI32,
     pub last_sent_health: AtomicI32,
-    pub last_sent_food: AtomicU32,
+    pub last_sent_food: AtomicU8,
     pub last_food_saturation: AtomicBool,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
@@ -235,6 +250,7 @@ pub struct Player {
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
+    pub signature_cache: Mutex<MessageCache>,
 }
 
 impl Player {
@@ -253,7 +269,6 @@ impl Player {
         );
         let player_uuid = gameprofile.id;
 
-        let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
 
         Self {
@@ -264,7 +279,7 @@ impl Player {
                 EntityType::PLAYER,
                 matches!(gamemode, GameMode::Creative | GameMode::Spectator),
             )),
-            config: Mutex::new(config),
+            config: RwLock::new(config),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
@@ -282,6 +297,7 @@ impl Player {
             mining_pos: Mutex::new(BlockPos(Vector3::new(0, 0, 0))),
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
+            previous_gamemode: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -297,16 +313,10 @@ impl Player {
             client_loaded_timeout: AtomicU32::new(60),
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
-            permission_lvl: OPERATOR_CONFIG
-                .read()
-                .await
-                .ops
-                .iter()
-                .find(|op| op.uuid == gameprofile_clone.id)
-                .map_or(
-                    AtomicCell::new(advanced_config().commands.default_op_level),
-                    |op| AtomicCell::new(op.level),
-                ),
+            permission_lvl: OPERATOR_CONFIG.read().await.get_entry(&player_uuid).map_or(
+                AtomicCell::new(advanced_config().commands.default_op_level),
+                |op| AtomicCell::new(op.level),
+            ),
             inventory: Mutex::new(PlayerInventory::new()),
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
@@ -315,10 +325,11 @@ impl Player {
             chunk_manager: Mutex::new(ChunkManager::new(16)),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
-            last_sent_food: AtomicU32::new(0),
+            last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
+            signature_cache: Mutex::new(MessageCache::default()),
         }
     }
 
@@ -417,8 +428,7 @@ impl Player {
         let attack_speed = base_attack_speed + add_speed;
 
         let attack_cooldown_progress = self.get_attack_cooldown_progress(0.5, attack_speed);
-        self.last_attacked_ticks
-            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.last_attacked_ticks.store(0, Relaxed);
 
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
@@ -488,7 +498,7 @@ impl Player {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle: Particle,
+        particle: Particle,
     ) {
         self.client
             .enqueue_packet(&CParticle::new(
@@ -498,7 +508,7 @@ impl Player {
                 offset,
                 max_speed,
                 particle_count,
-                VarInt(pariticle as i32),
+                VarInt(particle as i32),
                 &[],
             ))
             .await;
@@ -515,7 +525,7 @@ impl Player {
     ) {
         self.client
             .enqueue_packet(&CSoundEffect::new(
-                IdOr::Id(u32::from(sound_id)),
+                IdOr::Id(sound_id),
                 category,
                 position,
                 volume,
@@ -538,17 +548,13 @@ impl Player {
     }
 
     pub async fn tick(&self, server: &Server) {
-        if self
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if self.client.closed.load(Relaxed) {
             return;
         }
-        if self.packet_sequence.load(Ordering::Relaxed) > -1 {
+        if self.packet_sequence.load(Relaxed) > -1 {
             self.client
                 .enqueue_packet(&CAcknowledgeBlockChange::new(
-                    self.packet_sequence.swap(-1, Ordering::Relaxed).into(),
+                    self.packet_sequence.swap(-1, Relaxed).into(),
                 ))
                 .await;
         }
@@ -576,39 +582,37 @@ impl Player {
                 self.client.send_packet_now(&CChunkData(&chunk)).await;
             }
             self.client
-                .send_packet_now(&CChunkBatchEnd::new(chunk_count))
+                .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
                 .await;
         }
 
-        self.tick_counter.fetch_add(1, Ordering::Relaxed);
+        self.tick_counter.fetch_add(1, Relaxed);
 
-        if self.mining.load(Ordering::Relaxed) {
+        if self.mining.load(Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world().await;
             let block = world.get_block(&pos).await.unwrap();
             let state = world.get_block_state(&pos).await.unwrap();
             // Is the block broken?
-            if state.air {
+            if state.is_air() {
                 world
                     .set_block_breaking(&self.living_entity.entity, *pos, -1)
                     .await;
-                self.current_block_destroy_stage
-                    .store(-1, Ordering::Relaxed);
-                self.mining.store(false, Ordering::Relaxed);
+                self.current_block_destroy_stage.store(-1, Relaxed);
+                self.mining.store(false, Relaxed);
             } else {
                 self.continue_mining(
                     *pos,
                     &world,
                     &state,
                     block.name,
-                    self.start_mining_time.load(Ordering::Relaxed),
+                    self.start_mining_time.load(Relaxed),
                 )
                 .await;
             }
         }
 
-        self.last_attacked_ticks
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.last_attacked_ticks.fetch_add(1, Relaxed);
 
         self.living_entity.tick(server).await;
         self.hunger_manager.tick(self).await;
@@ -623,20 +627,15 @@ impl Player {
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
             // We never got a response from the last keep alive we sent.
-            if self
-                .wait_for_keep_alive
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if self.wait_for_keep_alive.load(Relaxed) {
                 self.kick(TextComponent::translate("disconnect.timeout", []))
                     .await;
                 return;
             }
-            self.wait_for_keep_alive
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+            self.wait_for_keep_alive.store(true, Relaxed);
             self.last_keep_alive_time.store(now);
             let id = now.elapsed().as_millis() as i64;
-            self.keep_alive_id
-                .store(id, std::sync::atomic::Ordering::Relaxed);
+            self.keep_alive_id.store(id, Relaxed);
             self.client.enqueue_packet(&CKeepAlive::new(id)).await;
         }
     }
@@ -649,20 +648,19 @@ impl Player {
         block_name: &str,
         starting_time: i32,
     ) {
-        let time = self.tick_counter.load(Ordering::Relaxed) - starting_time;
+        let time = self.tick_counter.load(Relaxed) - starting_time;
         let speed = block::calc_block_breaking(self, state, block_name).await * (time + 1) as f32;
         let progress = (speed * 10.0) as i32;
-        if progress != self.current_block_destroy_stage.load(Ordering::Relaxed) {
+        if progress != self.current_block_destroy_stage.load(Relaxed) {
             world
                 .set_block_breaking(&self.living_entity.entity, location, progress)
                 .await;
-            self.current_block_destroy_stage
-                .store(progress, Ordering::Relaxed);
+            self.current_block_destroy_stage.store(progress, Relaxed);
         }
     }
 
     pub async fn jump(&self) {
-        if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+        if self.living_entity.entity.sprinting.load(Relaxed) {
             self.add_exhaustion(0.2).await;
         } else {
             self.add_exhaustion(0.05).await;
@@ -672,10 +670,10 @@ impl Player {
     #[expect(clippy::cast_precision_loss)]
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
-        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
+        if self.living_entity.entity.on_ground.load(Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
             if delta > 0 {
-                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+                if self.living_entity.entity.sprinting.load(Relaxed) {
                     self.add_exhaustion(0.1 * delta as f32 * 0.01).await;
                 } else {
                     self.add_exhaustion(0.0 * delta as f32 * 0.01).await;
@@ -685,15 +683,14 @@ impl Player {
     }
 
     pub fn has_client_loaded(&self) -> bool {
-        self.client_loaded.load(Ordering::Relaxed)
-            || self.client_loaded_timeout.load(Ordering::Relaxed) == 0
+        self.client_loaded.load(Relaxed) || self.client_loaded_timeout.load(Relaxed) == 0
     }
 
     pub fn set_client_loaded(&self, loaded: bool) {
         if !loaded {
-            self.client_loaded_timeout.store(60, Ordering::Relaxed);
+            self.client_loaded_timeout.store(60, Relaxed);
         }
-        self.client_loaded.store(loaded, Ordering::Relaxed);
+        self.client_loaded.store(loaded, Relaxed);
     }
 
     pub fn get_attack_cooldown_progress(&self, base_time: f64, attack_speed: f64) -> f64 {
@@ -916,7 +913,7 @@ impl Player {
                 let position = event.to;
                 let i = self
                     .teleport_id_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .fetch_add(1, Relaxed);
                 let teleport_id = i + 1;
                 self.living_entity.set_pos(position);
                 let entity = &self.living_entity.entity;
@@ -946,30 +943,23 @@ impl Player {
                 to: position,
                 cancelled: false,
             };
-
             'after: {
                 let position = event.to;
-                self.living_entity
-                    .entity
+                let entity = self.get_entity();
+                self.request_teleport(position, yaw, pitch).await;
+                entity
                     .world
                     .read()
                     .await
-                    .broadcast_packet_all(&CTeleportEntity::new(
+                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                         self.living_entity.entity.entity_id.into(),
                         position,
                         Vector3::new(0.0, 0.0, 0.0),
                         yaw,
                         pitch,
-                        // TODO
-                        &[],
-                        self.living_entity
-                            .entity
-                            .on_ground
-                            .load(std::sync::atomic::Ordering::SeqCst),
+                        entity.on_ground.load(Ordering::SeqCst),
                     ))
                     .await;
-                self.living_entity.entity.set_pos(position);
-                self.living_entity.entity.set_rotation(yaw, pitch);
             }
         }}
     }
@@ -996,11 +986,7 @@ impl Player {
 
     /// Kicks the player with a reason depending on the connection state.
     pub async fn kick(&self, reason: TextComponent) {
-        if self
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if self.client.closed.load(Relaxed) {
             log::debug!(
                 "Tried to kick client id {} but connection is closed!",
                 self.client.id
@@ -1056,15 +1042,14 @@ impl Player {
         let food = self.hunger_manager.level.load();
         let saturation = self.hunger_manager.saturation.load();
 
-        let last_health = self.last_sent_health.load(Ordering::Relaxed);
-        let last_food = self.last_sent_food.load(Ordering::Relaxed);
-        let last_saturation = self.last_food_saturation.load(Ordering::Relaxed);
+        let last_health = self.last_sent_health.load(Relaxed);
+        let last_food = self.last_sent_food.load(Relaxed);
+        let last_saturation = self.last_food_saturation.load(Relaxed);
 
         if health != last_health || food != last_food || (saturation == 0.0) != last_saturation {
-            self.last_sent_health.store(health, Ordering::Relaxed);
-            self.last_sent_food.store(food, Ordering::Relaxed);
-            self.last_food_saturation
-                .store(saturation == 0.0, Ordering::Relaxed);
+            self.last_sent_health.store(health, Relaxed);
+            self.last_sent_food.store(food, Relaxed);
+            self.last_food_saturation.store(saturation == 0.0, Relaxed);
             self.send_health().await;
         }
     }
@@ -1075,10 +1060,10 @@ impl Player {
     }
 
     pub fn tick_client_load_timeout(&self) {
-        if !self.client_loaded.load(Ordering::Relaxed) {
-            let timeout = self.client_loaded_timeout.load(Ordering::Relaxed);
+        if !self.client_loaded.load(Relaxed) {
+            let timeout = self.client_loaded_timeout.load(Relaxed);
             self.client_loaded_timeout
-                .store(timeout.saturating_sub(1), Ordering::Relaxed);
+                .store(timeout.saturating_sub(1), Relaxed);
         }
     }
 
@@ -1115,6 +1100,9 @@ impl Player {
             'after: {
                 let gamemode = event.new_gamemode;
                 self.gamemode.store(gamemode);
+                // TODO: Fix this when mojang fixes it
+                // This is intentional to keep the pure vanilla mojang experience
+                // self.previous_gamemode.store(self.previous_gamemode.load());
                 {
                     // Use another scope so that we instantly unlock `abilities`.
                     let mut abilities = self.abilities.lock().await;
@@ -1124,7 +1112,7 @@ impl Player {
 
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
-                    std::sync::atomic::Ordering::Relaxed,
+                    Relaxed,
                 );
                 self.living_entity
                     .entity
@@ -1132,8 +1120,7 @@ impl Player {
                     .read()
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                        // TODO: Remove magic number
-                        0x04,
+                        PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
@@ -1152,18 +1139,26 @@ impl Player {
 
     /// Send the player's skin layers and used hand to all players.
     pub async fn send_client_information(&self) {
-        let config = self.config.lock().await;
+        let config = self.config.read().await;
         self.living_entity
             .entity
             .send_meta_data(&[
-                Metadata::new(17, MetaDataType::Byte, config.skin_parts),
-                Metadata::new(18, MetaDataType::Byte, config.main_hand as u8),
+                Metadata::new(
+                    DATA_PLAYER_MODE_CUSTOMISATION,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    DATA_PLAYER_MAIN_HAND,
+                    MetaDataType::Byte,
+                    config.main_hand as u8,
+                ),
             ])
             .await;
     }
 
     pub async fn can_harvest(&self, block: &BlockState, block_name: &str) -> bool {
-        !block.tool_required
+        !block.tool_required()
             || self
                 .inventory
                 .lock()
@@ -1203,7 +1198,7 @@ impl Player {
             speed *= fatigue_speed;
         }
         // TODO: Handle when in water
-        if !self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
+        if !self.living_entity.entity.on_ground.load(Relaxed) {
             speed /= 5.0;
         }
         speed
@@ -1228,7 +1223,7 @@ impl Player {
     pub async fn send_message(
         &self,
         message: &TextComponent,
-        chat_type: u32,
+        chat_type: u8,
         sender_name: &TextComponent,
         target_name: Option<&TextComponent>,
     ) {
@@ -1243,13 +1238,30 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_id: u16, count: u32) {
-        let entity = self
-            .world()
-            .await
-            .create_entity(self.living_entity.entity.pos.load(), EntityType::ITEM);
+        let entity = self.world().await.create_entity(
+            self.living_entity.entity.pos.load()
+                + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0),
+            EntityType::ITEM,
+        );
+
+        let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
+        let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
+        let pitch_sin = pitch.sin();
+        let pitch_cos = pitch.cos();
+        let yaw_sin = yaw.sin();
+        let yaw_cos = yaw.cos();
+        let horizontal_offset = rand::random::<f64>() * TAU;
+        let l = 0.02 * rand::random::<f64>();
+
+        let velocity = Vector3::new(
+            -yaw_sin * pitch_cos * 0.3 + horizontal_offset.cos() * l,
+            -pitch_sin * 0.3 + 0.1 + (rand::random::<f64>() - rand::random::<f64>()) * 0.1,
+            yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
+        );
 
         // TODO: Merge stacks together
-        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count).await);
+        let item_entity =
+            Arc::new(ItemEntity::new_with_velocity(entity, item_id, count, velocity, 40).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }
@@ -1275,12 +1287,12 @@ impl Player {
     }
 
     pub async fn tick_experience(&self) {
-        let level = self.experience_level.load(Ordering::Relaxed);
-        if self.last_sent_xp.load(Ordering::Relaxed) != level {
+        let level = self.experience_level.load(Relaxed);
+        if self.last_sent_xp.load(Relaxed) != level {
             let progress = self.experience_progress.load();
-            let points = self.experience_points.load(Ordering::Relaxed);
+            let points = self.experience_points.load(Relaxed);
 
-            self.last_sent_xp.store(level, Ordering::Relaxed);
+            self.last_sent_xp.store(level, Relaxed);
 
             self.client
                 .send_packet_now(&CSetExperience::new(
@@ -1295,10 +1307,10 @@ impl Player {
     /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
-        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_level.store(level, Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
-        self.experience_points.store(points, Ordering::Relaxed);
-        self.last_sent_xp.store(-1, Ordering::Relaxed);
+        self.experience_points.store(points, Relaxed);
+        self.last_sent_xp.store(-1, Relaxed);
         self.tick_experience().await;
 
         self.client
@@ -1313,12 +1325,12 @@ impl Player {
     /// Sets the player's experience level directly.
     pub async fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
         let progress = self.experience_progress.load();
-        let mut points = self.experience_points.load(Ordering::Relaxed);
+        let mut points = self.experience_points.load(Relaxed);
 
         // If `keep_progress` is `true` then calculate the number of points needed to keep the same progress scaled.
         if keep_progress {
             // Get our current level
-            let current_level = self.experience_level.load(Ordering::Relaxed);
+            let current_level = self.experience_level.load(Relaxed);
             let current_max_points = experience::points_in_level(current_level);
             // Calculate the max value for the new level
             let new_max_points = experience::points_in_level(new_level);
@@ -1331,7 +1343,7 @@ impl Player {
         self.set_experience(new_level, progress, points).await;
     }
 
-    pub async fn add_effect(&self, effect: Effect, keep_fading: bool) {
+    pub async fn add_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1343,9 +1355,10 @@ impl Player {
         if effect.show_icon {
             flag |= 4;
         }
-        if keep_fading {
+        if effect.blend {
             flag |= 8;
         }
+
         let effect_id = VarInt(effect.r#type as i32);
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(
@@ -1359,22 +1372,57 @@ impl Player {
         self.living_entity.add_effect(effect).await;
     }
 
+    pub async fn remove_effect(&self, effect_type: EffectType) {
+        let effect_id = VarInt(effect_type as i32);
+        self.client
+            .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                self.entity_id().into(),
+                effect_id,
+            ))
+            .await;
+        self.living_entity.remove_effect(effect_type).await;
+
+        // TODO broadcast metadata
+    }
+
+    pub async fn remove_all_effect(&self) -> u8 {
+        let mut count = 0;
+        let mut effect_list = vec![];
+        for effect in self.living_entity.active_effects.lock().await.keys() {
+            effect_list.push(*effect);
+            let effect_id = VarInt(*effect as i32);
+            self.client
+                .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    effect_id,
+                ))
+                .await;
+            count += 1;
+        }
+        //Need to remove effect after because the player effect are lock in the for before
+        for effect in effect_list {
+            self.living_entity.remove_effect(effect).await;
+        }
+
+        count
+    }
+
     /// Add experience levels to the player.
     pub async fn add_experience_levels(&self, added_levels: i32) {
-        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let current_level = self.experience_level.load(Relaxed);
         let new_level = current_level + added_levels;
         self.set_experience_level(new_level, true).await;
     }
 
     /// Set the player's experience points directly. Returns `true` if successful.
     pub async fn set_experience_points(&self, new_points: i32) -> bool {
-        let current_points = self.experience_points.load(Ordering::Relaxed);
+        let current_points = self.experience_points.load(Relaxed);
 
         if new_points == current_points {
             return true;
         }
 
-        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let current_level = self.experience_level.load(Relaxed);
         let max_points = experience::points_in_level(current_level);
 
         if new_points < 0 || new_points > max_points {
@@ -1389,8 +1437,8 @@ impl Player {
 
     /// Add experience points to the player.
     pub async fn add_experience_points(&self, added_points: i32) {
-        let current_level = self.experience_level.load(Ordering::Relaxed);
-        let current_points = self.experience_points.load(Ordering::Relaxed);
+        let current_level = self.experience_level.load(Relaxed);
+        let current_points = self.experience_points.load(Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
         let new_total_exp = total_exp + added_points;
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
@@ -1418,15 +1466,15 @@ impl NBTStorage for Player {
         self.abilities.lock().await.write_nbt(nbt).await;
 
         // Store total XP instead of individual components
-        let total_exp = experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
-            + self.experience_points.load(Ordering::Relaxed);
+        let total_exp = experience::points_to_level(self.experience_level.load(Relaxed))
+            + self.experience_points.load(Relaxed);
         nbt.put_int("XpTotal", total_exp);
         nbt.put_byte("playerGameType", self.gamemode.load() as i8);
+        if let Some(previous_gamemode) = self.previous_gamemode.load() {
+            nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
+        }
 
-        nbt.put_bool(
-            "HasPlayedBefore",
-            self.has_played_before.load(Ordering::Relaxed),
-        );
+        nbt.put_bool("HasPlayedBefore", self.has_played_before.load(Relaxed));
 
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt).await;
@@ -1442,10 +1490,13 @@ impl NBTStorage for Player {
                 .unwrap_or(GameMode::Survival),
         );
 
-        self.has_played_before.store(
-            nbt.get_bool("HasPlayedBefore").unwrap_or(false),
-            Ordering::Relaxed,
+        self.previous_gamemode.store(
+            nbt.get_byte("previousPlayerGameType")
+                .and_then(|byte| GameMode::try_from(byte).ok()),
         );
+
+        self.has_played_before
+            .store(nbt.get_bool("HasPlayedBefore").unwrap_or(false), Relaxed);
 
         // Load food level, saturation, exhaustion, and tick timer
         self.hunger_manager.read_nbt(nbt).await;
@@ -1454,9 +1505,9 @@ impl NBTStorage for Player {
         let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
         let (level, points) = experience::total_to_level_and_points(total_exp);
         let progress = experience::progress_in_level(level, points);
-        self.experience_level.store(level, Ordering::Relaxed);
+        self.experience_level.store(level, Relaxed);
         self.experience_progress.store(progress);
-        self.experience_points.store(points, Ordering::Relaxed);
+        self.experience_points.store(points, Relaxed);
     }
 }
 
@@ -1855,7 +1906,6 @@ impl TryFrom<i32> for ChatMode {
 }
 
 /// Player's current chat session
-#[derive(Debug)]
 pub struct ChatSession {
     pub session_id: uuid::Uuid,
     pub expires_at: i64,
@@ -1863,6 +1913,7 @@ pub struct ChatSession {
     pub signature: Box<[u8]>,
     pub messages_sent: i32,
     pub messages_received: i32,
+    pub signature_cache: Vec<Box<[u8]>>,
 }
 
 impl Default for ChatSession {
@@ -1886,6 +1937,99 @@ impl ChatSession {
             signature: key_signature,
             messages_sent: 0,
             messages_received: 0,
+            signature_cache: Vec::new(),
         }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct LastSeen(Vec<Box<[u8]>>);
+
+impl From<LastSeen> for Vec<Box<[u8]>> {
+    fn from(seen: LastSeen) -> Self {
+        seen.0
+    }
+}
+
+impl AsRef<[Box<[u8]>]> for LastSeen {
+    fn as_ref(&self) -> &[Box<[u8]>] {
+        &self.0
+    }
+}
+
+impl LastSeen {
+    /// The sender's `last_seen` signatures are sent as ID's if the recipient has them in their cache.
+    /// Otherwise, the full signature is sent. (ID:0 indicates full signature is being sent)
+    pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
+        let mut indexed = Vec::new();
+        for signature in &self.0 {
+            if let Some(index) = recipient
+                .signature_cache
+                .lock()
+                .await
+                .full_cache
+                .iter()
+                .position(|s| s == signature)
+            {
+                indexed.push(PreviousMessage {
+                    // Send ID reference to recipient's cache (index + 1 because 0 is reserved for full signature)
+                    id: VarInt(1 + index as i32),
+                    signature: None,
+                });
+            } else {
+                indexed.push(PreviousMessage {
+                    // Send ID as 0 for full signature
+                    id: VarInt(0),
+                    signature: Some(signature.clone()),
+                });
+            }
+        }
+        indexed.into_boxed_slice()
+    }
+}
+
+pub struct MessageCache {
+    /// max 128 cached message signatures. Most recent FIRST.
+    /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
+    /// Must be 1:1 with client's signature cache.
+    full_cache: VecDeque<Box<[u8]>>,
+    /// max 20 last seen messages by the sender. Most Recent LAST
+    pub last_seen: LastSeen,
+}
+
+impl Default for MessageCache {
+    fn default() -> Self {
+        Self {
+            full_cache: VecDeque::with_capacity(MAX_CACHED_SIGNATURES as usize),
+            last_seen: LastSeen::default(),
+        }
+    }
+}
+
+impl MessageCache {
+    /// Not used for caching seen messages. Only for non-indexed signatures from senders.
+    pub fn cache_signatures(&mut self, signatures: &[Box<[u8]>]) {
+        for sig in signatures.iter().rev() {
+            if self.full_cache.contains(sig) {
+                continue;
+            }
+            // If the cache is maxed, and someone sends a signature older than the oldest in cache, ignore it
+            if self.full_cache.len() < MAX_CACHED_SIGNATURES as usize {
+                self.full_cache.push_back(sig.clone()); // Recipient never saw this message so it must be older than the oldest in cache
+            }
+        }
+    }
+
+    /// Adds a seen signature to `last_seen` and `full_cache`.
+    pub fn add_seen_signature(&mut self, signature: &[u8]) {
+        if self.last_seen.0.len() >= MAX_PREVIOUS_MESSAGES as usize {
+            self.last_seen.0.remove(0);
+        }
+        self.last_seen.0.push(signature.into());
+        // This probably doesn't need to be a loop, but better safe than sorry
+        while self.full_cache.len() >= MAX_CACHED_SIGNATURES as usize {
+            self.full_cache.pop_back();
+        }
+        self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }

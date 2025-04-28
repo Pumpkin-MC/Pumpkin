@@ -3,8 +3,8 @@ use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::serializer::to_bytes;
+use pumpkin_data::{Block, chunk::ChunkStatus};
+use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
@@ -19,7 +19,8 @@ use tokio::{
 
 use crate::{
     chunk::{
-        ChunkData, ChunkReadingError, ChunkSerializingError, ChunkWritingError, CompressionError,
+        ChunkData, ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
+        CompressionError,
         io::{ChunkSerializer, LoadedData},
     },
     generation::section_coords,
@@ -239,7 +240,7 @@ impl AnvilChunkData {
     #[inline]
     fn raw_write_size(&self) -> usize {
         // 4 bytes for the *length* and 1 byte for the *compression* method
-        self.compressed_data.remaining() + 4 + 1
+        self.compressed_data.len() + 4 + 1
     }
 
     /// Size of serialized chunk with padding
@@ -259,6 +260,16 @@ impl AnvilChunkData {
         let mut bytes = bytes;
         // Minus one for the compression byte
         let length = bytes.get_u32() as usize - 1;
+
+        if length > bytes.len() {
+            return Err(ChunkReadingError::ParsingError(
+                ChunkParsingError::ErrorDeserializingChunk(format!(
+                    "Chunk length is greater than available bytes ({} vs {})",
+                    length,
+                    bytes.len()
+                )),
+            ));
+        }
 
         let compression_method = bytes.get_u8();
         let compression = Compression::from_byte(compression_method)
@@ -315,7 +326,7 @@ impl AnvilChunkData {
         let compression = compression
             .unwrap_or_else(|| advanced_config().chunk.compression.algorithm.clone().into());
 
-        // We need to buffer here anyway so theres no use in making an impl Write for this
+        // We need to buffer here anyway so there's no use in making an impl Write for this
         let compressed_data = compression
             .compress_data(&raw_bytes, advanced_config().chunk.compression.level)
             .map_err(ChunkWritingError::Compression)?;
@@ -574,6 +585,17 @@ impl ChunkSerializer for AnvilChunkFile {
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
 
+            if bytes_offset + bytes_count > raw_file_bytes.len() {
+                return Err(ChunkReadingError::ParsingError(
+                    ChunkParsingError::ErrorDeserializingChunk(format!(
+                        "Not enough bytes available for the chunk {} ({} vs {})",
+                        i,
+                        bytes_count,
+                        raw_file_bytes.len().saturating_sub(bytes_offset)
+                    )),
+                ));
+            }
+
             let serialized_data = AnvilChunkData::from_bytes(
                 raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
             )?;
@@ -653,7 +675,7 @@ impl ChunkSerializer for AnvilChunkFile {
                             });
                             write_action.maybe_update_chunk_index(index);
                         } else {
-                            // Walk back the end of the list; seeing if theres something that can fit
+                            // Walk back the end of the list; seeing if there's something that can fit
                             // in our spot. Here we play a game between is it worth it to do all
                             // this swapping. I figure if we don't find it after 64 chunks, just
                             // re-write the whole file instead
@@ -750,7 +772,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 }
 
                                 // If the shift is negative then there will be trailing data, but i
-                                // think thats fine
+                                // think that's fine
 
                                 let new_end = self.end_sector as i64 + offset;
                                 self.end_sector = new_end as u32;
@@ -805,6 +827,8 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
             block_states,
             biomes,
+            block_light: section.block_light.clone(), // :c
+            sky_light: section.sky_light.clone(),     // :c
         });
     }
 
@@ -850,6 +874,15 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 })
                 .collect()
         },
+        block_entities: chunk_data
+            .block_entities
+            .values()
+            .map(|block_entity| {
+                let mut nbt = NbtCompound::new();
+                block_entity.write_internal(&mut nbt);
+                nbt
+            })
+            .collect(),
     };
 
     let mut result = Vec::new();

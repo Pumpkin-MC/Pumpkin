@@ -43,7 +43,11 @@ macro_rules! read_data_from_file {
 /// The minimum number of bits required to represent this number
 #[inline]
 pub fn encompassing_bits(count: usize) -> u8 {
-    count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
+    if count == 1 {
+        1
+    } else {
+        count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
+    }
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Clone)]

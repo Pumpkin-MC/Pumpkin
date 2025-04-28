@@ -3,14 +3,15 @@ use std::sync::Arc;
 use crate::entity::player::Player;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockFace, BlockState, LeverLikeProperties};
 use pumpkin_data::{
-    block::{BlockProperties, HorizontalFacing},
+    Block, BlockState,
+    block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
 use crate::{
@@ -23,7 +24,7 @@ async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
 
     let mut lever_props = LeverLikeProperties::from_state_id(state.id, &block);
-    lever_props.powered = lever_props.powered.flip();
+    lever_props.powered = !lever_props.powered;
     world
         .set_block_state(
             block_pos,
@@ -48,9 +49,9 @@ impl PumpkinBlock for LeverBlock {
         face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 
         match face {
@@ -60,7 +61,7 @@ impl PumpkinBlock for LeverBlock {
         }
 
         if face == &BlockDirection::Up || face == &BlockDirection::Down {
-            lever_props.facing = *player_direction;
+            lever_props.facing = player.living_entity.entity.get_horizontal_facing();
         } else {
             lever_props.facing = face.opposite().to_cardinal_direction();
         }
@@ -110,7 +111,7 @@ impl PumpkinBlock for LeverBlock {
         _direction: &BlockDirection,
     ) -> u8 {
         let lever_props = LeverLikeProperties::from_state_id(state.id, block);
-        if lever_props.powered.to_bool() { 15 } else { 0 }
+        if lever_props.powered { 15 } else { 0 }
     }
 
     async fn get_strong_redstone_power(
@@ -122,7 +123,7 @@ impl PumpkinBlock for LeverBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let lever_props = LeverLikeProperties::from_state_id(state.id, block);
-        if lever_props.powered.to_bool() && &lever_props.get_direction() == direction {
+        if lever_props.powered && &lever_props.get_direction() == direction {
             15
         } else {
             0
@@ -134,12 +135,12 @@ impl PumpkinBlock for LeverBlock {
         world: &Arc<World>,
         block: &Block,
         location: BlockPos,
-        old_state_id: u16,
+        old_state_id: BlockStateId,
         moved: bool,
     ) {
         if !moved {
             let lever_props = LeverLikeProperties::from_state_id(old_state_id, block);
-            if lever_props.powered.to_bool() {
+            if lever_props.powered {
                 Self::update_neighbors(world, &location, &lever_props).await;
             }
         }

@@ -16,8 +16,7 @@ pub struct Item {
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemComponents {
     #[serde(rename = "minecraft:item_name")]
-    // TODO: TextComponent
-    pub item_name: Option<TextComponent>,
+    pub item_name: TextComponent,
     #[serde(rename = "minecraft:max_stack_size")]
     pub max_stack_size: u8,
     #[serde(rename = "minecraft:jukebox_playable")]
@@ -30,6 +29,8 @@ pub struct ItemComponents {
     pub attribute_modifiers: Option<Vec<Modifier>>,
     #[serde(rename = "minecraft:tool")]
     pub tool: Option<ToolComponent>,
+    #[serde(rename = "minecraft:food")]
+    pub food: Option<FoodComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -43,14 +44,10 @@ impl ToTokens for ItemComponents {
             None => quote! { None },
         };
 
-        let item_name = match self.item_name.clone() {
-            Some(d) => {
-                // TODO: use text component
-                let text = d.get_text();
-                let item_name = LitStr::new(&text, Span::call_site());
-                quote! { Some(#item_name) }
-            }
-            None => quote! { None },
+        let item_name = {
+            let text = self.item_name.clone().get_text();
+            let item_name = LitStr::new(&text, Span::call_site());
+            quote! { #item_name }
         };
 
         let damage = match self.damage {
@@ -150,6 +147,27 @@ impl ToTokens for ItemComponents {
             None => quote! { None },
         };
 
+        let food = match &self.food {
+            Some(food) => {
+                let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
+                let saturation =
+                    LitFloat::new(&format!("{:.1}", food.saturation), Span::call_site());
+                let can_always_eat = match food.can_always_eat {
+                    Some(can) => {
+                        let can = LitBool::new(can, Span::call_site());
+                        quote! { Some(#can) }
+                    }
+                    None => quote! { None },
+                };
+                quote! { Some(FoodComponent {
+                    nutrition: #nutrition,
+                    saturation: #saturation,
+                    can_always_eat: #can_always_eat,
+                } ) }
+            }
+            None => quote! { None },
+        };
+
         tokens.extend(quote! {
             ItemComponents {
                 item_name: #item_name,
@@ -158,7 +176,8 @@ impl ToTokens for ItemComponents {
                 damage: #damage,
                 max_damage: #max_damage,
                 attribute_modifiers: #attribute_modifiers,
-                tool: #tool
+                tool: #tool,
+                food: #food
             }
         });
     }
@@ -168,6 +187,13 @@ pub struct ToolComponent {
     rules: Vec<ToolRule>,
     default_mining_speed: Option<f32>,
     damage_per_block: Option<u32>,
+}
+
+#[derive(Deserialize, Copy, Clone, Debug)]
+pub struct FoodComponent {
+    nutrition: u8,
+    saturation: f32,
+    can_always_eat: Option<bool>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -252,13 +278,14 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Copy, Debug)]
         pub struct ItemComponents {
-            pub item_name: Option<&'static str>,
+            pub item_name: &'static str,
             pub max_stack_size: u8,
             pub jukebox_playable: Option<&'static str>,
             pub damage: Option<u16>,
             pub max_damage: Option<u16>,
             pub attribute_modifiers: Option<&'static [Modifier]>,
-            pub tool: Option<ToolComponent>
+            pub tool: Option<ToolComponent>,
+            pub food: Option<FoodComponent>
         }
 
         #[derive(Clone, Copy, Debug)]
@@ -292,11 +319,18 @@ pub(crate) fn build() -> TokenStream {
             pub correct_for_drops: Option<bool>,
         }
 
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct FoodComponent {
+            pub nutrition: u8,
+            pub saturation: f32,
+            pub can_always_eat: Option<bool>,
+        }
+
         impl Item {
             #constants
 
             pub fn translated_name(&self) -> TextComponent {
-                serde_json::from_str(self.components.item_name.unwrap()).expect("Could not parse item name.")
+                TextComponent::text(self.components.item_name)
             }
 
             #[doc = "Try to parse an item from a resource location string."]

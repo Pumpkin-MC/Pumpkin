@@ -4,7 +4,7 @@ use std::sync::Arc;
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 
@@ -14,6 +14,7 @@ pub(crate) mod buttons;
 pub(crate) mod lever;
 pub(crate) mod observer;
 pub(crate) mod piston;
+pub(crate) mod rails;
 pub(crate) mod redstone_block;
 pub(crate) mod redstone_lamp;
 pub(crate) mod redstone_torch;
@@ -48,7 +49,7 @@ pub async fn get_redstone_power(
     pos: BlockPos,
     facing: &BlockDirection,
 ) -> u8 {
-    if state.is_solid {
+    if state.is_solid() {
         return std::cmp::max(
             get_max_strong_power(world, &pos, true).await,
             get_weak_power(block, state, world, &pos, facing, true).await,
@@ -64,7 +65,7 @@ async fn get_redstone_power_no_dust(
     pos: BlockPos,
     facing: &BlockDirection,
 ) -> u8 {
-    if state.is_solid {
+    if state.is_solid() {
         return std::cmp::max(
             get_max_strong_power(world, &pos, false).await,
             get_weak_power(block, state, world, &pos, facing, false).await,
@@ -177,7 +178,7 @@ pub async fn diode_get_input_strength(
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
     let power: u8 = get_redstone_power(&input_block, &input_state, world, input_pos, facing).await;
-    if power == 0 && input_state.is_solid {
+    if power == 0 && input_state.is_solid() {
         return get_max_weak_power(world, &input_pos, true).await;
     }
     power

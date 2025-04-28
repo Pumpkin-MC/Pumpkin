@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    block::{
-        Block, BlockProperties, BlockState, Boolean, EnumVariants, HorizontalFacing, Integer1To4,
-    },
+    Block, BlockState,
+    block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
+    BlockStateId,
     block::{BlockDirection, HorizontalFacingExt},
     chunk::TickPriority,
 };
@@ -24,7 +24,7 @@ use crate::{
 
 use super::{diode_get_input_strength, get_weak_power, is_diode};
 
-type RepeaterProperties = pumpkin_data::block::RepeaterLikeProperties;
+type RepeaterProperties = pumpkin_data::block_properties::RepeaterLikeProperties;
 
 #[pumpkin_block("minecraft:repeater")]
 pub struct RepeaterBlock;
@@ -39,13 +39,22 @@ impl PumpkinBlock for RepeaterBlock {
         _face: &BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        player_direction: &HorizontalFacing,
+        player: &Player,
         _other: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         let mut props = RepeaterProperties::default(block);
-        props.facing = player_direction.opposite();
-        props.locked =
-            Boolean::from_bool(should_be_locked(player_direction, world, block_pos).await);
+        let dir = player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
+        props.facing = dir;
+        props.locked = should_be_locked(&dir, world, block_pos).await;
+
+        if !props.locked {
+            props.powered = should_be_powered(props, world, block_pos).await;
+        }
+
         props.to_state_id(block)
     }
 
@@ -60,21 +69,21 @@ impl PumpkinBlock for RepeaterBlock {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut rep = RepeaterProperties::from_state_id(state.id, block);
         let should_be_locked = should_be_locked(&rep.facing, world, block_pos).await;
-        if !rep.locked.to_bool() && should_be_locked {
-            rep.locked = Boolean::True;
+        if !rep.locked && should_be_locked {
+            rep.locked = true;
             world
                 .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
                 .await;
-        } else if rep.locked.to_bool() && !should_be_locked {
-            rep.locked = Boolean::False;
+        } else if rep.locked && !should_be_locked {
+            rep.locked = false;
             world
                 .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
                 .await;
         }
 
-        if !rep.locked.to_bool() && !world.is_block_tick_scheduled(block_pos, block).await {
+        if !rep.locked && !world.is_block_tick_scheduled(block_pos, block).await {
             let should_be_powered = should_be_powered(rep, world, block_pos).await;
-            if should_be_powered != rep.powered.to_bool() {
+            if should_be_powered != rep.powered {
                 schedule_tick(rep, world, *block_pos, should_be_powered).await;
             }
         }
@@ -83,19 +92,19 @@ impl PumpkinBlock for RepeaterBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut rep = RepeaterProperties::from_state_id(state.id, block);
-        if rep.locked.to_bool() {
+        if rep.locked {
             return;
         }
 
         let should_be_powered = should_be_powered(rep, world, block_pos).await;
-        if rep.powered.to_bool() && !should_be_powered {
-            rep.powered = Boolean::False;
+        if rep.powered && !should_be_powered {
+            rep.powered = false;
             world
                 .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
                 .await;
             on_state_change(rep, world, block_pos).await;
-        } else if !rep.powered.to_bool() {
-            rep.powered = Boolean::True;
+        } else if !rep.powered {
+            rep.powered = true;
             world
                 .set_block_state(block_pos, rep.to_state_id(block), BlockFlags::empty())
                 .await;
@@ -140,9 +149,7 @@ impl PumpkinBlock for RepeaterBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        if &repeater_props.facing.to_block_direction() == direction
-            && repeater_props.powered.to_bool()
-        {
+        if &repeater_props.facing.to_block_direction() == direction && repeater_props.powered {
             return 15;
         }
         0
@@ -157,9 +164,7 @@ impl PumpkinBlock for RepeaterBlock {
         direction: &BlockDirection,
     ) -> u8 {
         let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        if &repeater_props.facing.to_block_direction() == direction
-            && repeater_props.powered.to_bool()
-        {
+        if &repeater_props.facing.to_block_direction() == direction && repeater_props.powered {
             return 15;
         }
         0
@@ -192,8 +197,8 @@ async fn on_use(props: RepeaterProperties, world: &Arc<World>, block_pos: BlockP
 }
 
 async fn should_be_locked(facing: &HorizontalFacing, world: &World, pos: &BlockPos) -> bool {
-    let right_side = get_power_on_side(world, pos, facing.rotate()).await;
-    let left_side = get_power_on_side(world, pos, facing.rotate_ccw()).await;
+    let right_side = get_power_on_side(world, pos, facing.rotate_clockwise()).await;
+    let left_side = get_power_on_side(world, pos, facing.rotate_counter_clockwise()).await;
     std::cmp::max(right_side, left_side) > 0
 }
 

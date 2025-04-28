@@ -3,7 +3,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
-use crate::VarInt;
+use crate::{VarInt, ser::network_serialize_no_prefix};
 
 #[derive(Serialize)]
 #[packet(PLAY_LEVEL_PARTICLES)]
@@ -16,6 +16,7 @@ pub struct CParticle<'a> {
     max_speed: f32,
     particle_count: i32,
     pariticle_id: VarInt,
+    #[serde(serialize_with = "network_serialize_no_prefix")]
     data: &'a [u8],
 }
 
