@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::{
-    block::get_block,
+    block_properties::get_block,
     fluid::Fluid,
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},

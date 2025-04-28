@@ -3,7 +3,7 @@ use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
+use pumpkin_data::{Block, chunk::ChunkStatus};
 use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::vector2::Vector2;
 use std::{

@@ -50,7 +50,7 @@ impl Explosion {
                         // }
 
                         // TODO: This should only check air & fluid
-                        if !state.air {
+                        if !state.is_air() {
                             h -= (block.blast_resistance + 0.3) * 0.3;
                         }
                         if h > 0.0 {
@@ -74,7 +74,7 @@ impl Explosion {
         for pos in blocks {
             let block_state = world.get_block_state(&pos).await.unwrap();
 
-            if block_state.air {
+            if block_state.is_air() {
                 continue;
             }
 

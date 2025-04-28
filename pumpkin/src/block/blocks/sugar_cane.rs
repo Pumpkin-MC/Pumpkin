@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
-};
 use pumpkin_data::tag::Tagable;
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
@@ -27,7 +28,7 @@ impl PumpkinBlock for SugarCaneBlock {
     }
 
     async fn random_tick(&self, block: &Block, world: &Arc<World>, pos: &BlockPos) {
-        if world.get_block_state(&pos.up()).await.unwrap().air {
+        if world.get_block_state(&pos.up()).await.unwrap().is_air() {
             let state_id = world
                 .get_block_state(pos)
                 .await

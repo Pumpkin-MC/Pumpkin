@@ -1,11 +1,7 @@
-use core::error;
-use std::{
-    fs::File,
-    io::{Cursor, Read},
-    path::Path,
-};
-
+use super::CURRENT_MC_VERSION;
+use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
+use core::error;
 use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
@@ -13,8 +9,12 @@ use pumpkin_protocol::{
     client::{config::CPluginMessage, status::CStatusResponse},
     codec::var_int::VarInt,
 };
-
-use super::CURRENT_MC_VERSION;
+use std::sync::atomic::Ordering;
+use std::{
+    fs::File,
+    io::{Cursor, Read},
+    path::Path,
+};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 
@@ -90,20 +90,34 @@ impl CachedStatus {
     }
 
     // TODO: Player samples
-    pub fn add_player(&mut self) {
+    pub fn add_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            players.online += 1;
+            if player
+                .client
+                .added_to_server_listing
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+            {
+                players.online += 1;
+            }
         }
 
         self.status_response_json = serde_json::to_string(&status_response)
             .expect("Failed to parse status response into JSON");
     }
 
-    pub fn remove_player(&mut self) {
+    pub fn remove_player(&mut self, player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            players.online -= 1;
+            if player
+                .client
+                .added_to_server_listing
+                .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+            {
+                players.online -= 1;
+            }
         }
 
         self.status_response_json = serde_json::to_string(&status_response)

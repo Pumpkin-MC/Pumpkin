@@ -81,8 +81,7 @@ impl ServerPlayerData {
             self.last_save.store(now);
             // Save all online players periodically across all worlds
             for world in server.worlds.read().await.iter() {
-                let players = world.players.read().await;
-                for player in players.values() {
+                for player in world.players.read().await.values() {
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt).await;
 
@@ -111,8 +110,7 @@ impl ServerPlayerData {
 
         // Save players from all worlds
         for world in server.worlds.read().await.iter() {
-            let players = world.players.read().await;
-            for player in players.values() {
+            for player in world.players.read().await.values() {
                 self.extract_data_and_save_player(player).await?;
                 total_players += 1;
             }

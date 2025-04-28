@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockProperties;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -12,7 +12,7 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::world::World;
 use crate::{entity::player::Player, server::Server};
 
-type LogProperties = pumpkin_data::block::PaleOakWoodLikeProperties;
+type LogProperties = pumpkin_data::block_properties::PaleOakWoodLikeProperties;
 
 pub struct LogBlock;
 impl BlockMetadata for LogBlock {

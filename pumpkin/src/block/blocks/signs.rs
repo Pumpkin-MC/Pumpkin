@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockProperties;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -15,7 +15,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 
-type SignProperties = pumpkin_data::block::OakSignLikeProperties;
+type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 
 pub struct SignBlock;
 

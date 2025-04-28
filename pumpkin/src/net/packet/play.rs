@@ -4,6 +4,7 @@ use sha1::Sha1;
 
 use std::num::NonZeroU8;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::block;
@@ -15,7 +16,7 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::seasonal_events;
-use crate::world::BlockFlags;
+use crate::world::{BlockFlags, World};
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},
@@ -24,19 +25,22 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::{Block, get_block_by_item, get_block_collision_shapes};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::{
+    Block,
+    block_properties::{get_block_by_item, get_block_collision_shapes},
+};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
-    CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSetContainerSlot,
-    CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
+    CBlockUpdate, CEntityPositionSync, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
+    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -56,7 +60,6 @@ use pumpkin_protocol::{
         SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
     },
 };
-use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::polynomial_rolling_hash;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::color::NamedColor;
@@ -214,6 +217,40 @@ impl Player {
         self.set_client_loaded(true);
     }
 
+    /// Returns whether syncing the position was needed
+    async fn sync_position(
+        &self,
+        world: &World,
+        pos: Vector3<f64>,
+        last_pos: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+        on_ground: bool,
+    ) -> bool {
+        let delta = Vector3::new(pos.x - last_pos.x, pos.y - last_pos.y, pos.z - last_pos.z);
+        let entity_id = self.entity_id();
+
+        // Teleport when more than 8 blocks (-8..=7.999755859375) (checking 8²)
+        if delta.length_squared() < 64.0 {
+            return false;
+        }
+        // Sync position with all other players.
+        world
+            .broadcast_packet_except(
+                &[self.gameprofile.id],
+                &CEntityPositionSync::new(
+                    entity_id.into(),
+                    pos,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    yaw,
+                    pitch,
+                    on_ground,
+                ),
+            )
+            .await;
+        true
+    }
+
     pub async fn handle_position(self: &Arc<Self>, packet: SPlayerPosition) {
         if !self.has_client_loaded() {
             return;
@@ -243,54 +280,38 @@ impl Player {
             };
 
             'after: {
-                let position = event.to;
+                let pos = event.to;
                 let entity = &self.living_entity.entity;
                 let last_pos = entity.pos.load();
-                self.living_entity.set_pos(position);
+                self.living_entity.set_pos(pos);
 
-                let height_difference = position.y - last_pos.y;
-                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
-                    && !packet.ground
-                    && height_difference > 0.0
-                {
+                let height_difference = pos.y - last_pos.y;
+                if entity.on_ground.load(Ordering::Relaxed) && !packet.ground && height_difference > 0.0 {
                     self.jump().await;
                 }
 
-                entity
-                    .on_ground
-                    .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
+                entity.on_ground.store(packet.ground, Ordering::Relaxed);
+                let world = &self.world().await;
 
-                let entity_id = entity.entity_id;
-                let Vector3 { x, y, z } = position;
-                let world = &entity.world.read().await;
-
-                // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
-                // let velocity = self.velocity;
-
-                // // The player is falling down fast; we should account for that.
-                // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
-
-                // Teleport when more than 8 blocks (i guess 8 blocks)
-                // TODO: REPLACE * 2.0 by movement packets. See Vanilla for details.
-                // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
-                //     self.teleport(x, y, z, self.entity.yaw, self.entity.pitch);
-                //     return;
-                // }
-                // Send the new position to all other players.
-                world
-                    .broadcast_packet_except(
-                        &[self.gameprofile.id],
-                        &CUpdateEntityPos::new(
-                            entity_id.into(),
-                            Vector3::new(
-                                x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                                y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                                z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                // TODO: Warn when player moves to quickly
+                if !self.sync_position(world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.ground).await {
+                    // Send the new position to all other players.
+                    world
+                        .broadcast_packet_except(
+                            &[self.gameprofile.id],
+                            &CUpdateEntityPos::new(
+                                self.entity_id().into(),
+                                Vector3::new(
+                                    pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                    pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                    pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                                ),
+                                packet.ground,
                             ),
-                            packet.ground,
-                        ),
-                    )
-                    .await;
+                        )
+                        .await;
+                }
+
                 if !self.abilities.lock().await.flying {
                     self.living_entity
                         .update_fall_distance(
@@ -302,9 +323,9 @@ impl Player {
                 }
                 chunker::update_position(self).await;
                 self.progress_motion(Vector3::new(
-                    position.x - last_pos.x,
-                    position.y - last_pos.y,
-                    position.z - last_pos.z,
+                    pos.x - last_pos.x,
+                    pos.y - last_pos.y,
+                    pos.z - last_pos.z,
                 ))
                 .await;
             }
@@ -356,12 +377,12 @@ impl Player {
             );
 
             'after: {
-                let position = event.to;
+                let pos = event.to;
                 let entity = &self.living_entity.entity;
                 let last_pos = entity.pos.load();
-                self.living_entity.set_pos(position);
+                self.living_entity.set_pos(pos);
 
-                let height_difference = position.y - last_pos.y;
+                let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
                     && !packet.ground
                     && height_difference > 0.0
@@ -375,43 +396,36 @@ impl Player {
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
                 let entity_id = entity.entity_id;
-                let Vector3 { x, y, z } = position;
 
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
                 let world = &entity.world.read().await;
 
-                // let delta = Vector3::new(x - lastx, y - lasty, z - lastz);
-                // let velocity = self.velocity;
-
-                // // The player is falling down fast; we should account for that.
-                // let max_speed = if self.fall_flying { 300.0 } else { 100.0 };
-
-                // // Teleport when more than 8 blocks (i guess 8 blocks)
-                // // TODO: REPLACE * 2.0 by movement packets. see vanilla for details
-                // if delta.length_squared() - velocity.length_squared() > max_speed * 2.0 {
-                //     self.teleport(x, y, z, yaw, pitch);
-                //     return;
-                // }
-                // Send the new position to all other players.
-
-                world
-                    .broadcast_packet_except(
-                        &[self.gameprofile.id],
-                        &CUpdateEntityPosRot::new(
-                            entity_id.into(),
-                            Vector3::new(
-                                x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                                y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                                z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                // TODO: Warn when player moves to quickly
+                if !self
+                    .sync_position(world, pos, last_pos, yaw, pitch, packet.ground)
+                    .await
+                {
+                    // Send the new position to all other players.
+                    world
+                        .broadcast_packet_except(
+                            &[self.gameprofile.id],
+                            &CUpdateEntityPosRot::new(
+                                entity_id.into(),
+                                Vector3::new(
+                                    pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                    pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                    pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                                ),
+                                yaw as u8,
+                                pitch as u8,
+                                packet.ground,
                             ),
-                            yaw as u8,
-                            pitch as u8,
-                            packet.ground,
-                        ),
-                    )
-                    .await;
+                        )
+                        .await;
+                }
+
                 world
                     .broadcast_packet_except(
                         &[self.gameprofile.id],
@@ -429,9 +443,9 @@ impl Player {
                 }
                 chunker::update_position(self).await;
                 self.progress_motion(Vector3::new(
-                    position.x - last_pos.x,
-                    position.y - last_pos.y,
-                    position.z - last_pos.z,
+                    pos.x - last_pos.x,
+                    pos.y - last_pos.y,
+                    pos.z - last_pos.z,
                 ))
                 .await;
             }
@@ -716,7 +730,7 @@ impl Player {
             }
         };
         // Invert hand if player is left handed
-        let animation = match self.config.lock().await.main_hand {
+        let animation = match self.config.read().await.main_hand {
             Hand::Left => match animation {
                 Animation::SwingMainArm => Animation::SwingOffhand,
                 Animation::SwingOffhand => Animation::SwingMainArm,
@@ -958,7 +972,7 @@ impl Player {
             }
 
             let (update_settings, update_watched) = {
-                let mut config = self.config.lock().await;
+                let mut config = self.config.write().await;
                 let update_settings = config.main_hand != main_hand
                     || config.skin_parts != client_information.skin_parts;
 
@@ -1192,7 +1206,7 @@ impl Player {
                         self.tick_counter.load(std::sync::atomic::Ordering::Relaxed),
                         std::sync::atomic::Ordering::Relaxed,
                     );
-                    if !state.air {
+                    if !state.is_air() {
                         let speed = block::calc_block_breaking(self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
@@ -1685,8 +1699,9 @@ impl Player {
             //let previous_block = world.get_block(&block_pos).await?;
             let previous_block_state = world.get_block_state(&block_pos).await?;
 
-            if !previous_block_state.replaceable && !updateable {
-                return Ok(true);
+            if !previous_block_state.replaceable() && !updateable {
+                //no decrement if the block is not replaceable
+                return Ok(false);
             }
 
             (block_pos, &face.opposite())
@@ -1702,21 +1717,19 @@ impl Player {
                 &final_block_pos,
                 &use_item_on,
                 self,
-                !(clicked_block_state.replaceable || updateable),
+                !(clicked_block_state.replaceable() || updateable),
             )
             .await;
 
         // At this point, we must have the new block state.
         let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
         let mut intersects = false;
-        for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
+        'main: for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {
-                let block_box = BoundingBox::from_block_raw(&final_block_pos)
-                    .offset(BoundingBox::new_array(shape.min, shape.max));
-                if player_box.intersects(&block_box) {
+                if shape.at_pos(final_block_pos).intersects(&player_box) {
                     intersects = true;
-                    break;
+                    break 'main;
                 }
             }
         }

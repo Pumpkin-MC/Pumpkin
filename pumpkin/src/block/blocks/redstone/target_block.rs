@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 
 use pumpkin_world::block::BlockDirection;

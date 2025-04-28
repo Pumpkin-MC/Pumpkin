@@ -1,10 +1,10 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::math::experience::Experience;
+use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use syn::{Ident, LitBool, LitInt, LitStr};
+use syn::{Ident, LitInt, LitStr};
 
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
@@ -14,9 +14,14 @@ fn property_group_name_from_derived_name(name: &str) -> String {
     format!("{}_properties", name).to_upper_camel_case()
 }
 
+enum PropertyType {
+    Bool,
+    Enum { name: String },
+}
+
 struct PropertyVariantMapping {
     original_name: String,
-    property_enum: String,
+    property_type: PropertyType,
 }
 
 struct PropertyCollectionData {
@@ -49,6 +54,11 @@ pub struct PropertyStruct {
 
 impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        if self.values == vec!["true".to_string(), "false".to_string()] {
+            // For boolean properties, we'll use Rust's built-in bool type
+            return;
+        }
+
         let name = Ident::new(&self.name, Span::call_site());
 
         let variant_count = self.values.clone().len() as u16;
@@ -139,12 +149,15 @@ impl ToTokens for BlockPropertyStruct {
         let struct_name = property_group_name_from_derived_name(&self.data.derive_name());
         let name = Ident::new(&struct_name, Span::call_site());
 
-        let values = self.data.variant_mappings.iter().map(|entry| {
+        // Strukturfelder generieren
+        let fields = self.data.variant_mappings.iter().map(|entry| {
             let key = Ident::new_raw(&entry.original_name, Span::call_site());
-            let value = Ident::new(&entry.property_enum, Span::call_site());
-
-            quote! {
-                #key: #value
+            match &entry.property_type {
+                PropertyType::Bool => quote! { pub #key: bool },
+                PropertyType::Enum { name } => {
+                    let value = Ident::new(name, Span::call_site());
+                    quote! { pub #key: #value }
+                }
             }
         });
 
@@ -155,74 +168,110 @@ impl ToTokens for BlockPropertyStruct {
             .map(|(_, id)| *id)
             .collect::<Vec<_>>();
 
-        let field_names: Vec<_> = self
+        let to_index_body = self
             .data
             .variant_mappings
             .iter()
             .rev()
-            .map(|entry| Ident::new_raw(&entry.original_name, Span::call_site()))
-            .collect();
+            .map(|entry| {
+                let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
+                match &entry.property_type {
+                    PropertyType::Bool => quote! {
+                        index += !self.#field_name as u16 * multiplier;
+                        multiplier *= 2;
+                    },
+                    PropertyType::Enum { name } => {
+                        let enum_ident = Ident::new(name, Span::call_site());
+                        quote! {
+                            index += self.#field_name.to_index() * multiplier;
+                            multiplier *= #enum_ident::variant_count();
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
 
-        let field_types: Vec<_> = self
+        let from_index_body = self
             .data
             .variant_mappings
             .iter()
             .rev()
-            .map(|entry| Ident::new(&entry.property_enum, Span::call_site()))
-            .collect();
+            .map(|entry| {
+                let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
+                match &entry.property_type {
+                    PropertyType::Bool => quote! {
+                        #field_name: {
+                            let value = index % 2;
+                            index /= 2;
+                            value == 0
+                        }
+                    },
+                    PropertyType::Enum { name } => {
+                        let enum_ident = Ident::new(name, Span::call_site());
+                        quote! {
+                            #field_name: {
+                                let value = index % #enum_ident::variant_count();
+                                index /= #enum_ident::variant_count();
+                                #enum_ident::from_index(value)
+                            }
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
 
         let to_props_values = self.data.variant_mappings.iter().map(|entry| {
             let key = &entry.original_name;
-            let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
-
-            quote! {
-                props.push((#key.to_string(), self.#key2.to_value().to_string()));
+            let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
+            match &entry.property_type {
+                PropertyType::Bool => quote! {
+                    props.push((#key.to_string(), self.#field_name.to_string()));
+                },
+                PropertyType::Enum { name: _ } => quote! {
+                    props.push((#key.to_string(), self.#field_name.to_value().to_string()));
+                },
             }
         });
 
         let from_props_values = self.data.variant_mappings.iter().map(|entry| {
             let key = &entry.original_name;
-            let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
-            let value = Ident::new(&entry.property_enum, Span::call_site());
-
-            quote! {
-                #key => block_props.#key2 = #value::from_value(&value)
+            let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
+            match &entry.property_type {
+                PropertyType::Bool => quote! {
+                    #key => {
+                        block_props.#field_name = matches!(value, "true")
+                    }
+                },
+                PropertyType::Enum { name } => {
+                    let enum_ident = Ident::new(name, Span::call_site());
+                    quote! {
+                        #key => {
+                            block_props.#field_name = #enum_ident::from_value(value)
+                        }
+                    }
+                }
             }
         });
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
             pub struct #name {
-                #(pub #values),*
+                #(#fields),*
             }
 
             impl BlockProperties for #name {
-                // NOTE: `to_index` and `from_index` depend on Java's
-                // `net.minecraft.state.StateManager` logic. If these stop working, look there.
-
                 #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
                     let mut index = 0;
                     let mut multiplier = 1;
-
-                    #(
-                        index += self.#field_names.to_index() * multiplier;
-                        multiplier *= #field_types::variant_count();
-                    )*
-
+                    #(#to_index_body)*
                     index
                 }
 
                 #[allow(unused_assignments)]
                 fn from_index(mut index: u16) -> Self {
                     Self {
-                        #(
-                            #field_names: {
-                                let value = index % #field_types::variant_count();
-                                index /= #field_types::variant_count();
-                                #field_types::from_index(value)
-                            }
-                        ),*
+                        #(#from_index_body),*
                     }
                 }
 
@@ -230,7 +279,6 @@ impl ToTokens for BlockPropertyStruct {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
-
                     block.states[0].id + self.to_index()
                 }
 
@@ -238,7 +286,6 @@ impl ToTokens for BlockPropertyStruct {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
-
                     if state_id >= block.states[0].id && state_id <= block.states.last().unwrap().id {
                         let index = state_id - block.states[0].id;
                         Self::from_index(index)
@@ -251,33 +298,27 @@ impl ToTokens for BlockPropertyStruct {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
-
                     Self::from_state_id(block.default_state_id, block)
                 }
 
                 #[allow(clippy::vec_init_then_push)]
                 fn to_props(&self) -> Vec<(String, String)> {
                     let mut props = vec![];
-
                     #(#to_props_values)*
-
                     props
                 }
 
-                fn from_props(props: Vec<(String, String)>, block: &Block) -> Self {
+                fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
-
                     let mut block_props = Self::default(block);
-
                     for (key, value) in props {
-                        match key.as_str() {
+                        match key {
                             #(#from_props_values),*,
                             _ => panic!("Invalid key: {}", key),
                         }
                     }
-
                     block_props
                 }
             }
@@ -285,26 +326,26 @@ impl ToTokens for BlockPropertyStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Copy, Debug)]
 pub struct CollisionShape {
-    pub min: [f64; 3],
-    pub max: [f64; 3],
+    pub min: Vector3<f64>,
+    pub max: Vector3<f64>,
 }
 
 impl ToTokens for CollisionShape {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_x = &self.min[0];
-        let min_y = &self.min[1];
-        let min_z = &self.min[2];
+        let min_x = &self.min.x;
+        let min_y = &self.min.y;
+        let min_z = &self.min.z;
 
-        let max_x = &self.max[0];
-        let max_y = &self.max[1];
-        let max_z = &self.max[2];
+        let max_x = &self.max.x;
+        let max_y = &self.max.y;
+        let max_z = &self.max.z;
 
         tokens.extend(quote! {
             CollisionShape {
-                min: [#min_x, #min_y, #min_z],
-                max: [#max_x, #max_y, #max_z],
+                min: Vector3::new(#min_x, #min_y, #min_z),
+                max: Vector3::new(#max_x, #max_y, #max_z),
             }
         });
     }
@@ -313,19 +354,13 @@ impl ToTokens for CollisionShape {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockState {
     pub id: u16,
-    pub air: bool,
+    pub state_flags: u8,
     pub luminance: u8,
-    pub burnable: bool,
-    pub tool_required: bool,
     pub hardness: f32,
-    pub sided_transparency: bool,
-    pub replaceable: bool,
     pub collision_shapes: Vec<u16>,
-    pub opacity: Option<u32>,
-    pub block_entity_type: Option<u32>,
+    pub opacity: Option<u8>,
+    pub block_entity_type: Option<u16>,
     // pub instrument: String, // TODO: make this an enum
-    pub is_solid: bool,
-    pub is_liquid: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -337,29 +372,24 @@ pub struct BlockStateRef {
 impl BlockState {
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
-        //let id = LitInt::new(&self.id.to_string(), Span::call_site());
-        let air = LitBool::new(self.air, Span::call_site());
+        let id = LitInt::new(&self.id.to_string(), Span::call_site());
+        let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
-        let burnable = LitBool::new(self.burnable, Span::call_site());
-        let tool_required = LitBool::new(self.tool_required, Span::call_site());
         let hardness = self.hardness;
-        let is_liquid = LitBool::new(self.is_liquid, Span::call_site());
-        let sided_transparency = LitBool::new(self.sided_transparency, Span::call_site());
-        let replaceable = LitBool::new(self.replaceable, Span::call_site());
         let opacity = match self.opacity {
             Some(opacity) => {
                 let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
-                quote! { Some(#opacity) }
+                quote! { #opacity }
             }
-            None => quote! { None },
+            None => quote! { u8::MAX },
         };
         let block_entity_type = match self.block_entity_type {
             Some(block_entity_type) => {
                 let block_entity_type =
                     LitInt::new(&block_entity_type.to_string(), Span::call_site());
-                quote! { Some(#block_entity_type) }
+                quote! { #block_entity_type }
             }
-            None => quote! { None },
+            None => quote! { u16::MAX },
         };
 
         let collision_shapes = self
@@ -367,22 +397,15 @@ impl BlockState {
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
 
-        let is_solid = LitBool::new(self.is_solid, Span::call_site());
-
         tokens.extend(quote! {
-            PartialBlockState {
-                air: #air,
+            BlockState {
+                id: #id,
+                state_flags: #state_flags,
                 luminance: #luminance,
-                burnable: #burnable,
-                tool_required: #tool_required,
                 hardness: #hardness,
-                sided_transparency: #sided_transparency,
-                replaceable: #replaceable,
                 collision_shapes: &[#(#collision_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
-                is_liquid: #is_liquid,
-                is_solid: #is_solid,
             }
         });
         tokens
@@ -860,15 +883,10 @@ pub(crate) fn build() -> TokenStream {
         for state in block.states.clone() {
             // Check if this state is already in `unique_states` by comparing all fields except `id`.
             let already_exists = unique_states.iter().any(|s: &BlockState| {
-                s.air == state.air
+                s.state_flags == state.state_flags
                     && s.luminance == state.luminance
-                    && s.burnable == state.burnable
-                    && s.tool_required == state.tool_required
                     && s.hardness == state.hardness
-                    && s.sided_transparency == state.sided_transparency
-                    && s.replaceable == state.replaceable
                     && s.collision_shapes == state.collision_shapes
-                    && s.is_liquid == state.is_liquid
             });
 
             if !already_exists {
@@ -884,7 +902,6 @@ pub(crate) fn build() -> TokenStream {
     // Mapping of a collection of property hashes -> blocks that have these properties.
     let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
     // Validator that we have no `enum` collisions.
-    let mut enum_to_values: HashMap<String, Vec<String>> = HashMap::new();
     let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
     for block in blocks_assets.blocks.clone() {
         let optimized_block = OptimizedBlock {
@@ -908,13 +925,9 @@ pub(crate) fn build() -> TokenStream {
                     let state_idx = unique_states
                         .iter()
                         .position(|s| {
-                            s.air == state.air
+                            s.state_flags == state.state_flags
                                 && s.luminance == state.luminance
-                                && s.burnable == state.burnable
-                                && s.tool_required == state.tool_required
                                 && s.hardness == state.hardness
-                                && s.sided_transparency == state.sided_transparency
-                                && s.replaceable == state.replaceable
                                 && s.collision_shapes == state.collision_shapes
                         })
                         .unwrap() as u16;
@@ -936,36 +949,32 @@ pub(crate) fn build() -> TokenStream {
                 .iter()
                 .find(|p| p.hash_key == property)
                 .unwrap();
-
             property_collection.insert(generated_property.hash_key);
             let property = generated_property.to_property();
-
-            // Get mapped property `enum` name
             let renamed_property = property.enum_name.to_upper_camel_case();
 
-            let expected_values = enum_to_values
-                .entry(renamed_property.clone())
-                .or_insert_with(|| property.values.clone());
-
-            if expected_values != &property.values {
-                panic!(
-                    "Enum overlap for '{}' ({:?} vs {:?})",
-                    property.serialized_name, &property.values, expected_values
-                );
+            let property_type = if property.values == vec!["true".to_string(), "false".to_string()]
+            {
+                PropertyType::Bool
+            } else {
+                PropertyType::Enum {
+                    name: renamed_property.clone(),
+                }
             };
+
+            if let PropertyType::Enum { name } = &property_type {
+                let _ = property_enums
+                    .entry(name.clone())
+                    .or_insert_with(|| PropertyStruct {
+                        name: name.clone(),
+                        values: property.values.clone(),
+                    });
+            }
 
             property_mapping.push(PropertyVariantMapping {
                 original_name: property.serialized_name.clone(),
-                property_enum: renamed_property.clone(),
+                property_type,
             });
-
-            // If this property doesn't have an `enum` yet, make one.
-            let _ = property_enums
-                .entry(renamed_property.clone())
-                .or_insert_with(|| PropertyStruct {
-                    name: renamed_property,
-                    values: property.values,
-                });
         }
 
         // The Minecraft Java state manager deterministically produces an index given a set of properties. We must use
@@ -1060,83 +1069,16 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::tag::{Tagable, RegistryKey};
+        use crate::{BlockState, BlockStateRef, Block, CollisionShape};
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
-
-        #[derive(Clone, Debug)]
-        pub struct PartialBlockState {
-            pub air: bool,
-            pub luminance: u8,
-            pub burnable: bool,
-            pub tool_required: bool,
-            pub hardness: f32,
-            pub sided_transparency: bool,
-            pub replaceable: bool,
-            pub collision_shapes: &'static [u16],
-            pub opacity: Option<u32>,
-            pub block_entity_type: Option<u32>,
-            pub is_liquid: bool,
-            pub is_solid: bool,
-        }
-
-        #[derive(Clone, Debug)]
-        pub struct BlockState {
-            pub id: u16,
-            pub air: bool,
-            pub luminance: u8,
-            pub burnable: bool,
-            pub tool_required: bool,
-            pub hardness: f32,
-            pub sided_transparency: bool,
-            pub replaceable: bool,
-            pub collision_shapes: &'static [u16],
-            pub opacity: Option<u32>,
-            pub block_entity_type: Option<u32>,
-            pub is_liquid: bool,
-            pub is_solid: bool,
-        }
-
-        #[derive(Clone, Debug)]
-        pub struct BlockStateRef {
-            pub id: u16,
-            pub state_idx: u16,
-        }
-
-        #[derive(Clone, Debug)]
-        pub struct Block {
-            pub id: u16,
-            pub name: &'static str,
-            pub translation_key: &'static str,
-            pub hardness: f32,
-            pub blast_resistance: f32,
-            pub slipperiness: f32,
-            pub velocity_multiplier: f32,
-            pub jump_velocity_multiplier: f32,
-            pub item_id: u16,
-            pub default_state_id: u16,
-            pub states: &'static [BlockStateRef],
-            pub loot_table: Option<LootTable>,
-            pub experience: Option<Experience>,
-        }
-
-        impl PartialEq for Block {
-            fn eq(&self, other: &Self) -> bool {
-                self.id == other.id
-            }
-        }
+        use pumpkin_util::math::vector3::Vector3;
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
             pub name: &'static str,
             pub values: &'static [&'static str],
-        }
-
-        #[derive(Clone, Copy, Debug)]
-        pub struct CollisionShape {
-            pub min: [f64; 3],
-            pub max: [f64; 3],
         }
 
         pub trait BlockProperties where Self: 'static {
@@ -1156,7 +1098,7 @@ pub(crate) fn build() -> TokenStream {
             fn to_props(&self) -> Vec<(String, String)>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: Vec<(String, String)>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -1173,7 +1115,7 @@ pub(crate) fn build() -> TokenStream {
             #(#shapes),*
         ];
 
-        pub static BLOCK_STATES: &[PartialBlockState] = &[
+        pub static BLOCK_STATES: &[BlockState] = &[
             #(#unique_states),*
         ];
 
@@ -1228,7 +1170,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: Vec<(&str, &str)>) -> Option<Box<dyn BlockProperties>> {
                 match self.id {
                     #block_properties_from_props_and_name
                     _ => None
@@ -1242,45 +1184,9 @@ pub(crate) fn build() -> TokenStream {
 
         impl BlockStateRef {
             pub fn get_state(&self) -> BlockState {
-                let partial_state = &BLOCK_STATES[self.state_idx as usize];
-                BlockState {
-                    id: self.id,
-                    air: partial_state.air,
-                    luminance: partial_state.luminance,
-                    burnable: partial_state.burnable,
-                    tool_required: partial_state.tool_required,
-                    hardness: partial_state.hardness,
-                    sided_transparency: partial_state.sided_transparency,
-                    replaceable: partial_state.replaceable,
-                    collision_shapes: partial_state.collision_shapes,
-                    opacity: partial_state.opacity,
-                    block_entity_type: partial_state.block_entity_type,
-                    is_liquid: partial_state.is_liquid,
-                    is_solid: partial_state.is_solid,
-                }
-            }
-        }
-
-        impl Tagable for Block {
-            #[inline]
-            fn tag_key() -> RegistryKey {
-                RegistryKey::Block
-            }
-
-            #[inline]
-            fn registry_key(&self) -> &str {
-                self.name
-            }
-        }
-
-        impl HorizontalFacing {
-            pub fn opposite(&self) -> Self {
-                match self {
-                    HorizontalFacing::North => HorizontalFacing::South,
-                    HorizontalFacing::South => HorizontalFacing::North,
-                    HorizontalFacing::East => HorizontalFacing::West,
-                    HorizontalFacing::West => HorizontalFacing::East
-                }
+                let mut state = BLOCK_STATES[self.state_idx as usize].clone();
+                state.id = self.id;
+                state
             }
         }
 
@@ -1297,26 +1203,13 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Boolean {
-            pub fn flip(&self) -> Self {
+        impl HorizontalFacing {
+            pub fn opposite(&self) -> Self {
                 match self {
-                    Boolean::True => Boolean::False,
-                    Boolean::False => Boolean::True,
-                }
-            }
-
-            pub fn to_bool(&self) -> bool {
-                match self {
-                    Boolean::True => true,
-                    Boolean::False => false,
-                }
-            }
-
-            pub fn from_bool(value: bool) -> Self {
-                if value {
-                    Boolean::True
-                } else {
-                    Boolean::False
+                    HorizontalFacing::North => HorizontalFacing::South,
+                    HorizontalFacing::South => HorizontalFacing::North,
+                    HorizontalFacing::East => HorizontalFacing::West,
+                    HorizontalFacing::West => HorizontalFacing::East
                 }
             }
         }

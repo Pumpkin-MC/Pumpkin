@@ -1,5 +1,5 @@
 use crate::Container;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::screen::WindowType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;

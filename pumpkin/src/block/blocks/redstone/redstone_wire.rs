@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::BlockProperties;
-use pumpkin_data::block::{
-    Block, BlockState, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
+use pumpkin_data::block_properties::{
+    BlockProperties, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
     ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
     SouthWireConnection, WestWireConnection,
 };
 use pumpkin_data::item::Item;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -34,7 +34,7 @@ impl PumpkinBlock for RedstoneWireBlock {
     async fn can_place_at(&self, world: &World, block_pos: &BlockPos) -> bool {
         let floor = world.get_block_state(&block_pos.down()).await.unwrap();
         // TODO: Only check face instead of block
-        return floor.is_solid;
+        return floor.is_full_cube();
     }
 
     async fn on_place(
@@ -351,7 +351,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
     let up_pos = pos.offset(BlockDirection::Up.to_offset());
     let up_state = world.get_block_state(&up_pos).await.unwrap();
 
-    if !up_state.is_solid
+    if !up_state.is_solid()
         && can_connect_diagonal_to(
             &world
                 .get_block(&neighbor_pos.offset(BlockDirection::Up.to_offset()))
@@ -360,7 +360,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
         )
     {
         WireConnection::Up
-    } else if !state.is_solid
+    } else if !state.is_solid()
         && can_connect_diagonal_to(
             &world
                 .get_block(&neighbor_pos.offset(BlockDirection::Down.to_offset()))
@@ -596,7 +596,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
             get_redstone_power_no_dust(&neighbor, &neighbor_state, world, neighbor_pos, side).await,
         );
         if side.is_horizontal() {
-            if !up_state.is_solid
+            if !up_state.is_solid()
             /*TODO: &&  !neighbor.is_transparent() */
             {
                 wire_power = max_wire_power(
@@ -607,7 +607,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
                 .await;
             }
 
-            if !neighbor_state.is_solid {
+            if !neighbor_state.is_solid() {
                 wire_power = max_wire_power(
                     wire_power,
                     world,

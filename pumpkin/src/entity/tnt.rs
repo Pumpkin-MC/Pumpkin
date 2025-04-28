@@ -1,12 +1,15 @@
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::{block::Block, damage::DamageType};
+use pumpkin_data::{Block, damage::DamageType};
 use pumpkin_protocol::{
     client::play::{MetaDataType, Metadata},
     codec::var_int::VarInt,
 };
 use pumpkin_util::math::vector3::Vector3;
-use std::sync::atomic::AtomicU32;
+use std::{
+    f64::consts::TAU,
+    sync::atomic::{AtomicU32, Ordering::Relaxed},
+};
 
 use super::{Entity, EntityBase, living::LivingEntity};
 
@@ -26,7 +29,8 @@ impl TNTEntity {
     }
     pub async fn send_meta_packet(&self) {
         // TODO: Yes, this is the wrong function, but we need to send this after spawning the entity.
-        let pos: f64 = rand::random::<f64>() * 6.283_185_482_025_146_5;
+        let pos: f64 = rand::random::<f64>() * TAU;
+
         self.entity
             .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02))
             .await;
@@ -36,7 +40,7 @@ impl TNTEntity {
                 Metadata::new(
                     8,
                     MetaDataType::Integer,
-                    VarInt(self.fuse.load(std::sync::atomic::Ordering::Relaxed) as i32),
+                    VarInt(self.fuse.load(Relaxed) as i32),
                 ),
                 Metadata::new(
                     9,
@@ -51,7 +55,7 @@ impl TNTEntity {
 #[async_trait]
 impl EntityBase for TNTEntity {
     async fn tick(&self, server: &Server) {
-        let fuse = self.fuse.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        let fuse = self.fuse.fetch_sub(1, Relaxed);
         if fuse == 0 {
             self.entity.remove().await;
             self.entity

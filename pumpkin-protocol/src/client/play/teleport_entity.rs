@@ -9,6 +9,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
+/// Only used when teleporting a player's vehicle, this packet is sent to the player.
 #[packet(PLAY_TELEPORT_ENTITY)]
 pub struct CTeleportEntity<'a> {
     entity_id: VarInt,

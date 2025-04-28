@@ -2,14 +2,14 @@
 //! the accelerator created by theosib. For more information, see:
 //! <https://bugs.mojang.com/browse/MC-81098>.
 
-use std::sync::Arc;
-
-use pumpkin_data::block::{
-    Block, BlockProperties, BlockState, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::block::BlockDirection;
 use rustc_hash::FxHashMap;
+use std::sync::Arc;
 
 use crate::world::{BlockFlags, World};
 
@@ -384,10 +384,10 @@ impl RedstoneWireTurbo {
                 let neighbor = &self.get_node(neighbor_id).state;
                 block_power = self.get_max_current_strength(neighbor_id, block_power);
 
-                if !neighbor.is_solid {
+                if !neighbor.is_solid() {
                     let neighbor_down = neighbors[Self::RS_NEIGHBORS_DN[m]];
                     block_power = self.get_max_current_strength(neighbor_down, block_power);
-                } else if !center_up.is_solid
+                } else if !center_up.is_solid()
                 /* TODO:  && !neighbor.is_transparent()*/
                 {
                     let neighbor_up = neighbors[Self::RS_NEIGHBORS_UP[m]];
