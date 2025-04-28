@@ -3,9 +3,9 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, OakDoorLikeProperties, PaleOakWoodLikeProperties,
-};
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
@@ -134,97 +134,112 @@ fn get_stripped_equivalent(block: &Block) -> Option<u16> {
 }
 
 fn get_deoxidized_equivalent(block: &Block) -> Option<u16> {
-    let new_block_id = match &block.id {
-        id if id == &Block::OXIDIZED_COPPER.id => Block::WEATHERED_COPPER.id,
-        id if id == &Block::WEATHERED_COPPER.id => Block::EXPOSED_COPPER.id,
-        id if id == &Block::EXPOSED_COPPER.id => Block::COPPER_BLOCK.id,
-        id if id == &Block::OXIDIZED_CHISELED_COPPER.id => Block::WEATHERED_CHISELED_COPPER.id,
-        id if id == &Block::WEATHERED_CHISELED_COPPER.id => Block::EXPOSED_CHISELED_COPPER.id,
-        id if id == &Block::EXPOSED_CHISELED_COPPER.id => Block::CHISELED_COPPER.id,
-        id if id == &Block::OXIDIZED_COPPER_GRATE.id => Block::WEATHERED_COPPER_GRATE.id,
-        id if id == &Block::WEATHERED_COPPER_GRATE.id => Block::EXPOSED_COPPER_GRATE.id,
-        id if id == &Block::EXPOSED_COPPER_GRATE.id => Block::COPPER_GRATE.id,
-        id if id == &Block::OXIDIZED_CUT_COPPER.id => Block::WEATHERED_CUT_COPPER.id,
-        id if id == &Block::WEATHERED_CUT_COPPER.id => Block::EXPOSED_CUT_COPPER.id,
-        id if id == &Block::EXPOSED_CUT_COPPER.id => Block::CUT_COPPER.id,
-        id if id == &Block::OXIDIZED_CUT_COPPER_STAIRS.id => Block::WEATHERED_CUT_COPPER_STAIRS.id,
-        id if id == &Block::WEATHERED_CUT_COPPER_STAIRS.id => Block::EXPOSED_CUT_COPPER_STAIRS.id,
-        id if id == &Block::EXPOSED_CUT_COPPER_STAIRS.id => Block::CUT_COPPER_STAIRS.id,
-        id if id == &Block::OXIDIZED_CUT_COPPER_SLAB.id => Block::WEATHERED_CUT_COPPER_SLAB.id,
-        id if id == &Block::WEATHERED_CUT_COPPER_SLAB.id => Block::EXPOSED_CUT_COPPER_SLAB.id,
-        id if id == &Block::EXPOSED_CUT_COPPER_SLAB.id => Block::CUT_COPPER_SLAB.id,
-        id if id == &Block::OXIDIZED_COPPER_BULB.id => Block::WEATHERED_COPPER_BULB.id,
-        id if id == &Block::WEATHERED_COPPER_BULB.id => Block::EXPOSED_COPPER_BULB.id,
-        id if id == &Block::EXPOSED_COPPER_BULB.id => Block::COPPER_BULB.id,
-        id if id == &Block::OXIDIZED_COPPER_DOOR.id => Block::WEATHERED_COPPER_DOOR.id,
-        id if id == &Block::WEATHERED_COPPER_DOOR.id => Block::EXPOSED_COPPER_DOOR.id,
-        id if id == &Block::EXPOSED_COPPER_DOOR.id => Block::COPPER_DOOR.id,
-
-        id if id == &Block::OXIDIZED_COPPER_TRAPDOOR.id => Block::WEATHERED_COPPER_TRAPDOOR.id,
-        id if id == &Block::WEATHERED_COPPER_TRAPDOOR.id => Block::EXPOSED_COPPER_TRAPDOOR.id,
-        id if id == &Block::EXPOSED_COPPER_TRAPDOOR.id => Block::COPPER_TRAPDOOR.id,
-        _ => block.id,
-    };
-    if new_block_id == block.id {
-        return None;
+    match &block.id {
+        id if id == &Block::OXIDIZED_COPPER.id => Some(Block::WEATHERED_COPPER.id),
+        id if id == &Block::WEATHERED_COPPER.id => Some(Block::EXPOSED_COPPER.id),
+        id if id == &Block::EXPOSED_COPPER.id => Some(Block::COPPER_BLOCK.id),
+        id if id == &Block::OXIDIZED_CHISELED_COPPER.id => {
+            Some(Block::WEATHERED_CHISELED_COPPER.id)
+        }
+        id if id == &Block::WEATHERED_CHISELED_COPPER.id => Some(Block::EXPOSED_CHISELED_COPPER.id),
+        id if id == &Block::EXPOSED_CHISELED_COPPER.id => Some(Block::CHISELED_COPPER.id),
+        id if id == &Block::OXIDIZED_COPPER_GRATE.id => Some(Block::WEATHERED_COPPER_GRATE.id),
+        id if id == &Block::WEATHERED_COPPER_GRATE.id => Some(Block::EXPOSED_COPPER_GRATE.id),
+        id if id == &Block::EXPOSED_COPPER_GRATE.id => Some(Block::COPPER_GRATE.id),
+        id if id == &Block::OXIDIZED_CUT_COPPER.id => Some(Block::WEATHERED_CUT_COPPER.id),
+        id if id == &Block::WEATHERED_CUT_COPPER.id => Some(Block::EXPOSED_CUT_COPPER.id),
+        id if id == &Block::EXPOSED_CUT_COPPER.id => Some(Block::CUT_COPPER.id),
+        id if id == &Block::OXIDIZED_CUT_COPPER_STAIRS.id => {
+            Some(Block::WEATHERED_CUT_COPPER_STAIRS.id)
+        }
+        id if id == &Block::WEATHERED_CUT_COPPER_STAIRS.id => {
+            Some(Block::EXPOSED_CUT_COPPER_STAIRS.id)
+        }
+        id if id == &Block::EXPOSED_CUT_COPPER_STAIRS.id => Some(Block::CUT_COPPER_STAIRS.id),
+        id if id == &Block::OXIDIZED_CUT_COPPER_SLAB.id => {
+            Some(Block::WEATHERED_CUT_COPPER_SLAB.id)
+        }
+        id if id == &Block::WEATHERED_CUT_COPPER_SLAB.id => Some(Block::EXPOSED_CUT_COPPER_SLAB.id),
+        id if id == &Block::EXPOSED_CUT_COPPER_SLAB.id => Some(Block::CUT_COPPER_SLAB.id),
+        id if id == &Block::OXIDIZED_COPPER_BULB.id => Some(Block::WEATHERED_COPPER_BULB.id),
+        id if id == &Block::WEATHERED_COPPER_BULB.id => Some(Block::EXPOSED_COPPER_BULB.id),
+        id if id == &Block::EXPOSED_COPPER_BULB.id => Some(Block::COPPER_BULB.id),
+        id if id == &Block::OXIDIZED_COPPER_DOOR.id => Some(Block::WEATHERED_COPPER_DOOR.id),
+        id if id == &Block::WEATHERED_COPPER_DOOR.id => Some(Block::EXPOSED_COPPER_DOOR.id),
+        id if id == &Block::EXPOSED_COPPER_DOOR.id => Some(Block::COPPER_DOOR.id),
+        id if id == &Block::OXIDIZED_COPPER_TRAPDOOR.id => {
+            Some(Block::WEATHERED_COPPER_TRAPDOOR.id)
+        }
+        id if id == &Block::WEATHERED_COPPER_TRAPDOOR.id => Some(Block::EXPOSED_COPPER_TRAPDOOR.id),
+        id if id == &Block::EXPOSED_COPPER_TRAPDOOR.id => Some(Block::COPPER_TRAPDOOR.id),
+        _ => None,
     }
-    Some(new_block_id)
 }
 
 fn get_unwaxed_equivalent(block: &Block) -> Option<u16> {
-    let new_block_id = match &block.id {
-        id if id == &Block::WAXED_OXIDIZED_COPPER.id => Block::OXIDIZED_COPPER.id,
-        id if id == &Block::WAXED_WEATHERED_COPPER.id => Block::WEATHERED_COPPER.id,
-        id if id == &Block::WAXED_EXPOSED_COPPER.id => Block::EXPOSED_COPPER.id,
-        id if id == &Block::WAXED_COPPER_BLOCK.id => Block::COPPER_BLOCK.id,
-        id if id == &Block::WAXED_OXIDIZED_CHISELED_COPPER.id => Block::OXIDIZED_CHISELED_COPPER.id,
-        id if id == &Block::WAXED_WEATHERED_CHISELED_COPPER.id => {
-            Block::WEATHERED_CHISELED_COPPER.id
+    match &block.id {
+        id if id == &Block::WAXED_OXIDIZED_COPPER.id => Some(Block::OXIDIZED_COPPER.id),
+        id if id == &Block::WAXED_WEATHERED_COPPER.id => Some(Block::WEATHERED_COPPER.id),
+        id if id == &Block::WAXED_EXPOSED_COPPER.id => Some(Block::EXPOSED_COPPER.id),
+        id if id == &Block::WAXED_COPPER_BLOCK.id => Some(Block::COPPER_BLOCK.id),
+        id if id == &Block::WAXED_OXIDIZED_CHISELED_COPPER.id => {
+            Some(Block::OXIDIZED_CHISELED_COPPER.id)
         }
-        id if id == &Block::WAXED_EXPOSED_CHISELED_COPPER.id => Block::EXPOSED_CHISELED_COPPER.id,
-        id if id == &Block::WAXED_CHISELED_COPPER.id => Block::CHISELED_COPPER.id,
-        id if id == &Block::WAXED_COPPER_GRATE.id => Block::COPPER_GRATE.id,
-        id if id == &Block::WAXED_OXIDIZED_COPPER_GRATE.id => Block::OXIDIZED_COPPER_GRATE.id,
-        id if id == &Block::WAXED_WEATHERED_COPPER_GRATE.id => Block::WEATHERED_COPPER_GRATE.id,
-        id if id == &Block::WAXED_EXPOSED_COPPER_GRATE.id => Block::EXPOSED_COPPER_GRATE.id,
-        id if id == &Block::WAXED_OXIDIZED_CUT_COPPER.id => Block::OXIDIZED_CUT_COPPER.id,
-        id if id == &Block::WAXED_WEATHERED_CUT_COPPER.id => Block::WEATHERED_CUT_COPPER.id,
-        id if id == &Block::WAXED_EXPOSED_CUT_COPPER.id => Block::EXPOSED_CUT_COPPER.id,
-        id if id == &Block::WAXED_CUT_COPPER.id => Block::CUT_COPPER.id,
+        id if id == &Block::WAXED_WEATHERED_CHISELED_COPPER.id => {
+            Some(Block::WEATHERED_CHISELED_COPPER.id)
+        }
+        id if id == &Block::WAXED_EXPOSED_CHISELED_COPPER.id => {
+            Some(Block::EXPOSED_CHISELED_COPPER.id)
+        }
+        id if id == &Block::WAXED_CHISELED_COPPER.id => Some(Block::CHISELED_COPPER.id),
+        id if id == &Block::WAXED_COPPER_GRATE.id => Some(Block::COPPER_GRATE.id),
+        id if id == &Block::WAXED_OXIDIZED_COPPER_GRATE.id => Some(Block::OXIDIZED_COPPER_GRATE.id),
+        id if id == &Block::WAXED_WEATHERED_COPPER_GRATE.id => {
+            Some(Block::WEATHERED_COPPER_GRATE.id)
+        }
+        id if id == &Block::WAXED_EXPOSED_COPPER_GRATE.id => Some(Block::EXPOSED_COPPER_GRATE.id),
+        id if id == &Block::WAXED_OXIDIZED_CUT_COPPER.id => Some(Block::OXIDIZED_CUT_COPPER.id),
+        id if id == &Block::WAXED_WEATHERED_CUT_COPPER.id => Some(Block::WEATHERED_CUT_COPPER.id),
+        id if id == &Block::WAXED_EXPOSED_CUT_COPPER.id => Some(Block::EXPOSED_CUT_COPPER.id),
+        id if id == &Block::WAXED_CUT_COPPER.id => Some(Block::CUT_COPPER.id),
         id if id == &Block::WAXED_OXIDIZED_CUT_COPPER_STAIRS.id => {
-            Block::OXIDIZED_CUT_COPPER_STAIRS.id
+            Some(Block::OXIDIZED_CUT_COPPER_STAIRS.id)
         }
         id if id == &Block::WAXED_WEATHERED_CUT_COPPER_STAIRS.id => {
-            Block::WEATHERED_CUT_COPPER_STAIRS.id
+            Some(Block::WEATHERED_CUT_COPPER_STAIRS.id)
         }
         id if id == &Block::WAXED_EXPOSED_CUT_COPPER_STAIRS.id => {
-            Block::EXPOSED_CUT_COPPER_STAIRS.id
+            Some(Block::EXPOSED_CUT_COPPER_STAIRS.id)
         }
-        id if id == &Block::WAXED_CUT_COPPER_STAIRS.id => Block::CUT_COPPER_STAIRS.id,
-        id if id == &Block::WAXED_OXIDIZED_CUT_COPPER_SLAB.id => Block::OXIDIZED_CUT_COPPER_SLAB.id,
+        id if id == &Block::WAXED_CUT_COPPER_STAIRS.id => Some(Block::CUT_COPPER_STAIRS.id),
+        id if id == &Block::WAXED_OXIDIZED_CUT_COPPER_SLAB.id => {
+            Some(Block::OXIDIZED_CUT_COPPER_SLAB.id)
+        }
         id if id == &Block::WAXED_WEATHERED_CUT_COPPER_SLAB.id => {
-            Block::WEATHERED_CUT_COPPER_SLAB.id
+            Some(Block::WEATHERED_CUT_COPPER_SLAB.id)
         }
-        id if id == &Block::WAXED_EXPOSED_CUT_COPPER_SLAB.id => Block::EXPOSED_CUT_COPPER_SLAB.id,
-        id if id == &Block::WAXED_CUT_COPPER_SLAB.id => Block::CUT_COPPER_SLAB.id,
-        id if id == &Block::WAXED_OXIDIZED_COPPER_BULB.id => Block::OXIDIZED_COPPER_BULB.id,
-        id if id == &Block::WAXED_WEATHERED_COPPER_BULB.id => Block::WEATHERED_COPPER_BULB.id,
-        id if id == &Block::WAXED_EXPOSED_COPPER_BULB.id => Block::EXPOSED_COPPER_BULB.id,
-        id if id == &Block::WAXED_COPPER_BULB.id => Block::COPPER_BULB.id,
-        id if id == &Block::WAXED_OXIDIZED_COPPER_DOOR.id => Block::OXIDIZED_COPPER_DOOR.id,
-        id if id == &Block::WAXED_WEATHERED_COPPER_DOOR.id => Block::WEATHERED_COPPER_DOOR.id,
-        id if id == &Block::WAXED_EXPOSED_COPPER_DOOR.id => Block::EXPOSED_COPPER_DOOR.id,
-        id if id == &Block::WAXED_COPPER_DOOR.id => Block::COPPER_DOOR.id,
-        id if id == &Block::WAXED_OXIDIZED_COPPER_TRAPDOOR.id => Block::OXIDIZED_COPPER_TRAPDOOR.id,
+        id if id == &Block::WAXED_EXPOSED_CUT_COPPER_SLAB.id => {
+            Some(Block::EXPOSED_CUT_COPPER_SLAB.id)
+        }
+        id if id == &Block::WAXED_CUT_COPPER_SLAB.id => Some(Block::CUT_COPPER_SLAB.id),
+        id if id == &Block::WAXED_OXIDIZED_COPPER_BULB.id => Some(Block::OXIDIZED_COPPER_BULB.id),
+        id if id == &Block::WAXED_WEATHERED_COPPER_BULB.id => Some(Block::WEATHERED_COPPER_BULB.id),
+        id if id == &Block::WAXED_EXPOSED_COPPER_BULB.id => Some(Block::EXPOSED_COPPER_BULB.id),
+        id if id == &Block::WAXED_COPPER_BULB.id => Some(Block::COPPER_BULB.id),
+        id if id == &Block::WAXED_OXIDIZED_COPPER_DOOR.id => Some(Block::OXIDIZED_COPPER_DOOR.id),
+        id if id == &Block::WAXED_WEATHERED_COPPER_DOOR.id => Some(Block::WEATHERED_COPPER_DOOR.id),
+        id if id == &Block::WAXED_EXPOSED_COPPER_DOOR.id => Some(Block::EXPOSED_COPPER_DOOR.id),
+        id if id == &Block::WAXED_COPPER_DOOR.id => Some(Block::COPPER_DOOR.id),
+        id if id == &Block::WAXED_OXIDIZED_COPPER_TRAPDOOR.id => {
+            Some(Block::OXIDIZED_COPPER_TRAPDOOR.id)
+        }
         id if id == &Block::WAXED_WEATHERED_COPPER_TRAPDOOR.id => {
-            Block::WEATHERED_COPPER_TRAPDOOR.id
+            Some(Block::WEATHERED_COPPER_TRAPDOOR.id)
         }
-        id if id == &Block::WAXED_EXPOSED_COPPER_TRAPDOOR.id => Block::EXPOSED_COPPER_TRAPDOOR.id,
-        id if id == &Block::WAXED_COPPER_TRAPDOOR.id => Block::COPPER_TRAPDOOR.id,
-        _ => block.id,
-    };
-    if new_block_id == block.id {
-        return None;
+        id if id == &Block::WAXED_EXPOSED_COPPER_TRAPDOOR.id => {
+            Some(Block::EXPOSED_COPPER_TRAPDOOR.id)
+        }
+        id if id == &Block::WAXED_COPPER_TRAPDOOR.id => Some(Block::COPPER_TRAPDOOR.id),
+        _ => None,
     }
-    Some(new_block_id)
 }

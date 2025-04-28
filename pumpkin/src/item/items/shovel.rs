@@ -3,7 +3,7 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
@@ -47,7 +47,11 @@ impl PumpkinItem for ShovelItem {
         {
             let world = player.world().await;
             if face != &BlockDirection::Down
-                && world.get_block_state(&location.up()).await.unwrap().air
+                && world
+                    .get_block_state(&location.up())
+                    .await
+                    .unwrap()
+                    .is_air()
             {
                 world
                     .set_block_state(
