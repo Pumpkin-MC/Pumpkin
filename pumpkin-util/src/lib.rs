@@ -1,6 +1,5 @@
 use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::{FromPrimitive, ToPrimitive};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
 pub use gamemode::GameMode;
@@ -14,6 +13,7 @@ pub mod noise;
 pub mod permission;
 pub mod random;
 pub mod registry;
+pub mod serde_c_like_enum;
 pub mod text;
 pub mod translation;
 
@@ -51,35 +51,12 @@ pub fn encompassing_bits(count: usize) -> u8 {
     }
 }
 
-#[derive(FromPrimitive, ToPrimitive, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Clone, Debug)]
 pub enum Difficulty {
     Peaceful,
     Easy,
     Normal,
     Hard,
-}
-
-impl Serialize for Difficulty {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let value = self
-            .to_i8()
-            .ok_or_else(|| serde::ser::Error::custom("Invalid difficulty value"))?;
-        value.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Difficulty {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Deserialize::deserialize(deserializer)?;
-        Difficulty::from_i8(value)
-            .ok_or_else(|| serde::de::Error::custom("Invalid difficulty value"))
-    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
