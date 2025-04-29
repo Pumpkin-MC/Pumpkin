@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{block::BlockIsReplacing, entity::player::Player};
 use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::{
@@ -50,7 +50,7 @@ impl PumpkinBlock for LeverBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 

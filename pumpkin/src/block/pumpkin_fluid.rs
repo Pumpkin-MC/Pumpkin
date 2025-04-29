@@ -9,7 +9,7 @@ use pumpkin_world::{BlockStateId, block::BlockDirection};
 
 use crate::{server::Server, world::World};
 
-use super::registry::BlockActionResult;
+use super::{BlockIsReplacing, registry::BlockActionResult};
 
 #[async_trait]
 pub trait PumpkinFluid: Send + Sync {
@@ -54,7 +54,7 @@ pub trait PumpkinFluid: Send + Sync {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         fluid.default_state_index
     }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
@@ -58,7 +59,7 @@ impl PumpkinBlock for FenceGateBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut fence_gate_props = FenceGateProperties::default(block);
         fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();

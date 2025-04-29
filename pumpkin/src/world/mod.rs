@@ -26,6 +26,7 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikeProperties};
 use pumpkin_data::{
     Block,
     block_properties::{
@@ -1470,8 +1471,9 @@ impl World {
         cause: Option<Arc<Player>>,
         flags: BlockFlags,
     ) {
-        let block = self.get_block(position).await.unwrap();
-        let event = BlockBreakEvent::new(cause.clone(), block.clone(), *position, 0, false);
+        let (broken_block, broken_block_state) =
+            self.get_block_and_block_state(position).await.unwrap();
+        let event = BlockBreakEvent::new(cause.clone(), broken_block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .lock()
@@ -1480,17 +1482,36 @@ impl World {
             .await;
 
         if !event.cancelled {
-            let broken_block_state_id = self.set_block_state(position, 0, flags).await;
+            let new_state_id = if broken_block
+                .properties(broken_block_state.id)
+                .and_then(|properties| {
+                    properties
+                        .to_props()
+                        .into_iter()
+                        .find(|p| p.0 == "waterlogged")
+                        .map(|(_, value)| value == true.to_string())
+                })
+                .unwrap_or(false)
+            {
+                // Broken block was waterlogged
+                let mut water_props = WaterLikeProperties::default(&Block::WATER);
+                water_props.level = Integer0To15::L15;
+                water_props.to_state_id(&Block::WATER)
+            } else {
+                0
+            };
+
+            let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
             let particles_packet = CWorldEvent::new(
                 WorldEvent::BlockBroken as i32,
                 *position,
-                broken_block_state_id.into(),
+                broken_state_id.into(),
                 false,
             );
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
-                block::drop_loot(self, &block, position, true, broken_block_state_id).await;
+                block::drop_loot(self, &broken_block, position, true, broken_state_id).await;
             }
 
             match cause {

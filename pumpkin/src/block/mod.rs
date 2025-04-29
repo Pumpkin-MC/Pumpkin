@@ -283,3 +283,16 @@ impl LootConditionExt for LootCondition {
         }
     }
 }
+
+#[derive(PartialEq)]
+pub enum BlockIsReplacing {
+    Itself(BlockStateId),
+    Water,
+    Other,
+}
+
+impl BlockIsReplacing {
+    pub fn water(&self) -> bool {
+        *self == BlockIsReplacing::Water
+    }
+}

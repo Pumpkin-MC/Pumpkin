@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::block;
 use crate::block::registry::BlockActionResult;
+use crate::block::{self, BlockIsReplacing};
 use crate::entity::mob;
 use crate::entity::player::ChatSession;
 use crate::net::PlayerConfig;
@@ -1700,40 +1700,64 @@ impl Player {
                     &use_item_on,
                 )
                 .await
+                .then(|| BlockIsReplacing::Itself(clicked_block_state.id))
         } else {
-            clicked_block_state.replaceable()
+            clicked_block_state.replaceable().then(|| {
+                if clicked_block == Block::WATER {
+                    BlockIsReplacing::Water
+                } else {
+                    BlockIsReplacing::Other
+                }
+            })
         };
 
-        let (final_block_pos, final_face, update) = if replace_clicked_block {
-            (clicked_block_pos, face, clicked_block == block)
-        } else {
-            let block_pos = BlockPos(location.0 + face.to_offset());
-            let (previous_block, previous_block_state) =
-                world.get_block_and_block_state(&block_pos).await?;
-
-            let replace_previous_block = if previous_block == block {
-                world
-                    .block_registry
-                    .can_update_at(
-                        world,
-                        &previous_block,
-                        previous_block_state.id,
-                        &block_pos,
-                        face.opposite(),
-                        &use_item_on,
-                    )
-                    .await
+        let (final_block_pos, final_face, replacing) =
+            if let Some(replacing) = replace_clicked_block {
+                (clicked_block_pos, face, replacing)
             } else {
-                previous_block_state.replaceable()
+                let block_pos = BlockPos(location.0 + face.to_offset());
+                let (previous_block, previous_block_state) =
+                    world.get_block_and_block_state(&block_pos).await?;
+
+                let replace_previous_block = if previous_block == block {
+                    world
+                        .block_registry
+                        .can_update_at(
+                            world,
+                            &previous_block,
+                            previous_block_state.id,
+                            &block_pos,
+                            face.opposite(),
+                            &use_item_on,
+                        )
+                        .await
+                        .then(|| BlockIsReplacing::Itself(previous_block_state.id))
+                } else {
+                    previous_block_state.replaceable().then(|| {
+                        if previous_block == Block::WATER {
+                            BlockIsReplacing::Water
+                        } else {
+                            BlockIsReplacing::Other
+                        }
+                    })
+                };
+
+                match replace_previous_block {
+                    Some(replacing) => (block_pos, &face.opposite(), replacing),
+                    None => {
+                        // Don't place and don't decrement if the previous block is not replaceable
+                        return Ok(false);
+                    }
+                }
             };
 
-            if !replace_previous_block {
-                // Don't place and don't decrement if the previous block is not replaceable
-                return Ok(false);
-            }
-
-            (block_pos, &face.opposite(), previous_block == block)
-        };
+        if !server
+            .block_registry
+            .can_place_at(world, &block, &final_block_pos)
+            .await
+        {
+            return Ok(false);
+        }
 
         let new_state = server
             .block_registry
@@ -1745,44 +1769,32 @@ impl Player {
                 &final_block_pos,
                 &use_item_on,
                 self,
-                update,
+                replacing,
             )
             .await;
 
-        // Closure that checks if there is a player in the way of the block being placed
-        let player_intersects_with_block = async || {
-            let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
-            for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
-                let player_box = player.1.living_entity.entity.bounding_box.load();
-                for shape in &shapes {
-                    if shape.at_pos(final_block_pos).intersects(&player_box) {
-                        return true;
-                    }
+        // Check if there is a player in the way of the block being placed
+        let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
+        for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
+            let player_box = player.1.living_entity.entity.bounding_box.load();
+            for shape in &shapes {
+                if shape.at_pos(final_block_pos).intersects(&player_box) {
+                    return Ok(false);
                 }
             }
-            false
-        };
-
-        if server
-            .block_registry
-            .can_place_at(world, &block, &final_block_pos)
-            .await
-            && !player_intersects_with_block().await
-        {
-            let _replaced_id = world
-                .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
-                .await;
-
-            server
-                .block_registry
-                .player_placed(world, &block, new_state, &final_block_pos, face, self)
-                .await;
-
-            // The block was placed successfully, so decrement their inventory
-            return Ok(true);
         }
 
-        Ok(false)
+        let _replaced_id = world
+            .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
+            .await;
+
+        server
+            .block_registry
+            .player_placed(world, &block, new_state, &final_block_pos, face, self)
+            .await;
+
+        // The block was placed successfully, so decrement their inventory
+        Ok(true)
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.

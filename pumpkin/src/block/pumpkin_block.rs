@@ -12,6 +12,8 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
+use super::BlockIsReplacing;
+
 pub trait BlockMetadata {
     fn namespace(&self) -> &'static str;
     fn ids(&self) -> &'static [&'static str];
@@ -64,7 +66,7 @@ pub trait PumpkinBlock: Send + Sync {
         _pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         block.default_state_id
     }

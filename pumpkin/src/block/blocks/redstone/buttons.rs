@@ -19,6 +19,7 @@ type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
+use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::BlockFlags;
@@ -68,7 +69,7 @@ impl PumpkinBlock for ButtonBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut props = ButtonLikeProperties::default(block);
 

@@ -16,7 +16,7 @@ use pumpkin_world::{
 };
 
 use crate::{
-    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
+    block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,
     server::Server,
     world::{BlockFlags, World},
@@ -40,7 +40,7 @@ impl PumpkinBlock for RepeaterBlock {
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut props = RepeaterProperties::default(block);
         let dir = player

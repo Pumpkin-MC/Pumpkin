@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
@@ -35,7 +35,7 @@ impl PumpkinBlock for ObserverBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(block);
         props.facing = player.living_entity.entity.get_facing();

@@ -16,6 +16,7 @@ use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::HorizontalFacingExt;
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
@@ -171,7 +172,7 @@ impl PumpkinBlock for DoorBlock {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let powered = block_receives_redstone_power(world, block_pos).await
             || block_receives_redstone_power(world, &block_pos.up()).await;

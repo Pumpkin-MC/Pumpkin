@@ -9,6 +9,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::world::World;
 use crate::{entity::player::Player, server::Server};
@@ -38,21 +39,24 @@ impl PumpkinBlock for SlabBlock {
         _block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         _player: &Player,
-        update: bool,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
-        let mut slab_props = SlabProperties::default(block);
+        if let BlockIsReplacing::Itself(state_id) = replacing {
+            let mut slab_props = SlabProperties::from_state_id(state_id, block);
+            slab_props.r#type = SlabType::Double;
+            slab_props.waterlogged = false;
+            return slab_props.to_state_id(block);
+        }
 
-        slab_props.r#type = if update {
-            SlabType::Double
-        } else {
-            match face {
-                BlockDirection::Up => SlabType::Top,
-                BlockDirection::Down => SlabType::Bottom,
-                _ => match use_item_on.cursor_pos.y {
-                    0.0...0.5 => SlabType::Bottom,
-                    _ => SlabType::Top,
-                },
-            }
+        let mut slab_props = SlabProperties::default(block);
+        slab_props.waterlogged = replacing.water();
+        slab_props.r#type = match face {
+            BlockDirection::Up => SlabType::Top,
+            BlockDirection::Down => SlabType::Bottom,
+            _ => match use_item_on.cursor_pos.y {
+                0.0...0.5 => SlabType::Bottom,
+                _ => SlabType::Top,
+            },
         };
 
         slab_props.to_state_id(block)

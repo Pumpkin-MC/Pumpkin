@@ -8,6 +8,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::world::World;
 use crate::{entity::player::Player, server::Server};
@@ -36,7 +37,7 @@ impl PumpkinBlock for LogBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut log_props = LogProperties::default(block);
         log_props.axis = face.to_axis();

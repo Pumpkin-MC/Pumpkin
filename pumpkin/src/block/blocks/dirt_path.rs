@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -35,7 +36,7 @@ impl PumpkinBlock for DirtPathBlock {
         pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         if !self.can_place_at(world, pos).await {
             return Block::DIRT.default_state_id;

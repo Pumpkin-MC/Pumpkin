@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::pumpkin_fluid::PumpkinFluid;
+use super::BlockIsReplacing;
 
 pub enum BlockActionResult {
     /// Allow other actions to be executed
@@ -106,7 +107,7 @@ impl BlockRegistry {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        update: bool,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -119,7 +120,7 @@ impl BlockRegistry {
                     block_pos,
                     use_item_on,
                     player,
-                    update,
+                    replacing,
                 )
                 .await;
         }

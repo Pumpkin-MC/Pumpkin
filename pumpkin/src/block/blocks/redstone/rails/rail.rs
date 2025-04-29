@@ -9,6 +9,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -33,7 +34,7 @@ impl PumpkinBlock for RailBlock {
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _update: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
 
