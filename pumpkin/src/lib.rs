@@ -18,6 +18,7 @@ use std::{
     net::SocketAddr,
     sync::{Arc, LazyLock},
 };
+use tokio::runtime::Handle;
 use tokio::select;
 use tokio::sync::Notify;
 use tokio::{net::TcpListener, sync::Mutex};
@@ -208,7 +209,7 @@ impl PumpkinServer {
                 if let Some(rl) = wrapper.take_readline() {
                     setup_console(rl, server.clone());
                 } else {
-                    setup_stdin_console(server.clone());
+                    setup_stdin_console(server.clone(), Handle::current());
                 }
             }
         }
@@ -383,25 +384,28 @@ impl PumpkinServer {
     }
 }
 
-fn setup_stdin_console(server: Arc<Server>) {
-    tokio::spawn(async move {
+fn setup_stdin_console(server: Arc<Server>, handle: Handle) {
+    std::thread::spawn(move || {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
             let mut line = String::new();
             if stdin().read_line(&mut line).is_err() {
                 break;
             };
-            let command = &line[..line.len() - 1]; // Remove the newline
-            send_cancellable! {{
-                ServerCommandEvent::new(command.to_string());
+            let server_clone = server.clone();
+            handle.spawn(async move {
+                let command = &line[..line.len() - 1]; // Remove the newline
+                send_cancellable! {{
+                        ServerCommandEvent::new(command.to_string());
 
-                'after: {
-                    let dispatcher = server.command_dispatcher.read().await;
-
-                    dispatcher
-                        .handle_command(&mut command::CommandSender::Console, &server, command)
-                        .await;
+                        'after: {
+                            let dispatcher = &server_clone.command_dispatcher.read().await;
+                            dispatcher
+                                .handle_command(&mut command::CommandSender::Console, &server_clone, command)
+                                .await;
+                        };
+                    }
                 }
-            }}
+            });
         }
     });
 }
