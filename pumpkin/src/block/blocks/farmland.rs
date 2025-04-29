@@ -35,7 +35,7 @@ impl PumpkinBlock for FarmLandBlock {
         pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player_direction: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         if !self.can_place_at(world, pos).await {
             return Block::DIRT.default_state_id;

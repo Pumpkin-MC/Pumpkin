@@ -106,7 +106,7 @@ impl BlockRegistry {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        other: bool,
+        update: bool,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -119,7 +119,7 @@ impl BlockRegistry {
                     block_pos,
                     use_item_on,
                     player,
-                    other,
+                    update,
                 )
                 .await;
         }
@@ -149,6 +149,24 @@ impl BlockRegistry {
             return pumpkin_block.can_place_at(world, block_pos).await;
         }
         true
+    }
+
+    pub async fn can_update_at(
+        &self,
+        world: &World,
+        block: &Block,
+        state_id: BlockStateId,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        use_item_on: &SUseItemOn,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
+                .await;
+        }
+        false
     }
 
     pub async fn on_placed(

@@ -54,7 +54,7 @@ pub trait PumpkinFluid: Send + Sync {
         _face: &BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         fluid.default_state_index
     }

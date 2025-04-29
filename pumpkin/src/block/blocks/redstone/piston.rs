@@ -40,7 +40,7 @@ impl PumpkinBlock for PistonBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         let mut props = PistonProps::default(block);
         props.extended = false;

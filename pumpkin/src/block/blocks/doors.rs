@@ -171,7 +171,7 @@ impl PumpkinBlock for DoorBlock {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         let powered = block_receives_redstone_power(world, block_pos).await
             || block_receives_redstone_power(world, &block_pos.up()).await;

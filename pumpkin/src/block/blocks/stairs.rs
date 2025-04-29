@@ -44,7 +44,7 @@ impl PumpkinBlock for StairBlock {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         let mut stair_props = StairsProperties::default(block);
 

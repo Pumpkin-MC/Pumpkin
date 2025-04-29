@@ -1400,11 +1400,13 @@ impl Player {
         let Ok(block) = world.get_block(&location).await else {
             return Err(BlockPlacingError::NoBaseBlock.into());
         };
+
         let sneaking = self
             .living_entity
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
+
         let Some(stack) = held_item else {
             if !sneaking {
                 // Using block with empty hand
@@ -1415,6 +1417,7 @@ impl Player {
             }
             return Ok(());
         };
+
         if !sneaking {
             server
                 .item_registry
@@ -1432,12 +1435,14 @@ impl Player {
                 }
             }
         }
+
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(stack.item.id) {
             should_try_decrement = self
-                .run_is_block_place(block.clone(), server, use_item_on, location, &face)
+                .run_is_block_place(block, server, use_item_on, location, &face)
                 .await?;
         }
+
         // Check if the item is a spawn egg
         if let Some(entity) = entity_from_egg(stack.item.id) {
             self.spawn_entity_from_egg(entity, location, &face).await;
@@ -1659,10 +1664,6 @@ impl Player {
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
 
-        let clicked_block_pos = BlockPos(location.0);
-        let clicked_block_state = world.get_block_state(&clicked_block_pos).await?;
-        let _clicked_block = world.get_block(&clicked_block_pos).await?;
-
         // Check if the block is under the world
         if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
             return Err(BlockPlacingError::BlockOutOfWorld.into());
@@ -1689,22 +1690,55 @@ impl Player {
             _ => {}
         }
 
-        // TODO: Implement this
-        let updateable = false;
+        let clicked_block_pos = BlockPos(location.0);
+        let (clicked_block, clicked_block_state) =
+            world.get_block_and_block_state(&clicked_block_pos).await?;
 
-        let (final_block_pos, final_face) = if updateable {
-            (clicked_block_pos, face)
+        let replace_clicked_block = if clicked_block != block {
+            clicked_block_state.replaceable()
+        } else {
+            world
+                .block_registry
+                .can_update_at(
+                    world,
+                    &clicked_block,
+                    clicked_block_state.id,
+                    &clicked_block_pos,
+                    *face,
+                    &use_item_on,
+                )
+                .await
+        };
+
+        let (final_block_pos, final_face, update) = if replace_clicked_block {
+            (clicked_block_pos, face, clicked_block == block)
         } else {
             let block_pos = BlockPos(location.0 + face.to_offset());
-            //let previous_block = world.get_block(&block_pos).await?;
-            let previous_block_state = world.get_block_state(&block_pos).await?;
+            let (previous_block, previous_block_state) =
+                world.get_block_and_block_state(&block_pos).await?;
 
-            if !previous_block_state.replaceable() && !updateable {
-                //no decrement if the block is not replaceable
+            let replace_previous_block = if previous_block != block {
+                previous_block_state.replaceable()
+            } else {
+                world
+                    .block_registry
+                    .can_update_at(
+                        world,
+                        &previous_block,
+                        previous_block_state.id,
+                        &block_pos,
+                        face.opposite(),
+                        &use_item_on,
+                    )
+                    .await
+            };
+
+            if !replace_previous_block {
+                // Don't place and don't decrement if the previous block is not replaceable
                 return Ok(false);
             }
 
-            (block_pos, &face.opposite())
+            (block_pos, &face.opposite(), previous_block == block)
         };
 
         let new_state = server
@@ -1717,27 +1751,29 @@ impl Player {
                 &final_block_pos,
                 &use_item_on,
                 self,
-                !(clicked_block_state.replaceable() || updateable),
+                update,
             )
             .await;
 
-        // At this point, we must have the new block state.
-        let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
-        let mut intersects = false;
-        'main: for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
-            let player_box = player.1.living_entity.entity.bounding_box.load();
-            for shape in &shapes {
-                if shape.at_pos(final_block_pos).intersects(&player_box) {
-                    intersects = true;
-                    break 'main;
+        // Closure that checks if there is a player in the way of the block being placed
+        let player_intersects_with_block = async || {
+            let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
+            for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
+                let player_box = player.1.living_entity.entity.bounding_box.load();
+                for shape in &shapes {
+                    if shape.at_pos(final_block_pos).intersects(&player_box) {
+                        return true;
+                    }
                 }
             }
-        }
-        if !intersects
-            && server
-                .block_registry
-                .can_place_at(world, &block, &final_block_pos)
-                .await
+            false
+        };
+
+        if server
+            .block_registry
+            .can_place_at(world, &block, &final_block_pos)
+            .await
+            && !player_intersects_with_block().await
         {
             let _replaced_id = world
                 .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)

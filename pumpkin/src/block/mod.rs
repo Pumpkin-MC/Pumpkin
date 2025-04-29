@@ -19,6 +19,7 @@ use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
 use blocks::signs::SignBlock;
+use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
@@ -69,6 +70,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(SignBlock);
+    manager.register(SlabBlock);
     manager.register(StairBlock);
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);

@@ -37,7 +37,7 @@ impl PumpkinBlock for TorchBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         if face.is_horizontal() {
             let wall_block = match block.name {

@@ -33,7 +33,7 @@ impl PumpkinBlock for PoweredRailBlock {
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
         let player_facing = player.living_entity.entity.get_horizontal_facing();

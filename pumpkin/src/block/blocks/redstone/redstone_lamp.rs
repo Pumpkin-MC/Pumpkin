@@ -32,7 +32,7 @@ impl PumpkinBlock for RedstoneLamp {
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         let mut props = RedstoneLampProperties::default(block);
         props.lit = block_receives_redstone_power(world, block_pos).await;

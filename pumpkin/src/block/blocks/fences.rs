@@ -86,7 +86,7 @@ impl PumpkinBlock for FenceBlock {
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> u16 {
         fence_state(world, block, block_pos).await
     }

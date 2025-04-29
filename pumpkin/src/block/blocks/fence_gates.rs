@@ -58,7 +58,7 @@ impl PumpkinBlock for FenceGateBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        _update: bool,
     ) -> BlockStateId {
         let mut fence_gate_props = FenceGateProperties::default(block);
         fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
