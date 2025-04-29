@@ -14,8 +14,8 @@ use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::HorizontalFacingExt;
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::BlockIsReplacing;
+use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::world::BlockFlags;
 use crate::world::World;
 use crate::{entity::player::Player, server::Server};

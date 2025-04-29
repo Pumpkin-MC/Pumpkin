@@ -292,7 +292,8 @@ pub enum BlockIsReplacing {
 }
 
 impl BlockIsReplacing {
+    #[must_use]
     pub fn water(&self) -> bool {
-        *self == BlockIsReplacing::Water
+        *self == Self::Water
     }
 }

@@ -1700,7 +1700,7 @@ impl Player {
                     &use_item_on,
                 )
                 .await
-                .then(|| BlockIsReplacing::Itself(clicked_block_state.id))
+                .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
         } else {
             clicked_block_state.replaceable().then(|| {
                 if clicked_block == Block::WATER {
@@ -1731,7 +1731,7 @@ impl Player {
                             &use_item_on,
                         )
                         .await
-                        .then(|| BlockIsReplacing::Itself(previous_block_state.id))
+                        .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
                     previous_block_state.replaceable().then(|| {
                         if previous_block == Block::WATER {

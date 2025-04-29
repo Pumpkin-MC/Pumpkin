@@ -13,8 +13,8 @@ use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::pumpkin_fluid::PumpkinFluid;
 use super::BlockIsReplacing;
+use super::pumpkin_fluid::PumpkinFluid;
 
 pub enum BlockActionResult {
     /// Allow other actions to be executed

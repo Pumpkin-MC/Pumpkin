@@ -7,8 +7,8 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::BlockIsReplacing;
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::BlockFlags;
