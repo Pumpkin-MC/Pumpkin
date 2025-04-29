@@ -11,7 +11,7 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
-use std::io::stdin;
+use std::io::{IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::{
@@ -135,7 +135,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if advanced_config().commands.use_tty {
+        if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
@@ -392,6 +392,10 @@ fn setup_stdin_console(server: Arc<Server>, handle: Handle) {
                 break;
             };
             let server_clone = server.clone();
+            if line.len() == 0 || line.as_bytes()[line.len() - 1] != b'\n' {
+                log::warn!("Console command was not terminated with a newline");
+                continue;
+            }
             handle.spawn(async move {
                 let command = &line[..line.len() - 1]; // Remove the newline
                 send_cancellable! {{
