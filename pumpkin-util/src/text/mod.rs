@@ -27,10 +27,23 @@ impl<'de> Deserialize<'de> for TextComponent {
         struct TextComponentVisitor;
 
         impl<'de> Visitor<'de> for TextComponentVisitor {
-            type Value = TextComponent;
+            type Value = TextComponentBase;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 formatter.write_str("a TextComponentBase or a sequence of TextComponentBase")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(TextComponentBase {
+                    content: TextContent::Text {
+                        text: Cow::from(v.to_string()),
+                    },
+                    style: Default::default(),
+                    extra: vec![],
+                })
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -38,41 +51,30 @@ impl<'de> Deserialize<'de> for TextComponent {
                 A: SeqAccess<'de>,
             {
                 let mut bases = Vec::new();
-                while let Some(element) = seq.next_element::<TextComponentBase>()? {
-                    bases.push(element);
+                while let Some(element) = seq.next_element::<TextComponent>()? {
+                    bases.push(element.0);
                 }
 
-                Ok(TextComponent(TextComponentBase {
+                Ok(TextComponentBase {
                     content: TextContent::Text { text: "".into() },
                     style: Default::default(),
                     extra: bases,
-                }))
+                })
             }
 
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
             where
                 A: MapAccess<'de>,
             {
-                Ok(TextComponent(TextComponentBase::deserialize(
+                Ok(TextComponentBase::deserialize(
                     serde::de::value::MapAccessDeserializer::new(map),
-                )?))
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                Ok(TextComponent(TextComponentBase {
-                    content: TextContent::Text {
-                        text: Cow::from(v.to_string()),
-                    },
-                    style: Default::default(),
-                    extra: vec![],
-                }))
+                )?)
             }
         }
 
-        deserializer.deserialize_any(TextComponentVisitor)
+        deserializer
+            .deserialize_any(TextComponentVisitor)
+            .map(|base| TextComponent(base))
     }
 }
 
