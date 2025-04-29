@@ -384,14 +384,14 @@ impl Player {
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
-                    && !packet.ground
+                    && (packet.ground & 1) != 0
                     && height_difference > 0.0
                 {
                     self.jump().await;
                 }
                 entity
                     .on_ground
-                    .store(packet.ground, std::sync::atomic::Ordering::Relaxed);
+                    .store((packet.ground & 1) != 0, std::sync::atomic::Ordering::Relaxed);
 
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
@@ -404,7 +404,7 @@ impl Player {
 
                 // TODO: Warn when player moves to quickly
                 if !self
-                    .sync_position(world, pos, last_pos, yaw, pitch, packet.ground)
+                    .sync_position(world, pos, last_pos, yaw, pitch, (packet.ground & 1) != 0)
                     .await
                 {
                     // Send the new position to all other players.
@@ -420,7 +420,7 @@ impl Player {
                                 ),
                                 yaw as u8,
                                 pitch as u8,
-                                packet.ground,
+                                (packet.ground & 1) != 0,
                             ),
                         )
                         .await;
@@ -436,7 +436,7 @@ impl Player {
                     self.living_entity
                         .update_fall_distance(
                             height_difference,
-                            packet.ground,
+                            (packet.ground & 1) != 0,
                             self.gamemode.load() == GameMode::Creative,
                         )
                         .await;

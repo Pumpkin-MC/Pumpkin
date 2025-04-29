@@ -8,5 +8,6 @@ pub struct SPlayerPositionRotation {
     pub position: Vector3<f64>,
     pub yaw: f32,
     pub pitch: f32,
-    pub ground: bool,
+    /// bit 0: on_ground, bit 1: in_wall
+    pub ground: u8,
 }
