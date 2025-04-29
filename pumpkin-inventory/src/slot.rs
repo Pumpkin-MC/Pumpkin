@@ -161,6 +161,7 @@ pub trait Slot: Send + Sync + Debug {
             } else {
                 if stack_self.is_empty() {
                     drop(stack_self);
+                    println!("Inserting stack");
                     self.set_stack(stack.split(min_count)).await;
                 } else if stack.are_items_and_components_equal(&stack_self) {
                     stack.decrement(min_count);
@@ -258,9 +259,9 @@ impl Slot for ArmorSlot {
         1
     }
 
-    async fn set_stack_prev(&self, stack: ItemStack, previous_stack: ItemStack) {
+    async fn set_stack_prev(&self, stack: ItemStack, _previous_stack: ItemStack) {
         //TODO: this.entity.onEquipStack(this.equipmentSlot, previousStack, stack);
-        Slot::set_stack_prev(self, stack, previous_stack).await;
+        self.set_stack_no_callbacks(stack).await;
     }
 
     async fn can_insert(&self, _stack: &ItemStack) -> bool {

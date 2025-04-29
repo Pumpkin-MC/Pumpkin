@@ -56,7 +56,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CCloseContainer, COpenScreen, PlayerInfoFlags, PreviousMessage,
+    CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CSetCursorItem, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -365,7 +366,7 @@ impl Player {
             current_screen_handler: Mutex::new(player_screen_handler),
             screen_handler_sync_id: AtomicU8::new(0),
             screen_handler_listener: Arc::new(ScreenListener {}),
-            screen_handler_sync_handler: Arc::new(SyncHandler {}),
+            screen_handler_sync_handler: Arc::new(SyncHandler::new()),
         }
     }
 
@@ -1598,7 +1599,22 @@ impl Player {
             )
             .await;
 
-        for (key, value) in packet.array_of_changed_slots {}
+        for (key, value) in packet.array_of_changed_slots {
+            screen_handler
+                .set_previous_tracked_slot(key as usize, value.to_stack())
+                .await;
+        }
+
+        screen_handler
+            .set_previous_cursor_stack(packet.carried_item.to_stack())
+            .await;
+        screen_handler.enable_sync().await;
+
+        if not_in_sync {
+            screen_handler.update_to_client().await;
+        } else {
+            screen_handler.send_content_updates().await;
+        }
     }
 }
 
@@ -2171,5 +2187,21 @@ impl MessageCache {
 impl InventoryPlayer for Player {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool) {
         todo!()
+    }
+
+    async fn enque_inventory_packet(&self, packet: &CSetContainerContent) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enque_slot_packet(&self, packet: &CSetContainerSlot) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enque_cursor_packet(&self, packet: &CSetCursorItem) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enque_property_packet(&self, packet: &CSetContainerProperty) {
+        self.client.enqueue_packet(packet).await;
     }
 }

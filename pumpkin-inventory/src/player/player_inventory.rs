@@ -142,6 +142,7 @@ impl Inventory for PlayerInventory {
             *self.main_inventory[slot].lock().await = stack;
         } else {
             let slot = self.equipment_slots.get(&slot).unwrap();
+            println!("setting stack: {:?}, slot: {:?}", stack, slot);
             self.entity_equipment.put(slot, stack).await;
         }
     }

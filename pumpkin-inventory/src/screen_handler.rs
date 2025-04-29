@@ -1,8 +1,15 @@
 use std::{any::Any, collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use log::warn;
 use pumpkin_data::screen::WindowType;
-use pumpkin_protocol::server::play::SlotActionType;
+use pumpkin_protocol::{
+    ClientPacket,
+    client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    },
+    server::play::SlotActionType,
+};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
@@ -36,6 +43,10 @@ impl ScreenProperty {
 #[async_trait]
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
+    async fn enque_inventory_packet(&self, packet: &CSetContainerContent);
+    async fn enque_slot_packet(&self, packet: &CSetContainerSlot);
+    async fn enque_cursor_packet(&self, packet: &CSetCursorItem);
+    async fn enque_property_packet(&self, packet: &CSetContainerProperty);
 }
 
 //ScreenHandler.java
@@ -97,6 +108,24 @@ pub trait ScreenHandler: Send + Sync {
         todo!()
     }
 
+    async fn set_previous_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
+        let behaviour = self.get_behaviour_mut();
+        if slot < behaviour.previous_tracked_stacks.len() {
+            behaviour.previous_tracked_stacks[slot] = stack;
+        } else {
+            warn!(
+                "Incorrect slot index: {} available slots: {}",
+                slot,
+                behaviour.previous_tracked_stacks.len()
+            );
+        }
+    }
+
+    async fn set_previous_cursor_stack(&mut self, stack: ItemStack) {
+        let behaviour = self.get_behaviour_mut();
+        behaviour.previous_cursor_stack = stack;
+    }
+
     async fn sync_state(&mut self) {
         let behaviour = self.get_behaviour_mut();
 
@@ -111,6 +140,8 @@ pub trait ScreenHandler: Send + Sync {
             behaviour.tracked_property_values[i] = property_val;
         }
 
+        let next_revision = behaviour.next_revision();
+
         if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
             sync_handler
                 .update_state(
@@ -118,6 +149,7 @@ pub trait ScreenHandler: Send + Sync {
                     &behaviour.previous_tracked_stacks,
                     &behaviour.previous_cursor_stack,
                     behaviour.tracked_property_values.clone(),
+                    next_revision,
                 )
                 .await;
         }
@@ -183,8 +215,11 @@ pub trait ScreenHandler: Send + Sync {
 
             if prev_stack != stack {
                 behaviour.previous_tracked_stacks[slot] = stack;
+                let next_revision = behaviour.next_revision();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                    sync_handler.update_slot(behaviour, slot, &stack).await;
+                    sync_handler
+                        .update_slot(behaviour, slot, &stack, next_revision)
+                        .await;
                 }
             }
         }
@@ -336,6 +371,7 @@ pub trait ScreenHandler: Send + Sync {
                         };
                         *cursor_stack =
                             slot.insert_stack_count(*cursor_stack, transfer_count).await;
+                        println!("cursor_stack: {:?}", *cursor_stack);
                     }
                 } else if slot.can_take_items(player).await {
                     if cursor_stack.is_empty() {
@@ -347,9 +383,10 @@ pub trait ScreenHandler: Send + Sync {
                         };
                         let taken = slot.try_take_stack_range(take_count, u8::MAX, player).await;
                         if let Some(taken) = taken {
+                            println!("taken: {:?}", taken);
                             // Reverse order of operations, shouldn't affect anything
-                            slot.on_take_item(&taken).await;
                             *cursor_stack = taken;
+                            slot.on_take_item(&taken).await;
                         }
                     } else if slot.can_insert(&cursor_stack).await {
                         if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
@@ -464,5 +501,10 @@ impl DefaultScreenHandlerBehaviour {
             tracked_property_values: Vec::new(),
             window_type,
         }
+    }
+
+    pub fn next_revision(&mut self) -> u32 {
+        self.revision = (self.revision + 1) & 32767;
+        self.revision
     }
 }
