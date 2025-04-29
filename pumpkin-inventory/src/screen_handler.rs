@@ -43,6 +43,7 @@ impl ScreenProperty {
 #[async_trait]
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
+    async fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>>;
     async fn enque_inventory_packet(&self, packet: &CSetContainerContent);
     async fn enque_slot_packet(&self, packet: &CSetContainerSlot);
     async fn enque_cursor_packet(&self, packet: &CSetCursorItem);
@@ -339,6 +340,7 @@ pub trait ScreenHandler: Send + Sync {
                     moved_stack = self.quick_move(player, slot_index).await;
                 }
             } else {
+                // Pickup
                 if slot_index < 0 {
                     return;
                 }
@@ -426,6 +428,8 @@ pub trait ScreenHandler: Send + Sync {
                 println!("Done");
                 slot.mark_dirty().await;
             }
+        } else if action_type == SlotActionType::Swap && button >= 0 && button < 9 || button == 40 {
+            
         }
     }
 

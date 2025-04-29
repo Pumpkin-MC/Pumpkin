@@ -2189,6 +2189,10 @@ impl InventoryPlayer for Player {
         todo!()
     }
 
+    async fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>> {
+        self.inventory.clone()
+    }
+
     async fn enque_inventory_packet(&self, packet: &CSetContainerContent) {
         self.client.enqueue_packet(packet).await;
     }
