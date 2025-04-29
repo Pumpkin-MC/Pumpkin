@@ -388,11 +388,16 @@ fn setup_stdin_console(server: Arc<Server>, handle: Handle) {
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
             let mut line = String::new();
-            if stdin().read_line(&mut line).is_err() {
+            if let Ok(size) = stdin().read_line(&mut line) {
+                // if no bytes were read, we may have hit EOF
+                if size == 0 {
+                    break;
+                }
+            } else {
                 break;
             };
             let server_clone = server.clone();
-            if line.len() == 0 || line.as_bytes()[line.len() - 1] != b'\n' {
+            if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
                 continue;
             }
