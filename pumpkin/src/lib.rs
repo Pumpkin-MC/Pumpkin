@@ -404,9 +404,8 @@ async fn setup_stdin_console(server: Arc<Server>) {
             };
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
-                continue;
             }
-            rt.block_on(tx.send(line.trim()))
+            rt.block_on(tx.send(line.trim().to_string()))
                 .expect("Failed to send command to server");
         }
     });
@@ -419,7 +418,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                     'after: {
                         let dispatcher = &server.command_dispatcher.read().await;
                         dispatcher
-                            .handle_command(&mut command::CommandSender::Console, &server, command)
+                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
                 }}
