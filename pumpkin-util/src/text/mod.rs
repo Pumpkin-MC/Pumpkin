@@ -57,6 +57,19 @@ impl<'de> Deserialize<'de> for TextComponent {
                     serde::de::value::MapAccessDeserializer::new(map),
                 )?))
             }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(TextComponent(TextComponentBase {
+                    content: TextContent::Text {
+                        text: Cow::from(v.to_string()),
+                    },
+                    style: Default::default(),
+                    extra: vec![],
+                }))
+            }
         }
 
         deserializer.deserialize_any(TextComponentVisitor)
