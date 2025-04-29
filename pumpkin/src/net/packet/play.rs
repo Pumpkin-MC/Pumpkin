@@ -352,8 +352,8 @@ impl Player {
         if position.x.is_nan()
             || position.y.is_nan()
             || position.z.is_nan()
-            || packet.yaw.is_infinite()
-            || packet.pitch.is_infinite()
+            || !packet.yaw.is_finite()
+            || !packet.pitch.is_finite()
         {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.invalid_player_movement",
