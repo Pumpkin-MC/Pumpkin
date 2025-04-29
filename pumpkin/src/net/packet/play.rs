@@ -1270,43 +1270,37 @@ impl Player {
                         );
                         return;
                     }
+
                     // Block break & play sound
                     let entity = &self.living_entity.entity;
                     let world = &entity.world.read().await;
+
                     self.mining
                         .store(false, std::sync::atomic::Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
-                    let block = world.get_block(&location).await;
-                    let state = world.get_block_state(&location).await;
-                    if let Ok(block) = block {
-                        let broken_state = world.get_block_state(&location).await.unwrap();
-                        if let Ok(state) = state {
-                            let drop = self.gamemode.load() != GameMode::Creative
-                                && self.can_harvest(&state, block.name).await;
-                            world
-                                .break_block(
-                                    &location,
-                                    Some(self.clone()),
-                                    if drop {
-                                        BlockFlags::NOTIFY_NEIGHBORS
-                                    } else {
-                                        BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                                    },
-                                )
-                                .await;
-                        }
-                        server
-                            .block_registry
-                            .broken(
-                                Arc::clone(world),
-                                &block,
-                                self,
-                                location,
-                                server,
-                                broken_state,
+
+                    if let Ok((block, state)) = world.get_block_and_block_state(&location).await {
+                        let drop = self.gamemode.load() != GameMode::Creative
+                            && self.can_harvest(&state, block.name).await;
+
+                        world
+                            .break_block(
+                                &location,
+                                Some(self.clone()),
+                                if drop {
+                                    BlockFlags::NOTIFY_NEIGHBORS
+                                } else {
+                                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                                },
                             )
                             .await;
+
+                        server
+                            .block_registry
+                            .broken(Arc::clone(world), &block, self, location, server, state)
+                            .await;
                     }
+
                     self.update_sequence(player_action.sequence.0);
                 }
                 Status::DropItem => {
@@ -1694,9 +1688,7 @@ impl Player {
         let (clicked_block, clicked_block_state) =
             world.get_block_and_block_state(&clicked_block_pos).await?;
 
-        let replace_clicked_block = if clicked_block != block {
-            clicked_block_state.replaceable()
-        } else {
+        let replace_clicked_block = if clicked_block == block {
             world
                 .block_registry
                 .can_update_at(
@@ -1708,6 +1700,8 @@ impl Player {
                     &use_item_on,
                 )
                 .await
+        } else {
+            clicked_block_state.replaceable()
         };
 
         let (final_block_pos, final_face, update) = if replace_clicked_block {
@@ -1717,9 +1711,7 @@ impl Player {
             let (previous_block, previous_block_state) =
                 world.get_block_and_block_state(&block_pos).await?;
 
-            let replace_previous_block = if previous_block != block {
-                previous_block_state.replaceable()
-            } else {
+            let replace_previous_block = if previous_block == block {
                 world
                     .block_registry
                     .can_update_at(
@@ -1731,6 +1723,8 @@ impl Player {
                         &use_item_on,
                     )
                     .await
+            } else {
+                previous_block_state.replaceable()
             };
 
             if !replace_previous_block {
