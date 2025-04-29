@@ -18,7 +18,6 @@ use std::{
     net::SocketAddr,
     sync::{Arc, LazyLock},
 };
-use tokio::runtime::Handle;
 use tokio::select;
 use tokio::sync::Notify;
 use tokio::{net::TcpListener, sync::Mutex};
@@ -209,7 +208,7 @@ impl PumpkinServer {
                 if let Some(rl) = wrapper.take_readline() {
                     setup_console(rl, server.clone());
                 } else {
-                    setup_stdin_console(server.clone(), Handle::current());
+                    setup_stdin_console(server.clone()).await;
                 }
             }
         }
@@ -384,7 +383,9 @@ impl PumpkinServer {
     }
 }
 
-fn setup_stdin_console(server: Arc<Server>, handle: Handle) {
+async fn setup_stdin_console(server: Arc<Server>) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+    let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
             let mut line = String::new();
@@ -396,24 +397,28 @@ fn setup_stdin_console(server: Arc<Server>, handle: Handle) {
             } else {
                 break;
             };
-            let server_clone = server.clone();
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
                 continue;
             }
-            handle.spawn(async move {
-                let command = &line[..line.len() - 1]; // Remove the newline
+            rt.block_on(tx.send(line[..line.len() - 1].to_string()))
+                .expect("Failed to send command to server");
+        }
+    });
+    tokio::spawn(async move {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Some(command) = rx.recv().await {
                 send_cancellable! {{
-                    ServerCommandEvent::new(command.to_string());
+                    ServerCommandEvent::new(command.clone());
 
                     'after: {
-                        let dispatcher = &server_clone.command_dispatcher.read().await;
+                        let dispatcher = &server.command_dispatcher.read().await;
                         dispatcher
-                            .handle_command(&mut command::CommandSender::Console, &server_clone, command)
+                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
                 }}
-            });
+            }
         }
     });
 }
