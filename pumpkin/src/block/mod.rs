@@ -294,8 +294,10 @@ pub enum BlockIsReplacing {
 
 impl BlockIsReplacing {
     #[must_use]
+    /// Returns true if the block was a water source block.
     pub fn water_source(&self) -> bool {
         match self {
+            // Level 0 means the water is a source block
             Self::Water(level) => *level == Integer0To15::L0,
             _ => false,
         }
