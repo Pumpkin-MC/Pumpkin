@@ -395,16 +395,15 @@ fn setup_stdin_console(server: Arc<Server>, handle: Handle) {
             handle.spawn(async move {
                 let command = &line[..line.len() - 1]; // Remove the newline
                 send_cancellable! {{
-                        ServerCommandEvent::new(command.to_string());
+                    ServerCommandEvent::new(command.to_string());
 
-                        'after: {
-                            let dispatcher = &server_clone.command_dispatcher.read().await;
-                            dispatcher
-                                .handle_command(&mut command::CommandSender::Console, &server_clone, command)
-                                .await;
-                        };
-                    }
-                }
+                    'after: {
+                        let dispatcher = &server_clone.command_dispatcher.read().await;
+                        dispatcher
+                            .handle_command(&mut command::CommandSender::Console, &server_clone, command)
+                            .await;
+                    };
+                }}
             });
         }
     });
