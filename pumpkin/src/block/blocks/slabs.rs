@@ -50,11 +50,7 @@ impl PumpkinBlock for SlabBlock {
                 BlockDirection::Down => SlabType::Bottom,
                 _ => match use_item_on.cursor_pos.y {
                     0.0...0.5 => SlabType::Bottom,
-                    0.5...1.0 => SlabType::Top,
-
-                    // This cannot happen normally
-                    #[allow(clippy::match_same_arms)]
-                    _ => SlabType::Bottom,
+                    _ => SlabType::Top,
                 },
             }
         };
@@ -79,12 +75,16 @@ impl PumpkinBlock for SlabBlock {
                 BlockDirection::Down => SlabType::Top,
                 _ => match use_item_on.cursor_pos.y {
                     0.0...0.5 => SlabType::Top,
-                    0.5...1.0 => SlabType::Bottom,
-
-                    // This cannot happen normally
-                    #[allow(clippy::match_same_arms)]
                     _ => SlabType::Bottom,
                 },
             }
+    }
+}
+
+impl SlabBlock {
+    pub fn drop_double_loot(block: &Block, state_id: BlockStateId) -> bool {
+        let slab_props = SlabProperties::from_state_id(state_id, block);
+
+        slab_props.r#type == SlabType::Double
     }
 }

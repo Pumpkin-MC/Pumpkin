@@ -30,6 +30,7 @@ use fluids::lava::FlowingLava;
 use fluids::water::FlowingWater;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::loot_table::{
     AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
@@ -116,8 +117,18 @@ pub async fn drop_loot(
                 .map(|(key, value)| (key.as_str(), value.as_str()))
                 .collect::<Vec<_>>(),
         );
-        for stack in loot {
-            drop_stack(world, pos, stack).await;
+
+        if block.is_tagged_with("#minecraft:slabs").unwrap()
+            && SlabBlock::drop_double_loot(block, state_id)
+        {
+            for mut stack in loot {
+                stack.item_count *= 2;
+                drop_stack(world, pos, stack).await;
+            }
+        } else {
+            for stack in loot {
+                drop_stack(world, pos, stack).await;
+            }
         }
     }
 
