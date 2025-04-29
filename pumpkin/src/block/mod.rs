@@ -28,6 +28,7 @@ use blocks::{
 };
 use fluids::lava::FlowingLava;
 use fluids::water::FlowingWater;
+use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
@@ -287,13 +288,16 @@ impl LootConditionExt for LootCondition {
 #[derive(PartialEq)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
-    Water,
+    Water(Integer0To15),
     Other,
 }
 
 impl BlockIsReplacing {
     #[must_use]
-    pub fn water(&self) -> bool {
-        *self == Self::Water
+    pub fn water_source(&self) -> bool {
+        match self {
+            Self::Water(level) => *level == Integer0To15::L0,
+            _ => false,
+        }
     }
 }

@@ -1,3 +1,4 @@
+use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -1704,7 +1705,9 @@ impl Player {
         } else {
             clicked_block_state.replaceable().then(|| {
                 if clicked_block == Block::WATER {
-                    BlockIsReplacing::Water
+                    let water_props =
+                        WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
+                    BlockIsReplacing::Water(water_props.level)
                 } else {
                     BlockIsReplacing::Other
                 }
@@ -1735,7 +1738,11 @@ impl Player {
                 } else {
                     previous_block_state.replaceable().then(|| {
                         if previous_block == Block::WATER {
-                            BlockIsReplacing::Water
+                            let water_props = WaterLikeProperties::from_state_id(
+                                previous_block_state.id,
+                                &previous_block,
+                            );
+                            BlockIsReplacing::Water(water_props.level)
                         } else {
                             BlockIsReplacing::Other
                         }

@@ -49,7 +49,7 @@ impl PumpkinBlock for SlabBlock {
         }
 
         let mut slab_props = SlabProperties::default(block);
-        slab_props.waterlogged = replacing.water();
+        slab_props.waterlogged = replacing.water_source();
         slab_props.r#type = match face {
             BlockDirection::Up => SlabType::Top,
             BlockDirection::Down => SlabType::Bottom,
