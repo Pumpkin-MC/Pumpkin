@@ -150,6 +150,11 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
             }
         } else {
+            if advanced_config().commands.use_tty && !stdin().is_terminal() {
+                log::warn!(
+                    "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                );
+            }
             let logger = simplelog::SimpleLogger::new(level, config.build());
             Some((ReadlineLogWrapper::new(logger, None), level))
         }
@@ -384,7 +389,7 @@ impl PumpkinServer {
 }
 
 async fn setup_stdin_console(server: Arc<Server>) {
-    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
@@ -401,7 +406,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                 log::warn!("Console command was not terminated with a newline");
                 continue;
             }
-            rt.block_on(tx.send(line[..line.len() - 1].to_string()))
+            rt.block_on(tx.send(line.trim()))
                 .expect("Failed to send command to server");
         }
     });
@@ -414,7 +419,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                     'after: {
                         let dispatcher = &server.command_dispatcher.read().await;
                         dispatcher
-                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
+                            .handle_command(&mut command::CommandSender::Console, &server, command)
                             .await;
                     };
                 }}
