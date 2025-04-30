@@ -34,11 +34,12 @@ impl PumpkinBlock for PoweredRailBlock {
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _replacing: BlockIsReplacing,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
         let player_facing = player.living_entity.entity.get_horizontal_facing();
 
+        rail_props.set_waterlogged(replacing.water_source());
         rail_props
             .set_straight_shape(compute_placed_rail_shape(world, block_pos, player_facing).await);
 

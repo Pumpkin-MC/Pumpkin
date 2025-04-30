@@ -242,6 +242,13 @@ impl RailProperties {
         }
     }
 
+    fn set_waterlogged(&mut self, waterlogged: bool) {
+        match self {
+            Self::Rail(props) => props.waterlogged = waterlogged,
+            Self::StraightRail(props) => props.waterlogged = waterlogged,
+        }
+    }
+
     fn set_shape(&mut self, shape: RailShape) {
         match self {
             Self::Rail(props) => props.shape = shape,
