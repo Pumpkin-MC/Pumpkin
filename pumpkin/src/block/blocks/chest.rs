@@ -84,7 +84,7 @@ impl PumpkinBlock for ChestBlock {
             } else {
                 ChestType::Single
             }
-        } else if can_connect_towards(
+        } else if get_chest_properties_if_can_connect(
             world,
             block,
             block_pos,
@@ -96,7 +96,7 @@ impl PumpkinBlock for ChestBlock {
         .is_some()
         {
             ChestType::Left
-        } else if can_connect_towards(
+        } else if get_chest_properties_if_can_connect(
             world,
             block,
             block_pos,
@@ -134,7 +134,7 @@ impl PumpkinBlock for ChestBlock {
             ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
         };
 
-        if let Some(mut neighbor_props) = can_connect_towards(
+        if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
             &world,
             block,
             block_pos,
@@ -199,7 +199,7 @@ impl PumpkinBlock for ChestBlock {
             ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
         };
 
-        if let Some(mut neighbor_props) = can_connect_towards(
+        if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
             &world,
             block,
             &block_pos,
@@ -311,13 +311,13 @@ impl ChestBlock {
     }
 }
 
-async fn can_connect_towards(
+async fn get_chest_properties_if_can_connect(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
     facing: HorizontalFacing,
     direction: HorizontalFacing,
-    r#type: ChestType,
+    wanted_type: ChestType,
 ) -> Option<ChestLikeProperties> {
     let (neighbor_block, neighbor_block_state) = world
         .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
@@ -330,7 +330,7 @@ async fn can_connect_towards(
 
     let neighbor_props =
         ChestLikeProperties::from_state_id(neighbor_block_state.id, &neighbor_block);
-    if neighbor_props.facing == facing && neighbor_props.r#type == r#type {
+    if neighbor_props.facing == facing && neighbor_props.r#type == wanted_type {
         return Some(neighbor_props);
     }
 

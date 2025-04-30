@@ -41,9 +41,10 @@ impl PumpkinBlock for SignBlock {
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _replacing: BlockIsReplacing,
+        replacing: BlockIsReplacing,
     ) -> u16 {
-        let sign_props = SignProperties::default(block);
+        let mut sign_props = SignProperties::default(block);
+        sign_props.waterlogged = replacing.water_source();
 
         sign_props.to_state_id(block)
     }

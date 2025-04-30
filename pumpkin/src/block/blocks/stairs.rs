@@ -45,9 +45,10 @@ impl PumpkinBlock for StairBlock {
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        _replacing: BlockIsReplacing,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut stair_props = StairsProperties::default(block);
+        stair_props.waterlogged = replacing.water_source();
 
         stair_props.facing = player.living_entity.entity.get_horizontal_facing();
         stair_props.half = match face {
