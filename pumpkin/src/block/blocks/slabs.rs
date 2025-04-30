@@ -84,11 +84,3 @@ impl PumpkinBlock for SlabBlock {
             }
     }
 }
-
-impl SlabBlock {
-    pub fn drop_double_loot(block: &Block, state_id: BlockStateId) -> bool {
-        let slab_props = SlabProperties::from_state_id(state_id, block);
-
-        slab_props.r#type == SlabType::Double
-    }
-}

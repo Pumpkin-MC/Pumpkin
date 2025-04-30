@@ -37,10 +37,10 @@ use fluids::water::FlowingWater;
 use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::loot_table::{
-    AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
+    AlternativeEntry, ItemEntry, LootCondition, LootFunctionNumberProvider, LootFunctionTypes,
+    LootPoolEntryTypes, LootTable,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -126,24 +126,9 @@ pub async fn drop_loot(
     if let Some(table) = &block.loot_table {
         let props =
             Block::properties(block, state_id).map_or_else(Vec::new, |props| props.to_props());
-        let loot = table.get_loot(
-            &props
-                .iter()
-                .map(|(key, value)| (key.as_str(), value.as_str()))
-                .collect::<Vec<_>>(),
-        );
 
-        if block.is_tagged_with("#minecraft:slabs").unwrap()
-            && SlabBlock::drop_double_loot(block, state_id)
-        {
-            for mut stack in loot {
-                stack.item_count *= 2;
-                drop_stack(world, pos, stack).await;
-            }
-        } else {
-            for stack in loot {
-                drop_stack(world, pos, stack).await;
-            }
+        for stack in table.get_loot(&props) {
+            drop_stack(world, pos, stack).await;
         }
     }
 
@@ -193,41 +178,89 @@ pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name
 // These traits need to be implemented here so they have access to pumpkin_data
 
 trait LootTableExt {
-    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+    fn get_loot(&self, block_props: &[(String, String)]) -> Vec<ItemStack>;
 }
 
 impl LootTableExt for LootTable {
-    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
-        let mut items = vec![];
+    fn get_loot(&self, block_props: &[(String, String)]) -> Vec<ItemStack> {
+        let mut items = Vec::new();
+
         if let Some(pools) = &self.pools {
-            for i in 0..pools.len() {
-                let pool = &pools[i];
-                items.extend_from_slice(&pool.get_loot(block_props));
-            }
-        }
-        items
-    }
-}
+            for pool in *pools {
+                let rolls = pool.rolls.round() + pool.bonus_rolls.floor(); // TODO: multiply by luck
 
-trait LootPoolExt {
-    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
-}
+                for _ in 0..(rolls as i32) {
+                    for entry in pool.entries {
+                        if let Some(conditions) = entry.conditions {
+                            if !conditions.iter().all(|cond| cond.is_fulfilled(block_props)) {
+                                continue;
+                            }
+                        }
 
-impl LootPoolExt for LootPool {
-    fn get_loot(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
-        let i = self.rolls.round() as i32 + self.bonus_rolls.floor() as i32; // TODO: mul by luck
-        let mut items = vec![];
-        for _ in 0..i {
-            for entry_idx in 0..self.entries.len() {
-                let entry = &self.entries[entry_idx];
-                if let Some(conditions) = &entry.conditions {
-                    if !conditions.iter().all(|c| c.test(block_props)) {
-                        continue;
+                        let mut new_items = entry.content.get_items(block_props);
+
+                        if let Some(functions) = entry.functions {
+                            for function in functions {
+                                if let Some(conditions) = function.conditions {
+                                    if !conditions.iter().all(|cond| cond.is_fulfilled(block_props))
+                                    {
+                                        continue;
+                                    }
+                                }
+
+                                match &function.content {
+                                    LootFunctionTypes::SetCount { count, add } => {
+                                        for stack in new_items.iter_mut() {
+                                            if *add {
+                                                stack.item_count += count.generate().round() as u8;
+                                            } else {
+                                                stack.item_count = count.generate().round() as u8;
+                                            }
+                                        }
+                                    }
+                                    LootFunctionTypes::LimitCount { min, max } => {
+                                        if let Some(min) = min.map(|min| min.round() as u8) {
+                                            for stack in new_items.iter_mut() {
+                                                if stack.item_count < min {
+                                                    stack.item_count = min;
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(max) = max.map(|max| max.round() as u8) {
+                                            for stack in new_items.iter_mut() {
+                                                if stack.item_count > max {
+                                                    stack.item_count = max;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    LootFunctionTypes::ApplyBonus {
+                                        enchantment: _,
+                                        formula: _,
+                                        parameters: _,
+                                    } => todo!(),
+                                    LootFunctionTypes::CopyComponents {
+                                        source: _,
+                                        include: _,
+                                    } => todo!(),
+                                    LootFunctionTypes::CopyState {
+                                        block: _,
+                                        properties: _,
+                                    } => todo!(),
+                                    LootFunctionTypes::ExplosionDecay => {
+                                        // TODO: shouldnt crash here but needs to be implemented someday
+                                    }
+                                }
+                            }
+                        }
+
+                        items.extend_from_slice(&new_items);
                     }
                 }
-                items.extend_from_slice(&entry.content.get_items(block_props));
             }
         }
+
         items
     }
 }
@@ -244,16 +277,16 @@ impl ItemEntryExt for ItemEntry {
 }
 
 trait AlternativeEntryExt {
-    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+    fn get_items(&self, block_props: &[(String, String)]) -> Vec<ItemStack>;
 }
 
 impl AlternativeEntryExt for AlternativeEntry {
-    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
+    fn get_items(&self, block_props: &[(String, String)]) -> Vec<ItemStack> {
         let mut items = vec![];
         for i in 0..self.children.len() {
             let child = &self.children[i];
             if let Some(conditions) = &child.conditions {
-                if !conditions.iter().all(|c| c.test(block_props)) {
+                if !conditions.iter().all(|c| c.is_fulfilled(block_props)) {
                     continue;
                 }
             }
@@ -264,13 +297,13 @@ impl AlternativeEntryExt for AlternativeEntry {
 }
 
 trait LootPoolEntryTypesExt {
-    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack>;
+    fn get_items(&self, block_props: &[(String, String)]) -> Vec<ItemStack>;
 }
 
 impl LootPoolEntryTypesExt for LootPoolEntryTypes {
-    fn get_items(&self, block_props: &[(&str, &str)]) -> Vec<ItemStack> {
+    fn get_items(&self, block_props: &[(String, String)]) -> Vec<ItemStack> {
         match self {
-            Self::Empty => todo!(),
+            Self::Empty => Vec::new(),
             Self::Item(item_entry) => item_entry.get_items(),
             Self::LootTable => todo!(),
             Self::Dynamic => todo!(),
@@ -283,18 +316,35 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
 }
 
 trait LootConditionExt {
-    fn test(&self, block_props: &[(&str, &str)]) -> bool;
+    fn is_fulfilled(&self, block_props: &[(String, String)]) -> bool;
 }
 
 impl LootConditionExt for LootCondition {
     // TODO: This is trash. Make this right
-    fn test(&self, block_props: &[(&str, &str)]) -> bool {
+    fn is_fulfilled(&self, block_props: &[(String, String)]) -> bool {
         match self {
             Self::SurvivesExplosion => true,
-            Self::BlockStateProperty { properties } => properties
+            Self::BlockStateProperty {
+                block: _,
+                properties,
+            } => properties
                 .iter()
                 .all(|(key, value)| block_props.iter().any(|(k, v)| k == key && v == value)),
             _ => false,
+        }
+    }
+}
+
+trait LootFunctionNumberProviderExt {
+    fn generate(&self) -> f32;
+}
+
+impl LootFunctionNumberProviderExt for LootFunctionNumberProvider {
+    fn generate(&self) -> f32 {
+        match self {
+            Self::Constant { value } => *value,
+            Self::Uniform { min, max } => rand::thread_rng().gen_range(*min..=*max),
+            Self::Binomial { n: _, p: _ } => todo!(),
         }
     }
 }
