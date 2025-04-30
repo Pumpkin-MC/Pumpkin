@@ -65,9 +65,7 @@ impl PumpkinBlock for ChestBlock {
                     .await
                     .unwrap();
 
-                if clicked_block != *block {
-                    ChestType::Single
-                } else {
+                if clicked_block == *block {
                     let clicked_props =
                         ChestLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
 
@@ -80,6 +78,8 @@ impl PumpkinBlock for ChestBlock {
                     } else {
                         ChestType::Single
                     }
+                } else {
+                    ChestType::Single
                 }
             } else {
                 ChestType::Single
@@ -124,7 +124,7 @@ impl PumpkinBlock for ChestBlock {
         _old_state_id: u16,
         _notify: bool,
     ) {
-        let chest = ChestBlockEntity::new(block_pos.clone());
+        let chest = ChestBlockEntity::new(*block_pos);
         world.add_block_entity(Arc::new(chest)).await;
 
         let chest_props = ChestLikeProperties::from_state_id(state_id, block);
@@ -135,7 +135,7 @@ impl PumpkinBlock for ChestBlock {
         };
 
         if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
-            &world,
+            world,
             block,
             block_pos,
             chest_props.facing,
@@ -342,11 +342,11 @@ trait ChestTypeExt {
 }
 
 impl ChestTypeExt for ChestType {
-    fn opposite(&self) -> ChestType {
+    fn opposite(&self) -> Self {
         match self {
-            ChestType::Single => ChestType::Single,
-            ChestType::Left => ChestType::Right,
-            ChestType::Right => ChestType::Left,
+            Self::Single => Self::Single,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
         }
     }
 }
