@@ -592,7 +592,10 @@ pub enum LootConditionStruct {
     #[serde(rename = "minecraft:entity_scores")]
     EntityScores,
     #[serde(rename = "minecraft:block_state_property")]
-    BlockStateProperty { properties: HashMap<String, String> },
+    BlockStateProperty {
+        block: String,
+        properties: HashMap<String, String>,
+    },
     #[serde(rename = "minecraft:match_tool")]
     MatchTool,
     #[serde(rename = "minecraft:table_bonus")]
@@ -628,12 +631,12 @@ impl ToTokens for LootConditionStruct {
             LootConditionStruct::EntityProperties => quote! { LootCondition::EntityProperties },
             LootConditionStruct::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
             LootConditionStruct::EntityScores => quote! { LootCondition::EntityScores },
-            LootConditionStruct::BlockStateProperty { properties } => {
+            LootConditionStruct::BlockStateProperty { block, properties } => {
                 let properties: Vec<_> = properties
                     .iter()
                     .map(|(k, v)| quote! { (#k, #v) })
                     .collect();
-                quote! { LootCondition::BlockStateProperty { properties: &[#(#properties),*] } }
+                quote! { LootCondition::BlockStateProperty { block: #block, properties: &[#(#properties),*] } }
             }
             LootConditionStruct::MatchTool => quote! { LootCondition::MatchTool },
             LootConditionStruct::TableBonus => quote! { LootCondition::TableBonus },
@@ -656,10 +659,197 @@ impl ToTokens for LootConditionStruct {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+pub struct LootFunctionStruct {
+    #[serde(flatten)]
+    content: LootFunctionTypesStruct,
+    conditions: Option<Vec<LootConditionStruct>>,
+}
+
+impl ToTokens for LootFunctionStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let functions_tokens = &self.content.to_token_stream();
+
+        let conditions_tokens = match &self.conditions {
+            Some(conds) => {
+                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+
+        tokens.extend(quote! {
+            LootFunction {
+                content: #functions_tokens,
+                conditions: #conditions_tokens,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "function")]
+pub enum LootFunctionTypesStruct {
+    #[serde(rename = "minecraft:set_count")]
+    SetCount {
+        count: LootFunctionNumberProviderStruct,
+        add: Option<bool>,
+    },
+    #[serde(rename = "minecraft:limit_count")]
+    LimitCount { limit: LootFunctionLimitCountStruct },
+    #[serde(rename = "minecraft:apply_bonus")]
+    ApplyBonus {
+        enchantment: String,
+        formula: String,
+        parameters: Option<LootFunctionBonusParameterStruct>,
+    },
+    #[serde(rename = "minecraft:copy_components")]
+    CopyComponents {
+        source: String,
+        include: Vec<String>,
+    },
+    #[serde(rename = "minecraft:copy_state")]
+    CopyState {
+        block: String,
+        properties: Vec<String>,
+    },
+    #[serde(rename = "minecraft:explosion_decay")]
+    ExplosionDecay,
+}
+
+impl ToTokens for LootFunctionTypesStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            LootFunctionTypesStruct::SetCount { count, add } => {
+                let count = count.to_token_stream();
+                let add = add.unwrap_or(false);
+                quote! { LootFunctionTypes::SetCount { count: #count, add: #add } }
+            }
+            LootFunctionTypesStruct::LimitCount { limit } => {
+                let min = match limit.min {
+                    Some(min) => quote! { Some(#min) },
+                    None => quote! { None },
+                };
+                let max = match limit.max {
+                    Some(max) => quote! { Some(#max) },
+                    None => quote! { None },
+                };
+                quote! { LootFunctionTypes::LimitCount { min: #min, max: #max } }
+            }
+            LootFunctionTypesStruct::ApplyBonus {
+                enchantment,
+                formula,
+                parameters,
+            } => {
+                let parameters = match parameters {
+                    Some(params) => {
+                        let params = params.to_token_stream();
+                        quote! { Some(#params) }
+                    }
+                    None => quote! { None },
+                };
+
+                quote! {
+                    LootFunctionTypes::ApplyBonus {
+                        enchantment: #enchantment,
+                        formula: #formula,
+                        parameters: #parameters,
+                    }
+                }
+            }
+            LootFunctionTypesStruct::CopyComponents { source, include } => {
+                quote! {
+                    LootFunctionTypes::CopyComponents {
+                        source: #source,
+                        include: &[#(#include),*],
+                    }
+                }
+            }
+            LootFunctionTypesStruct::CopyState { block, properties } => {
+                quote! {
+                    LootFunctionTypes::CopyState {
+                        block: #block,
+                        properties: &[#(#properties),*],
+                    }
+                }
+            }
+            LootFunctionTypesStruct::ExplosionDecay => {
+                quote! { LootFunctionTypes::ExplosionDecay }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum LootFunctionNumberProviderStruct {
+    #[serde(rename = "minecraft:uniform")]
+    Uniform { min: f32, max: f32 },
+    #[serde(rename = "minecraft:binomial")]
+    Binomial { n: f32, p: f32 },
+    #[serde(rename = "minecraft:constant", untagged)]
+    Constant(f32),
+}
+
+impl ToTokens for LootFunctionNumberProviderStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            Self::Constant(value) => {
+                quote! { LootFunctionNumberProvider::Constant { value: #value } }
+            }
+            Self::Uniform { min, max } => {
+                quote! { LootFunctionNumberProvider::Uniform { min: #min, max: #max } }
+            }
+            Self::Binomial { n, p } => {
+                quote! { LootFunctionNumberProvider::Binomial { n: #n, p: #p } }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootFunctionLimitCountStruct {
+    min: Option<f32>,
+    max: Option<f32>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum LootFunctionBonusParameterStruct {
+    Multiplier {
+        #[serde(rename = "bonusMultiplier")]
+        bonus_multiplier: i32,
+    },
+    Probability {
+        extra: i32,
+        probability: f32,
+    },
+}
+
+impl ToTokens for LootFunctionBonusParameterStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            Self::Multiplier { bonus_multiplier } => {
+                quote! { LootFunctionBonusParameter::Multiplier { bonus_multiplier: #bonus_multiplier } }
+            }
+            Self::Probability { extra, probability } => {
+                quote! { LootFunctionBonusParameter::Probability { extra: #extra, probability: #probability } }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct LootPoolEntryStruct {
     #[serde(flatten)]
     content: LootPoolEntryTypesStruct,
     conditions: Option<Vec<LootConditionStruct>>,
+    functions: Option<Vec<LootFunctionStruct>>,
 }
 
 impl ToTokens for LootPoolEntryStruct {
@@ -672,11 +862,19 @@ impl ToTokens for LootPoolEntryStruct {
             }
             None => quote! { None },
         };
+        let functions_tokens = match &self.functions {
+            Some(fns) => {
+                let cond_tokens: Vec<_> = fns.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
 
         tokens.extend(quote! {
             LootPoolEntry {
                 content: #content,
                 conditions: #conditions_tokens,
+                functions: #functions_tokens,
             }
         });
     }
