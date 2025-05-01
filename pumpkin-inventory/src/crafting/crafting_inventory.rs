@@ -20,7 +20,13 @@ impl CraftingInventory {
         Self {
             width,
             height,
-            slots: vec![Arc::new(Mutex::new(ItemStack::EMPTY)); width as usize * height as usize],
+            slots: {
+                // Creates a Vec with different Mutexes for each slot
+                let mut v = Vec::with_capacity(width as usize * height as usize);
+                (0..width as usize * height as usize)
+                    .for_each(|_| v.push(Arc::new(Mutex::new(ItemStack::EMPTY))));
+                v
+            },
         }
     }
 }

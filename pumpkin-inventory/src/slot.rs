@@ -32,8 +32,7 @@ pub trait Slot: Send + Sync + Debug {
 
     fn on_take(&self, _amount: u8) {}
 
-    // TODO: Source takes player as parameter
-    async fn on_take_item(&self, _stack: &ItemStack) {
+    async fn on_take_item(&self, _player: &dyn InventoryPlayer, _stack: &ItemStack) {
         self.mark_dirty().await;
     }
 
@@ -137,7 +136,7 @@ pub trait Slot: Send + Sync + Debug {
         let stack = self.try_take_stack_range(min, max, player).await;
 
         if let Some(stack) = &stack {
-            self.on_take_item(stack).await;
+            self.on_take_item(player, stack).await;
         }
 
         stack.unwrap_or(ItemStack::EMPTY)
@@ -166,7 +165,7 @@ pub trait Slot: Send + Sync + Debug {
                 } else if stack.are_items_and_components_equal(&stack_self) {
                     stack.decrement(min_count);
                     stack_self.increment(min_count);
-                    let cloned_stack = stack_self.clone();
+                    let cloned_stack = *stack_self;
                     drop(stack_self);
                     self.set_stack(cloned_stack).await;
                 }

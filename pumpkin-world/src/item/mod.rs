@@ -56,6 +56,10 @@ impl ItemStack {
         }
     }
 
+    pub fn is_stackable(&self) -> bool {
+        self.get_max_stack_size() > 1 // TODO: && (!this.isDamageable() || !this.isDamaged());
+    }
+
     pub fn is_empty(&self) -> bool {
         self.item_count == 0 || self.item.id == Item::AIR.id
     }
@@ -71,6 +75,10 @@ impl ItemStack {
         let mut stack = *self;
         stack.item_count = count;
         stack
+    }
+
+    pub fn set_count(&mut self, count: u8) {
+        self.item_count = count;
     }
 
     pub fn decrement(&mut self, amount: u8) {

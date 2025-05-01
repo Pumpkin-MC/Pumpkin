@@ -1,6 +1,5 @@
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
-use crossbeam_utils::atomic::AtomicCell;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
@@ -10,13 +9,16 @@ use pumpkin_protocol::{
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{
-    inventory::Inventory,
-    screen_handler::{DefaultScreenHandlerBehaviour, InventoryPlayer},
-};
+use crate::screen_handler::{DefaultScreenHandlerBehaviour, InventoryPlayer};
 
 pub struct SyncHandler {
     player: Mutex<Option<Arc<dyn InventoryPlayer>>>,
+}
+
+impl Default for SyncHandler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SyncHandler {
@@ -33,7 +35,7 @@ impl SyncHandler {
     pub async fn update_state(
         &self,
         screen_handler: &DefaultScreenHandlerBehaviour,
-        stacks: &Vec<ItemStack>,
+        stacks: &[ItemStack],
         cursor_stack: &ItemStack,
         properties: Vec<i32>,
         next_revision: u32,
@@ -45,10 +47,10 @@ impl SyncHandler {
                     VarInt(next_revision as i32),
                     stacks
                         .iter()
-                        .map(|stack| ItemStackSerializer::from(stack.clone()))
+                        .map(|stack| ItemStackSerializer::from(*stack))
                         .collect::<Vec<_>>()
                         .as_slice(),
-                    &ItemStackSerializer::from(cursor_stack.clone()),
+                    &ItemStackSerializer::from(*cursor_stack),
                 ))
                 .await;
 
@@ -77,7 +79,7 @@ impl SyncHandler {
                     screen_handler.sync_id as i8,
                     next_revision as i32,
                     slot as i16,
-                    &ItemStackSerializer::from(stack.clone()),
+                    &ItemStackSerializer::from(*stack),
                 ))
                 .await;
         }
@@ -90,9 +92,7 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enque_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(
-                    stack.clone(),
-                )))
+                .enque_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(*stack)))
                 .await;
         }
     }

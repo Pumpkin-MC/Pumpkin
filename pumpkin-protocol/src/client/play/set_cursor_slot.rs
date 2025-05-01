@@ -1,4 +1,3 @@
-use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 
 use pumpkin_data::packet::clientbound::PLAY_SET_CURSOR_ITEM;

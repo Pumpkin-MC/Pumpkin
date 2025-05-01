@@ -111,6 +111,70 @@ impl ScreenHandler for PlayerScreenHandler {
     }
 
     async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        todo!()
+        let mut stack_left = ItemStack::EMPTY;
+        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+        println!("slot_index: {}", slot_index);
+
+        // TODO: Equippable component
+
+        if slot.has_stack().await {
+            let slot_stack = slot.get_stack().await;
+            let mut slot_stack = slot_stack.lock().await;
+            stack_left = slot_stack.clone();
+
+            println!("stack_left: {:?}", stack_left);
+
+            if slot_index == 0 {
+                if !self.insert_item(&mut slot_stack, 9, 45, true).await {
+                    return ItemStack::EMPTY;
+                }
+
+                slot.on_quick_transfer(*slot_stack, stack_left);
+            } else if slot_index >= 1 && slot_index < 5 {
+                if !self.insert_item(&mut slot_stack, 9, 45, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if slot_index >= 5 && slot_index < 9 {
+                if !self.insert_item(&mut slot_stack, 9, 45, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if slot_index >= 9 && slot_index < 36 {
+                if !self.insert_item(&mut slot_stack, 36, 45, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if slot_index >= 36 && slot_index < 45 {
+                if !self.insert_item(&mut slot_stack, 9, 36, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
+                return ItemStack::EMPTY;
+            }
+
+            println!("slot_stack: {:?}", slot_stack);
+
+            if slot_stack.is_empty() {
+                drop(slot_stack);
+                slot.set_stack_prev(ItemStack::EMPTY, stack_left).await;
+            } else {
+                drop(slot_stack);
+                slot.mark_dirty().await;
+            }
+
+            let slot_stack = slot.get_stack().await;
+            let slot_stack = slot_stack.lock().await;
+
+            if slot_stack.item_count == stack_left.item_count {
+                return ItemStack::EMPTY;
+            }
+
+            slot.on_take_item(player, &slot_stack).await;
+
+            if slot_index == 0 {
+                player.drop_item(*slot_stack, false).await;
+            }
+        }
+
+        return stack_left;
     }
 }

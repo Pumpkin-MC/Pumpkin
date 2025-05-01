@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
 use pumpkin_protocol::{
-    ClientPacket,
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
@@ -268,6 +267,95 @@ pub trait ScreenHandler: Send + Sync {
 
     async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack;
 
+    async fn insert_item(
+        &mut self,
+        stack: &mut ItemStack,
+        start_index: i32,
+        end_index: i32,
+        from_last: bool,
+    ) -> bool {
+        let mut success = false;
+        let mut current_index = if from_last {
+            end_index - 1
+        } else {
+            start_index
+        };
+
+        if stack.is_stackable() {
+            while !stack.is_empty()
+                && (if from_last {
+                    current_index >= start_index
+                } else {
+                    current_index < end_index
+                })
+            {
+                let slot = self.get_behaviour().slots[current_index as usize].clone();
+                let slot_stack = slot.get_stack().await;
+                let mut slot_stack = slot_stack.lock().await;
+
+                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(&stack) {
+                    let combined_count = slot_stack.item_count + stack.item_count;
+                    let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack).await;
+                    if combined_count <= max_slot_count {
+                        stack.set_count(0);
+                        slot_stack.set_count(combined_count);
+                        drop(slot_stack);
+                        slot.mark_dirty().await;
+                        success = true;
+                    } else if slot_stack.item_count < max_slot_count {
+                        stack.decrement(max_slot_count - slot_stack.item_count);
+                        slot_stack.set_count(max_slot_count);
+                        drop(slot_stack);
+                        slot.mark_dirty().await;
+                        success = true;
+                    }
+                }
+
+                if from_last {
+                    current_index -= 1;
+                } else {
+                    current_index += 1;
+                }
+            }
+        }
+
+        if !stack.is_empty() {
+            if from_last {
+                current_index = end_index - 1;
+            } else {
+                current_index = start_index;
+            }
+
+            while if from_last {
+                current_index >= start_index
+            } else {
+                current_index < end_index
+            } {
+                let slot = self.get_behaviour().slots[current_index as usize].clone();
+                let slot_stack = slot.get_stack().await;
+                let slot_stack = slot_stack.lock().await;
+
+                if slot_stack.is_empty() && slot.can_insert(&stack).await {
+                    let max_count = slot.get_max_item_count_for_stack(&stack).await;
+                    drop(slot_stack);
+                    slot.set_stack(stack.split(max_count.min(stack.item_count)))
+                        .await;
+                    slot.mark_dirty().await;
+                    success = true;
+                    break;
+                }
+
+                if from_last {
+                    current_index -= 1;
+                } else {
+                    current_index += 1;
+                }
+            }
+        }
+
+        success
+    }
+
     async fn handle_slot_click(
         &self,
         _player: &dyn InventoryPlayer,
@@ -388,7 +476,7 @@ pub trait ScreenHandler: Send + Sync {
                             println!("taken: {:?}", taken);
                             // Reverse order of operations, shouldn't affect anything
                             *cursor_stack = taken;
-                            slot.on_take_item(&taken).await;
+                            slot.on_take_item(player, &taken).await;
                         }
                     } else if slot.can_insert(&cursor_stack).await {
                         if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
@@ -420,7 +508,7 @@ pub trait ScreenHandler: Send + Sync {
 
                         if let Some(taken) = taken {
                             cursor_stack.increment(taken.item_count);
-                            slot.on_take_item(&taken).await;
+                            slot.on_take_item(player, &taken).await;
                         }
                     }
                 }
@@ -428,8 +516,7 @@ pub trait ScreenHandler: Send + Sync {
                 println!("Done");
                 slot.mark_dirty().await;
             }
-        } else if action_type == SlotActionType::Swap && button >= 0 && button < 9 || button == 40 {
-            
+        } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
         }
     }
 
