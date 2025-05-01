@@ -349,9 +349,9 @@ impl Player {
         }
         // y = feet Y
         let position = packet.position;
-        if position.x.is_nan()
-            || position.y.is_nan()
-            || position.z.is_nan()
+        if !position.x.is_finite()
+            || !position.y.is_finite()
+            || !position.z.is_finite()
             || !packet.yaw.is_finite()
             || !packet.pitch.is_finite()
         {
