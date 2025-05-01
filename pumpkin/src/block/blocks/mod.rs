@@ -15,6 +15,7 @@ pub mod fence_gates;
 pub mod fences;
 pub mod furnace;
 pub mod glass_panes;
+pub mod iron_bars;
 pub mod jukebox;
 pub mod logs;
 pub mod redstone;
