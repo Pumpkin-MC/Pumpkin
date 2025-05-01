@@ -45,72 +45,19 @@ impl PumpkinBlock for ChestBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
         replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut chest_props = ChestLikeProperties::default(block);
-        let player_facing = player.get_entity().get_horizontal_facing();
 
         chest_props.waterlogged = replacing.water_source();
-        chest_props.facing = player_facing.opposite();
 
-        chest_props.r#type = if player.get_entity().pose.load() as i8 == EntityPose::Crouching as i8
-        {
-            if let Some(face) = face.to_horizontal_facing() {
-                let (clicked_block, clicked_block_state) = world
-                    .get_block_and_block_state(&block_pos.offset(face.to_offset()))
-                    .await
-                    .unwrap();
-
-                if clicked_block == *block {
-                    let clicked_props =
-                        ChestLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
-
-                    if clicked_props.facing.rotate_clockwise() == face {
-                        chest_props.facing = clicked_props.facing;
-                        ChestType::Left
-                    } else if clicked_props.facing.rotate_counter_clockwise() == face {
-                        chest_props.facing = clicked_props.facing;
-                        ChestType::Right
-                    } else {
-                        ChestType::Single
-                    }
-                } else {
-                    ChestType::Single
-                }
-            } else {
-                ChestType::Single
-            }
-        } else if get_chest_properties_if_can_connect(
-            world,
-            block,
-            block_pos,
-            chest_props.facing,
-            chest_props.facing.rotate_clockwise(),
-            ChestType::Single,
-        )
-        .await
-        .is_some()
-        {
-            ChestType::Left
-        } else if get_chest_properties_if_can_connect(
-            world,
-            block,
-            block_pos,
-            chest_props.facing,
-            chest_props.facing.rotate_counter_clockwise(),
-            ChestType::Single,
-        )
-        .await
-        .is_some()
-        {
-            ChestType::Right
-        } else {
-            ChestType::Single
-        };
+        let (r#type, facing) = compute_chest_props(world, player, block, block_pos, face).await;
+        chest_props.facing = facing;
+        chest_props.r#type = r#type;
 
         chest_props.to_state_id(block)
     }
@@ -311,6 +258,70 @@ impl ChestBlock {
     }
 }
 
+async fn compute_chest_props(
+    world: &World,
+    player: &Player,
+    block: &Block,
+    block_pos: &BlockPos,
+    face: BlockDirection,
+) -> (ChestType, HorizontalFacing) {
+    let chest_facing = player.get_entity().get_horizontal_facing().opposite();
+
+    if player.get_entity().pose.load() == EntityPose::Crouching {
+        let Some(face) = face.to_horizontal_facing() else {
+            return (ChestType::Single, chest_facing);
+        };
+
+        let Ok((clicked_block, clicked_block_state)) = world
+            .get_block_and_block_state(&block_pos.offset(face.to_offset()))
+            .await
+        else {
+            return (ChestType::Single, chest_facing);
+        };
+
+        if clicked_block == *block {
+            let clicked_props =
+                ChestLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
+
+            if clicked_props.facing.rotate_clockwise() == face {
+                return (ChestType::Left, clicked_props.facing);
+            } else if clicked_props.facing.rotate_counter_clockwise() == face {
+                return (ChestType::Right, clicked_props.facing);
+            }
+        }
+
+        return (ChestType::Single, chest_facing);
+    }
+
+    if get_chest_properties_if_can_connect(
+        world,
+        block,
+        block_pos,
+        chest_facing,
+        chest_facing.rotate_clockwise(),
+        ChestType::Single,
+    )
+    .await
+    .is_some()
+    {
+        (ChestType::Left, chest_facing)
+    } else if get_chest_properties_if_can_connect(
+        world,
+        block,
+        block_pos,
+        chest_facing,
+        chest_facing.rotate_counter_clockwise(),
+        ChestType::Single,
+    )
+    .await
+    .is_some()
+    {
+        (ChestType::Right, chest_facing)
+    } else {
+        (ChestType::Single, chest_facing)
+    }
+}
+
 async fn get_chest_properties_if_can_connect(
     world: &World,
     block: &Block,
@@ -319,10 +330,12 @@ async fn get_chest_properties_if_can_connect(
     direction: HorizontalFacing,
     wanted_type: ChestType,
 ) -> Option<ChestLikeProperties> {
-    let (neighbor_block, neighbor_block_state) = world
+    let Ok((neighbor_block, neighbor_block_state)) = world
         .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
         .await
-        .unwrap();
+    else {
+        return None;
+    };
 
     if neighbor_block != *block {
         return None;

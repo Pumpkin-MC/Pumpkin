@@ -51,19 +51,19 @@ pub async fn compute_fence_state(
 ) -> u16 {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let (other_block, other_block_state) = world
-            .get_block_and_block_state(&other_block_pos)
-            .await
-            .unwrap();
+        let Ok((other_block, other_block_state)) =
+            world.get_block_and_block_state(&other_block_pos).await
+        else {
+            continue;
+        };
 
-        if connects_to(block, &other_block, &other_block_state, direction) {
-            match direction {
-                BlockDirection::North => fence_props.north = true,
-                BlockDirection::South => fence_props.south = true,
-                BlockDirection::West => fence_props.west = true,
-                BlockDirection::East => fence_props.east = true,
-                _ => {}
-            }
+        let connected = connects_to(block, &other_block, &other_block_state, direction);
+        match direction {
+            BlockDirection::North => fence_props.north = connected,
+            BlockDirection::South => fence_props.south = connected,
+            BlockDirection::West => fence_props.west = connected,
+            BlockDirection::East => fence_props.east = connected,
+            _ => {}
         }
     }
 
