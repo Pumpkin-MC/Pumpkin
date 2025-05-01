@@ -56,7 +56,7 @@ impl LootPoolEntryExt for LootPoolEntry {
 
                 match &function.content {
                     LootFunctionTypes::SetCount { count, add } => {
-                        for stack in stacks.iter_mut() {
+                        for stack in &mut stacks {
                             if *add {
                                 stack.item_count += count.generate().round() as u8;
                             } else {
@@ -66,7 +66,7 @@ impl LootPoolEntryExt for LootPoolEntry {
                     }
                     LootFunctionTypes::LimitCount { min, max } => {
                         if let Some(min) = min.map(|min| min.round() as u8) {
-                            for stack in stacks.iter_mut() {
+                            for stack in &mut stacks {
                                 if stack.item_count < min {
                                     stack.item_count = min;
                                 }
@@ -74,7 +74,7 @@ impl LootPoolEntryExt for LootPoolEntry {
                         }
 
                         if let Some(max) = max.map(|max| max.round() as u8) {
-                            for stack in stacks.iter_mut() {
+                            for stack in &mut stacks {
                                 if stack.item_count > max {
                                     stack.item_count = max;
                                 }
