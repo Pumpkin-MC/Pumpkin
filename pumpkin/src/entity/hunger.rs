@@ -32,13 +32,13 @@ impl HungerManager {
         let level = self.level.load();
         let exhaustion = self.exhaustion.load();
         let health = player.living_entity.health.load();
-        let difficulty = player.world().await.level.level_info.difficulty;
+        let difficulty = player.world().await.level.level_info.difficulty.clone();
         // Decrease hunger level on exhaustion
         if level != 0 && exhaustion > 4.0 {
             self.exhaustion.store(exhaustion - 4.0);
             if saturation > 0.0 {
                 self.saturation.store((saturation - 1.0).max(0.0));
-            } else if difficulty != Difficulty::Peaceful as i8 {
+            } else if difficulty != Difficulty::Peaceful {
                 self.level.store(level - 1);
                 player.send_health().await;
             }
@@ -61,12 +61,12 @@ impl HungerManager {
                 self.add_exhaustion(saturation);
                 self.tick_timer.store(0);
             }
-        } else if level <= 0 {
+        } else if level == 0 {
             self.tick_timer.fetch_add(1);
             if self.tick_timer.load() >= 80 {
                 if (health > 10.0)
-                    || (difficulty == Difficulty::Hard as i8)
-                    || (health > 1.0 && difficulty == Difficulty::Normal as i8)
+                    || (difficulty == Difficulty::Hard)
+                    || (health > 1.0 && difficulty == Difficulty::Normal)
                 {
                     player.damage(1.0, DamageType::STARVE).await;
                 }
