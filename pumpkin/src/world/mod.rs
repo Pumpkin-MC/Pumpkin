@@ -40,7 +40,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::to_bytes_unnamed;
-use pumpkin_protocol::client::play::{CSetEntityMetadata, MetaDataType, Metadata};
+use pumpkin_protocol::client::play::{CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata};
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
@@ -82,6 +82,7 @@ use tokio::{
     select,
     sync::{Mutex, mpsc::UnboundedReceiver},
 };
+use pumpkin_data::entity::EffectType;
 
 pub mod border;
 pub mod bossbar;
@@ -200,6 +201,12 @@ impl World {
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
         // TODO: only nearby
         self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
+            .await;
+    }
+
+    pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
+        // TODO: only nearby
+        self.broadcast_packet_all(&CRemoveMobEffect::new(entity.entity_id.into(), VarInt(effect_type as i32)))
             .await;
     }
 
