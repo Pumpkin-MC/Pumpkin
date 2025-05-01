@@ -19,57 +19,6 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::server::Server;
 use crate::world::World;
 
-fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: BlockDirection) -> bool {
-    if from == to {
-        return true;
-    }
-
-    if to.is_tagged_with("c:fence_gates").unwrap() {
-        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
-        if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
-            == direction.rotate_clockwise().to_axis()
-        {
-            return true;
-        }
-    }
-
-    // If the block is not a wooden fence, it cannot connect to a wooden fence
-    if !from.is_tagged_with("c:fences/wooden").unwrap() {
-        return false;
-    }
-
-    to.is_tagged_with("c:fences/wooden").unwrap()
-        || (to_state.is_solid() && to_state.is_full_cube())
-}
-
-/// This returns an index and not a state id making it so all fences can use the same state calculation function
-pub async fn compute_fence_state(
-    mut fence_props: FenceProperties,
-    world: &World,
-    block: &Block,
-    block_pos: &BlockPos,
-) -> u16 {
-    for direction in BlockDirection::horizontal() {
-        let other_block_pos = block_pos.offset(direction.to_offset());
-        let Ok((other_block, other_block_state)) =
-            world.get_block_and_block_state(&other_block_pos).await
-        else {
-            continue;
-        };
-
-        let connected = connects_to(block, &other_block, &other_block_state, direction);
-        match direction {
-            BlockDirection::North => fence_props.north = connected,
-            BlockDirection::South => fence_props.south = connected,
-            BlockDirection::West => fence_props.west = connected,
-            BlockDirection::East => fence_props.east = connected,
-            _ => {}
-        }
-    }
-
-    fence_props.to_state_id(block)
-}
-
 pub struct FenceBlock;
 impl BlockMetadata for FenceBlock {
     fn namespace(&self) -> &'static str {
@@ -113,4 +62,52 @@ impl PumpkinBlock for FenceBlock {
         let fence_props = FenceProperties::from_state_id(state_id, block);
         compute_fence_state(fence_props, world, block, block_pos).await
     }
+}
+
+pub async fn compute_fence_state(
+    mut fence_props: FenceProperties,
+    world: &World,
+    block: &Block,
+    block_pos: &BlockPos,
+) -> u16 {
+    for direction in BlockDirection::horizontal() {
+        let other_block_pos = block_pos.offset(direction.to_offset());
+        let Ok((other_block, other_block_state)) =
+            world.get_block_and_block_state(&other_block_pos).await
+        else {
+            continue;
+        };
+
+        let connected = connects_to(block, &other_block, &other_block_state, direction);
+        match direction {
+            BlockDirection::North => fence_props.north = connected,
+            BlockDirection::South => fence_props.south = connected,
+            BlockDirection::West => fence_props.west = connected,
+            BlockDirection::East => fence_props.east = connected,
+            _ => {}
+        }
+    }
+
+    fence_props.to_state_id(block)
+}
+
+fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: BlockDirection) -> bool {
+    if from == to {
+        return true;
+    }
+
+    if to_state.is_solid() && to_state.is_full_cube() {
+        return true;
+    }
+
+    if to.is_tagged_with("c:fence_gates").unwrap() {
+        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
+        if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
+            == direction.rotate_clockwise().to_axis()
+        {
+            return true;
+        }
+    }
+
+    *from != Block::NETHER_BRICK_FENCE && to.is_tagged_with("c:fences/wooden").unwrap()
 }
