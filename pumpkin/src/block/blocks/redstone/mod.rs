@@ -10,18 +10,18 @@ use pumpkin_world::block::BlockDirection;
 
 use crate::world::World;
 
-pub(crate) mod buttons;
-pub(crate) mod lever;
-pub(crate) mod observer;
-pub(crate) mod piston;
-pub(crate) mod rails;
-pub(crate) mod redstone_block;
-pub(crate) mod redstone_lamp;
-pub(crate) mod redstone_torch;
-pub(crate) mod redstone_wire;
-pub(crate) mod repeater;
-pub(crate) mod target_block;
-pub(crate) mod turbo;
+pub mod buttons;
+pub mod lever;
+pub mod observer;
+pub mod piston;
+pub mod rails;
+pub mod redstone_block;
+pub mod redstone_lamp;
+pub mod redstone_torch;
+pub mod redstone_wire;
+pub mod repeater;
+pub mod target_block;
+pub mod turbo;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     for direction in BlockDirection::all() {

@@ -4,6 +4,7 @@ use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::FenceGateBlock;
 use blocks::fences::FenceBlock;
+use blocks::glass_panes::GlassPaneBlock;
 use blocks::logs::LogBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
@@ -69,6 +70,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);
     manager.register(FurnaceBlock);
+    manager.register(GlassPaneBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(SignBlock);

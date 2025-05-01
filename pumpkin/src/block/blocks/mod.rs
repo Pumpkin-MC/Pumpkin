@@ -5,24 +5,25 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{entity::player::Player, server::Server};
 
-pub(crate) mod cactus;
-pub(crate) mod chest;
-pub(crate) mod crafting_table;
-pub(crate) mod dirt_path;
-pub(crate) mod doors;
-pub(crate) mod farmland;
-pub(crate) mod fence_gates;
-pub(crate) mod fences;
-pub(crate) mod furnace;
-pub(crate) mod jukebox;
-pub(crate) mod logs;
-pub(crate) mod redstone;
-pub(crate) mod signs;
-pub(crate) mod slabs;
-pub(crate) mod stairs;
-pub(crate) mod sugar_cane;
-pub(crate) mod tnt;
-pub(crate) mod torches;
+pub mod cactus;
+pub mod chest;
+pub mod crafting_table;
+pub mod dirt_path;
+pub mod doors;
+pub mod farmland;
+pub mod fence_gates;
+pub mod fences;
+pub mod furnace;
+pub mod glass_panes;
+pub mod jukebox;
+pub mod logs;
+pub mod redstone;
+pub mod signs;
+pub mod slabs;
+pub mod stairs;
+pub mod sugar_cane;
+pub mod tnt;
+pub mod torches;
 
 /// The standard destroy with container removes the player forcibly from the container,
 /// drops items to the floor, and back to the player's inventory if the item stack is in movement.
