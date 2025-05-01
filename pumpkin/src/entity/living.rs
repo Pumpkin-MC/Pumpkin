@@ -159,10 +159,7 @@ impl LivingEntity {
             .world
             .read()
             .await
-            .send_remove_mob_effect(
-                &self.entity,
-                effect_type,
-            )
+            .send_remove_mob_effect(&self.entity, effect_type)
             .await;
     }
 
@@ -271,10 +268,10 @@ impl LivingEntity {
             .velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
     }
-    
+
     async fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
-        
+
         {
             let mut effects = self.active_effects.lock().await;
             for effect in effects.values_mut() {
@@ -284,7 +281,7 @@ impl LivingEntity {
                 effect.duration -= 1;
             }
         }
-        
+
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
