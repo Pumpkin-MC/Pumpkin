@@ -161,7 +161,13 @@ impl LootFunctionNumberProviderExt for LootFunctionNumberProvider {
         match self {
             Self::Constant { value } => *value,
             Self::Uniform { min, max } => rand::thread_rng().gen_range(*min..=*max),
-            Self::Binomial { n: _, p: _ } => todo!(),
+            Self::Binomial { n, p } => (0..n.floor() as u32).fold(0.0, |c, _| {
+                if rand::thread_rng().gen_bool(f64::from(*p)) {
+                    c + 1.0
+                } else {
+                    c
+                }
+            }),
         }
     }
 }
