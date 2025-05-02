@@ -163,7 +163,21 @@ impl CommandDispatcher {
         let mut in_double_quotes = false;
         let mut in_braces = 0u32;
         let mut in_brackets = 0u32;
+        let mut is_escaping = false;
         for (i, c) in cmd.char_indices() {
+            if c == '\\' {
+                if is_escaping {
+                    is_escaping = false;
+                    continue;
+                } else {
+                    is_escaping = true;
+                    continue;
+                }
+            }
+            if is_escaping {
+                is_escaping = false;
+                continue;
+            }
             match c {
                 '{' => {
                     if !in_single_quotes && !in_double_quotes {
@@ -252,6 +266,7 @@ impl CommandDispatcher {
             return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
         }
 
+        dbg!(key, &raw_args);
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
                 "Permission for Command not found".to_string(),
