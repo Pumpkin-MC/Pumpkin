@@ -66,7 +66,7 @@ impl FindArg<'_> for TextComponentArgConsumer {
 fn parse_text_component(input: &str) -> Option<TextComponent> {
     let result = serde_json::from_str(input);
     if let Err(e) = result {
-        log::debug!("Failed to parse text component: {}", e);
+        log::debug!("Failed to parse text component: {e}");
         None
     } else {
         result.unwrap()

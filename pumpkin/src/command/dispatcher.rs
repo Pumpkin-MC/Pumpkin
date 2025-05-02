@@ -166,13 +166,8 @@ impl CommandDispatcher {
         let mut is_escaping = false;
         for (i, c) in cmd.char_indices() {
             if c == '\\' {
-                if is_escaping {
-                    is_escaping = false;
-                    continue;
-                } else {
-                    is_escaping = true;
-                    continue;
-                }
+                is_escaping = !is_escaping;
+                continue;
             }
             if is_escaping {
                 is_escaping = false;
