@@ -145,28 +145,28 @@ pub async fn compute_wall_state(
         }
     }
 
-    wall_props.up = if block_above_state.is_full_cube() {
-        true
-    } else if !(wall_props.north != NorthWallShape::None
+    let line_north_south = wall_props.north != NorthWallShape::None
         && wall_props.south != SouthWallShape::None
         && wall_props.east == EastWallShape::None
-        && wall_props.west == WestWallShape::None)
-        && !(wall_props.north == NorthWallShape::None
-            && wall_props.south == SouthWallShape::None
-            && wall_props.east != EastWallShape::None
-            && wall_props.west != WestWallShape::None)
-        && !(wall_props.north != NorthWallShape::None
-            && wall_props.south != SouthWallShape::None
-            && wall_props.east != EastWallShape::None
-            && wall_props.west != WestWallShape::None)
-    {
-        true
-    } else if block_above.is_tagged_with("minecraft:walls").unwrap() {
-        let other_props = WallProperties::from_state_id(block_above_state.id, &block_above);
-        other_props.up
-    } else {
-        false
-    };
+        && wall_props.west == WestWallShape::None;
+    let line_east_west = wall_props.north == NorthWallShape::None
+        && wall_props.south == SouthWallShape::None
+        && wall_props.east != EastWallShape::None
+        && wall_props.west != WestWallShape::None;
+    let cross = wall_props.north != NorthWallShape::None
+        && wall_props.south != SouthWallShape::None
+        && wall_props.east != EastWallShape::None
+        && wall_props.west != WestWallShape::None;
+
+    wall_props.up =
+        if block_above_state.is_full_cube() || !(cross || line_north_south || line_east_west) {
+            true
+        } else if block_above.is_tagged_with("minecraft:walls").unwrap() {
+            let other_props = WallProperties::from_state_id(block_above_state.id, &block_above);
+            other_props.up
+        } else {
+            false
+        };
 
     wall_props.to_state_id(block)
 }

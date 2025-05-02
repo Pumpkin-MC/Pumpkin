@@ -186,12 +186,12 @@ pub trait FacingExt {
 impl FacingExt for Facing {
     fn to_block_direction(&self) -> BlockDirection {
         match self {
-            Facing::North => BlockDirection::North,
-            Facing::South => BlockDirection::South,
-            Facing::West => BlockDirection::West,
-            Facing::East => BlockDirection::East,
-            Facing::Up => BlockDirection::Up,
-            Facing::Down => BlockDirection::Down,
+            Self::North => BlockDirection::North,
+            Self::South => BlockDirection::South,
+            Self::West => BlockDirection::West,
+            Self::East => BlockDirection::East,
+            Self::Up => BlockDirection::Up,
+            Self::Down => BlockDirection::Down,
         }
     }
 }
