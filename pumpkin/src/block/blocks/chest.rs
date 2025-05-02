@@ -283,6 +283,10 @@ async fn compute_chest_props(
             let clicked_props =
                 ChestLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
 
+            if clicked_props.r#type != ChestType::Single {
+                return (ChestType::Single, chest_facing);
+            }
+
             if clicked_props.facing.rotate_clockwise() == face {
                 return (ChestType::Left, clicked_props.facing);
             } else if clicked_props.facing.rotate_counter_clockwise() == face {
