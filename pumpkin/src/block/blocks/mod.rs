@@ -25,6 +25,7 @@ pub mod stairs;
 pub mod sugar_cane;
 pub mod tnt;
 pub mod torches;
+pub mod walls;
 
 /// The standard destroy with container removes the player forcibly from the container,
 /// drops items to the floor, and back to the player's inventory if the item stack is in movement.
