@@ -179,63 +179,6 @@ impl BlockDirection {
     }
 }
 
-pub trait HorizontalFacingExt {
-    fn to_block_direction(&self) -> BlockDirection;
-    fn to_offset(&self) -> Vector3<i32>;
-
-    fn opposite(&self) -> HorizontalFacing;
-    fn rotate_clockwise(&self) -> HorizontalFacing;
-    fn rotate_counter_clockwise(&self) -> HorizontalFacing;
-}
-
-impl HorizontalFacingExt for HorizontalFacing {
-    fn to_block_direction(&self) -> BlockDirection {
-        match self {
-            Self::North => BlockDirection::North,
-            Self::South => BlockDirection::South,
-            Self::West => BlockDirection::West,
-            Self::East => BlockDirection::East,
-        }
-    }
-
-    fn to_offset(&self) -> Vector3<i32> {
-        match self {
-            Self::North => (0, 0, -1),
-            Self::South => (0, 0, 1),
-            Self::West => (-1, 0, 0),
-            Self::East => (1, 0, 0),
-        }
-        .into()
-    }
-
-    fn opposite(&self) -> HorizontalFacing {
-        match self {
-            Self::North => HorizontalFacing::South,
-            Self::South => HorizontalFacing::North,
-            Self::West => HorizontalFacing::East,
-            Self::East => HorizontalFacing::West,
-        }
-    }
-
-    fn rotate_clockwise(&self) -> HorizontalFacing {
-        match self {
-            Self::North => HorizontalFacing::East,
-            Self::South => HorizontalFacing::West,
-            Self::West => HorizontalFacing::North,
-            Self::East => HorizontalFacing::South,
-        }
-    }
-
-    fn rotate_counter_clockwise(&self) -> HorizontalFacing {
-        match self {
-            Self::North => HorizontalFacing::West,
-            Self::South => HorizontalFacing::East,
-            Self::West => HorizontalFacing::South,
-            Self::East => HorizontalFacing::North,
-        }
-    }
-}
-
 pub trait FacingExt {
     fn to_block_direction(&self) -> BlockDirection;
 }
@@ -249,6 +192,21 @@ impl FacingExt for Facing {
             Facing::East => BlockDirection::East,
             Facing::Up => BlockDirection::Up,
             Facing::Down => BlockDirection::Down,
+        }
+    }
+}
+
+pub trait HorizontalFacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+}
+
+impl HorizontalFacingExt for HorizontalFacing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            Self::North => BlockDirection::North,
+            Self::South => BlockDirection::South,
+            Self::West => BlockDirection::West,
+            Self::East => BlockDirection::East,
         }
     }
 }

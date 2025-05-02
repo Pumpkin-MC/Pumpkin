@@ -9,11 +9,8 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    block::{BlockDirection, HorizontalFacingExt},
-    chunk::TickPriority,
-};
+use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_world::{BlockStateId, chunk::TickPriority};
 
 use crate::{
     block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},

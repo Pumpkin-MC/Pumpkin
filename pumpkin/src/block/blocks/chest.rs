@@ -17,8 +17,8 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_protocol::{client::play::CBlockAction, codec::var_int::VarInt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
 use crate::block::BlockIsReplacing;
 use crate::entity::EntityBase;
