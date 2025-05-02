@@ -150,11 +150,6 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
             }
         } else {
-            if advanced_config().commands.use_tty && !stdin().is_terminal() {
-                log::warn!(
-                    "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
-                );
-            }
             let logger = simplelog::SimpleLogger::new(level, config.build());
             Some((ReadlineLogWrapper::new(logger, None), level))
         }
@@ -213,6 +208,11 @@ impl PumpkinServer {
                 if let Some(rl) = wrapper.take_readline() {
                     setup_console(rl, server.clone());
                 } else {
+                    if advanced_config().commands.use_tty {
+                        log::warn!(
+                            "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                        );
+                    }
                     setup_stdin_console(server.clone()).await;
                 }
             }
