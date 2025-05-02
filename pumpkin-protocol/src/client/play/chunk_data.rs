@@ -3,7 +3,6 @@ use crate::{
     ClientPacket, VarInt,
     ser::{NetworkWriteExt, WritingError},
 };
-use async_trait::async_trait;
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
 use pumpkin_nbt::END_ID;
@@ -15,9 +14,8 @@ use std::io::Write;
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
-#[async_trait]
 impl ClientPacket for CChunkData<'_> {
-    async fn write_packet_data(&self, write: impl Write + Send) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         // Chunk X
