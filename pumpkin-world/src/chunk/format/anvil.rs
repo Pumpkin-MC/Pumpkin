@@ -316,12 +316,11 @@ impl AnvilChunkData {
         Ok(chunk)
     }
 
-    async fn from_chunk(
+    fn from_chunk(
         chunk: &ChunkData,
         compression: Option<Compression>,
     ) -> Result<Self, ChunkWritingError> {
         let raw_bytes = chunk_to_bytes(chunk)
-            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression
@@ -623,7 +622,7 @@ impl ChunkSerializer for AnvilChunkFile {
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type).await?;
+        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type)?;
 
         let mut write_action = self.write_action.lock().await;
         if !advanced_config().chunk.write_in_place {
@@ -817,7 +816,7 @@ impl ChunkSerializer for AnvilChunkFile {
     }
 }
 
-pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
+pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
     let mut sections = Vec::new();
 
     for i in 0..chunk_data.light_engine.sections {

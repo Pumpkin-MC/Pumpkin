@@ -23,7 +23,6 @@ thiserror.workspace = true
 log.workspace = true
 tokio.workspace = true
 bytes.workspace = true
-async-trait.workspace = true
 
 # encryption
 aes = "0.8"
