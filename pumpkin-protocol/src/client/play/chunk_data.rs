@@ -131,30 +131,20 @@ impl ClientPacket for CChunkData<'_> {
         }
 
         {
-            let mut sky_light_buf = Vec::new();
-            let mut block_light_buf = Vec::new();
+            // todo: these masks are 64 bits long, we should use a bitset instead of a u64
+            //  in higher maps
             let mut sky_light_empty_mask = 0;
             let mut block_light_empty_mask = 0;
             let mut sky_light_mask = 0;
             let mut block_light_mask = 0;
             for light_index in 0..self.0.light_engine.sky_light.len() {
-                let light_data_size = LightContainer::ARRAY_SIZE.try_into().unwrap();
-
-                if let LightContainer::Full(data) = &self.0.light_engine.sky_light[light_index] {
-                    let mut buf = Vec::new();
-                    buf.write_var_int(&light_data_size)?;
-                    buf.write_slice(data)?;
-                    sky_light_buf.push(buf);
+                if let LightContainer::Full(_) = &self.0.light_engine.sky_light[light_index] {
                     sky_light_mask |= 1 << light_index;
                 } else {
                     sky_light_empty_mask |= 1 << light_index;
                 }
 
-                if let LightContainer::Full(data) = &self.0.light_engine.block_light[light_index] {
-                    let mut buf = Vec::new();
-                    buf.write_var_int(&light_data_size)?;
-                    buf.write_slice(data)?;
-                    block_light_buf.push(buf);
+                if let LightContainer::Full(_) = &self.0.light_engine.block_light[light_index] {
                     block_light_mask |= 1 << light_index;
                 } else {
                     block_light_empty_mask |= 1 << light_index;
@@ -173,16 +163,23 @@ impl ClientPacket for CChunkData<'_> {
             // Empty Block Light Mask
             write.write_bitset(&BitSet(Box::new([block_light_empty_mask])))?;
 
+            let light_data_size: VarInt = LightContainer::ARRAY_SIZE.try_into().unwrap();
             // Sky light
-            write.write_var_int(&VarInt(sky_light_buf.len() as i32))?;
-            for sky_buf in sky_light_buf {
-                write.write_slice(&sky_buf)?;
+            write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;
+            for light_index in 0..self.0.light_engine.sky_light.len() {
+                if let LightContainer::Full(data) = &self.0.light_engine.sky_light[light_index] {
+                    write.write_var_int(&light_data_size)?;
+                    write.write_slice(data)?;
+                }
             }
 
             // Block Light
-            write.write_var_int(&VarInt(block_light_buf.len() as i32))?;
-            for block_buf in block_light_buf {
-                write.write_slice(&block_buf)?;
+            write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
+            for light_index in 0..self.0.light_engine.block_light.len() {
+                if let LightContainer::Full(data) = &self.0.light_engine.block_light[light_index] {
+                    write.write_var_int(&light_data_size)?;
+                    write.write_slice(data)?;
+                }
             }
         }
         Ok(())

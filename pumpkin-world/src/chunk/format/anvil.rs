@@ -817,33 +817,34 @@ impl ChunkSerializer for AnvilChunkFile {
 }
 
 pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
-    let mut sections = Vec::new();
+    let sections: Vec<_> = (0..chunk_data.section.sections.len() + 2)
+        .map(|i| {
+            let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
+            let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
 
-    for i in 0..chunk_data.section.sections.len() + 2 {
-        let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
-        let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
-
-        let chunk_section_nbt = ChunkSectionNBT {
-            y: ((i as i8) - 1i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8),
-            block_states: section.map(|section| section.block_states.to_disk_nbt()),
-            biomes: section.map(|section| section.biomes.to_disk_nbt()),
-            block_light: match chunk_data.light_engine.block_light[i].clone() {
-                LightContainer::Empty(_) => None,
-                LightContainer::Full(data) => Some(data),
-            },
-            sky_light: match chunk_data.light_engine.sky_light[i].clone() {
-                LightContainer::Empty(_) => None,
-                LightContainer::Full(data) => Some(data),
-            },
-        };
-        if chunk_section_nbt.block_states.is_some()
-            || chunk_section_nbt.biomes.is_some()
-            || chunk_section_nbt.block_light.is_some()
-            || chunk_section_nbt.sky_light.is_some()
-        {
-            sections.push(chunk_section_nbt);
-        }
-    }
+            let chunk_section_nbt = ChunkSectionNBT {
+                y: ((i as i8) - 1i8
+                    + section_coords::block_to_section(chunk_data.section.min_y) as i8),
+                block_states: section.map(|section| section.block_states.to_disk_nbt()),
+                biomes: section.map(|section| section.biomes.to_disk_nbt()),
+                block_light: match chunk_data.light_engine.block_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+                sky_light: match chunk_data.light_engine.sky_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+            };
+            chunk_section_nbt
+        })
+        .filter(|nbt| {
+            nbt.block_states.is_some()
+                || nbt.biomes.is_some()
+                || nbt.block_light.is_some()
+                || nbt.sky_light.is_some()
+        })
+        .collect();
 
     let nbt = ChunkNbt {
         data_version: WORLD_DATA_VERSION,
