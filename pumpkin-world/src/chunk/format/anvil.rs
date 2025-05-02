@@ -822,9 +822,9 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
             let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
             let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
 
-            let chunk_section_nbt = ChunkSectionNBT {
-                y: ((i as i8) - 1i8
-                    + section_coords::block_to_section(chunk_data.section.min_y) as i8),
+            ChunkSectionNBT {
+                y: (i as i8) - 1i8
+                    + section_coords::block_to_section(chunk_data.section.min_y) as i8,
                 block_states: section.map(|section| section.block_states.to_disk_nbt()),
                 biomes: section.map(|section| section.biomes.to_disk_nbt()),
                 block_light: match chunk_data.light_engine.block_light[i].clone() {
@@ -835,8 +835,7 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                     LightContainer::Empty(_) => None,
                     LightContainer::Full(data) => Some(data),
                 },
-            };
-            chunk_section_nbt
+            }
         })
         .filter(|nbt| {
             nbt.block_states.is_some()
