@@ -2189,7 +2189,7 @@ impl InventoryPlayer for Player {
         todo!()
     }
 
-    async fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>> {
+    fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>> {
         self.inventory.clone()
     }
 

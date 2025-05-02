@@ -7,7 +7,7 @@ use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
-    server::play::SlotActionType,
+    server::play::{self, SlotActionType},
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
@@ -42,7 +42,7 @@ impl ScreenProperty {
 #[async_trait]
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
-    async fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>>;
+    fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>>;
     async fn enque_inventory_packet(&self, packet: &CSetContainerContent);
     async fn enque_slot_packet(&self, packet: &CSetContainerSlot);
     async fn enque_cursor_packet(&self, packet: &CSetCursorItem);
@@ -517,6 +517,78 @@ pub trait ScreenHandler: Send + Sync {
                 slot.mark_dirty().await;
             }
         } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
+            let mut button_stack = player
+                .get_inventory()
+                .lock()
+                .await
+                .get_stack(button as usize)
+                .lock()
+                .await
+                .clone();
+            let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
+            let source_stack = source_slot.get_cloned_stack().await;
+
+            if !button_stack.is_empty() || !source_stack.is_empty() {
+                if button_stack.is_empty() {
+                    if source_slot.can_take_items(player).await {
+                        player
+                            .get_inventory()
+                            .lock()
+                            .await
+                            .set_stack(button as usize, source_stack)
+                            .await;
+                        source_slot.on_take(source_stack.item_count);
+                        source_slot.set_stack(ItemStack::EMPTY).await;
+                        source_slot.on_take_item(player, &source_stack).await;
+                    }
+                } else if source_stack.is_empty() {
+                    if source_slot.can_insert(&button_stack).await {
+                        let max_count = source_slot
+                            .get_max_item_count_for_stack(&button_stack)
+                            .await;
+                        if button_stack.item_count > max_count {
+                            // button_stack might need to be a ref instead of a clone
+                            source_slot.set_stack(button_stack.split(max_count)).await;
+                        } else {
+                            player
+                                .get_inventory()
+                                .lock()
+                                .await
+                                .set_stack(button as usize, ItemStack::EMPTY)
+                                .await;
+                            source_slot.set_stack(button_stack).await;
+                        }
+                    }
+                } else if source_slot.can_take_items(player).await
+                    && source_slot.can_insert(&button_stack).await
+                {
+                    let max_count = source_slot
+                        .get_max_item_count_for_stack(&button_stack)
+                        .await;
+                    if button_stack.item_count > max_count {
+                        source_slot.set_stack(button_stack.split(max_count)).await;
+                        source_slot.on_take_item(player, &button_stack).await;
+                        if !player
+                            .get_inventory()
+                            .lock()
+                            .await
+                            .insert_stack_anywhere(&mut button_stack)
+                            .await
+                        {
+                            player.drop_item(button_stack, true).await;
+                        }
+                    } else {
+                        player
+                            .get_inventory()
+                            .lock()
+                            .await
+                            .set_stack(button as usize, source_stack)
+                            .await;
+                        source_slot.set_stack(button_stack).await;
+                        source_slot.on_take_item(player, &button_stack).await;
+                    }
+                }
+            }
         }
     }
 

@@ -21,7 +21,7 @@ pub struct PlayerInventory {
 impl PlayerInventory {
     const MAIN_SIZE: usize = 36;
     const HOTBAR_SIZE: usize = 9;
-    const OFF_HAND_SLOT: usize = 45;
+    const OFF_HAND_SLOT: usize = 40;
 
     // TODO: Add inventory load from nbt
     pub fn new(entity_equipment: EntityEquipment) -> Self {
@@ -67,6 +67,110 @@ impl PlayerInventory {
         );
         equipment_slots.insert(40, EquipmentSlot::OFF_HAND);
         equipment_slots
+    }
+
+    async fn add_stack(&mut self, stack: ItemStack) -> usize {
+        let mut slot_index = self.get_occupied_slot_with_room_for_stack(&stack).await;
+
+        if slot_index == -1 {
+            slot_index = self.get_empty_slot().await;
+        }
+
+        if slot_index == -1 {
+            return stack.item_count as usize;
+        } else {
+            return self.add_stack_to_slot(slot_index as usize, stack).await;
+        }
+    }
+
+    async fn add_stack_to_slot(&mut self, slot: usize, stack: ItemStack) -> usize {
+        let mut stack_count = stack.item_count;
+        let binding = self.get_stack(slot);
+        let mut self_stack = binding.lock().await;
+
+        if self_stack.is_empty() {
+            *self_stack = stack.copy_with_count(0);
+            //self.set_stack(slot, self_stack).await;
+        }
+
+        let count_left = self_stack.get_max_stack_size() - self_stack.item_count;
+        let count_min = stack_count.min(count_left);
+
+        if count_min == 0 {
+            return stack_count as usize;
+        } else {
+            stack_count -= count_min;
+            self_stack.increment(count_min);
+            return stack_count as usize;
+        }
+    }
+
+    async fn get_empty_slot(&self) -> i16 {
+        for i in 0..Self::MAIN_SIZE {
+            if self.main_inventory[i].lock().await.is_empty() {
+                return i as i16;
+            }
+        }
+
+        -1
+    }
+
+    fn can_stack_add_more(&self, exsiting_stack: &ItemStack, stack: &ItemStack) -> bool {
+        return !exsiting_stack.is_empty()
+            && exsiting_stack.are_items_and_components_equal(stack)
+            && exsiting_stack.is_stackable()
+            && exsiting_stack.item_count < exsiting_stack.get_max_stack_size();
+    }
+
+    async fn get_occupied_slot_with_room_for_stack(&self, stack: &ItemStack) -> i16 {
+        if self.can_stack_add_more(
+            &*self.get_stack(self.selected_slot as usize).lock().await,
+            stack,
+        ) {
+            return self.selected_slot as i16;
+        } else if self.can_stack_add_more(&*self.get_stack(Self::OFF_HAND_SLOT).lock().await, stack)
+        {
+            return Self::OFF_HAND_SLOT as i16;
+        } else {
+            for i in 0..Self::MAIN_SIZE {
+                if self.can_stack_add_more(&*self.main_inventory[i].lock().await, stack) {
+                    return i as i16;
+                }
+            }
+
+            return -1;
+        }
+    }
+
+    pub async fn insert_stack_anywhere(&mut self, stack: &mut ItemStack) -> bool {
+        self.insert_stack(-1, stack).await
+    }
+
+    pub async fn insert_stack(&mut self, slot: i16, stack: &mut ItemStack) -> bool {
+        if stack.is_empty() {
+            return false;
+        }
+
+        // TODO: if (stack.isDamaged()) {
+
+        let mut i;
+
+        loop {
+            i = stack.item_count;
+            if slot == -1 {
+                stack.set_count(self.add_stack(*stack).await as u8);
+            } else {
+                stack.set_count(self.add_stack_to_slot(slot as usize, *stack).await as u8);
+            }
+
+            if !stack.is_empty() && stack.item_count < i {
+                break;
+            }
+        }
+
+        // TODO: Creative mode check
+
+        return stack.item_count < i;
     }
 }
 
