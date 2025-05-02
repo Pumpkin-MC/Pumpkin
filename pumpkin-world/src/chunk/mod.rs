@@ -169,9 +169,6 @@ pub struct SubChunk {
 pub struct ChunkLightEngine {
     pub sky_light: Box<[LightContainer]>,
     pub block_light: Box<[LightContainer]>,
-    /// The number of light sections in the chunk,
-    /// always be chunk sections + 2
-    pub sections: usize,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

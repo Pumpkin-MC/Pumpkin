@@ -61,7 +61,7 @@ impl ChunkData {
                         .sum();
                 }
                 if (block || sky) && section.y == -5 {
-                    log::debug!(
+                    log::trace!(
                         "section {},{},{}: block_light={}/{}, sky_light={}/{}",
                         chunk_data.x_pos,
                         section.y,
@@ -83,7 +83,6 @@ impl ChunkData {
         }
 
         let light_engine = ChunkLightEngine {
-            sections: chunk_data.sections.len() + 2,
             block_light: (0..chunk_data.sections.len() + 2)
                 .map(|index| {
                     chunk_data

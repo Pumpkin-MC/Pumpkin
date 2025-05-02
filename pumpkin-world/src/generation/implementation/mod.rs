@@ -88,7 +88,6 @@ impl WorldGenerator for VanillaGenerator {
                 block_light: (0..sections.sections.len() + 2)
                     .map(|_| LightContainer::new_empty(15))
                     .collect(),
-                sections: &sections.sections.len() + 2,
             },
             section: sections,
             heightmap: Default::default(),

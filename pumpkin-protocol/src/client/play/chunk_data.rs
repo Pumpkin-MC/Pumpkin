@@ -137,7 +137,7 @@ impl ClientPacket for CChunkData<'_> {
             let mut block_light_empty_mask = 0;
             let mut sky_light_mask = 0;
             let mut block_light_mask = 0;
-            for light_index in 0..self.0.light_engine.sections {
+            for light_index in 0..self.0.light_engine.sky_light.len() {
                 let light_data_size = LightContainer::ARRAY_SIZE.try_into().unwrap();
 
                 if let LightContainer::Full(data) = &self.0.light_engine.sky_light[light_index] {

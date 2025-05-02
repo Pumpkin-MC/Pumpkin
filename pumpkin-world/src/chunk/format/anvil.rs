@@ -819,7 +819,7 @@ impl ChunkSerializer for AnvilChunkFile {
 pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
     let mut sections = Vec::new();
 
-    for i in 0..chunk_data.light_engine.sections {
+    for i in 0..chunk_data.section.sections.len() + 2 {
         let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
         let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
 
