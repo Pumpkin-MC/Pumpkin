@@ -89,7 +89,6 @@ impl EntityBase for ItemEntity {
                 .insert_stack_anywhere(&mut *self.item_stack.lock().await)
                 .await
         {
-            println!("Picked up item");
             player
                 .client
                 .enqueue_packet(&CTakeItemEntity::new(
@@ -97,6 +96,14 @@ impl EntityBase for ItemEntity {
                     player.entity_id().into(),
                     self.item_stack.lock().await.item_count.try_into().unwrap(),
                 ))
+                .await;
+            player
+                .current_screen_handler
+                .lock()
+                .await
+                .lock()
+                .await
+                .send_content_updates()
                 .await;
 
             if self.item_stack.lock().await.is_empty() {

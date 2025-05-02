@@ -584,6 +584,17 @@ impl Player {
     }
 
     pub async fn tick(&self, server: &Server) {
+        /* TODO:
+        self.current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .send_content_updates()
+            .await; */
+
+        println!("Tick");
+
         if self
             .client
             .closed
@@ -1316,6 +1327,7 @@ impl Player {
             self.drop_item(item_stack.item.id, u32::from(drop_amount))
                 .await;
             item_stack.decrement(drop_amount);
+            // TODO: Inv self.current_screen_handler.lock().await.lock().await.get
         }
     }
 
