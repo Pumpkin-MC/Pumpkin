@@ -162,6 +162,7 @@ impl CommandDispatcher {
         let mut in_single_quotes = false;
         let mut in_double_quotes = false;
         let mut in_braces = 0u32;
+        let mut in_brackets = 0u32;
         for (i, c) in cmd.char_indices() {
             match c {
                 '{' => {
@@ -177,6 +178,19 @@ impl CommandDispatcher {
                         in_braces -= 1;
                     }
                 }
+                '[' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        in_brackets += 1;
+                    }
+                }
+                ']' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        if in_brackets == 0 {
+                            return Err(GeneralCommandIssue("Unmatched brackets".to_string()));
+                        }
+                        in_brackets -= 1;
+                    }
+                }
                 '\'' => {
                     if !in_double_quotes {
                         in_single_quotes = !in_single_quotes;
@@ -187,7 +201,11 @@ impl CommandDispatcher {
                         in_double_quotes = !in_double_quotes;
                     }
                 }
-                ' ' if !in_single_quotes && !in_double_quotes && in_braces == 0 => {
+                ' ' if !in_single_quotes
+                    && !in_double_quotes
+                    && in_braces == 0
+                    && in_brackets == 0 =>
+                {
                     if current_arg_start != i {
                         args.push(&cmd[current_arg_start..i]);
                     }
@@ -207,6 +225,11 @@ impl CommandDispatcher {
         if in_braces != 0 {
             return Err(GeneralCommandIssue(
                 "Unmatched braces at the end".to_string(),
+            ));
+        }
+        if in_brackets != 0 {
+            return Err(GeneralCommandIssue(
+                "Unmatched brackets at the end".to_string(),
             ));
         }
         if args.is_empty() {
