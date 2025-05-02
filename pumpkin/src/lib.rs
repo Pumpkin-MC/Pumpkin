@@ -134,21 +134,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if advanced_config().commands.use_tty {
-            if !stdin().is_terminal() {
-                // we do not have a logger yet, create a temporary one
-                log::set_max_level(level);
-                let logger = *simplelog::SimpleLogger::new(level, config.build());
-                log::warn!(
-                    logger: logger,
-                    "The input is not a terminal, the console reader may fail to initialize!"
-                );
-                log::info!(
-                    logger: logger,
-                    "Note: to fix this, set `use_tty` to false in `features.toml`"
-                );
-                logger.flush();
-            }
+        if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
@@ -164,6 +150,11 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
             }
         } else {
+            if advanced_config().commands.use_tty && !stdin().is_terminal() {
+                log::warn!(
+                    "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                );
+            }
             let logger = simplelog::SimpleLogger::new(level, config.build());
             Some((ReadlineLogWrapper::new(logger, None), level))
         }
