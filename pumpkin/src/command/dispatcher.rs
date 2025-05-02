@@ -266,7 +266,6 @@ impl CommandDispatcher {
             return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
         }
 
-        dbg!(key, &raw_args);
         let Some(permission) = self.permissions.get(key) else {
             return Err(GeneralCommandIssue(
                 "Permission for Command not found".to_string(),
