@@ -66,9 +66,7 @@ impl<'de> Deserialize<'de> for TextComponent {
             where
                 A: MapAccess<'de>,
             {
-                TextComponentBase::deserialize(
-                    serde::de::value::MapAccessDeserializer::new(map),
-                )
+                TextComponentBase::deserialize(serde::de::value::MapAccessDeserializer::new(map))
             }
         }
 
@@ -125,9 +123,15 @@ impl TextComponentBase {
         }
         if style.strikethrough.is_some() {
             text = text.strikethrough().to_string();
-      TextComponentBase::deserialize(
-                    serde::de::value::MapAccessDeserializer::new(map),
-                )extComponent {
+        }
+        for child in self.extra {
+            text += &*child.to_pretty_console();
+        }
+        text
+    }
+}
+
+impl TextComponent {
     pub fn text<P>(plain: P) -> Self
     where
         P: Into<Cow<'static, str>>,
