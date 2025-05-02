@@ -72,6 +72,8 @@ impl PlayerInventory {
     async fn add_stack(&mut self, stack: ItemStack) -> usize {
         let mut slot_index = self.get_occupied_slot_with_room_for_stack(&stack).await;
 
+        println!("slot_index: {}", slot_index);
+
         if slot_index == -1 {
             slot_index = self.get_empty_slot().await;
         }
@@ -92,6 +94,8 @@ impl PlayerInventory {
             *self_stack = stack.copy_with_count(0);
             //self.set_stack(slot, self_stack).await;
         }
+
+        println!("self_stack: {:?}", self_stack);
 
         let count_left = self_stack.get_max_stack_size() - self_stack.item_count;
         let count_min = stack_count.min(count_left);
@@ -163,7 +167,7 @@ impl PlayerInventory {
                 stack.set_count(self.add_stack_to_slot(slot as usize, *stack).await as u8);
             }
 
-            if !stack.is_empty() && stack.item_count < i {
+            if stack.is_empty() || stack.item_count >= i {
                 break;
             }
         }
