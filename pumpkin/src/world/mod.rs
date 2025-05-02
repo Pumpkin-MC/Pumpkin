@@ -199,7 +199,7 @@ impl World {
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub async fn broadcast_packet_all<P>(&self, packet: &P)
     where
-        P: ClientPacket + Sync,
+        P: ClientPacket,
     {
         self.broadcast_packet_except(&[], packet).await;
     }
@@ -276,10 +276,10 @@ impl World {
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub async fn broadcast_packet_except<P>(&self, except: &[uuid::Uuid], packet: &P)
     where
-        P: ClientPacket + Sync,
+        P: ClientPacket,
     {
         let mut packet_buf = Vec::new();
-        if let Err(err) = packet.write(&mut packet_buf).await {
+        if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
             return;
         }
@@ -940,7 +940,7 @@ impl World {
                     let binding = chunk.read().await;
                     let packet = CChunkData(&binding);
                     let mut test = Vec::new();
-                    packet.write_packet_data(&mut test).await.unwrap();
+                    packet.write_packet_data(&mut test).unwrap();
                     let len = test.len();
                     log::debug!(
                         "Chunk packet size: {}B {}KB {}MB",

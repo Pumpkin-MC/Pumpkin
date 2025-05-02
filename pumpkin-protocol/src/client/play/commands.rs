@@ -1,7 +1,7 @@
-use async_trait::async_trait;
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::packet;
-use std::io::Write;
 
 use crate::{
     ClientPacket, VarInt,
@@ -23,9 +23,8 @@ impl<'a> CCommands<'a> {
     }
 }
 
-#[async_trait]
 impl ClientPacket for CCommands<'_> {
-    async fn write_packet_data(&self, write: impl Write + Send) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(&self.nodes, |bytebuf, node: &ProtoNode| {
             node.write_to(bytebuf)

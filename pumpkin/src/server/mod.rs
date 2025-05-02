@@ -323,10 +323,10 @@ impl Server {
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
     pub async fn broadcast_packet_all<P>(&self, packet: &P)
     where
-        P: ClientPacket + Sync,
+        P: ClientPacket,
     {
         let mut packet_buf = Vec::new();
-        if let Err(err) = packet.write(&mut packet_buf).await {
+        if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
             return;
         }

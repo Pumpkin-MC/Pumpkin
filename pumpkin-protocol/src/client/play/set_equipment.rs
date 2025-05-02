@@ -1,9 +1,9 @@
+use std::io::Write;
+
 use crate::ser::{NetworkWriteExt, WritingError, serializer::Serializer};
-use async_trait::async_trait;
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
 use pumpkin_macros::packet;
 use serde::Serialize;
-use std::io::Write;
 
 use crate::{
     ClientPacket,
@@ -28,9 +28,8 @@ impl CSetEquipment {
     }
 }
 
-#[async_trait]
 impl ClientPacket for CSetEquipment {
-    async fn write_packet_data(&self, write: impl Write + Send) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_var_int(&self.entity_id)?;

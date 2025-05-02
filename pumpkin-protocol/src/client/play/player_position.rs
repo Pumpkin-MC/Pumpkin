@@ -1,8 +1,8 @@
-use async_trait::async_trait;
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
-use std::io::Write;
 
 use crate::{
     ClientPacket, PositionFlag, VarInt,
@@ -40,9 +40,8 @@ impl<'a> CPlayerPosition<'a> {
 }
 
 // TODO: Do we need a custom impl?
-#[async_trait]
 impl ClientPacket for CPlayerPosition<'_> {
-    async fn write_packet_data(&self, write: impl Write + Send) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_var_int(&self.teleport_id)?;

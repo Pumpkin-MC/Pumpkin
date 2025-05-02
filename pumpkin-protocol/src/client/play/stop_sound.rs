@@ -1,10 +1,10 @@
+use std::io::Write;
+
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkWriteExt, WritingError};
 use crate::{ClientPacket, codec::identifier::Identifier};
-use async_trait::async_trait;
 use pumpkin_data::{packet::clientbound::PLAY_STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::packet;
-use std::io::Write;
 
 #[packet(PLAY_STOP_SOUND)]
 pub struct CStopSound {
@@ -18,9 +18,8 @@ impl CStopSound {
     }
 }
 
-#[async_trait]
 impl ClientPacket for CStopSound {
-    async fn write_packet_data(&self, write: impl Write + Send) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         const NO_CATEGORY_NO_SOUND: u8 = 0;

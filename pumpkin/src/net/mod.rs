@@ -349,10 +349,10 @@ impl Client {
     /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
     pub async fn enqueue_packet<P>(&self, packet: &P)
     where
-        P: ClientPacket + Sync,
+        P: ClientPacket,
     {
         let mut packet_buf = Vec::new();
-        if let Err(err) = packet.write(&mut packet_buf).await {
+        if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
             return;
         }
@@ -387,9 +387,9 @@ impl Client {
     /// # Errors
     ///
     /// Returns an `PacketError` if the packet could not be Send.
-    pub async fn send_packet_now<P: ClientPacket + Sync>(&self, packet: &P) {
+    pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
-        if let Err(err) = packet.write(&mut packet_buf).await {
+        if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
             return;
         }
