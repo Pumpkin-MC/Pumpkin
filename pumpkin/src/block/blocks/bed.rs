@@ -55,7 +55,7 @@ impl PumpkinBlock for BedBlock {
             && world
                 .get_block_state(&block_pos.offset(facing.to_offset()))
                 .await
-                .is_ok_and(|state| state.is_solid() && state.is_full_cube())
+                .is_ok_and(|state| state.replaceable())
     }
 
     async fn on_place(
