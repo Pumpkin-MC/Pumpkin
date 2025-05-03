@@ -214,7 +214,7 @@ impl BlockRegistry {
         &self,
         world: Arc<World>,
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         location: BlockPos,
         server: &Server,
         state: BlockState,

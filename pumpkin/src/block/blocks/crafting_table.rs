@@ -46,7 +46,7 @@ impl PumpkinBlock for CraftingTableBlock {
     async fn broken(
         &self,
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         location: BlockPos,
         server: &Server,
         _world: Arc<World>,

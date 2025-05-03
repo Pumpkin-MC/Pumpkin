@@ -5,6 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{entity::player::Player, server::Server};
 
+pub mod bed;
 pub mod cactus;
 pub mod chest;
 pub mod crafting_table;

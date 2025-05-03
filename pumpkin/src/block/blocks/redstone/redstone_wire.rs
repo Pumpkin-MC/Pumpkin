@@ -268,7 +268,7 @@ impl PumpkinBlock for RedstoneWireBlock {
     async fn broken(
         &self,
         _block: &Block,
-        _player: &Player,
+        _player: &Arc<Player>,
         location: BlockPos,
         _server: &Server,
         world: Arc<World>,

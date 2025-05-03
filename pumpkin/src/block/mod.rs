@@ -1,3 +1,4 @@
+use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
@@ -66,6 +67,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
     // Blocks
+    manager.register(BedBlock);
     manager.register(CactusBlock);
     manager.register(ChestBlock);
     manager.register(CraftingTableBlock);

@@ -112,7 +112,7 @@ impl PumpkinBlock for JukeboxBlock {
     async fn broken(
         &self,
         _block: &Block,
-        _player: &Player,
+        _player: &Arc<Player>,
         position: BlockPos,
         _server: &Server,
         world: Arc<World>,

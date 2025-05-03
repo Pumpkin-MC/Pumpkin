@@ -120,7 +120,7 @@ pub trait PumpkinBlock: Send + Sync {
     async fn broken(
         &self,
         _block: &Block,
-        _player: &Player,
+        _player: &Arc<Player>,
         _location: BlockPos,
         _server: &Server,
         _world: Arc<World>,

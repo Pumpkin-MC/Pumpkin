@@ -131,7 +131,7 @@ impl PumpkinBlock for ChestBlock {
     async fn broken(
         &self,
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         block_pos: BlockPos,
         server: &Server,
         world: Arc<World>,
