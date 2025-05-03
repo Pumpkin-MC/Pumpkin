@@ -39,12 +39,12 @@ impl PumpkinBlock for StairBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        face: BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut stair_props = StairsProperties::default(block);
         stair_props.waterlogged = replacing.water_source();

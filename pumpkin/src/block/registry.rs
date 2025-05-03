@@ -98,16 +98,64 @@ impl BlockRegistry {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub async fn can_place_at(
+        &self,
+        server: &Server,
+        world: &World,
+        player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_place_at(
+                    server,
+                    world,
+                    player,
+                    block,
+                    block_pos,
+                    face,
+                    replacing,
+                    use_item_on,
+                )
+                .await;
+        }
+        true
+    }
+
+    pub async fn can_update_at(
+        &self,
+        world: &World,
+        block: &Block,
+        state_id: BlockStateId,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        use_item_on: &SUseItemOn,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
+                .await;
+        }
+        false
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub async fn on_place(
         &self,
         server: &Server,
         world: &World,
-        block: &Block,
-        face: BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -115,12 +163,12 @@ impl BlockRegistry {
                 .on_place(
                     server,
                     world,
-                    block,
-                    face,
-                    block_pos,
-                    use_item_on,
                     player,
+                    block,
+                    block_pos,
+                    face,
                     replacing,
+                    use_item_on,
                 )
                 .await;
         }
@@ -142,38 +190,6 @@ impl BlockRegistry {
                 .player_placed(world, block, state_id, pos, face, player)
                 .await;
         }
-    }
-
-    pub async fn can_place_at(
-        &self,
-        world: &World,
-        block: &Block,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-    ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.can_place_at(world, block_pos, face).await;
-        }
-        true
-    }
-
-    pub async fn can_update_at(
-        &self,
-        world: &World,
-        block: &Block,
-        state_id: BlockStateId,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-        use_item_on: &SUseItemOn,
-    ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
-                .await;
-        }
-        false
     }
 
     pub async fn on_placed(

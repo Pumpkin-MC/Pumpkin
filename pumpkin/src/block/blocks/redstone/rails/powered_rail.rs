@@ -29,12 +29,12 @@ impl PumpkinBlock for PoweredRailBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
         let player_facing = player.living_entity.entity.get_horizontal_facing();
@@ -74,7 +74,17 @@ impl PumpkinBlock for PoweredRailBlock {
         }
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: BlockDirection) -> bool {
-        can_place_rail_at(world, pos).await
+    async fn can_place_at(
+        &self,
+        _server: &Server,
+        world: &World,
+        _player: &Player,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
+        can_place_rail_at(world, block_pos).await
     }
 }

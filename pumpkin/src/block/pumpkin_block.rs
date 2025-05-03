@@ -61,23 +61,29 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        _pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         block.default_state_id
     }
 
     async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}
 
+    #[allow(clippy::too_many_arguments)]
     async fn can_place_at(
         &self,
+        _server: &Server,
         _world: &World,
+        _player: &Player,
+        _block: &Block,
         _block_pos: &BlockPos,
         _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> bool {
         true
     }

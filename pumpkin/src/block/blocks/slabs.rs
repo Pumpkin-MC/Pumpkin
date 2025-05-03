@@ -34,12 +34,12 @@ impl PumpkinBlock for SlabBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        face: BlockDirection,
-        _block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = replacing {
             let mut slab_props = SlabProperties::from_state_id(state_id, block);

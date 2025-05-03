@@ -64,12 +64,12 @@ impl PumpkinBlock for ButtonBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut props = ButtonLikeProperties::default(block);
 

@@ -41,12 +41,12 @@ impl PumpkinBlock for RedstoneTorchBlock {
         &self,
         _server: &Server,
         world: &World,
-        _block: &Block,
-        face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        _block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         if face.is_horizontal() {
             let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);

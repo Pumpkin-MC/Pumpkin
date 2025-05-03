@@ -30,12 +30,12 @@ impl PumpkinBlock for ObserverBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(block);
         props.facing = player.living_entity.entity.get_facing();

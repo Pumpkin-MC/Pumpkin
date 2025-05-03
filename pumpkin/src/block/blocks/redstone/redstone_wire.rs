@@ -30,29 +30,30 @@ pub struct RedstoneWireBlock;
 
 #[async_trait]
 impl PumpkinBlock for RedstoneWireBlock {
-    // Start of placement
-
     async fn can_place_at(
         &self,
+        _server: &Server,
         world: &World,
+        _player: &Player,
+        _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> bool {
-        let floor = world.get_block_state(&block_pos.down()).await.unwrap();
-        // TODO: Only check face instead of block
-        return floor.is_full_cube();
+        can_place_at(world, block_pos).await
     }
 
     async fn on_place(
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut wire = RedstoneWireProperties::default(block);
         wire.power = Integer0To15::from_index(calculate_power(world, block_pos).await.into());
@@ -201,7 +202,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        if self.can_place_at(world, pos, BlockDirection::Down).await {
+        if can_place_at(world, pos).await {
             let state = world.get_block_state(pos).await.unwrap();
             let mut wire = RedstoneWireProperties::from_state_id(state.id, block);
             let new_power = calculate_power(world, pos).await;
@@ -276,6 +277,12 @@ impl PumpkinBlock for RedstoneWireBlock {
     ) {
         update_wire_neighbors(&world, &location).await;
     }
+}
+
+async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+    let floor = world.get_block_state(&block_pos.down()).await.unwrap();
+    // TODO: Only check face instead of block
+    floor.is_full_cube()
 }
 
 async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &BlockPos) -> bool {

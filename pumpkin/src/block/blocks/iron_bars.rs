@@ -25,12 +25,12 @@ impl PumpkinBlock for IronBarsBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> u16 {
         let mut bars_props = IronBarsProperties::default(block);
         bars_props.waterlogged = replacing.water_source();

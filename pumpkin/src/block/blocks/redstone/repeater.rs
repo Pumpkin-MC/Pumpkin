@@ -32,12 +32,12 @@ impl PumpkinBlock for RepeaterBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut props = RepeaterProperties::default(block);
         let dir = player

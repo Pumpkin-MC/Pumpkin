@@ -167,12 +167,12 @@ impl PumpkinBlock for DoorBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let powered = block_receives_redstone_power(world, block_pos).await
             || block_receives_redstone_power(world, &block_pos.up()).await;
@@ -192,18 +192,16 @@ impl PumpkinBlock for DoorBlock {
 
     async fn can_place_at(
         &self,
+        _server: &Server,
         world: &World,
+        _player: &Player,
+        _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> bool {
-        world
-            .get_block_state(&block_pos.offset(BlockDirection::Up.to_offset()))
-            .await
-            .is_ok_and(|state| state.replaceable())
-            && world
-                .get_block_state(&block_pos.offset(BlockDirection::Down.to_offset()))
-                .await
-                .is_ok_and(|state| state.is_solid() && state.is_full_cube())
+        can_place_at(world, block_pos).await
     }
 
     async fn placed(
@@ -328,7 +326,7 @@ impl PumpkinBlock for DoorBlock {
         {
             if lv == DoubleBlockHalf::Lower
                 && direction == BlockDirection::Down
-                && !self.can_place_at(world, block_pos, direction).await
+                && !can_place_at(world, block_pos).await
             {
                 return 0;
             }
@@ -343,4 +341,15 @@ impl PumpkinBlock for DoorBlock {
         }
         state
     }
+}
+
+async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+    world
+        .get_block_state(&block_pos.up())
+        .await
+        .is_ok_and(|state| state.replaceable())
+        && world
+            .get_block_state(&block_pos.down())
+            .await
+            .is_ok_and(|state| state.is_solid() && state.is_full_cube())
 }

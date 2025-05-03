@@ -44,12 +44,12 @@ impl PumpkinBlock for ChestBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut chest_props = ChestLikeProperties::default(block);
 

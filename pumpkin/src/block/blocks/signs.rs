@@ -36,12 +36,12 @@ impl PumpkinBlock for SignBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> u16 {
         let mut sign_props = SignProperties::default(block);
         sign_props.waterlogged = replacing.water_source();

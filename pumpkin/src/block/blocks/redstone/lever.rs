@@ -45,12 +45,12 @@ impl PumpkinBlock for LeverBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 

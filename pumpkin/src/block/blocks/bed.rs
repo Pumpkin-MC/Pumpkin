@@ -37,16 +37,23 @@ impl BlockMetadata for BedBlock {
 impl PumpkinBlock for BedBlock {
     async fn can_place_at(
         &self,
+        _server: &Server,
         world: &World,
+        player: &Player,
+        _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> bool {
+        let facing = player.living_entity.entity.get_horizontal_facing();
+
         world
-            .get_block_state(&block_pos.offset(BlockDirection::Up.to_offset()))
+            .get_block_state(block_pos)
             .await
             .is_ok_and(|state| state.replaceable())
             && world
-                .get_block_state(&block_pos.offset(BlockDirection::Down.to_offset()))
+                .get_block_state(&block_pos.offset(facing.to_offset()))
                 .await
                 .is_ok_and(|state| state.is_solid() && state.is_full_cube())
     }
@@ -55,12 +62,12 @@ impl PumpkinBlock for BedBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut bed_props = BedProperties::default(block);
 
@@ -112,10 +119,10 @@ impl PumpkinBlock for BedBlock {
             .break_block(
                 &other_half_pos,
                 Some(player.clone()),
-                if player.gamemode.load() != GameMode::Creative {
-                    BlockFlags::NOTIFY_NEIGHBORS
-                } else {
+                if player.gamemode.load() == GameMode::Creative {
                     BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                } else {
+                    BlockFlags::NOTIFY_NEIGHBORS
                 },
             )
             .await;
