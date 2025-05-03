@@ -199,7 +199,7 @@ pub trait ScreenHandler: Send + Sync {
     async fn update_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
         let other_stack = &behaviour.tracked_stacks[slot];
-        if other_stack != &stack {
+        if !other_stack.are_equal(&stack) {
             behaviour.tracked_stacks[slot] = stack;
 
             for listener in behaviour.listeners.iter() {
@@ -213,7 +213,7 @@ pub trait ScreenHandler: Send + Sync {
         if !behaviour.disable_sync {
             let prev_stack = behaviour.previous_tracked_stacks[slot];
 
-            if prev_stack != stack {
+            if !prev_stack.are_equal(&stack) {
                 behaviour.previous_tracked_stacks[slot] = stack;
                 let next_revision = behaviour.next_revision();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
@@ -245,7 +245,6 @@ pub trait ScreenHandler: Send + Sync {
 
         for i in 0..slots_len {
             let slot = self.get_behaviour().slots[i].clone();
-            //TODO: We might need to avoid using clone here
             let stack = slot.get_cloned_stack().await;
 
             self.update_tracked_slot(i, stack).await;
@@ -263,6 +262,22 @@ pub trait ScreenHandler: Send + Sync {
 
     async fn is_slot_valid(&self, slot: i32) -> bool {
         slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
+    }
+
+    async fn get_slot_index(
+        &self,
+        inventory: &Arc<Mutex<dyn Inventory>>,
+        slot: usize,
+    ) -> Option<usize> {
+        for i in 0..self.get_behaviour().slots.len() {
+            if Arc::ptr_eq(self.get_behaviour().slots[i].get_inventory(), inventory)
+                && self.get_behaviour().slots[i].get_index() == slot
+            {
+                return Some(i);
+            }
+        }
+
+        None
     }
 
     async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack;

@@ -28,11 +28,12 @@ impl Hash for ItemStack {
     }
 }
 
+/*
 impl PartialEq for ItemStack {
     fn eq(&self, other: &Self) -> bool {
         self.item.id == other.item.id
     }
-}
+} */
 
 impl ItemStack {
     pub const EMPTY: ItemStack = ItemStack {
@@ -94,7 +95,7 @@ impl ItemStack {
     }
 
     pub fn are_equal(&self, other: &Self) -> bool {
-        self.item == other.item && self.item_count == other.item_count
+        self.item_count == other.item_count && self.are_items_and_components_equal(other)
     }
 
     /// Determines the mining speed for a block based on tool rules.

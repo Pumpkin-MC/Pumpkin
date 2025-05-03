@@ -584,16 +584,13 @@ impl Player {
     }
 
     pub async fn tick(&self, server: &Server) {
-        /* TODO:
         self.current_screen_handler
             .lock()
             .await
             .lock()
             .await
             .send_content_updates()
-            .await; */
-
-        println!("Tick");
+            .await;
 
         if self
             .client
@@ -1327,7 +1324,20 @@ impl Player {
             self.drop_item(item_stack.item.id, u32::from(drop_amount))
                 .await;
             item_stack.decrement(drop_amount);
-            // TODO: Inv self.current_screen_handler.lock().await.lock().await.get
+            let selected_slot = inv.get_selected_slot();
+            drop(inv);
+            let inv: Arc<Mutex<dyn Inventory>> = self.inventory.clone();
+            let binding = self.current_screen_handler.lock().await;
+            let mut screen_handler = binding.lock().await;
+            let slot_index = screen_handler
+                .get_slot_index(&inv, selected_slot as usize)
+                .await;
+
+            if let Some(slot_index) = slot_index {
+                screen_handler
+                    .set_previous_tracked_slot(slot_index, item_stack.clone())
+                    .await;
+            }
         }
     }
 
