@@ -45,7 +45,7 @@ impl PlayerInventory {
     }
 
     pub fn is_valid_hotbar_index(slot: usize) -> bool {
-        slot <= Self::HOTBAR_SIZE
+        slot < Self::HOTBAR_SIZE
     }
 
     fn build_equipment_slots() -> HashMap<usize, EquipmentSlot> {
@@ -238,10 +238,10 @@ impl PlayerInventory {
                 )
                 .await;
             }
-
-            self.set_stack(self.get_selected_slot() as usize, stack)
-                .await;
         }
+
+        self.set_stack(self.get_selected_slot() as usize, stack)
+            .await;
     }
 
     pub async fn swap_slot_with_hotbar(&self, slot: usize) {
@@ -394,13 +394,9 @@ impl Inventory for PlayerInventory {
     fn mark_dirty(&self) {}
 }
 
-pub fn is_valid_hotbar_slot(slot: u8) -> bool {
-    slot < 9
-}
-
 impl PlayerInventory {
     pub fn set_selected_slot(&self, slot: u8) {
-        if is_valid_hotbar_slot(slot) {
+        if Self::is_valid_hotbar_index(slot as usize) {
             self.selected_slot
                 .store(slot, std::sync::atomic::Ordering::Relaxed);
         } else {
