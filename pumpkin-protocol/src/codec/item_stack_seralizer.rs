@@ -47,11 +47,6 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                         .next_element::<VarInt>()?
                         .ok_or(de::Error::custom("No component remove length VarInt!"))?;
 
-                    println!("item_count: {:?}", item_count);
-                    println!("item_id: {:?}", item_id);
-                    println!("num_components_to_add: {:?}", num_components_to_add);
-                    println!("num_components_to_remove: {:?}", num_components_to_remove);
-
                     if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
                         return Err(de::Error::custom(
                             "Slot components are currently unsupported",
@@ -182,14 +177,9 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
                         .next_element::<VarInt>()?
                         .ok_or(de::Error::custom("No item count VarInt!"))?;
 
-                    println!("item_id: {:?}", item_id);
-                    println!("count: {:?}", count);
-
                     let hashed_components = seq
                         .next_element::<ItemComponentHash>()?
                         .ok_or(de::Error::custom("No item component hash!"))?;
-
-                    println!("hashed_components: {:?}", hashed_components);
 
                     let item_stack_hash = ItemStackHash {
                         item_id: item_id,

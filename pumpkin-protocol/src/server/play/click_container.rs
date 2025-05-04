@@ -55,25 +55,19 @@ impl<'de> Deserialize<'de> for SClickSlot {
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
                 let mut array_of_changed_slots = vec![];
-                println!("length_of_array: {:?}", length_of_array);
                 for _ in 0..length_of_array.0 {
                     let slot_number = seq
                         .next_element::<i16>()?
                         .ok_or(de::Error::custom("Unable to parse slot"))?;
-                    println!("slot_number: {:?}", slot_number);
                     let slot = seq
                         .next_element::<OptionalItemStackHash>()?
                         .ok_or(de::Error::custom("Unable to parse item"))?;
                     array_of_changed_slots.push((slot_number, slot));
                 }
 
-                println!("carried_item");
                 let carried_item = seq
                     .next_element::<OptionalItemStackHash>()?
                     .ok_or(de::Error::custom("Failed to decode carried item"))?;
-
-                println!("array_of_changed_slots: {:?}", array_of_changed_slots);
-                println!("carried_item: {:?}", carried_item);
 
                 Ok(SClickSlot {
                     sync_id: sync_id.into(),

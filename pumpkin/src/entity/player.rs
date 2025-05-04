@@ -1573,8 +1573,6 @@ impl Player {
     }
 
     pub async fn on_slot_click(&self, packet: SClickSlot) {
-        println!("on_slot_click: {:?}", packet);
-
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
