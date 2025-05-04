@@ -82,7 +82,6 @@ pub trait PumpkinBlock: Send + Sync {
         _block: &Block,
         _block_pos: &BlockPos,
         _face: BlockDirection,
-        _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> bool {
         true

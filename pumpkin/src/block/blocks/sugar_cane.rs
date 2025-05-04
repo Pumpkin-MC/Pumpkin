@@ -14,7 +14,6 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
-use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -87,7 +86,6 @@ impl PumpkinBlock for SugarCaneBlock {
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> bool {
         can_place_at(world, block_pos).await

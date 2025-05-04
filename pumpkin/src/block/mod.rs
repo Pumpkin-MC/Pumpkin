@@ -301,7 +301,7 @@ impl LootConditionExt for LootCondition {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),

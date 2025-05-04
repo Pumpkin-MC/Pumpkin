@@ -198,7 +198,6 @@ impl PumpkinBlock for DoorBlock {
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> bool {
         can_place_at(world, block_pos).await

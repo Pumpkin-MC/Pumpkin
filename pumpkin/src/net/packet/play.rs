@@ -1767,7 +1767,6 @@ impl Player {
                 &block,
                 &final_block_pos,
                 final_face,
-                replacing,
                 &use_item_on,
             )
             .await

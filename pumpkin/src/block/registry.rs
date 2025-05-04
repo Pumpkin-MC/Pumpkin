@@ -106,7 +106,6 @@ impl BlockRegistry {
         block: &Block,
         block_pos: &BlockPos,
         face: BlockDirection,
-        replacing: BlockIsReplacing,
         use_item_on: &SUseItemOn,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -119,7 +118,6 @@ impl BlockRegistry {
                     block,
                     block_pos,
                     face,
-                    replacing,
                     use_item_on,
                 )
                 .await;
