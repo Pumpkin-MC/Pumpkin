@@ -269,7 +269,7 @@ impl Player {
                 slot: u8,
                 stack: ItemStack,
             ) {
-                println!("Slot updated: {slot:?}, {stack:?}");
+                //println!("Slot updated: {slot:?}, {stack:?}");
             }
         }
 
@@ -1328,7 +1328,7 @@ impl Player {
 
             if let Some(slot_index) = slot_index {
                 screen_handler
-                    .set_previous_tracked_slot(slot_index, *item_stack)
+                    .set_recived_stack(slot_index, *item_stack)
                     .await;
             }
         }
@@ -1573,6 +1573,8 @@ impl Player {
     }
 
     pub async fn on_slot_click(&self, packet: SClickSlot) {
+        println!("on_slot_click: {:?}", packet);
+
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
@@ -1610,8 +1612,6 @@ impl Player {
 
         let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
 
-        println!("not_in_sync: {not_in_sync:?}");
-
         screen_handler.disable_sync().await;
         screen_handler
             .on_slot_click(
@@ -1623,13 +1623,11 @@ impl Player {
             .await;
 
         for (key, value) in packet.array_of_changed_slots {
-            screen_handler
-                .set_previous_tracked_slot(key as usize, value.to_stack())
-                .await;
+            screen_handler.set_recived_hash(key as usize, value).await;
         }
 
         screen_handler
-            .set_previous_cursor_stack(packet.carried_item.to_stack())
+            .set_recived_cursor_hash(packet.carried_item)
             .await;
         screen_handler.enable_sync().await;
 

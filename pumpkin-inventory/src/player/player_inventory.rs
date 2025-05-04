@@ -73,8 +73,6 @@ impl PlayerInventory {
     async fn add_stack(&self, stack: ItemStack) -> usize {
         let mut slot_index = self.get_occupied_slot_with_room_for_stack(&stack).await;
 
-        println!("slot_index: {}", slot_index);
-
         if slot_index == -1 {
             slot_index = self.get_empty_slot().await;
         }
@@ -95,8 +93,6 @@ impl PlayerInventory {
             *self_stack = stack.copy_with_count(0);
             //self.set_stack(slot, self_stack).await;
         }
-
-        println!("self_stack: {:?}", self_stack);
 
         let count_left = self_stack.get_max_stack_size() - self_stack.item_count;
         let count_min = stack_count.min(count_left);
@@ -381,12 +377,10 @@ impl Inventory for PlayerInventory {
     }
 
     async fn set_stack(&self, slot: usize, stack: ItemStack) {
-        println!("set_stack: {:?}, slot: {}", stack, slot);
         if slot < self.main_inventory.len() {
             *self.main_inventory[slot].lock().await = stack;
         } else {
             let slot = self.equipment_slots.get(&slot).unwrap();
-            println!("setting stack: {:?}, slot: {:?}", stack, slot);
             self.entity_equipment.lock().await.put(slot, stack).await;
         }
     }

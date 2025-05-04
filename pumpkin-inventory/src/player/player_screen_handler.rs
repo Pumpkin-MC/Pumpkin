@@ -44,10 +44,6 @@ impl PlayerScreenHandler {
         self.behaviour.slots[slot].clone()
     }
 
-    pub async fn set_previous_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
-        self.behaviour.previous_tracked_stacks[slot] = stack;
-    }
-
     pub async fn new(
         player_inventory: &Arc<PlayerInventory>,
         window_type: Option<WindowType>,
@@ -122,16 +118,12 @@ impl ScreenHandler for PlayerScreenHandler {
         let mut stack_left = ItemStack::EMPTY;
         let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-        println!("slot_index: {}", slot_index);
-
         // TODO: Equippable component
 
         if slot.has_stack().await {
             let slot_stack = slot.get_stack().await;
             let mut slot_stack = slot_stack.lock().await;
             stack_left = *slot_stack;
-
-            println!("stack_left: {:?}", stack_left);
 
             if slot_index == 0 {
                 if !self.insert_item(&mut slot_stack, 9, 45, true).await {
@@ -158,8 +150,6 @@ impl ScreenHandler for PlayerScreenHandler {
             } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                 return ItemStack::EMPTY;
             }
-
-            println!("slot_stack: {:?}", slot_stack);
 
             if slot_stack.is_empty() {
                 drop(slot_stack);

@@ -1,5 +1,5 @@
 use crate::VarInt;
-use crate::codec::item_stack_seralizer::ItemStackSerializer;
+use crate::codec::item_stack_seralizer::{ItemStackSerializer, OptionalItemStackHash};
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
 use pumpkin_macros::packet;
 use serde::de::SeqAccess;
@@ -14,8 +14,8 @@ pub struct SClickSlot {
     pub button: i8,
     pub mode: SlotActionType,
     pub length_of_array: VarInt,
-    pub array_of_changed_slots: Vec<(i16, ItemStackSerializer<'static>)>,
-    pub carried_item: ItemStackSerializer<'static>,
+    pub array_of_changed_slots: Vec<(i16, OptionalItemStackHash)>,
+    pub carried_item: OptionalItemStackHash,
 }
 
 impl<'de> Deserialize<'de> for SClickSlot {
@@ -35,10 +35,10 @@ impl<'de> Deserialize<'de> for SClickSlot {
             where
                 A: SeqAccess<'de>,
             {
-                let window_id = seq
-                    .next_element::<u8>()?
+                let sync_id = seq
+                    .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode u8"))?;
-                let state_id = seq
+                let revision = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
 
@@ -55,26 +55,29 @@ impl<'de> Deserialize<'de> for SClickSlot {
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
                 let mut array_of_changed_slots = vec![];
+                println!("length_of_array: {:?}", length_of_array);
                 for _ in 0..length_of_array.0 {
                     let slot_number = seq
                         .next_element::<i16>()?
                         .ok_or(de::Error::custom("Unable to parse slot"))?;
+                    println!("slot_number: {:?}", slot_number);
                     let slot = seq
-                        .next_element::<ItemStackSerializer>()?
+                        .next_element::<OptionalItemStackHash>()?
                         .ok_or(de::Error::custom("Unable to parse item"))?;
                     array_of_changed_slots.push((slot_number, slot));
                 }
 
+                println!("carried_item");
                 let carried_item = seq
-                    .next_element::<ItemStackSerializer>()?
+                    .next_element::<OptionalItemStackHash>()?
                     .ok_or(de::Error::custom("Failed to decode carried item"))?;
 
                 println!("array_of_changed_slots: {:?}", array_of_changed_slots);
                 println!("carried_item: {:?}", carried_item);
 
                 Ok(SClickSlot {
-                    sync_id: window_id.into(),
-                    revision: state_id,
+                    sync_id: sync_id.into(),
+                    revision,
                     slot,
                     button,
                     mode: SlotActionType::try_from(mode.0)

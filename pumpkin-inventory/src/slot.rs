@@ -158,7 +158,6 @@ pub trait Slot: Send + Sync + Debug {
             } else {
                 if stack_self.is_empty() {
                     drop(stack_self);
-                    println!("Inserting stack");
                     self.set_stack(stack.split(min_count)).await;
                 } else if stack.are_items_and_components_equal(&stack_self) {
                     stack.decrement(min_count);

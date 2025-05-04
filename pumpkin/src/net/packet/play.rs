@@ -1440,7 +1440,7 @@ impl Player {
                 .set_stack(item_stack)
                 .await;
             player_screen_handler
-                .set_previous_tracked_slot(packet.slot as usize, item_stack)
+                .set_recived_stack(packet.slot as usize, item_stack)
                 .await;
             player_screen_handler.send_content_updates().await;
         } else if is_negative && is_legal {

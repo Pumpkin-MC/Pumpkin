@@ -4,7 +4,10 @@ use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
-    codec::{item_stack_seralizer::ItemStackSerializer, var_int::VarInt},
+    codec::{
+        item_stack_seralizer::{ItemStackHash, ItemStackSerializer, OptionalItemStackHash},
+        var_int::VarInt,
+    },
 };
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
@@ -112,5 +115,42 @@ impl SyncHandler {
                 ))
                 .await;
         }
+    }
+}
+
+// TrackedSlot in vanilla
+#[derive(Debug, Clone)]
+pub struct TrackedStack {
+    pub recived_stack: Option<ItemStack>,
+    pub recived_hash: Option<OptionalItemStackHash>,
+}
+
+impl TrackedStack {
+    pub const EMPTY: TrackedStack = TrackedStack {
+        recived_stack: None,
+        recived_hash: None,
+    };
+
+    pub fn set_recived_stack(&mut self, stack: ItemStack) {
+        self.recived_stack = Some(stack);
+        self.recived_hash = None;
+    }
+
+    pub fn set_recived_hash(&mut self, hash: OptionalItemStackHash) {
+        self.recived_hash = Some(hash);
+        self.recived_stack = None;
+    }
+
+    pub fn is_in_sync(&mut self, actual_stack: &ItemStack) -> bool {
+        if let Some(stack) = &self.recived_stack {
+            return stack.are_equal(actual_stack);
+        } else if let Some(hash) = &self.recived_hash {
+            if hash.hash_equals(actual_stack) {
+                self.recived_stack = Some(actual_stack.clone());
+                return true;
+            }
+        }
+
+        false
     }
 }

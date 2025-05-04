@@ -8,6 +8,7 @@ use pumpkin_protocol::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory,
     },
+    codec::item_stack_seralizer::{ItemStackHash, OptionalItemStackHash},
     server::play::SlotActionType,
 };
 use pumpkin_util::text::TextComponent;
@@ -19,7 +20,7 @@ use crate::{
     inventory::{ComparableInventory, Inventory},
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
-    sync_handler::SyncHandler,
+    sync_handler::{SyncHandler, TrackedStack},
 };
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
@@ -101,7 +102,7 @@ pub trait ScreenHandler: Send + Sync {
         slot.set_id(behaviour.slots.len());
         behaviour.slots.push(slot.clone());
         behaviour.tracked_stacks.push(ItemStack::EMPTY);
-        behaviour.previous_tracked_stacks.push(ItemStack::EMPTY);
+        behaviour.previous_tracked_stacks.push(TrackedStack::EMPTY);
 
         slot
     }
@@ -153,16 +154,16 @@ pub trait ScreenHandler: Send + Sync {
                     self.get_behaviour_mut().tracked_stacks[i] =
                         other_behaviour.tracked_stacks[*other_index];
                     self.get_behaviour_mut().previous_tracked_stacks[i] =
-                        other_behaviour.previous_tracked_stacks[*other_index];
+                        other_behaviour.previous_tracked_stacks[*other_index].clone();
                 }
             }
         }
     }
 
-    async fn set_previous_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
+    async fn set_recived_hash(&mut self, slot: usize, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
         if slot < behaviour.previous_tracked_stacks.len() {
-            behaviour.previous_tracked_stacks[slot] = stack;
+            behaviour.previous_tracked_stacks[slot].set_recived_hash(hash);
         } else {
             warn!(
                 "Incorrect slot index: {} available slots: {}",
@@ -172,19 +173,30 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    async fn set_previous_cursor_stack(&mut self, stack: ItemStack) {
+    async fn set_recived_stack(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
-        behaviour.previous_cursor_stack = stack;
+        behaviour.previous_tracked_stacks[slot].set_recived_stack(stack);
+    }
+
+    async fn set_recived_cursor_hash(&mut self, hash: OptionalItemStackHash) {
+        let behaviour = self.get_behaviour_mut();
+        behaviour.previous_cursor_stack.set_recived_hash(hash);
     }
 
     async fn sync_state(&mut self) {
         let behaviour = self.get_behaviour_mut();
+        let mut previous_tracked_stacks = Vec::new();
 
         for i in 0..behaviour.slots.len() {
-            behaviour.previous_tracked_stacks[i] = behaviour.slots[i].get_cloned_stack().await;
+            let stack = behaviour.slots[i].get_cloned_stack().await;
+            previous_tracked_stacks.push(stack);
+            behaviour.previous_tracked_stacks[i].set_recived_stack(stack);
         }
 
-        behaviour.previous_cursor_stack = *behaviour.cursor_stack.lock().await;
+        let cursor_stack = behaviour.cursor_stack.lock().await.clone();
+        behaviour
+            .previous_cursor_stack
+            .set_recived_stack(cursor_stack);
 
         for i in 0..behaviour.properties.len() {
             let property_val = behaviour.properties[i].get();
@@ -197,8 +209,8 @@ pub trait ScreenHandler: Send + Sync {
             sync_handler
                 .update_state(
                     behaviour,
-                    &behaviour.previous_tracked_stacks,
-                    &behaviour.previous_cursor_stack,
+                    &previous_tracked_stacks,
+                    &cursor_stack,
                     behaviour.tracked_property_values.clone(),
                     next_revision,
                 )
@@ -262,10 +274,10 @@ pub trait ScreenHandler: Send + Sync {
     async fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.disable_sync {
-            let prev_stack = behaviour.previous_tracked_stacks[slot];
+            let prev_stack = &mut behaviour.previous_tracked_stacks[slot];
 
-            if !prev_stack.are_equal(&stack) {
-                behaviour.previous_tracked_stacks[slot] = stack;
+            if !prev_stack.is_in_sync(&stack) {
+                prev_stack.set_recived_stack(stack);
                 let next_revision = behaviour.next_revision();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
@@ -280,11 +292,13 @@ pub trait ScreenHandler: Send + Sync {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.disable_sync {
             let cursor_stack = behaviour.cursor_stack.lock().await;
-            if !cursor_stack.are_equal(&behaviour.previous_cursor_stack) {
-                behaviour.previous_cursor_stack = *cursor_stack;
+            if !behaviour.previous_cursor_stack.is_in_sync(&cursor_stack) {
+                behaviour
+                    .previous_cursor_stack
+                    .set_recived_stack(cursor_stack.clone());
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
-                        .update_cursor_stack(behaviour, &behaviour.previous_cursor_stack)
+                        .update_cursor_stack(behaviour, &cursor_stack)
                         .await;
                 }
             }
@@ -515,7 +529,7 @@ pub trait ScreenHandler: Send + Sync {
 
                 if slot_stack.is_empty() {
                     if !cursor_stack.is_empty() {
-                        println!("Cursor -> Slot");
+                        //println!("Cursor -> Slot");
                         let transfer_count = if click_type == MouseClick::Left {
                             cursor_stack.item_count
                         } else {
@@ -523,11 +537,10 @@ pub trait ScreenHandler: Send + Sync {
                         };
                         *cursor_stack =
                             slot.insert_stack_count(*cursor_stack, transfer_count).await;
-                        println!("cursor_stack: {:?}", *cursor_stack);
                     }
                 } else if slot.can_take_items(player).await {
                     if cursor_stack.is_empty() {
-                        println!("Slot -> Cursor");
+                        //println!("Slot -> Cursor");
                         let take_count = if click_type == MouseClick::Left {
                             slot_stack.item_count
                         } else {
@@ -535,7 +548,6 @@ pub trait ScreenHandler: Send + Sync {
                         };
                         let taken = slot.try_take_stack_range(take_count, u8::MAX, player).await;
                         if let Some(taken) = taken {
-                            println!("taken: {:?}", taken);
                             // Reverse order of operations, shouldn't affect anything
                             *cursor_stack = taken;
                             slot.on_take_item(player, &taken).await;
@@ -575,7 +587,6 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
-                println!("Done");
                 slot.mark_dirty().await;
             }
         } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
@@ -682,10 +693,11 @@ pub struct ScreenHandlerBehaviour {
     pub sync_id: u8,
     pub listeners: Vec<Arc<dyn ScreenHandlerListener>>,
     pub sync_handler: Option<Arc<SyncHandler>>,
+    //TODO: Check if this is needed
     pub tracked_stacks: Vec<ItemStack>,
     pub cursor_stack: Arc<Mutex<ItemStack>>,
-    pub previous_tracked_stacks: Vec<ItemStack>,
-    pub previous_cursor_stack: ItemStack,
+    pub previous_tracked_stacks: Vec<TrackedStack>,
+    pub previous_cursor_stack: TrackedStack,
     pub revision: u32,
     pub disable_sync: bool,
     pub properties: Vec<ScreenProperty>,
@@ -703,7 +715,7 @@ impl ScreenHandlerBehaviour {
             tracked_stacks: Vec::new(),
             cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
             previous_tracked_stacks: Vec::new(),
-            previous_cursor_stack: ItemStack::EMPTY,
+            previous_cursor_stack: TrackedStack::EMPTY,
             revision: 0,
             disable_sync: false,
             properties: Vec::new(),
