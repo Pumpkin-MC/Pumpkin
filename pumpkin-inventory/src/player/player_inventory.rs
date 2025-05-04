@@ -7,15 +7,15 @@ use pumpkin_world::item::ItemStack;
 use std::array::from_fn;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU8;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlayerInventory {
     pub main_inventory: [Arc<Mutex<ItemStack>>; Self::MAIN_SIZE],
     pub equipment_slots: HashMap<usize, EquipmentSlot>,
-    change_count: u32,
-    selected_slot: u8,
-    pub entity_equipment: EntityEquipment,
+    selected_slot: AtomicU8,
+    pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
 
 impl PlayerInventory {
@@ -29,16 +29,15 @@ impl PlayerInventory {
             // Normal syntax can't be used here because Arc doesn't implement Copy
             main_inventory: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
             equipment_slots: Self::build_equipment_slots(),
-            change_count: 0,
-            selected_slot: 0,
-            entity_equipment,
+            selected_slot: AtomicU8::new(0),
+            entity_equipment: Arc::new(Mutex::new(entity_equipment)),
         }
     }
 
     /// getSelectedStack in source
     pub fn held_item(&self) -> Arc<Mutex<ItemStack>> {
         self.main_inventory
-            .get(self.selected_slot as usize)
+            .get(self.get_selected_slot() as usize)
             .unwrap()
             .clone()
     }
@@ -69,7 +68,7 @@ impl PlayerInventory {
         equipment_slots
     }
 
-    async fn add_stack(&mut self, stack: ItemStack) -> usize {
+    async fn add_stack(&self, stack: ItemStack) -> usize {
         let mut slot_index = self.get_occupied_slot_with_room_for_stack(&stack).await;
 
         println!("slot_index: {}", slot_index);
@@ -85,9 +84,9 @@ impl PlayerInventory {
         }
     }
 
-    async fn add_stack_to_slot(&mut self, slot: usize, stack: ItemStack) -> usize {
+    async fn add_stack_to_slot(&self, slot: usize, stack: ItemStack) -> usize {
         let mut stack_count = stack.item_count;
-        let binding = self.get_stack(slot);
+        let binding = self.get_stack(slot).await;
         let mut self_stack = binding.lock().await;
 
         if self_stack.is_empty() {
@@ -128,12 +127,18 @@ impl PlayerInventory {
 
     async fn get_occupied_slot_with_room_for_stack(&self, stack: &ItemStack) -> i16 {
         if self.can_stack_add_more(
-            &*self.get_stack(self.selected_slot as usize).lock().await,
+            &*self
+                .get_stack(self.get_selected_slot() as usize)
+                .await
+                .lock()
+                .await,
             stack,
         ) {
-            return self.selected_slot as i16;
-        } else if self.can_stack_add_more(&*self.get_stack(Self::OFF_HAND_SLOT).lock().await, stack)
-        {
+            return self.get_selected_slot() as i16;
+        } else if self.can_stack_add_more(
+            &*self.get_stack(Self::OFF_HAND_SLOT).await.lock().await,
+            stack,
+        ) {
             return Self::OFF_HAND_SLOT as i16;
         } else {
             for i in 0..Self::MAIN_SIZE {
@@ -146,11 +151,11 @@ impl PlayerInventory {
         }
     }
 
-    pub async fn insert_stack_anywhere(&mut self, stack: &mut ItemStack) -> bool {
+    pub async fn insert_stack_anywhere(&self, stack: &mut ItemStack) -> bool {
         self.insert_stack(-1, stack).await
     }
 
-    pub async fn insert_stack(&mut self, slot: i16, stack: &mut ItemStack) -> bool {
+    pub async fn insert_stack(&self, slot: i16, stack: &mut ItemStack) -> bool {
         if stack.is_empty() {
             return false;
         }
@@ -179,7 +184,7 @@ impl PlayerInventory {
 }
 
 impl Clearable for PlayerInventory {
-    fn clear(&mut self) {
+    fn clear(&self) {
         todo!()
     }
 }
@@ -198,7 +203,15 @@ impl Inventory for PlayerInventory {
         }
 
         for slot in self.equipment_slots.values() {
-            if !self.entity_equipment.get(slot).lock().await.is_empty() {
+            if !self
+                .entity_equipment
+                .lock()
+                .await
+                .get(slot)
+                .lock()
+                .await
+                .is_empty()
+            {
                 return false;
             }
         }
@@ -206,12 +219,12 @@ impl Inventory for PlayerInventory {
         true
     }
 
-    fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
+    async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
         if slot < self.main_inventory.len() {
             self.main_inventory[slot].clone()
         } else {
             let slot = self.equipment_slots.get(&slot).unwrap();
-            self.entity_equipment.get(slot)
+            self.entity_equipment.lock().await.get(slot)
         }
     }
 
@@ -221,7 +234,7 @@ impl Inventory for PlayerInventory {
         } else {
             let slot = self.equipment_slots.get(&slot).unwrap();
 
-            let equipment = self.entity_equipment.get(slot);
+            let equipment = self.entity_equipment.lock().await.get(slot);
             let mut stack = equipment.lock().await;
 
             if !stack.is_empty() {
@@ -232,7 +245,7 @@ impl Inventory for PlayerInventory {
         }
     }
 
-    async fn remove_stack(&mut self, slot: usize) -> ItemStack {
+    async fn remove_stack(&self, slot: usize) -> ItemStack {
         if slot < self.main_inventory.len() {
             let mut removed = ItemStack::EMPTY;
             let mut guard = self.main_inventory[slot].lock().await;
@@ -240,24 +253,26 @@ impl Inventory for PlayerInventory {
             removed
         } else {
             let slot = self.equipment_slots.get(&slot).unwrap();
-            self.entity_equipment.put(slot, ItemStack::EMPTY).await
+            self.entity_equipment
+                .lock()
+                .await
+                .put(slot, ItemStack::EMPTY)
+                .await
         }
     }
 
-    async fn set_stack(&mut self, slot: usize, stack: ItemStack) {
+    async fn set_stack(&self, slot: usize, stack: ItemStack) {
         println!("set_stack: {:?}, slot: {}", stack, slot);
         if slot < self.main_inventory.len() {
             *self.main_inventory[slot].lock().await = stack;
         } else {
             let slot = self.equipment_slots.get(&slot).unwrap();
             println!("setting stack: {:?}, slot: {:?}", stack, slot);
-            self.entity_equipment.put(slot, stack).await;
+            self.entity_equipment.lock().await.put(slot, stack).await;
         }
     }
 
-    fn mark_dirty(&mut self) {
-        self.change_count += 1;
-    }
+    fn mark_dirty(&self) {}
 }
 
 pub fn is_valid_hotbar_slot(slot: u8) -> bool {
@@ -265,9 +280,10 @@ pub fn is_valid_hotbar_slot(slot: u8) -> bool {
 }
 
 impl PlayerInventory {
-    pub fn set_selected_slot(&mut self, slot: u8) {
+    pub fn set_selected_slot(&self, slot: u8) {
         if is_valid_hotbar_slot(slot) {
-            self.selected_slot = slot;
+            self.selected_slot
+                .store(slot, std::sync::atomic::Ordering::Relaxed);
         } else {
             panic!("Invalid hotbar slot: {}", slot);
         }
@@ -275,5 +291,6 @@ impl PlayerInventory {
 
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }

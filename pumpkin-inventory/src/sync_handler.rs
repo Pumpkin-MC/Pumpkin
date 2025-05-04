@@ -9,7 +9,7 @@ use pumpkin_protocol::{
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::screen_handler::{DefaultScreenHandlerBehaviour, InventoryPlayer};
+use crate::screen_handler::{InventoryPlayer, ScreenHandlerBehaviour};
 
 pub struct SyncHandler {
     player: Mutex<Option<Arc<dyn InventoryPlayer>>>,
@@ -34,7 +34,7 @@ impl SyncHandler {
 
     pub async fn update_state(
         &self,
-        screen_handler: &DefaultScreenHandlerBehaviour,
+        screen_handler: &ScreenHandlerBehaviour,
         stacks: &[ItemStack],
         cursor_stack: &ItemStack,
         properties: Vec<i32>,
@@ -68,7 +68,7 @@ impl SyncHandler {
 
     pub async fn update_slot(
         &self,
-        screen_handler: &DefaultScreenHandlerBehaviour,
+        screen_handler: &ScreenHandlerBehaviour,
         slot: usize,
         stack: &ItemStack,
         next_revision: u32,
@@ -87,7 +87,7 @@ impl SyncHandler {
 
     pub async fn update_cursor_stack(
         &self,
-        _screen_handler: &DefaultScreenHandlerBehaviour,
+        _screen_handler: &ScreenHandlerBehaviour,
         stack: &ItemStack,
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
@@ -99,7 +99,7 @@ impl SyncHandler {
 
     pub async fn update_property(
         &self,
-        screen_handler: &DefaultScreenHandlerBehaviour,
+        screen_handler: &ScreenHandlerBehaviour,
         property: i32,
         value: i32,
     ) {

@@ -1151,7 +1151,7 @@ impl Player {
                     let block = world.get_block(&location).await.unwrap();
                     let state = world.get_block_state(&location).await.unwrap();
 
-                    let inventory = self.inventory().lock().await;
+                    let inventory = self.inventory();
                     let held = inventory.held_item();
                     if !server.item_registry.can_mine(held.lock().await.item, self) {
                         self.client
@@ -1379,10 +1379,9 @@ impl Player {
             return Err(BlockPlacingError::InvalidBlockFace.into());
         };
 
-        let inventory = self.inventory().lock().await;
+        let inventory = self.inventory();
         let binding = inventory.held_item();
         let mut held_item = binding.lock().await;
-        drop(inventory);
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1475,7 +1474,7 @@ impl Player {
         if !self.has_client_loaded() {
             return;
         }
-        let inventory = self.inventory().lock().await;
+        let inventory = self.inventory();
         let binding = inventory.held_item();
         let held = binding.lock().await;
         server.item_registry.on_use(held.item, self).await;
@@ -1487,10 +1486,9 @@ impl Player {
             self.kick(TextComponent::text("Invalid held slot")).await;
             return;
         }
-        let mut inv = self.inventory().lock().await;
+        let inv = self.inventory();
         inv.set_selected_slot(slot as u8);
         let stack = *inv.held_item().lock().await;
-        drop(inv);
         let equipment = &[(EquipmentSlot::MainHand, stack)];
         self.living_entity.send_equipment_changes(equipment).await;
     }

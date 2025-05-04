@@ -47,7 +47,7 @@ use pumpkin_inventory::{
     inventory::Inventory,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
     screen_handler::{
-        DefaultScreenHandlerBehaviour, InventoryPlayer, ScreenHandler, ScreenHandlerFactory,
+        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
         ScreenHandlerListener,
     },
     sync_handler::SyncHandler,
@@ -188,7 +188,7 @@ pub struct Player {
     /// The client connection associated with the player.
     pub client: Client,
     /// The player's inventory.
-    pub inventory: Arc<Mutex<PlayerInventory>>,
+    pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
     pub config: Mutex<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
@@ -277,7 +277,7 @@ impl Player {
         let gameprofile_clone = gameprofile.clone();
         let config = client.config.lock().await.clone().unwrap_or_default();
 
-        let inventory = Arc::new(Mutex::new(PlayerInventory::new(EntityEquipment::new())));
+        let inventory = Arc::new(PlayerInventory::new(EntityEquipment::new()));
 
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
@@ -288,7 +288,7 @@ impl Player {
         impl ScreenHandlerListener for ScreenListener {
             fn on_slot_update(
                 &self,
-                screen_handler: &DefaultScreenHandlerBehaviour,
+                screen_handler: &ScreenHandlerBehaviour,
                 slot: u8,
                 stack: ItemStack,
             ) {
@@ -383,7 +383,7 @@ impl Player {
         self.client.spawn_task(task)
     }
 
-    pub fn inventory(&self) -> &Mutex<PlayerInventory> {
+    pub fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
 
@@ -434,7 +434,7 @@ impl Player {
         let attacker_entity = &self.living_entity.entity;
         let config = &advanced_config().pvp;
 
-        let inventory = self.inventory().lock().await;
+        let inventory = self.inventory();
         let item_stack = inventory.held_item();
 
         let base_damage = 1.0;
@@ -458,7 +458,6 @@ impl Player {
                 }
             }
         }
-        drop(inventory);
 
         let attack_speed = base_attack_speed + add_speed;
 
@@ -1222,8 +1221,6 @@ impl Player {
         !block.tool_required
             || self
                 .inventory
-                .lock()
-                .await
                 .held_item()
                 .lock()
                 .await
@@ -1233,8 +1230,6 @@ impl Player {
     pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
         let mut speed = self
             .inventory
-            .lock()
-            .await
             .held_item()
             .lock()
             .await
@@ -1315,8 +1310,7 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        let inv = self.inventory.lock().await;
-        let binding = inv.held_item();
+        let binding = self.inventory.held_item();
         let mut item_stack = binding.lock().await;
 
         if !item_stack.is_empty() {
@@ -1324,9 +1318,8 @@ impl Player {
             self.drop_item(item_stack.item.id, u32::from(drop_amount))
                 .await;
             item_stack.decrement(drop_amount);
-            let selected_slot = inv.get_selected_slot();
-            drop(inv);
-            let inv: Arc<Mutex<dyn Inventory>> = self.inventory.clone();
+            let selected_slot = self.inventory.get_selected_slot();
+            let inv: Arc<dyn Inventory> = self.inventory.clone();
             let binding = self.current_screen_handler.lock().await;
             let mut screen_handler = binding.lock().await;
             let slot_index = screen_handler
@@ -1644,7 +1637,7 @@ impl Player {
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.living_entity.write_nbt(nbt).await;
-        self.inventory.lock().await.write_nbt(nbt).await;
+        self.inventory.write_nbt(nbt).await;
 
         self.abilities.lock().await.write_nbt(nbt).await;
 
@@ -1668,7 +1661,7 @@ impl NBTStorage for Player {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
-        self.inventory.lock().await.read_nbt(nbt).await;
+        self.inventory.read_nbt_non_mut(nbt).await;
         self.abilities.lock().await.read_nbt(nbt).await;
 
         self.gamemode.store(
@@ -1724,7 +1717,7 @@ impl NBTStorage for PlayerInventory {
         nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
     }
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+    async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
         self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
 
@@ -2211,7 +2204,7 @@ impl InventoryPlayer for Player {
         todo!()
     }
 
-    fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>> {
+    fn get_inventory(&self) -> Arc<PlayerInventory> {
         self.inventory.clone()
     }
 

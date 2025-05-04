@@ -12,9 +12,9 @@ pub trait Inventory: Send + Sync + Debug {
 
     async fn is_empty(&self) -> bool;
 
-    fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>>;
+    async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>>;
 
-    async fn remove_stack(&mut self, slot: usize) -> ItemStack;
+    async fn remove_stack(&self, slot: usize) -> ItemStack;
 
     async fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack;
 
@@ -22,9 +22,9 @@ pub trait Inventory: Send + Sync + Debug {
         99
     }
 
-    async fn set_stack(&mut self, slot: usize, stack: ItemStack);
+    async fn set_stack(&self, slot: usize, stack: ItemStack);
 
-    fn mark_dirty(&mut self);
+    fn mark_dirty(&self);
 
     /*
     boolean canPlayerUse(PlayerEntity player);
@@ -54,7 +54,7 @@ pub trait Inventory: Send + Sync + Debug {
         let mut count = 0;
 
         for i in 0..self.size() {
-            let slot = self.get_stack(i);
+            let slot = self.get_stack(i).await;
             let stack = slot.lock().await;
             if stack.get_item().id == item.id {
                 count += stack.item_count;
@@ -69,7 +69,7 @@ pub trait Inventory: Send + Sync + Debug {
         predicate: &(dyn Fn(OwnedMutexGuard<ItemStack>) -> bool + Sync),
     ) -> bool {
         for i in 0..self.size() {
-            let slot = self.get_stack(i);
+            let slot = self.get_stack(i).await;
             let stack = slot.lock_owned().await;
             if predicate(stack) {
                 return true;
@@ -88,5 +88,5 @@ pub trait Inventory: Send + Sync + Debug {
 }
 
 pub trait Clearable {
-    fn clear(&mut self);
+    fn clear(&self);
 }

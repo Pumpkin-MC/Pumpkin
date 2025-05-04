@@ -42,7 +42,7 @@ impl ScreenProperty {
 #[async_trait]
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
-    fn get_inventory(&self) -> Arc<Mutex<PlayerInventory>>;
+    fn get_inventory(&self) -> Arc<PlayerInventory>;
     async fn enque_inventory_packet(&self, packet: &CSetContainerContent);
     async fn enque_slot_packet(&self, packet: &CSetContainerSlot);
     async fn enque_cursor_packet(&self, packet: &CSetCursorItem);
@@ -66,9 +66,9 @@ pub trait ScreenHandler: Send + Sync {
         true
     }
 
-    fn get_behaviour(&self) -> &DefaultScreenHandlerBehaviour;
+    fn get_behaviour(&self) -> &ScreenHandlerBehaviour;
 
-    fn get_behaviour_mut(&mut self) -> &mut DefaultScreenHandlerBehaviour;
+    fn get_behaviour_mut(&mut self) -> &mut ScreenHandlerBehaviour;
 
     fn add_slot(&mut self, slot: Arc<dyn Slot>) -> Arc<dyn Slot> {
         let behaviour = self.get_behaviour_mut();
@@ -80,13 +80,13 @@ pub trait ScreenHandler: Send + Sync {
         slot
     }
 
-    fn add_player_hotbar_slots(&mut self, player_inventory: &Arc<Mutex<dyn Inventory>>) {
+    fn add_player_hotbar_slots(&mut self, player_inventory: &Arc<dyn Inventory>) {
         for i in 0..9 {
             self.add_slot(Arc::new(NormalSlot::new(player_inventory.clone(), i)));
         }
     }
 
-    fn add_player_inventory_slots(&mut self, player_inventory: &Arc<Mutex<dyn Inventory>>) {
+    fn add_player_inventory_slots(&mut self, player_inventory: &Arc<dyn Inventory>) {
         for i in 0..3 {
             for j in 0..9 {
                 self.add_slot(Arc::new(NormalSlot::new(
@@ -97,7 +97,7 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    fn add_player_slots(&mut self, player_inventory: &Arc<Mutex<dyn Inventory>>) {
+    fn add_player_slots(&mut self, player_inventory: &Arc<dyn Inventory>) {
         self.add_player_inventory_slots(player_inventory);
         self.add_player_hotbar_slots(player_inventory);
     }
@@ -264,11 +264,7 @@ pub trait ScreenHandler: Send + Sync {
         slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
     }
 
-    async fn get_slot_index(
-        &self,
-        inventory: &Arc<Mutex<dyn Inventory>>,
-        slot: usize,
-    ) -> Option<usize> {
+    async fn get_slot_index(&self, inventory: &Arc<dyn Inventory>, slot: usize) -> Option<usize> {
         for i in 0..self.get_behaviour().slots.len() {
             if Arc::ptr_eq(self.get_behaviour().slots[i].get_inventory(), inventory)
                 && self.get_behaviour().slots[i].get_index() == slot
@@ -534,9 +530,8 @@ pub trait ScreenHandler: Send + Sync {
         } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
             let mut button_stack = player
                 .get_inventory()
-                .lock()
-                .await
                 .get_stack(button as usize)
+                .await
                 .lock()
                 .await
                 .clone();
@@ -548,8 +543,6 @@ pub trait ScreenHandler: Send + Sync {
                     if source_slot.can_take_items(player).await {
                         player
                             .get_inventory()
-                            .lock()
-                            .await
                             .set_stack(button as usize, source_stack)
                             .await;
                         source_slot.on_take(source_stack.item_count);
@@ -567,8 +560,6 @@ pub trait ScreenHandler: Send + Sync {
                         } else {
                             player
                                 .get_inventory()
-                                .lock()
-                                .await
                                 .set_stack(button as usize, ItemStack::EMPTY)
                                 .await;
                             source_slot.set_stack(button_stack).await;
@@ -585,8 +576,6 @@ pub trait ScreenHandler: Send + Sync {
                         source_slot.on_take_item(player, &button_stack).await;
                         if !player
                             .get_inventory()
-                            .lock()
-                            .await
                             .insert_stack_anywhere(&mut button_stack)
                             .await
                         {
@@ -595,8 +584,6 @@ pub trait ScreenHandler: Send + Sync {
                     } else {
                         player
                             .get_inventory()
-                            .lock()
-                            .await
                             .set_stack(button as usize, source_stack)
                             .await;
                         source_slot.set_stack(button_stack).await;
@@ -622,7 +609,7 @@ pub trait ScreenHandlerFactory: Send + Sync {
     fn crate_menu(
         &self,
         sync_id: u8,
-        player_inventory: Arc<Mutex<PlayerInventory>>,
+        player_inventory: Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>>;
 
@@ -630,23 +617,17 @@ pub trait ScreenHandlerFactory: Send + Sync {
 }
 
 pub trait ScreenHandlerListener: Send + Sync {
-    fn on_slot_update(
-        &self,
-        screen_handler: &DefaultScreenHandlerBehaviour,
-        slot: u8,
-        stack: ItemStack,
-    ) {
-    }
+    fn on_slot_update(&self, screen_handler: &ScreenHandlerBehaviour, slot: u8, stack: ItemStack) {}
     fn on_property_update(
         &self,
-        screen_handler: &DefaultScreenHandlerBehaviour,
+        screen_handler: &ScreenHandlerBehaviour,
         property: u8,
         value: i32,
     ) {
     }
 }
 
-pub struct DefaultScreenHandlerBehaviour {
+pub struct ScreenHandlerBehaviour {
     pub slots: Vec<Arc<dyn Slot>>,
     pub sync_id: u8,
     pub listeners: Vec<Arc<dyn ScreenHandlerListener>>,
@@ -662,7 +643,7 @@ pub struct DefaultScreenHandlerBehaviour {
     pub window_type: Option<WindowType>,
 }
 
-impl DefaultScreenHandlerBehaviour {
+impl ScreenHandlerBehaviour {
     pub fn new(sync_id: u8, window_type: Option<WindowType>) -> Self {
         Self {
             slots: Vec::new(),

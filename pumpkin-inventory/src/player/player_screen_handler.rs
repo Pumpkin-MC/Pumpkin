@@ -13,14 +13,14 @@ use crate::{
     },
     equipment_slot::EquipmentSlot,
     inventory::Inventory,
-    screen_handler::{DefaultScreenHandlerBehaviour, InventoryPlayer, ScreenHandler},
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
     slot::{ArmorSlot, NormalSlot, Slot},
 };
 
 use super::player_inventory::PlayerInventory;
 
 pub struct PlayerScreenHandler {
-    behaviour: DefaultScreenHandlerBehaviour,
+    behaviour: ScreenHandlerBehaviour,
 }
 
 impl RecipeFinderScreenHandler for PlayerScreenHandler {}
@@ -49,16 +49,16 @@ impl PlayerScreenHandler {
     }
 
     pub async fn new(
-        player_inventory: &Arc<Mutex<PlayerInventory>>,
+        player_inventory: &Arc<PlayerInventory>,
         window_type: Option<WindowType>,
         sync_id: u8,
     ) -> Self {
         let mut player_screen_handler = PlayerScreenHandler {
-            behaviour: DefaultScreenHandlerBehaviour::new(sync_id, window_type),
+            behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
         };
 
-        let crafting_inventory: Arc<Mutex<dyn RecipeInputInventory>> =
-            Arc::new(Mutex::new(CraftingInventory::new(2, 2)));
+        let crafting_inventory: Arc<dyn RecipeInputInventory> =
+            Arc::new(CraftingInventory::new(2, 2));
 
         player_screen_handler
             .add_result_slot(&crafting_inventory)
@@ -76,7 +76,7 @@ impl PlayerScreenHandler {
             )));
         }
 
-        let player_inventory: Arc<Mutex<dyn Inventory>> = player_inventory.clone();
+        let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
 
         player_screen_handler.add_player_slots(&player_inventory);
 
@@ -102,11 +102,11 @@ impl ScreenHandler for PlayerScreenHandler {
         self.behaviour.sync_id
     }
 
-    fn get_behaviour(&self) -> &DefaultScreenHandlerBehaviour {
+    fn get_behaviour(&self) -> &ScreenHandlerBehaviour {
         &self.behaviour
     }
 
-    fn get_behaviour_mut(&mut self) -> &mut DefaultScreenHandlerBehaviour {
+    fn get_behaviour_mut(&mut self) -> &mut ScreenHandlerBehaviour {
         &mut self.behaviour
     }
 

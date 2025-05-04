@@ -13,7 +13,7 @@ use crate::{equipment_slot::EquipmentSlot, inventory::Inventory, screen_handler:
 // This is a trait due to crafting slots being a thing
 #[async_trait]
 pub trait Slot: Send + Sync + Debug {
-    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>>;
+    fn get_inventory(&self) -> &Arc<dyn Inventory>;
 
     fn get_index(&self) -> usize;
 
@@ -41,25 +41,25 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn get_stack(&self) -> Arc<Mutex<ItemStack>> {
-        self.get_inventory()
-            .lock()
-            .await
-            .get_stack(self.get_index())
+        self.get_inventory().get_stack(self.get_index()).await
     }
 
     async fn get_cloned_stack(&self) -> ItemStack {
         *self
             .get_inventory()
-            .lock()
-            .await
             .get_stack(self.get_index())
+            .await
             .lock()
             .await
     }
 
     async fn has_stack(&self) -> bool {
-        let inv = self.get_inventory().lock().await;
-        !inv.get_stack(self.get_index()).lock().await.is_empty()
+        let inv = self.get_inventory();
+        !inv.get_stack(self.get_index())
+            .await
+            .lock()
+            .await
+            .is_empty()
     }
 
     /// Make sure to drop any locks to the slot stack before calling this
@@ -72,16 +72,15 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn set_stack_no_callbacks(&self, stack: ItemStack) {
-        let mut inv = self.get_inventory().lock().await;
+        let inv = self.get_inventory();
         inv.set_stack(self.get_index(), stack).await;
-        drop(inv);
         self.mark_dirty().await;
     }
 
     async fn mark_dirty(&self);
 
     async fn get_max_item_count(&self) -> u8 {
-        self.get_inventory().lock().await.get_max_count_per_stack()
+        self.get_inventory().get_max_count_per_stack()
     }
 
     async fn get_max_item_count_for_stack(&self, stack: &ItemStack) -> u8 {
@@ -91,7 +90,7 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn take_stack(&self, amount: u8) -> ItemStack {
-        let inv = self.get_inventory().lock().await;
+        let inv = self.get_inventory();
 
         inv.remove_stack_specific(self.get_index(), amount).await
     }
@@ -118,9 +117,8 @@ pub trait Slot: Send + Sync + Debug {
         } else {
             if self
                 .get_inventory()
-                .lock()
-                .await
                 .get_stack(self.get_index())
+                .await
                 .lock()
                 .await
                 .is_empty()
@@ -181,13 +179,13 @@ pub trait Slot: Send + Sync + Debug {
 #[derive(Debug)]
 /// Just called Slot in Vanilla
 pub struct NormalSlot {
-    pub inventory: Arc<Mutex<dyn Inventory>>,
+    pub inventory: Arc<dyn Inventory>,
     pub index: usize,
     pub id: AtomicU8,
 }
 
 impl NormalSlot {
-    pub fn new(inventory: Arc<Mutex<dyn Inventory>>, index: usize) -> Self {
+    pub fn new(inventory: Arc<dyn Inventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -197,7 +195,7 @@ impl NormalSlot {
 }
 #[async_trait]
 impl Slot for NormalSlot {
-    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>> {
+    fn get_inventory(&self) -> &Arc<dyn Inventory> {
         &self.inventory
     }
 
@@ -211,25 +209,21 @@ impl Slot for NormalSlot {
     }
 
     async fn mark_dirty(&self) {
-        self.inventory.lock().await.mark_dirty();
+        self.inventory.mark_dirty();
     }
 }
 
 // ArmorSlot.java
 #[derive(Debug)]
 pub struct ArmorSlot {
-    pub inventory: Arc<Mutex<dyn Inventory>>,
+    pub inventory: Arc<dyn Inventory>,
     pub index: usize,
     pub id: AtomicU8,
     pub equipment_slot: EquipmentSlot,
 }
 
 impl ArmorSlot {
-    pub fn new(
-        inventory: Arc<Mutex<dyn Inventory>>,
-        index: usize,
-        equipment_slot: EquipmentSlot,
-    ) -> Self {
+    pub fn new(inventory: Arc<dyn Inventory>, index: usize, equipment_slot: EquipmentSlot) -> Self {
         Self {
             inventory,
             index,
@@ -241,7 +235,7 @@ impl ArmorSlot {
 
 #[async_trait]
 impl Slot for ArmorSlot {
-    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>> {
+    fn get_inventory(&self) -> &Arc<dyn Inventory> {
         &self.inventory
     }
 
@@ -274,6 +268,6 @@ impl Slot for ArmorSlot {
     }
 
     async fn mark_dirty(&self) {
-        self.inventory.lock().await.mark_dirty();
+        self.inventory.mark_dirty();
     }
 }

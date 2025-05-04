@@ -41,11 +41,11 @@ impl Inventory for CraftingInventory {
         todo!()
     }
 
-    fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
+    async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
         self.slots[slot].clone()
     }
 
-    async fn remove_stack(&mut self, slot: usize) -> ItemStack {
+    async fn remove_stack(&self, slot: usize) -> ItemStack {
         todo!()
     }
 
@@ -53,11 +53,11 @@ impl Inventory for CraftingInventory {
         todo!()
     }
 
-    async fn set_stack(&mut self, slot: usize, stack: ItemStack) {
+    async fn set_stack(&self, slot: usize, stack: ItemStack) {
         todo!()
     }
 
-    fn mark_dirty(&mut self) {
+    fn mark_dirty(&self) {
         todo!()
     }
 }

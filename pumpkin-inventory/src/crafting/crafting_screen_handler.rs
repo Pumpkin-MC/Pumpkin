@@ -15,13 +15,13 @@ use super::recipies::{RecipeFinderScreenHandler, RecipeInputInventory};
 // CraftingResultSlot.java
 #[derive(Debug)]
 pub struct ResultSlot {
-    pub inventory: Arc<Mutex<dyn Inventory>>,
+    pub inventory: Arc<dyn Inventory>,
     pub index: usize,
     pub id: AtomicU8,
 }
 
 impl ResultSlot {
-    pub fn new(inventory: Arc<Mutex<dyn Inventory>>, index: usize) -> Self {
+    pub fn new(inventory: Arc<dyn Inventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -31,7 +31,7 @@ impl ResultSlot {
 }
 #[async_trait]
 impl Slot for ResultSlot {
-    fn get_inventory(&self) -> &Arc<Mutex<dyn Inventory>> {
+    fn get_inventory(&self) -> &Arc<dyn Inventory> {
         &self.inventory
     }
 
@@ -45,7 +45,7 @@ impl Slot for ResultSlot {
     }
 
     async fn mark_dirty(&self) {
-        self.inventory.lock().await.mark_dirty();
+        self.inventory.mark_dirty();
     }
 }
 
@@ -54,16 +54,14 @@ impl Slot for ResultSlot {
 pub trait CraftingScreenHandler<I: RecipeInputInventory>:
     RecipeFinderScreenHandler + ScreenHandler
 {
-    async fn add_result_slot(&mut self, crafing_inventory: &Arc<Mutex<dyn RecipeInputInventory>>) {
+    async fn add_result_slot(&mut self, crafing_inventory: &Arc<dyn RecipeInputInventory>) {
         let result_slot = ResultSlot::new(crafing_inventory.clone(), 0);
         self.add_slot(Arc::new(result_slot));
     }
 
-    async fn add_input_slots(&mut self, crafing_inventory: &Arc<Mutex<dyn RecipeInputInventory>>) {
-        let crafting_temp = crafing_inventory.lock().await;
-        let width = crafting_temp.get_width();
-        let height = crafting_temp.get_height();
-        drop(crafting_temp);
+    async fn add_input_slots(&mut self, crafing_inventory: &Arc<dyn RecipeInputInventory>) {
+        let width = crafing_inventory.get_width();
+        let height = crafing_inventory.get_height();
         for i in 0..width {
             for j in 0..height {
                 let input_slot = NormalSlot::new(crafing_inventory.clone(), j + i * width);
