@@ -6,8 +6,9 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory,
     },
-    server::play::{self, SlotActionType},
+    server::play::SlotActionType,
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
@@ -15,7 +16,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     container_click::MouseClick,
-    inventory::Inventory,
+    inventory::{ComparableInventory, Inventory},
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
     sync_handler::SyncHandler,
@@ -47,6 +48,15 @@ pub trait InventoryPlayer: Send + Sync {
     async fn enque_slot_packet(&self, packet: &CSetContainerSlot);
     async fn enque_cursor_packet(&self, packet: &CSetCursorItem);
     async fn enque_property_packet(&self, packet: &CSetContainerProperty);
+    async fn enque_slot_set_packet(&self, packet: &CSetPlayerInventory);
+}
+
+pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
+    // TODO: Super wierd disconnect logic in vanilla, investigate this later
+    player
+        .get_inventory()
+        .offer_or_drop_stack(stack, player)
+        .await;
 }
 
 //ScreenHandler.java
@@ -60,10 +70,26 @@ pub trait ScreenHandler: Send + Sync {
 
     fn sync_id(&self) -> u8;
 
-    fn on_closed(&self, player: &dyn InventoryPlayer) {}
+    async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player).await;
+    }
+
+    async fn default_on_closed(&mut self, player: &dyn InventoryPlayer) {
+        let behaviour = self.get_behaviour_mut();
+        if !behaviour.cursor_stack.lock().await.is_empty() {
+            offer_or_drop_stack(player, *behaviour.cursor_stack.lock().await).await;
+            *behaviour.cursor_stack.lock().await = ItemStack::EMPTY;
+        }
+    }
 
     fn can_use(&self, player: &dyn InventoryPlayer) -> bool {
         true
+    }
+
+    async fn drop_inventory(&self, player: &dyn InventoryPlayer, inventory: Arc<dyn Inventory>) {
+        for i in 0..inventory.size() {
+            offer_or_drop_stack(player, inventory.remove_stack(i).await).await;
+        }
     }
 
     fn get_behaviour(&self) -> &ScreenHandlerBehaviour;
@@ -102,10 +128,35 @@ pub trait ScreenHandler: Send + Sync {
         self.add_player_hotbar_slots(player_inventory);
     }
 
-    async fn copy_shared_slots(&self, other: Arc<Mutex<dyn ScreenHandler>>) {
-        let table: HashMap<&dyn Inventory, HashMap<i32, i32>> = HashMap::new();
+    async fn copy_shared_slots(&mut self, other: Arc<Mutex<dyn ScreenHandler>>) {
+        let mut table: HashMap<ComparableInventory, HashMap<usize, usize>> = HashMap::new();
+        let other_binding = other.lock().await;
+        let other_behaviour = other_binding.get_behaviour();
 
-        todo!()
+        for i in 0..other_behaviour.slots.len() {
+            let other_slot = other_behaviour.slots[i].clone();
+            let mut hash_map = HashMap::new();
+            hash_map.insert(other_slot.get_index(), i);
+            table.insert(
+                ComparableInventory(other_slot.get_inventory().clone()),
+                hash_map,
+            );
+        }
+
+        for i in 0..self.get_behaviour().slots.len() {
+            let slot = self.get_behaviour().slots[i].clone();
+            let inventory = slot.get_inventory();
+            let index = slot.get_index();
+
+            if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone())) {
+                if let Some(other_index) = hash_map.get(&index) {
+                    self.get_behaviour_mut().tracked_stacks[i] =
+                        other_behaviour.tracked_stacks[*other_index];
+                    self.get_behaviour_mut().previous_tracked_stacks[i] =
+                        other_behaviour.previous_tracked_stacks[*other_index];
+                }
+            }
+        }
     }
 
     async fn set_previous_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
@@ -304,7 +355,7 @@ pub trait ScreenHandler: Send + Sync {
                 let slot_stack = slot.get_stack().await;
                 let mut slot_stack = slot_stack.lock().await;
 
-                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(&stack) {
+                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
                     let combined_count = slot_stack.item_count + stack.item_count;
                     let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack).await;
                     if combined_count <= max_slot_count {
@@ -346,8 +397,8 @@ pub trait ScreenHandler: Send + Sync {
                 let slot_stack = slot.get_stack().await;
                 let slot_stack = slot_stack.lock().await;
 
-                if slot_stack.is_empty() && slot.can_insert(&stack).await {
-                    let max_count = slot.get_max_item_count_for_stack(&stack).await;
+                if slot_stack.is_empty() && slot.can_insert(stack).await {
+                    let max_count = slot.get_max_item_count_for_stack(stack).await;
                     drop(slot_stack);
                     slot.set_stack(stack.split(max_count.min(stack.item_count)))
                         .await;
@@ -528,13 +579,12 @@ pub trait ScreenHandler: Send + Sync {
                 slot.mark_dirty().await;
             }
         } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
-            let mut button_stack = player
+            let mut button_stack = *player
                 .get_inventory()
                 .get_stack(button as usize)
                 .await
                 .lock()
-                .await
-                .clone();
+                .await;
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack().await;
 

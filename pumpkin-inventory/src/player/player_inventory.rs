@@ -1,8 +1,10 @@
 use crate::entity_equipment::EntityEquipment;
 use crate::equipment_slot::EquipmentSlot;
 use crate::inventory::{Clearable, Inventory};
+use crate::screen_handler::InventoryPlayer;
 use crate::split_stack;
 use async_trait::async_trait;
+use pumpkin_protocol::client::play::CSetPlayerInventory;
 use pumpkin_world::item::ItemStack;
 use std::array::from_fn;
 use std::collections::HashMap;
@@ -78,7 +80,7 @@ impl PlayerInventory {
         }
 
         if slot_index == -1 {
-            return stack.item_count as usize;
+            stack.item_count as usize
         } else {
             return self.add_stack_to_slot(slot_index as usize, stack).await;
         }
@@ -100,11 +102,11 @@ impl PlayerInventory {
         let count_min = stack_count.min(count_left);
 
         if count_min == 0 {
-            return stack_count as usize;
+            stack_count as usize
         } else {
             stack_count -= count_min;
             self_stack.increment(count_min);
-            return stack_count as usize;
+            stack_count as usize
         }
     }
 
@@ -119,10 +121,10 @@ impl PlayerInventory {
     }
 
     fn can_stack_add_more(&self, exsiting_stack: &ItemStack, stack: &ItemStack) -> bool {
-        return !exsiting_stack.is_empty()
+        !exsiting_stack.is_empty()
             && exsiting_stack.are_items_and_components_equal(stack)
             && exsiting_stack.is_stackable()
-            && exsiting_stack.item_count < exsiting_stack.get_max_stack_size();
+            && exsiting_stack.item_count < exsiting_stack.get_max_stack_size()
     }
 
     async fn get_occupied_slot_with_room_for_stack(&self, stack: &ItemStack) -> i16 {
@@ -134,7 +136,7 @@ impl PlayerInventory {
                 .await,
             stack,
         ) {
-            return self.get_selected_slot() as i16;
+            self.get_selected_slot() as i16
         } else if self.can_stack_add_more(
             &*self.get_stack(Self::OFF_HAND_SLOT).await.lock().await,
             stack,
@@ -179,13 +181,130 @@ impl PlayerInventory {
 
         // TODO: Creative mode check
 
-        return stack.item_count < i;
+        stack.item_count < i
+    }
+
+    pub async fn get_slot_with_stack(&self, stack: &ItemStack) -> i16 {
+        for i in 0..Self::MAIN_SIZE {
+            if !self.main_inventory[i].lock().await.is_empty()
+                && self.main_inventory[i]
+                    .lock()
+                    .await
+                    .are_items_and_components_equal(stack)
+            {
+                return i as i16;
+            }
+        }
+
+        -1
+    }
+
+    pub async fn get_swappable_hotbar_slot(&self) -> usize {
+        let selected_slot = self.get_selected_slot() as usize;
+        for i in 0..Self::HOTBAR_SIZE {
+            let check_index = (i + selected_slot) % 9;
+            if self.main_inventory[check_index].lock().await.is_empty() {
+                return check_index;
+            }
+        }
+
+        for i in 0..Self::HOTBAR_SIZE {
+            let check_index = (i + selected_slot) % 9;
+            if true
+            /*TODO: If item has an enchantment skip it */
+            {
+                return check_index;
+            }
+        }
+
+        self.get_selected_slot() as usize
+    }
+
+    pub async fn swap_stack_with_hotbar(&self, stack: ItemStack) {
+        self.set_selected_slot(self.get_swappable_hotbar_slot().await as u8);
+
+        if !self.main_inventory[self.get_selected_slot() as usize]
+            .lock()
+            .await
+            .is_empty()
+        {
+            let empty_slot = self.get_empty_slot().await;
+            if empty_slot != -1 {
+                self.set_stack(
+                    empty_slot as usize,
+                    *self.main_inventory[self.get_selected_slot() as usize]
+                        .lock()
+                        .await,
+                )
+                .await;
+            }
+
+            self.set_stack(self.get_selected_slot() as usize, stack)
+                .await;
+        }
+    }
+
+    pub async fn swap_slot_with_hotbar(&self, slot: usize) {
+        self.set_selected_slot(self.get_swappable_hotbar_slot().await as u8);
+        let stack = *self.main_inventory[self.get_selected_slot() as usize]
+            .lock()
+            .await;
+        self.set_stack(
+            self.get_selected_slot() as usize,
+            *self.main_inventory[slot].lock().await,
+        )
+        .await;
+        self.set_stack(slot, stack).await;
+    }
+
+    pub async fn offer_or_drop_stack(&self, stack: ItemStack, player: &dyn InventoryPlayer) {
+        self.offer(stack, true, player).await;
+    }
+
+    pub async fn offer(&self, stack: ItemStack, notify_client: bool, player: &dyn InventoryPlayer) {
+        let mut stack = stack;
+        while !stack.is_empty() {
+            let mut room_for_stack = self.get_occupied_slot_with_room_for_stack(&stack).await;
+            if room_for_stack == -1 {
+                room_for_stack = self.get_empty_slot().await;
+            }
+
+            if room_for_stack == -1 {
+                player.drop_item(stack, false).await;
+                break;
+            }
+
+            let items_fit = stack.get_max_stack_size()
+                - self
+                    .get_stack(room_for_stack as usize)
+                    .await
+                    .lock()
+                    .await
+                    .item_count;
+            if self
+                .insert_stack(room_for_stack, &mut stack.split(items_fit as u8))
+                .await
+                && notify_client
+            {
+                player
+                    .enque_slot_set_packet(&CSetPlayerInventory::new(
+                        (room_for_stack as i32).into(),
+                        &stack.into(),
+                    ))
+                    .await;
+            }
+        }
     }
 }
 
+#[async_trait]
 impl Clearable for PlayerInventory {
-    fn clear(&self) {
-        todo!()
+    async fn clear(&self) {
+        for item in self.main_inventory.iter() {
+            *item.lock().await = ItemStack::EMPTY;
+        }
+
+        self.entity_equipment.lock().await.clear();
     }
 }
 

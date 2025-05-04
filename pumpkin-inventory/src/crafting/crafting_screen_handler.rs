@@ -1,7 +1,6 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use async_trait::async_trait;
-use tokio::sync::Mutex;
 
 use crate::{
     inventory::Inventory,

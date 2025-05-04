@@ -1,3 +1,4 @@
+use pumpkin_data::item::Item;
 use pumpkin_inventory::inventory::Inventory;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
@@ -34,8 +35,8 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
-    CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSystemChatMessage,
-    EquipmentSlot, InitChat, PlayerAction,
+    CBlockUpdate, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
+    CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
@@ -544,32 +545,7 @@ impl Player {
             .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub async fn update_single_slot(
-        &self,
-        inventory: &mut PlayerInventory,
-        slot: usize,
-        stack: ItemStack,
-    ) {
-        /* TODO: Inv
-        inventory.increment_state_id();
-        let slot_data = ItemStackSerializer::from(stack.clone());
-        let slot_data = ItemStackSerializer::from(stack.clone());
-        if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
-            log::error!("Pick item set slot error: {err}");
-        } else {
-            let dest_packet = CSetContainerSlot::new(
-                PlayerInventory::CONTAINER_ID,
-                inventory.state_id as i32,
-                slot as i16,
-                &slot_data,
-            );
-            self.client.enqueue_packet(&dest_packet).await;
-        }
-        */
-    }
-
     pub async fn handle_pick_item_from_block(&self, pick_item: SPickItemFromBlock) {
-        /* TODO: Inv
         if !self.can_interact_with_block_at(&pick_item.pos, 1.0) {
             return;
         }
@@ -584,71 +560,32 @@ impl Player {
             return;
         }
 
-        let mut inventory = self.inventory().lock().await;
+        let stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
 
-        let source_slot = inventory.get_slot_with_item(block.item_id);
-        let mut dest_slot = inventory.get_empty_hotbar_slot();
+        let slot_with_stack = self.inventory().get_slot_with_stack(&stack).await;
 
-        let dest_slot_data = match inventory.get_slot(dest_slot + SLOT_HOTBAR_START) {
-            Ok(Some(stack)) => stack.clone(),
-            _ => ItemStack::new(0, Item::AIR),
-        };
-
-        // Early return if no source slot and not in creative mode
-        if source_slot.is_none() && self.gamemode.load() != GameMode::Creative {
-            return;
-        }
-
-        match source_slot {
-            Some(slot_index) if (SLOT_HOTBAR_START..=SLOT_HOTBAR_END).contains(&slot_index) => {
-                // Case where item is in hotbar
-                dest_slot = slot_index - SLOT_HOTBAR_START;
-            }
-            Some(slot_index) => {
-                // Case where item is in inventory
-
-                // Update destination slot
-                let source_slot_data = match inventory.get_slot(slot_index) {
-                    Ok(Some(stack)) => stack.clone(),
-                    _ => return,
-                };
-                self.update_single_slot(
-                    &mut inventory,
-                    dest_slot + SLOT_HOTBAR_START,
-                    source_slot_data,
-                )
-                .await;
-
-                // Update source slot
-                self.update_single_slot(&mut inventory, slot_index, dest_slot_data)
+        if slot_with_stack != -1 {
+            if PlayerInventory::is_valid_hotbar_index(slot_with_stack as usize) {
+                self.inventory.set_selected_slot(slot_with_stack as u8);
+            } else {
+                self.inventory
+                    .swap_slot_with_hotbar(slot_with_stack as usize)
                     .await;
             }
-            None if self.gamemode.load() == GameMode::Creative => {
-                // Case where item is not present, if in creative mode create the item
-                let item_stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
-                self.update_single_slot(&mut inventory, dest_slot + SLOT_HOTBAR_START, item_stack)
-                    .await;
-
-                // Check if there is any empty slot in the player inventory
-                if let Some(slot_index) = inventory.get_empty_slot_no_order() {
-                    inventory.increment_state_id();
-                    self.update_single_slot(&mut inventory, slot_index, dest_slot_data)
-                        .await;
-                }
-            }
-            _ => return,
+        } else if self.gamemode.load() == GameMode::Creative {
+            self.inventory.swap_stack_with_hotbar(stack).await;
         }
 
-        // Update held item
-        inventory.set_selected(dest_slot);
-        let empty = &ItemStack::new(0, Item::AIR);
-        let stack = inventory.held_item().unwrap_or(empty);
-        let equipment = &[(EquipmentSlot::MainHand, stack.clone())];
-        self.living_entity.send_equipment_changes(equipment).await;
         self.client
-            .enqueue_packet(&CSetHeldItem::new(dest_slot as i8))
+            .enqueue_packet(&CSetSelectedSlot::new(
+                self.inventory.get_selected_slot() as i8
+            ))
             .await;
-         */
+        self.player_screen_handler
+            .lock()
+            .await
+            .send_content_updates()
+            .await;
     }
 
     // pub fn handle_pick_item_from_entity(&self, _pick_item: SPickItemFromEntity) {
@@ -1437,17 +1374,6 @@ impl Player {
             // Decrease block count
             if self.gamemode.load() != GameMode::Creative {
                 held_item.decrement(1);
-                // TODO: this should be by use item on not currently selected as they might be different
-                /* TODO: Inv
-                let _ = self
-                    .handle_decrease_item(
-                        server,
-                        slot_id as i16,
-                        inventory.held_item(),
-                        &mut inventory.state_id,
-                    )
-                    .await;
-                 */
             }
         }
 
@@ -1519,8 +1445,7 @@ impl Player {
             player_screen_handler.send_content_updates().await;
         } else if is_negative && is_legal {
             // Item drop
-            self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
-                .await;
+            self.drop_item(item_stack).await;
         }
         Ok(())
     }
@@ -1536,7 +1461,7 @@ impl Player {
     }
 
     pub async fn handle_close_container(&self, server: &Server, _packet: SCloseContainer) {
-        // TODO: Inv
+        self.on_handeled_screen_closed().await;
     }
 
     pub async fn handle_command_suggestion(

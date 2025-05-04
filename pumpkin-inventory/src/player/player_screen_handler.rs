@@ -3,7 +3,6 @@ use std::{any::Any, sync::Arc};
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
 
 use crate::{
     crafting::{
@@ -21,6 +20,7 @@ use super::player_inventory::PlayerInventory;
 
 pub struct PlayerScreenHandler {
     behaviour: ScreenHandlerBehaviour,
+    crafting_inventory: Arc<dyn RecipeInputInventory>,
 }
 
 impl RecipeFinderScreenHandler for PlayerScreenHandler {}
@@ -53,12 +53,13 @@ impl PlayerScreenHandler {
         window_type: Option<WindowType>,
         sync_id: u8,
     ) -> Self {
-        let mut player_screen_handler = PlayerScreenHandler {
-            behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
-        };
-
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(2, 2));
+
+        let mut player_screen_handler = PlayerScreenHandler {
+            behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
+            crafting_inventory: crafting_inventory.clone(),
+        };
 
         player_screen_handler
             .add_result_slot(&crafting_inventory)
@@ -94,6 +95,13 @@ impl ScreenHandler for PlayerScreenHandler {
         None
     }
 
+    async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player).await;
+        //TODO: this.craftingResultInventory.clear();
+        self.drop_inventory(player, self.crafting_inventory.clone())
+            .await;
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -121,7 +129,7 @@ impl ScreenHandler for PlayerScreenHandler {
         if slot.has_stack().await {
             let slot_stack = slot.get_stack().await;
             let mut slot_stack = slot_stack.lock().await;
-            stack_left = slot_stack.clone();
+            stack_left = *slot_stack;
 
             println!("stack_left: {:?}", stack_left);
 
@@ -131,19 +139,19 @@ impl ScreenHandler for PlayerScreenHandler {
                 }
 
                 slot.on_quick_transfer(*slot_stack, stack_left);
-            } else if slot_index >= 1 && slot_index < 5 {
+            } else if (1..5).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if slot_index >= 5 && slot_index < 9 {
+            } else if (5..9).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if slot_index >= 9 && slot_index < 36 {
+            } else if (9..36).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 36, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if slot_index >= 36 && slot_index < 45 {
+            } else if (36..45).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 9, 36, false).await {
                     return ItemStack::EMPTY;
                 }

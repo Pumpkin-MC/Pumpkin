@@ -1,7 +1,7 @@
 use std::sync::{Arc, atomic::AtomicU32};
 
 use async_trait::async_trait;
-use pumpkin_data::{damage::DamageType, item::Item};
+use pumpkin_data::damage::DamageType;
 use pumpkin_inventory::inventory::Inventory;
 use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
@@ -25,7 +25,7 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
-    pub async fn new(entity: Entity, item_id: u16, count: u32) -> Self {
+    pub async fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity
             .set_velocity(Vector3::new(
                 rand::random::<f64>() * 0.2 - 0.1,
@@ -36,10 +36,7 @@ impl ItemEntity {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
-            item_stack: Mutex::new(ItemStack::new(
-                count as u8,
-                Item::from_id(item_id).expect("We passed a bad item id into ItemEntity"),
-            )),
+            item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
         }
@@ -92,7 +89,7 @@ impl EntityBase for ItemEntity {
                 .enqueue_packet(&CTakeItemEntity::new(
                     self.entity.entity_id.into(),
                     player.entity_id().into(),
-                    self.item_stack.lock().await.item_count.try_into().unwrap(),
+                    self.item_stack.lock().await.item_count.into(),
                 ))
                 .await;
             player

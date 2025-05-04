@@ -23,7 +23,7 @@ const ARG_TARGET: &str = "target";
 async fn clear_player(target: &Player) -> usize {
     let inventory = target.inventory();
 
-    inventory.clear();
+    inventory.clear().await;
     //target.set_container_content(None).await; TODO: Inv
     0 //TODO: Count items
 }

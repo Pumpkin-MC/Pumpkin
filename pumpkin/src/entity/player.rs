@@ -57,7 +57,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
     CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
-    CSetCursorItem, PlayerInfoFlags, PreviousMessage,
+    CSetCursorItem, CSetPlayerInventory, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -260,6 +260,19 @@ pub struct Player {
 
 impl Player {
     pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
+        struct ScreenListener;
+
+        impl ScreenHandlerListener for ScreenListener {
+            fn on_slot_update(
+                &self,
+                screen_handler: &ScreenHandlerBehaviour,
+                slot: u8,
+                stack: ItemStack,
+            ) {
+                println!("Slot updated: {slot:?}, {stack:?}");
+            }
+        }
+
         let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
             || {
                 log::error!("Client {} has no game profile!", client.id);
@@ -282,19 +295,6 @@ impl Player {
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
         ));
-
-        struct ScreenListener {}
-
-        impl ScreenHandlerListener for ScreenListener {
-            fn on_slot_update(
-                &self,
-                screen_handler: &ScreenHandlerBehaviour,
-                slot: u8,
-                stack: ItemStack,
-            ) {
-                println!("Slot updated: {slot:?}, {stack:?}");
-            }
-        }
 
         Self {
             living_entity: LivingEntity::new(Entity::new(
@@ -1297,14 +1297,14 @@ impl Player {
             .await;
     }
 
-    pub async fn drop_item(&self, item_id: u16, count: u32) {
+    pub async fn drop_item(&self, item_stack: ItemStack) {
         let entity = self
             .world()
             .await
             .create_entity(self.living_entity.entity.pos.load(), EntityType::ITEM);
 
         // TODO: Merge stacks together
-        let item_entity = Arc::new(ItemEntity::new(entity, item_id, count).await);
+        let item_entity = Arc::new(ItemEntity::new(entity, item_stack).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }
@@ -1315,7 +1315,7 @@ impl Player {
 
         if !item_stack.is_empty() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.item.id, u32::from(drop_amount))
+            self.drop_item(item_stack.copy_with_count(drop_amount))
                 .await;
             item_stack.decrement(drop_amount);
             let selected_slot = self.inventory.get_selected_slot();
@@ -1328,7 +1328,7 @@ impl Player {
 
             if let Some(slot_index) = slot_index {
                 screen_handler
-                    .set_previous_tracked_slot(slot_index, item_stack.clone())
+                    .set_previous_tracked_slot(slot_index, *item_stack)
                     .await;
             }
         }
@@ -1468,7 +1468,7 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    pub async fn increment_screen_handler_sync_id(&self) {
+    pub fn increment_screen_handler_sync_id(&self) {
         let current_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
         self.screen_handler_sync_id
             .store(current_id % 100 + 1, Ordering::Relaxed);
@@ -1495,13 +1495,21 @@ impl Player {
             .await
             .lock()
             .await
-            .on_closed(self);
-
-        self.player_screen_handler
-            .lock()
-            .await
-            .copy_shared_slots(self.current_screen_handler.lock().await.clone())
+            .on_closed(self)
             .await;
+
+        let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
+            self.player_screen_handler.clone();
+        let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
+            self.current_screen_handler.lock().await.clone();
+
+        if !Arc::ptr_eq(&player_screen_handler, &current_screen_handler) {
+            player_screen_handler
+                .lock()
+                .await
+                .copy_shared_slots(current_screen_handler)
+                .await;
+        }
 
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
     }
@@ -1533,7 +1541,7 @@ impl Player {
             self.close_handeled_screen().await;
         }
 
-        self.increment_screen_handler_sync_id().await;
+        self.increment_screen_handler_sync_id();
 
         let screen_handler = screen_handler_factory.unwrap().crate_menu(
             self.screen_handler_sync_id.load(Ordering::Relaxed),
@@ -1699,19 +1707,17 @@ impl NBTStorage for PlayerInventory {
         nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::with_capacity(36);
+        let mut vec: Vec<NbtTag> = Vec::new();
 
-        // Helper function to add items to the vector
-        let add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
-            if let Some(stack) = stack_ref {
+        for i in 0..self.main_inventory.len() {
+            let stack = self.main_inventory[i].lock().await;
+            if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
-                item_compound.put_byte("Slot", slot as i8);
+                item_compound.put_byte("Slot", i as i8);
                 stack.write_item_stack(&mut item_compound);
                 vec.push(NbtTag::Compound(item_compound));
             }
-        };
-
-        // TODO: Inv
+        }
 
         // Save the inventory list
         nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
@@ -2200,8 +2206,8 @@ impl MessageCache {
 
 #[async_trait]
 impl InventoryPlayer for Player {
-    async fn drop_item(&self, item: ItemStack, retain_ownership: bool) {
-        todo!()
+    async fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
+        self.drop_item(item).await;
     }
 
     fn get_inventory(&self) -> Arc<PlayerInventory> {
@@ -2221,6 +2227,10 @@ impl InventoryPlayer for Player {
     }
 
     async fn enque_property_packet(&self, packet: &CSetContainerProperty) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enque_slot_set_packet(&self, packet: &CSetPlayerInventory) {
         self.client.enqueue_packet(packet).await;
     }
 }

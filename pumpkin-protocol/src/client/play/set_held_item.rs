@@ -4,11 +4,11 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 #[packet(PLAY_SET_HELD_SLOT)]
-pub struct CSetHeldItem {
+pub struct CSetSelectedSlot {
     slot: i8,
 }
 
-impl CSetHeldItem {
+impl CSetSelectedSlot {
     pub fn new(slot: i8) -> Self {
         Self { slot }
     }

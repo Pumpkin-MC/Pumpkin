@@ -1,4 +1,8 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
@@ -7,7 +11,7 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 
 // Inventory.java
 #[async_trait]
-pub trait Inventory: Send + Sync + Debug {
+pub trait Inventory: Send + Sync + Debug + Clearable {
     fn size(&self) -> usize;
 
     async fn is_empty(&self) -> bool;
@@ -24,7 +28,7 @@ pub trait Inventory: Send + Sync + Debug {
 
     async fn set_stack(&self, slot: usize, stack: ItemStack);
 
-    fn mark_dirty(&self);
+    fn mark_dirty(&self) {}
 
     /*
     boolean canPlayerUse(PlayerEntity player);
@@ -87,6 +91,24 @@ pub trait Inventory: Send + Sync + Debug {
     // TODO: canPlayerUse
 }
 
+#[async_trait]
 pub trait Clearable {
-    fn clear(&self);
+    async fn clear(&self);
+}
+
+pub struct ComparableInventory(pub Arc<dyn Inventory>);
+
+impl PartialEq for ComparableInventory {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for ComparableInventory {}
+
+impl Hash for ComparableInventory {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let ptr = Arc::as_ptr(&self.0);
+        ptr.hash(state);
+    }
 }

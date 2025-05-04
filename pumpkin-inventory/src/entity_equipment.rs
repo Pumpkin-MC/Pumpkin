@@ -50,5 +50,9 @@ impl EntityEquipment {
         true
     }
 
+    pub fn clear(&mut self) {
+        self.equipment.clear();
+    }
+
     // TODO: tick
 }
