@@ -1,18 +1,22 @@
+use pumpkin_data::block_properties::HorizontalAxis;
+use pumpkin_registry::DimensionType;
+use rand::Rng;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use pumpkin_data::{Block, BlockState};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
+use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
-use rand::Rng;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use async_trait::async_trait;
-use pumpkin_data::{Block, BlockState};
-use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
+use crate::world::portal::NetherPortal;
 
 use super::FireBlockBase;
 
@@ -34,18 +38,23 @@ impl PumpkinBlock for FireBlock {
         state_id: BlockStateId,
         pos: &BlockPos,
         old_state_id: BlockStateId,
-        notify: bool,
+        _notify: bool,
     ) {
-        FireBlockBase::placed(
-            &FireBlockBase,
-            world,
-            block,
-            state_id,
-            pos,
-            old_state_id,
-            notify,
-        )
-        .await;
+        if old_state_id == state_id {
+            // Already a fire
+            return;
+        }
+
+        let dimension = world.dimension_type;
+        // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
+        if dimension == DimensionType::Overworld || dimension == DimensionType::TheNether {
+            if let Some(portal) = NetherPortal::get_new_portal(world, pos, HorizontalAxis::X).await
+            {
+                portal.create(world).await;
+                return;
+            }
+        }
+
         world
             .schedule_block_tick(
                 block,
@@ -60,37 +69,41 @@ impl PumpkinBlock for FireBlock {
         &self,
         world: &World,
         _block: &Block,
-        state: BlockStateId,
+        state_id: BlockStateId,
         block_pos: &BlockPos,
-        direction: BlockDirection,
+        _direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        // TODO: add can_place_at
-        if self.can_place_at(world, block_pos, direction).await {
-            return state;
+        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await.unwrap()) {
+            return Block::AIR.default_state_id;
         }
-        Block::AIR.default_state_id
+
+        state_id
+    }
+
+    async fn can_place_at(
+        &self,
+        _server: &Server,
+        world: &World,
+        _player: &Player,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
+        FireBlockBase::can_place_at(world, block_pos).await
     }
 
     async fn broken(
         &self,
-        block: &Block,
-        player: &Player,
-        position: BlockPos,
-        server: &Server,
+        _block: &Block,
+        _player: &Arc<Player>,
+        block_pos: BlockPos,
+        _server: &Server,
         world: Arc<World>,
-        state: BlockState,
+        _state: BlockState,
     ) {
-        FireBlockBase::broken(
-            &FireBlockBase,
-            block,
-            player,
-            position,
-            server,
-            world,
-            state,
-        )
-        .await;
+        FireBlockBase::broken(world, block_pos).await;
     }
 }

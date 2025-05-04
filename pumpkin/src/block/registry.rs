@@ -111,15 +111,7 @@ impl BlockRegistry {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .can_place_at(
-                    server,
-                    world,
-                    player,
-                    block,
-                    block_pos,
-                    face,
-                    use_item_on,
-                )
+                .can_place_at(server, world, player, block, block_pos, face, use_item_on)
                 .await;
         }
         true
