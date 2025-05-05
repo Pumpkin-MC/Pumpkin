@@ -1707,12 +1707,14 @@ impl World {
         chunk.block_entities.remove(block_pos);
         chunk.dirty = true;
     }
+
     pub async fn traverse_blocks(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
         hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
     ) -> (Option<BlockPos>, Option<BlockDirection>) {
+        log::info!("diff pos: {:?}", end_pos.sub(&start_pos));
         if start_pos == end_pos {
             return (None, None);
         }
@@ -1771,6 +1773,7 @@ impl World {
         );
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
+            log::info!("next: {:?}", next);
             let block_direction = match (next.x, next.y, next.z) {
                 (x, y, z) if x < y && x < z => {
                     block.0.x += step.x;

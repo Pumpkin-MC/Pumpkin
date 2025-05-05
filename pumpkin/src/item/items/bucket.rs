@@ -49,7 +49,8 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
     let (yaw, pitch) = player.rotation();
     let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
-    let block_interaction_range = player.block_interaction_range();
+    let block_interaction_range = 4.5; // This is not the same as the block_interaction_range in the
+                                       // player entity.
     let direction = Vector3::new(
         -yaw_rad.sin() * pitch_rad.cos() * block_interaction_range,
         -pitch_rad.sin() * block_interaction_range,
@@ -95,20 +96,7 @@ impl PumpkinItem for EmptyBucketItem {
             let item_stack = Some(ItemStack::new(1, item_type.clone()));
             let slot_data = ItemStackSerializer::from(item_stack.clone());
             let game_mode = player.gamemode.load();
-            if game_mode == GameMode::Survival {
-                if let Err(err) = inventory.set_slot(selected, item_stack.clone(), false) {
-                    log::error!("Failed to set slot: {err}");
-                } else {
-                    let dest_packet = CSetContainerSlot::new(
-                        PlayerInventory::CONTAINER_ID,
-                        inventory.state_id as i32,
-                        selected as i16,
-                        &slot_data,
-                    );
-                    player.client.enqueue_packet(&dest_packet).await;
-                }
-            } else {
-                log::info!("Setting slot");
+            if game_mode == GameMode::Creative {
                 let slot = inventory.get_pickup_item_slot(item_type.id);
                 if let Some(slot) = slot {
                     if let Err(err) = inventory.set_slot(slot, item_stack, false) {
@@ -122,6 +110,18 @@ impl PumpkinItem for EmptyBucketItem {
                         );
                         player.client.enqueue_packet(&dest_packet).await;
                     }
+                }
+            } else {
+                if let Err(err) = inventory.set_slot(selected, item_stack.clone(), false) {
+                    log::error!("Failed to set slot: {err}");
+                } else {
+                    let dest_packet = CSetContainerSlot::new(
+                        PlayerInventory::CONTAINER_ID,
+                        inventory.state_id as i32,
+                        selected as i16,
+                        &slot_data,
+                    );
+                    player.client.enqueue_packet(&dest_packet).await;
                 }
             }
         }
@@ -163,7 +163,7 @@ impl PumpkinItem for FilledBucketItem {
                     BlockFlags::NOTIFY_NEIGHBORS,
                 )
                 .await;
-            if player.gamemode.load() == GameMode::Survival {
+            if player.gamemode.load() != GameMode::Creative {
                 let mut inventory = player.inventory().lock().await;
                 let selected = inventory.get_selected_slot();
                 let item = Some(ItemStack::new(1, Item::BUCKET));
