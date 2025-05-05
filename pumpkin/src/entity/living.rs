@@ -155,7 +155,12 @@ impl LivingEntity {
     pub async fn remove_effect(&self, effect_type: EffectType) {
         let mut effects = self.active_effects.lock().await;
         effects.remove(&effect_type);
-        // TODO broadcast metadata
+        self.entity
+            .world
+            .read()
+            .await
+            .send_remove_mob_effect(&self.entity, effect_type)
+            .await;
     }
 
     pub async fn has_effect(&self, effect: EffectType) -> bool {
@@ -263,6 +268,24 @@ impl LivingEntity {
             .velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
     }
+
+    async fn tick_effects(&self) {
+        let mut effects_to_remove = Vec::new();
+
+        {
+            let mut effects = self.active_effects.lock().await;
+            for effect in effects.values_mut() {
+                if effect.duration == 0 {
+                    effects_to_remove.push(effect.r#type);
+                }
+                effect.duration -= 1;
+            }
+        }
+
+        for effect_type in effects_to_remove {
+            self.remove_effect(effect_type).await;
+        }
+    }
 }
 
 #[async_trait]
@@ -270,7 +293,7 @@ impl EntityBase for LivingEntity {
     async fn tick(&self, server: &Server) {
         self.entity.tick(server).await;
         self.tick_move();
-
+        self.tick_effects().await;
         if self.time_until_regen.load(Relaxed) > 0 {
             self.time_until_regen.fetch_sub(1, Relaxed);
         }

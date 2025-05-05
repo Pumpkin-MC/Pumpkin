@@ -41,8 +41,8 @@ impl CommandExecutor for Executor {
             let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
             let delta = delta.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
             let delta: Vector3<f32> = Vector3::new(delta.x as f32, delta.y as f32, delta.z as f32);
-            let speed = speed.unwrap_or(Ok(0.0)).unwrap_or(0.0);
-            let count = count.unwrap_or(Ok(0)).unwrap_or(0);
+            let speed = speed.unwrap_or(Ok(0.0))?;
+            let count = count.unwrap_or(Ok(0))?;
 
             player
                 .world()

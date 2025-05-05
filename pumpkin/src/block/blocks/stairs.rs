@@ -11,9 +11,9 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::HorizontalFacingExt;
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::world::BlockFlags;
 use crate::world::World;
@@ -40,13 +40,14 @@ impl PumpkinBlock for StairBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut stair_props = StairsProperties::default(block);
+        stair_props.waterlogged = replacing.water_source();
 
         stair_props.facing = player.living_entity.entity.get_horizontal_facing();
         stair_props.half = match face {

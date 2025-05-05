@@ -1,6 +1,13 @@
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
+use super::{
+    biome_coords,
+    noise_router::proto_noise_router::ProtoNoiseRouters,
+    settings::{GENERATION_SETTINGS, GeneratorSetting},
+};
+use crate::chunk::ChunkLightEngine;
+use crate::chunk::format::LightContainer;
 use crate::{
     chunk::{
         ChunkData, ChunkSections, SubChunk,
@@ -9,12 +16,6 @@ use crate::{
     generation::{
         GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit, proto_chunk::ProtoChunk,
     },
-};
-
-use super::{
-    biome_coords,
-    noise_router::proto_noise_router::ProtoNoiseRouters,
-    settings::{GENERATION_SETTINGS, GeneratorSetting},
 };
 
 pub struct VanillaGenerator {
@@ -43,7 +44,7 @@ impl WorldGenerator for VanillaGenerator {
             .unwrap();
 
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
-        let sections = (0..sub_chunks).map(|_| SubChunk::max_sky_light()).collect();
+        let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
         let mut proto_chunk = ProtoChunk::new(
@@ -80,6 +81,14 @@ impl WorldGenerator for VanillaGenerator {
         }
 
         ChunkData {
+            light_engine: ChunkLightEngine {
+                sky_light: (0..sections.sections.len() + 2)
+                    .map(|_| LightContainer::new_filled(15))
+                    .collect(),
+                block_light: (0..sections.sections.len() + 2)
+                    .map(|_| LightContainer::new_empty(15))
+                    .collect(),
+            },
             section: sections,
             heightmap: Default::default(),
             position: *at,

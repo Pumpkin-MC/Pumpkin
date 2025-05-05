@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_macros::pumpkin_block;
@@ -28,11 +28,11 @@ impl PumpkinBlock for RedstoneLamp {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut props = RedstoneLampProperties::default(block);
         props.lit = block_receives_redstone_power(world, block_pos).await;

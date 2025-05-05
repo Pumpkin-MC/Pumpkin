@@ -112,7 +112,7 @@ impl CommandExecutor for BaseHelpExecutor {
         let page_number = match page_number_consumer().find_arg_default_name(args) {
             Err(_) => 1,
             Ok(Ok(number)) => number,
-            Ok(Err(())) => {
+            Ok(Err(_)) => {
                 sender
                     .send_message(
                         TextComponent::text("Invalid page number.")

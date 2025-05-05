@@ -14,6 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 
+use crate::block::BlockIsReplacing;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::world::BlockFlags;
@@ -31,7 +32,12 @@ pub struct RedstoneWireBlock;
 impl PumpkinBlock for RedstoneWireBlock {
     // Start of placement
 
-    async fn can_place_at(&self, world: &World, block_pos: &BlockPos) -> bool {
+    async fn can_place_at(
+        &self,
+        world: &World,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+    ) -> bool {
         let floor = world.get_block_state(&block_pos.down()).await.unwrap();
         // TODO: Only check face instead of block
         return floor.is_full_cube();
@@ -42,11 +48,11 @@ impl PumpkinBlock for RedstoneWireBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut wire = RedstoneWireProperties::default(block);
         wire.power = Integer0To15::from_index(calculate_power(world, block_pos).await.into());
@@ -64,7 +70,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         block: &Block,
         state: BlockStateId,
         block_pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
@@ -135,7 +141,7 @@ impl PumpkinBlock for RedstoneWireBlock {
                     world
                         .replace_with_state_for_neighbor_update(
                             &up_block_pos,
-                            &direction.opposite(),
+                            direction.opposite(),
                             flags,
                         )
                         .await;
@@ -147,7 +153,7 @@ impl PumpkinBlock for RedstoneWireBlock {
                     world
                         .replace_with_state_for_neighbor_update(
                             &down_block_pos,
-                            &direction.opposite(),
+                            direction.opposite(),
                             flags,
                         )
                         .await;
@@ -195,7 +201,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        if self.can_place_at(world, pos).await {
+        if self.can_place_at(world, pos, BlockDirection::Down).await {
             let state = world.get_block_state(pos).await.unwrap();
             let mut wire = RedstoneWireProperties::from_state_id(state.id, block);
             let new_power = calculate_power(world, pos).await;
@@ -221,10 +227,10 @@ impl PumpkinBlock for RedstoneWireBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let wire = RedstoneWireProperties::from_state_id(state.id, block);
-        if direction == &BlockDirection::Up || wire.is_side_connected(direction.opposite()) {
+        if direction == BlockDirection::Up || wire.is_side_connected(direction.opposite()) {
             wire.power.to_index() as u8
         } else {
             0
@@ -237,10 +243,10 @@ impl PumpkinBlock for RedstoneWireBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let wire = RedstoneWireProperties::from_state_id(state.id, block);
-        if direction == &BlockDirection::Up || wire.is_side_connected(direction.opposite()) {
+        if direction == BlockDirection::Up || wire.is_side_connected(direction.opposite()) {
             wire.power.to_index() as u8
         } else {
             0
@@ -315,7 +321,7 @@ async fn can_connect_to(
 ) -> bool {
     if world
         .block_registry
-        .emits_redstone_power(block, state, &side)
+        .emits_redstone_power(block, state, side)
         .await
     {
         return true;
@@ -585,7 +591,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
     let up_pos = pos.offset(BlockDirection::Up.to_offset());
     let (_up_block, up_state) = world.get_block_and_block_state(&up_pos).await.unwrap();
 
-    for side in &BlockDirection::all() {
+    for side in BlockDirection::all() {
         let neighbor_pos = pos.offset(side.to_offset());
         wire_power = max_wire_power(wire_power, world, neighbor_pos).await;
         let (neighbor, neighbor_state) = world

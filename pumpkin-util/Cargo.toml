@@ -10,7 +10,7 @@ serde_json.workspace = true
 bytes.workspace = true
 rand = "0.9"
 
-
+num-derive = "0.4"
 num-traits = "0.2"
 
 colored = "3.0"
@@ -19,4 +19,3 @@ quote = "1.0"
 syn = "2.0"
 proc-macro2 = "1.0"
 enum_dispatch = "0.3.13"
-

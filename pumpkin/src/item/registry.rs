@@ -31,7 +31,7 @@ impl ItemRegistry {
         item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         server: &Server,
     ) {

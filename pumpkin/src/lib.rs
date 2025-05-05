@@ -11,6 +11,7 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
+use std::io::{IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::{
@@ -133,7 +134,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if advanced_config().commands.use_console {
+        if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
@@ -202,9 +203,18 @@ impl PumpkinServer {
 
         let mut ticker = Ticker::new(BASIC_CONFIG.tps);
 
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
+        if advanced_config().commands.use_console {
+            if let Some((wrapper, _)) = &*LOGGER_IMPL {
+                if let Some(rl) = wrapper.take_readline() {
+                    setup_console(rl, server.clone());
+                } else {
+                    if advanced_config().commands.use_tty {
+                        log::warn!(
+                            "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                        );
+                    }
+                    setup_stdin_console(server.clone()).await;
+                }
             }
         }
 
@@ -376,6 +386,45 @@ impl PumpkinServer {
             }
         }
     }
+}
+
+async fn setup_stdin_console(server: Arc<Server>) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let rt = tokio::runtime::Handle::current();
+    std::thread::spawn(move || {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut line = String::new();
+            if let Ok(size) = stdin().read_line(&mut line) {
+                // if no bytes were read, we may have hit EOF
+                if size == 0 {
+                    break;
+                }
+            } else {
+                break;
+            };
+            if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
+                log::warn!("Console command was not terminated with a newline");
+            }
+            rt.block_on(tx.send(line.trim().to_string()))
+                .expect("Failed to send command to server");
+        }
+    });
+    tokio::spawn(async move {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Some(command) = rx.recv().await {
+                send_cancellable! {{
+                    ServerCommandEvent::new(command.clone());
+
+                    'after: {
+                        let dispatcher = &server.command_dispatcher.read().await;
+                        dispatcher
+                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
+                            .await;
+                    };
+                }}
+            }
+        }
+    });
 }
 
 fn setup_console(rl: Readline, server: Arc<Server>) {

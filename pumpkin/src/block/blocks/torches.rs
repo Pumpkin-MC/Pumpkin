@@ -1,3 +1,4 @@
+use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
@@ -33,11 +34,11 @@ impl PumpkinBlock for TorchBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         if face.is_horizontal() {
             let wall_block = match block.name {

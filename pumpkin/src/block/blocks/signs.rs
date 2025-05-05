@@ -10,6 +10,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -36,13 +37,14 @@ impl PumpkinBlock for SignBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        replacing: BlockIsReplacing,
     ) -> u16 {
-        let sign_props = SignProperties::default(block);
+        let mut sign_props = SignProperties::default(block);
+        sign_props.waterlogged = replacing.water_source();
 
         sign_props.to_state_id(block)
     }
@@ -67,7 +69,7 @@ impl PumpkinBlock for SignBlock {
         _block: &Block,
         _state_id: u16,
         pos: &BlockPos,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         player: &Player,
     ) {
         player.send_sign_packet(*pos).await;

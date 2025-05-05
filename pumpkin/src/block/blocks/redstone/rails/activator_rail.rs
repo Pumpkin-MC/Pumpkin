@@ -7,6 +7,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -29,15 +30,16 @@ impl PumpkinBlock for ActivatorRailBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
         let player_facing = player.living_entity.entity.get_horizontal_facing();
 
+        rail_props.set_waterlogged(replacing.water_source());
         rail_props
             .set_straight_shape(compute_placed_rail_shape(world, block_pos, player_facing).await);
 
@@ -72,7 +74,7 @@ impl PumpkinBlock for ActivatorRailBlock {
         }
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
+    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: BlockDirection) -> bool {
         can_place_rail_at(world, pos).await
     }
 }

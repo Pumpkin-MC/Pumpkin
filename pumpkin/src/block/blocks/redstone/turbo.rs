@@ -357,7 +357,7 @@ impl RedstoneWireTurbo {
         let pos = self.nodes[upd.index].pos;
 
         let mut wire_power = 0;
-        for side in &BlockDirection::all() {
+        for side in BlockDirection::all() {
             let neighbor_pos = pos.offset(side.to_offset());
             let neighbor = &self.nodes[self.node_cache[&neighbor_pos].index].state;
             wire_power = wire_power.max(

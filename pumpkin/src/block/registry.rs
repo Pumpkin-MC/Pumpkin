@@ -13,6 +13,7 @@ use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::BlockIsReplacing;
 use super::pumpkin_fluid::PumpkinFluid;
 
 pub enum BlockActionResult {
@@ -102,11 +103,11 @@ impl BlockRegistry {
         server: &Server,
         world: &World,
         block: &Block,
-        face: &BlockDirection,
+        face: BlockDirection,
         block_pos: &BlockPos,
         use_item_on: &SUseItemOn,
         player: &Player,
-        other: bool,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -119,7 +120,7 @@ impl BlockRegistry {
                     block_pos,
                     use_item_on,
                     player,
-                    other,
+                    replacing,
                 )
                 .await;
         }
@@ -132,7 +133,7 @@ impl BlockRegistry {
         block: &Block,
         state_id: u16,
         pos: &BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         player: &Player,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -143,12 +144,36 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn can_place_at(&self, world: &World, block: &Block, block_pos: &BlockPos) -> bool {
+    pub async fn can_place_at(
+        &self,
+        world: &World,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.can_place_at(world, block_pos).await;
+            return pumpkin_block.can_place_at(world, block_pos, face).await;
         }
         true
+    }
+
+    pub async fn can_update_at(
+        &self,
+        world: &World,
+        block: &Block,
+        state_id: BlockStateId,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        use_item_on: &SUseItemOn,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
+                .await;
+        }
+        false
     }
 
     pub async fn on_placed(
@@ -254,7 +279,7 @@ impl BlockRegistry {
                         block,
                         state.id,
                         location,
-                        &direction.opposite(),
+                        direction.opposite(),
                         &neighbor_pos,
                         neighbor_state.id,
                     )
@@ -287,7 +312,7 @@ impl BlockRegistry {
         block: &Block,
         state: BlockStateId,
         block_pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         neighbor_pos: &BlockPos,
         neighbor_state: BlockStateId,
     ) -> BlockStateId {
@@ -320,7 +345,7 @@ impl BlockRegistry {
 
             Box::pin(world.replace_with_state_for_neighbor_update(
                 &pos,
-                &direction.opposite(),
+                direction.opposite(),
                 flags,
             ))
             .await;
@@ -363,7 +388,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -380,7 +405,7 @@ impl BlockRegistry {
         world: &World,
         block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -397,7 +422,7 @@ impl BlockRegistry {
         world: &World,
         block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {

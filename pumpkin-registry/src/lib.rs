@@ -72,7 +72,7 @@ pub struct SyncedRegistry {
     instrument: IndexMap<String, Instrument>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DimensionType {
     Overworld,
     OverworldCaves,

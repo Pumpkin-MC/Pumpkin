@@ -1204,12 +1204,49 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl HorizontalFacing {
+            pub fn all() -> [HorizontalFacing; 4] {
+                [
+                    HorizontalFacing::North,
+                    HorizontalFacing::South,
+                    HorizontalFacing::West,
+                    HorizontalFacing::East,
+                ]
+            }
+
+            pub fn to_offset(&self) -> Vector3<i32> {
+                match self {
+                    Self::North => (0, 0, -1),
+                    Self::South => (0, 0, 1),
+                    Self::West => (-1, 0, 0),
+                    Self::East => (1, 0, 0),
+                }
+                .into()
+            }
+
             pub fn opposite(&self) -> Self {
                 match self {
-                    HorizontalFacing::North => HorizontalFacing::South,
-                    HorizontalFacing::South => HorizontalFacing::North,
-                    HorizontalFacing::East => HorizontalFacing::West,
-                    HorizontalFacing::West => HorizontalFacing::East
+                    Self::North => Self::South,
+                    Self::South => Self::North,
+                    Self::West => Self::East,
+                    Self::East => Self::West,
+                }
+            }
+
+            pub fn rotate_clockwise(&self) -> Self {
+                match self {
+                    Self::North => Self::East,
+                    Self::South => Self::West,
+                    Self::West => Self::North,
+                    Self::East => Self::South,
+                }
+            }
+
+            pub fn rotate_counter_clockwise(&self) -> Self {
+                match self {
+                    Self::North => Self::West,
+                    Self::South => Self::East,
+                    Self::West => Self::South,
+                    Self::East => Self::North,
                 }
             }
         }

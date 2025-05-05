@@ -6,6 +6,7 @@ use std::{
 
 pub mod chunker;
 pub mod explosion;
+pub mod portal;
 pub mod time;
 
 use crate::{
@@ -26,6 +27,8 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikeProperties};
+use pumpkin_data::entity::EffectType;
 use pumpkin_data::{
     Block,
     block_properties::{
@@ -39,7 +42,10 @@ use pumpkin_data::{
 };
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::to_bytes_unnamed;
-use pumpkin_protocol::client::play::{CSetEntityMetadata, MetaDataType, Metadata};
+use pumpkin_protocol::client::play::{
+    CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
+};
+use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
@@ -50,7 +56,6 @@ use pumpkin_protocol::{
     },
     server::play::SChatMessage,
 };
-use pumpkin_protocol::{client::play::CLevelEvent, codec::identifier::Identifier};
 use pumpkin_protocol::{
     client::play::{
         CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
@@ -202,6 +207,15 @@ impl World {
             .await;
     }
 
+    pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
+        // TODO: only nearby
+        self.broadcast_packet_all(&CRemoveMobEffect::new(
+            entity.entity_id.into(),
+            VarInt(effect_type as i32),
+        ))
+        .await;
+    }
+
     /// Broadcasts a packet to all connected players within the world.
     ///
     /// Sends the specified packet to every player currently logged in to the world.
@@ -346,26 +360,6 @@ impl World {
             f64::from(position.0.z) + 0.5,
         );
         self.play_sound(sound, category, &new_vec).await;
-    }
-
-    pub async fn play_record(&self, record_id: i32, position: BlockPos) {
-        self.broadcast_packet_all(&CLevelEvent::new(
-            WorldEvent::JukeboxStartsPlaying as i32,
-            position,
-            record_id,
-            false,
-        ))
-        .await;
-    }
-
-    pub async fn stop_record(&self, position: BlockPos) {
-        self.broadcast_packet_all(&CLevelEvent::new(
-            WorldEvent::JukeboxStopsPlaying as i32,
-            position,
-            0,
-            false,
-        ))
-        .await;
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
@@ -1470,8 +1464,9 @@ impl World {
         cause: Option<Arc<Player>>,
         flags: BlockFlags,
     ) {
-        let block = self.get_block(position).await.unwrap();
-        let event = BlockBreakEvent::new(cause.clone(), block.clone(), *position, 0, false);
+        let (broken_block, broken_block_state) =
+            self.get_block_and_block_state(position).await.unwrap();
+        let event = BlockBreakEvent::new(cause.clone(), broken_block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .lock()
@@ -1480,17 +1475,36 @@ impl World {
             .await;
 
         if !event.cancelled {
-            let broken_block_state_id = self.set_block_state(position, 0, flags).await;
+            let new_state_id = if broken_block
+                .properties(broken_block_state.id)
+                .and_then(|properties| {
+                    properties
+                        .to_props()
+                        .into_iter()
+                        .find(|p| p.0 == "waterlogged")
+                        .map(|(_, value)| value == true.to_string())
+                })
+                .unwrap_or(false)
+            {
+                // Broken block was waterlogged
+                let mut water_props = WaterLikeProperties::default(&Block::WATER);
+                water_props.level = Integer0To15::L15;
+                water_props.to_state_id(&Block::WATER)
+            } else {
+                0
+            };
+
+            let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
             let particles_packet = CWorldEvent::new(
                 WorldEvent::BlockBroken as i32,
                 *position,
-                broken_block_state_id.into(),
+                broken_state_id.into(),
                 false,
             );
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
-                block::drop_loot(self, &block, position, true, broken_block_state_id).await;
+                block::drop_loot(self, &broken_block, position, true, broken_state_id).await;
             }
 
             match cause {
@@ -1501,6 +1515,11 @@ impl World {
                 None => self.broadcast_packet_all(&particles_packet).await,
             }
         }
+    }
+
+    pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
+            .await;
     }
 
     pub async fn get_chunk(&self, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
@@ -1574,16 +1593,18 @@ impl World {
     pub async fn update_neighbors(
         self: &Arc<Self>,
         block_pos: &BlockPos,
-        except: Option<&BlockDirection>,
+        except: Option<BlockDirection>,
     ) {
         let source_block = self.get_block(block_pos).await.unwrap();
         for direction in BlockDirection::update_order() {
-            if Some(&direction) == except {
+            if except.is_some_and(|d| d == direction) {
                 continue;
             }
+
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let neighbor_block = self.get_block(&neighbor_pos).await;
             let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
+
             if let Ok(neighbor_block) = neighbor_block {
                 if let Some(neighbor_pumpkin_block) =
                     self.block_registry.get_pumpkin_block(&neighbor_block)
@@ -1599,6 +1620,7 @@ impl World {
                         .await;
                 }
             }
+
             if let Ok(neighbor_fluid) = neighbor_fluid {
                 if let Some(neighbor_pumpkin_fluid) =
                     self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
@@ -1635,7 +1657,7 @@ impl World {
     pub async fn replace_with_state_for_neighbor_update(
         self: &Arc<Self>,
         block_pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         flags: BlockFlags,
     ) {
         let (block, block_state) = match self.get_block_and_block_state(block_pos).await {

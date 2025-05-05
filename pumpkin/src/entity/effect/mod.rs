@@ -1,6 +1,6 @@
 use pumpkin_data::entity::EffectType;
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Effect {
     pub r#type: EffectType,
     pub duration: i32,

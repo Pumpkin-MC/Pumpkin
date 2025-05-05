@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
@@ -31,11 +31,11 @@ impl PumpkinBlock for ObserverBlock {
         _server: &Server,
         _world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        _replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(block);
         props.facing = player.living_entity.entity.get_facing();
@@ -88,13 +88,13 @@ impl PumpkinBlock for ObserverBlock {
         block: &Block,
         state: BlockStateId,
         block_pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
         let props = ObserverLikeProperties::from_state_id(state, block);
 
-        if &props.facing.to_block_direction() == direction && !props.powered {
+        if props.facing.to_block_direction() == direction && !props.powered {
             Self::schedule_tick(world, block_pos).await;
         }
 
@@ -105,10 +105,10 @@ impl PumpkinBlock for ObserverBlock {
         &self,
         block: &Block,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> bool {
         let props = ObserverLikeProperties::from_state_id(state.id, block);
-        &props.facing.to_block_direction() == direction
+        props.facing.to_block_direction() == direction
     }
 
     async fn get_weak_redstone_power(
@@ -117,10 +117,10 @@ impl PumpkinBlock for ObserverBlock {
         _world: &World,
         _block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         let props = ObserverLikeProperties::from_state_id(state.id, block);
-        if &props.facing.to_block_direction() == direction && props.powered {
+        if props.facing.to_block_direction() == direction && props.powered {
             15
         } else {
             0
@@ -133,7 +133,7 @@ impl PumpkinBlock for ObserverBlock {
         world: &World,
         block_pos: &BlockPos,
         state: &BlockState,
-        direction: &BlockDirection,
+        direction: BlockDirection,
     ) -> u8 {
         self.get_weak_redstone_power(block, world, block_pos, state, direction)
             .await
@@ -172,7 +172,7 @@ impl ObserverBlock {
             block_pos.offset(facing.to_block_direction().opposite().to_offset());
         world.update_neighbor(&opposite_facing_pos, block).await;
         world
-            .update_neighbors(&opposite_facing_pos, Some(&facing.to_block_direction()))
+            .update_neighbors(&opposite_facing_pos, Some(facing.to_block_direction()))
             .await;
     }
 

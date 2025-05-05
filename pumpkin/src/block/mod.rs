@@ -4,7 +4,12 @@ use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::FenceGateBlock;
 use blocks::fences::FenceBlock;
+use blocks::fire::fire::FireBlock;
+use blocks::fire::soul_fire::SoulFireBlock;
+use blocks::glass_panes::GlassPaneBlock;
+use blocks::iron_bars::IronBarsBlock;
 use blocks::logs::LogBlock;
+use blocks::nether_portal::NetherPortalBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::piston::PistonBlock;
@@ -19,16 +24,20 @@ use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
 use blocks::signs::SignBlock;
+use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
+use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
 use fluids::lava::FlowingLava;
 use fluids::water::FlowingWater;
+use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::loot_table::{
     AlternativeEntry, ItemEntry, LootCondition, LootPool, LootPoolEntryTypes, LootTable,
@@ -46,7 +55,7 @@ use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::P
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
 
-mod blocks;
+pub(crate) mod blocks;
 mod fluids;
 pub mod pumpkin_block;
 pub mod pumpkin_fluid;
@@ -66,13 +75,22 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);
     manager.register(FurnaceBlock);
+    manager.register(GlassPaneBlock);
+    manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(SignBlock);
+    manager.register(SlabBlock);
     manager.register(StairBlock);
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);
     manager.register(TorchBlock);
+    manager.register(WallBlock);
+    manager.register(NetherPortalBlock);
+
+    // Fire
+    manager.register(SoulFireBlock);
+    manager.register(FireBlock);
 
     // Redstone
     manager.register(ButtonBlock);
@@ -95,7 +113,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     // Fluids
     manager.register_fluid(FlowingWater);
     manager.register_fluid(FlowingLava);
-
     Arc::new(manager)
 }
 
@@ -115,8 +132,18 @@ pub async fn drop_loot(
                 .map(|(key, value)| (key.as_str(), value.as_str()))
                 .collect::<Vec<_>>(),
         );
-        for stack in loot {
-            drop_stack(world, pos, stack).await;
+
+        if block.is_tagged_with("#minecraft:slabs").unwrap()
+            && SlabBlock::drop_double_loot(block, state_id)
+        {
+            for mut stack in loot {
+                stack.item_count *= 2;
+                drop_stack(world, pos, stack).await;
+            }
+        } else {
+            for stack in loot {
+                drop_stack(world, pos, stack).await;
+            }
         }
     }
 
@@ -267,6 +294,25 @@ impl LootConditionExt for LootCondition {
             Self::BlockStateProperty { properties } => properties
                 .iter()
                 .all(|(key, value)| block_props.iter().any(|(k, v)| k == key && v == value)),
+            _ => false,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum BlockIsReplacing {
+    Itself(BlockStateId),
+    Water(Integer0To15),
+    Other,
+}
+
+impl BlockIsReplacing {
+    #[must_use]
+    /// Returns true if the block was a water source block.
+    pub fn water_source(&self) -> bool {
+        match self {
+            // Level 0 means the water is a source block
+            Self::Water(level) => *level == Integer0To15::L0,
             _ => false,
         }
     }

@@ -9,6 +9,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -29,13 +30,14 @@ impl PumpkinBlock for RailBlock {
         _server: &Server,
         world: &World,
         block: &Block,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        replacing: BlockIsReplacing,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
+        rail_props.set_waterlogged(replacing.water_source());
 
         let shape = if let Some(east_rail) =
             Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East).await
@@ -144,7 +146,7 @@ impl PumpkinBlock for RailBlock {
         }
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
+    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: BlockDirection) -> bool {
         can_place_rail_at(world, pos).await
     }
 }

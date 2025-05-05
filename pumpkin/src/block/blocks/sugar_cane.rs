@@ -22,7 +22,7 @@ pub struct SugarCaneBlock;
 #[async_trait]
 impl PumpkinBlock for SugarCaneBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
-        if !self.can_place_at(world, pos).await {
+        if !self.can_place_at(world, pos, BlockDirection::Down).await {
             world.break_block(pos, None, BlockFlags::empty()).await;
         }
     }
@@ -62,11 +62,11 @@ impl PumpkinBlock for SugarCaneBlock {
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !self.can_place_at(world, pos).await {
+        if !self.can_place_at(world, pos, BlockDirection::Down).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
@@ -74,7 +74,7 @@ impl PumpkinBlock for SugarCaneBlock {
         state
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
+    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: BlockDirection) -> bool {
         let block = world.get_block(&pos.down()).await.unwrap();
 
         if block == Block::SUGAR_CANE {
@@ -94,6 +94,7 @@ impl PumpkinBlock for SugarCaneBlock {
                 }
             }
         }
+
         false
     }
 }
