@@ -9,7 +9,7 @@ use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
 /// An event that occurs when a `Player` interacts with a `Block` using their hand.
-/// This event does not consider interactions through block movement, eg pressure plates, tripwire hooks, sculk sensors etc.
+/// This event does not consider interactions through block movement, e.g. pressure plates, tripwire hooks, sculk sensors etc.
 ///
 /// If the event is cancelled, the interaction  will not happen.
 ///
@@ -35,6 +35,9 @@ pub struct PlayerInteractEvent {
 
     /// The position of the block being interacted with
     pub position: BlockPos,
+
+    /// Is the player sneaking?
+    pub sneaking: bool,
 }
 
 impl PlayerInteractEvent {
@@ -51,6 +54,7 @@ impl PlayerInteractEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerInteractEvent`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         player: Arc<Player>,
         action: InteractAction,
@@ -58,6 +62,7 @@ impl PlayerInteractEvent {
         block_direction: Result<BlockDirection, InvalidBlockFace>,
         item_stack: Arc<Option<ItemStack>>,
         position: BlockPos,
+        sneaking: bool,
         cancelled: bool,
     ) -> Self {
         Self {
@@ -67,14 +72,9 @@ impl PlayerInteractEvent {
             block_direction,
             item_stack,
             position,
+            sneaking,
             cancelled,
         }
-    }
-
-    /// Returns whether the player was sneaking during the interaction.
-    #[must_use]
-    pub fn is_sneaking(&self) -> bool {
-        self.action.is_sneaking()
     }
 }
 
@@ -87,16 +87,6 @@ impl PlayerEvent for PlayerInteractEvent {
 /// Represents the type of interaction performed by the player.
 #[derive(Clone, Debug)]
 pub enum InteractAction {
-    LeftClick { sneaking: bool },
-    RightClick { sneaking: bool },
-}
-
-impl InteractAction {
-    /// Returns whether the player was `sneaking` during the interaction.
-    #[must_use]
-    pub fn is_sneaking(&self) -> bool {
-        match self {
-            Self::RightClick { sneaking } | Self::LeftClick { sneaking } => *sneaking,
-        }
-    }
+    LeftClick,
+    RightClick,
 }

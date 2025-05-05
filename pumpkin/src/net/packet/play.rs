@@ -949,11 +949,12 @@ impl Player {
 
                         let event = PlayerInteractEvent::new(
                             self.clone(),
-                            InteractAction::LeftClick { sneaking },
+                            InteractAction::LeftClick,
                             block.clone(),
                             face,
                             held_item.clone(),
                             *location,
+                            sneaking,
                             !self.can_interact_with_block_at(location, 1.0), // Default cancel condition
                         );
                         let event = PLUGIN_MANAGER
@@ -1229,11 +1230,12 @@ impl Player {
         send_cancellable! {{
             PlayerInteractEvent::new(
                 self.clone(),
-                InteractAction::LeftClick { sneaking },
+                InteractAction::LeftClick,
                 block.clone(),
                 Ok(face),
                 held_item.clone(),
                 location,
+                sneaking,
                 !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
             );
 
