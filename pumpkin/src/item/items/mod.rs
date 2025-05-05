@@ -1,5 +1,5 @@
-mod bucket;
 mod axe;
+mod bucket;
 mod egg;
 mod flint_and_steel;
 mod hoe;
@@ -9,8 +9,8 @@ mod snowball;
 mod sword;
 mod trident;
 
-use bucket::{EmptyBucketItem, FilledBucketItem};
 use axe::AxeItem;
+use bucket::{EmptyBucketItem, FilledBucketItem};
 use egg::EggItem;
 use flint_and_steel::FlintAndSteelItem;
 use hoe::HoeItem;

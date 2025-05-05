@@ -50,7 +50,7 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let (yaw, pitch) = player.rotation();
     let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
     let block_interaction_range = 4.5; // This is not the same as the block_interaction_range in the
-                                       // player entity.
+    // player entity.
     let direction = Vector3::new(
         -yaw_rad.sin() * pitch_rad.cos() * block_interaction_range,
         -pitch_rad.sin() * block_interaction_range,
@@ -111,18 +111,16 @@ impl PumpkinItem for EmptyBucketItem {
                         player.client.enqueue_packet(&dest_packet).await;
                     }
                 }
+            } else if let Err(err) = inventory.set_slot(selected, item_stack.clone(), false) {
+                log::error!("Failed to set slot: {err}");
             } else {
-                if let Err(err) = inventory.set_slot(selected, item_stack.clone(), false) {
-                    log::error!("Failed to set slot: {err}");
-                } else {
-                    let dest_packet = CSetContainerSlot::new(
-                        PlayerInventory::CONTAINER_ID,
-                        inventory.state_id as i32,
-                        selected as i16,
-                        &slot_data,
-                    );
-                    player.client.enqueue_packet(&dest_packet).await;
-                }
+                let dest_packet = CSetContainerSlot::new(
+                    PlayerInventory::CONTAINER_ID,
+                    inventory.state_id as i32,
+                    selected as i16,
+                    &slot_data,
+                );
+                player.client.enqueue_packet(&dest_packet).await;
             }
         }
     }

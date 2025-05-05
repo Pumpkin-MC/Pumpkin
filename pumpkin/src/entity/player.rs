@@ -719,15 +719,16 @@ impl Player {
     pub fn eye_position(&self) -> Vector3<f64> {
         let sneaking_adjust = if self.living_entity.entity.sneaking.load(Relaxed) {
             -0.35f64 //TODO: This is a guess, we should probably use the actual value from the
-                     //entity, when that is implemented. Otherwise, sneaking will not be accounted
-                     //for
+        //entity, when that is implemented. Otherwise, sneaking will not be accounted
+        //for
         } else {
             0.0
         };
         Vector3::new(
             self.living_entity.entity.pos.load().x,
             self.living_entity.entity.pos.load().y
-                + f64::from(self.living_entity.entity.standing_eye_height) + sneaking_adjust,
+                + f64::from(self.living_entity.entity.standing_eye_height)
+                + sneaking_adjust,
             self.living_entity.entity.pos.load().z,
         )
     }
