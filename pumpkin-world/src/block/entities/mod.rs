@@ -10,6 +10,7 @@ use sign::SignBlockEntity;
 pub mod bed;
 pub mod chest;
 pub mod comparator;
+pub mod barrel;
 pub mod sign;
 
 pub trait BlockEntity: Send + Sync {

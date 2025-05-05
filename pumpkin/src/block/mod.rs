@@ -1,3 +1,4 @@
+use blocks::barrel::BarrelBlock;
 use blocks::cactus::CactusBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
@@ -66,6 +67,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ObserverBlock);
     manager.register(PistonBlock);
     manager.register(TargetBlock);
+    manager.register(BarrelBlock);
 
     manager.register(DoorBlock);
     manager.register(FenceBlock);

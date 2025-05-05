@@ -15,3 +15,4 @@ pub(crate) mod signs;
 pub(crate) mod sugar_cane;
 pub(crate) mod tnt;
 pub(crate) mod torches;
+pub(crate) mod barrel;
