@@ -1,9 +1,9 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use async_trait::async_trait;
+use pumpkin_world::inventory::inventory::Inventory;
 
 use crate::{
-    inventory::Inventory,
     screen_handler::ScreenHandler,
     slot::{NormalSlot, Slot},
 };

@@ -1,3 +1,4 @@
+pub(crate) mod barrel;
 pub(crate) mod cactus;
 pub(crate) mod chest;
 pub(crate) mod crafting_table;
@@ -15,4 +16,3 @@ pub(crate) mod signs;
 pub(crate) mod sugar_cane;
 pub(crate) mod tnt;
 pub(crate) mod torches;
-pub(crate) mod barrel;

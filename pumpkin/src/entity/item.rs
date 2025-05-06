@@ -2,12 +2,12 @@ use std::sync::{Arc, atomic::AtomicU32};
 
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
-use pumpkin_inventory::inventory::Inventory;
 use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::inventory::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 

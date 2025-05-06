@@ -1,9 +1,5 @@
 use std::{any::Any, sync::Arc};
 
-use async_trait::async_trait;
-use pumpkin_data::screen::WindowType;
-use pumpkin_world::item::ItemStack;
-
 use crate::{
     crafting::{
         crafting_inventory::CraftingInventory,
@@ -11,10 +7,13 @@ use crate::{
         recipies::{RecipeFinderScreenHandler, RecipeInputInventory},
     },
     equipment_slot::EquipmentSlot,
-    inventory::Inventory,
     screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
     slot::{ArmorSlot, NormalSlot, Slot},
 };
+use async_trait::async_trait;
+use pumpkin_data::screen::WindowType;
+use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::item::ItemStack;
 
 use super::player_inventory::PlayerInventory;
 
@@ -87,10 +86,6 @@ impl PlayerScreenHandler {
 
 #[async_trait]
 impl ScreenHandler for PlayerScreenHandler {
-    fn window_type(&self) -> Option<WindowType> {
-        None
-    }
-
     async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player).await;
         //TODO: this.craftingResultInventory.clear();
@@ -100,10 +95,6 @@ impl ScreenHandler for PlayerScreenHandler {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-
-    fn sync_id(&self) -> u8 {
-        self.behaviour.sync_id
     }
 
     fn get_behaviour(&self) -> &ScreenHandlerBehaviour {

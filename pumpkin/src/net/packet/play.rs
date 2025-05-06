@@ -1,6 +1,6 @@
 use pumpkin_data::item::Item;
-use pumpkin_inventory::inventory::Inventory;
 use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_world::inventory::inventory::Inventory;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;

@@ -4,9 +4,10 @@ use std::{
     sync::Arc,
 };
 
+use crate::item::ItemStack;
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
-use pumpkin_world::item::ItemStack;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 // Inventory.java
@@ -29,6 +30,53 @@ pub trait Inventory: Send + Sync + Debug + Clearable {
     async fn set_stack(&self, slot: usize, stack: ItemStack);
 
     fn mark_dirty(&self) {}
+
+    async fn write_data(
+        &self,
+        nbt: &mut pumpkin_nbt::compound::NbtCompound,
+        stacks: &[Arc<Mutex<ItemStack>>],
+        include_empty: bool,
+    ) {
+        let mut slots = Vec::new();
+
+        for i in 0..stacks.len() {
+            let stack = stacks[i].lock().await;
+            if !stack.is_empty() {
+                let mut item_compound = NbtCompound::new();
+                item_compound.put_byte("Slot", i as i8);
+                stack.write_item_stack(&mut item_compound);
+                slots.push(NbtTag::Compound(item_compound));
+            }
+        }
+
+        if !include_empty && slots.is_empty() {
+            return;
+        }
+
+        nbt.put("Items", NbtTag::List(slots.into_boxed_slice()));
+    }
+
+    fn read_data(
+        &self,
+        nbt: &pumpkin_nbt::compound::NbtCompound,
+        stacks: &[Arc<Mutex<ItemStack>>],
+    ) {
+        if let Some(inventory_list) = nbt.get_list("Items") {
+            for tag in inventory_list {
+                if let Some(item_compound) = tag.extract_compound() {
+                    if let Some(slot_byte) = item_compound.get_byte("Slot") {
+                        let slot = slot_byte as usize;
+                        if slot < stacks.len() {
+                            if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                                // This won't error cause it's only called on initailization
+                                *stacks[slot].try_lock().unwrap() = item_stack;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /*
     boolean canPlayerUse(PlayerEntity player);

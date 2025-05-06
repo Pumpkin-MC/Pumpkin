@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
@@ -7,26 +8,28 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+pub mod barrel;
 pub mod bed;
 pub mod chest;
 pub mod comparator;
-pub mod barrel;
 pub mod sign;
 
+#[async_trait]
 pub trait BlockEntity: Send + Sync {
-    fn write_nbt(&self, nbt: &mut NbtCompound);
+    async fn write_nbt(&self, nbt: &mut NbtCompound);
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
+    async fn snapshot(&self) {}
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
-    fn write_internal(&self, nbt: &mut NbtCompound) {
+    async fn write_internal(&self, nbt: &mut NbtCompound) {
         nbt.put_string("id", self.identifier().to_string());
         let position = self.get_position();
         nbt.put_int("x", position.0.x);
         nbt.put_int("y", position.0.y);
         nbt.put_int("z", position.0.z);
-        self.write_nbt(nbt);
+        self.write_nbt(nbt).await;
     }
     fn get_id(&self) -> u32 {
         pumpkin_data::block::BLOCK_ENTITY_TYPES

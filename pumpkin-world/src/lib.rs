@@ -8,6 +8,7 @@ pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
 mod generation;
+pub mod inventory;
 pub mod item;
 pub mod level;
 mod lock;

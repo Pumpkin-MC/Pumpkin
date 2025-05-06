@@ -44,11 +44,9 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::{
     entity_equipment::EntityEquipment,
-    inventory::Inventory,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
     screen_handler::{
-        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
-        ScreenHandlerListener,
+        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerListener,
     },
     sync_handler::SyncHandler,
 };
@@ -98,6 +96,7 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
+use pumpkin_world::inventory::inventory::Inventory;
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
@@ -1526,9 +1525,9 @@ impl Player {
 
     pub async fn open_handeled_screen(
         &self,
-        screen_handler_factory: Option<&dyn ScreenHandlerFactory>,
+        screen_handler: Arc<Mutex<dyn ScreenHandler>>,
+        name: TextComponent,
     ) -> Option<u8> {
-        screen_handler_factory?;
         if !self
             .current_screen_handler
             .lock()
@@ -1543,33 +1542,21 @@ impl Player {
 
         self.increment_screen_handler_sync_id();
 
-        let screen_handler = screen_handler_factory.unwrap().crate_menu(
-            self.screen_handler_sync_id.load(Ordering::Relaxed),
-            self.inventory.clone(),
-            self,
-        );
-
-        if let Some(screen_handler) = screen_handler {
-            let screen_handler_temp = screen_handler.lock().await;
-            self.client
-                .enqueue_packet(&COpenScreen::new(
-                    screen_handler_temp.sync_id().into(),
-                    (screen_handler_temp
-                        .window_type()
-                        .expect("Can't open PlayerScreenHandler") as i32)
-                        .into(),
-                    &screen_handler_factory.unwrap().get_display_name(),
-                ))
-                .await;
-            drop(screen_handler_temp);
-            self.on_screen_handler_opened(screen_handler.clone()).await;
-            *self.current_screen_handler.lock().await = screen_handler;
-            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
-        } else {
-            // TODO: Send message if player is in spectator mode
-
-            None
-        }
+        let screen_handler_temp = screen_handler.lock().await;
+        self.client
+            .enqueue_packet(&COpenScreen::new(
+                screen_handler_temp.sync_id().into(),
+                (screen_handler_temp
+                    .window_type()
+                    .expect("Can't open PlayerScreenHandler") as i32)
+                    .into(),
+                &name,
+            ))
+            .await;
+        drop(screen_handler_temp);
+        self.on_screen_handler_opened(screen_handler.clone()).await;
+        *self.current_screen_handler.lock().await = screen_handler;
+        Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
     }
 
     pub async fn on_slot_click(&self, packet: SClickSlot) {

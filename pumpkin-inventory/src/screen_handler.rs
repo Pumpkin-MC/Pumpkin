@@ -12,12 +12,12 @@ use pumpkin_protocol::{
     server::play::SlotActionType,
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::inventory::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::{
     container_click::MouseClick,
-    inventory::{ComparableInventory, Inventory},
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
@@ -65,11 +65,15 @@ pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack)
 #[async_trait]
 pub trait ScreenHandler: Send + Sync {
     /// Get the window type of the screen handler, otherwise panics
-    fn window_type(&self) -> Option<WindowType>;
+    fn window_type(&self) -> Option<WindowType> {
+        self.get_behaviour().window_type
+    }
 
     fn as_any(&self) -> &dyn Any;
 
-    fn sync_id(&self) -> u8;
+    fn sync_id(&self) -> u8 {
+        self.get_behaviour().sync_id
+    }
 
     async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player).await;
@@ -664,17 +668,6 @@ pub trait ScreenHandler: Send + Sync {
         let behaviour = self.get_behaviour_mut();
         behaviour.disable_sync = false;
     }
-}
-
-pub trait ScreenHandlerFactory: Send + Sync {
-    fn crate_menu(
-        &self,
-        sync_id: u8,
-        player_inventory: Arc<PlayerInventory>,
-        player: &dyn InventoryPlayer,
-    ) -> Option<Arc<Mutex<dyn ScreenHandler>>>;
-
-    fn get_display_name(&self) -> TextComponent;
 }
 
 pub trait ScreenHandlerListener: Send + Sync {

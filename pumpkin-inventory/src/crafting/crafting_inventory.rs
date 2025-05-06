@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_world::item::ItemStack;
+use pumpkin_world::{inventory::split_stack, item::ItemStack};
 use tokio::sync::Mutex;
 
-use crate::{
-    inventory::{Clearable, Inventory},
-    split_stack,
-};
+use pumpkin_world::inventory::inventory::{Clearable, Inventory};
 
 use super::recipies::RecipeInputInventory;
 

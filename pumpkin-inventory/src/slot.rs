@@ -4,10 +4,11 @@ use std::{
 };
 
 use async_trait::async_trait;
+use pumpkin_world::inventory::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{equipment_slot::EquipmentSlot, inventory::Inventory, screen_handler::InventoryPlayer};
+use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 
 // Slot.java
 // This is a trait due to crafting slots being a thing
