@@ -466,7 +466,7 @@ impl Player {
         if config.swing {}
     }
 
-    pub async fn set_respawn_point(&self, block_pos: BlockPos, yaw: f32) {
+    pub fn set_respawn_point(&self, block_pos: BlockPos, yaw: f32) {
         self.respawn_point.store(Some(RespawnPoint {
             position: block_pos,
             yaw,
@@ -486,6 +486,12 @@ impl Player {
             return if block.is_tagged_with("#minecraft:beds").unwrap() {
                 Some(respawn_point)
             } else if block == Block::RESPAWN_ANCHOR {
+                let _state_id = self
+                    .world()
+                    .await
+                    .get_block_state_id(&respawn_point.position)
+                    .await
+                    .unwrap();
                 Some(respawn_point)
             } else {
                 self.send_system_message(&TextComponent::translate(

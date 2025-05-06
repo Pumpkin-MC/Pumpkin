@@ -156,24 +156,17 @@ impl PumpkinBlock for BedBlock {
                 block_pos.offset(bed_props.facing.to_offset())
             };
 
-            player
-                .set_respawn_point(bed_head_pos, player.get_entity().yaw.load())
-                .await;
+            player.set_respawn_point(bed_head_pos, player.get_entity().yaw.load());
 
             if bed_props.occupied {
                 // Wake up villager
+            } else if can_sleep(world).await {
+                player.sleep(bed_head_pos).await;
+                set_bed_occupied(true, world, block, &block_pos, bed_props).await;
             } else {
-                if can_sleep(world).await {
-                    player.sleep(bed_head_pos).await;
-                    set_bed_occupied(true, world, block, &block_pos, bed_props).await;
-                } else {
-                    player
-                        .send_system_message(&TextComponent::translate(
-                            "block.minecraft.set_spawn",
-                            [],
-                        ))
-                        .await;
-                }
+                player
+                    .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
+                    .await;
             }
         }
     }

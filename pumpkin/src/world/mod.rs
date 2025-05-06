@@ -879,22 +879,21 @@ impl World {
 
         // Teleport
         let info = &self.level.level_info;
-        let (position, yaw) = match player.get_respawn_point().await {
-            Some(respawn) => (respawn.position.to_f64(), respawn.yaw),
-            None => {
-                let top = self
-                    .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
-                    .await;
+        let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
+            (respawn.position.to_f64(), respawn.yaw)
+        } else {
+            let top = self
+                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                .await;
 
-                (
-                    Vector3::new(
-                        f64::from(info.spawn_x),
-                        f64::from(top + 1),
-                        f64::from(info.spawn_z),
-                    ),
-                    info.spawn_angle,
-                )
-            }
+            (
+                Vector3::new(
+                    f64::from(info.spawn_x),
+                    f64::from(top + 1),
+                    f64::from(info.spawn_z),
+                ),
+                info.spawn_angle,
+            )
         };
         let pitch = 0.0;
 
