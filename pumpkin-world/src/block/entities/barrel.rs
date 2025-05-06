@@ -6,8 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     inventory::{
-        inventory::{Clearable, Inventory},
-        split_stack,
+        split_stack, {Clearable, Inventory},
     },
     item::ItemStack,
 };
@@ -46,7 +45,7 @@ impl BlockEntity for BarrelBlockEntity {
 
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.write_data(nbt, &self.items, true).await;
-        // Saftey precaution
+        // Safety precaution
         self.clear().await;
     }
 

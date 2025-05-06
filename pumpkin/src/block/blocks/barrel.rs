@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::block::Block;
 use pumpkin_data::item::Item;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -11,7 +11,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::barrel::BarrelBlockEntity;
-use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
 use crate::world::World;
@@ -28,31 +28,31 @@ pub struct BarrelBlock;
 impl PumpkinBlock for BarrelBlock {
     async fn normal_use(
         &self,
-        block: &Block,
+        _block: &Block,
         player: &Player,
         location: BlockPos,
-        server: &Server,
+        _server: &Server,
         world: &Arc<World>,
     ) {
         if let Some(barrel_block_entity) = world.get_block_entity(&location).await {
             if let Some(inventory) = barrel_block_entity.get_inventory() {
-                player.open_handeled_screen(self, Some(inventory)).await;
+                player.open_handled_screen(self, Some(inventory)).await;
             }
         }
     }
 
     async fn use_with_item(
         &self,
-        block: &Block,
+        _block: &Block,
         player: &Player,
         location: BlockPos,
         _item: &Item,
-        server: &Server,
+        _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
         if let Some(barrel_block_entity) = world.get_block_entity(&location).await {
             if let Some(inventory) = barrel_block_entity.get_inventory() {
-                player.open_handeled_screen(self, Some(inventory)).await;
+                player.open_handled_screen(self, Some(inventory)).await;
             }
         }
         BlockActionResult::Consume
@@ -88,9 +88,10 @@ impl ScreenHandlerFactory for BarrelBlock {
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
-        player: &dyn InventoryPlayer,
+        _player: &dyn InventoryPlayer,
         inventory: Option<Arc<dyn Inventory>>,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
+        #[allow(clippy::option_if_let_else)]
         if let Some(inventory) = inventory {
             Some(Arc::new(Mutex::new(create_generic_9x3(
                 sync_id,

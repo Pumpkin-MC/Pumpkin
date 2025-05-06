@@ -175,7 +175,9 @@ impl BlockEntity for SignBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        self.write_nbt(&mut nbt);
+        nbt.put("front_text", self.front_text.clone());
+        nbt.put("back_text", self.back_text.clone());
+        nbt.put_bool("is_waxed", self.is_waxed);
         Some(nbt)
     }
 }

@@ -5,7 +5,7 @@ use pumpkin_protocol::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
     codec::{
-        item_stack_seralizer::{ItemStackHash, ItemStackSerializer, OptionalItemStackHash},
+        item_stack_seralizer::{ItemStackSerializer, OptionalItemStackHash},
         var_int::VarInt,
     },
 };
@@ -45,7 +45,7 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enque_inventory_packet(&CSetContainerContent::new(
+                .enqueue_inventory_packet(&CSetContainerContent::new(
                     VarInt(screen_handler.sync_id.into()),
                     VarInt(next_revision as i32),
                     stacks
@@ -59,7 +59,7 @@ impl SyncHandler {
 
             for (i, property) in properties.iter().enumerate() {
                 player
-                    .enque_property_packet(&CSetContainerProperty::new(
+                    .enqueue_property_packet(&CSetContainerProperty::new(
                         VarInt(screen_handler.sync_id.into()),
                         i as i16,
                         *property as i16,
@@ -78,7 +78,7 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enque_slot_packet(&CSetContainerSlot::new(
+                .enqueue_slot_packet(&CSetContainerSlot::new(
                     screen_handler.sync_id as i8,
                     next_revision as i32,
                     slot as i16,
@@ -95,7 +95,7 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enque_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(*stack)))
+                .enqueue_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(*stack)))
                 .await;
         }
     }
@@ -108,7 +108,7 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enque_property_packet(&CSetContainerProperty::new(
+                .enqueue_property_packet(&CSetContainerProperty::new(
                     VarInt(screen_handler.sync_id.into()),
                     property as i16,
                     value as i16,
@@ -121,32 +121,32 @@ impl SyncHandler {
 // TrackedSlot in vanilla
 #[derive(Debug, Clone)]
 pub struct TrackedStack {
-    pub recived_stack: Option<ItemStack>,
-    pub recived_hash: Option<OptionalItemStackHash>,
+    pub received_stack: Option<ItemStack>,
+    pub received_hash: Option<OptionalItemStackHash>,
 }
 
 impl TrackedStack {
     pub const EMPTY: TrackedStack = TrackedStack {
-        recived_stack: None,
-        recived_hash: None,
+        received_stack: None,
+        received_hash: None,
     };
 
-    pub fn set_recived_stack(&mut self, stack: ItemStack) {
-        self.recived_stack = Some(stack);
-        self.recived_hash = None;
+    pub fn set_received_stack(&mut self, stack: ItemStack) {
+        self.received_stack = Some(stack);
+        self.received_hash = None;
     }
 
-    pub fn set_recived_hash(&mut self, hash: OptionalItemStackHash) {
-        self.recived_hash = Some(hash);
-        self.recived_stack = None;
+    pub fn set_received_hash(&mut self, hash: OptionalItemStackHash) {
+        self.received_hash = Some(hash);
+        self.received_stack = None;
     }
 
     pub fn is_in_sync(&mut self, actual_stack: &ItemStack) -> bool {
-        if let Some(stack) = &self.recived_stack {
+        if let Some(stack) = &self.received_stack {
             return stack.are_equal(actual_stack);
-        } else if let Some(hash) = &self.recived_hash {
+        } else if let Some(hash) = &self.received_hash {
             if hash.hash_equals(actual_stack) {
-                self.recived_stack = Some(actual_stack.clone());
+                self.received_stack = Some(*actual_stack);
                 return true;
             }
         }

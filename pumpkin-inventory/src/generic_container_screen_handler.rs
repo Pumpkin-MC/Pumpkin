@@ -2,11 +2,10 @@ use std::{any::Any, sync::Arc};
 
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::{inventory::inventory::Inventory, item::ItemStack};
-use tokio::sync::Mutex;
+use pumpkin_world::{inventory::Inventory, item::ItemStack};
 
 use crate::{
-    player::player_inventory::{self, PlayerInventory},
+    player::player_inventory::PlayerInventory,
     screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
     slot::NormalSlot,
 };
@@ -90,7 +89,7 @@ impl ScreenHandler for GenericContainerScreenHandler {
 
         if slot.has_stack().await {
             let slot_stack = slot.get_stack().await;
-            stack_left = slot_stack.lock().await.clone();
+            stack_left = *slot_stack.lock().await;
 
             if slot_index < (self.rows * 9) as i32 {
                 if !self

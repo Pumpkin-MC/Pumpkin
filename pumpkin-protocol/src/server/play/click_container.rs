@@ -1,5 +1,5 @@
 use crate::VarInt;
-use crate::codec::item_stack_seralizer::{ItemStackSerializer, OptionalItemStackHash};
+use crate::codec::item_stack_seralizer::OptionalItemStackHash;
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
 use pumpkin_macros::packet;
 use serde::de::SeqAccess;
@@ -70,7 +70,7 @@ impl<'de> Deserialize<'de> for SClickSlot {
                     .ok_or(de::Error::custom("Failed to decode carried item"))?;
 
                 Ok(SClickSlot {
-                    sync_id: sync_id.into(),
+                    sync_id,
                     revision,
                     slot,
                     button,

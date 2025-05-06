@@ -1,6 +1,6 @@
 use pumpkin_data::item::Item;
+use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::screen_handler::ScreenHandler;
-use pumpkin_world::inventory::inventory::Inventory;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -31,7 +31,6 @@ use pumpkin_data::block::{Block, get_block_by_item, get_block_collision_shapes};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
@@ -79,7 +78,6 @@ pub enum BlockPlacingError {
     BlockOutOfReach,
     InvalidBlockFace,
     BlockOutOfWorld,
-    InventoryInvalid,
     InvalidGamemode,
     NoBaseBlock,
 }
@@ -94,7 +92,7 @@ impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
-            Self::InvalidBlockFace | Self::InventoryInvalid | Self::NoBaseBlock => true,
+            Self::InvalidBlockFace | Self::NoBaseBlock => true,
         }
     }
 
@@ -102,7 +100,6 @@ impl PumpkinError for BlockPlacingError {
         match self {
             Self::BlockOutOfWorld | Self::InvalidGamemode | Self::NoBaseBlock => log::Level::Trace,
             Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
-            Self::InventoryInvalid => log::Level::Error,
         }
     }
 
@@ -110,7 +107,6 @@ impl PumpkinError for BlockPlacingError {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
-            Self::InventoryInvalid => Some("Held item invalid".into()),
             Self::NoBaseBlock => Some("No base block".into()),
         }
     }
@@ -1343,7 +1339,7 @@ impl Player {
             server
                 .item_registry
                 .use_on_block(
-                    held_item.lock().await.clone().item,
+                    held_item.lock().await.item,
                     self,
                     location,
                     &face,
@@ -1358,7 +1354,7 @@ impl Player {
                     &block,
                     self,
                     location,
-                    held_item.lock().await.clone().item,
+                    held_item.lock().await.item,
                     server,
                     world,
                 )
@@ -1453,7 +1449,7 @@ impl Player {
                 .set_stack(item_stack)
                 .await;
             player_screen_handler
-                .set_recived_stack(packet.slot as usize, item_stack)
+                .set_received_stack(packet.slot as usize, item_stack)
                 .await;
             player_screen_handler.send_content_updates().await;
         } else if is_negative && is_legal {
@@ -1473,8 +1469,8 @@ impl Player {
         );
     }
 
-    pub async fn handle_close_container(&self, server: &Server, _packet: SCloseContainer) {
-        self.on_handeled_screen_closed().await;
+    pub async fn handle_close_container(&self, _server: &Server, _packet: SCloseContainer) {
+        self.on_handled_screen_closed().await;
     }
 
     pub async fn handle_command_suggestion(

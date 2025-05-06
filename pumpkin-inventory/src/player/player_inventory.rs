@@ -3,8 +3,8 @@ use crate::equipment_slot::EquipmentSlot;
 use crate::screen_handler::InventoryPlayer;
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::CSetPlayerInventory;
-use pumpkin_world::inventory::inventory::{Clearable, Inventory};
 use pumpkin_world::inventory::split_stack;
+use pumpkin_world::inventory::{Clearable, Inventory};
 use pumpkin_world::item::ItemStack;
 use std::array::from_fn;
 use std::collections::HashMap;
@@ -116,11 +116,11 @@ impl PlayerInventory {
         -1
     }
 
-    fn can_stack_add_more(&self, exsiting_stack: &ItemStack, stack: &ItemStack) -> bool {
-        !exsiting_stack.is_empty()
-            && exsiting_stack.are_items_and_components_equal(stack)
-            && exsiting_stack.is_stackable()
-            && exsiting_stack.item_count < exsiting_stack.get_max_stack_size()
+    fn can_stack_add_more(&self, existing_stack: &ItemStack, stack: &ItemStack) -> bool {
+        !existing_stack.is_empty()
+            && existing_stack.are_items_and_components_equal(stack)
+            && existing_stack.is_stackable()
+            && existing_stack.item_count < existing_stack.get_max_stack_size()
     }
 
     async fn get_occupied_slot_with_room_for_stack(&self, stack: &ItemStack) -> i16 {
@@ -283,7 +283,7 @@ impl PlayerInventory {
                 && notify_client
             {
                 player
-                    .enque_slot_set_packet(&CSetPlayerInventory::new(
+                    .enqueue_slot_set_packet(&CSetPlayerInventory::new(
                         (room_for_stack as i32).into(),
                         &stack.into(),
                     ))

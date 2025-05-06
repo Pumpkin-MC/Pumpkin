@@ -9,7 +9,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
-use crate::inventory::inventory::Inventory;
+use crate::inventory::Inventory;
 
 pub mod barrel;
 pub mod bed;

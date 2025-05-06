@@ -5,7 +5,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::inventory::inventory::Clearable;
+use pumpkin_world::inventory::Clearable;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};

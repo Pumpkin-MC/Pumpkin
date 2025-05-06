@@ -97,7 +97,7 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
@@ -265,9 +265,9 @@ impl Player {
         impl ScreenHandlerListener for ScreenListener {
             fn on_slot_update(
                 &self,
-                screen_handler: &ScreenHandlerBehaviour,
-                slot: u8,
-                stack: ItemStack,
+                _screen_handler: &ScreenHandlerBehaviour,
+                _slot: u8,
+                _stack: ItemStack,
             ) {
                 //println!("Slot updated: {slot:?}, {stack:?}");
             }
@@ -1328,7 +1328,7 @@ impl Player {
 
             if let Some(slot_index) = slot_index {
                 screen_handler
-                    .set_recived_stack(slot_index, *item_stack)
+                    .set_received_stack(slot_index, *item_stack)
                     .await;
             }
         }
@@ -1474,7 +1474,7 @@ impl Player {
             .store(current_id % 100 + 1, Ordering::Relaxed);
     }
 
-    pub async fn close_handeled_screen(&self) {
+    pub async fn close_handled_screen(&self) {
         self.client
             .enqueue_packet(&CCloseContainer::new(
                 self.current_screen_handler
@@ -1486,10 +1486,10 @@ impl Player {
                     .into(),
             ))
             .await;
-        self.on_handeled_screen_closed().await;
+        self.on_handled_screen_closed().await;
     }
 
-    pub async fn on_handeled_screen_closed(&self) {
+    pub async fn on_handled_screen_closed(&self) {
         self.current_screen_handler
             .lock()
             .await
@@ -1516,27 +1516,17 @@ impl Player {
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
         let mut screen_handler = screen_handler.lock().await;
-        println!(
-            "Adding listener to screen with sync id: {}",
-            screen_handler.sync_id()
-        );
+
         screen_handler
             .add_listener(self.screen_handler_listener.clone())
             .await;
-        println!(
-            "Updating sync handler to screen with sync id: {}",
-            screen_handler.sync_id()
-        );
+
         screen_handler
             .update_sync_handler(self.screen_handler_sync_handler.clone())
             .await;
-        println!(
-            "Sync handler updated to screen with sync id: {}",
-            screen_handler.sync_id()
-        );
     }
 
-    pub async fn open_handeled_screen(
+    pub async fn open_handled_screen(
         &self,
         screen_handler_factory: &dyn ScreenHandlerFactory,
         inventory: Option<Arc<dyn Inventory>>,
@@ -1550,7 +1540,7 @@ impl Player {
             .as_any()
             .is::<PlayerScreenHandler>()
         {
-            self.close_handeled_screen().await;
+            self.close_handled_screen().await;
         }
 
         self.increment_screen_handler_sync_id();
@@ -1575,10 +1565,6 @@ impl Player {
             drop(screen_handler_temp);
             self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
-            println!(
-                "Opened screen with sync id: {}",
-                self.screen_handler_sync_id.load(Ordering::Relaxed)
-            );
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
             //TODO: Send message if spectator
@@ -1636,11 +1622,11 @@ impl Player {
             .await;
 
         for (key, value) in packet.array_of_changed_slots {
-            screen_handler.set_recived_hash(key as usize, value).await;
+            screen_handler.set_received_hash(key as usize, value).await;
         }
 
         screen_handler
-            .set_recived_cursor_hash(packet.carried_item)
+            .set_received_cursor_hash(packet.carried_item)
             .await;
         screen_handler.enable_sync().await;
 
@@ -2225,23 +2211,23 @@ impl InventoryPlayer for Player {
         self.inventory.clone()
     }
 
-    async fn enque_inventory_packet(&self, packet: &CSetContainerContent) {
+    async fn enqueue_inventory_packet(&self, packet: &CSetContainerContent) {
         self.client.enqueue_packet(packet).await;
     }
 
-    async fn enque_slot_packet(&self, packet: &CSetContainerSlot) {
+    async fn enqueue_slot_packet(&self, packet: &CSetContainerSlot) {
         self.client.enqueue_packet(packet).await;
     }
 
-    async fn enque_cursor_packet(&self, packet: &CSetCursorItem) {
+    async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem) {
         self.client.enqueue_packet(packet).await;
     }
 
-    async fn enque_property_packet(&self, packet: &CSetContainerProperty) {
+    async fn enqueue_property_packet(&self, packet: &CSetContainerProperty) {
         self.client.enqueue_packet(packet).await;
     }
 
-    async fn enque_slot_set_packet(&self, packet: &CSetPlayerInventory) {
+    async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory) {
         self.client.enqueue_packet(packet).await;
     }
 }

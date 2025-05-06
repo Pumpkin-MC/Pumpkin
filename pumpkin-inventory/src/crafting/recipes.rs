@@ -1,4 +1,4 @@
-use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::inventory::Inventory;
 
 // RecipeMatcher.java
 pub struct RecipeMatcher {}

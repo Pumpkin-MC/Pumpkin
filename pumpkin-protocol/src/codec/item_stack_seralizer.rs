@@ -2,7 +2,6 @@ use std::borrow::Cow;
 
 use crate::VarInt;
 use pumpkin_data::item::Item;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use serde::{
     Deserialize, Serialize, Serializer,
@@ -132,6 +131,7 @@ pub struct ItemComponentHash {
 pub struct ItemStackHash {
     item_id: VarInt,
     count: VarInt,
+    #[allow(dead_code)]
     components: ItemComponentHash,
 }
 
@@ -182,7 +182,7 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
                         .ok_or(de::Error::custom("No item component hash!"))?;
 
                     let item_stack_hash = ItemStackHash {
-                        item_id: item_id,
+                        item_id,
                         count,
                         components: hashed_components,
                     };

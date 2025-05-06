@@ -39,8 +39,8 @@ pub trait Inventory: Send + Sync + Debug + Clearable {
     ) {
         let mut slots = Vec::new();
 
-        for i in 0..stacks.len() {
-            let stack = stacks[i].lock().await;
+        for (i, item) in stacks.iter().enumerate() {
+            let stack = item.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", i as i8);
@@ -68,7 +68,7 @@ pub trait Inventory: Send + Sync + Debug + Clearable {
                         let slot = slot_byte as usize;
                         if slot < stacks.len() {
                             if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                                // This won't error cause it's only called on initailization
+                                // This won't error cause it's only called on initialization
                                 *stacks[slot].try_lock().unwrap() = item_stack;
                             }
                         }

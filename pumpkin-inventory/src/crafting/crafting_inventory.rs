@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use pumpkin_world::{inventory::split_stack, item::ItemStack};
 use tokio::sync::Mutex;
 
-use pumpkin_world::inventory::inventory::{Clearable, Inventory};
+use pumpkin_world::inventory::{Clearable, Inventory};
 
-use super::recipies::RecipeInputInventory;
+use super::recipes::RecipeInputInventory;
 
 #[derive(Debug, Clone)]
 pub struct CraftingInventory {

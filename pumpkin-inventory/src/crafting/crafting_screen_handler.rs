@@ -1,14 +1,14 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use async_trait::async_trait;
-use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::inventory::Inventory;
 
 use crate::{
     screen_handler::ScreenHandler,
     slot::{NormalSlot, Slot},
 };
 
-use super::recipies::{RecipeFinderScreenHandler, RecipeInputInventory};
+use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 
 // TODO: Implement ResultSlot
 // CraftingResultSlot.java

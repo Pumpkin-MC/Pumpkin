@@ -4,7 +4,7 @@ use crate::{
     crafting::{
         crafting_inventory::CraftingInventory,
         crafting_screen_handler::CraftingScreenHandler,
-        recipies::{RecipeFinderScreenHandler, RecipeInputInventory},
+        recipes::{RecipeFinderScreenHandler, RecipeInputInventory},
     },
     equipment_slot::EquipmentSlot,
     screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
@@ -12,7 +12,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 
 use super::player_inventory::PlayerInventory;
@@ -116,6 +116,7 @@ impl ScreenHandler for PlayerScreenHandler {
             let mut slot_stack = slot_stack.lock().await;
             stack_left = *slot_stack;
 
+            #[allow(clippy::if_same_then_else)]
             if slot_index == 0 {
                 if !self.insert_item(&mut slot_stack, 9, 45, true).await {
                     return ItemStack::EMPTY;

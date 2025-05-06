@@ -64,7 +64,7 @@ impl ServerPlayerData {
             .await
             .on_closed(player)
             .await;
-        player.on_handeled_screen_closed().await;
+        player.on_handled_screen_closed().await;
 
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;

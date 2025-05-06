@@ -5,7 +5,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use pumpkin_world::inventory::inventory::Inventory;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::{sync::Mutex, time::timeout};
 
@@ -155,7 +155,7 @@ pub trait Slot: Send + Sync + Debug {
                 .min(stack.item_count)
                 .min(self.get_max_item_count_for_stack(&stack).await - stack_self.item_count);
 
-            if min_count <= 0 {
+            if min_count == 0 {
                 return stack;
             } else {
                 if stack_self.is_empty() {

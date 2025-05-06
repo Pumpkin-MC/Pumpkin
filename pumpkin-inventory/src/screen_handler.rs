@@ -8,11 +8,11 @@ use pumpkin_protocol::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory,
     },
-    codec::item_stack_seralizer::{ItemStackHash, OptionalItemStackHash},
+    codec::item_stack_seralizer::OptionalItemStackHash,
     server::play::SlotActionType,
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::inventory::{ComparableInventory, Inventory};
+use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
@@ -26,8 +26,8 @@ use crate::{
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
 pub struct ScreenProperty {
-    old_value: i32,
-    index: u8,
+    _old_value: i32,
+    _index: u8,
     value: i32,
 }
 
@@ -45,15 +45,15 @@ impl ScreenProperty {
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
     fn get_inventory(&self) -> Arc<PlayerInventory>;
-    async fn enque_inventory_packet(&self, packet: &CSetContainerContent);
-    async fn enque_slot_packet(&self, packet: &CSetContainerSlot);
-    async fn enque_cursor_packet(&self, packet: &CSetCursorItem);
-    async fn enque_property_packet(&self, packet: &CSetContainerProperty);
-    async fn enque_slot_set_packet(&self, packet: &CSetPlayerInventory);
+    async fn enqueue_inventory_packet(&self, packet: &CSetContainerContent);
+    async fn enqueue_slot_packet(&self, packet: &CSetContainerSlot);
+    async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
+    async fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
+    async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
 }
 
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
-    // TODO: Super wierd disconnect logic in vanilla, investigate this later
+    // TODO: Super weird disconnect logic in vanilla, investigate this later
     player
         .get_inventory()
         .offer_or_drop_stack(stack, player)
@@ -87,7 +87,7 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    fn can_use(&self, player: &dyn InventoryPlayer) -> bool {
+    fn can_use(&self, _player: &dyn InventoryPlayer) -> bool {
         true
     }
 
@@ -164,10 +164,10 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    async fn set_recived_hash(&mut self, slot: usize, hash: OptionalItemStackHash) {
+    async fn set_received_hash(&mut self, slot: usize, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
         if slot < behaviour.previous_tracked_stacks.len() {
-            behaviour.previous_tracked_stacks[slot].set_recived_hash(hash);
+            behaviour.previous_tracked_stacks[slot].set_received_hash(hash);
         } else {
             warn!(
                 "Incorrect slot index: {} available slots: {}",
@@ -177,14 +177,14 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    async fn set_recived_stack(&mut self, slot: usize, stack: ItemStack) {
+    async fn set_received_stack(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
-        behaviour.previous_tracked_stacks[slot].set_recived_stack(stack);
+        behaviour.previous_tracked_stacks[slot].set_received_stack(stack);
     }
 
-    async fn set_recived_cursor_hash(&mut self, hash: OptionalItemStackHash) {
+    async fn set_received_cursor_hash(&mut self, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
-        behaviour.previous_cursor_stack.set_recived_hash(hash);
+        behaviour.previous_cursor_stack.set_received_hash(hash);
     }
 
     async fn sync_state(&mut self) {
@@ -194,13 +194,13 @@ pub trait ScreenHandler: Send + Sync {
         for i in 0..behaviour.slots.len() {
             let stack = behaviour.slots[i].get_cloned_stack().await;
             previous_tracked_stacks.push(stack);
-            behaviour.previous_tracked_stacks[i].set_recived_stack(stack);
+            behaviour.previous_tracked_stacks[i].set_received_stack(stack);
         }
 
-        let cursor_stack = behaviour.cursor_stack.lock().await.clone();
+        let cursor_stack = *behaviour.cursor_stack.lock().await;
         behaviour
             .previous_cursor_stack
-            .set_recived_stack(cursor_stack);
+            .set_received_stack(cursor_stack);
 
         for i in 0..behaviour.properties.len() {
             let property_val = behaviour.properties[i].get();
@@ -280,7 +280,7 @@ pub trait ScreenHandler: Send + Sync {
             let prev_stack = &mut behaviour.previous_tracked_stacks[slot];
 
             if !prev_stack.is_in_sync(&stack) {
-                prev_stack.set_recived_stack(stack);
+                prev_stack.set_received_stack(stack);
                 let next_revision = behaviour.next_revision();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
@@ -298,7 +298,7 @@ pub trait ScreenHandler: Send + Sync {
             if !behaviour.previous_cursor_stack.is_in_sync(&cursor_stack) {
                 behaviour
                     .previous_cursor_stack
-                    .set_recived_stack(cursor_stack.clone());
+                    .set_received_stack(*cursor_stack);
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
                         .update_cursor_stack(behaviour, &cursor_stack)
@@ -465,6 +465,7 @@ pub trait ScreenHandler: Send + Sync {
         action_type: SlotActionType,
         player: &dyn InventoryPlayer,
     ) {
+        //TODO: Implement quickcraft, Clone, PickupAll, Throw
         if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
             && (button == 0 || button == 1)
         {
@@ -670,12 +671,18 @@ pub trait ScreenHandler: Send + Sync {
 }
 
 pub trait ScreenHandlerListener: Send + Sync {
-    fn on_slot_update(&self, screen_handler: &ScreenHandlerBehaviour, slot: u8, stack: ItemStack) {}
+    fn on_slot_update(
+        &self,
+        _screen_handler: &ScreenHandlerBehaviour,
+        _slot: u8,
+        _stack: ItemStack,
+    ) {
+    }
     fn on_property_update(
         &self,
-        screen_handler: &ScreenHandlerBehaviour,
-        property: u8,
-        value: i32,
+        _screen_handler: &ScreenHandlerBehaviour,
+        _property: u8,
+        _value: i32,
     ) {
     }
 }

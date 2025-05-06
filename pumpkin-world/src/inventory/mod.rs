@@ -4,7 +4,10 @@ use tokio::sync::Mutex;
 
 use crate::item::ItemStack;
 
-pub mod inventory;
+#[allow(clippy::module_inception)]
+mod inventory;
+
+pub use inventory::*;
 
 // These are some utility functions found in Inventories.java
 pub async fn split_stack(stacks: &[Arc<Mutex<ItemStack>>], slot: usize, amount: u8) -> ItemStack {

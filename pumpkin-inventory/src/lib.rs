@@ -11,8 +11,4 @@ pub mod slot;
 pub mod sync_handler;
 pub mod window_property;
 
-use std::sync::Arc;
-
 pub use error::InventoryError;
-use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
