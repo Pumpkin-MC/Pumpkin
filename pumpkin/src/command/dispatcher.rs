@@ -153,6 +153,101 @@ impl CommandDispatcher {
         suggestions
     }
 
+    pub(crate) fn split_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
+        if cmd.is_empty() {
+            return Err(GeneralCommandIssue("Empty Command".to_string()));
+        }
+        let mut args = Vec::new();
+        let mut current_arg_start = 0usize;
+        let mut in_single_quotes = false;
+        let mut in_double_quotes = false;
+        let mut in_braces = 0u32;
+        let mut in_brackets = 0u32;
+        let mut is_escaping = false;
+        for (i, c) in cmd.char_indices() {
+            if c == '\\' {
+                is_escaping = !is_escaping;
+                continue;
+            }
+            if is_escaping {
+                is_escaping = false;
+                continue;
+            }
+            match c {
+                '{' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        in_braces += 1;
+                    }
+                }
+                '}' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        if in_braces == 0 {
+                            return Err(GeneralCommandIssue("Unmatched braces".to_string()));
+                        }
+                        in_braces -= 1;
+                    }
+                }
+                '[' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        in_brackets += 1;
+                    }
+                }
+                ']' => {
+                    if !in_single_quotes && !in_double_quotes {
+                        if in_brackets == 0 {
+                            return Err(GeneralCommandIssue("Unmatched brackets".to_string()));
+                        }
+                        in_brackets -= 1;
+                    }
+                }
+                '\'' => {
+                    if !in_double_quotes {
+                        in_single_quotes = !in_single_quotes;
+                    }
+                }
+                '"' => {
+                    if !in_single_quotes {
+                        in_double_quotes = !in_double_quotes;
+                    }
+                }
+                ' ' if !in_single_quotes
+                    && !in_double_quotes
+                    && in_braces == 0
+                    && in_brackets == 0 =>
+                {
+                    if current_arg_start != i {
+                        args.push(&cmd[current_arg_start..i]);
+                    }
+                    current_arg_start = i + 1;
+                }
+                _ => {}
+            }
+        }
+        if current_arg_start != cmd.len() {
+            args.push(&cmd[current_arg_start..]);
+        }
+        if in_single_quotes || in_double_quotes {
+            return Err(GeneralCommandIssue(
+                "Unmatched quotes at the end".to_string(),
+            ));
+        }
+        if in_braces != 0 {
+            return Err(GeneralCommandIssue(
+                "Unmatched braces at the end".to_string(),
+            ));
+        }
+        if in_brackets != 0 {
+            return Err(GeneralCommandIssue(
+                "Unmatched brackets at the end".to_string(),
+            ));
+        }
+        if args.is_empty() {
+            return Err(GeneralCommandIssue("Empty Command".to_string()));
+        }
+        let key = args.remove(0);
+        Ok((key, args.into_iter().rev().collect()))
+    }
+
     /// Execute a command using its corresponding [`CommandTree`].
     pub(crate) async fn dispatch<'a>(
         &'a self,
@@ -160,12 +255,7 @@ impl CommandDispatcher {
         server: &'a Server,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
-        // Other languages dont use the ascii whitespace
-        let mut parts = cmd.split_whitespace();
-        let key = parts
-            .next()
-            .ok_or(GeneralCommandIssue("Empty Command".to_string()))?;
-        let raw_args: Vec<&str> = parts.rev().collect();
+        let (key, raw_args) = Self::split_parts(cmd)?;
 
         if !self.commands.contains_key(key) {
             return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
@@ -236,30 +326,42 @@ impl CommandDispatcher {
                         executor.execute(src, server, &parsed_args).await?;
                         Ok(true)
                     } else {
+                        log::debug!(
+                            "Error while parsing command: {raw_args:?} was not consumed, but should have been"
+                        );
                         Ok(false)
                     };
                 }
                 NodeType::Literal { string, .. } => {
                     if raw_args.pop() != Some(string) {
+                        log::debug!("Error while parsing command: {raw_args:?}: expected {string}");
                         return Ok(false);
                     }
                 }
                 NodeType::Argument { consumer, name, .. } => {
-                    match consumer.consume(src, server, raw_args).await {
-                        Some(consumed) => {
-                            parsed_args.insert(name, consumed);
-                        }
-                        None => return Ok(false),
+                    if let Some(consumed) = consumer.consume(src, server, raw_args).await {
+                        parsed_args.insert(name, consumed);
+                    } else {
+                        log::debug!(
+                            "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
+                        );
+                        return Ok(false);
                     }
                 }
                 NodeType::Require { predicate, .. } => {
                     if !predicate(src) {
+                        log::debug!(
+                            "Error while parsing command: {raw_args:?} does not meet the requirement"
+                        );
                         return Ok(false);
                     }
                 }
             }
         }
 
+        log::debug!(
+            "Error while parsing command: {raw_args:?} was not consumed, but should have been"
+        );
         Ok(false)
     }
 

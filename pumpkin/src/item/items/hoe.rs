@@ -4,7 +4,7 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
@@ -37,7 +37,7 @@ impl PumpkinItem for HoeItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
@@ -52,7 +52,7 @@ impl PumpkinItem for HoeItem {
             let world = player.world().await;
 
             //Only rooted can be right-clicked on the bottom of the block
-            if face == &BlockDirection::Down {
+            if face == BlockDirection::Down {
                 if block == &Block::ROOTED_DIRT {
                     future_block = &Block::DIRT;
                 }
@@ -61,7 +61,11 @@ impl PumpkinItem for HoeItem {
                 if (block == &Block::GRASS_BLOCK
                     || block == &Block::DIRT_PATH
                     || block == &Block::DIRT)
-                    && world.get_block_state(&location.up()).await.unwrap().air
+                    && world
+                        .get_block_state(&location.up())
+                        .await
+                        .unwrap()
+                        .is_air()
                 {
                     future_block = &Block::FARMLAND;
                 }

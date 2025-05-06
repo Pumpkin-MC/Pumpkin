@@ -4,7 +4,7 @@ use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use futures::future::join_all;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
+use pumpkin_data::{Block, chunk::ChunkStatus};
 use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::vector2::Vector2;
 use std::{
@@ -27,7 +27,7 @@ use crate::{
     generation::section_coords,
 };
 
-use super::{ChunkNbt, ChunkSectionNBT, SerializedScheduledTick};
+use super::{ChunkNbt, ChunkSectionNBT, LightContainer, SerializedScheduledTick};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -819,20 +819,33 @@ impl ChunkSerializer for AnvilChunkFile {
 }
 
 pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
-    let mut sections = Vec::new();
+    let sections: Vec<_> = (0..chunk_data.section.sections.len() + 2)
+        .map(|i| {
+            let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
+            let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
 
-    for (i, section) in chunk_data.section.sections.iter().enumerate() {
-        let block_states = section.block_states.to_disk_nbt();
-        let biomes = section.biomes.to_disk_nbt();
-
-        sections.push(ChunkSectionNBT {
-            y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
-            block_states,
-            biomes,
-            block_light: section.block_light.clone(), // :c
-            sky_light: section.sky_light.clone(),     // :c
-        });
-    }
+            ChunkSectionNBT {
+                y: (i as i8) - 1i8
+                    + section_coords::block_to_section(chunk_data.section.min_y) as i8,
+                block_states: section.map(|section| section.block_states.to_disk_nbt()),
+                biomes: section.map(|section| section.biomes.to_disk_nbt()),
+                block_light: match chunk_data.light_engine.block_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+                sky_light: match chunk_data.light_engine.sky_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+            }
+        })
+        .filter(|nbt| {
+            nbt.block_states.is_some()
+                || nbt.biomes.is_some()
+                || nbt.block_light.is_some()
+                || nbt.sky_light.is_some()
+        })
+        .collect();
 
     let nbt = ChunkNbt {
         data_version: WORLD_DATA_VERSION,
@@ -884,6 +897,8 @@ pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSeri
             },
         ))
         .await,
+        // we have not implemented light engine
+        light_correct: false,
     };
 
     let mut result = Vec::new();

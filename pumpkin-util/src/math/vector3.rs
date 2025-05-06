@@ -1,7 +1,7 @@
 use bytes::BufMut;
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-use num_traits::Float;
+use num_traits::{Float, Num};
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector3<T> {
@@ -10,7 +10,7 @@ pub struct Vector3<T> {
     pub z: T,
 }
 
-impl<T: Math + Copy> Vector3<T> {
+impl<T: Math + PartialOrd + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Vector3 { x, y, z }
     }
@@ -52,6 +52,43 @@ impl<T: Math + Copy> Vector3<T> {
             x: self.x * x,
             y: self.y * y,
             z: self.z * z,
+        }
+    }
+
+    pub fn lerp(&self, other: &Vector3<T>, t: T) -> Self {
+        Vector3 {
+            x: self.x + (other.x - self.x) * t,
+            y: self.y + (other.y - self.y) * t,
+            z: self.z + (other.z - self.z) * t,
+        }
+    }
+
+    pub fn sign(&self) -> Vector3<i32>
+    where
+        T: Num + PartialOrd + Copy,
+    {
+        Vector3 {
+            x: if self.x > T::zero() {
+                1
+            } else if self.x < T::zero() {
+                -1
+            } else {
+                0
+            },
+            y: if self.y > T::zero() {
+                1
+            } else if self.y < T::zero() {
+                -1
+            } else {
+                0
+            },
+            z: if self.z > T::zero() {
+                1
+            } else if self.z < T::zero() {
+                -1
+            } else {
+                0
+            },
         }
     }
 

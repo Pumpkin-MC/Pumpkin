@@ -14,6 +14,9 @@ use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_data::Block;
+use pumpkin_inventory::drag_handler::DragHandler;
+use pumpkin_inventory::{Container, OpenContainer};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
@@ -24,7 +27,7 @@ use pumpkin_world::dimension::Dimension;
 use rand::prelude::SliceRandom;
 use rsa::RsaPublicKey;
 use std::net::IpAddr;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::{
     sync::{Arc, atomic::Ordering},
     time::Duration,
@@ -73,6 +76,8 @@ pub struct Server {
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    // Whether the server whitelist is on or off
+    pub white_list: AtomicBool,
     tasks: TaskTracker,
 }
 
@@ -131,6 +136,7 @@ impl Server {
                 format!("{world_name}/playerdata"),
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
+            white_list: AtomicBool::new(BASIC_CONFIG.white_list),
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
         }
@@ -158,6 +164,7 @@ impl Server {
         self.tasks.spawn(task)
     }
 
+    #[allow(clippy::if_then_some_else_none)]
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -209,16 +216,19 @@ impl Server {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
                 world
                     .add_player(player.gameprofile.id, player.clone())
-                    .await;
-                // TODO: Config if we want increase online
-                if let Some(config) = player.client.config.lock().await.as_ref() {
-                    // TODO: Config so we can also just ignore this hehe
-                    if config.server_listing {
-                        self.listing.lock().await.add_player();
+                    .await.is_ok() {
+                    // TODO: Config if we want increase online
+                    if let Some(config) = player.client.config.lock().await.as_ref() {
+                        // TODO: Config so we can also just ignore this hehe
+                        if config.server_listing {
+                            self.listing.lock().await.add_player(&player);
+                        }
                     }
-                }
 
-                Some((player, world.clone()))
+                    Some((player, world.clone()))
+                } else {
+                    None
+                }
             }
 
             'cancelled: {
@@ -228,9 +238,9 @@ impl Server {
         }}
     }
 
-    pub async fn remove_player(&self) {
+    pub async fn remove_player(&self, player: &Player) {
         // TODO: Config if we want decrease online
-        self.listing.lock().await.remove_player();
+        self.listing.lock().await.remove_player(player);
     }
 
     pub async fn shutdown(&self) {

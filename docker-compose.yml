@@ -10,6 +10,9 @@ services:
       - ./data:/pumpkin
       # Use the following, if you want to make your config immutable
       #- ./config:/pumpkin/config:ro
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
     stdin_open: true
     tty: true
     cap_drop:

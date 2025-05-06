@@ -45,6 +45,7 @@ pub enum LootCondition {
     KilledByPlayer,
     EntityScores,
     BlockStateProperty {
+        block: &'static str,
         properties: &'static [(&'static str, &'static str)],
     },
     MatchTool,
@@ -60,9 +61,55 @@ pub enum LootCondition {
 }
 
 #[derive(Clone, Debug)]
+pub struct LootFunction {
+    pub content: LootFunctionTypes,
+    pub conditions: Option<&'static [LootCondition]>,
+}
+
+#[derive(Clone, Debug)]
+pub enum LootFunctionTypes {
+    SetCount {
+        count: LootFunctionNumberProvider,
+        add: bool,
+    },
+    LimitCount {
+        min: Option<f32>,
+        max: Option<f32>,
+    },
+    ApplyBonus {
+        enchantment: &'static str,
+        formula: &'static str,
+        parameters: Option<LootFunctionBonusParameter>,
+    },
+    CopyComponents {
+        source: &'static str,
+        include: &'static [&'static str],
+    },
+    CopyState {
+        block: &'static str,
+        properties: &'static [&'static str],
+    },
+    ExplosionDecay,
+}
+
+#[derive(Clone, Debug)]
+pub enum LootFunctionNumberProvider {
+    Constant { value: f32 },
+    Uniform { min: f32, max: f32 },
+    Binomial { n: f32, p: f32 },
+}
+
+#[derive(Clone, Debug)]
+pub enum LootFunctionBonusParameter {
+    Multiplier { bonus_multiplier: i32 },
+    Probability { extra: i32, probability: f32 },
+}
+
+#[derive(Clone, Debug)]
 pub struct LootPoolEntry {
     pub content: LootPoolEntryTypes,
     pub conditions: Option<&'static [LootCondition]>,
+    pub functions: Option<&'static [LootFunction]>,
 }
 
 #[derive(Clone, Debug)]

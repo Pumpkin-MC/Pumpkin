@@ -2,7 +2,7 @@ pub mod entities;
 pub mod state;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{Axis, Facing, HorizontalFacing};
+use pumpkin_data::block_properties::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 use serde::Deserialize;
@@ -179,39 +179,6 @@ impl BlockDirection {
     }
 }
 
-pub trait HorizontalFacingExt {
-    fn to_block_direction(&self) -> BlockDirection;
-    fn rotate(&self) -> HorizontalFacing;
-    fn rotate_ccw(&self) -> HorizontalFacing;
-}
-
-impl HorizontalFacingExt for HorizontalFacing {
-    fn to_block_direction(&self) -> BlockDirection {
-        match self {
-            HorizontalFacing::North => BlockDirection::North,
-            HorizontalFacing::South => BlockDirection::South,
-            HorizontalFacing::West => BlockDirection::West,
-            HorizontalFacing::East => BlockDirection::East,
-        }
-    }
-    fn rotate(&self) -> HorizontalFacing {
-        match self {
-            HorizontalFacing::North => HorizontalFacing::East,
-            HorizontalFacing::South => HorizontalFacing::West,
-            HorizontalFacing::West => HorizontalFacing::North,
-            HorizontalFacing::East => HorizontalFacing::South,
-        }
-    }
-    fn rotate_ccw(&self) -> HorizontalFacing {
-        match self {
-            HorizontalFacing::North => HorizontalFacing::West,
-            HorizontalFacing::South => HorizontalFacing::East,
-            HorizontalFacing::West => HorizontalFacing::North,
-            HorizontalFacing::East => HorizontalFacing::South,
-        }
-    }
-}
-
 pub trait FacingExt {
     fn to_block_direction(&self) -> BlockDirection;
 }
@@ -219,19 +186,34 @@ pub trait FacingExt {
 impl FacingExt for Facing {
     fn to_block_direction(&self) -> BlockDirection {
         match self {
-            Facing::North => BlockDirection::North,
-            Facing::South => BlockDirection::South,
-            Facing::West => BlockDirection::West,
-            Facing::East => BlockDirection::East,
-            Facing::Up => BlockDirection::Up,
-            Facing::Down => BlockDirection::Down,
+            Self::North => BlockDirection::North,
+            Self::South => BlockDirection::South,
+            Self::West => BlockDirection::West,
+            Self::East => BlockDirection::East,
+            Self::Up => BlockDirection::Up,
+            Self::Down => BlockDirection::Down,
+        }
+    }
+}
+
+pub trait HorizontalFacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+}
+
+impl HorizontalFacingExt for HorizontalFacing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            Self::North => BlockDirection::North,
+            Self::South => BlockDirection::South,
+            Self::West => BlockDirection::West,
+            Self::East => BlockDirection::East,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::block::Block;
+    use pumpkin_data::Block;
 
     use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
 

@@ -1,4 +1,5 @@
 use core::f64;
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use async_trait::async_trait;
@@ -34,13 +35,19 @@ where
 
         if let Some(max) = self.max_inclusive {
             if x > max {
-                return Some(Arg::Num(Err(())));
+                return Some(Arg::Num(Err(NotInBounds::UpperBound(
+                    x.to_number(),
+                    max.to_number(),
+                ))));
             }
         }
 
         if let Some(min) = self.min_inclusive {
             if x < min {
-                return Some(Arg::Num(Err(())));
+                return Some(Arg::Num(Err(NotInBounds::LowerBound(
+                    x.to_number(),
+                    min.to_number(),
+                ))));
             }
         }
 
@@ -67,22 +74,68 @@ impl<'a, T: 'static + ToFromNumber> FindArg<'a> for BoundedNumArgumentConsumer<T
                     || Err(CommandError::InvalidConsumption(Some(name.to_string()))),
                     |x| Ok(Ok(x)),
                 ),
-                Err(()) => Ok(Err(())),
+                Err(err) => Ok(Err(*err)),
             },
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }
 }
 
-pub type NotInBounds = ();
+#[derive(Debug, Copy, Clone)]
+pub enum NotInBounds {
+    /// Number is lower than the lower bound
+    LowerBound(Number, Number),
+    /// Number is higher then the upper bound
+    UpperBound(Number, Number),
+}
 
-#[derive(Clone, Copy)]
+impl From<NotInBounds> for CommandError {
+    fn from(value: NotInBounds) -> Self {
+        match value {
+            NotInBounds::LowerBound(val, min) => Self::GeneralCommandIssue(format!(
+                "{} must not be less than {}, found {}",
+                val.qualifier(),
+                min,
+                val
+            )),
+            NotInBounds::UpperBound(val, max) => Self::GeneralCommandIssue(format!(
+                "{} must not be more than {}, found {}",
+                val.qualifier(),
+                max,
+                val
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum Number {
     F64(f64),
     F32(f32),
     I32(i32),
     #[allow(unused)]
     I64(i64),
+}
+
+impl Number {
+    #[must_use]
+    pub fn qualifier(&self) -> &'static str {
+        match self {
+            Self::F64(_) | Self::F32(_) => "Float",
+            Self::I32(_) | Self::I64(_) => "Integer",
+        }
+    }
+}
+
+impl Display for Number {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::F64(v) => write!(f, "{v:.2}"),
+            Self::F32(v) => write!(f, "{v:.2}"),
+            Self::I32(v) => write!(f, "{v}"),
+            Self::I64(v) => write!(f, "{v}"),
+        }
+    }
 }
 
 impl<T: ToFromNumber> BoundedNumArgumentConsumer<T> {

@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::AtomicU32};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering::Relaxed},
+};
 
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
@@ -40,6 +43,23 @@ impl ItemEntity {
             pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
         }
     }
+
+    pub async fn new_with_velocity(
+        entity: Entity,
+        item_id: u16,
+        count: u32,
+        velocity: Vector3<f64>,
+        pickup_delay: u8,
+    ) -> Self {
+        entity.set_velocity(velocity).await;
+        entity.yaw.store(rand::random::<f32>() * 360.0);
+        Self {
+            entity,
+            item_stack: Mutex::new(item_stack),
+            item_age: AtomicU32::new(0),
+            pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
+        }
+    }
     pub async fn send_meta_packet(&self) {
         self.entity
             .send_meta_data(&[Metadata::new(
@@ -54,19 +74,19 @@ impl ItemEntity {
 #[async_trait]
 impl EntityBase for ItemEntity {
     async fn tick(&self, server: &Server) {
-        self.entity.tick(server).await;
+        let entity = &self.entity;
+        entity.tick(server).await;
         {
             let mut delay = self.pickup_delay.lock().await;
             *delay = delay.saturating_sub(1);
         };
 
-        let age = self
-            .item_age
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let age = self.item_age.fetch_add(1, Relaxed);
         if age >= 6000 {
-            self.entity.remove().await;
+            entity.remove().await;
         }
     }
+
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
         false
     }

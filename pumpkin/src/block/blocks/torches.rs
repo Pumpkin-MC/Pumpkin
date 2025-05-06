@@ -1,13 +1,14 @@
+use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::BlockProperties;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 
-type WallTorchProps = pumpkin_data::block::WallTorchLikeProperties;
+type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -32,12 +33,12 @@ impl PumpkinBlock for TorchBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        face: &BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        block: &Block,
+        _block_pos: &BlockPos,
+        face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         if face.is_horizontal() {
             let wall_block = match block.name {

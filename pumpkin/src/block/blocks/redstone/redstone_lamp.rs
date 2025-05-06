@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, Boolean};
+use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -16,7 +16,7 @@ use crate::{
 
 use super::block_receives_redstone_power;
 
-type RedstoneLampProperties = pumpkin_data::block::RedstoneOreLikeProperties;
+type RedstoneLampProperties = pumpkin_data::block_properties::RedstoneOreLikeProperties;
 
 #[pumpkin_block("minecraft:redstone_lamp")]
 pub struct RedstoneLamp;
@@ -27,15 +27,15 @@ impl PumpkinBlock for RedstoneLamp {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: &BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut props = RedstoneLampProperties::default(block);
-        props.lit = Boolean::from_bool(block_receives_redstone_power(world, block_pos).await);
+        props.lit = block_receives_redstone_power(world, block_pos).await;
         props.to_state_id(block)
     }
 
@@ -49,7 +49,7 @@ impl PumpkinBlock for RedstoneLamp {
     ) {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);
-        let is_lit = props.lit.to_bool();
+        let is_lit = props.lit;
         let is_receiving_power = block_receives_redstone_power(world, block_pos).await;
 
         if is_lit != is_receiving_power {
@@ -58,7 +58,7 @@ impl PumpkinBlock for RedstoneLamp {
                     .schedule_block_tick(block, *block_pos, 4, TickPriority::Normal)
                     .await;
             } else {
-                props.lit = props.lit.flip();
+                props.lit = !props.lit;
                 world
                     .set_block_state(
                         block_pos,
@@ -73,11 +73,11 @@ impl PumpkinBlock for RedstoneLamp {
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         let state = world.get_block_state(block_pos).await.unwrap();
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);
-        let is_lit = props.lit.to_bool();
+        let is_lit = props.lit;
         let is_receiving_power = block_receives_redstone_power(world, block_pos).await;
 
         if is_lit && !is_receiving_power {
-            props.lit = props.lit.flip();
+            props.lit = !props.lit;
             world
                 .set_block_state(
                     block_pos,

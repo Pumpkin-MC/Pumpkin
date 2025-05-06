@@ -44,7 +44,7 @@ derive-getters = "0.5.0"
 thread_local = "1.1.8"
 lru = "0.13.0"
 
-tokio-util = { version = "0.7.14", features = ["rt"] }
+tokio-util = { version = "0.7.15", features = ["rt"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
