@@ -8,17 +8,19 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::tag::Tagable;
+use pumpkin_util::respawn_point::RespawnPoint;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item::Operation;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_BOOT, SLOT_CRAFT_INPUT_END, SLOT_CRAFT_INPUT_START, SLOT_HELM,
     SLOT_HOTBAR_END, SLOT_INV_START, SLOT_OFFHAND,
@@ -172,6 +174,8 @@ pub struct Player {
     pub gamemode: AtomicCell<GameMode>,
     /// The player's previous gamemode
     pub previous_gamemode: AtomicCell<Option<GameMode>>,
+    /// The player's spawnpoint
+    pub respawn_point: AtomicCell<Option<RespawnPoint>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -275,6 +279,7 @@ impl Player {
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
+            respawn_point: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -459,6 +464,40 @@ impl Player {
         }
 
         if config.swing {}
+    }
+
+    pub async fn set_respawn_point(&self, block_pos: BlockPos, yaw: f32) {
+        self.respawn_point.store(Some(RespawnPoint {
+            position: block_pos,
+            yaw,
+            force: false,
+        }));
+    }
+
+    pub async fn get_respawn_point(&self) -> Option<RespawnPoint> {
+        if let Some(respawn_point) = self.respawn_point.load() {
+            let block = self
+                .world()
+                .await
+                .get_block(&respawn_point.position)
+                .await
+                .unwrap();
+
+            return if block.is_tagged_with("#minecraft:beds").unwrap() {
+                Some(respawn_point)
+            } else if block == Block::RESPAWN_ANCHOR {
+                Some(respawn_point)
+            } else {
+                self.send_system_message(&TextComponent::translate(
+                    "block.minecraft.spawn.not_valid",
+                    [],
+                ))
+                .await;
+                None
+            };
+        }
+
+        None
     }
 
     pub async fn sleep(&self, bed_head_pos: BlockPos) {
