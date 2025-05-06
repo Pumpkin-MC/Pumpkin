@@ -1,23 +1,27 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_registry::DimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
-use std::sync::Arc;
+use pumpkin_world::block::entities::bed::BedBlockEntity;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
-use pumpkin_protocol::server::play::SUseItemOn;
-
 use crate::server::Server;
+use crate::world::BlockFlags;
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -85,17 +89,24 @@ impl PumpkinBlock for BedBlock {
         _old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        let mut head_props = BedProperties::default(block);
-        head_props.facing = BedProperties::from_state_id(state_id, block).facing;
-        head_props.part = BedPart::Head;
+        let bed_entity = BedBlockEntity::new(*block_pos);
+        world.add_block_entity(Arc::new(bed_entity)).await;
 
+        let mut bed_head_props = BedProperties::default(block);
+        bed_head_props.facing = BedProperties::from_state_id(state_id, block).facing;
+        bed_head_props.part = BedPart::Head;
+
+        let bed_head_pos = block_pos.offset(bed_head_props.facing.to_offset());
         world
             .set_block_state(
-                &block_pos.offset(head_props.facing.to_offset()),
-                head_props.to_state_id(block),
+                &bed_head_pos,
+                bed_head_props.to_state_id(block),
                 BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
             )
             .await;
+
+        let bed_head_entity = BedBlockEntity::new(bed_head_pos);
+        world.add_block_entity(Arc::new(bed_head_entity)).await;
     }
 
     async fn broken(
