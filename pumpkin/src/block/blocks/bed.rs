@@ -5,14 +5,12 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_registry::DimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::bed::BedBlockEntity;
@@ -140,12 +138,22 @@ impl PumpkinBlock for BedBlock {
 
     async fn normal_use(
         &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
+        block: &Block,
+        player: &Player,
+        block_pos: BlockPos,
         _server: &Server,
-        _world: &Arc<World>,
+        world: &Arc<World>,
     ) {
-        // Sleep
+        if world.dimension_type == DimensionType::Overworld {
+            let state_id = world.get_block_state_id(&block_pos).await.unwrap();
+            let bed_props = BedProperties::from_state_id(state_id, block);
+            let bed_head_pos = if bed_props.part == BedPart::Head {
+                block_pos
+            } else {
+                block_pos.offset(bed_props.facing.to_offset())
+            };
+
+            player.sleep(bed_head_pos).await;
+        }
     }
 }

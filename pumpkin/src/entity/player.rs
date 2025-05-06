@@ -53,7 +53,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CEntityPositionSync, CSetHeldItem, PlayerInfoFlags, PreviousMessage,
+    Animation, CEntityAnimation, CEntityPositionSync, CSetHeldItem, PlayerInfoFlags,
+    PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -95,7 +96,7 @@ use pumpkin_util::{
     text::TextComponent,
 };
 use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
+    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
 };
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::RwLock;
@@ -482,6 +483,57 @@ impl Player {
         }
 
         if config.swing {}
+    }
+
+    pub async fn sleep(&self, bed_head_pos: BlockPos) {
+        // TODO: Stop riding
+
+        self.living_entity
+            .entity
+            .set_pose(EntityPose::Sleeping)
+            .await;
+        self.living_entity
+            .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                SLEEPING_POS_ID,
+                MetaDataType::OptionalBlockPos,
+                Some(bed_head_pos),
+            )])
+            .await;
+        self.living_entity
+            .entity
+            .set_velocity(Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            })
+            .await;
+    }
+
+    pub async fn wake_up(&self) {
+        self.living_entity
+            .entity
+            .set_pose(EntityPose::Standing)
+            .await;
+        self.living_entity.entity.set_pos(self.position());
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                SLEEPING_POS_ID,
+                MetaDataType::OptionalBlockPos,
+                None::<BlockPos>,
+            )])
+            .await;
+
+        self.world()
+            .await
+            .broadcast_packet_all(&CEntityAnimation::new(
+                self.entity_id().into(),
+                Animation::LeaveBed,
+            ))
+            .await;
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
