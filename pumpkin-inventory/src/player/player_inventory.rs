@@ -278,7 +278,7 @@ impl PlayerInventory {
                     .await
                     .item_count;
             if self
-                .insert_stack(room_for_stack, &mut stack.split(items_fit as u8))
+                .insert_stack(room_for_stack, &mut stack.split(items_fit))
                 .await
                 && notify_client
             {
