@@ -5,13 +5,9 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
-use pumpkin_inventory::player::PlayerInventory;
-use pumpkin_protocol::client::play::CSetContainerSlot;
-use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::world::{BlockFlags, World};
@@ -79,49 +75,14 @@ impl PumpkinItem for EmptyBucketItem {
         let (block_pos, _) = world.raytrace(start_pos, end_pos, checker).await;
 
         if let Some(pos) = block_pos {
-            let Ok(state_id) = world.get_block_state_id(&pos).await else {
+            let Ok(_state_id) = world.get_block_state_id(&pos).await else {
                 return;
             };
 
             world
                 .set_block_state(&pos, Block::AIR.id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
-            let mut inventory = player.inventory().lock().await;
-            let selected = inventory.get_selected_slot();
-            let item_type = if state_id == Block::WATER.default_state_id {
-                Item::WATER_BUCKET
-            } else {
-                Item::LAVA_BUCKET
-            };
-            let item_stack = Some(ItemStack::new(1, item_type.clone()));
-            let slot_data = ItemStackSerializer::from(item_stack.clone());
-            let game_mode = player.gamemode.load();
-            if game_mode == GameMode::Creative {
-                let slot = inventory.get_pickup_item_slot(item_type.id);
-                if let Some(slot) = slot {
-                    if let Err(err) = inventory.set_slot(slot, item_stack, false) {
-                        log::error!("Failed to set slot: {err}");
-                    } else {
-                        let dest_packet = CSetContainerSlot::new(
-                            PlayerInventory::CONTAINER_ID,
-                            inventory.state_id as i32,
-                            slot as i16,
-                            &slot_data,
-                        );
-                        player.client.enqueue_packet(&dest_packet).await;
-                    }
-                }
-            } else if let Err(err) = inventory.set_slot(selected, item_stack.clone(), false) {
-                log::error!("Failed to set slot: {err}");
-            } else {
-                let dest_packet = CSetContainerSlot::new(
-                    PlayerInventory::CONTAINER_ID,
-                    inventory.state_id as i32,
-                    selected as i16,
-                    &slot_data,
-                );
-                player.client.enqueue_packet(&dest_packet).await;
-            }
+            //TODO: Pickup in inv
         }
     }
 }
@@ -162,21 +123,7 @@ impl PumpkinItem for FilledBucketItem {
                 )
                 .await;
             if player.gamemode.load() != GameMode::Creative {
-                let mut inventory = player.inventory().lock().await;
-                let selected = inventory.get_selected_slot();
-                let item = Some(ItemStack::new(1, Item::BUCKET));
-                let slot_data = ItemStackSerializer::from(item.clone());
-                if let Err(err) = inventory.set_slot(selected, item, false) {
-                    log::error!("Failed to set slot: {err}");
-                } else {
-                    let dest_packet = CSetContainerSlot::new(
-                        PlayerInventory::CONTAINER_ID,
-                        inventory.state_id as i32,
-                        selected as i16,
-                        &slot_data,
-                    );
-                    player.client.enqueue_packet(&dest_packet).await;
-                }
+                //TODO: Pickup in inv
             }
         }
     }

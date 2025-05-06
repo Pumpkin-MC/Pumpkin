@@ -1,7 +1,7 @@
+use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::screen_handler::ScreenHandler;
-use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -36,10 +36,7 @@ use pumpkin_data::{
     Block,
     block_properties::{get_block_by_item, get_block_collision_shapes},
 };
-use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::player::{
-    PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
-};
+
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
@@ -1356,7 +1353,7 @@ impl Player {
                     held_item.lock().await.item,
                     self,
                     location,
-                    &face,
+                    face,
                     &block,
                     server,
                 )
@@ -1390,7 +1387,7 @@ impl Player {
 
         // Check if the item is a spawn egg
         if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
-            self.spawn_entity_from_egg(entity, location, &face).await;
+            self.spawn_entity_from_egg(entity, location, face).await;
             should_try_decrement = true;
         }
 
@@ -1421,7 +1418,7 @@ impl Player {
         world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
-    pub async fn handle_use_item(&self, use_item: &SUseItem, server: &Server) {
+    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }

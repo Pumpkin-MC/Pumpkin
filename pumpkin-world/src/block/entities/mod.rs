@@ -17,6 +17,7 @@ pub mod chest;
 pub mod comparator;
 pub mod sign;
 
+//TODO: We need a mark_dirty for chests
 #[async_trait]
 pub trait BlockEntity: Send + Sync {
     async fn write_nbt(&self, nbt: &mut NbtCompound);

@@ -46,8 +46,7 @@ impl ItemEntity {
 
     pub async fn new_with_velocity(
         entity: Entity,
-        item_id: u16,
-        count: u32,
+        item_stack: ItemStack,
         velocity: Vector3<f64>,
         pickup_delay: u8,
     ) -> Self {

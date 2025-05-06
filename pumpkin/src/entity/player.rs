@@ -59,9 +59,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CEntityPositionSync, 
-    CCloseContainer, COpenScreen, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
-    CSetCursorItem, CSetPlayerInventory, PlayerInfoFlags, PreviousMessage,
+    CCloseContainer, CEntityPositionSync, COpenScreen, CSetContainerContent, CSetContainerProperty,
+    CSetContainerSlot, CSetCursorItem, CSetPlayerInventory, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
@@ -102,10 +101,10 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::entity::entity_data_flags::{
     DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
 };
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::RwLock;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -597,9 +596,9 @@ impl Player {
             .closed
             .load(std::sync::atomic::Ordering::Relaxed)
         {
-        if self.client.closed.load(Relaxed) {
             return;
         }
+
         if self.packet_sequence.load(Relaxed) > -1 {
             self.client
                 .enqueue_packet(&CAcknowledgeBlockChange::new(
@@ -1306,7 +1305,7 @@ impl Player {
             .await;
     }
 
-    pub async fn drop_item(&self, item_id: u16, count: u32) {
+    pub async fn drop_item(&self, item_stack: ItemStack) {
         let entity = self.world().await.create_entity(
             self.living_entity.entity.pos.load()
                 + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0),
@@ -1330,7 +1329,7 @@ impl Player {
 
         // TODO: Merge stacks together
         let item_entity =
-            Arc::new(ItemEntity::new_with_velocity(entity, item_id, count, velocity, 40).await);
+            Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
         item_entity.send_meta_packet().await;
     }

@@ -14,9 +14,7 @@ use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::Block;
-use pumpkin_inventory::drag_handler::DragHandler;
-use pumpkin_inventory::{Container, OpenContainer};
+
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
@@ -214,7 +212,7 @@ impl Server {
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
-                world
+                if world
                     .add_player(player.gameprofile.id, player.clone())
                     .await.is_ok() {
                     // TODO: Config if we want increase online

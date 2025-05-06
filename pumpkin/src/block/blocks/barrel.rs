@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;

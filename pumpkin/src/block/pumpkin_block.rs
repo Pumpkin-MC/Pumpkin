@@ -5,7 +5,6 @@ use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockState};
-use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
