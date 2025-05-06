@@ -76,7 +76,7 @@ impl PumpkinItem for EmptyBucketItem {
             state_id == Block::WATER.default_state_id || state_id == Block::LAVA.default_state_id
         };
 
-        let (block_pos, _) = world.traverse_blocks(start_pos, end_pos, checker).await;
+        let (block_pos, _) = world.raytrace(start_pos, end_pos, checker).await;
 
         if let Some(pos) = block_pos {
             let Ok(state_id) = world.get_block_state_id(&pos).await else {
@@ -146,7 +146,7 @@ impl PumpkinItem for FilledBucketItem {
             state_id != Block::AIR.id
         };
 
-        let (block_pos, block_direction) = world.traverse_blocks(start_pos, end_pos, checker).await;
+        let (block_pos, block_direction) = world.raytrace(start_pos, end_pos, checker).await;
 
         if let (Some(pos), Some(direction)) = (block_pos, block_direction) {
             world

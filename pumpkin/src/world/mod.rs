@@ -1730,7 +1730,7 @@ impl World {
         chunk.dirty = true;
     }
 
-    pub async fn traverse_blocks(
+    pub async fn raytrace(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
