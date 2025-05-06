@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+use futures::future::join_all;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
 use pumpkin_data::{block::Block, chunk::ChunkStatus};
@@ -875,15 +876,14 @@ pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSeri
                 })
                 .collect()
         },
-        block_entities: chunk_data
-            .block_entities
-            .values()
-            .map(|block_entity| {
+        block_entities: join_all(chunk_data.block_entities.values().map(
+            |block_entity| async move {
                 let mut nbt = NbtCompound::new();
-                block_entity.write_internal(&mut nbt);
+                block_entity.write_internal(&mut nbt).await;
                 nbt
-            })
-            .collect(),
+            },
+        ))
+        .await,
     };
 
     let mut result = Vec::new();

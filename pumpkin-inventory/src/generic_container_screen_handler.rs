@@ -48,7 +48,7 @@ impl GenericContainerScreenHandler {
         //inventory.onOpen(player);
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
-        handler.add_player_inventory_slots(&player_inventory);
+        handler.add_player_slots(&player_inventory);
 
         handler
     }
@@ -84,9 +84,44 @@ impl ScreenHandler for GenericContainerScreenHandler {
         &mut self.behaviour
     }
 
-    async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+    async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut stack_left = ItemStack::EMPTY;
         let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+        if slot.has_stack().await {
+            let slot_stack = slot.get_stack().await;
+            stack_left = slot_stack.lock().await.clone();
+
+            if slot_index < (self.rows * 9) as i32 {
+                if !self
+                    .insert_item(
+                        &mut *slot_stack.lock().await,
+                        (self.rows * 9).into(),
+                        self.get_behaviour().slots.len() as i32,
+                        true,
+                    )
+                    .await
+                {
+                    return ItemStack::EMPTY;
+                }
+            } else if !self
+                .insert_item(
+                    &mut *slot_stack.lock().await,
+                    0,
+                    (self.rows * 9).into(),
+                    false,
+                )
+                .await
+            {
+                return ItemStack::EMPTY;
+            }
+
+            if stack_left.is_empty() {
+                slot.set_stack(ItemStack::EMPTY).await;
+            } else {
+                slot.mark_dirty().await;
+            }
+        }
 
         return stack_left;
     }

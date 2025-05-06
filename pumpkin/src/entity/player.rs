@@ -46,7 +46,8 @@ use pumpkin_inventory::{
     entity_equipment::EntityEquipment,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
     screen_handler::{
-        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerListener,
+        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
+        ScreenHandlerListener,
     },
     sync_handler::SyncHandler,
 };
@@ -1515,18 +1516,30 @@ impl Player {
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
         let mut screen_handler = screen_handler.lock().await;
+        println!(
+            "Adding listener to screen with sync id: {}",
+            screen_handler.sync_id()
+        );
         screen_handler
             .add_listener(self.screen_handler_listener.clone())
             .await;
+        println!(
+            "Updating sync handler to screen with sync id: {}",
+            screen_handler.sync_id()
+        );
         screen_handler
             .update_sync_handler(self.screen_handler_sync_handler.clone())
             .await;
+        println!(
+            "Sync handler updated to screen with sync id: {}",
+            screen_handler.sync_id()
+        );
     }
 
     pub async fn open_handeled_screen(
         &self,
-        screen_handler: Arc<Mutex<dyn ScreenHandler>>,
-        name: TextComponent,
+        screen_handler_factory: &dyn ScreenHandlerFactory,
+        inventory: Option<Arc<dyn Inventory>>,
     ) -> Option<u8> {
         if !self
             .current_screen_handler
@@ -1542,21 +1555,36 @@ impl Player {
 
         self.increment_screen_handler_sync_id();
 
-        let screen_handler_temp = screen_handler.lock().await;
-        self.client
-            .enqueue_packet(&COpenScreen::new(
-                screen_handler_temp.sync_id().into(),
-                (screen_handler_temp
-                    .window_type()
-                    .expect("Can't open PlayerScreenHandler") as i32)
-                    .into(),
-                &name,
-            ))
-            .await;
-        drop(screen_handler_temp);
-        self.on_screen_handler_opened(screen_handler.clone()).await;
-        *self.current_screen_handler.lock().await = screen_handler;
-        Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+        if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
+            self.screen_handler_sync_id.load(Ordering::Relaxed),
+            &self.inventory,
+            self,
+            inventory,
+        ) {
+            let screen_handler_temp = screen_handler.lock().await;
+            self.client
+                .enqueue_packet(&COpenScreen::new(
+                    screen_handler_temp.sync_id().into(),
+                    (screen_handler_temp
+                        .window_type()
+                        .expect("Can't open PlayerScreenHandler") as i32)
+                        .into(),
+                    &screen_handler_factory.get_display_name(),
+                ))
+                .await;
+            drop(screen_handler_temp);
+            self.on_screen_handler_opened(screen_handler.clone()).await;
+            *self.current_screen_handler.lock().await = screen_handler;
+            println!(
+                "Opened screen with sync id: {}",
+                self.screen_handler_sync_id.load(Ordering::Relaxed)
+            );
+            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+        } else {
+            //TODO: Send message if spectator
+
+            None
+        }
     }
 
     pub async fn on_slot_click(&self, packet: SClickSlot) {

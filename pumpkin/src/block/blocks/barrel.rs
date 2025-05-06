@@ -4,11 +4,14 @@ use async_trait::async_trait;
 use pumpkin_data::block::{Block, BlockState};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::barrel::BarrelBlockEntity;
+use pumpkin_world::inventory::inventory::Inventory;
 use tokio::sync::Mutex;
 
 use crate::world::World;
@@ -31,26 +34,27 @@ impl PumpkinBlock for BarrelBlock {
         server: &Server,
         world: &Arc<World>,
     ) {
-        /*
         if let Some(barrel_block_entity) = world.get_block_entity(&location).await {
-            player
-                .open_handeled_screen(
-                    Arc::new(Mutex::new(create_generic_9x3)),
-                    TextComponent::new("Barrel"),
-                )
-                .await;
-        }*/
+            if let Some(inventory) = barrel_block_entity.get_inventory() {
+                player.open_handeled_screen(self, Some(inventory)).await;
+            }
+        }
     }
 
     async fn use_with_item(
         &self,
         block: &Block,
         player: &Player,
-        _location: BlockPos,
+        location: BlockPos,
         _item: &Item,
         server: &Server,
-        _world: &Arc<World>,
+        world: &Arc<World>,
     ) -> BlockActionResult {
+        if let Some(barrel_block_entity) = world.get_block_entity(&location).await {
+            if let Some(inventory) = barrel_block_entity.get_inventory() {
+                player.open_handeled_screen(self, Some(inventory)).await;
+            }
+        }
         BlockActionResult::Consume
     }
 
@@ -76,5 +80,29 @@ impl PumpkinBlock for BarrelBlock {
         _moved: bool,
     ) {
         world.remove_block_entity(&location).await;
+    }
+}
+
+impl ScreenHandlerFactory for BarrelBlock {
+    fn create_screen_handler(
+        &self,
+        sync_id: u8,
+        player_inventory: &Arc<PlayerInventory>,
+        player: &dyn InventoryPlayer,
+        inventory: Option<Arc<dyn Inventory>>,
+    ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
+        if let Some(inventory) = inventory {
+            Some(Arc::new(Mutex::new(create_generic_9x3(
+                sync_id,
+                player_inventory,
+                inventory,
+            ))))
+        } else {
+            None
+        }
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        TextComponent::text("container.barrel")
     }
 }

@@ -1,12 +1,13 @@
 use std::{
     fmt::Debug,
     sync::{Arc, atomic::AtomicU8},
+    time::Duration,
 };
 
 use async_trait::async_trait;
 use pumpkin_world::inventory::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, time::timeout};
 
 use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 
@@ -46,12 +47,12 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn get_cloned_stack(&self) -> ItemStack {
-        *self
-            .get_inventory()
-            .get_stack(self.get_index())
+        let stack = self.get_inventory().get_stack(self.get_index()).await;
+        let lock = timeout(Duration::from_secs(5), stack.lock())
             .await
-            .lock()
-            .await
+            .expect("Timed out while trying to acquire lock");
+
+        *lock
     }
 
     async fn has_stack(&self) -> bool {

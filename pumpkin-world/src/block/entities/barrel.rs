@@ -49,6 +49,10 @@ impl BlockEntity for BarrelBlockEntity {
         // Saftey precaution
         self.clear().await;
     }
+
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
 }
 
 impl BarrelBlockEntity {

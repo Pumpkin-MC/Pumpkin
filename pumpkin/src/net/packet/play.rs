@@ -1317,8 +1317,7 @@ impl Player {
         };
 
         let inventory = self.inventory();
-        let binding = inventory.held_item();
-        let mut held_item = binding.lock().await;
+        let held_item = inventory.held_item();
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1330,7 +1329,7 @@ impl Player {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-        if held_item.is_empty() {
+        if held_item.lock().await.is_empty() {
             if !sneaking {
                 // Using block with empty hand
                 server
@@ -1343,12 +1342,26 @@ impl Player {
         if !sneaking {
             server
                 .item_registry
-                .use_on_block(held_item.item, self, location, &face, &block, server)
+                .use_on_block(
+                    held_item.lock().await.clone().item,
+                    self,
+                    location,
+                    &face,
+                    &block,
+                    server,
+                )
                 .await;
 
             let action_result = server
                 .block_registry
-                .use_with_item(&block, self, location, held_item.item, server, world)
+                .use_with_item(
+                    &block,
+                    self,
+                    location,
+                    held_item.lock().await.clone().item,
+                    server,
+                    world,
+                )
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1358,13 +1371,13 @@ impl Player {
             }
         }
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(held_item.item.id) {
+        if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
             should_try_decrement = self
                 .run_is_block_place(block.clone(), server, use_item_on, location, &face)
                 .await?;
         }
         // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(held_item.item.id) {
+        if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
             self.spawn_entity_from_egg(entity, location, &face).await;
             should_try_decrement = true;
         }
@@ -1373,7 +1386,7 @@ impl Player {
             // TODO: Config
             // Decrease block count
             if self.gamemode.load() != GameMode::Creative {
-                held_item.decrement(1);
+                held_item.lock().await.decrement(1);
             }
         }
 

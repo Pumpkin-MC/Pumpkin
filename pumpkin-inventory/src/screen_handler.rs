@@ -223,8 +223,7 @@ pub trait ScreenHandler: Send + Sync {
     }
 
     async fn add_listener(&mut self, listener: Arc<dyn ScreenHandlerListener>) {
-        let behaviour = self.get_behaviour_mut();
-        behaviour.listeners.push(listener);
+        self.get_behaviour_mut().listeners.push(listener);
         self.send_content_updates().await;
     }
 
@@ -679,6 +678,17 @@ pub trait ScreenHandlerListener: Send + Sync {
         value: i32,
     ) {
     }
+}
+
+pub trait ScreenHandlerFactory: Send + Sync {
+    fn create_screen_handler(
+        &self,
+        sync_id: u8,
+        player_inventory: &Arc<PlayerInventory>,
+        player: &dyn InventoryPlayer,
+        inventory: Option<Arc<dyn Inventory>>,
+    ) -> Option<Arc<Mutex<dyn ScreenHandler>>>;
+    fn get_display_name(&self) -> TextComponent;
 }
 
 pub struct ScreenHandlerBehaviour {
