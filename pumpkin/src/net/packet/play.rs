@@ -1359,16 +1359,12 @@ impl Player {
                 )
                 .await;
             self.update_sequence(use_item_on.sequence.0);
+            let item_stack = held_item.lock().await;
+            let item = item_stack.item;
+            drop(item_stack);
             let action_result = server
                 .block_registry
-                .use_with_item(
-                    &block,
-                    self,
-                    location,
-                    held_item.lock().await.item,
-                    server,
-                    world,
-                )
+                .use_with_item(&block, self, location, item, server, world)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
