@@ -380,8 +380,12 @@ impl Inventory for PlayerInventory {
         if slot < self.main_inventory.len() {
             *self.main_inventory[slot].lock().await = stack;
         } else {
-            let slot = self.equipment_slots.get(&slot).unwrap();
-            self.entity_equipment.lock().await.put(slot, stack).await;
+            match self.equipment_slots.get(&slot) {
+                Some(slot) => {
+                    self.entity_equipment.lock().await.put(slot, stack).await;
+                }
+                None => log::warn!("Failed to get Equipment Slot at {0}", slot),
+            }
         }
     }
 
