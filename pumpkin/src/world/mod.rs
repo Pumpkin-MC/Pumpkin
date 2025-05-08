@@ -366,18 +366,28 @@ impl World {
         self.flush_block_updates().await;
 
         // world ticks
-        {
-            let mut level_time = self.level_time.lock().await;
-            level_time.tick_time();
-            if level_time.world_age % 20 == 0 {
-                level_time.send_time(self).await;
-            }
-        }
+        let mut level_time = self.level_time.lock().await;
+        level_time.tick_time();
+        let mut weather = self.weather.lock().await;
+        weather.tick_weather(self).await;
 
-        {
-            let mut weather = self.weather.lock().await;
-            weather.tick_weather(self).await;
-        };
+        if self.should_skip_night().await {
+            let time = level_time.time_of_day + 24000;
+            level_time.set_time(time - time % 24000);
+            level_time.send_time(self).await;
+
+            for player in self.players.read().await.values() {
+                player.wake_up().await;
+            }
+
+            if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                weather.reset_weather_cycle(&self).await;
+            }
+        } else if level_time.world_age % 20 == 0 {
+            level_time.send_time(self).await;
+        }
+        drop(level_time);
+        drop(weather);
 
         self.tick_scheduled_block_ticks().await;
 
@@ -901,6 +911,25 @@ impl World {
         // TODO: difficulty, exp bar, status effect
 
         self.send_world_info(player, position, yaw, pitch).await;
+    }
+
+    /// Returns true if enough players are sleeping and we should skip the night.
+    async fn should_skip_night(&self) -> bool {
+        let players = self.players.read().await;
+
+        let player_count = players.len();
+        let sleeping_player_count = players
+            .values()
+            .filter(|player| {
+                player
+                    .sleeping_since
+                    .load()
+                    .is_some_and(|since| since == 101)
+            })
+            .count();
+
+        // TODO: sleep ratio
+        sleeping_player_count == player_count
     }
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks

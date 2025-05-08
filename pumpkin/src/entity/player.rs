@@ -177,6 +177,8 @@ pub struct Player {
     pub previous_gamemode: AtomicCell<Option<GameMode>>,
     /// The player's spawnpoint
     pub respawn_point: AtomicCell<Option<RespawnPoint>>,
+    /// The player's sleep status
+    pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -281,6 +283,7 @@ impl Player {
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
             respawn_point: AtomicCell::new(None),
+            sleeping_since: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -524,35 +527,39 @@ impl Player {
     pub async fn sleep(&self, bed_head_pos: BlockPos) {
         // TODO: Stop riding
 
-        self.living_entity
-            .entity
-            .set_pose(EntityPose::Sleeping)
-            .await;
+        self.get_entity().set_pose(EntityPose::Sleeping).await;
         self.living_entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
-        self.living_entity
-            .entity
+        self.get_entity()
             .send_meta_data(&[Metadata::new(
                 SLEEPING_POS_ID,
                 MetaDataType::OptionalBlockPos,
                 Some(bed_head_pos),
             )])
             .await;
-        self.living_entity
-            .entity
+        self.get_entity()
             .set_velocity(Vector3 {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
             })
             .await;
+
+        self.sleeping_since.store(Some(0));
     }
 
     pub async fn wake_up(&self) {
         let world = self.world().await;
-        let bed_pos = self.position().to_block_pos();
-        if let Ok((bed, bed_state)) = world.get_block_and_block_state(&bed_pos).await {
-            BedBlock::set_occupied(false, &world, &bed, &bed_pos, bed_state.id).await;
+        let respawn_point = self
+            .respawn_point
+            .load()
+            .expect("Player waking up should have it's respawn point set on the bed.");
+        if let Ok((bed, bed_state)) = world
+            .get_block_and_block_state(&respawn_point.position)
+            .await
+        {
+            BedBlock::set_occupied(false, &world, &bed, &respawn_point.position, bed_state.id)
+                .await;
         }
 
         self.living_entity
@@ -575,6 +582,8 @@ impl Player {
                 Animation::LeaveBed,
             ))
             .await;
+
+        self.sleeping_since.store(None);
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -680,6 +689,11 @@ impl Player {
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
+        if let Some(sleeping_since) = self.sleeping_since.load() {
+            if sleeping_since < 101 {
+                self.sleeping_since.store(Some(sleeping_since + 1));
+            }
+        }
 
         if self.mining.load(Ordering::Relaxed) {
             let pos = self.mining_pos.lock().await;
