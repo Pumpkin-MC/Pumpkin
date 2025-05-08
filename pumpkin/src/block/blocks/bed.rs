@@ -143,19 +143,19 @@ impl PumpkinBlock for BedBlock {
         block: &Block,
         player: &Player,
         block_pos: BlockPos,
-        _server: &Server,
+        server: &Server,
         world: &Arc<World>,
     ) {
+        let state_id = world.get_block_state_id(&block_pos).await.unwrap();
+        let bed_props = BedProperties::from_state_id(state_id, block);
+
+        let bed_head_pos = if bed_props.part == BedPart::Head {
+            block_pos
+        } else {
+            block_pos.offset(bed_props.facing.to_offset())
+        };
+
         if world.dimension_type == DimensionType::Overworld {
-            let state_id = world.get_block_state_id(&block_pos).await.unwrap();
-            let bed_props = BedProperties::from_state_id(state_id, block);
-
-            let bed_head_pos = if bed_props.part == BedPart::Head {
-                block_pos
-            } else {
-                block_pos.offset(bed_props.facing.to_offset())
-            };
-
             let respawn_point_set = player.set_respawn_point(
                 world.dimension_type,
                 bed_head_pos,
@@ -172,6 +172,32 @@ impl PumpkinBlock for BedBlock {
                     .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
                     .await;
             }
+        } else {
+            world
+                .break_block(&block_pos, None, BlockFlags::SKIP_DROPS)
+                .await;
+
+            if bed_props.part == BedPart::Head {
+                world
+                    .break_block(
+                        &block_pos.offset(bed_props.facing.opposite().to_offset()),
+                        None,
+                        BlockFlags::SKIP_DROPS,
+                    )
+                    .await;
+            } else {
+                world
+                    .break_block(
+                        &block_pos.offset(bed_props.facing.to_offset()),
+                        None,
+                        BlockFlags::SKIP_DROPS,
+                    )
+                    .await;
+            }
+
+            world
+                .explode(server, bed_head_pos.to_centered_f64(), 5.0)
+                .await;
         }
     }
 }
