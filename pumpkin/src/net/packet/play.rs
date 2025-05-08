@@ -1,6 +1,7 @@
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
@@ -41,7 +42,7 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
     CBlockUpdate, CEntityPositionSync, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
-    CSetSelectedSlot, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
+    CSetSelectedSlot, CSystemChatMessage, InitChat, PlayerAction,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
@@ -1433,7 +1434,7 @@ impl Player {
         let inv = self.inventory();
         inv.set_selected_slot(slot as u8);
         let stack = *inv.held_item().lock().await;
-        let equipment = &[(EquipmentSlot::MainHand, stack)];
+        let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         self.living_entity.send_equipment_changes(equipment).await;
     }
 

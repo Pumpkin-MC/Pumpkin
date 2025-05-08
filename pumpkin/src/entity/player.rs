@@ -47,7 +47,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::{
-    entity_equipment::EntityEquipment,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
     screen_handler::{
         InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
@@ -297,20 +296,22 @@ impl Player {
 
         let config = client.config.lock().await.clone().unwrap_or_default();
 
-        let inventory = Arc::new(PlayerInventory::new(EntityEquipment::new()));
+        let living_entity = LivingEntity::new(Entity::new(
+            player_uuid,
+            world,
+            Vector3::new(0.0, 0.0, 0.0),
+            EntityType::PLAYER,
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+        ));
+
+        let inventory = Arc::new(PlayerInventory::new(living_entity.entity_equipment.clone()));
 
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
         ));
 
         Self {
-            living_entity: LivingEntity::new(Entity::new(
-                player_uuid,
-                world,
-                Vector3::new(0.0, 0.0, 0.0),
-                EntityType::PLAYER,
-                matches!(gamemode, GameMode::Creative | GameMode::Spectator),
-            )),
+            living_entity,
             config: RwLock::new(config),
             gameprofile,
             client,

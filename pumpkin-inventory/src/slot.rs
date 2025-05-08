@@ -1,3 +1,4 @@
+#![warn(unused)]
 use std::{
     fmt::Debug,
     sync::{Arc, atomic::AtomicU8},
@@ -37,6 +38,9 @@ pub trait Slot: Send + Sync + Debug {
     async fn on_take_item(&self, _player: &dyn InventoryPlayer, _stack: &ItemStack) {
         self.mark_dirty().await;
     }
+
+    // Used for plugins
+    async fn on_click(&self, _player: &dyn InventoryPlayer) {}
 
     async fn can_insert(&self, _stack: &ItemStack) -> bool {
         true
@@ -98,10 +102,6 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
-        true
-    }
-
-    fn is_enabled(&self) -> bool {
         true
     }
 

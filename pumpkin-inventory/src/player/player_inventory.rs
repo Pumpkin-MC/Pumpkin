@@ -26,13 +26,13 @@ impl PlayerInventory {
     const OFF_HAND_SLOT: usize = 40;
 
     // TODO: Add inventory load from nbt
-    pub fn new(entity_equipment: EntityEquipment) -> Self {
+    pub fn new(entity_equipment: Arc<Mutex<EntityEquipment>>) -> Self {
         Self {
             // Normal syntax can't be used here because Arc doesn't implement Copy
             main_inventory: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
             equipment_slots: Self::build_equipment_slots(),
             selected_slot: AtomicU8::new(0),
-            entity_equipment: Arc::new(Mutex::new(entity_equipment)),
+            entity_equipment,
         }
     }
 

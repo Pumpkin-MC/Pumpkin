@@ -514,7 +514,11 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
-                //TODO: Check if we can really use clone here
+
+                if click_type == MouseClick::Left {
+                    slot.on_click(player).await;
+                }
+
                 let slot_stack = slot.get_cloned_stack().await;
                 let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
 
