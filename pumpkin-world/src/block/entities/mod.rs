@@ -24,7 +24,6 @@ pub trait BlockEntity: Send + Sync {
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
-    async fn snapshot(&self) {}
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
     async fn write_internal(&self, nbt: &mut NbtCompound) {
@@ -48,6 +47,9 @@ pub trait BlockEntity: Send + Sync {
     }
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
+    }
+    fn is_dirty(&self) -> bool {
+        false
     }
 }
 

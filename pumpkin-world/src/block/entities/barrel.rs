@@ -1,4 +1,7 @@
-use std::{array::from_fn, sync::Arc};
+use std::{
+    array::from_fn,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
@@ -17,6 +20,7 @@ use super::BlockEntity;
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; 27],
+    pub dirty: AtomicBool,
 }
 
 #[async_trait]
@@ -36,6 +40,7 @@ impl BlockEntity for BarrelBlockEntity {
         let barrel = Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            dirty: AtomicBool::new(false),
         };
 
         barrel.read_data(nbt, &barrel.items);
@@ -46,20 +51,26 @@ impl BlockEntity for BarrelBlockEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.write_data(nbt, &self.items, true).await;
         // Safety precaution
-        self.clear().await;
+        //self.clear().await;
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
 impl BarrelBlockEntity {
     pub const ID: &'static str = "minecraft:barrel";
     pub fn new(position: BlockPos) -> Self {
+        println!("Creating barrel");
         Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            dirty: AtomicBool::new(false),
         }
     }
 }
@@ -97,6 +108,10 @@ impl Inventory for BarrelBlockEntity {
 
     async fn set_stack(&self, slot: usize, stack: ItemStack) {
         *self.items[slot].lock().await = stack;
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
