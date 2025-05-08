@@ -8,8 +8,6 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::tag::Tagable;
-use pumpkin_util::respawn_point::RespawnPoint;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -20,6 +18,7 @@ use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item::Operation;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_inventory::player::{
     PlayerInventory, SLOT_BOOT, SLOT_CRAFT_INPUT_END, SLOT_CRAFT_INPUT_START, SLOT_HELM,
@@ -48,6 +47,7 @@ use pumpkin_protocol::server::play::{
     SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::{IdOr, RawPacket, ServerPacket};
+use pumpkin_registry::DimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
@@ -62,6 +62,7 @@ use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::SyncChunk;
 
 use crate::block;
+use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
@@ -466,44 +467,58 @@ impl Player {
         if config.swing {}
     }
 
-    pub fn set_respawn_point(&self, block_pos: BlockPos, yaw: f32) {
+    pub fn set_respawn_point(
+        &self,
+        dimension: DimensionType,
+        block_pos: BlockPos,
+        yaw: f32,
+    ) -> bool {
+        if let Some(respawn_point) = self.respawn_point.load() {
+            if dimension == respawn_point.dimension && block_pos == respawn_point.position {
+                return false;
+            }
+        }
+
         self.respawn_point.store(Some(RespawnPoint {
+            dimension,
             position: block_pos,
             yaw,
             force: false,
         }));
+        true
     }
 
-    pub async fn get_respawn_point(&self) -> Option<RespawnPoint> {
-        if let Some(respawn_point) = self.respawn_point.load() {
-            let block = self
-                .world()
-                .await
-                .get_block(&respawn_point.position)
-                .await
-                .unwrap();
+    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
+        let Some(respawn_point) = self.respawn_point.load() else {
+            return None;
+        };
 
-            return if block.is_tagged_with("#minecraft:beds").unwrap() {
-                Some(respawn_point)
-            } else if block == Block::RESPAWN_ANCHOR {
-                let _state_id = self
-                    .world()
-                    .await
-                    .get_block_state_id(&respawn_point.position)
-                    .await
-                    .unwrap();
-                Some(respawn_point)
-            } else {
-                self.send_system_message(&TextComponent::translate(
-                    "block.minecraft.spawn.not_valid",
-                    [],
-                ))
-                .await;
-                None
-            };
+        let (block, _block_state) = self
+            .world()
+            .await
+            .get_block_and_block_state(&respawn_point.position)
+            .await
+            .unwrap();
+
+        if respawn_point.dimension == DimensionType::Overworld
+            && block.is_tagged_with("#minecraft:beds").unwrap()
+        {
+            // TODO: calculate respawn position
+            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+        } else if respawn_point.dimension == DimensionType::TheNether
+            && block == Block::RESPAWN_ANCHOR
+        {
+            // TODO: calculate respawn position
+            // TODO: check if there is fuel for respawn
+            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+        } else {
+            self.send_system_message(&TextComponent::translate(
+                "block.minecraft.spawn.not_valid",
+                [],
+            ))
+            .await;
+            None
         }
-
-        None
     }
 
     pub async fn sleep(&self, bed_head_pos: BlockPos) {
@@ -534,6 +549,12 @@ impl Player {
     }
 
     pub async fn wake_up(&self) {
+        let world = self.world().await;
+        let bed_pos = self.position().to_block_pos();
+        if let Ok((bed, bed_state)) = world.get_block_and_block_state(&bed_pos).await {
+            BedBlock::set_occupied(false, &world, &bed, &bed_pos, bed_state.id).await;
+        }
+
         self.living_entity
             .entity
             .set_pose(EntityPose::Standing)
@@ -548,8 +569,7 @@ impl Player {
             )])
             .await;
 
-        self.world()
-            .await
+        world
             .broadcast_packet_all(&CEntityAnimation::new(
                 self.entity_id().into(),
                 Animation::LeaveBed,
@@ -1976,6 +1996,15 @@ impl TryFrom<i32> for Hand {
             _ => Err(InvalidHand),
         }
     }
+}
+
+/// Represents the player's respawn point.
+#[derive(Copy, Debug, Clone, PartialEq)]
+pub struct RespawnPoint {
+    pub dimension: DimensionType,
+    pub position: BlockPos,
+    pub yaw: f32,
+    pub force: bool,
 }
 
 /// Represents the player's chat mode settings.

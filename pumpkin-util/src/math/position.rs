@@ -172,6 +172,7 @@ impl BlockPos {
         self.offset(Vector3::new(0, -1, 0))
     }
 }
+
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

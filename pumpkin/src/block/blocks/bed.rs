@@ -156,14 +156,18 @@ impl PumpkinBlock for BedBlock {
                 block_pos.offset(bed_props.facing.to_offset())
             };
 
-            player.set_respawn_point(bed_head_pos, player.get_entity().yaw.load());
+            let respawn_point_set = player.set_respawn_point(
+                world.dimension_type,
+                bed_head_pos,
+                player.get_entity().yaw.load(),
+            );
 
             if bed_props.occupied {
                 // Wake up villager
             } else if can_sleep(world).await {
                 player.sleep(bed_head_pos).await;
-                set_bed_occupied(true, world, block, &block_pos, bed_props).await;
-            } else {
+                Self::set_occupied(true, world, block, &block_pos, state_id).await;
+            } else if respawn_point_set {
                 player
                     .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
                     .await;
@@ -172,39 +176,42 @@ impl PumpkinBlock for BedBlock {
     }
 }
 
-async fn set_bed_occupied(
-    occupied: bool,
-    world: &Arc<World>,
-    block: &Block,
-    block_pos: &BlockPos,
-    mut bed_props: BedProperties,
-) {
-    bed_props.occupied = occupied;
-    world
-        .set_block_state(
-            block_pos,
-            bed_props.to_state_id(block),
-            BlockFlags::NOTIFY_LISTENERS,
-        )
-        .await;
+impl BedBlock {
+    pub async fn set_occupied(
+        occupied: bool,
+        world: &Arc<World>,
+        block: &Block,
+        block_pos: &BlockPos,
+        state_id: u16,
+    ) {
+        let mut bed_props = BedProperties::from_state_id(state_id, block);
+        bed_props.occupied = occupied;
+        world
+            .set_block_state(
+                block_pos,
+                bed_props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
 
-    let other_half_pos = if bed_props.part == BedPart::Head {
-        block_pos.offset(bed_props.facing.opposite().to_offset())
-    } else {
-        block_pos.offset(bed_props.facing.to_offset())
-    };
-    bed_props.part = if bed_props.part == BedPart::Head {
-        BedPart::Foot
-    } else {
-        BedPart::Head
-    };
-    world
-        .set_block_state(
-            &other_half_pos,
-            bed_props.to_state_id(block),
-            BlockFlags::NOTIFY_LISTENERS,
-        )
-        .await;
+        let other_half_pos = if bed_props.part == BedPart::Head {
+            block_pos.offset(bed_props.facing.opposite().to_offset())
+        } else {
+            block_pos.offset(bed_props.facing.to_offset())
+        };
+        bed_props.part = if bed_props.part == BedPart::Head {
+            BedPart::Foot
+        } else {
+            BedPart::Head
+        };
+        world
+            .set_block_state(
+                &other_half_pos,
+                bed_props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+    }
 }
 
 async fn can_sleep(world: &Arc<World>) -> bool {

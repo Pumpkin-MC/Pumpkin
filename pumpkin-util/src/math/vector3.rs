@@ -3,6 +3,8 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::{Float, Num};
 
+use super::position::BlockPos;
+
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector3<T> {
     pub x: T,
@@ -208,6 +210,15 @@ where
             y: y.round() as i32,
             z: z.round() as i32,
         }
+    }
+}
+
+impl<T: Math + Copy> Vector3<T>
+where
+    T: Into<f64>,
+{
+    pub fn to_block_pos(&self) -> BlockPos {
+        BlockPos(self.to_i32())
     }
 }
 
