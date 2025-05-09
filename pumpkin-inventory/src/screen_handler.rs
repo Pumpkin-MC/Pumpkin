@@ -697,7 +697,6 @@ pub trait ScreenHandlerFactory: Send + Sync {
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
-        inventory: Option<Arc<dyn Inventory>>,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>>;
     fn get_display_name(&self) -> TextComponent;
 }

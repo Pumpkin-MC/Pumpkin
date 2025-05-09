@@ -1591,7 +1591,6 @@ impl Player {
     pub async fn open_handled_screen(
         &self,
         screen_handler_factory: &dyn ScreenHandlerFactory,
-        inventory: Option<Arc<dyn Inventory>>,
     ) -> Option<u8> {
         if !self
             .current_screen_handler
@@ -1611,7 +1610,6 @@ impl Player {
             self.screen_handler_sync_id.load(Ordering::Relaxed),
             &self.inventory,
             self,
-            inventory,
         ) {
             let screen_handler_temp = screen_handler.lock().await;
             self.client

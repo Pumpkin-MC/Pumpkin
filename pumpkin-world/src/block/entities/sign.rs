@@ -180,6 +180,10 @@ impl BlockEntity for SignBlockEntity {
         nbt.put_bool("is_waxed", self.is_waxed);
         Some(nbt)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl SignBlockEntity {

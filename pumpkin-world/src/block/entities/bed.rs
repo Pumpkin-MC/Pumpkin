@@ -29,4 +29,8 @@ impl BlockEntity for BedBlockEntity {
     }
 
     async fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

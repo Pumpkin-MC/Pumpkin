@@ -61,6 +61,10 @@ impl BlockEntity for BarrelBlockEntity {
     fn is_dirty(&self) -> bool {
         self.dirty.load(std::sync::atomic::Ordering::Relaxed)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl BarrelBlockEntity {

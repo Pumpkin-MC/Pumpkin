@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use async_trait::async_trait;
 use barrel::BarrelBlockEntity;
@@ -51,6 +51,7 @@ pub trait BlockEntity: Send + Sync {
     fn is_dirty(&self) -> bool {
         false
     }
+    fn as_any(&self) -> &dyn Any;
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {

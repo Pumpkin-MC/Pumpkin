@@ -21,6 +21,28 @@ use crate::{
     server::Server,
 };
 
+struct BarrelScreenFactory(Arc<dyn Inventory>);
+
+impl ScreenHandlerFactory for BarrelScreenFactory {
+    fn create_screen_handler(
+        &self,
+        sync_id: u8,
+        player_inventory: &Arc<PlayerInventory>,
+        _player: &dyn InventoryPlayer,
+    ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
+        #[allow(clippy::option_if_let_else)]
+        Some(Arc::new(Mutex::new(create_generic_9x3(
+            sync_id,
+            player_inventory,
+            self.0.clone(),
+        ))))
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        TextComponent::translate("container.barrel", vec![])
+    }
+}
+
 #[pumpkin_block("minecraft:barrel")]
 pub struct BarrelBlock;
 
@@ -34,9 +56,11 @@ impl PumpkinBlock for BarrelBlock {
         _server: &Server,
         world: &Arc<World>,
     ) {
-        if let Some(barrel_block_entity) = world.get_block_entity(&location).await {
-            if let Some(inventory) = barrel_block_entity.get_inventory() {
-                player.open_handled_screen(self, Some(inventory)).await;
+        if let Some(block_entity) = world.get_block_entity(&location).await {
+            if let Some(inventory) = block_entity.get_inventory() {
+                player
+                    .open_handled_screen(&BarrelScreenFactory(inventory))
+                    .await;
             }
         }
     }
@@ -50,9 +74,11 @@ impl PumpkinBlock for BarrelBlock {
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        if let Some(barrel_block_entity) = world.get_block_entity(&location).await {
-            if let Some(inventory) = barrel_block_entity.get_inventory() {
-                player.open_handled_screen(self, Some(inventory)).await;
+        if let Some(block_entity) = world.get_block_entity(&location).await {
+            if let Some(inventory) = block_entity.get_inventory() {
+                player
+                    .open_handled_screen(&BarrelScreenFactory(inventory))
+                    .await;
             }
         }
         BlockActionResult::Consume
@@ -80,30 +106,5 @@ impl PumpkinBlock for BarrelBlock {
         _moved: bool,
     ) {
         world.remove_block_entity(&location).await;
-    }
-}
-
-impl ScreenHandlerFactory for BarrelBlock {
-    fn create_screen_handler(
-        &self,
-        sync_id: u8,
-        player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
-        inventory: Option<Arc<dyn Inventory>>,
-    ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        #[allow(clippy::option_if_let_else)]
-        if let Some(inventory) = inventory {
-            Some(Arc::new(Mutex::new(create_generic_9x3(
-                sync_id,
-                player_inventory,
-                inventory,
-            ))))
-        } else {
-            None
-        }
-    }
-
-    fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.barrel", vec![])
     }
 }

@@ -38,4 +38,8 @@ impl BlockEntity for ComparatorBlockEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         nbt.put_int(OUTPUT_SIGNAL, self.output_signal);
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
