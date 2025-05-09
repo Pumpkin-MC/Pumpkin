@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    io::ErrorKind,
     ops::{AddAssign, SubAssign},
     path::{Path, PathBuf},
     sync::Arc,
@@ -12,17 +11,16 @@ use log::{error, trace};
 use num_traits::Zero;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    io::AsyncReadExt,
     join,
     sync::{OnceCell, RwLock, mpsc},
 };
 
 use crate::{
-    chunk::{ChunkData, ChunkReadingError, ChunkWritingError},
-    level::{LevelFolder, SyncChunk},
+    chunk::{ChunkEntityData, ChunkReadingError, ChunkWritingError, io::Dirtiable},
+    level::LevelFolder,
 };
 
-use super::{ChunkIO, ChunkSerializer, LoadedData};
+use super::{ChunkSerializer, FileIO, LoadedData};
 
 /// A simple implementation of the ChunkSerializer trait
 /// that load and save the data from a file in the disk
@@ -48,7 +46,7 @@ struct ChunkSerializerLazyLoader<S: ChunkSerializer<WriteBackend = PathBuf>> {
     internal: OnceCell<Arc<RwLock<S>>>,
 }
 
-impl<S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
+impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -80,32 +78,8 @@ impl<S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>> ChunkSerializ
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
         trace!("Opening file from Disk: {:?}", self.path);
-        let file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .write(false)
-            .create(false)
-            .truncate(false)
-            .open(&self.path)
-            .await
-            .map_err(|err| match err.kind() {
-                ErrorKind::NotFound => ChunkReadingError::ChunkNotExist,
-                kind => ChunkReadingError::IoError(kind),
-            });
-
-        let value = match file {
-            Ok(mut file) => {
-                let capacity = match file.metadata().await {
-                    Ok(metadata) => metadata.len() as usize,
-                    Err(_) => 4096, // A sane default
-                };
-
-                // TODO: Memmap?
-                let mut file_bytes = Vec::with_capacity(capacity);
-                file.read_to_end(&mut file_bytes)
-                    .await
-                    .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-                S::read(file_bytes.into())?
-            }
+        let value = match S::read(self.path.clone()).await {
+            Ok(value) => value,
             Err(ChunkReadingError::ChunkNotExist) => S::default(),
             Err(err) => return Err(err),
         };
@@ -113,6 +87,11 @@ impl<S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>> ChunkSerializ
         trace!("Successfully read file from Disk: {:?}", self.path);
         Ok(value)
     }
+}
+
+impl<S: ChunkSerializer<Data = ChunkEntityData, WriteBackend = PathBuf>>
+    ChunkSerializerLazyLoader<S>
+{
 }
 
 impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for ChunkFileManager<S> {
@@ -124,13 +103,11 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for ChunkFileManager<S>
     }
 }
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
-    fn map_key(folder: &LevelFolder, file_name: &str) -> PathBuf {
-        folder.region_folder.join(file_name)
-    }
+pub(crate) trait PathFromLevelFolder {
+    fn file_path(folder: &LevelFolder, file_name: &str) -> PathBuf;
 }
 
-impl<S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>> ChunkFileManager<S> {
+impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
     async fn get_serializer(&self, path: &Path) -> Result<Arc<RwLock<S>>, ChunkReadingError> {
         // We get the entry from the DashMap and try to insert a new lock if it doesn't exist
         // using dead-lock safe methods like `or_try_insert_with`
@@ -152,18 +129,19 @@ impl<S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>> ChunkFileMana
 }
 
 #[async_trait]
-impl<S> ChunkIO for ChunkFileManager<S>
+impl<P, S> FileIO for ChunkFileManager<S>
 where
-    S: ChunkSerializer<Data = ChunkData, WriteBackend = PathBuf>,
+    P: PathFromLevelFolder + Send + Sync + Sized + Dirtiable + 'static,
+    S: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
 {
-    type Data = SyncChunk;
+    type Data = Arc<RwLock<S::Data>>;
 
     async fn watch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]) {
         // It is intentional that regions are watched multiple times (once per chunk)
         let mut watchers = self.watchers.write().await;
         for chunk in chunks {
             let key = S::get_chunk_key(chunk);
-            let map_key = Self::map_key(folder, &key);
+            let map_key = P::file_path(folder, &key);
             match watchers.entry(map_key) {
                 std::collections::btree_map::Entry::Vacant(vacant) => {
                     let _ = vacant.insert(1);
@@ -179,7 +157,7 @@ where
         let mut watchers = self.watchers.write().await;
         for chunk in chunks {
             let key = S::get_chunk_key(chunk);
-            let map_key = Self::map_key(folder, &key);
+            let map_key = P::file_path(folder, &key);
             match watchers.entry(map_key) {
                 std::collections::btree_map::Entry::Vacant(_vacant) => {}
                 std::collections::btree_map::Entry::Occupied(mut occupied) => {
@@ -200,7 +178,7 @@ where
         &self,
         folder: &LevelFolder,
         chunk_coords: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<SyncChunk, ChunkReadingError>>,
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
 
@@ -216,7 +194,7 @@ where
         // we use a Sync Closure with an Async Block to execute the tasks concurrently
         // Also improves File Cache utilizations.
         let region_read_tasks = regions_chunks.into_iter().map(async |(file_name, chunks)| {
-            let path = Self::map_key(folder, &file_name);
+            let path = P::file_path(folder, &file_name);
             let chunk_serializer = match self.get_serializer(&path).await {
                 Ok(chunk_serializer) => chunk_serializer,
                 Err(ChunkReadingError::ChunkNotExist) => {
@@ -229,7 +207,7 @@ where
             };
 
             // Intermediate channel for wrapping the data with the Arc<RwLock>
-            let (send, mut recv) = mpsc::channel::<LoadedData<ChunkData, ChunkReadingError>>(1);
+            let (send, mut recv) = mpsc::channel::<LoadedData<S::Data, ChunkReadingError>>(1);
 
             let intermediary = async {
                 while let Some(data) = recv.recv().await {
@@ -254,9 +232,9 @@ where
     async fn save_chunks(
         &self,
         folder: &LevelFolder,
-        chunks_data: Vec<(Vector2<i32>, SyncChunk)>,
+        chunks_data: Vec<(Vector2<i32>, Self::Data)>,
     ) -> Result<(), ChunkWritingError> {
-        let mut regions_chunks: BTreeMap<String, Vec<SyncChunk>> = BTreeMap::new();
+        let mut regions_chunks: BTreeMap<String, Vec<Self::Data>> = BTreeMap::new();
 
         for (at, chunk) in chunks_data {
             let key = S::get_chunk_key(&at);
@@ -276,7 +254,7 @@ where
         let tasks = regions_chunks
             .into_iter()
             .map(async |(file_name, chunk_locks)| {
-                let path = Self::map_key(folder, &file_name);
+                let path = P::file_path(folder, &file_name);
                 log::trace!("Updating data for file {:?}", path);
 
                 let chunk_serializer = match self.get_serializer(&path).await {
@@ -297,10 +275,10 @@ where
                 let mut serializer = chunk_serializer.write().await;
                 for chunk_lock in chunk_locks {
                     let mut chunk = chunk_lock.write().await;
-                    let chunk_is_dirty = chunk.dirty;
+                    let chunk_is_dirty = chunk.is_dirty();
                     // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
                     // updating what we will write here
-                    chunk.dirty = false;
+                    chunk.mark_dirty(false);
                     // It is important that we keep the lock after we mark the chunk as clean so no one else
                     // can modify it
                     let chunk = chunk.downgrade();

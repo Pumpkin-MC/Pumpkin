@@ -155,7 +155,6 @@ async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     let item_entity =
         Arc::new(ItemEntity::new(entity, stack.item.id, u32::from(stack.item_count)).await);
     world.spawn_entity(item_entity.clone()).await;
-    item_entity.send_meta_packet().await;
 }
 
 pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {

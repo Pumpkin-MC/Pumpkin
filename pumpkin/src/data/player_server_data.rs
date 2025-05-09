@@ -138,12 +138,12 @@ impl ServerPlayerData {
     ) -> Result<(), PlayerDataError> {
         let uuid = &player.gameprofile.id;
         match self.storage.load_player_data(uuid) {
-            Ok((should_load, mut data)) => {
+            Ok((should_load, data)) => {
                 if !should_load {
                     // No data to load, continue with default data
                     return Ok(());
                 }
-                player.read_nbt(&mut data).await;
+                player.read_nbt(&data).await;
                 Ok(())
             }
             Err(e) => {

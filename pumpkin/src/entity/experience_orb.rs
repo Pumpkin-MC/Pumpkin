@@ -1,7 +1,11 @@
-use std::sync::{Arc, atomic::AtomicU32};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, entity::EntityType};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{server::Server, world::World};
@@ -10,7 +14,7 @@ use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
-    amount: u32,
+    amount: AtomicU32,
     orb_age: AtomicU32,
 }
 
@@ -19,7 +23,7 @@ impl ExperienceOrbEntity {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
-            amount,
+            amount: AtomicU32::new(amount),
             orb_age: AtomicU32::new(0),
         }
     }
@@ -75,6 +79,22 @@ impl EntityBase for ExperienceOrbEntity {
         }
     }
 
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.entity.write_nbt(nbt).await;
+        nbt.put_short("Age", self.orb_age.load(Ordering::Relaxed) as i16);
+        nbt.put_short("Value", self.amount.load(Ordering::Relaxed) as i16);
+    }
+
+    async fn read_nbt(&self, nbt: &NbtCompound) {
+        self.entity.read_nbt(nbt).await;
+        self.orb_age
+            .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
+        self.amount.store(
+            nbt.get_short("Value").unwrap_or(0) as u32,
+            Ordering::Relaxed,
+        );
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
@@ -84,7 +104,9 @@ impl EntityBase for ExperienceOrbEntity {
         if *delay == 0 {
             *delay = 2;
             player.living_entity.pickup(&self.entity, 1).await;
-            player.add_experience_points(self.amount as i32).await;
+            player
+                .add_experience_points(self.amount.load(Ordering::Relaxed) as i32)
+                .await;
             // TODO: pickingCount for merging
             self.entity.remove().await;
         }

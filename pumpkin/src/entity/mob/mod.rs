@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_nbt::compound::NbtCompound;
 use tokio::sync::Mutex;
-use zombie::Zombie;
 
-use crate::{server::Server, world::World};
+use crate::server::Server;
 
 use super::{
     Entity, EntityBase,
@@ -42,6 +40,16 @@ impl EntityBase for MobEntity {
         navigator.tick(&self.living_entity).await;
     }
 
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.living_entity.write_nbt(nbt).await;
+        // TODO: write mob stuff
+    }
+
+    async fn read_nbt(&self, nbt: &NbtCompound) {
+        self.living_entity.read_nbt(nbt).await;
+        // TODO: read mob stuff
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.living_entity.entity
     }
@@ -49,25 +57,6 @@ impl EntityBase for MobEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
     }
-}
-
-pub async fn from_type(
-    entity_type: EntityType,
-    position: Vector3<f64>,
-    world: &Arc<World>,
-) -> Arc<dyn EntityBase> {
-    let entity = world.create_entity(position, entity_type);
-    let mob = MobEntity {
-        living_entity: LivingEntity::new(entity),
-        goals: Mutex::new(vec![]),
-        navigator: Mutex::new(Navigator::default()),
-    };
-    match entity_type {
-        EntityType::ZOMBIE => Zombie::make(&mob).await,
-        // TODO
-        _ => (),
-    }
-    Arc::new(mob)
 }
 
 impl MobEntity {

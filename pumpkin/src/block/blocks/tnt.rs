@@ -28,7 +28,6 @@ impl TNTBlock {
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
         world.spawn_entity(tnt.clone()).await;
-        tnt.send_meta_packet().await;
         world
             .play_sound(
                 pumpkin_data::sound::Sound::EntityTntPrimed,
@@ -101,7 +100,6 @@ impl PumpkinBlock for TNTBlock {
         let fuse = rand::thread_rng().gen_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
         world.spawn_entity(tnt.clone()).await;
-        tnt.send_meta_packet().await;
     }
 
     fn should_drop_items_on_explosion(&self) -> bool {

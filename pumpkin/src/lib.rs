@@ -373,10 +373,8 @@ impl PumpkinServer {
         tasks.close();
         tasks.wait().await;
 
-        log::info!("Starting save.");
-
+        log::info!("Starting save...");
         self.server.shutdown().await;
-
         log::info!("Completed save!");
 
         // Explicitly drop the line reader to return the terminal to the original state.

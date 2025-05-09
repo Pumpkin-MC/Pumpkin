@@ -1,4 +1,6 @@
+use enum_dispatch::enum_dispatch;
 use num_derive::{FromPrimitive, ToPrimitive};
+use pumpkin_nbt::compound::NbtCompound;
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 

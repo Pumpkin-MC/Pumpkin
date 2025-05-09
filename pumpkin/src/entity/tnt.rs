@@ -1,6 +1,7 @@
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::{Block, damage::DamageType};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     client::play::{MetaDataType, Metadata},
     codec::var_int::VarInt,
@@ -8,7 +9,10 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
-    sync::atomic::{AtomicU32, Ordering::Relaxed},
+    sync::atomic::{
+        AtomicU32,
+        Ordering::{self, Relaxed},
+    },
 };
 
 use super::{Entity, EntityBase, living::LivingEntity};
@@ -27,7 +31,32 @@ impl TNTEntity {
             fuse: AtomicU32::new(fuse),
         }
     }
-    pub async fn send_meta_packet(&self) {
+
+    pub fn new_default(entity: Entity) -> Self {
+        Self {
+            entity,
+            power: 4.0,
+            fuse: AtomicU32::new(80),
+        }
+    }
+}
+
+#[async_trait]
+impl EntityBase for TNTEntity {
+    async fn tick(&self, server: &Server) {
+        let fuse = self.fuse.fetch_sub(1, Relaxed);
+        if fuse == 0 {
+            self.entity.remove().await;
+            self.entity
+                .world
+                .read()
+                .await
+                .explode(server, self.entity.pos.load(), self.power)
+                .await;
+        }
+    }
+
+    async fn init_data_tracker(&self) {
         // TODO: Yes, this is the wrong function, but we need to send this after spawning the entity.
         let pos: f64 = rand::random::<f64>() * TAU;
 
@@ -50,22 +79,20 @@ impl TNTEntity {
             ])
             .await;
     }
-}
 
-#[async_trait]
-impl EntityBase for TNTEntity {
-    async fn tick(&self, server: &Server) {
-        let fuse = self.fuse.fetch_sub(1, Relaxed);
-        if fuse == 0 {
-            self.entity.remove().await;
-            self.entity
-                .world
-                .read()
-                .await
-                .explode(server, self.entity.pos.load(), self.power)
-                .await;
-        }
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.entity.write_nbt(nbt).await;
+        nbt.put_short("fuse", self.fuse.load(Ordering::Relaxed) as i16);
+        // TODO
     }
+
+    async fn read_nbt(&self, nbt: &NbtCompound) {
+        self.entity.read_nbt(nbt).await;
+        self.fuse
+            .store(nbt.get_short("fuse").unwrap_or(80) as u32, Relaxed);
+        // TODO
+    }
+
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
         false
     }

@@ -139,6 +139,7 @@ mod test {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: temp_dir.path().join("entities"),
         };
 
         AnvilLevelInfo
@@ -222,6 +223,7 @@ mod test {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: temp_dir.path().join("entities"),
         };
 
         let test_dat = global_path!("../../assets/level_1_20.dat");

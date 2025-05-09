@@ -94,7 +94,7 @@ impl NBTStorage for HungerManager {
         nbt.put_int("foodTickTimer", self.tick_timer.load() as i32);
     }
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &NbtCompound) {
         self.level
             .store(nbt.get_int("foodLevel").unwrap_or(20) as u8);
         self.saturation

@@ -2,6 +2,7 @@ use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
+use uuid::Uuid;
 
 use std::num::NonZeroU8;
 use std::sync::Arc;
@@ -10,8 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
-use crate::entity::mob;
 use crate::entity::player::ChatSession;
+use crate::entity::r#type::entity_base_from_type;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
@@ -1638,14 +1639,21 @@ impl Player {
         let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
         let world = self.world().await;
-        // Create a new mob and UUID based on the spawn egg id
-        let mob = mob::from_type(EntityType::from_raw(entity_type.id).unwrap(), pos, &world).await;
+        // Create a new entity and UUID based on the spawn egg id
+        let entity = entity_base_from_type(
+            EntityType::from_raw(entity_type.id).unwrap(),
+            Uuid::new_v4(),
+            world.clone(),
+            pos,
+            false,
+        )
+        .await;
 
         // Set the rotation
-        mob.get_entity().set_rotation(yaw, 0.0);
+        entity.get_entity().set_rotation(yaw, 0.0);
 
         // Broadcast the new mob to all players
-        world.spawn_entity(mob).await;
+        world.spawn_entity(entity).await;
 
         // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }

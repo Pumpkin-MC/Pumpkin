@@ -24,6 +24,7 @@ impl CSetEntityMetadata {
 
 #[derive(Serialize, Clone)]
 pub struct Metadata<T> {
+    /// https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata
     index: u8,
     r#type: VarInt,
     value: T,

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
-use super::{Entity, EntityId, NBTStorage, effect::Effect};
+use super::{Entity, EntityId, effect::Effect};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -335,26 +335,24 @@ impl EntityBase for LivingEntity {
         }
         true
     }
-    fn get_entity(&self) -> &Entity {
-        &self.entity
-    }
 
-    fn get_living_entity(&self) -> Option<&LivingEntity> {
-        Some(self)
-    }
-}
-
-#[async_trait]
-impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
         // todo more...
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         self.entity.read_nbt(nbt).await;
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
         // todo more...
+    }
+
+    fn get_entity(&self) -> &Entity {
+        &self.entity
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        Some(self)
     }
 }

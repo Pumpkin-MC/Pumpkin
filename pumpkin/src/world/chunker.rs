@@ -1,7 +1,10 @@
 use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
+use pumpkin_protocol::{
+    client::play::{CCenterChunk, CRemoveEntities, CUnloadChunk},
+    codec::var_int::VarInt,
+};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;
@@ -84,11 +87,25 @@ pub async fn update_position(player: &Arc<Player>) {
         player.watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {
+            // First lets clean the chunks
             level.clean_chunks(&chunks_to_clean).await;
             for chunk in unloading_chunks {
                 player
                     .client
                     .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                    .await;
+
+                let entity_ids: Vec<_> = player
+                    .world()
+                    .await
+                    .get_entity_ids_for_chunk(chunk)
+                    .await
+                    .iter()
+                    .map(|id| VarInt(*id))
+                    .collect();
+                player
+                    .client
+                    .enqueue_packet(&CRemoveEntities::new(&entity_ids))
                     .await;
             }
         }

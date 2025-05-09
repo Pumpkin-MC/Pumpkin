@@ -19,7 +19,7 @@ pub struct ChunkCompression {
 impl Default for ChunkCompression {
     fn default() -> Self {
         Self {
-            algorithm: Compression::LZ4,
+            algorithm: Compression::ZLib,
             level: 6,
         }
     }

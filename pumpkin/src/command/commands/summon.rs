@@ -8,10 +8,9 @@ use crate::{
             ConsumedArgs, FindArg, position_3d::Position3DArgumentConsumer,
             summonable_entities::SummonableEntitiesArgumentConsumer,
         },
-        tree::CommandTree,
-        tree::builder::argument,
+        tree::{CommandTree, builder::argument},
     },
-    entity::mob,
+    entity::r#type::entity_base_from_type,
 };
 const NAMES: [&str; 1] = ["summon"];
 
@@ -31,18 +30,25 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
+        let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
 
         // TODO: Make this work in console
         if let Some(player) = sender.as_player() {
             let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
-            let mob = mob::from_type(entity, pos, &player.world().await).await;
-            player.world().await.spawn_entity(mob).await;
+            let entity = entity_base_from_type(
+                entity_type,
+                uuid::Uuid::new_v4(),
+                player.world().await,
+                pos,
+                false,
+            )
+            .await;
+            player.world().await.spawn_entity(entity).await;
             sender
                 .send_message(TextComponent::translate(
                     "commands.summon.success",
-                    [TextComponent::text(format!("{entity:?}"))],
+                    [TextComponent::text(format!("{entity_type:?}"))],
                 ))
                 .await;
         }

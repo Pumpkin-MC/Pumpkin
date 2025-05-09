@@ -375,6 +375,7 @@ impl Player {
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
+
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -576,10 +577,11 @@ impl Player {
             let chunk_count = chunk_of_chunks.len();
             self.client.send_packet_now(&CChunkBatchStart).await;
             for chunk in chunk_of_chunks {
-                let chunk = chunk.read().await;
+                let chunk_data = chunk.read().await;
                 // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
                 // player or something.
-                self.client.send_packet_now(&CChunkData(&chunk)).await;
+                self.client.send_packet_now(&CChunkData(&chunk_data)).await;
+                // TODO: Send entities
             }
             self.client
                 .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
@@ -1283,7 +1285,6 @@ impl Player {
         let item_entity =
             Arc::new(ItemEntity::new_with_velocity(entity, item_id, count, velocity, 40).await);
         self.world().await.spawn_entity(item_entity.clone()).await;
-        item_entity.send_meta_packet().await;
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
@@ -1500,7 +1501,7 @@ impl NBTStorage for Player {
         self.hunger_manager.write_nbt(nbt).await;
     }
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.lock().await.read_nbt(nbt).await;
         self.abilities.lock().await.read_nbt(nbt).await;
@@ -1572,7 +1573,7 @@ impl NBTStorage for PlayerInventory {
         nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
     }
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &NbtCompound) {
         // Read selected hotbar slot
         self.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
 
@@ -1824,7 +1825,7 @@ impl NBTStorage for Abilities {
         nbt.put_component("abilities", component);
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         if let Some(component) = nbt.get_compound("abilities") {
             self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
             self.flying = component.get_bool("flying").unwrap_or(false);

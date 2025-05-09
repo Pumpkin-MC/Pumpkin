@@ -5,6 +5,7 @@ use std::sync::{
 
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, item::Item};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -66,16 +67,6 @@ impl ItemEntity {
             pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
         }
     }
-
-    pub async fn send_meta_packet(&self) {
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                8,
-                MetaDataType::ItemStack,
-                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-            )])
-            .await;
-    }
 }
 
 #[async_trait]
@@ -92,6 +83,32 @@ impl EntityBase for ItemEntity {
         if age >= 6000 {
             entity.remove().await;
         }
+    }
+
+    async fn init_data_tracker(&self) {
+        self.entity
+            .send_meta_data(&[Metadata::new(
+                8,
+                MetaDataType::ItemStack,
+                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            )])
+            .await;
+    }
+
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.entity.write_nbt(nbt).await;
+        nbt.put_short("Age", self.item_age.load(Relaxed) as i16);
+        let pickup_delay = self.pickup_delay.lock().await;
+        nbt.put_short("PickupDelay", i16::from(*pickup_delay));
+        // TODO: put stack
+    }
+
+    async fn read_nbt(&self, nbt: &NbtCompound) {
+        self.entity.read_nbt(nbt).await;
+        self.item_age
+            .store(nbt.get_short("Age").unwrap_or(0) as u32, Relaxed);
+        *self.pickup_delay.lock().await = nbt.get_short("PickupDelay").unwrap_or(0) as u8;
+        // TODO: get stack
     }
 
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
@@ -178,7 +195,7 @@ impl EntityBase for ItemEntity {
                 self.entity.remove().await;
             } else {
                 // Update entity
-                self.send_meta_packet().await;
+                self.init_data_tracker().await;
             }
         }
     }

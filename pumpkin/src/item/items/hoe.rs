@@ -97,7 +97,6 @@ impl PumpkinItem for HoeItem {
                 let item_entity =
                     Arc::new(ItemEntity::new(entity, Block::HANGING_ROOTS.item_id, 1).await);
                 world.spawn_entity(item_entity.clone()).await;
-                item_entity.send_meta_packet().await;
             }
         }
     }

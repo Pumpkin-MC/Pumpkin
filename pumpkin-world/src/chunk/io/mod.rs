@@ -1,13 +1,12 @@
 use std::error;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
 
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
-pub mod chunk_file_manager;
+pub mod file_manager;
 
 /// The result of loading a chunk data.
 ///
@@ -45,7 +44,7 @@ impl<D: Send, E: error::Error> LoadedData<D, E> {
 /// The `R` type is the type of the data that will be loaded/saved
 /// like ChunkData or EntityData
 #[async_trait]
-pub trait ChunkIO
+pub trait FileIO
 where
     Self: Send + Sync,
 {
@@ -81,13 +80,18 @@ where
     async fn block_and_await_ongoing_tasks(&self);
 }
 
+pub trait Dirtiable {
+    fn is_dirty(&self) -> bool;
+    fn mark_dirty(&mut self, flag: bool);
+}
+
 /// Trait to serialize and deserialize the chunk data to and from bytes.
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
 #[async_trait]
 pub trait ChunkSerializer: Send + Sync + Default {
-    type Data: Send + Sync + Sized;
+    type Data: Send + Sync + Sized + Dirtiable;
     type WriteBackend;
 
     /// Get the key for the chunk (like the file name)
@@ -98,8 +102,8 @@ pub trait ChunkSerializer: Send + Sync + Default {
     /// Serialize the data to bytes.
     async fn write(&self, backend: Self::WriteBackend) -> Result<(), std::io::Error>;
 
-    /// Create a new instance from bytes
-    fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
+    /// Create a new instance from the backend
+    async fn read(data: Self::WriteBackend) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunk data to the serializer
     async fn update_chunk(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError>;
