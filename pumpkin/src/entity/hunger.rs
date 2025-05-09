@@ -4,6 +4,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
+use pumpkin_util::gamemode::GameMode;
 
 // TODO: This entire thing should be atomic, not individual fields
 pub struct HungerManager {
@@ -28,6 +29,12 @@ impl Default for HungerManager {
 
 impl HungerManager {
     pub async fn tick(&self, player: &Player) {
+        // Skips all hunger processing logic in Creative or Spectator mode
+        let gamemode = player.gamemode.load();
+        if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
+            return;
+        }
+
         let saturation = self.saturation.load();
         let level = self.level.load();
         let exhaustion = self.exhaustion.load();
