@@ -31,9 +31,9 @@ use pumpkin_protocol::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
     CCombatDeath, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent,
     CKeepAlive, CParticle, CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-    CRespawn, CSetExperience, CSetHealth, CSetHeldItem, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CPlayerSpawnPosition, CRespawn, CSetExperience, CSetHealth, CSetHeldItem, CSoundEffect,
+    CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -282,6 +282,7 @@ impl Player {
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
+            // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: AtomicCell::new(None),
             sleeping_since: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
@@ -470,7 +471,7 @@ impl Player {
         if config.swing {}
     }
 
-    pub fn set_respawn_point(
+    pub async fn set_respawn_point(
         &self,
         dimension: DimensionType,
         block_pos: BlockPos,
@@ -488,6 +489,10 @@ impl Player {
             yaw,
             force: false,
         }));
+
+        self.client
+            .send_packet_now(&CPlayerSpawnPosition::new(block_pos, yaw))
+            .await;
         true
     }
 

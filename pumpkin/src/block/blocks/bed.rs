@@ -156,11 +156,13 @@ impl PumpkinBlock for BedBlock {
         };
 
         if world.dimension_type == DimensionType::Overworld {
-            let respawn_point_set = player.set_respawn_point(
-                world.dimension_type,
-                bed_head_pos,
-                player.get_entity().yaw.load(),
-            );
+            let respawn_point_set = player
+                .set_respawn_point(
+                    world.dimension_type,
+                    bed_head_pos,
+                    player.get_entity().yaw.load(),
+                )
+                .await;
 
             if bed_props.occupied {
                 // Wake up villager
