@@ -6,10 +6,6 @@ pub struct BedBlockEntity {
     pub position: BlockPos,
 }
 
-impl BedBlockEntity {
-    pub const ID: &'static str = "minecraft:bed";
-}
-
 impl BlockEntity for BedBlockEntity {
     fn identifier(&self) -> &'static str {
         Self::ID
@@ -27,4 +23,11 @@ impl BlockEntity for BedBlockEntity {
     }
 
     fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+}
+
+impl BedBlockEntity {
+    pub const ID: &'static str = "minecraft:bed";
+    pub fn new(position: BlockPos) -> Self {
+        Self { position }
+    }
 }

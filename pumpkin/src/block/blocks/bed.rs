@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
@@ -5,19 +7,21 @@ use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_registry::DimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
-use std::sync::Arc;
+use pumpkin_world::block::entities::bed::BedBlockEntity;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
-use pumpkin_protocol::server::play::SUseItemOn;
-
 use crate::server::Server;
+use crate::world::BlockFlags;
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -85,17 +89,24 @@ impl PumpkinBlock for BedBlock {
         _old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        let mut head_props = BedProperties::default(block);
-        head_props.facing = BedProperties::from_state_id(state_id, block).facing;
-        head_props.part = BedPart::Head;
+        let bed_entity = BedBlockEntity::new(*block_pos);
+        world.add_block_entity(Arc::new(bed_entity)).await;
 
+        let mut bed_head_props = BedProperties::default(block);
+        bed_head_props.facing = BedProperties::from_state_id(state_id, block).facing;
+        bed_head_props.part = BedPart::Head;
+
+        let bed_head_pos = block_pos.offset(bed_head_props.facing.to_offset());
         world
             .set_block_state(
-                &block_pos.offset(head_props.facing.to_offset()),
-                head_props.to_state_id(block),
+                &bed_head_pos,
+                bed_head_props.to_state_id(block),
                 BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
             )
             .await;
+
+        let bed_head_entity = BedBlockEntity::new(bed_head_pos);
+        world.add_block_entity(Arc::new(bed_head_entity)).await;
     }
 
     async fn broken(
@@ -129,12 +140,117 @@ impl PumpkinBlock for BedBlock {
 
     async fn normal_use(
         &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _server: &Server,
-        _world: &Arc<World>,
+        block: &Block,
+        player: &Player,
+        block_pos: BlockPos,
+        server: &Server,
+        world: &Arc<World>,
     ) {
-        // Sleep
+        let state_id = world.get_block_state_id(&block_pos).await.unwrap();
+        let bed_props = BedProperties::from_state_id(state_id, block);
+
+        let bed_head_pos = if bed_props.part == BedPart::Head {
+            block_pos
+        } else {
+            block_pos.offset(bed_props.facing.to_offset())
+        };
+
+        if world.dimension_type == DimensionType::Overworld {
+            let respawn_point_set = player
+                .set_respawn_point(
+                    world.dimension_type,
+                    bed_head_pos,
+                    player.get_entity().yaw.load(),
+                )
+                .await;
+
+            if bed_props.occupied {
+                // Wake up villager
+            } else if can_sleep(world).await {
+                player.sleep(bed_head_pos).await;
+                Self::set_occupied(true, world, block, &block_pos, state_id).await;
+            } else if respawn_point_set {
+                player
+                    .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
+                    .await;
+            }
+        } else {
+            world
+                .break_block(&block_pos, None, BlockFlags::SKIP_DROPS)
+                .await;
+
+            if bed_props.part == BedPart::Head {
+                world
+                    .break_block(
+                        &block_pos.offset(bed_props.facing.opposite().to_offset()),
+                        None,
+                        BlockFlags::SKIP_DROPS,
+                    )
+                    .await;
+            } else {
+                world
+                    .break_block(
+                        &block_pos.offset(bed_props.facing.to_offset()),
+                        None,
+                        BlockFlags::SKIP_DROPS,
+                    )
+                    .await;
+            }
+
+            world
+                .explode(server, bed_head_pos.to_centered_f64(), 5.0)
+                .await;
+        }
+    }
+}
+
+impl BedBlock {
+    pub async fn set_occupied(
+        occupied: bool,
+        world: &Arc<World>,
+        block: &Block,
+        block_pos: &BlockPos,
+        state_id: u16,
+    ) {
+        let mut bed_props = BedProperties::from_state_id(state_id, block);
+        bed_props.occupied = occupied;
+        world
+            .set_block_state(
+                block_pos,
+                bed_props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+
+        let other_half_pos = if bed_props.part == BedPart::Head {
+            block_pos.offset(bed_props.facing.opposite().to_offset())
+        } else {
+            block_pos.offset(bed_props.facing.to_offset())
+        };
+        bed_props.part = if bed_props.part == BedPart::Head {
+            BedPart::Foot
+        } else {
+            BedPart::Head
+        };
+        world
+            .set_block_state(
+                &other_half_pos,
+                bed_props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+    }
+}
+
+async fn can_sleep(world: &Arc<World>) -> bool {
+    let time = world.level_time.lock().await;
+    let weather = world.weather.lock().await;
+
+    if weather.thundering {
+        true
+    } else if weather.raining {
+        time.time_of_day > 12010 && time.time_of_day < 23991
+    } else {
+        time.time_of_day > 12542 && time.time_of_day < 23459
     }
 }
