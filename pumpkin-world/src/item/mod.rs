@@ -1,6 +1,7 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_nbt::compound::NbtCompound;
+use std::hash::Hash;
 
 mod categories;
 
@@ -14,26 +15,33 @@ pub enum Rarity {
     Epic,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct ItemStack {
     pub item_count: u8,
-    // TODO: Should this be a ref? all of our items are const
-    pub item: Item,
+    pub item: &'static Item,
 }
 
+impl Hash for ItemStack {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.item_count.hash(state);
+        self.item.id.hash(state);
+    }
+}
+
+/*
 impl PartialEq for ItemStack {
     fn eq(&self, other: &Self) -> bool {
         self.item.id == other.item.id
     }
-}
+} */
 
 impl ItemStack {
     pub const EMPTY: ItemStack = ItemStack {
         item_count: 0,
-        item: Item::AIR,
+        item: &Item::AIR,
     };
 
-    pub fn new(item_count: u8, item: Item) -> Self {
+    pub fn new(item_count: u8, item: &'static Item) -> Self {
         Self { item_count, item }
     }
 
@@ -45,8 +53,12 @@ impl ItemStack {
         if self.is_empty() {
             &Item::AIR
         } else {
-            &self.item
+            self.item
         }
+    }
+
+    pub fn is_stackable(&self) -> bool {
+        self.get_max_stack_size() > 1 // TODO: && (!this.isDamageable() || !this.isDamaged());
     }
 
     pub fn is_empty(&self) -> bool {
@@ -61,9 +73,13 @@ impl ItemStack {
     }
 
     pub fn copy_with_count(&self, count: u8) -> Self {
-        let mut stack = self.clone();
+        let mut stack = *self;
         stack.item_count = count;
         stack
+    }
+
+    pub fn set_count(&mut self, count: u8) {
+        self.item_count = count;
     }
 
     pub fn decrement(&mut self, amount: u8) {
@@ -76,6 +92,10 @@ impl ItemStack {
 
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
         self.item == other.item //TODO: && self.item.components == other.item.components
+    }
+
+    pub fn are_equal(&self, other: &Self) -> bool {
+        self.item_count == other.item_count && self.are_items_and_components_equal(other)
     }
 
     /// Determines the mining speed for a block based on tool rules.

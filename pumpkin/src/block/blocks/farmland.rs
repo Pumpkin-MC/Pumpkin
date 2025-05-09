@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -30,14 +31,14 @@ impl PumpkinBlock for FarmLandBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: &BlockDirection,
-        pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player_direction: &Player,
-        _other: bool,
+        block: &Block,
+        pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        if !self.can_place_at(world, pos).await {
+        if !can_place_at(world, pos).await {
             return Block::DIRT.default_state_id;
         }
         block.default_state_id
@@ -49,11 +50,11 @@ impl PumpkinBlock for FarmLandBlock {
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if direction == &BlockDirection::Up && !self.can_place_at(world, pos).await {
+        if direction == BlockDirection::Up && !can_place_at(world, pos).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
@@ -61,8 +62,21 @@ impl PumpkinBlock for FarmLandBlock {
         state
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
-        let state = world.get_block_state(&pos.up()).await.unwrap();
-        !state.is_solid() // TODO: add fence gata block
+    async fn can_place_at(
+        &self,
+        _server: &Server,
+        world: &World,
+        _player: &Player,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
+        can_place_at(world, block_pos).await
     }
+}
+
+async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+    let state = world.get_block_state(&block_pos.up()).await.unwrap();
+    !state.is_solid() // TODO: add fence gate block
 }

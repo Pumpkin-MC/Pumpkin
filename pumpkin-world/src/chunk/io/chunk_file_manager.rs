@@ -297,7 +297,7 @@ where
                 let mut serializer = chunk_serializer.write().await;
                 for chunk_lock in chunk_locks {
                     let mut chunk = chunk_lock.write().await;
-                    let chunk_is_dirty = chunk.dirty;
+                    let chunk_is_dirty = chunk.dirty || chunk.block_entities.values().any(|block_entity| block_entity.is_dirty());
                     // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
                     // updating what we will write here
                     chunk.dirty = false;

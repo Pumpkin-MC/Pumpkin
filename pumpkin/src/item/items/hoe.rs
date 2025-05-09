@@ -10,6 +10,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
 pub struct HoeItem;
@@ -36,7 +37,7 @@ impl PumpkinItem for HoeItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
@@ -51,7 +52,7 @@ impl PumpkinItem for HoeItem {
             let world = player.world().await;
 
             //Only rooted can be right-clicked on the bottom of the block
-            if face == &BlockDirection::Down {
+            if face == BlockDirection::Down {
                 if block == &Block::ROOTED_DIRT {
                     future_block = &Block::DIRT;
                 }
@@ -94,8 +95,9 @@ impl PumpkinItem for HoeItem {
                 };
                 let entity = world.create_entity(location, EntityType::ITEM);
                 // TODO: Merge stacks together
-                let item_entity =
-                    Arc::new(ItemEntity::new(entity, Block::HANGING_ROOTS.item_id, 1).await);
+                let item_entity = Arc::new(
+                    ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,
+                );
                 world.spawn_entity(item_entity.clone()).await;
                 item_entity.send_meta_packet().await;
             }

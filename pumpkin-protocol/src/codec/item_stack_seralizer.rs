@@ -38,6 +38,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                     let item_id = seq
                         .next_element::<VarInt>()?
                         .ok_or(de::Error::custom("No item id VarInt!"))?;
+
                     let num_components_to_add = seq
                         .next_element::<VarInt>()?
                         .ok_or(de::Error::custom("No component add length VarInt!"))?;
@@ -58,7 +59,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                     ItemStackSerializer(Cow::Owned(ItemStack::new(
                         item_count.0 as u8,
-                        Item::from_id(item_id).unwrap_or(Item::AIR),
+                        Item::from_id(item_id).unwrap_or(&Item::AIR),
                     )))
                 };
 
@@ -117,5 +118,132 @@ impl From<Option<ItemStack>> for ItemStackSerializer<'_> {
             Some(item) => ItemStackSerializer::from(item),
             None => ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY)),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ItemComponentHash {
+    pub added: Vec<(VarInt, VarInt)>,
+    pub removed: Vec<VarInt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItemStackHash {
+    item_id: VarInt,
+    count: VarInt,
+    #[allow(dead_code)]
+    components: ItemComponentHash,
+}
+
+impl OptionalItemStackHash {
+    pub fn hash_equals(&self, other: &ItemStack) -> bool {
+        if let Some(hash) = &self.0 {
+            // TODO: Components
+            hash.item_id == other.item.id.into() && hash.count == other.item_count.into()
+        } else {
+            other.is_empty()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OptionalItemStackHash(pub Option<ItemStackHash>);
+
+impl<'de> Deserialize<'de> for OptionalItemStackHash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = OptionalItemStackHash;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a valid Slot encoded in a byte sequence")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let is_some = seq
+                    .next_element::<bool>()?
+                    .ok_or(de::Error::custom("No is some bool!"))?;
+                if is_some {
+                    let item_id = seq
+                        .next_element::<VarInt>()?
+                        .ok_or(de::Error::custom("No item id VarInt!"))?;
+                    let count = seq
+                        .next_element::<VarInt>()?
+                        .ok_or(de::Error::custom("No item count VarInt!"))?;
+
+                    let hashed_components = seq
+                        .next_element::<ItemComponentHash>()?
+                        .ok_or(de::Error::custom("No item component hash!"))?;
+
+                    let item_stack_hash = ItemStackHash {
+                        item_id,
+                        count,
+                        components: hashed_components,
+                    };
+                    Ok(OptionalItemStackHash(Some(item_stack_hash)))
+                } else {
+                    Ok(OptionalItemStackHash(None))
+                }
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for ItemComponentHash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = ItemComponentHash;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a valid Slot encoded in a byte sequence")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut added = Vec::new();
+                let mut removed = Vec::new();
+
+                let added_length = seq
+                    .next_element::<VarInt>()?
+                    .ok_or(de::Error::custom("No added length VarInt!"))?;
+                for _ in 0..added_length.0 {
+                    let component_id = seq
+                        .next_element::<VarInt>()?
+                        .ok_or(de::Error::custom("No component id VarInt!"))?;
+                    let component_value = seq
+                        .next_element::<VarInt>()?
+                        .ok_or(de::Error::custom("No component value VarInt!"))?;
+                    added.push((component_id, component_value));
+                }
+
+                let removed_length = seq
+                    .next_element::<VarInt>()?
+                    .ok_or(de::Error::custom("No removed length VarInt!"))?;
+                for _ in 0..removed_length.0 {
+                    let component_id = seq
+                        .next_element::<VarInt>()?
+                        .ok_or(de::Error::custom("No component id VarInt!"))?;
+                    removed.push(component_id);
+                }
+
+                Ok(ItemComponentHash { added, removed })
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor)
     }
 }

@@ -1,5 +1,7 @@
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
+use async_trait::async_trait;
+use barrel::BarrelBlockEntity;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
@@ -7,25 +9,30 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::inventory::Inventory;
+
+pub mod barrel;
 pub mod bed;
 pub mod chest;
 pub mod comparator;
 pub mod sign;
 
+//TODO: We need a mark_dirty for chests
+#[async_trait]
 pub trait BlockEntity: Send + Sync {
-    fn write_nbt(&self, nbt: &mut NbtCompound);
+    async fn write_nbt(&self, nbt: &mut NbtCompound);
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
-    fn write_internal(&self, nbt: &mut NbtCompound) {
+    async fn write_internal(&self, nbt: &mut NbtCompound) {
         nbt.put_string("id", self.identifier().to_string());
         let position = self.get_position();
         nbt.put_int("x", position.0.x);
         nbt.put_int("y", position.0.y);
         nbt.put_int("z", position.0.z);
-        self.write_nbt(nbt);
+        self.write_nbt(nbt).await;
     }
     fn get_id(&self) -> u32 {
         pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
@@ -38,6 +45,13 @@ pub trait BlockEntity: Send + Sync {
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
     }
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        None
+    }
+    fn is_dirty(&self) -> bool {
+        false
+    }
+    fn as_any(&self) -> &dyn Any;
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
@@ -56,6 +70,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         ComparatorBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
             ComparatorBlockEntity,
         >(nbt))),
+        BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
+            nbt,
+        ))),
         _ => None,
     }
 }

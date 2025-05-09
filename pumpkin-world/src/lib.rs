@@ -9,6 +9,7 @@ pub mod data;
 pub mod dimension;
 pub mod entity;
 mod generation;
+pub mod inventory;
 pub mod item;
 pub mod level;
 mod lock;

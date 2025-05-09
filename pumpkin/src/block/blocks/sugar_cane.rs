@@ -1,20 +1,24 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
 };
 use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::entity::player::Player;
+use crate::server::Server;
 use crate::world::BlockFlags;
 use crate::world::World;
-use pumpkin_util::math::position::BlockPos;
 
 #[pumpkin_block("minecraft:sugar_cane")]
 pub struct SugarCaneBlock;
@@ -22,7 +26,7 @@ pub struct SugarCaneBlock;
 #[async_trait]
 impl PumpkinBlock for SugarCaneBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
-        if !self.can_place_at(world, pos).await {
+        if !can_place_at(world, pos).await {
             world.break_block(pos, None, BlockFlags::empty()).await;
         }
     }
@@ -62,11 +66,11 @@ impl PumpkinBlock for SugarCaneBlock {
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !self.can_place_at(world, pos).await {
+        if !can_place_at(world, pos).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
@@ -74,26 +78,41 @@ impl PumpkinBlock for SugarCaneBlock {
         state
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
-        let block = world.get_block(&pos.down()).await.unwrap();
+    async fn can_place_at(
+        &self,
+        _server: &Server,
+        world: &World,
+        _player: &Player,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
+        can_place_at(world, block_pos).await
+    }
+}
 
-        if block == Block::SUGAR_CANE {
-            return true;
-        }
+async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+    let block_below = world.get_block(&block_pos.down()).await.unwrap();
 
-        if block.is_tagged_with("minecraft:dirt").unwrap()
-            || block.is_tagged_with("minecraft:sand").unwrap()
-        {
-            for direction in BlockDirection::horizontal() {
-                let block = world
-                    .get_block(&pos.down().offset(direction.to_offset()))
-                    .await
-                    .unwrap();
-                if block == Block::WATER || block == Block::FROSTED_ICE {
-                    return true;
-                }
+    if block_below == Block::SUGAR_CANE {
+        return true;
+    }
+
+    if block_below.is_tagged_with("minecraft:dirt").unwrap()
+        || block_below.is_tagged_with("minecraft:sand").unwrap()
+    {
+        for direction in HorizontalFacing::all() {
+            let block = world
+                .get_block(&block_pos.down().offset(direction.to_offset()))
+                .await
+                .unwrap();
+
+            if block == Block::WATER || block == Block::FROSTED_ICE {
+                return true;
             }
         }
-        false
     }
+
+    false
 }

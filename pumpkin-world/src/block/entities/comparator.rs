@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEntity;
@@ -13,6 +14,7 @@ impl ComparatorBlockEntity {
 
 const OUTPUT_SIGNAL: &str = "OutputSignal";
 
+#[async_trait]
 impl BlockEntity for ComparatorBlockEntity {
     fn identifier(&self) -> &'static str {
         Self::ID
@@ -33,7 +35,11 @@ impl BlockEntity for ComparatorBlockEntity {
         }
     }
 
-    fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         nbt.put_int(OUTPUT_SIGNAL, self.output_signal);
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

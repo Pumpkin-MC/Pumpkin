@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEntity;
@@ -7,6 +8,7 @@ pub struct ChestBlockEntity {
     //pub items: [Item; 27],
 }
 
+#[async_trait]
 impl BlockEntity for ChestBlockEntity {
     fn identifier(&self) -> &'static str {
         Self::ID
@@ -23,7 +25,11 @@ impl BlockEntity for ChestBlockEntity {
         Self { position }
     }
 
-    fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+    async fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl ChestBlockEntity {

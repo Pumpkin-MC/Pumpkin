@@ -1,3 +1,4 @@
+use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -5,9 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
-use crate::block::entities::BlockEntity;
-
 use crate::BlockStateId;
+use crate::chunk::format::LightContainer;
 
 pub mod format;
 pub mod io;
@@ -116,6 +116,7 @@ pub struct ChunkData {
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
     pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
+    pub light_engine: ChunkLightEngine,
 
     pub dirty: bool,
 }
@@ -162,19 +163,12 @@ impl ChunkSections {
 pub struct SubChunk {
     pub block_states: BlockPalette,
     pub biomes: BiomePalette,
-    pub block_light: Option<Box<[u8]>>,
-    pub sky_light: Option<Box<[u8]>>,
 }
 
-impl SubChunk {
-    /// As of now we don't have light calculation when generating a new chunk
-    pub fn max_sky_light() -> Self {
-        let chunk_light_len = BlockPalette::VOLUME / 2;
-        Self {
-            sky_light: Some(vec![0xFFu8; chunk_light_len].into_boxed_slice()),
-            ..Default::default()
-        }
-    }
+#[derive(Debug, Default)]
+pub struct ChunkLightEngine {
+    pub sky_light: Box<[LightContainer]>,
+    pub block_light: Box<[LightContainer]>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

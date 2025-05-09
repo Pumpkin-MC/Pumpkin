@@ -72,7 +72,7 @@ impl<'a> DoublePerlinNoiseBuilder<'a> {
         let parameters = DoublePerlinNoiseParameters::id_to_parameters(id)
             .unwrap_or_else(|| panic!("Unknown noise id: {}", id));
 
-        // Note that the parameters' id is differenent than `id`
+        // Note that the parameters' id is different than `id`
         let mut random = self
             .random_config
             .base_random_deriver

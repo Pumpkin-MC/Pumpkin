@@ -1,5 +1,5 @@
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_util::Difficulty;
+use pumpkin_util::{Difficulty, serde_enum_as_integer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -59,7 +59,8 @@ pub struct LevelData {
     // The time of day. 0 is sunrise, 6000 is mid day, 12000 is sunset, 18000 is mid night, 24000 is the next day's 0. This value keeps counting past 24000 and does not reset to 0.
     pub day_time: i64,
     // The current difficulty setting.
-    pub difficulty: i8,
+    #[serde(with = "serde_enum_as_integer")]
+    pub difficulty: Difficulty,
     // 1 or 0 (true/false) - True if the difficulty has been locked. Defaults to 0.
     pub difficulty_locked: bool,
     // TODO: DimensionData
@@ -158,7 +159,7 @@ impl Default for LevelData {
             },
             data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             day_time: 0,
-            difficulty: Difficulty::Normal as i8,
+            difficulty: Difficulty::Normal,
             difficulty_locked: false,
             world_gen_settings: Default::default(),
             last_played: -1,

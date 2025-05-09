@@ -15,7 +15,7 @@ pub struct CParticle<'a> {
     offset: Vector3<f32>,
     max_speed: f32,
     particle_count: i32,
-    pariticle_id: VarInt,
+    particle_id: VarInt,
     #[serde(serialize_with = "network_serialize_no_prefix")]
     data: &'a [u8],
 }
@@ -29,7 +29,7 @@ impl<'a> CParticle<'a> {
         offset: Vector3<f32>,
         max_speed: f32,
         particle_count: i32,
-        pariticle_id: VarInt,
+        particle_id: VarInt,
         data: &'a [u8],
     ) -> Self {
         Self {
@@ -39,7 +39,7 @@ impl<'a> CParticle<'a> {
             offset,
             max_speed,
             particle_count,
-            pariticle_id,
+            particle_id,
             data,
         }
     }

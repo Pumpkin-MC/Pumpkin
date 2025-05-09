@@ -555,7 +555,9 @@ impl NBTStorage for Entity {
 pub trait NBTStorage: Send + Sync {
     async fn write_nbt(&self, nbt: &mut NbtCompound);
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound);
+    async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
+
+    async fn read_nbt_non_mut(&self, _nbt: &mut NbtCompound) {}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

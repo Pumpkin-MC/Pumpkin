@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
@@ -10,11 +11,13 @@ use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
+use pumpkin_inventory::entity_equipment::EntityEquipment;
+use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::{
-    client::play::{CDamageEvent, CSetEquipment, EquipmentSlot, MetaDataType, Metadata},
+    client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_util::math::vector3::Vector3;
@@ -39,6 +42,7 @@ pub struct LivingEntity {
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<EffectType, Effect>>,
+    pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
 impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
@@ -52,13 +56,14 @@ impl LivingEntity {
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
+            entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
         }
     }
 
     pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
-        let equipment: Vec<(EquipmentSlot, ItemStackSerializer)> = equipment
+        let equipment: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
-            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
+            .map(|(slot, stack)| (slot.discriminant(), ItemStackSerializer::from(*stack)))
             .collect();
         self.entity
             .world
@@ -155,7 +160,12 @@ impl LivingEntity {
     pub async fn remove_effect(&self, effect_type: EffectType) {
         let mut effects = self.active_effects.lock().await;
         effects.remove(&effect_type);
-        // TODO broadcast metadata
+        self.entity
+            .world
+            .read()
+            .await
+            .send_remove_mob_effect(&self.entity, effect_type)
+            .await;
     }
 
     pub async fn has_effect(&self, effect: EffectType) -> bool {
@@ -263,6 +273,24 @@ impl LivingEntity {
             .velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
     }
+
+    async fn tick_effects(&self) {
+        let mut effects_to_remove = Vec::new();
+
+        {
+            let mut effects = self.active_effects.lock().await;
+            for effect in effects.values_mut() {
+                if effect.duration == 0 {
+                    effects_to_remove.push(effect.r#type);
+                }
+                effect.duration -= 1;
+            }
+        }
+
+        for effect_type in effects_to_remove {
+            self.remove_effect(effect_type).await;
+        }
+    }
 }
 
 #[async_trait]
@@ -270,7 +298,7 @@ impl EntityBase for LivingEntity {
     async fn tick(&self, server: &Server) {
         self.entity.tick(server).await;
         self.tick_move();
-
+        self.tick_effects().await;
         if self.time_until_regen.load(Relaxed) > 0 {
             self.time_until_regen.fetch_sub(1, Relaxed);
         }
@@ -326,6 +354,7 @@ impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
+        //TODO: write equipment
         // todo more...
     }
 

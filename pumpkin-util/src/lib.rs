@@ -1,3 +1,10 @@
+use num_derive::{FromPrimitive, ToPrimitive};
+use serde::{Deserialize, Serialize};
+use std::ops::{Index, IndexMut};
+
+pub use gamemode::GameMode;
+pub use permission::PermissionLvl;
+
 pub mod biome;
 pub mod gamemode;
 pub mod loot_table;
@@ -6,15 +13,9 @@ pub mod noise;
 pub mod permission;
 pub mod random;
 pub mod registry;
+pub mod serde_enum_as_integer;
 pub mod text;
 pub mod translation;
-
-use std::ops::{Index, IndexMut};
-
-pub use gamemode::GameMode;
-pub use permission::PermissionLvl;
-
-use serde::{Deserialize, Serialize};
 
 #[macro_export]
 macro_rules! global_path {
@@ -50,7 +51,7 @@ pub fn encompassing_bits(count: usize) -> u8 {
     }
 }
 
-#[derive(PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Clone, Debug)]
 pub enum Difficulty {
     Peaceful,
     Easy,

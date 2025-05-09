@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEntity;
@@ -10,6 +11,7 @@ impl BedBlockEntity {
     pub const ID: &'static str = "minecraft:bed";
 }
 
+#[async_trait]
 impl BlockEntity for BedBlockEntity {
     fn identifier(&self) -> &'static str {
         Self::ID
@@ -26,5 +28,9 @@ impl BlockEntity for BedBlockEntity {
         Self { position }
     }
 
-    fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+    async fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

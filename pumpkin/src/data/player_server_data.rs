@@ -3,6 +3,7 @@ use crate::{
     server::Server,
 };
 use crossbeam::atomic::AtomicCell;
+use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
 use std::sync::Arc;
@@ -57,6 +58,14 @@ impl ServerPlayerData {
     ///
     /// A Result indicating success or the error that occurred.
     pub async fn handle_player_leave(&self, player: &Player) -> Result<(), PlayerDataError> {
+        player
+            .player_screen_handler
+            .lock()
+            .await
+            .on_closed(player)
+            .await;
+        player.on_handled_screen_closed().await;
+
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
 

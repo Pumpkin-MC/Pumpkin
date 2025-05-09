@@ -5,7 +5,7 @@ use pumpkin_data::{
     block_properties::{HorizontalFacing, RailShape, StraightRailShape},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, block::HorizontalFacingExt};
+use pumpkin_world::BlockStateId;
 
 use crate::world::{BlockFlags, World};
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -35,12 +35,12 @@ impl PumpkinBlock for PistonBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        _face: &BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
-        _other: bool,
+        block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut props = PistonProps::default(block);
         props.extended = false;

@@ -117,6 +117,7 @@ mod test {
 
     use flate2::read::GzDecoder;
     use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
+    use pumpkin_util::Difficulty;
     use temp_dir::TempDir;
 
     use crate::{
@@ -172,7 +173,7 @@ mod test {
             },
             data_version: 4189,
             day_time: 1727,
-            difficulty: 2,
+            difficulty: Difficulty::Normal,
             difficulty_locked: false,
             world_gen_settings: WorldGenSettings { seed: 1 },
             last_played: 1733847709327,

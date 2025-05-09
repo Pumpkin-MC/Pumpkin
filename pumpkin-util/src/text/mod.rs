@@ -1,12 +1,13 @@
-use core::str;
-use std::borrow::Cow;
-
 use crate::{text::color::ARGBColor, translation::get_translation_en_us};
 use click::ClickEvent;
 use color::Color;
 use colored::Colorize;
+use core::str;
 use hover::HoverEvent;
-use serde::{Deserialize, Serialize};
+use serde::de::{Error, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::borrow::Cow;
+use std::fmt::Formatter;
 use style::Style;
 
 pub mod click;
@@ -15,8 +16,65 @@ pub mod hover;
 pub mod style;
 
 /// Represents a text component
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 pub struct TextComponent(pub TextComponentBase);
+
+impl<'de> Deserialize<'de> for TextComponent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TextComponentVisitor;
+
+        impl<'de> Visitor<'de> for TextComponentVisitor {
+            type Value = TextComponentBase;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("a TextComponentBase or a sequence of TextComponentBase")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(TextComponentBase {
+                    content: TextContent::Text {
+                        text: Cow::from(v.to_string()),
+                    },
+                    style: Default::default(),
+                    extra: vec![],
+                })
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut bases = Vec::new();
+                while let Some(element) = seq.next_element::<TextComponent>()? {
+                    bases.push(element.0);
+                }
+
+                Ok(TextComponentBase {
+                    content: TextContent::Text { text: "".into() },
+                    style: Default::default(),
+                    extra: bases,
+                })
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                TextComponentBase::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            }
+        }
+
+        deserializer
+            .deserialize_any(TextComponentVisitor)
+            .map(TextComponent)
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]

@@ -5,12 +5,13 @@ use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockState};
-use pumpkin_inventory::OpenContainer;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use std::sync::Arc;
+
+use super::BlockIsReplacing;
 
 pub trait BlockMetadata {
     fn namespace(&self) -> &'static str;
@@ -34,10 +35,13 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &Arc<World>,
     ) {
     }
+
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
+
     async fn explode(&self, _block: &Block, _world: &Arc<World>, _location: BlockPos) {}
+
     async fn use_with_item(
         &self,
         _block: &Block,
@@ -56,20 +60,42 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        _face: &BlockDirection,
-        _pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
-        _other: bool,
+        block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         block.default_state_id
     }
 
     async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}
 
-    async fn can_place_at(&self, _world: &World, _pos: &BlockPos) -> bool {
+    #[allow(clippy::too_many_arguments)]
+    async fn can_place_at(
+        &self,
+        _server: &Server,
+        _world: &World,
+        _player: &Player,
+        _block: &Block,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
         true
+    }
+
+    async fn can_update_at(
+        &self,
+        _world: &World,
+        _block: &Block,
+        _state_id: BlockStateId,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
+        false
     }
 
     /// onBlockAdded in source code
@@ -90,7 +116,7 @@ pub trait PumpkinBlock: Send + Sync {
         _block: &Block,
         _state_id: u16,
         _pos: &BlockPos,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _player: &Player,
     ) {
     }
@@ -98,21 +124,11 @@ pub trait PumpkinBlock: Send + Sync {
     async fn broken(
         &self,
         _block: &Block,
-        _player: &Player,
+        _player: &Arc<Player>,
         _location: BlockPos,
         _server: &Server,
         _world: Arc<World>,
         _state: BlockState,
-    ) {
-    }
-
-    async fn close(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _server: &Server,
-        _container: &mut OpenContainer,
     ) {
     }
 
@@ -144,7 +160,7 @@ pub trait PumpkinBlock: Send + Sync {
         _block: &Block,
         state: BlockStateId,
         _pos: &BlockPos,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
@@ -168,7 +184,7 @@ pub trait PumpkinBlock: Send + Sync {
         &self,
         _block: &Block,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> bool {
         false
     }
@@ -180,7 +196,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &World,
         _pos: &BlockPos,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> u8 {
         0
     }
@@ -192,7 +208,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &World,
         _pos: &BlockPos,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> u8 {
         0
     }

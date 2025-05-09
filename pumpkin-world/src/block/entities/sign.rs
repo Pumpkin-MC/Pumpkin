@@ -1,4 +1,5 @@
 use super::BlockEntity;
+use async_trait::async_trait;
 use num_derive::FromPrimitive;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
@@ -141,6 +142,7 @@ impl Text {
     }
 }
 
+#[async_trait]
 impl BlockEntity for SignBlockEntity {
     fn identifier(&self) -> &'static str {
         Self::ID
@@ -165,7 +167,7 @@ impl BlockEntity for SignBlockEntity {
         }
     }
 
-    fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
         nbt.put_bool("is_waxed", self.is_waxed);
@@ -173,8 +175,14 @@ impl BlockEntity for SignBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        self.write_nbt(&mut nbt);
+        nbt.put("front_text", self.front_text.clone());
+        nbt.put("back_text", self.back_text.clone());
+        nbt.put_bool("is_waxed", self.is_waxed);
         Some(nbt)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
