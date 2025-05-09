@@ -381,7 +381,7 @@ impl World {
             }
 
             if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
-                weather.reset_weather_cycle(&self).await;
+                weather.reset_weather_cycle(self).await;
             }
         } else if level_time.world_age % 20 == 0 {
             level_time.send_time(self).await;
@@ -890,18 +890,17 @@ impl World {
         // Teleport
         let info = &self.level.level_info;
         let pitch = 0.0;
-        let (position, yaw) = match player.get_respawn_point().await {
-            Some(respawn) => respawn,
-            None => {
-                let top = self
-                    .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
-                    .await;
+        let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
+            respawn
+        } else {
+            let top = self
+                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                .await;
 
-                (
-                    Vector3::new(info.spawn_x.into(), (top + 1).into(), info.spawn_z.into()),
-                    info.spawn_angle,
-                )
-            }
+            (
+                Vector3::new(info.spawn_x.into(), (top + 1).into(), info.spawn_z.into()),
+                info.spawn_angle,
+            )
         };
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);

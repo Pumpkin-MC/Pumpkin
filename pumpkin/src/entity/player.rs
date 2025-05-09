@@ -497,9 +497,7 @@ impl Player {
     }
 
     pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
-        let Some(respawn_point) = self.respawn_point.load() else {
-            return None;
-        };
+        let respawn_point = self.respawn_point.load()?;
 
         let (block, _block_state) = self
             .world()
