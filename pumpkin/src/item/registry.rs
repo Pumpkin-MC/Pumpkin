@@ -1,9 +1,9 @@
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
 

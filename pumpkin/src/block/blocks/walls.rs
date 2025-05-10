@@ -2,6 +2,8 @@ use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EastWallShape;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -14,7 +16,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
@@ -89,7 +90,7 @@ pub async fn compute_wall_state(
         };
 
         let connected = other_block == *block
-            || (other_block_state.is_solid() && other_block_state.is_full_cube())
+            || other_block_state.is_side_solid(direction.opposite().to_block_direction())
             || other_block.is_tagged_with("minecraft:walls").unwrap()
             || other_block.is_tagged_with("minecraft:fence_gates").unwrap()
             || other_block == Block::IRON_BARS

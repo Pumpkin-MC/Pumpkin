@@ -180,6 +180,7 @@ pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),
     Other,
+    None,
 }
 
 impl BlockIsReplacing {
