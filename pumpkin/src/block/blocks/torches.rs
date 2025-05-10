@@ -1,13 +1,13 @@
 use crate::block::BlockIsReplacing;
-use crate::entity::player::Player;
 use crate::entity::EntityBase;
+use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
 
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
@@ -24,7 +24,12 @@ impl BlockMetadata for TorchBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &[Block::TORCH.name, Block::SOUL_TORCH.name, Block::WALL_TORCH.name, Block::SOUL_WALL_TORCH.name]
+        &[
+            Block::TORCH.name,
+            Block::SOUL_TORCH.name,
+            Block::WALL_TORCH.name,
+            Block::SOUL_WALL_TORCH.name,
+        ]
     }
 }
 
@@ -60,24 +65,29 @@ impl PumpkinBlock for TorchBlock {
                 directions.copy_within(0..i, 1);
                 directions[0] = face;
             }
-        } else {
-            if directions[0] == Facing::Down {
-                let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
-                if support_block.is_center_solid(BlockDirection::Up) {
-                    return block.default_state_id;
-                }
+        } else if directions[0] == Facing::Down {
+            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            if support_block.is_center_solid(BlockDirection::Up) {
+                return block.default_state_id;
             }
         }
 
         for dir in directions {
-            if dir != Facing::Up && dir != Facing::Down && can_place_at(world, block_pos, dir.to_block_direction()).await {
+            if dir != Facing::Up
+                && dir != Facing::Down
+                && can_place_at(world, block_pos, dir.to_block_direction()).await
+            {
                 let wall_block = if *block == Block::TORCH {
                     Block::WALL_TORCH
                 } else {
                     Block::SOUL_WALL_TORCH
                 };
                 let mut torch_props = WallTorchProps::default(&wall_block);
-                torch_props.facing = dir.opposite().to_block_direction().to_horizontal_facing().unwrap();
+                torch_props.facing = dir
+                    .opposite()
+                    .to_block_direction()
+                    .to_horizontal_facing()
+                    .unwrap();
                 return torch_props.to_state_id(&wall_block);
             }
         }
@@ -88,7 +98,6 @@ impl PumpkinBlock for TorchBlock {
         } else {
             0
         }
-
     }
 
     async fn can_place_at(
@@ -125,17 +134,15 @@ impl PumpkinBlock for TorchBlock {
     ) -> u16 {
         if *block == Block::WALL_TORCH || *block == Block::SOUL_WALL_TORCH {
             let props = WallTorchProps::from_state_id(state, block);
-            if props.facing.to_block_direction().opposite() == direction {
-                if !can_place_at(world, block_pos, props.facing.to_block_direction()).await {
-                    return 0;
-                }
+            if props.facing.to_block_direction().opposite() == direction
+                && !can_place_at(world, block_pos, props.facing.to_block_direction()).await
+            {
+                return 0;
             }
-        } else {
-            if direction == BlockDirection::Down {
-                let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
-                if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
-                }
+        } else if direction == BlockDirection::Down {
+            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            if !support_block.is_center_solid(BlockDirection::Up) {
+                return 0;
             }
         }
         state
@@ -143,6 +150,9 @@ impl PumpkinBlock for TorchBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos, facing: BlockDirection) -> bool {
-    let support_block = world.get_block_state(&block_pos.offset(facing.to_offset())).await.unwrap();
+    let support_block = world
+        .get_block_state(&block_pos.offset(facing.to_offset()))
+        .await
+        .unwrap();
     support_block.is_side_solid(facing.opposite())
 }

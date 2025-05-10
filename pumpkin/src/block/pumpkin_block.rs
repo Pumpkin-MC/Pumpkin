@@ -3,12 +3,12 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::{BlockFlags, World};
 use async_trait::async_trait;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
 use std::sync::Arc;
 
 use super::BlockIsReplacing;

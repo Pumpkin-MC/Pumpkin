@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::DoorHinge;
@@ -12,8 +14,6 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::HorizontalFacingExt;
 use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;

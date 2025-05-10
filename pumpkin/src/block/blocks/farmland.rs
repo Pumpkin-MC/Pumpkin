@@ -8,11 +8,11 @@ use crate::world::BlockFlags;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
 #[pumpkin_block("minecraft:farmland")]

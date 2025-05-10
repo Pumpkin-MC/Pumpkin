@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
-use pumpkin_data::{Block, block_properties::BlockProperties, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, block_properties::BlockProperties};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;

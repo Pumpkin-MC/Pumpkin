@@ -3,11 +3,11 @@ use crate::world::World;
 use crate::world::portal::NetherPortal;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
 
 #[pumpkin_block("minecraft:nether_portal")]
 pub struct NetherPortalBlock;

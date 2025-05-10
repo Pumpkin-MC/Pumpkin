@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;

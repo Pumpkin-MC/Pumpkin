@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use pumpkin_data::BlockDirection;
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
     tag::Tagable,
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_data::BlockDirection;
 
 use super::{BlockFlags, World};
 

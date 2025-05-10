@@ -5,11 +5,11 @@ use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_data::BlockDirection;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 

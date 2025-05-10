@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use pumpkin_data::BlockDirection;
 /**
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_data::BlockDirection;
 
 use crate::world::World;
 

@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::{
     Block,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockId, BlockStateId};
-use pumpkin_data::BlockDirection;
 
 use crate::world::{BlockFlags, World};
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;

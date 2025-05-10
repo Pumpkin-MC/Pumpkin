@@ -4,12 +4,12 @@ use crate::server::Server;
 use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_data::BlockDirection;
 
 pub struct HoneyCombItem;
 

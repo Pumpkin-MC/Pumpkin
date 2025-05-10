@@ -1,19 +1,19 @@
 use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;
-use crate::entity::player::Player;
 use crate::entity::EntityBase;
+use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::block_properties::Facing;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::FacingExt;
+use pumpkin_data::HorizontalFacingExt;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::Facing;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::HorizontalFacingExt;
 use pumpkin_world::chunk::TickPriority;
 
 type RWallTorchProps = pumpkin_data::block_properties::FurnaceLikeProperties;
@@ -70,19 +70,24 @@ impl PumpkinBlock for RedstoneTorchBlock {
                 directions.copy_within(0..i, 1);
                 directions[0] = face;
             }
-        } else {
-            if directions[0] == Facing::Down {
-                let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
-                if support_block.is_center_solid(BlockDirection::Up) {
-                    return block.default_state_id;
-                }
+        } else if directions[0] == Facing::Down {
+            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            if support_block.is_center_solid(BlockDirection::Up) {
+                return block.default_state_id;
             }
         }
 
         for dir in directions {
-            if dir != Facing::Up && dir != Facing::Down && can_place_at(world, block_pos, dir.to_block_direction()).await {
+            if dir != Facing::Up
+                && dir != Facing::Down
+                && can_place_at(world, block_pos, dir.to_block_direction()).await
+            {
                 let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
-                torch_props.facing = dir.opposite().to_block_direction().to_horizontal_facing().unwrap();
+                torch_props.facing = dir
+                    .opposite()
+                    .to_block_direction()
+                    .to_horizontal_facing()
+                    .unwrap();
                 return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
             }
         }
@@ -129,17 +134,15 @@ impl PumpkinBlock for RedstoneTorchBlock {
     ) -> u16 {
         if *block == Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(state, block);
-            if props.facing.to_block_direction().opposite() == direction {
-                if !can_place_at(world, block_pos, props.facing.to_block_direction()).await {
-                    return 0;
-                }
+            if props.facing.to_block_direction().opposite() == direction
+                && !can_place_at(world, block_pos, props.facing.to_block_direction()).await
+            {
+                return 0;
             }
-        } else {
-            if direction == BlockDirection::Down {
-                let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
-                if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
-                }
+        } else if direction == BlockDirection::Down {
+            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            if !support_block.is_center_solid(BlockDirection::Up) {
+                return 0;
             }
         }
         state
@@ -306,6 +309,9 @@ pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos, facing: BlockDirection) -> bool {
-    let support_block = world.get_block_state(&block_pos.offset(facing.to_offset())).await.unwrap();
+    let support_block = world
+        .get_block_state(&block_pos.offset(facing.to_offset()))
+        .await
+        .unwrap();
     support_block.is_side_solid(facing.opposite())
 }

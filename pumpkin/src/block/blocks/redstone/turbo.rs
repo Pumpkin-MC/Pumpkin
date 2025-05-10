@@ -2,12 +2,12 @@
 //! the accelerator created by theosib. For more information, see:
 //! <https://bugs.mojang.com/browse/MC-81098>.
 
+use pumpkin_data::BlockDirection;
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_data::BlockDirection;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 

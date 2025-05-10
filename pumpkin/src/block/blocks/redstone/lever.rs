@@ -8,11 +8,11 @@ use pumpkin_data::{
     block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
     item::Item,
 };
+use pumpkin_data::{BlockDirection, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_data::{BlockDirection, HorizontalFacingExt};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
