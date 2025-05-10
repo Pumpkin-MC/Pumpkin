@@ -355,6 +355,7 @@ impl ToTokens for CollisionShape {
 pub struct BlockState {
     pub id: u16,
     pub state_flags: u8,
+    pub side_flags: u8,
     pub luminance: u8,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
@@ -374,6 +375,7 @@ impl BlockState {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
+        let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
         let opacity = match self.opacity {
@@ -401,6 +403,7 @@ impl BlockState {
             BlockState {
                 id: #id,
                 state_flags: #state_flags,
+                side_flags: #side_flags,
                 luminance: #luminance,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],

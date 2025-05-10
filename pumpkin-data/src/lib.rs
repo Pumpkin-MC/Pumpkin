@@ -125,8 +125,12 @@ pub mod noise_router {
 mod block_state;
 mod blocks;
 mod collision_shape;
+mod block_direction;
 
 pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
 pub use blocks::Block;
+pub use block_direction::BlockDirection;
+pub use block_direction::HorizontalFacingExt;
+pub use block_direction::FacingExt;
 pub use collision_shape::CollisionShape;

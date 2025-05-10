@@ -9,7 +9,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_data::{BlockDirection, HorizontalFacingExt};
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
 
 use crate::{

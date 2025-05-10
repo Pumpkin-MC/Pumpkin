@@ -7,7 +7,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_world::block::BlockDirection;
+use pumpkin_data::BlockDirection;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 

@@ -6,7 +6,7 @@ use std::sync::Arc;
  */
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_data::BlockDirection;
 
 use crate::world::World;
 

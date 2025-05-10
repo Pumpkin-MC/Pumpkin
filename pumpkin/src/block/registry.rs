@@ -8,7 +8,7 @@ use pumpkin_data::{Block, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_data::BlockDirection;
 use std::collections::HashMap;
 use std::sync::Arc;
 

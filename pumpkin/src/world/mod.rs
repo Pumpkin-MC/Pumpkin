@@ -28,6 +28,7 @@ use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikeProperties};
+use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::{
     Block,
@@ -74,7 +75,7 @@ use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
     level::SyncChunk,
 };
-use pumpkin_world::{block::BlockDirection, chunk::ChunkData};
+use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;

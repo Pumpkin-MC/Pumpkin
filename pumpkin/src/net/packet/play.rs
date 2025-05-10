@@ -69,7 +69,7 @@ use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
 };
-use pumpkin_world::block::BlockDirection;
+use pumpkin_data::BlockDirection;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 
@@ -1608,15 +1608,17 @@ impl Player {
                 .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
         } else {
-            clicked_block_state.replaceable().then(|| {
+            if clicked_block_state.replaceable(){
                 if clicked_block == Block::WATER {
                     let water_props =
                         WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
-                    BlockIsReplacing::Water(water_props.level)
+                    Some(BlockIsReplacing::Water(water_props.level))
                 } else {
-                    BlockIsReplacing::Other
+                    Some(BlockIsReplacing::Other)
                 }
-            })
+            } else {
+                None
+            }
         };
 
         let (final_block_pos, final_face, replacing) =
@@ -1649,7 +1651,7 @@ impl Player {
                             );
                             BlockIsReplacing::Water(water_props.level)
                         } else {
-                            BlockIsReplacing::Other
+                            BlockIsReplacing::None
                         }
                     })
                 };
