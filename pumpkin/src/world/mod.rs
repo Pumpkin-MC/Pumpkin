@@ -27,8 +27,9 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikeProperties};
 use pumpkin_data::entity::EffectType;
+use pumpkin_data::fluid::Falling;
+use pumpkin_data::fluid::FluidProperties;
 use pumpkin_data::{
     Block,
     block_properties::{
@@ -94,6 +95,8 @@ pub mod scoreboard;
 pub mod weather;
 
 use weather::Weather;
+
+type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -458,9 +461,6 @@ impl World {
             let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
                 continue;
             };
-            if scheduled_tick.target_block_id != fluid.id {
-                continue;
-            }
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
                 pumpkin_fluid
                     .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
@@ -1489,9 +1489,10 @@ impl World {
                 .unwrap_or(false)
             {
                 // Broken block was waterlogged
-                let mut water_props = WaterLikeProperties::default(&Block::WATER);
-                water_props.level = Integer0To15::L15;
-                water_props.to_state_id(&Block::WATER)
+                let mut water_props = FlowingFluidProperties::default(&Fluid::FLOWING_WATER);
+                water_props.level = pumpkin_data::fluid::Level::L8;
+                water_props.falling = Falling::False;
+                water_props.to_state_id(&Fluid::FLOWING_WATER)
             } else {
                 0
             };
@@ -1566,7 +1567,27 @@ impl World {
         position: &BlockPos,
     ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
         let id = self.get_block_state_id(position).await?;
-        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+        let fluid = Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId);
+        if let Ok(fluid) = fluid {
+            return Ok(fluid);
+        }
+        let block = get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)?;
+        block
+            .properties(id)
+            .and_then(|props| {
+                props
+                    .to_props()
+                    .into_iter()
+                    .find(|p| p.0 == "waterlogged")
+                    .map(|(_, value)| {
+                        if value == true.to_string() {
+                            Ok(Fluid::FLOWING_WATER)
+                        } else {
+                            Err(GetBlockError::InvalidBlockId)
+                        }
+                    })
+            })
+            .unwrap_or(Err(GetBlockError::InvalidBlockId))
     }
 
     /// Gets the `BlockState` from the block registry. Returns `None` if the block state was not found.
