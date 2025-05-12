@@ -11,9 +11,10 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
@@ -161,11 +162,7 @@ impl PumpkinItem for EmptyBucketItem {
                 let mut item_stack = ItemStack::new(1, item);
                 player
                     .inventory
-                    .remove_stack(player.inventory.get_selected_slot().into())
-                    .await;
-                player
-                    .inventory
-                    .insert_stack(player.inventory.get_selected_slot().into(), &mut item_stack)
+                    .set_stack(player.inventory.get_selected_slot().into(), &mut item_stack)
                     .await;
             }
         }
@@ -248,11 +245,7 @@ impl PumpkinItem for FilledBucketItem {
                 let mut item_stack = ItemStack::new(1, &Item::BUCKET);
                 player
                     .inventory
-                    .remove_stack(player.inventory.get_selected_slot().into())
-                    .await;
-                player
-                    .inventory
-                    .insert_stack(player.inventory.get_selected_slot().into(), &mut item_stack)
+                    .set_stack(player.inventory.get_selected_slot().into(), &mut item_stack)
                     .await;
             }
         }
