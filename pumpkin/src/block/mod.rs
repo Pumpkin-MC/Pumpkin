@@ -33,6 +33,7 @@ use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
+use blocks::trapdoor::TrapDoorBlock;
 use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
@@ -89,6 +90,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);
     manager.register(TorchBlock);
+    manager.register(TrapDoorBlock);
     manager.register(WallBlock);
     manager.register(NetherPortalBlock);
     manager.register(NoteBlock);

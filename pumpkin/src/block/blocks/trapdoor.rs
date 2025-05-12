@@ -1,0 +1,111 @@
+use crate::block::BlockIsReplacing;
+use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::registry::BlockActionResult;
+use crate::entity::player::Player;
+use crate::server::Server;
+use crate::world::World;
+use async_trait::async_trait;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::item::Item;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
+use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockFlags;
+use std::sync::Arc;
+
+type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
+
+async fn toggle_trapdoor(world: &Arc<World>, block_pos: &BlockPos) {
+    let (block, block_state) = world.get_block_and_block_state(&block_pos).await.unwrap();
+    let mut trapdoor_props =
+        TrapDoorProperties::from_state_id(block_state.id, &block);
+    trapdoor_props.open = !trapdoor_props.open;
+
+    world
+        .set_block_state(
+            block_pos,
+            trapdoor_props.to_state_id(&block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
+        .await;
+}
+
+fn can_open_trapdoor(block: &Block) -> bool {
+    if block.id == Block::IRON_TRAPDOOR.id {
+        return false;
+    }
+    true
+}
+
+pub struct TrapDoorBlock;
+impl BlockMetadata for TrapDoorBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
+
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "minecraft:trapdoors").unwrap()
+    }
+}
+
+#[async_trait]
+impl PumpkinBlock for TrapDoorBlock {
+    async fn on_place(
+        &self,
+        _server: &Server,
+        world: &World,
+        player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
+    ) -> BlockStateId {
+        let powered = block_receives_redstone_power(world, block_pos).await
+            || block_receives_redstone_power(world, &block_pos.up()).await;
+
+        let direction = player.living_entity.entity.get_horizontal_facing();
+
+        let mut trapdoor_props = TrapDoorProperties::default(block);
+        trapdoor_props.facing = direction;
+        trapdoor_props.powered = powered;
+        trapdoor_props.open = powered;
+
+        trapdoor_props.to_state_id(block)
+    }
+
+    async fn use_with_item(
+        &self,
+        block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _item: &Item,
+        _server: &Server,
+        world: &Arc<World>,
+    ) -> BlockActionResult {
+        if !can_open_trapdoor(block) {
+            return BlockActionResult::Continue;
+        }
+
+        toggle_trapdoor(world, &location).await;
+
+        BlockActionResult::Consume
+    }
+
+    async fn normal_use(
+        &self,
+        block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: &Arc<World>,
+    ) {
+        if can_open_trapdoor(block) {
+            toggle_trapdoor(world, &location).await;
+        }
+    }
+}
