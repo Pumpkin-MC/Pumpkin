@@ -257,7 +257,7 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             .await
         {
             world
-                .add_synced_block_event(*block_pos, 0, dir.to_index() as u8)
+                .add_synced_block_event(*block_pos, 0, dir.to_index())
                 .await;
         }
     } else if !should_extent && props.extended {
@@ -272,7 +272,7 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             }
         }
         world
-            .add_synced_block_event(*block_pos, r#type, dir.to_index() as u8)
+            .add_synced_block_event(*block_pos, r#type, dir.to_index())
             .await;
     }
 }
