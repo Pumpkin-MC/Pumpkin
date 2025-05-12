@@ -354,7 +354,7 @@ impl AnvilChunkFile {
     }
 
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
-        log::trace!("Writing in place: {:?}", path);
+        log::trace!("Writing in place: {path:?}");
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -454,7 +454,7 @@ impl AnvilChunkFile {
     /// Write entire file, disregarding saved offsets
     async fn write_all(&self, path: &Path) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+        log::trace!("Writing tmp file to disk: {temp_path:?}");
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -500,7 +500,7 @@ impl AnvilChunkFile {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {:?}", path);
+        log::trace!("Wrote file to Disk: {path:?}");
         Ok(())
     }
 }
@@ -527,17 +527,14 @@ impl ChunkSerializer for AnvilChunkFile {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = Self::get_region_coords(chunk);
-        format!("./r.{}.{}.mca", region_x, region_z)
+        format!("./r.{region_x}.{region_z}.mca")
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!(
-                    "Skipping write for {:?} as there were no dirty chunks",
-                    path
-                );
+                log::debug!("Skipping write for {path:?} as there were no dirty chunks");
                 Ok(())
             }
             WriteAction::All => self.write_all(&path).await,
@@ -757,11 +754,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 let offset = new_sectors as i64 - swapped_sectors as i64;
 
                                 log::trace!(
-                                    "Swapping {} with {}, shifting all chunks {} and after by {}",
-                                    index,
-                                    swapped_index,
-                                    swapped_index,
-                                    offset
+                                    "Swapping {index} with {swapped_index}, shifting all chunks {swapped_index} and after by {offset}"
                                 );
 
                                 for shift_index in indices_to_shift {
@@ -892,7 +885,7 @@ pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSeri
         block_entities: join_all(chunk_data.block_entities.values().map(
             |block_entity| async move {
                 let mut nbt = NbtCompound::new();
-                block_entity.write_internal(&mut nbt).await;
+                block_entity.1.write_internal(&mut nbt).await;
                 nbt
             },
         ))
@@ -946,7 +939,7 @@ mod tests {
                 LoadedData::Loaded(chunk) => chunk,
                 LoadedData::Missing(_) => panic!("Missing chunk"),
                 LoadedData::Error((position, error)) => {
-                    panic!("Error reading chunk at {:?} | Error: {:?}", position, error)
+                    panic!("Error reading chunk at {position:?} | Error: {error:?}")
                 }
             })
             .collect::<Vec<_>>();
@@ -1034,7 +1027,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1047,7 +1040,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
                     break;
@@ -1092,7 +1085,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1105,7 +1098,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1165,7 +1158,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1178,7 +1171,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1226,7 +1219,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1239,7 +1232,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
                     break;
@@ -1307,7 +1300,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {o}, got {r} ({i})");
                                 }
                             });
 
@@ -1320,7 +1313,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {o}, got {r} ({i})");
                                 }
                             });
                         break;

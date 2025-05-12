@@ -5,12 +5,12 @@ use async_trait::async_trait;
 use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, block::BlockDirection};
+use pumpkin_world::{BlockStateId, block::BlockDirection, world::BlockFlags};
 
 use crate::{
     block::pumpkin_block::{BlockMetadata, PumpkinBlock},
     server::Server,
-    world::{BlockFlags, World},
+    world::World,
 };
 
 use super::block_receives_redstone_power;

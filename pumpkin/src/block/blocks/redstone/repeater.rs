@@ -9,14 +9,17 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
+use pumpkin_world::{
+    block::{BlockDirection, HorizontalFacingExt},
+    world::BlockFlags,
+};
 
 use crate::{
     block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,
     server::Server,
-    world::{BlockFlags, World},
+    world::World,
 };
 
 use super::{diode_get_input_strength, get_weak_power, is_diode};

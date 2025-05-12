@@ -1,7 +1,7 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockState};
@@ -9,6 +9,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockFlags;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -35,6 +36,23 @@ impl BlockRegistry {
 
     pub fn register_fluid<T: PumpkinFluid + BlockMetadata + 'static>(&mut self, fluid: T) {
         self.fluids.insert(fluid.names(), Arc::new(fluid));
+    }
+
+    pub async fn on_synced_block_event(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        r#type: u8,
+        data: u8,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .on_synced_block_event(block, world, pos, r#type, data)
+                .await;
+        }
+        false
     }
 
     pub async fn on_use(

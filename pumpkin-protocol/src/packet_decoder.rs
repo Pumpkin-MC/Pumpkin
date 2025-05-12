@@ -421,10 +421,7 @@ mod tests {
 
         // Build the packet with compression enabled
         let packet = build_packet(packet_id, &payload, true, None, None);
-        println!(
-            "Built packet (with compression, maximum length): {:?}",
-            packet
-        );
+        println!("Built packet (with compression, maximum length): {packet:?}");
 
         // Initialize the decoder with compression enabled
         let mut decoder = NetworkDecoder::new(packet.as_slice());

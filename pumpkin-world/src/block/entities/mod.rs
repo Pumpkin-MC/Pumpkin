@@ -5,16 +5,18 @@ use barrel::BarrelBlockEntity;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
+use piston::PistonBlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
-use crate::inventory::Inventory;
+use crate::{inventory::Inventory, world::SimpleWorld};
 
 pub mod barrel;
 pub mod bed;
 pub mod chest;
 pub mod comparator;
+pub mod piston;
 pub mod sign;
 
 //TODO: We need a mark_dirty for chests
@@ -24,6 +26,7 @@ pub trait BlockEntity: Send + Sync {
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
+    async fn tick(&self, _world: &Arc<dyn SimpleWorld>) {}
     fn identifier(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
     async fn write_internal(&self, nbt: &mut NbtCompound) {
@@ -71,6 +74,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ComparatorBlockEntity,
         >(nbt))),
         BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
+            nbt,
+        ))),
+        PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
             nbt,
         ))),
         _ => None,

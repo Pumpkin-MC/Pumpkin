@@ -11,11 +11,11 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 use pumpkin_data::item::Item;
 

@@ -122,7 +122,7 @@ pub mod noise_router {
     include!(concat!(env!("OUT_DIR"), "/noise_router.rs"));
 }
 
-mod block_state;
+pub mod block_state;
 mod blocks;
 mod collision_shape;
 

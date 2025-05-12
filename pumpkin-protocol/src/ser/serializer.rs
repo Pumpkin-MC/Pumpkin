@@ -98,8 +98,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         T: ?Sized + Serialize,
     {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a newtype struct {}!",
-            name
+            "Expected a sequence but found a newtype struct {name}!"
         )))
     }
 
@@ -114,8 +113,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         T: ?Sized + Serialize,
     {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a newtype variant {}!",
-            name
+            "Expected a sequence but found a newtype variant {name}!"
         )))
     }
 
@@ -141,8 +139,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a struct {}!",
-            name
+            "Expected a sequence but found a struct {name}!"
         )))
     }
 
@@ -154,8 +151,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a struct variant {}!",
-            name
+            "Expected a sequence but found a struct variant {name}!"
         )))
     }
 
@@ -171,8 +167,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a tuple struct {}!",
-            name
+            "Expected a sequence but found a tuple struct {name}!"
         )))
     }
 
@@ -184,8 +179,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a tuple variant {}!",
-            name
+            "Expected a sequence but found a tuple variant {name}!"
         )))
     }
 
@@ -197,8 +191,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a unit struct {}!",
-            name
+            "Expected a sequence but found a unit struct {name}!"
         )))
     }
 
@@ -209,8 +202,7 @@ impl<W: Write> ser::Serializer for NonPrefixedSeqSerializer<'_, W> {
         _variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
         Err(WritingError::Serde(format!(
-            "Expected a sequence but found a unit variant {}!",
-            name
+            "Expected a sequence but found a unit variant {name}!"
         )))
     }
 }
@@ -282,7 +274,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             let mut nbt_serializer =
                 pumpkin_nbt::serializer::Serializer::new(&mut self.write, None);
             value.serialize(&mut nbt_serializer).map_err(|err| {
-                WritingError::Serde(format!("Failed to serialize TextComponent NBT: {}", err))
+                WritingError::Serde(format!("Failed to serialize TextComponent NBT: {err}"))
             })
         } else if name == NO_PREFIX_MARKER {
             value.serialize(NonPrefixedSeqSerializer { wrapped: self })
@@ -302,7 +294,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     {
         self.write
             .write_var_int(&variant_index.try_into().map_err(|_| {
-                WritingError::Message(format!("{} isn't representable as a VarInt", variant_index))
+                WritingError::Message(format!("{variant_index} isn't representable as a VarInt"))
             })?)?;
         value.serialize(self)
     }
@@ -317,7 +309,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         };
 
         self.write.write_var_int(&len.try_into().map_err(|_| {
-            WritingError::Message(format!("{} isn't representable as a VarInt", len))
+            WritingError::Message(format!("{len} isn't representable as a VarInt"))
         })?)?;
 
         Ok(self)
@@ -368,7 +360,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         // Serialize ENUM index as varint
         self.write
             .write_var_int(&variant_index.try_into().map_err(|_| {
-                WritingError::Message(format!("{} isn't representable as a VarInt", variant_index))
+                WritingError::Message(format!("{variant_index} isn't representable as a VarInt"))
             })?)?;
         Ok(self)
     }
@@ -402,7 +394,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         // For ENUMs, only write enum index as varint
         self.write
             .write_var_int(&variant_index.try_into().map_err(|_| {
-                WritingError::Message(format!("{} isn't representable as a VarInt", variant_index))
+                WritingError::Message(format!("{variant_index} isn't representable as a VarInt"))
             })?)
     }
     fn is_human_readable(&self) -> bool {

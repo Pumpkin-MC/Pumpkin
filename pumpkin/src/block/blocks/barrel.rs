@@ -39,7 +39,7 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.barrel", vec![])
+        TextComponent::translate("container.barrel", &[])
     }
 }
 
@@ -57,7 +57,7 @@ impl PumpkinBlock for BarrelBlock {
         world: &Arc<World>,
     ) {
         if let Some(block_entity) = world.get_block_entity(&location).await {
-            if let Some(inventory) = block_entity.get_inventory() {
+            if let Some(inventory) = block_entity.1.get_inventory() {
                 player
                     .open_handled_screen(&BarrelScreenFactory(inventory))
                     .await;
@@ -75,7 +75,7 @@ impl PumpkinBlock for BarrelBlock {
         world: &Arc<World>,
     ) -> BlockActionResult {
         if let Some(block_entity) = world.get_block_entity(&location).await {
-            if let Some(inventory) = block_entity.get_inventory() {
+            if let Some(inventory) = block_entity.1.get_inventory() {
                 player
                     .open_handled_screen(&BarrelScreenFactory(inventory))
                     .await;

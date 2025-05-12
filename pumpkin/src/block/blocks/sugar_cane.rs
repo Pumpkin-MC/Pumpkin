@@ -13,11 +13,11 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 
 #[pumpkin_block("minecraft:sugar_cane")]

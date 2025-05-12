@@ -13,10 +13,11 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockIsReplacing;
 use crate::entity::EntityBase;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
     entity::player::Player,

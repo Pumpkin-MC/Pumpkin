@@ -12,13 +12,13 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::HorizontalFacingExt;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 type RWallTorchProps = pumpkin_data::block_properties::FurnaceLikeProperties;
 type RTorchProps = pumpkin_data::block_properties::RedstoneOreLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 
 use super::get_redstone_power;
@@ -209,7 +209,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 pub async fn should_be_lit(world: &World, pos: &BlockPos, face: BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
     let (block, state) = world.get_block_and_block_state(&other_pos).await.unwrap();
-    get_redstone_power(&block, &state, world, other_pos, face).await == 0
+    get_redstone_power(&block, &state, world, &other_pos, face).await == 0
 }
 
 pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {

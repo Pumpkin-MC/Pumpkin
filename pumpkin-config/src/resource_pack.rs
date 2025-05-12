@@ -29,8 +29,7 @@ impl ResourcePackConfig {
         let hash_len = self.sha1.len();
         assert!(
             hash_len == 40,
-            "Resource pack SHA1 hash is the wrong length (should be 40, is {})",
-            hash_len
+            "Resource pack SHA1 hash is the wrong length (should be 40, is {hash_len})"
         )
     }
 }

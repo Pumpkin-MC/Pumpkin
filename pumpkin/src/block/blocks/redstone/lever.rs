@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::world::BlockFlags;
 use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{
@@ -11,8 +10,8 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},

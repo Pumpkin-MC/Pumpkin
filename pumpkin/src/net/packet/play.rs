@@ -3,6 +3,7 @@ use pumpkin_data::item::Item;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_world::world::BlockFlags;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -21,7 +22,7 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::seasonal_events;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use crate::{
     command::CommandSender,
     entity::player::{ChatMode, Hand, Player},

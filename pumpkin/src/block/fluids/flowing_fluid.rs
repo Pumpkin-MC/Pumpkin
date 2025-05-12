@@ -7,9 +7,9 @@ use pumpkin_data::{
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockId, BlockStateId, block::BlockDirection};
+use pumpkin_world::{BlockId, BlockStateId, block::BlockDirection, world::BlockFlags};
 
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 #[derive(Clone)]

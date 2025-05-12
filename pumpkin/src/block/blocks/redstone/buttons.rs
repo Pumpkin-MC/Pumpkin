@@ -13,6 +13,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
@@ -22,7 +23,6 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {

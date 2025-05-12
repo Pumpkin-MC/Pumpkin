@@ -14,6 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::HorizontalFacingExt;
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;
@@ -21,7 +22,6 @@ use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
-use crate::world::BlockFlags;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 

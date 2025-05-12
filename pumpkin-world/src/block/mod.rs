@@ -44,6 +44,29 @@ pub struct BlockStateCodec {
 }
 
 impl BlockDirection {
+    pub fn to_index(&self) -> u8 {
+        match self {
+            BlockDirection::Down => 0,
+            BlockDirection::Up => 1,
+            BlockDirection::North => 2,
+            BlockDirection::South => 3,
+            BlockDirection::West => 4,
+            BlockDirection::East => 5,
+        }
+    }
+
+    pub fn from_index(index: u8) -> Option<Self> {
+        match index {
+            0 => Some(Self::Down),
+            1 => Some(Self::Up),
+            2 => Some(Self::North),
+            3 => Some(Self::South),
+            4 => Some(Self::West),
+            5 => Some(Self::East),
+            _ => None,
+        }
+    }
+
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
             BlockDirection::Down => (0, -1, 0),

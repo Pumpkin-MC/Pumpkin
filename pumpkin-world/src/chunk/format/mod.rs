@@ -8,7 +8,7 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ChunkData, ChunkHeightmaps, ChunkLightEngine, ChunkParsingError, ChunkSections, ScheduledTick,
+    ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections, ScheduledTick,
     SubChunk, TickPriority,
     palette::{BiomePalette, BlockPalette},
 };
@@ -82,7 +82,7 @@ impl ChunkData {
             )));
         }
 
-        let light_engine = ChunkLightEngine {
+        let light_engine = ChunkLight {
             block_light: (0..chunk_data.sections.len() + 2)
                 .map(|index| {
                     chunk_data
@@ -167,7 +167,7 @@ impl ChunkData {
                 for nbt in chunk_data.block_entities {
                     let block_entity = block_entity_from_nbt(&nbt);
                     if let Some(block_entity) = block_entity {
-                        block_entities.insert(block_entity.get_position(), block_entity);
+                        block_entities.insert(block_entity.get_position(), (nbt, block_entity));
                     }
                 }
                 block_entities

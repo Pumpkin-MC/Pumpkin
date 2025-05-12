@@ -6,7 +6,7 @@ use super::{
     noise_router::proto_noise_router::ProtoNoiseRouters,
     settings::{GENERATION_SETTINGS, GeneratorSetting},
 };
-use crate::chunk::ChunkLightEngine;
+use crate::chunk::ChunkLight;
 use crate::chunk::format::LightContainer;
 use crate::{
     chunk::{
@@ -81,7 +81,7 @@ impl WorldGenerator for VanillaGenerator {
         }
 
         ChunkData {
-            light_engine: ChunkLightEngine {
+            light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len() + 2)
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),

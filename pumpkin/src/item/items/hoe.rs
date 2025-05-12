@@ -2,7 +2,6 @@ use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
-use crate::world::BlockFlags;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
@@ -11,6 +10,7 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 pub struct HoeItem;
@@ -98,8 +98,7 @@ impl PumpkinItem for HoeItem {
                 let item_entity = Arc::new(
                     ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,
                 );
-                world.spawn_entity(item_entity.clone()).await;
-                item_entity.send_meta_packet().await;
+                world.spawn_entity(item_entity).await;
             }
         }
     }
