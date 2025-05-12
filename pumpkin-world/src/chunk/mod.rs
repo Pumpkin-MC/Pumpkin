@@ -95,7 +95,7 @@ impl From<i32> for TickPriority {
             1 => TickPriority::Low,
             2 => TickPriority::VeryLow,
             3 => TickPriority::ExtremelyLow,
-            _ => panic!("Invalid tick priority: {}", value),
+            _ => panic!("Invalid tick priority: {value}"),
         }
     }
 }

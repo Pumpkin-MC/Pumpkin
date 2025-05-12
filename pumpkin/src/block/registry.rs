@@ -37,6 +37,23 @@ impl BlockRegistry {
         self.fluids.insert(fluid.names(), Arc::new(fluid));
     }
 
+    pub async fn on_synced_block_event(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        r#type: u8,
+        data: u8,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .on_synced_block_event(block, world, pos, r#type, data)
+                .await;
+        }
+        false
+    }
+
     pub async fn on_use(
         &self,
         block: &Block,

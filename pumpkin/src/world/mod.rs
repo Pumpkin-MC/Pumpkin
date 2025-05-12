@@ -9,6 +9,7 @@ pub mod explosion;
 pub mod portal;
 pub mod time;
 
+use crate::block::BlockEvent;
 use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
@@ -44,7 +45,7 @@ use pumpkin_data::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::to_bytes_unnamed;
 use pumpkin_protocol::client::play::{
-    CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
+    CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::ser::serializer::Serializer;
@@ -167,6 +168,7 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     // TODO: entities
@@ -194,6 +196,7 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
+            synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
         }
     }
@@ -215,6 +218,35 @@ impl World {
             VarInt(effect_type as i32),
         ))
         .await;
+    }
+
+    pub async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
+        let mut queue = self.synced_block_event_queue.lock().await;
+        queue.push(BlockEvent { pos, r#type, data });
+    }
+
+    async fn flush_synced_block_events(self: &Arc<Self>) {
+        let mut queue = self.synced_block_event_queue.lock().await;
+        let events: Vec<BlockEvent> = queue.drain(..).collect();
+        // lets drop it here, allows us to add new things
+        drop(queue);
+        for event in events {
+            let block = self.get_block(&event.pos).await.unwrap(); // TODO
+            if !self
+                .block_registry
+                .on_synced_block_event(&block, self, &event.pos, event.r#type, event.data)
+                .await
+            {
+                continue;
+            }
+            self.broadcast_packet_all(&CBlockEvent::new(
+                event.pos,
+                event.r#type,
+                event.data,
+                VarInt(i32::from(block.id)),
+            ))
+            .await;
+        }
     }
 
     /// Broadcasts a packet to all connected players within the world.
@@ -365,6 +397,7 @@ impl World {
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.flush_block_updates().await;
+        self.flush_synced_block_events().await;
 
         // world ticks
         {
@@ -1259,6 +1292,7 @@ impl World {
         let base_entity = entity.get_entity();
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
             .await;
+        entity.init_data_tracker().await;
         let mut current_living_entities = self.entities.write().await;
         current_living_entities.insert(base_entity.entity_uuid, entity);
     }

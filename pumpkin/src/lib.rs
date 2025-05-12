@@ -142,8 +142,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
                 Err(e) => {
                     log::warn!(
-                        "Failed to initialize console input ({}); falling back to simple logger",
-                        e
+                        "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
                     Some((ReadlineLogWrapper::new(logger, None), level))
@@ -261,7 +260,7 @@ impl PumpkinServer {
         let mut loader_lock = PLUGIN_MANAGER.lock().await;
         loader_lock.set_server(self.server.clone());
         if let Err(err) = loader_lock.load_plugins().await {
-            log::error!("{}", err);
+            log::error!("{err}");
         };
     }
 
@@ -297,11 +296,7 @@ impl PumpkinServer {
             } else {
                 format!("{client_addr}")
             };
-            log::debug!(
-                "Accepted connection from: {} (id {})",
-                formatted_address,
-                id
-            );
+            log::debug!("Accepted connection from: {formatted_address} (id {id})");
 
             let mut client = Client::new(connection, client_addr, id);
             client.init();
@@ -325,7 +320,7 @@ impl PumpkinServer {
                         player.close().await;
 
                         //TODO: Move these somewhere less likely to be forgotten
-                        log::debug!("Cleaning up player for id {}", id);
+                        log::debug!("Cleaning up player for id {id}");
 
                         // Save player data on disconnect
                         if let Err(e) = server
@@ -333,7 +328,7 @@ impl PumpkinServer {
                             .handle_player_leave(&player)
                             .await
                         {
-                            log::error!("Failed to save player data on disconnect: {}", e);
+                            log::error!("Failed to save player data on disconnect: {e}");
                         }
 
                         // Remove the player from its world
@@ -345,9 +340,9 @@ impl PumpkinServer {
                     // Also handle case of client connects but does not become a player (like a server
                     // ping)
                     client.close();
-                    log::debug!("Awaiting tasks for client {}", id);
+                    log::debug!("Awaiting tasks for client {id}");
                     client.await_tasks().await;
-                    log::debug!("Finished awaiting tasks for client {}", id);
+                    log::debug!("Finished awaiting tasks for client {id}");
                 }
             });
         }
@@ -360,7 +355,7 @@ impl PumpkinServer {
             .save_all_players(&self.server)
             .await
         {
-            log::error!("Error saving all players during shutdown: {}", e);
+            log::error!("Error saving all players during shutdown: {e}");
         }
 
         let kick_message = TextComponent::text("Server stopped");
@@ -463,7 +458,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                 }
                 err => {
                     log::error!("Console command loop failed!");
-                    log::error!("{:?}", err);
+                    log::error!("{err:?}");
                     break;
                 }
             }

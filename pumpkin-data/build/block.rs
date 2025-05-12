@@ -11,7 +11,7 @@ fn const_block_name_from_block_name(block: &str) -> String {
 }
 
 fn property_group_name_from_derived_name(name: &str) -> String {
-    format!("{}_properties", name).to_upper_camel_case()
+    format!("{name}_properties").to_upper_camel_case()
 }
 
 enum PropertyType {
@@ -356,12 +356,12 @@ pub struct BlockState {
     pub id: u16,
     pub state_flags: u8,
     pub side_flags: u8,
+    pub instrument: String, // TODO: make this an enum
     pub luminance: u8,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
-    // pub instrument: String, // TODO: make this an enum
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -376,6 +376,7 @@ impl BlockState {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
+        let instrument = self.instrument.clone();
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
         let opacity = match self.opacity {
@@ -404,6 +405,7 @@ impl BlockState {
                 id: #id,
                 state_flags: #state_flags,
                 side_flags: #side_flags,
+                instrument: #instrument,
                 luminance: #luminance,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
@@ -1018,7 +1020,7 @@ impl GeneratedProperty {
     fn to_property(&self) -> Property {
         let enum_name = match &self.property_type {
             GeneratedPropertyType::Boolean => "boolean".to_string(),
-            GeneratedPropertyType::Int { min, max } => format!("integer_{}_to_{}", min, max),
+            GeneratedPropertyType::Int { min, max } => format!("integer_{min}_to_{max}"),
             GeneratedPropertyType::Enum { .. } => self.enum_name.clone(),
         };
 
@@ -1029,7 +1031,7 @@ impl GeneratedProperty {
             GeneratedPropertyType::Int { min, max } => {
                 let mut values = Vec::new();
                 for i in *min..=*max {
-                    values.push(format!("L{}", i));
+                    values.push(format!("L{i}"));
                 }
                 values
             }

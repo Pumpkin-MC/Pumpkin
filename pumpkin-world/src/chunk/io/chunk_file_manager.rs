@@ -277,7 +277,7 @@ where
             .into_iter()
             .map(async |(file_name, chunk_locks)| {
                 let path = Self::map_key(folder, &file_name);
-                log::trace!("Updating data for file {:?}", path);
+                log::trace!("Updating data for file {path:?}");
 
                 let chunk_serializer = match self.get_serializer(&path).await {
                     Ok(file) => Ok(file),
@@ -285,11 +285,11 @@ where
                         unreachable!("Must be managed by the cache")
                     }
                     Err(ChunkReadingError::IoError(err)) => {
-                        error!("Error reading the data before write: {}", err);
+                        error!("Error reading the data before write: {err}");
                         Err(ChunkWritingError::IoError(err))
                     }
                     Err(err) => {
-                        error!("Error reading the data before write: {:?}", err);
+                        error!("Error reading the data before write: {err:?}");
                         Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
                     }
                 }?;
@@ -310,7 +310,7 @@ where
                         serializer.update_chunk(&*chunk).await?;
                     }
                 }
-                log::trace!("Updated data for file {:?}", path);
+                log::trace!("Updated data for file {path:?}");
 
                 let is_watched = self
                     .watchers
@@ -324,7 +324,7 @@ where
                     // to avoid other threads to write/modify the data, but allow other threads to read it
                     let serializer = serializer.downgrade();
 
-                    log::debug!("Writing file for {:?}", path);
+                    log::debug!("Writing file for {path:?}");
                     serializer
                         .write(path.clone())
                         .await
@@ -353,9 +353,9 @@ where
 
                         if can_remove {
                             locks.remove(&path);
-                            log::trace!("Removed lockfile cache {:?}", path);
+                            log::trace!("Removed lockfile cache {path:?}");
                         } else {
-                            log::trace!("Wanted to remove lockfile cache {:?} but someone still holds a reference to it!", path);
+                            log::trace!("Wanted to remove lockfile cache {path:?} but someone still holds a reference to it!");
                         }
                     }
                 }

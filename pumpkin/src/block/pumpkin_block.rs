@@ -36,12 +36,6 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
-    fn should_drop_items_on_explosion(&self) -> bool {
-        true
-    }
-
-    async fn explode(&self, _block: &Block, _world: &Arc<World>, _location: BlockPos) {}
-
     async fn use_with_item(
         &self,
         _block: &Block,
@@ -52,6 +46,26 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &Arc<World>,
     ) -> BlockActionResult {
         BlockActionResult::Continue
+    }
+
+    fn should_drop_items_on_explosion(&self) -> bool {
+        true
+    }
+
+    async fn explode(&self, _block: &Block, _world: &Arc<World>, _location: BlockPos) {}
+
+    /// Handles the block event, which is an event specific to a block with an integer ID and data.
+    ///
+    /// returns whether the event was handled successfully
+    async fn on_synced_block_event(
+        &self,
+        _block: &Block,
+        _world: &Arc<World>,
+        _pos: &BlockPos,
+        _type: u8,
+        _data: u8,
+    ) -> bool {
+        false
     }
 
     #[allow(clippy::too_many_arguments)]

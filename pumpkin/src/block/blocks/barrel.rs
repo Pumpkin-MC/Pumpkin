@@ -39,7 +39,7 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.barrel", vec![])
+        TextComponent::translate("container.barrel", &[])
     }
 }
 

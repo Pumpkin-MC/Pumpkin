@@ -66,6 +66,8 @@ pub trait EntityBase: Send + Sync {
         }
     }
 
+    async fn init_data_tracker(&self) {}
+
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
         if let Some(living) = self.get_living_entity() {

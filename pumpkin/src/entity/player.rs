@@ -1331,8 +1331,7 @@ impl Player {
         // TODO: Merge stacks together
         let item_entity =
             Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
-        self.world().await.spawn_entity(item_entity.clone()).await;
-        item_entity.send_meta_packet().await;
+        self.world().await.spawn_entity(item_entity).await;
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {

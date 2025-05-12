@@ -169,7 +169,7 @@ impl ChunkSerializer for LinearFile {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
-        format!("./r.{}.{}.linear", region_x, region_z)
+        format!("./r.{region_x}.{region_z}.linear")
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {

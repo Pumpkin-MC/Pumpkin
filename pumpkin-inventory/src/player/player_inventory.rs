@@ -384,7 +384,7 @@ impl Inventory for PlayerInventory {
                 Some(slot) => {
                     self.entity_equipment.lock().await.put(slot, stack).await;
                 }
-                None => log::warn!("Failed to get Equipment Slot at {0}", slot),
+                None => log::warn!("Failed to get Equipment Slot at {slot}"),
             }
         }
     }
@@ -398,7 +398,7 @@ impl PlayerInventory {
             self.selected_slot
                 .store(slot, std::sync::atomic::Ordering::Relaxed);
         } else {
-            panic!("Invalid hotbar slot: {}", slot);
+            panic!("Invalid hotbar slot: {slot}");
         }
     }
 

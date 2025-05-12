@@ -59,15 +59,6 @@ impl ItemEntity {
             pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
         }
     }
-    pub async fn send_meta_packet(&self) {
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                8,
-                MetaDataType::ItemStack,
-                &ItemStackSerializer::from(*self.item_stack.lock().await),
-            )])
-            .await;
-    }
 }
 
 #[async_trait]
@@ -84,6 +75,16 @@ impl EntityBase for ItemEntity {
         if age >= 6000 {
             entity.remove().await;
         }
+    }
+
+    async fn init_data_tracker(&self) {
+        self.entity
+            .send_meta_data(&[Metadata::new(
+                8,
+                MetaDataType::ItemStack,
+                &ItemStackSerializer::from(*self.item_stack.lock().await),
+            )])
+            .await;
     }
 
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
@@ -123,7 +124,7 @@ impl EntityBase for ItemEntity {
                 self.entity.remove().await;
             } else {
                 // Update entity
-                self.send_meta_packet().await;
+                self.init_data_tracker().await;
             }
         }
     }
