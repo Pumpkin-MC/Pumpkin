@@ -159,10 +159,12 @@ impl PumpkinItem for EmptyBucketItem {
                     .insert_stack_anywhere(&mut item_stack)
                     .await;
             } else {
-                let mut item_stack = ItemStack::new(1, item);
                 player
                     .inventory
-                    .set_stack(player.inventory.get_selected_slot().into(), &mut item_stack)
+                    .set_stack(
+                        player.inventory.get_selected_slot().into(),
+                        ItemStack::new(1, item),
+                    )
                     .await;
             }
         }
@@ -242,10 +244,12 @@ impl PumpkinItem for FilledBucketItem {
 
             //TODO: Spawn entity if applicable
             if player.gamemode.load() != GameMode::Creative {
-                let mut item_stack = ItemStack::new(1, &Item::BUCKET);
                 player
                     .inventory
-                    .set_stack(player.inventory.get_selected_slot().into(), &mut item_stack)
+                    .set_stack(
+                        player.inventory.get_selected_slot().into(),
+                        ItemStack::new(1, &Item::BUCKET),
+                    )
                     .await;
             }
         }
