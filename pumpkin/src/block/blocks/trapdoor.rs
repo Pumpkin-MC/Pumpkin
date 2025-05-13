@@ -7,7 +7,7 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{BlockHalf, BlockProperties, SlabType};
+use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
@@ -115,7 +115,7 @@ impl PumpkinBlock for TrapDoorBlock {
         use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut trapdoor_props = TrapDoorProperties::default(block);
-        trapdoor_props.waterlogged =  replacing.water_source();
+        trapdoor_props.waterlogged = replacing.water_source();
 
         let powered = block_receives_redstone_power(world, block_pos).await;
         let direction = player
