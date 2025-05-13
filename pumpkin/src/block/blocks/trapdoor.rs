@@ -7,7 +7,7 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -20,9 +20,8 @@ use std::sync::Arc;
 type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 
 async fn toggle_trapdoor(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, block_state) = world.get_block_and_block_state(&block_pos).await.unwrap();
-    let mut trapdoor_props =
-        TrapDoorProperties::from_state_id(block_state.id, &block);
+    let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, &block);
     trapdoor_props.open = !trapdoor_props.open;
 
     world
@@ -54,28 +53,17 @@ impl BlockMetadata for TrapDoorBlock {
 
 #[async_trait]
 impl PumpkinBlock for TrapDoorBlock {
-    async fn on_place(
+    async fn normal_use(
         &self,
-        _server: &Server,
-        world: &World,
-        player: &Player,
         block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let powered = block_receives_redstone_power(world, block_pos).await
-            || block_receives_redstone_power(world, &block_pos.up()).await;
-
-        let direction = player.living_entity.entity.get_horizontal_facing();
-
-        let mut trapdoor_props = TrapDoorProperties::default(block);
-        trapdoor_props.facing = direction;
-        trapdoor_props.powered = powered;
-        trapdoor_props.open = powered;
-
-        trapdoor_props.to_state_id(block)
+        _player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: &Arc<World>,
+    ) {
+        if can_open_trapdoor(block) {
+            toggle_trapdoor(world, &location).await;
+        }
     }
 
     async fn use_with_item(
@@ -96,16 +84,40 @@ impl PumpkinBlock for TrapDoorBlock {
         BlockActionResult::Consume
     }
 
-    async fn normal_use(
+    async fn on_place(
         &self,
-        block: &Block,
-        _player: &Player,
-        location: BlockPos,
         _server: &Server,
-        world: &Arc<World>,
-    ) {
-        if can_open_trapdoor(block) {
-            toggle_trapdoor(world, &location).await;
-        }
+        world: &World,
+        player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        _replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
+    ) -> BlockStateId {
+        let powered = block_receives_redstone_power(world, block_pos).await
+            || block_receives_redstone_power(world, &block_pos.up()).await;
+
+        let direction = player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .rotate_clockwise()
+            .rotate_clockwise();
+
+        let mut trapdoor_props = TrapDoorProperties::default(block);
+        trapdoor_props.facing = direction;
+        trapdoor_props.half = match face {
+            BlockDirection::Up => BlockHalf::Top,
+            BlockDirection::Down => BlockHalf::Bottom,
+            _ => match use_item_on.cursor_pos.y {
+                0.0...0.5 => BlockHalf::Bottom,
+                _ => BlockHalf::Top,
+            },
+        };
+        trapdoor_props.powered = powered;
+        trapdoor_props.open = powered;
+
+        trapdoor_props.to_state_id(block)
     }
 }
