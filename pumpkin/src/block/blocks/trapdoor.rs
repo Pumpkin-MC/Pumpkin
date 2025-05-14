@@ -122,8 +122,7 @@ impl PumpkinBlock for TrapDoorBlock {
             .living_entity
             .entity
             .get_horizontal_facing()
-            .rotate_clockwise()
-            .rotate_clockwise();
+            .opposite();
 
         trapdoor_props.facing = direction;
         trapdoor_props.half = match face {
