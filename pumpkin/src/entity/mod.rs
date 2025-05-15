@@ -39,6 +39,7 @@ use std::{
         },
     },
 };
+use enum_dispatch::enum_dispatch;
 use tokio::sync::RwLock;
 use r#type::entity_base_from_type;
 use uuid::Uuid;
@@ -61,15 +62,16 @@ mod combat;
 
 pub type EntityId = i32;
 
+#[enum_dispatch]
 #[async_trait]
 pub trait WorldEntityExt: EntityBase {
     /// Gets Called every tick
-    async fn tick(&mut self, world: &World);
+    async fn tick(&mut self, server: &Server, world: &World);
 
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType, world: &World) -> bool;
 
-    async fn init_data_tracker(&self, world: &World);
+    async fn init_data_tracker(&mut self, world: &World);
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, player: Arc<Player>, world: &World);
@@ -92,7 +94,7 @@ pub trait WorldEntityExt: EntityBase {
             .await;
     }
 
-    async fn global_tick(&mut self, world: &World) {
+    async fn global_tick(&mut self, server: &Server, world: &World) {
         // Movement
         let velocity = self.get_velocity();
         let pos = self.pos();
@@ -106,7 +108,7 @@ pub trait WorldEntityExt: EntityBase {
             .await;
         // TODO: Update velocity
 
-        self.tick(world).await;
+        self.tick(server, world).await;
     }
 }
 

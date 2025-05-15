@@ -12,7 +12,7 @@ use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
     command::client_suggestions,
-    entity::{Entity, EntityId, WorldEntityExt, player::Player},
+    entity::{EntityId, WorldEntityExt, player::Player},
     error::PumpkinError,
     plugin::{
         block::block_break::BlockBreakEvent,
@@ -85,6 +85,7 @@ use tokio::{
     select,
     sync::{Mutex, mpsc::UnboundedReceiver},
 };
+use pumpkin_world::entity::{Entity, EntityBase};
 
 pub mod border;
 pub mod bossbar;
@@ -151,7 +152,7 @@ pub struct World {
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
-    pub entities: Arc<RwLock<HashMap<uuid::Uuid, Arc<dyn WorldEntityExt>>>>,
+    pub entities: Arc<RwLock<HashMap<uuid::Uuid, Arc<Entity>>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -202,14 +203,14 @@ impl World {
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
         // TODO: only nearby
-        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
+        self.broadcast_packet_all(&CEntityStatus::new(entity.id(), status as i8))
             .await;
     }
 
     pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
         // TODO: only nearby
         self.broadcast_packet_all(&CRemoveMobEffect::new(
-            entity.entity_id.into(),
+            entity.id().into(),
             VarInt(effect_type as i32),
         ))
         .await;
@@ -816,7 +817,7 @@ impl World {
         player.set_health(20.0).await;
     }
 
-    pub async fn explode(self: &Arc<Self>, server: &Server, position: Vector3<f64>, power: f32) {
+    pub async fn explode(&self, server: &Server, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
         explosion.explode(server, self).await;
         let particle = if power < 2.0 {
@@ -1047,7 +1048,7 @@ impl World {
     }
 
     /// Gets an entity by an entity id
-    pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<dyn WorldEntityExt>> {
+    pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<Entity>> {
         for entity in self.entities.read().await.values() {
             if entity.get_entity().entity_id == id {
                 return Some(entity.clone());
@@ -1274,25 +1275,25 @@ impl World {
     ///
     /// NOTE: If you want to remove multiple entities at Once, Use `remove_entities` as it is more efficient
     pub async fn remove_entity(&self, entity: &Entity) {
-        self.entities.write().await.remove(&entity.entity_uuid);
-        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
+        self.entities.write().await.remove(&entity.uuid());
+        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.id().into()]))
             .await;
     }
 
     pub async fn remove_entities(&self, entities: &[&Entity]) {
         let mut world_entities = self.entities.write().await;
         for entity in entities {
-            world_entities.remove(&entity.entity_uuid);
+            world_entities.remove(&entity.uuid());
         }
-        let entities_id: Vec<VarInt> = entities.iter().map(|e| VarInt(e.entity_id)).collect();
+        let entities_id: Vec<VarInt> = entities.iter().map(|e| VarInt(e.id())).collect();
         self.broadcast_packet_all(&CRemoveEntities::new(&entities_id))
             .await;
     }
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
         self.broadcast_packet_except(
-            &[from.entity_uuid],
-            &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
+            &[from.uuid()],
+            &CSetBlockDestroyStage::new(from.id().into(), location, progress as i8),
         )
         .await;
     }
@@ -1300,7 +1301,7 @@ impl World {
     /// Sets a block and returns the old block id
     #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
-        self: &Arc<Self>,
+        &self,
         position: &BlockPos,
         block_state_id: BlockStateId,
         flags: BlockFlags,

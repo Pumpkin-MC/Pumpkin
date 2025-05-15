@@ -68,7 +68,7 @@ impl Explosion {
         set.into_iter().collect()
     }
 
-    pub async fn explode(&self, server: &Server, world: &Arc<World>) {
+    pub async fn explode(&self, server: &Server, world: &World) {
         let blocks = self.get_blocks_to_destroy(world).await;
         // TODO: Entity damage, fire
         for pos in blocks {

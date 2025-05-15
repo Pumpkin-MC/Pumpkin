@@ -85,6 +85,8 @@ libloading = "0.8"
 bitflags = "2.9.0"
 rustc-hash = "2.1.1"
 
+enum_dispatch = "0.3"
+
 # Task handling
 tokio-util = { version = "0.7.15", features = ["rt"] }
 
