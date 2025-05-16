@@ -566,11 +566,12 @@ impl Entity {
             for y in blockpos.0.y..=blockpos1.0.y {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
-                    let (block, state) = world.get_block_and_block_state(&pos).await.unwrap();
-                    world
-                        .block_registry
-                        .on_entity_collision(block, &world, entity, pos, state)
-                        .await;
+                    if let Ok((block, state)) = world.get_block_and_block_state(&pos).await {
+                        world
+                            .block_registry
+                            .on_entity_collision(block, &world, entity, pos, state)
+                            .await;
+                    }
                 }
             }
         }
