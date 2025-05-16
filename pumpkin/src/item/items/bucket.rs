@@ -138,6 +138,8 @@ impl PumpkinItem for EmptyBucketItem {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
+            } else {
+                return;
             }
 
             let item = if state_id == Block::LAVA.default_state_id {
@@ -207,7 +209,7 @@ impl PumpkinItem for FilledBucketItem {
                     .find(|p| p.0 == "waterlogged")
             });
 
-            if waterlogged_check.is_some() {
+            if waterlogged_check.is_some() && item.id == Item::WATER_BUCKET.id {
                 //get props and set waterlogged to true
                 let original_props = &block.properties(state_id).unwrap().to_props();
                 let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
