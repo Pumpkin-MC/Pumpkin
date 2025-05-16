@@ -10,14 +10,18 @@ use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
 use blocks::glass_panes::GlassPaneBlock;
 use blocks::iron_bars::IronBarsBlock;
+use blocks::lily_pad::LilyPadBlock;
 use blocks::logs::LogBlock;
 use blocks::nether_portal::NetherPortalBlock;
 use blocks::note::NoteBlock;
+use blocks::piston::piston::PistonBlock;
 use blocks::piston::piston_extension::PistonExtensionBlock;
+use blocks::piston::piston_head::PistonHeadBlock;
 use blocks::pumpkin::PumpkinBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
-use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::pressure_plate::plate::PressurePlateBlock;
+use blocks::redstone::pressure_plate::weighted::WeightedPressurePlateBlock;
 use blocks::redstone::rails::activator_rail::ActivatorRailBlock;
 use blocks::redstone::rails::detector_rail::DetectorRailBlock;
 use blocks::redstone::rails::powered_rail::PoweredRailBlock;
@@ -33,6 +37,7 @@ use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
+use blocks::trapdoor::TrapDoorBlock;
 use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
@@ -86,13 +91,17 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(StairBlock);
+    manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);
     manager.register(TorchBlock);
+    manager.register(TrapDoorBlock);
     manager.register(WallBlock);
     manager.register(NetherPortalBlock);
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
+    manager.register(PressurePlateBlock);
+    manager.register(WeightedPressurePlateBlock);
 
     // Fire
     manager.register(SoulFireBlock);
@@ -106,6 +115,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     // Piston
     manager.register(PistonBlock);
     manager.register(PistonExtensionBlock);
+    manager.register(PistonHeadBlock);
 
     manager.register(RedstoneBlock);
     manager.register(RedstoneLamp);
@@ -127,6 +137,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     Arc::new(manager)
 }
 
+#[derive(Clone)]
 pub struct BlockEvent {
     pub pos: BlockPos,
     pub r#type: u8,

@@ -1,4 +1,7 @@
-use crate::server::Server;
+use crate::{
+    server::Server,
+    world::portal::{Portal, PortalManager},
+};
 use async_trait::async_trait;
 use bytes::BufMut;
 use core::f32;
@@ -32,11 +35,11 @@ use serde::Serialize;
 use std::sync::{
     Arc,
     atomic::{
-        AtomicBool, AtomicI32,
-        Ordering::{Relaxed, SeqCst},
+        AtomicBool, AtomicI32, AtomicU32,
+        Ordering::{self, Relaxed, SeqCst},
     },
 };
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::world::World;
 
@@ -57,12 +60,18 @@ pub type EntityId = i32;
 
 #[async_trait]
 pub trait EntityBase: Send + Sync {
-    /// Gets Called every tick
-    async fn tick(&self, server: &Server) {
+    /// Called every tick for this entity.
+    ///
+    /// The `caller` parameter is a reference to the entity that initiated the tick.
+    /// This can be the same entity the method is being called on (`self`),
+    /// but in some scenarios (e.g., interactions or events), it might be a different entity.
+    ///
+    /// The `server` parameter provides access to the game server instance.
+    async fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         if let Some(living) = self.get_living_entity() {
-            living.tick(server).await;
+            living.tick(caller, server).await;
         } else {
-            self.get_entity().tick(server).await;
+            self.get_entity().tick(caller, server).await;
         }
     }
 
@@ -78,7 +87,7 @@ pub trait EntityBase: Send + Sync {
     }
 
     /// Called when a player collides with a entity
-    async fn on_player_collision(&self, _player: Arc<Player>) {}
+    async fn on_player_collision(&self, _player: &Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 }
@@ -129,6 +138,11 @@ pub struct Entity {
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
     pub damage_immunities: Vec<DamageType>,
+
+    pub portal_cooldown: AtomicU32,
+
+    // :c
+    pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
 }
 
 impl Entity {
@@ -175,6 +189,8 @@ impl Entity {
             bounding_box_size: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
+            portal_cooldown: AtomicU32::new(0),
+            portal_manager: Mutex::new(None),
         }
     }
 
@@ -288,6 +304,53 @@ impl Entity {
             .await;
         self.set_pos(position);
         self.set_rotation(yaw, pitch);
+    }
+
+    fn default_portal_cooldown(&self) -> u32 {
+        if self.entity_type == EntityType::PLAYER {
+            10
+        } else {
+            300
+        }
+    }
+
+    async fn tick_portal(&self) {
+        if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
+            self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
+        }
+        let mut manager_guard = self.portal_manager.lock().await;
+        // I know this is ugly, but a quick fix because i can't modify the thing while using it
+        let mut should_remove = false;
+        if let Some(pmanager_mutex) = manager_guard.as_ref() {
+            let mut portal_manager = pmanager_mutex.lock().await;
+            if portal_manager.tick() {
+                // reset cooldown
+                self.portal_cooldown
+                    .store(self.default_portal_cooldown(), Ordering::Relaxed);
+                //let world = portal_manager.portal.get_world(self);
+            } else {
+                should_remove = true;
+            }
+        }
+        if should_remove {
+            *manager_guard = None;
+        }
+    }
+
+    pub async fn try_use_portal(&self, portal: Arc<dyn Portal>, pos: BlockPos) {
+        if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
+            self.portal_cooldown
+                .store(self.default_portal_cooldown(), Ordering::Relaxed);
+            return;
+        }
+        let mut manager = self.portal_manager.lock().await;
+        if manager.is_none() {
+            *manager = Some(Mutex::new(PortalManager::new(portal, pos)));
+        } else if let Some(manager) = manager.as_ref() {
+            let mut manager = manager.lock().await;
+            manager.pos = pos;
+            manager.in_portal = true;
+        }
     }
 
     /// Sets the `Entity` yaw & pitch rotation
@@ -484,6 +547,35 @@ impl Entity {
         // } else {
         // }
     }
+
+    pub async fn check_block_collision(entity: &dyn EntityBase) {
+        let aabb = entity.get_entity().bounding_box.load();
+        let blockpos = BlockPos::new(
+            (aabb.min.x + 0.001).floor() as i32,
+            (aabb.min.y + 0.001).floor() as i32,
+            (aabb.min.z + 0.001).floor() as i32,
+        );
+        let blockpos1 = BlockPos::new(
+            (aabb.max.x - 0.001).floor() as i32,
+            (aabb.max.y - 0.001).floor() as i32,
+            (aabb.max.z - 0.001).floor() as i32,
+        );
+        let world = entity.get_entity().world.read().await;
+
+        for x in blockpos.0.x..=blockpos1.0.x {
+            for y in blockpos.0.y..=blockpos1.0.y {
+                for z in blockpos.0.z..=blockpos1.0.z {
+                    let pos = BlockPos::new(x, y, z);
+                    if let Ok((block, state)) = world.get_block_and_block_state(&pos).await {
+                        world
+                            .block_registry
+                            .on_entity_collision(block, &world, entity, pos, state)
+                            .await;
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -492,8 +584,9 @@ impl EntityBase for Entity {
         false
     }
 
-    async fn tick(&self, _: &Server) {
-        //Todo! Tick
+    async fn tick(&self, _caller: &dyn EntityBase, _: &Server) {
+        self.tick_portal().await;
+        // TODO: Tick
     }
 
     fn get_entity(&self) -> &Entity {

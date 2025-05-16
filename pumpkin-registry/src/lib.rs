@@ -95,6 +95,16 @@ impl DimensionType {
             Self::TheNether => Identifier::vanilla("the_nether"),
         }
     }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "minecraft:overworld" => Some(Self::Overworld),
+            "minecraft:overworld_caves" => Some(Self::OverworldCaves),
+            "minecraft:the_end" => Some(Self::TheEnd),
+            "minecraft:the_nether" => Some(Self::TheNether),
+            _ => None,
+        }
+    }
 }
 
 impl Registry {

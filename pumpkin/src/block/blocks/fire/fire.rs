@@ -16,7 +16,7 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use crate::world::portal::NetherPortal;
+use crate::world::portal::nether::NetherPortal;
 
 use super::FireBlockBase;
 

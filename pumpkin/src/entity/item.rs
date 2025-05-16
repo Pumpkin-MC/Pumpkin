@@ -63,9 +63,9 @@ impl ItemEntity {
 
 #[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self, server: &Server) {
+    async fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
-        entity.tick(server).await;
+        entity.tick(caller, server).await;
         {
             let mut delay = self.pickup_delay.lock().await;
             *delay = delay.saturating_sub(1);
@@ -91,7 +91,7 @@ impl EntityBase for ItemEntity {
         false
     }
 
-    async fn on_player_collision(&self, player: Arc<Player>) {
+    async fn on_player_collision(&self, player: &Arc<Player>) {
         let can_pickup = {
             let delay = self.pickup_delay.lock().await;
             *delay == 0

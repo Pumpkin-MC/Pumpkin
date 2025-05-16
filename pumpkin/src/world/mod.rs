@@ -65,10 +65,9 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::world::BlockFlags;
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
     level::SyncChunk,
@@ -79,6 +78,7 @@ use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
     world::GetBlockError,
 };
+use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
@@ -125,6 +125,7 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
+    pub level_info: Arc<LevelData>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
@@ -146,13 +147,13 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
-    // TODO: entities
 }
 
 impl World {
     #[must_use]
     pub fn load(
         level: Level,
+        level_info: Arc<LevelData>,
         dimension_type: DimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
@@ -162,6 +163,7 @@ impl World {
             .unwrap();
         Self {
             level: Arc::new(level),
+            level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -202,7 +204,12 @@ impl World {
 
     async fn flush_synced_block_events(self: &Arc<Self>) {
         let mut queue = self.synced_block_event_queue.lock().await;
-        for event in queue.drain(..) {
+        let events: Vec<BlockEvent> = queue.clone();
+        queue.clear();
+        // THIS IS IMPORTANT
+        // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
+        drop(queue);
+        for event in events {
             let block = self.get_block(&event.pos).await.unwrap(); // TODO
             if !self
                 .block_registry
@@ -369,6 +376,8 @@ impl World {
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.flush_block_updates().await;
+        // tick block entities
+        self.level.tick_block_entities(self.clone()).await;
         self.flush_synced_block_events().await;
 
         // world ticks
@@ -396,7 +405,7 @@ impl World {
 
         // Entity ticks
         for entity in entities_to_tick {
-            entity.tick(server).await;
+            entity.tick(entity.as_ref(), server).await;
             for player in self.players.read().await.values() {
                 if player
                     .living_entity
@@ -407,7 +416,7 @@ impl World {
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
-                    entity.on_player_collision(player.clone()).await;
+                    entity.on_player_collision(player).await;
                     break;
                 }
             }
@@ -552,7 +561,7 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let info = &self.level.level_info;
+            let info = &self.level_info;
             let position = Vector3::new(
                 f64::from(info.spawn_x),
                 f64::from(info.spawn_y) + 1.0,
@@ -883,7 +892,7 @@ impl World {
         player.send_permission_lvl_update().await;
 
         // Teleport
-        let info = &self.level.level_info;
+        let info = &self.level_info;
         let mut position = Vector3::new(
             f64::from(info.spawn_x),
             f64::from(info.spawn_y),
@@ -1061,6 +1070,23 @@ impl World {
             }
         }
         None
+    }
+
+    pub async fn get_entities_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+        let entities_guard = self.entities.read().await;
+        entities_guard
+            .values()
+            .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+            .cloned()
+            .collect()
+    }
+    pub async fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
+        let players_guard = self.players.read().await;
+        players_guard
+            .values()
+            .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
+            .cloned()
+            .collect()
     }
 
     /// Retrieves a player by their unique UUID.

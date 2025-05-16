@@ -67,6 +67,10 @@ impl BlockDirection {
         }
     }
 
+    pub fn by_index(index: usize) -> Option<Self> {
+        Self::all().get(index % Self::all().len()).cloned()
+    }
+
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
             BlockDirection::Down => (0, -1, 0),

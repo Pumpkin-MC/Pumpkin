@@ -3,6 +3,8 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::{Float, Num};
 
+use super::vector2::Vector2;
+
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector3<T> {
     pub x: T,
@@ -206,6 +208,15 @@ where
         Vector3 {
             x: x.round() as i32,
             y: y.round() as i32,
+            z: z.round() as i32,
+        }
+    }
+
+    pub fn to_vec2_i32(&self) -> Vector2<i32> {
+        let x: f64 = self.x.into();
+        let z: f64 = self.z.into();
+        Vector2 {
+            x: x.round() as i32,
             z: z.round() as i32,
         }
     }

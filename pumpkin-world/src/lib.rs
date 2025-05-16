@@ -12,7 +12,7 @@ mod generation;
 pub mod inventory;
 pub mod item;
 pub mod level;
-mod lock;
+pub mod lock;
 pub mod world;
 pub mod world_info;
 

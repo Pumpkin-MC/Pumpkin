@@ -1,12 +1,12 @@
-use thiserror::Error;
+use std::path::Path;
 
-use crate::level::LevelFolder;
+use thiserror::Error;
 
 pub mod anvil;
 
 // Gets unlocked when dropped
 pub trait LevelLocker<T>: Send + Sync {
-    fn look(folder: &LevelFolder) -> Result<T, LockError>;
+    fn look(folder: &Path) -> Result<T, LockError>;
 }
 
 #[derive(Error, Debug)]

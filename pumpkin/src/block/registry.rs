@@ -1,4 +1,5 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
@@ -53,6 +54,22 @@ impl BlockRegistry {
                 .await;
         }
         false
+    }
+
+    pub async fn on_entity_collision(
+        &self,
+        block: Block,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        pos: BlockPos,
+        state: BlockState,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(&block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .on_entity_collision(world, entity, pos, block, state)
+                .await;
+        }
     }
 
     pub async fn on_use(

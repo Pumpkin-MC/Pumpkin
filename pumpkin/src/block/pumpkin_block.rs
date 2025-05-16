@@ -1,4 +1,5 @@
 use crate::block::registry::BlockActionResult;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
@@ -47,6 +48,16 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &Arc<World>,
     ) -> BlockActionResult {
         BlockActionResult::Continue
+    }
+
+    async fn on_entity_collision(
+        &self,
+        _world: &Arc<World>,
+        _entity: &dyn EntityBase,
+        _pos: BlockPos,
+        _block: Block,
+        _state: BlockState,
+    ) {
     }
 
     fn should_drop_items_on_explosion(&self) -> bool {

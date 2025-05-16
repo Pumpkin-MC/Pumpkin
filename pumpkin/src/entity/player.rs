@@ -663,7 +663,7 @@ impl Player {
 
         self.last_attacked_ticks.fetch_add(1, Relaxed);
 
-        self.living_entity.tick(server).await;
+        self.living_entity.tick(self, server).await;
         self.hunger_manager.tick(self).await;
 
         // experience handling
@@ -886,7 +886,7 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
-        let info = &new_world.level.level_info;
+        let info = &new_world.level_info;
         let position = if let Some(pos) = position {
             pos
         } else {
@@ -1797,6 +1797,9 @@ impl NBTStorage for PlayerInventory {
 #[async_trait]
 impl EntityBase for Player {
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+        if self.abilities.lock().await.invulnerable {
+            return false;
+        }
         self.world()
             .await
             .play_sound(

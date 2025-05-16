@@ -31,7 +31,7 @@ impl TNTEntity {
 
 #[async_trait]
 impl EntityBase for TNTEntity {
-    async fn tick(&self, server: &Server) {
+    async fn tick(&self, _caller: &dyn EntityBase, server: &Server) {
         let fuse = self.fuse.fetch_sub(1, Relaxed);
         if fuse == 0 {
             self.entity.remove().await;

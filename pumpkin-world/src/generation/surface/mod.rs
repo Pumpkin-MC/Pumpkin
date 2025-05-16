@@ -137,7 +137,7 @@ pub enum MaterialCondition {
     #[serde(rename = "minecraft:noise_threshold")]
     NoiseThreshold(NoiseThresholdMaterialCondition),
     #[serde(rename = "minecraft:vertical_gradient")]
-    VerticalGradient(VerticalGradientMaterialCondition),
+    VerticalGradient(Box<VerticalGradientMaterialCondition>),
     #[serde(rename = "minecraft:y_above")]
     YAbove(AboveYMaterialCondition),
     #[serde(rename = "minecraft:water")]

@@ -26,7 +26,7 @@ crossbeam.workspace = true
 
 num-derive = "0.4"
 sha2 = "0.10"
-bitflags = "2.9.0"
+bitflags = "2.9.1"
 
 dashmap = "6.1"
 

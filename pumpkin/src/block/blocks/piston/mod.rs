@@ -21,7 +21,7 @@ pub struct PistonHandler<'a> {
     motion_direction: BlockDirection,
     pub moved_blocks: Vec<BlockPos>,
     pub broken_blocks: Vec<BlockPos>,
-    _piston_direction: BlockDirection,
+    piston_direction: BlockDirection,
 }
 
 impl<'a> PistonHandler<'a> {
@@ -29,7 +29,7 @@ impl<'a> PistonHandler<'a> {
         let motion_direction;
         let pos_to = if retracted {
             motion_direction = dir;
-            pos.offset_dir(dir.to_offset(), 1)
+            pos.offset(dir.to_offset())
         } else {
             motion_direction = dir.opposite();
             pos.offset_dir(dir.to_offset(), 2)
@@ -37,7 +37,7 @@ impl<'a> PistonHandler<'a> {
         PistonHandler {
             world,
             pos_from: pos,
-            _piston_direction: dir,
+            piston_direction: dir,
             retracted,
             motion_direction,
             pos_to,
@@ -54,14 +54,19 @@ impl<'a> PistonHandler<'a> {
             .get_block_and_block_state(&self.pos_to)
             .await
             .unwrap();
+        dbg!(PistonBlock::is_movable(
+            &block,
+            &block_state,
+            self.motion_direction,
+            false,
+            self.piston_direction,
+        ));
         if !PistonBlock::is_movable(
             &block,
             &block_state,
-            // self.world,
-            // self.pos_to,
-            // self.motion_direction,
-            // false,
-            // self.piston_direction,
+            self.motion_direction,
+            false,
+            self.piston_direction,
         ) {
             if self.retracted && block_state.piston_behavior == PistonBehavior::Destroy {
                 self.broken_blocks.push(self.pos_to);
@@ -97,21 +102,13 @@ impl<'a> PistonHandler<'a> {
         Self::is_block_sticky(state) || Self::is_block_sticky(adjacent_state)
     }
 
-    async fn try_move(&mut self, pos: BlockPos, _dir: BlockDirection) -> bool {
+    async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
         let (mut block, mut block_state) =
             self.world.get_block_and_block_state(&pos).await.unwrap();
         if block_state.is_air() {
             return true;
         }
-        if !PistonBlock::is_movable(
-            &block,
-            &block_state,
-            // self.world,
-            // pos,
-            // self.motion_direction,
-            // false,
-            // dir,
-        ) {
+        if !PistonBlock::is_movable(&block, &block_state, self.motion_direction, false, dir) {
             return true;
         }
         if pos == self.pos_from {
@@ -137,11 +134,9 @@ impl<'a> PistonHandler<'a> {
                 || !PistonBlock::is_movable(
                     &block,
                     &block_state,
-                    // self.world,
-                    // block_pos,
-                    // self.motion_direction,
-                    // false,
-                    // self.motion_direction.opposite(),
+                    self.motion_direction,
+                    false,
+                    self.motion_direction.opposite(),
                 )
                 || block_pos == self.pos_from
             {
@@ -185,11 +180,9 @@ impl<'a> PistonHandler<'a> {
             if !PistonBlock::is_movable(
                 &block,
                 &block_state,
-                // self.world,
-                // block_pos2,
-                // self.motion_direction,
-                // true,
-                // self.motion_direction,
+                self.motion_direction,
+                true,
+                self.motion_direction,
             ) || block_pos2 == self.pos_from
             {
                 return false;

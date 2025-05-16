@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::entity::EntityBase;
 use crate::world::World;
-use crate::world::portal::NetherPortal;
+use crate::world::portal::nether::NetherPortal;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -37,5 +40,15 @@ impl PumpkinBlock for NetherPortalBlock {
             return state;
         }
         Block::AIR.default_state_id
+    }
+
+    async fn on_entity_collision(
+        &self,
+        _world: &Arc<World>,
+        _entity: &dyn EntityBase,
+        _pos: BlockPos,
+        _block: Block,
+        _state: BlockState,
+    ) {
     }
 }
