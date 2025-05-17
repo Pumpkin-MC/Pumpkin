@@ -229,6 +229,8 @@ impl LivingEntity {
                     .play_sound(Self::get_fall_sound(fall_distance as i32))
                     .await;
             }
+        } else if self.is_in_water().await {
+            self.fall_distance.store(0.0);
         } else if height_difference < 0.0 {
             let distance = self.fall_distance.load();
             self.fall_distance
