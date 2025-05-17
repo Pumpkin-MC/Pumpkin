@@ -35,7 +35,7 @@ impl CommandExecutor for Executor {
 
         match sender {
             CommandSender::Console => {
-                if let Some(world) = server.worlds.read().await.get(0) {
+                if let Some(world) = server.worlds.read().await.first() {
                     let info = &world.level_info;
                     // default position for spawning a player, in this case for mob
                     let pos = pos.unwrap_or(Vector3::new(
