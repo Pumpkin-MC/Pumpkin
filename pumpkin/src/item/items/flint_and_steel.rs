@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::fire::FireBlockBase;

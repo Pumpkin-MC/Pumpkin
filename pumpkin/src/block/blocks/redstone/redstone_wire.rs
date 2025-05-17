@@ -7,12 +7,11 @@ use pumpkin_data::block_properties::{
     SouthWireConnection, WestWireConnection,
 };
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockIsReplacing;
@@ -280,8 +279,7 @@ impl PumpkinBlock for RedstoneWireBlock {
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
     let floor = world.get_block_state(&block_pos.down()).await.unwrap();
-    // TODO: Only check face instead of block
-    floor.is_full_cube()
+    floor.is_side_solid(BlockDirection::Up)
 }
 
 async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &BlockPos) -> bool {

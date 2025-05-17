@@ -2,13 +2,13 @@ use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Tagable;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 type IronBarsProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
@@ -68,7 +68,7 @@ pub async fn compute_bars_state(
         };
 
         let connected = other_block == *block
-            || (other_block_state.is_solid() && other_block_state.is_full_cube())
+            || other_block_state.is_side_solid(direction.opposite())
             || other_block.is_tagged_with("c:glass_panes").unwrap()
             || other_block.is_tagged_with("minecraft:walls").unwrap();
 

@@ -2,18 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockFlags;
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
-use pumpkin_world::{
-    block::{BlockDirection, HorizontalFacingExt},
-    world::BlockFlags,
-};
 
 use crate::{
     block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},

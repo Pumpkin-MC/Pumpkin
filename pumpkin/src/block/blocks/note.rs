@@ -8,7 +8,7 @@ use pumpkin_data::block_properties::Axis;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
-    Block,
+    Block, BlockDirection,
     block_properties::{
         BlockProperties, EnumVariants, Instrument, Integer0To24, NoteBlockLikeProperties,
     },
@@ -17,7 +17,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{block::pumpkin_block::PumpkinBlock, world::World};

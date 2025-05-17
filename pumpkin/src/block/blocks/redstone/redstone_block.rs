@@ -1,8 +1,7 @@
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 
 use crate::{block::pumpkin_block::PumpkinBlock, world::World};
 

@@ -4,9 +4,8 @@ use std::sync::Arc;
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 
 use crate::world::World;
 
