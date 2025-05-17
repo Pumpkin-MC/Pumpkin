@@ -35,7 +35,7 @@ impl CommandExecutor for Executor {
 
         match sender {
             CommandSender::Console => {
-                if let Some(world) = server.worlds.read().await.iter().nth(0) {
+                if let Some(world) = server.worlds.read().await.get(0) {
                     let info = &world.level_info;
                     // default position for spawning a player, in this case for mob
                     let pos = pos.unwrap_or(Vector3::new(
@@ -43,7 +43,7 @@ impl CommandExecutor for Executor {
                         f64::from(info.spawn_y) + 1.0,
                         f64::from(info.spawn_z),
                     ));
-                    let mob = mob::from_type(entity, pos, &world).await;
+                    let mob = mob::from_type(entity, pos, world).await;
                     world.spawn_entity(mob).await;
                     sender
                         .send_message(TextComponent::translate(
