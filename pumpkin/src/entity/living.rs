@@ -355,6 +355,22 @@ impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
+        {
+            let effects = self.active_effects.lock().await;
+            if !effects.is_empty() {
+                // Iterate effects and create Box<[NbtTag]>
+                let mut effects_list = Vec::with_capacity(effects.len());
+                for effect in effects.values() {
+                    let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    effect.write_nbt(&mut effect_nbt).await;
+                    effects_list.push(NbtTag::Compound(effect_nbt));
+                }
+                nbt.put(
+                    "active_effects",
+                    NbtTag::List(effects_list.into_boxed_slice()),
+                );
+            }
+        }
         //TODO: write equipment
         // todo more...
     }
@@ -362,6 +378,24 @@ impl NBTStorage for LivingEntity {
     async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.read_nbt(nbt).await;
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+        {
+            let mut active_effects = self.active_effects.lock().await;
+            let nbt_effects = nbt.get_list("active_effects");
+            if let Some(nbt_effects) = nbt_effects {
+                for effect in nbt_effects {
+                    if let NbtTag::Compound(effect_nbt) = effect {
+                        let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
+                        if effect.is_none() {
+                            log::warn!("Unable to read effect from nbt");
+                            continue;
+                        }
+                        let mut effect = effect.unwrap();
+                        effect.blend = true; // TODO: change, is taken from effect give command
+                        active_effects.insert(effect.r#type, effect);
+                    }
+                }
+            }
+        }
         // todo more...
     }
 }

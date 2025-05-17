@@ -1427,6 +1427,18 @@ impl Player {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
+        self.send_effect(effect.clone()).await;
+        self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn send_active_effects(&self) {
+        let effects = self.living_entity.active_effects.lock().await;
+        for effect in effects.values() {
+            self.send_effect(effect.clone()).await;
+        }
+    }
+
+    pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1452,7 +1464,6 @@ impl Player {
                 flag,
             ))
             .await;
-        self.living_entity.add_effect(effect).await;
     }
 
     pub async fn remove_effect(&self, effect_type: EffectType) {

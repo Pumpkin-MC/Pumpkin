@@ -783,6 +783,8 @@ impl World {
         player
             .on_screen_handler_opened(player.player_screen_handler.clone())
             .await;
+
+        player.send_active_effects().await;
     }
 
     pub async fn send_world_info(
