@@ -1,8 +1,8 @@
 use piston::PistonBlock;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 
 use crate::world::World;
 

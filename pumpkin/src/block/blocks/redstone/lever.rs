@@ -3,14 +3,13 @@ use std::sync::Arc;
 use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{

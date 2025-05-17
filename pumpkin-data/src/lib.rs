@@ -122,10 +122,14 @@ pub mod noise_router {
     include!(concat!(env!("OUT_DIR"), "/noise_router.rs"));
 }
 
+mod block_direction;
 pub mod block_state;
 mod blocks;
 mod collision_shape;
 
+pub use block_direction::BlockDirection;
+pub use block_direction::FacingExt;
+pub use block_direction::HorizontalFacingExt;
 pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
 pub use blocks::Block;

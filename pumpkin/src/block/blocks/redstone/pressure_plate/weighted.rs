@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer0To15},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, block::BlockDirection};
+use pumpkin_world::BlockStateId;
 
 use crate::{
     block::pumpkin_block::{BlockMetadata, PumpkinBlock},

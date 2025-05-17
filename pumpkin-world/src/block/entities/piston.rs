@@ -3,16 +3,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState,
     block_properties::{get_block_by_state_id, get_state_by_state_id},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::{
-    block::BlockDirection,
-    world::{BlockFlags, SimpleWorld},
-};
+use crate::world::{BlockFlags, SimpleWorld};
 
 use super::BlockEntity;
 
