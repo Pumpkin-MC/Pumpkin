@@ -1,6 +1,7 @@
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
+use blocks::command::CommandBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
@@ -42,8 +43,8 @@ use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
-use fluids::lava::FlowingLava;
-use fluids::water::FlowingWater;
+use fluid::lava::FlowingLava;
+use fluid::water::FlowingWater;
 use loot::LootTableExt;
 use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::entity::EntityType;
@@ -63,7 +64,7 @@ use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::Experi
 use std::sync::Arc;
 
 pub(crate) mod blocks;
-mod fluids;
+mod fluid;
 mod loot;
 pub mod pumpkin_block;
 pub mod pumpkin_fluid;
@@ -100,6 +101,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
+    manager.register(CommandBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
 

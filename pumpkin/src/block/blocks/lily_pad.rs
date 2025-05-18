@@ -6,7 +6,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
-use crate::{block::pumpkin_block::PumpkinBlock, entity::EntityBase, world::World};
+use crate::{block::pumpkin_block::PumpkinBlock, entity::EntityBase, server::Server, world::World};
 
 #[pumpkin_block("minecraft:lily_pad")]
 pub struct LilyPadBlock;
@@ -20,6 +20,7 @@ impl PumpkinBlock for LilyPadBlock {
         pos: BlockPos,
         _block: Block,
         _state: BlockState,
+        _server: &Server,
     ) {
         // Proberbly not the best solution, but works
         if entity

@@ -85,15 +85,12 @@ fn set_waterlogged(block: &Block, state_id: u16, waterlogged: bool) -> u16 {
 
 #[async_trait]
 impl PumpkinItem for EmptyBucketItem {
-    #[allow(clippy::too_many_lines)]
     async fn normal_use(&self, _item: &Item, player: &Player) {
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
 
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
-            let Ok(state_id) = world_inner.get_block_state_id(pos).await else {
-                return false;
-            };
+            let state_id = world_inner.get_block_state_id(pos).await;
 
             let block = Block::from_state_id(state_id).unwrap();
 
@@ -210,9 +207,7 @@ impl PumpkinItem for FilledBucketItem {
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
-            let Ok(state_id) = world_inner.get_block_state_id(pos).await else {
-                return false;
-            };
+            let state_id = world_inner.get_block_state_id(pos).await;
             if Fluid::from_state_id(state_id).is_some() {
                 return false;
             }

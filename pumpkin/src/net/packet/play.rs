@@ -3,6 +3,8 @@ use pumpkin_data::item::Item;
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_world::block::entities::BlockEntity;
+use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::world::BlockFlags;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
@@ -47,7 +49,8 @@ use pumpkin_protocol::client::play::{
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    FLAG_ON_GROUND, SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
+    CommandBlockMode, FLAG_ON_GROUND, SChunkBatch, SCookieResponse as SPCookieResponse,
+    SPlayerSession, SSetCommandBlock, SUpdateSign,
 };
 use pumpkin_protocol::{
     client::play::{
@@ -86,7 +89,6 @@ pub enum BlockPlacingError {
     InvalidBlockFace,
     BlockOutOfWorld,
     InvalidGamemode,
-    NoBaseBlock,
 }
 
 impl std::fmt::Display for BlockPlacingError {
@@ -99,13 +101,13 @@ impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
-            Self::InvalidBlockFace | Self::NoBaseBlock => true,
+            Self::InvalidBlockFace => true,
         }
     }
 
     fn severity(&self) -> log::Level {
         match self {
-            Self::BlockOutOfWorld | Self::InvalidGamemode | Self::NoBaseBlock => log::Level::Trace,
+            Self::BlockOutOfWorld | Self::InvalidGamemode => log::Level::Trace,
             Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
         }
     }
@@ -114,7 +116,6 @@ impl PumpkinError for BlockPlacingError {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
-            Self::NoBaseBlock => Some("No base block".into()),
         }
     }
 }
@@ -565,9 +566,7 @@ impl Player {
         }
 
         let world = self.world().await;
-        let Ok(block) = world.get_block(&pick_item.pos).await else {
-            return;
-        };
+        let block = world.get_block(&pick_item.pos).await;
 
         if block.item_id == 0 {
             // Invalid block id (blocks such as tall seagrass)
@@ -605,6 +604,33 @@ impl Player {
     // pub fn handle_pick_item_from_entity(&self, _pick_item: SPickItemFromEntity) {
     //     // TODO: Implement and merge any redundant code with pick_item_from_block
     // }
+
+    pub async fn handle_set_command_block(&self, command: SSetCommandBlock) {
+        // TODO: check things
+        let pos = command.pos;
+        if let Some((nbt, block_entity)) = self.world().await.get_block_entity(&pos).await {
+            let command_entity = CommandBlockEntity::from_nbt(&nbt, pos);
+
+            if block_entity.identifier() != command_entity.identifier() {
+                log::warn!(
+                    "Client tried to change Command block but not Command block entity found"
+                );
+                return;
+            }
+
+            let Ok(command_block_mode) = CommandBlockMode::try_from(command.mode) else {
+                self.kick(TextComponent::text("Invalid Command block mode"))
+                    .await;
+                return;
+            };
+
+            let _block_state = match command_block_mode {
+                CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
+                CommandBlockMode::Repeating => Block::REPEATING_COMMAND_BLOCK,
+                CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
+            };
+        }
+    }
 
     pub async fn handle_player_command(&self, command: SPlayerCommand) {
         if command.entity_id != self.entity_id().into() {
@@ -1099,8 +1125,7 @@ impl Player {
                     let location = player_action.location;
                     let entity = &self.living_entity.entity;
                     let world = &entity.world.read().await;
-                    let block = world.get_block(&location).await.unwrap();
-                    let state = world.get_block_state(&location).await.unwrap();
+                    let (block, state) = world.get_block_and_block_state(&location).await;
 
                     let inventory = self.inventory();
                     let held = inventory.held_item();
@@ -1119,8 +1144,6 @@ impl Player {
                     // TODO: Config
                     if self.gamemode.load() == GameMode::Creative {
                         // Block break & play sound
-
-                        let broken_state = world.get_block_state(&location).await.unwrap();
                         world
                             .break_block(
                                 &location,
@@ -1130,14 +1153,7 @@ impl Player {
                             .await;
                         server
                             .block_registry
-                            .broken(
-                                Arc::clone(world),
-                                &block,
-                                self,
-                                location,
-                                server,
-                                broken_state,
-                            )
+                            .broken(Arc::clone(world), &block, self, location, server, state)
                             .await;
                         self.update_sequence(player_action.sequence.0);
                         return;
@@ -1150,7 +1166,7 @@ impl Player {
                         let speed = block::calc_block_breaking(self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&location).await.unwrap();
+                            let broken_state = world.get_block_state(&location).await;
                             world
                                 .break_block(
                                     &location,
@@ -1219,27 +1235,26 @@ impl Player {
                         .store(false, std::sync::atomic::Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
-                    if let Ok((block, state)) = world.get_block_and_block_state(&location).await {
-                        let drop = self.gamemode.load() != GameMode::Creative
-                            && self.can_harvest(&state, block.name).await;
+                    let (block, state) = world.get_block_and_block_state(&location).await;
+                    let drop = self.gamemode.load() != GameMode::Creative
+                        && self.can_harvest(&state, block.name).await;
 
-                        world
-                            .break_block(
-                                &location,
-                                Some(self.clone()),
-                                if drop {
-                                    BlockFlags::NOTIFY_NEIGHBORS
-                                } else {
-                                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                                },
-                            )
-                            .await;
+                    world
+                        .break_block(
+                            &location,
+                            Some(self.clone()),
+                            if drop {
+                                BlockFlags::NOTIFY_NEIGHBORS
+                            } else {
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            },
+                        )
+                        .await;
 
-                        server
-                            .block_registry
-                            .broken(Arc::clone(world), &block, self, location, server, state)
-                            .await;
-                    }
+                    server
+                        .block_registry
+                        .broken(Arc::clone(world), &block, self, location, server, state)
+                        .await;
 
                     self.update_sequence(player_action.sequence.0);
                 }
@@ -1329,9 +1344,7 @@ impl Player {
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
-        let Ok(block) = world.get_block(&location).await else {
-            return Err(BlockPlacingError::NoBaseBlock.into());
-        };
+        let block = world.get_block(&location).await;
 
         let sneaking = self
             .living_entity
@@ -1596,7 +1609,7 @@ impl Player {
 
         let clicked_block_pos = BlockPos(location.0);
         let (clicked_block, clicked_block_state) =
-            world.get_block_and_block_state(&clicked_block_pos).await?;
+            world.get_block_and_block_state(&clicked_block_pos).await;
 
         let replace_clicked_block = if clicked_block == block {
             world
@@ -1629,7 +1642,7 @@ impl Player {
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
                 let (previous_block, previous_block_state) =
-                    world.get_block_and_block_state(&block_pos).await?;
+                    world.get_block_and_block_state(&block_pos).await;
 
                 let replace_previous_block = if previous_block == block {
                     world

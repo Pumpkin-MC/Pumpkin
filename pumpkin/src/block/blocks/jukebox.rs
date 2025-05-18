@@ -22,11 +22,7 @@ pub struct JukeboxBlock;
 
 impl JukeboxBlock {
     async fn has_record(&self, block: &Block, location: BlockPos, world: &World) -> bool {
-        let state_id = world
-            .get_block_state(&location)
-            .await
-            .expect("`location` should be a jukebox")
-            .id;
+        let state_id = world.get_block_state(&location).await.id;
         JukeboxLikeProperties::from_state_id(state_id, block).has_record
     }
 

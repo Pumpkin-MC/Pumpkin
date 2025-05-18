@@ -27,7 +27,7 @@ struct Rail {
 
 impl Rail {
     async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
-        let (block, block_state) = world.get_block_and_block_state(&position).await.unwrap();
+        let (block, block_state) = world.get_block_and_block_state(&position).await;
         if block.is_tagged_with("#minecraft:rails").unwrap() {
             let properties = RailProperties::new(block_state.id, &block);
             return Some(Self {
@@ -39,7 +39,7 @@ impl Rail {
         }
 
         let pos = position.up();
-        let (block, block_state) = world.get_block_and_block_state(&pos).await.unwrap();
+        let (block, block_state) = world.get_block_and_block_state(&pos).await;
         if block.is_tagged_with("#minecraft:rails").unwrap() {
             let properties = RailProperties::new(block_state.id, &block);
             return Some(Self {
@@ -51,7 +51,7 @@ impl Rail {
         }
 
         let pos = position.down();
-        let (block, block_state) = world.get_block_and_block_state(&pos).await.unwrap();
+        let (block, block_state) = world.get_block_and_block_state(&pos).await;
         if block.is_tagged_with("#minecraft:rails").unwrap() {
             let properties = RailProperties::new(block_state.id, &block);
             return Some(Self {

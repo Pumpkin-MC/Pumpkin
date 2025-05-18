@@ -50,7 +50,7 @@ impl PumpkinItem for AxeItem {
             let new_block = Block::from_id(replacement_block.unwrap());
             let new_block = &new_block.unwrap();
             let new_state_id = if block.is_tagged_with("#minecraft:logs") == Some(true) {
-                let log_information = world.get_block_state_id(&location).await.unwrap();
+                let log_information = world.get_block_state_id(&location).await;
                 let log_props = PaleOakWoodLikeProperties::from_state_id(log_information, block);
                 // create new properties for the new log.
                 let mut new_log_properties = PaleOakWoodLikeProperties::default(new_block);
@@ -65,7 +65,7 @@ impl PumpkinItem for AxeItem {
             // Let's check if It's a door
             else if block.is_tagged_with("#minecraft:doors") == Some(true) {
                 // get block state of the old log.
-                let door_information = world.get_block_state_id(&location).await.unwrap();
+                let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
                 let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
                 // create new properties for the new log.

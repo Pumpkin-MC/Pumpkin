@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::level::Level;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Dimension {
     Overworld,
@@ -19,6 +19,6 @@ impl Dimension {
             Dimension::Nether => base_directory.push("DIM-1"),
             Dimension::End => base_directory.push("DIM1"),
         }
-        Level::from_root_folder(base_directory, seed)
+        Level::from_root_folder(base_directory, seed, *self)
     }
 }

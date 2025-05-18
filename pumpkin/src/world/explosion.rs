@@ -41,8 +41,7 @@ impl Explosion {
                     let mut h = self.power * (0.7 + rand::random::<f32>() * 0.6);
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
-                        let (block, state) =
-                            world.get_block_and_block_state(&block_pos).await.unwrap();
+                        let (block, state) = world.get_block_and_block_state(&block_pos).await;
 
                         // if !world.is_in_build_limit(&block_pos) {
                         //     // Pass by reference
@@ -72,13 +71,13 @@ impl Explosion {
         let blocks = self.get_blocks_to_destroy(world).await;
         // TODO: Entity damage, fire
         for pos in blocks {
-            let block_state = world.get_block_state(&pos).await.unwrap();
+            let block_state = world.get_block_state(&pos).await;
 
             if block_state.is_air() {
                 continue;
             }
 
-            let block = world.get_block(&pos).await.unwrap();
+            let block = world.get_block(&pos).await;
             let pumpkin_block = server.block_registry.get_pumpkin_block(&block);
 
             world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;

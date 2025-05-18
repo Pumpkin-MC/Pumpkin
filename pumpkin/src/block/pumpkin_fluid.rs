@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::entity::{EntityBase, player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -77,6 +77,8 @@ pub trait PumpkinFluid: Send + Sync {
         _notify: bool,
     ) {
     }
+
+    async fn on_entity_collision(&self, _entity: &dyn EntityBase) {}
 
     async fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
 

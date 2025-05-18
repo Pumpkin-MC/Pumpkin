@@ -139,24 +139,28 @@ impl Server {
         }
 
         let level_info = Arc::new(level_info.unwrap_or_default()); // TODO: Improve error handling
+        let seed = level_info.world_gen_settings.seed;
+        log::info!("Loading Overworld: {seed}");
         let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), level_info.world_gen_settings.seed),
+            Dimension::Overworld.into_level(world_path.clone(), seed),
             level_info.clone(),
             DimensionType::Overworld,
             block_registry.clone(),
         );
+        log::info!("Loading Nether: {seed}");
         let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), level_info.world_gen_settings.seed),
+            Dimension::Nether.into_level(world_path.clone(), seed),
             level_info.clone(),
             DimensionType::TheNether,
             block_registry.clone(),
         );
-        let end = World::load(
-            Dimension::End.into_level(world_path.clone(), level_info.world_gen_settings.seed),
-            level_info.clone(),
-            DimensionType::TheEnd,
-            block_registry.clone(),
-        );
+        // log::info!("Loading End: {}", seed);
+        // let end = World::load(
+        //     Dimension::End.into_level(world_path.clone(), seed),
+        //     level_info.clone(),
+        //     DimensionType::TheEnd,
+        //     block_registry.clone(),
+        // );
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
@@ -167,7 +171,7 @@ impl Server {
         Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
+            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether)]),
             dimensions: vec![
                 DimensionType::Overworld,
                 DimensionType::OverworldCaves,
@@ -226,7 +230,7 @@ impl Server {
         let world = match dimension {
             DimensionType::Overworld => world_guard.first(),
             DimensionType::OverworldCaves => todo!(),
-            DimensionType::TheEnd => world_guard.get(2),
+            DimensionType::TheEnd => todo!(),
             DimensionType::TheNether => world_guard.get(1),
         };
         world.cloned().unwrap()
@@ -277,7 +281,6 @@ impl Server {
                 }
             } else {
                 // Player data exists but doesn't have a "Dimension" key.
-                log::warn!("Player data missing 'Dimension' key, defaulting to Overworld.");
                 let default_world_guard = self.worlds.read().await;
                 let default_world = default_world_guard
                     .first()

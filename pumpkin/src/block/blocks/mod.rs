@@ -2,6 +2,7 @@ pub mod barrel;
 pub mod bed;
 pub mod cactus;
 pub mod chest;
+pub mod command;
 pub mod crafting_table;
 pub mod dirt_path;
 pub mod doors;

@@ -47,14 +47,11 @@ impl PumpkinBlock for BedBlock {
     ) -> bool {
         let facing = player.living_entity.entity.get_horizontal_facing();
 
-        world
-            .get_block_state(block_pos)
-            .await
-            .is_ok_and(|state| state.replaceable())
+        world.get_block_state(block_pos).await.replaceable()
             && world
                 .get_block_state(&block_pos.offset(facing.to_offset()))
                 .await
-                .is_ok_and(|state| state.replaceable())
+                .replaceable()
     }
 
     async fn on_place(

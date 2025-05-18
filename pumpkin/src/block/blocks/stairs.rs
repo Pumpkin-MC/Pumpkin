@@ -77,7 +77,7 @@ impl PumpkinBlock for StairBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let state_id = world.get_block_state_id(block_pos).await.unwrap();
+        let state_id = world.get_block_state_id(block_pos).await;
         let mut stair_props = StairsProperties::from_state_id(state_id, block);
 
         let new_shape =
@@ -158,7 +158,7 @@ async fn get_stair_properties_if_exists(
     world: &World,
     block_pos: &BlockPos,
 ) -> Option<StairsProperties> {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
     block
         .is_tagged_with("#minecraft:stairs")
         .unwrap()

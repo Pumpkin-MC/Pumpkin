@@ -67,7 +67,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
 
         if world.is_block_tick_scheduled(block_pos, block).await {
             return;
@@ -153,7 +153,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
     }
 
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         if block == &Block::REDSTONE_WALL_TORCH {
             let mut props = RWallTorchProps::from_state_id(state.id, block);
             let should_be_lit_now = should_be_lit(
@@ -208,7 +208,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 
 pub async fn should_be_lit(world: &World, pos: &BlockPos, face: BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
-    let (block, state) = world.get_block_and_block_state(&other_pos).await.unwrap();
+    let (block, state) = world.get_block_and_block_state(&other_pos).await;
     get_redstone_power(&block, &state, world, &other_pos, face).await == 0
 }
 

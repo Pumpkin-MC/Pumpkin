@@ -21,7 +21,7 @@ use std::sync::Arc;
 type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 
 async fn toggle_trapdoor(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
     let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, &block);
     trapdoor_props.open = !trapdoor_props.open;
 
@@ -147,7 +147,7 @@ impl PumpkinBlock for TrapDoorBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let block_state = world.get_block_state(pos).await.unwrap();
+        let block_state = world.get_block_state(pos).await;
         let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, block);
         let powered = block_receives_redstone_power(world, pos).await;
         if powered != trapdoor_props.powered {

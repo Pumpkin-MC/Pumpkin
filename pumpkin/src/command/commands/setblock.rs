@@ -73,8 +73,9 @@ impl CommandExecutor for Executor {
                     .await;
                 true
             }
-            Mode::Keep => match world.get_block_state(&pos).await {
-                Ok(old_state) if old_state.is_air() => {
+            Mode::Keep => {
+                let old_state = world.get_block_state(&pos).await;
+                if old_state.is_air() {
                     world
                         .set_block_state(
                             &pos,
@@ -83,10 +84,10 @@ impl CommandExecutor for Executor {
                         )
                         .await;
                     true
+                } else {
+                    false
                 }
-                Ok(_) => false,
-                Err(e) => return Err(CommandError::OtherPumpkin(e.into())),
-            },
+            }
         };
 
         sender

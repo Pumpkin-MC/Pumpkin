@@ -29,9 +29,11 @@ pub use seed::Seed;
 
 use generator::GeneratorInit;
 
-pub fn get_world_gen(seed: Seed) -> Box<dyn WorldGenerator> {
+use crate::dimension::Dimension;
+
+pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<dyn WorldGenerator> {
     // TODO decide which WorldGenerator to pick based on config.
-    Box::new(VanillaGenerator::new(seed))
+    Box::new(VanillaGenerator::new(seed, dimension))
 }
 
 #[derive(Getters)]

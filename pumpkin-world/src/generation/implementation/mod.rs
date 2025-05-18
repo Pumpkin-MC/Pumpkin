@@ -1,13 +1,15 @@
-use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
+use pumpkin_data::noise_router::{
+    END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
+};
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use super::{
-    biome_coords,
-    noise_router::proto_noise_router::ProtoNoiseRouters,
-    settings::{GENERATION_SETTINGS, GeneratorSetting},
+    biome_coords, noise_router::proto_noise_router::ProtoNoiseRouters,
+    settings::gen_settings_from_dimension,
 };
-use crate::chunk::ChunkLight;
+use crate::chunk::ChunkHeightmaps;
 use crate::chunk::format::LightContainer;
+use crate::{chunk::ChunkLight, dimension::Dimension};
 use crate::{
     chunk::{
         ChunkData, ChunkSections, SubChunk,
@@ -21,27 +23,31 @@ use crate::{
 pub struct VanillaGenerator {
     random_config: GlobalRandomConfig,
     base_router: ProtoNoiseRouters,
+    dimension: Dimension,
 }
 
 impl GeneratorInit for VanillaGenerator {
-    fn new(seed: Seed) -> Self {
+    fn new(seed: Seed, dimension: Dimension) -> Self {
         let random_config = GlobalRandomConfig::new(seed.0, false);
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?
-        let base_router = ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
+        let base = match dimension {
+            Dimension::Overworld => OVERWORLD_BASE_NOISE_ROUTER,
+            Dimension::Nether => NETHER_BASE_NOISE_ROUTER,
+            Dimension::End => END_BASE_NOISE_ROUTER,
+        };
+        let base_router = ProtoNoiseRouters::generate(&base, &random_config);
         Self {
             random_config,
             base_router,
+            dimension,
         }
     }
 }
 
 impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(&self, at: &Vector2<i32>) -> ChunkData {
-        // TODO: Dont hardcode this
-        let generation_settings = GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap();
+        let generation_settings = gen_settings_from_dimension(&self.dimension);
 
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
@@ -53,7 +59,7 @@ impl WorldGenerator for VanillaGenerator {
             &self.random_config,
             generation_settings,
         );
-        proto_chunk.populate_biomes();
+        proto_chunk.populate_biomes(self.dimension);
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
 
@@ -79,7 +85,11 @@ impl WorldGenerator for VanillaGenerator {
                 }
             }
         }
-
+        let heightmap = ChunkHeightmaps {
+            world_surface: proto_chunk.flat_surface_height_map,
+            motion_blocking: proto_chunk.flat_motion_blocking_height_map,
+            motion_blocking_no_leaves: proto_chunk.flat_motion_blocking_no_leaves_height_map,
+        };
         ChunkData {
             light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len() + 2)
@@ -90,7 +100,7 @@ impl WorldGenerator for VanillaGenerator {
                     .collect(),
             },
             section: sections,
-            heightmap: Default::default(),
+            heightmap,
             position: *at,
             dirty: true,
             block_ticks: Default::default(),

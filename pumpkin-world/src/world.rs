@@ -44,7 +44,7 @@ pub trait SimpleWorld: Send + Sync {
         flags: BlockFlags,
     ) -> BlockStateId;
 
-    async fn get_block(&self, position: &BlockPos) -> Result<pumpkin_data::Block, GetBlockError>;
+    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block;
 
     async fn update_neighbor(
         self: Arc<Self>,

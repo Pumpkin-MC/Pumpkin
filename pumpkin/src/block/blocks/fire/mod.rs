@@ -15,7 +15,7 @@ pub struct FireBlockBase;
 
 impl FireBlockBase {
     pub async fn get_fire_type(world: &World, pos: &BlockPos) -> Block {
-        let (block, _block_state) = world.get_block_and_block_state(&pos.down()).await.unwrap();
+        let (block, _block_state) = world.get_block_and_block_state(&pos.down()).await;
         if SoulFireBlock::is_soul_base(&block) {
             return Block::SOUL_FIRE;
         }
@@ -32,9 +32,8 @@ impl FireBlockBase {
     }
 
     pub async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-        let block_state = world.get_block_state(block_pos).await.unwrap();
-        block_state.is_air()
-            && Self::can_place_on(&world.get_block(&block_pos.down()).await.unwrap())
+        let block_state = world.get_block_state(block_pos).await;
+        block_state.is_air() && Self::can_place_on(&world.get_block(&block_pos.down()).await)
     }
 
     async fn broken(world: Arc<World>, block_pos: BlockPos) {

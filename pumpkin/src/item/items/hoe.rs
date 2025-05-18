@@ -61,11 +61,7 @@ impl PumpkinItem for HoeItem {
                 if (block == &Block::GRASS_BLOCK
                     || block == &Block::DIRT_PATH
                     || block == &Block::DIRT)
-                    && world
-                        .get_block_state(&location.up())
-                        .await
-                        .unwrap()
-                        .is_air()
+                    && world.get_block_state(&location.up()).await.is_air()
                 {
                     future_block = &Block::FARMLAND;
                 }

@@ -112,18 +112,16 @@ impl CommandExecutor for Executor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3 { x, y, z });
-                            match world.get_block_state(&block_position).await {
-                                Ok(old_state) if old_state.is_air() => {
-                                    world
-                                        .set_block_state(
-                                            &block_position,
-                                            block_state_id,
-                                            BlockFlags::FORCE_STATE,
-                                        )
-                                        .await;
-                                    placed_blocks += 1;
-                                }
-                                _ => {}
+                            let old_state = world.get_block_state(&block_position).await;
+                            if old_state.is_air() {
+                                world
+                                    .set_block_state(
+                                        &block_position,
+                                        block_state_id,
+                                        BlockFlags::FORCE_STATE,
+                                    )
+                                    .await;
+                                placed_blocks += 1;
                             }
                         }
                     }

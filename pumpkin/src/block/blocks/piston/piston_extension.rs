@@ -34,7 +34,7 @@ impl PumpkinBlock for PistonExtensionBlock {
     ) {
         let props = MovingPistonProps::from_state_id(state.id, &Block::MOVING_PISTON);
         let pos = location.offset(props.facing.opposite().to_block_direction().to_offset());
-        let (new_block, new_state) = world.get_block_and_block_state(&pos).await.unwrap();
+        let (new_block, new_state) = world.get_block_and_block_state(&pos).await;
         if PistonBlock::ids(&PistonBlock).contains(&new_block.name) {
             let props = PistonProps::from_state_id(new_state.id, &new_block);
             if props.extended {

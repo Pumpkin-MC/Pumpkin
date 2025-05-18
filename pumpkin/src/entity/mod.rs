@@ -1,7 +1,4 @@
-use crate::{
-    server::Server,
-    world::portal::{Portal, PortalManager},
-};
+use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
 use core::f32;
@@ -36,7 +33,7 @@ use std::sync::{
     Arc,
     atomic::{
         AtomicBool, AtomicI32, AtomicU32,
-        Ordering::{self, Relaxed, SeqCst},
+        Ordering::{self, Relaxed},
     },
 };
 use tokio::sync::{Mutex, RwLock};
@@ -67,7 +64,7 @@ pub trait EntityBase: Send + Sync {
     /// but in some scenarios (e.g., interactions or events), it might be a different entity.
     ///
     /// The `server` parameter provides access to the game server instance.
-    async fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         if let Some(living) = self.get_living_entity() {
             living.tick(caller, server).await;
         } else {
@@ -76,6 +73,18 @@ pub trait EntityBase: Send + Sync {
     }
 
     async fn init_data_tracker(&self) {}
+
+    async fn teleport(
+        self: Arc<Self>,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.get_entity()
+            .teleport(position, yaw, pitch, world)
+            .await;
+    }
 
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
@@ -138,10 +147,11 @@ pub struct Entity {
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
     pub damage_immunities: Vec<DamageType>,
+    pub fire_ticks: AtomicI32,
+    pub has_visual_fire: AtomicBool,
 
     pub portal_cooldown: AtomicU32,
 
-    // :c
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
 }
 
@@ -189,6 +199,8 @@ impl Entity {
             bounding_box_size: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
+            fire_ticks: AtomicI32::new(-1),
+            has_visual_fire: AtomicBool::new(false),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
         }
@@ -288,24 +300,6 @@ impl Entity {
             .await;
     }
 
-    pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        self.world
-            .read()
-            .await
-            .broadcast_packet_all(&CEntityPositionSync::new(
-                self.entity_id.into(),
-                position,
-                Vector3::new(0.0, 0.0, 0.0),
-                yaw,
-                pitch,
-                // TODO
-                self.on_ground.load(SeqCst),
-            ))
-            .await;
-        self.set_pos(position);
-        self.set_rotation(yaw, pitch);
-    }
-
     fn default_portal_cooldown(&self) -> u32 {
         if self.entity_type == EntityType::PLAYER {
             10
@@ -314,7 +308,7 @@ impl Entity {
         }
     }
 
-    async fn tick_portal(&self) {
+    async fn tick_portal(&self, caller: &Arc<dyn EntityBase>) {
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
         }
@@ -327,8 +321,11 @@ impl Entity {
                 // reset cooldown
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
-                //let world = portal_manager.portal.get_world(self);
-            } else {
+                caller
+                    .clone()
+                    .teleport(None, None, None, portal_manager.portal_world.clone())
+                    .await;
+            } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }
         }
@@ -337,7 +334,7 @@ impl Entity {
         }
     }
 
-    pub async fn try_use_portal(&self, portal: Arc<dyn Portal>, pos: BlockPos) {
+    pub async fn try_use_portal(&self, portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown
                 .store(self.default_portal_cooldown(), Ordering::Relaxed);
@@ -345,12 +342,32 @@ impl Entity {
         }
         let mut manager = self.portal_manager.lock().await;
         if manager.is_none() {
-            *manager = Some(Mutex::new(PortalManager::new(portal, pos)));
+            *manager = Some(Mutex::new(PortalManager::new(
+                portal_delay,
+                portal_world,
+                pos,
+            )));
         } else if let Some(manager) = manager.as_ref() {
             let mut manager = manager.lock().await;
             manager.pos = pos;
             manager.in_portal = true;
         }
+    }
+
+    /// Extinguishes this entity.
+    pub fn extinguish(&self) {
+        self.fire_ticks.store(0, Ordering::Relaxed);
+    }
+
+    pub fn set_on_fire_for(&self, seconds: f32) {
+        self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
+    }
+
+    pub fn set_on_fire_for_ticks(&self, ticks: u32) {
+        if self.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
+            self.fire_ticks.store(ticks as i32, Ordering::Relaxed);
+        }
+        // TODO: defrost
     }
 
     /// Sets the `Entity` yaw & pitch rotation
@@ -421,6 +438,13 @@ impl Entity {
             self.set_pose(EntityPose::Crouching).await;
         } else {
             self.set_pose(EntityPose::Standing).await;
+        }
+    }
+
+    pub async fn set_on_fire(&self, on_fire: bool) {
+        if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
+            self.has_visual_fire.store(on_fire, Ordering::Relaxed);
+            self.set_flag(Flag::OnFire, on_fire).await;
         }
     }
 
@@ -548,7 +572,7 @@ impl Entity {
         // }
     }
 
-    pub async fn check_block_collision(entity: &dyn EntityBase) {
+    pub async fn check_block_collision(entity: &dyn EntityBase, server: &Server) {
         let aabb = entity.get_entity().bounding_box.load();
         let blockpos = BlockPos::new(
             (aabb.min.x + 0.001).floor() as i32,
@@ -566,15 +590,43 @@ impl Entity {
             for y in blockpos.0.y..=blockpos1.0.y {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
-                    if let Ok((block, state)) = world.get_block_and_block_state(&pos).await {
+                    let (block, state) = world.get_block_and_block_state(&pos).await;
+                    world
+                        .block_registry
+                        .on_entity_collision(block, &world, entity, pos, state, server)
+                        .await;
+                    if let Ok(fluid) = world.get_fluid(&pos).await {
                         world
                             .block_registry
-                            .on_entity_collision(block, &world, entity, pos, state)
+                            .on_entity_collision_fluid(&fluid, entity)
                             .await;
                     }
                 }
             }
         }
+    }
+
+    async fn teleport(
+        &self,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        _world: Arc<World>,
+    ) {
+        dbg!("aa");
+        // TODO: handle world change
+        self.world
+            .read()
+            .await
+            .broadcast_packet_all(&CEntityPositionSync::new(
+                self.entity_id.into(),
+                position.unwrap_or(Vector3::new(0.0, 0.0, 0.0)),
+                Vector3::new(0.0, 0.0, 0.0),
+                yaw.unwrap_or(0.0),
+                pitch.unwrap_or(0.0),
+                self.on_ground.load(Ordering::SeqCst),
+            ))
+            .await;
     }
 }
 
@@ -584,9 +636,37 @@ impl EntityBase for Entity {
         false
     }
 
-    async fn tick(&self, _caller: &dyn EntityBase, _: &Server) {
-        self.tick_portal().await;
+    async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
+        self.tick_portal(&caller).await;
+        let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+        if fire_ticks > 0 {
+            if self.entity_type.fire_immune {
+                self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
+                if self.fire_ticks.load(Ordering::Relaxed) < 0 {
+                    self.extinguish();
+                }
+            } else {
+                if fire_ticks % 20 == 0 {
+                    caller.damage(1.0, DamageType::ON_FIRE).await;
+                }
+
+                self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
+            }
+        }
+        self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
+            .await;
         // TODO: Tick
+    }
+
+    async fn teleport(
+        self: Arc<Self>,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        // TODO: handle world change
+        self.teleport(position, yaw, pitch, world).await;
     }
 
     fn get_entity(&self) -> &Entity {
@@ -619,7 +699,13 @@ impl NBTStorage for Entity {
             "Rotation",
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
         );
+        nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
+        nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
+        nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
+        if self.has_visual_fire.load(Relaxed) {
+            nbt.put_bool("HasVisualFire", true);
+        }
 
         // todo more...
     }
@@ -640,19 +726,32 @@ impl NBTStorage for Entity {
         let pitch = rotation[1].extract_float().unwrap_or(0.0);
         self.set_rotation(yaw, pitch);
         self.head_yaw.store(yaw);
+        self.fire_ticks
+            .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
         self.on_ground
             .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
+        self.invulnerable
+            .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
+        self.portal_cooldown
+            .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
+        self.has_visual_fire
+            .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
         // todo more...
     }
 }
 
 #[async_trait]
-pub trait NBTStorage: Send + Sync {
+pub trait NBTStorage: Send + Sync + Sized {
     async fn write_nbt(&self, nbt: &mut NbtCompound);
 
     async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
 
     async fn read_nbt_non_mut(&self, _nbt: &mut NbtCompound) {}
+
+    /// Creates an instance of the type from NBT data. If the NBT data is invalid or cannot be parsed, it returns `None`.
+    async fn create_from_nbt(_nbt: &mut NbtCompound) -> Option<Self> {
+        None
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

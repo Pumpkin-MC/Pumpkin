@@ -64,7 +64,7 @@ impl ExperienceOrbEntity {
 
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {
-    async fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         self.entity.tick(caller, server).await;
 
         let age = self

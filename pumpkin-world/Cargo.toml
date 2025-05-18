@@ -49,7 +49,7 @@ lru = "0.14.0"
 tokio-util = { version = "0.7.15", features = ["rt"] }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+criterion = { version = "0.6", features = ["html_reports", "async_tokio"] }
 temp-dir = "0.1.16"
 # Print log info inside tests when needed
 env_logger = "0.11.8"

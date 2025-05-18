@@ -46,12 +46,7 @@ impl PumpkinItem for ShovelItem {
             || block == &Block::MYCELIUM
         {
             let world = player.world().await;
-            if face != BlockDirection::Down
-                && world
-                    .get_block_state(&location.up())
-                    .await
-                    .unwrap()
-                    .is_air()
+            if face != BlockDirection::Down && world.get_block_state(&location.up()).await.is_air()
             {
                 world
                     .set_block_state(
