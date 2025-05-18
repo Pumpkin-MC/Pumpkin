@@ -169,7 +169,7 @@ impl ChunkSerializer for LinearFile {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
-        format!("./r.{}.{}.linear", region_x, region_z)
+        format!("./r.{region_x}.{region_z}.linear")
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
@@ -318,6 +318,7 @@ impl ChunkSerializer for LinearFile {
     async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
         let index = LinearFile::get_chunk_index(&chunk.position);
         let chunk_raw: Bytes = chunk_to_bytes(chunk)
+            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
             .into();
 
@@ -375,6 +376,7 @@ mod tests {
     use crate::chunk::format::linear::LinearFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
     use crate::chunk::io::{ChunkIO, LoadedData};
+    use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::LevelFolder;
 
@@ -408,7 +410,7 @@ mod tests {
     async fn test_writing() {
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {

@@ -68,7 +68,7 @@ pub(crate) fn build() -> TokenStream {
         let data = &entry.components;
         let death_message_type = match &data.death_message_type {
             Some(msg) => {
-                let msg_ident = Ident::new(&format!("{:?}", msg), proc_macro2::Span::call_site());
+                let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
                 quote! { Some(DeathMessageType::#msg_ident) }
             }
             None => quote! { None },
@@ -76,7 +76,7 @@ pub(crate) fn build() -> TokenStream {
 
         let effects = match &data.effects {
             Some(msg) => {
-                let msg_ident = Ident::new(&format!("{:?}", msg), proc_macro2::Span::call_site());
+                let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
                 quote! { Some(DamageEffects::#msg_ident) }
             }
             None => quote! { None },

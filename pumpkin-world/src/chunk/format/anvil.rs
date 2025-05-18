@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+use futures::future::join_all;
 use itertools::Itertools;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{block::Block, chunk::ChunkStatus};
-use pumpkin_nbt::serializer::to_bytes;
+use pumpkin_data::{Block, chunk::ChunkStatus};
+use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
@@ -26,7 +27,7 @@ use crate::{
     generation::section_coords,
 };
 
-use super::{ChunkNbt, ChunkSectionNBT, SerializedScheduledTick};
+use super::{ChunkNbt, ChunkSectionNBT, LightContainer, SerializedScheduledTick};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -316,11 +317,12 @@ impl AnvilChunkData {
         Ok(chunk)
     }
 
-    fn from_chunk(
+    async fn from_chunk(
         chunk: &ChunkData,
         compression: Option<Compression>,
     ) -> Result<Self, ChunkWritingError> {
         let raw_bytes = chunk_to_bytes(chunk)
+            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression
@@ -352,7 +354,7 @@ impl AnvilChunkFile {
     }
 
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
-        log::trace!("Writing in place: {:?}", path);
+        log::trace!("Writing in place: {path:?}");
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -452,7 +454,7 @@ impl AnvilChunkFile {
     /// Write entire file, disregarding saved offsets
     async fn write_all(&self, path: &Path) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+        log::trace!("Writing tmp file to disk: {temp_path:?}");
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -498,7 +500,7 @@ impl AnvilChunkFile {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {:?}", path);
+        log::trace!("Wrote file to Disk: {path:?}");
         Ok(())
     }
 }
@@ -525,17 +527,14 @@ impl ChunkSerializer for AnvilChunkFile {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = Self::get_region_coords(chunk);
-        format!("./r.{}.{}.mca", region_x, region_z)
+        format!("./r.{region_x}.{region_z}.mca")
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!(
-                    "Skipping write for {:?} as there were no dirty chunks",
-                    path
-                );
+                log::debug!("Skipping write for {path:?} as there were no dirty chunks");
                 Ok(())
             }
             WriteAction::All => self.write_all(&path).await,
@@ -622,7 +621,7 @@ impl ChunkSerializer for AnvilChunkFile {
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type)?;
+        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type).await?;
 
         let mut write_action = self.write_action.lock().await;
         if !advanced_config().chunk.write_in_place {
@@ -755,11 +754,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 let offset = new_sectors as i64 - swapped_sectors as i64;
 
                                 log::trace!(
-                                    "Swapping {} with {}, shifting all chunks {} and after by {}",
-                                    index,
-                                    swapped_index,
-                                    swapped_index,
-                                    offset
+                                    "Swapping {index} with {swapped_index}, shifting all chunks {swapped_index} and after by {offset}"
                                 );
 
                                 for shift_index in indices_to_shift {
@@ -816,21 +811,34 @@ impl ChunkSerializer for AnvilChunkFile {
     }
 }
 
-pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
-    let mut sections = Vec::new();
+pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
+    let sections: Vec<_> = (0..chunk_data.section.sections.len() + 2)
+        .map(|i| {
+            let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
+            let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
 
-    for (i, section) in chunk_data.section.sections.iter().enumerate() {
-        let block_states = section.block_states.to_disk_nbt();
-        let biomes = section.biomes.to_disk_nbt();
-
-        sections.push(ChunkSectionNBT {
-            y: i as i8 + section_coords::block_to_section(chunk_data.section.min_y) as i8,
-            block_states,
-            biomes,
-            block_light: section.block_light.clone(), // :c
-            sky_light: section.sky_light.clone(),     // :c
-        });
-    }
+            ChunkSectionNBT {
+                y: (i as i8) - 1i8
+                    + section_coords::block_to_section(chunk_data.section.min_y) as i8,
+                block_states: section.map(|section| section.block_states.to_disk_nbt()),
+                biomes: section.map(|section| section.biomes.to_disk_nbt()),
+                block_light: match chunk_data.light_engine.block_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+                sky_light: match chunk_data.light_engine.sky_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+            }
+        })
+        .filter(|nbt| {
+            nbt.block_states.is_some()
+                || nbt.biomes.is_some()
+                || nbt.block_light.is_some()
+                || nbt.sky_light.is_some()
+        })
+        .collect();
 
     let nbt = ChunkNbt {
         data_version: WORLD_DATA_VERSION,
@@ -874,6 +882,16 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 })
                 .collect()
         },
+        block_entities: join_all(chunk_data.block_entities.values().map(
+            |block_entity| async move {
+                let mut nbt = NbtCompound::new();
+                block_entity.1.write_internal(&mut nbt).await;
+                nbt
+            },
+        ))
+        .await,
+        // we have not implemented light engine
+        light_correct: false,
     };
 
     let mut result = Vec::new();
@@ -894,6 +912,7 @@ mod tests {
     use crate::chunk::format::anvil::AnvilChunkFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
     use crate::chunk::io::{ChunkIO, LoadedData};
+    use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::{LevelFolder, SyncChunk};
 
@@ -921,7 +940,7 @@ mod tests {
                 LoadedData::Loaded(chunk) => chunk,
                 LoadedData::Missing(_) => panic!("Missing chunk"),
                 LoadedData::Error((position, error)) => {
-                    panic!("Error reading chunk at {:?} | Error: {:?}", position, error)
+                    panic!("Error reading chunk at {position:?} | Error: {error:?}")
                 }
             })
             .collect::<Vec<_>>();
@@ -964,7 +983,7 @@ mod tests {
 
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
@@ -1009,7 +1028,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1022,7 +1041,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
                     break;
@@ -1067,7 +1086,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1080,7 +1099,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1140,7 +1159,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1153,7 +1172,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1201,7 +1220,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1214,7 +1233,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
                     break;
@@ -1232,7 +1251,7 @@ mod tests {
 
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
@@ -1282,7 +1301,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {o}, got {r} ({i})");
                                 }
                             });
 
@@ -1295,7 +1314,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {o}, got {r} ({i})");
                                 }
                             });
                         break;

@@ -9,7 +9,7 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_OPEN_SCREEN)]
 pub struct COpenScreen<'a> {
-    window_id: VarInt,
+    sync_id: VarInt,
     window_type: VarInt,
     window_title: &'a TextComponent,
 }
@@ -17,7 +17,7 @@ pub struct COpenScreen<'a> {
 impl<'a> COpenScreen<'a> {
     pub fn new(window_id: VarInt, window_type: VarInt, window_title: &'a TextComponent) -> Self {
         Self {
-            window_id,
+            sync_id: window_id,
             window_type,
             window_title,
         }

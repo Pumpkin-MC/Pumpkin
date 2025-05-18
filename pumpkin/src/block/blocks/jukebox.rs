@@ -4,13 +4,18 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockProperties, BlockState, Boolean, JukeboxLikeProperties};
 use pumpkin_data::item::Item;
+use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, JukeboxLikeProperties},
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:jukebox")]
 pub struct JukeboxBlock;
@@ -22,7 +27,7 @@ impl JukeboxBlock {
             .await
             .expect("`location` should be a jukebox")
             .id;
-        JukeboxLikeProperties::from_state_id(state_id, block).has_record == Boolean::True
+        JukeboxLikeProperties::from_state_id(state_id, block).has_record
     }
 
     async fn set_record(
@@ -32,21 +37,17 @@ impl JukeboxBlock {
         location: BlockPos,
         world: &Arc<World>,
     ) {
-        let new_state = JukeboxLikeProperties {
-            has_record: if has_record {
-                Boolean::True
-            } else {
-                Boolean::False
-            },
-        };
+        let new_state = JukeboxLikeProperties { has_record };
         world
             .set_block_state(&location, new_state.to_state_id(block), BlockFlags::empty())
             .await;
     }
 
-    async fn stop_music(&self, block: &Block, location: BlockPos, world: &Arc<World>) {
-        self.set_record(false, block, location, world).await;
-        world.stop_record(location).await;
+    async fn stop_music(&self, block: &Block, position: BlockPos, world: &Arc<World>) {
+        self.set_record(false, block, position, world).await;
+        world
+            .sync_world_event(WorldEvent::JukeboxStopsPlaying, position, 0)
+            .await;
     }
 }
 
@@ -98,7 +99,13 @@ impl PumpkinBlock for JukeboxBlock {
         //TODO: Update block nbt
 
         self.set_record(true, block, location, world).await;
-        world.play_record(jukebox_song as i32, location).await;
+        world
+            .sync_world_event(
+                WorldEvent::JukeboxStartsPlaying,
+                location,
+                jukebox_song as i32,
+            )
+            .await;
 
         BlockActionResult::Consume
     }
@@ -106,13 +113,15 @@ impl PumpkinBlock for JukeboxBlock {
     async fn broken(
         &self,
         _block: &Block,
-        _player: &Player,
-        location: BlockPos,
+        _player: &Arc<Player>,
+        position: BlockPos,
         _server: &Server,
         world: Arc<World>,
         _state: BlockState,
     ) {
         // For now just stop the music at this position
-        world.stop_record(location).await;
+        world
+            .sync_world_event(WorldEvent::JukeboxStopsPlaying, position, 0)
+            .await;
     }
 }

@@ -2,14 +2,15 @@ use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
-use crate::world::BlockFlags;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 pub struct HoeItem;
@@ -36,7 +37,7 @@ impl PumpkinItem for HoeItem {
         _item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
@@ -51,7 +52,7 @@ impl PumpkinItem for HoeItem {
             let world = player.world().await;
 
             //Only rooted can be right-clicked on the bottom of the block
-            if face == &BlockDirection::Down {
+            if face == BlockDirection::Down {
                 if block == &Block::ROOTED_DIRT {
                     future_block = &Block::DIRT;
                 }
@@ -60,7 +61,11 @@ impl PumpkinItem for HoeItem {
                 if (block == &Block::GRASS_BLOCK
                     || block == &Block::DIRT_PATH
                     || block == &Block::DIRT)
-                    && world.get_block_state(&location.up()).await.unwrap().air
+                    && world
+                        .get_block_state(&location.up())
+                        .await
+                        .unwrap()
+                        .is_air()
                 {
                     future_block = &Block::FARMLAND;
                 }
@@ -90,10 +95,10 @@ impl PumpkinItem for HoeItem {
                 };
                 let entity = world.create_entity(location, EntityType::ITEM);
                 // TODO: Merge stacks together
-                let item_entity =
-                    Arc::new(ItemEntity::new(entity, Block::HANGING_ROOTS.item_id, 1).await);
-                world.spawn_entity(item_entity.clone()).await;
-                item_entity.send_meta_packet().await;
+                let item_entity = Arc::new(
+                    ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,
+                );
+                world.spawn_entity(item_entity).await;
             }
         }
     }

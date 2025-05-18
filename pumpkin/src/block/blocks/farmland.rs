@@ -1,17 +1,19 @@
 use std::sync::Arc;
 
+use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::block::Block;
-use pumpkin_data::block::HorizontalFacing;
+use pumpkin_data::Block;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:farmland")]
 pub struct FarmLandBlock;
@@ -29,14 +31,14 @@ impl PumpkinBlock for FarmLandBlock {
         &self,
         _server: &Server,
         world: &World,
+        _player_direction: &Player,
         block: &Block,
-        _face: &BlockDirection,
         pos: &BlockPos,
+        _face: BlockDirection,
+        _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
-        _other: bool,
-    ) -> u16 {
-        if !self.can_place_at(world, pos).await {
+    ) -> BlockStateId {
+        if !can_place_at(world, pos).await {
             return Block::DIRT.default_state_id;
         }
         block.default_state_id
@@ -46,13 +48,13 @@ impl PumpkinBlock for FarmLandBlock {
         &self,
         world: &World,
         block: &Block,
-        state: u16,
+        state: BlockStateId,
         pos: &BlockPos,
-        direction: &BlockDirection,
+        direction: BlockDirection,
         _neighbor_pos: &BlockPos,
-        _neighbor_state: u16,
-    ) -> u16 {
-        if direction == &BlockDirection::Up && !self.can_place_at(world, pos).await {
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        if direction == BlockDirection::Up && !can_place_at(world, pos).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
@@ -60,8 +62,21 @@ impl PumpkinBlock for FarmLandBlock {
         state
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos) -> bool {
-        let state = world.get_block_state(&pos.up()).await.unwrap();
-        !state.is_solid // TODO: add fence gata block
+    async fn can_place_at(
+        &self,
+        _server: &Server,
+        world: &World,
+        _player: &Player,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: &SUseItemOn,
+    ) -> bool {
+        can_place_at(world, block_pos).await
     }
+}
+
+async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+    let state = world.get_block_state(&block_pos.up()).await.unwrap();
+    !state.is_solid() // TODO: add fence gate block
 }

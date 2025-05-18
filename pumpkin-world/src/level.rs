@@ -1,5 +1,4 @@
 use std::{
-    fs,
     path::PathBuf,
     sync::{
         Arc,
@@ -24,12 +23,9 @@ use crate::{
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
+    dimension::Dimension,
     generation::{Seed, WorldGenerator, get_world_gen},
-    lock::{LevelLocker, anvil::AnvilLevelLocker},
-    world_info::{
-        LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
-        anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME},
-    },
+    world::SimpleWorld,
 };
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -45,8 +41,6 @@ pub type SyncChunk = Arc<RwLock<ChunkData>>;
 /// For more details on world generation, refer to the `WorldGenerator` module.
 pub struct Level {
     pub seed: Seed,
-    pub level_info: LevelData,
-    world_info_writer: Arc<dyn WorldInfoWriter>,
     level_folder: LevelFolder,
 
     // Holds this level's spawn chunks, which are always loaded
@@ -54,14 +48,12 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
     world_gen: Arc<dyn WorldGenerator>,
-    // Gets unlocked when dropped
-    // TODO: Make this a trait
-    _locker: Arc<AnvilLevelLocker>,
+
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     fluid_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     /// Tracks tasks associated with this world instance
@@ -77,7 +69,7 @@ pub struct LevelFolder {
 }
 
 impl Level {
-    pub fn from_root_folder(root_folder: PathBuf) -> Self {
+    pub fn from_root_folder(root_folder: PathBuf, seed: i64, dimension: Dimension) -> Self {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
         if !region_folder.exists() {
@@ -88,41 +80,10 @@ impl Level {
             region_folder,
         };
 
-        // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
-        // So TODO
-        let locker = AnvilLevelLocker::look(&level_folder).expect("Failed to lock level");
-
         // TODO: Load info correctly based on world format type
-        let level_info = AnvilLevelInfo.read_world_info(&level_folder);
-        if let Err(error) = &level_info {
-            match error {
-                // If it doesn't exist, just make a new one
-                WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedVersion(version) => {
-                    log::error!("Failed to load world info!, {version}");
-                    log::error!("{}", error);
-                    panic!("Unsupported world data! See the logs for more info.");
-                }
-                e => {
-                    panic!("World Error {}", e);
-                }
-            }
-        } else {
-            let dat_path = level_folder.root_folder.join(LEVEL_DAT_FILE_NAME);
-            if dat_path.exists() {
-                let backup_path = level_folder.root_folder.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
-            }
-        }
 
-        let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
-        log::info!(
-            "Loading world with seed: {}",
-            level_info.world_gen_settings.seed
-        );
-
-        let seed = Seed(level_info.world_gen_settings.seed as u64);
-        let world_gen = get_world_gen(seed).into();
+        let seed = Seed(seed as u64);
+        let world_gen = get_world_gen(seed, dimension).into();
 
         let chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
@@ -133,14 +94,11 @@ impl Level {
         Self {
             seed,
             world_gen,
-            world_info_writer: Arc::new(AnvilLevelInfo),
             level_folder,
             chunk_saver,
             spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
-            level_info,
-            _locker: Arc::new(locker),
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             block_ticks: Arc::new(Mutex::new(Vec::new())),
@@ -181,16 +139,6 @@ impl Level {
         // TODO: I think the chunk_saver should be at the server level
         self.chunk_saver.clear_watched_chunks().await;
         self.write_chunks(chunks_to_write).await;
-
-        // then lets save the world info
-        let result = self
-            .world_info_writer
-            .write_world_info(self.level_info.clone(), &self.level_folder);
-
-        // Lets not stop the overall save for this
-        if let Err(err) = result {
-            log::error!("Failed to save level.dat: {}", err);
-        }
     }
 
     pub fn loaded_chunk_count(&self) -> usize {
@@ -212,7 +160,7 @@ impl Level {
     /// before
     pub async fn mark_chunks_as_newly_watched(&self, chunks: &[Vector2<i32>]) {
         for chunk in chunks {
-            log::trace!("{:?} marked as newly watched", chunk);
+            log::trace!("{chunk:?} marked as newly watched");
             match self.chunk_watchers.entry(*chunk) {
                 Entry::Occupied(mut occupied) => {
                     let value = occupied.get_mut();
@@ -220,7 +168,7 @@ impl Level {
                         *value = new_value;
                         //log::debug!("Watch value for {:?}: {}", chunk, value);
                     } else {
-                        log::error!("Watching overflow on chunk {:?}", chunk);
+                        log::error!("Watching overflow on chunk {chunk:?}");
                     }
                 }
                 Entry::Vacant(vacant) => {
@@ -245,7 +193,7 @@ impl Level {
         let mut chunks_to_clean = Vec::new();
 
         for chunk in chunks {
-            log::trace!("{:?} marked as no longer watched", chunk);
+            log::trace!("{chunk:?} marked as no longer watched");
             match self.chunk_watchers.entry(*chunk) {
                 Entry::Occupied(mut occupied) => {
                     let value = occupied.get_mut();
@@ -321,6 +269,17 @@ impl Level {
         });
     }
 
+    pub async fn tick_block_entities(&self, world: Arc<dyn SimpleWorld>) {
+        for chunk in self.loaded_chunks.iter() {
+            let chunk = chunk.read().await;
+            let cloned_entities = chunk.block_entities.clone();
+            drop(chunk);
+            for block_entity in &cloned_entities {
+                block_entity.1.1.tick(&world).await;
+            }
+        }
+    }
+
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
         self.clean_chunks(&[*chunk]).await;
     }
@@ -391,7 +350,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {}", error);
+            log::error!("Failed writing Chunk to disk {error}");
         }
     }
 
@@ -501,9 +460,7 @@ impl Level {
                             // this is an error, and we should log it
                             error => {
                                 log::error!(
-                                    "Failed to load chunk at {:?}: {} (regenerating)",
-                                    pos,
-                                    error
+                                    "Failed to load chunk at {pos:?}: {error} (regenerating)"
                                 );
                             }
                         };

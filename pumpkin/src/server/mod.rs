@@ -2,7 +2,7 @@ use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
-use crate::entity::EntityId;
+use crate::entity::NBTStorage;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -15,22 +15,25 @@ use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::Block;
-use pumpkin_inventory::drag_handler::DragHandler;
-use pumpkin_inventory::{Container, OpenContainer};
+
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
+use pumpkin_world::lock::LevelLocker;
+use pumpkin_world::lock::anvil::AnvilLevelLocker;
+use pumpkin_world::world_info::anvil::{
+    AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
+};
+use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::prelude::SliceRandom;
 use rsa::RsaPublicKey;
-use std::collections::HashMap;
+use std::fs;
 use std::net::IpAddr;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::{
     sync::{Arc, atomic::Ordering},
     time::Duration,
@@ -62,14 +65,10 @@ pub struct Server {
     pub item_registry: Arc<ItemRegistry>,
     /// Manages multiple worlds within the server.
     pub worlds: RwLock<Vec<Arc<World>>>,
-    // All the dimensions that exist on the server.
+    /// All the dimensions that exist on the server.
     pub dimensions: Vec<DimensionType>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
-    /// Tracks open containers used for item interactions.
-    // TODO: should have per player open_containers
-    pub open_containers: RwLock<HashMap<u64, OpenContainer>>,
-    pub drag_handler: DragHandler,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     /// Manages authentication with an authentication server, if enabled.
@@ -83,7 +82,16 @@ pub struct Server {
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    // Whether the server whitelist is on or off
+    pub white_list: AtomicBool,
     tasks: TaskTracker,
+
+    // world stuff which maybe should be put into a struct
+    pub level_info: Arc<LevelData>,
+    world_info_writer: Arc<dyn WorldInfoWriter>,
+    // Gets unlocked when dropped
+    // TODO: Make this a trait
+    _locker: Arc<AnvilLevelLocker>,
 }
 
 impl Server {
@@ -108,20 +116,62 @@ impl Server {
 
         let block_registry = super::block::default_registry();
 
-        let world = World::load(
-            Dimension::Overworld.into_level(world_path.clone()),
+        let level_info = AnvilLevelInfo.read_world_info(&world_path);
+        if let Err(error) = &level_info {
+            match error {
+                // If it doesn't exist, just make a new one
+                WorldInfoError::InfoNotFound => (),
+                WorldInfoError::UnsupportedVersion(version) => {
+                    log::error!("Failed to load world info!, {version}");
+                    log::error!("{error}");
+                    panic!("Unsupported world data! See the logs for more info.");
+                }
+                e => {
+                    panic!("World Error {e}");
+                }
+            }
+        } else {
+            let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
+            if dat_path.exists() {
+                let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
+                fs::copy(dat_path, backup_path).unwrap();
+            }
+        }
+
+        let level_info = Arc::new(level_info.unwrap_or_default()); // TODO: Improve error handling
+        let seed = level_info.world_gen_settings.seed;
+        log::info!("Loading Overworld: {seed}");
+        let overworld = World::load(
+            Dimension::Overworld.into_level(world_path.clone(), seed),
+            level_info.clone(),
             DimensionType::Overworld,
             block_registry.clone(),
         );
+        log::info!("Loading Nether: {seed}");
+        let nether = World::load(
+            Dimension::Nether.into_level(world_path.clone(), seed),
+            level_info.clone(),
+            DimensionType::TheNether,
+            block_registry.clone(),
+        );
+        // log::info!("Loading End: {}", seed);
+        // let end = World::load(
+        //     Dimension::End.into_level(world_path.clone(), seed),
+        //     level_info.clone(),
+        //     DimensionType::TheEnd,
+        //     block_registry.clone(),
+        // );
+
+        // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
+        // So TODO
+        let locker = AnvilLevelLocker::look(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
         Self {
             cached_registry: Registry::get_synced(),
-            open_containers: RwLock::new(HashMap::new()),
-            drag_handler: DragHandler::new(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(world)]),
+            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether)]),
             dimensions: vec![
                 DimensionType::Overworld,
                 DimensionType::OverworldCaves,
@@ -143,8 +193,12 @@ impl Server {
                 format!("{world_name}/playerdata"),
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
+            white_list: AtomicBool::new(BASIC_CONFIG.white_list),
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
+            world_info_writer: Arc::new(AnvilLevelInfo),
+            level_info,
+            _locker: Arc::new(locker),
         }
     }
 
@@ -170,6 +224,19 @@ impl Server {
         self.tasks.spawn(task)
     }
 
+    pub async fn get_world_from_dimension(&self, dimension: DimensionType) -> Arc<World> {
+        // TODO: this is really bad
+        let world_guard = self.worlds.read().await;
+        let world = match dimension {
+            DimensionType::Overworld => world_guard.first(),
+            DimensionType::OverworldCaves => todo!(),
+            DimensionType::TheEnd => todo!(),
+            DimensionType::TheNether => world_guard.get(1),
+        };
+        world.cloned().unwrap()
+    }
+
+    #[allow(clippy::if_then_some_else_none)]
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -197,19 +264,42 @@ impl Server {
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
     pub async fn add_player(&self, client: Client) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
-        // Basically the default world
-        // TODO: select default from config
-        let world = &self.worlds.read().await[0];
+        let uuid = client.gameprofile.lock().await.as_ref().unwrap().id;
+
+        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&uuid) {
+            if let Some(dimension_key) = data.get_string("Dimension") {
+                if let Some(dimension) = DimensionType::from_name(dimension_key) {
+                    let world = self.get_world_from_dimension(dimension).await;
+                    (world, Some(data))
+                } else {
+                    log::warn!("Invalid dimension key in player data: {dimension_key}");
+                    let default_world_guard = self.worlds.read().await;
+                    let default_world = default_world_guard
+                        .first()
+                        .expect("Default world should exist");
+                    (default_world.clone(), Some(data))
+                }
+            } else {
+                // Player data exists but doesn't have a "Dimension" key.
+                let default_world_guard = self.worlds.read().await;
+                let default_world = default_world_guard
+                    .first()
+                    .expect("Default world should exist");
+                (default_world.clone(), Some(data))
+            }
+        } else {
+            // No player data found or an error occurred, default to the Overworld.
+            let default_world_guard = self.worlds.read().await;
+            let default_world = default_world_guard
+                .first()
+                .expect("Default world should exist");
+            (default_world.clone(), None)
+        };
 
         let mut player = Player::new(client, world.clone(), gamemode).await;
 
-        // Load player data
-        if let Err(e) = self
-            .player_data_storage
-            .handle_player_join(&mut player)
-            .await
-        {
-            log::error!("Unexpected error loading player data: {e}");
+        if let Some(mut nbt_data) = nbt {
+            player.read_nbt(&mut nbt_data).await;
         }
 
         // Wrap in Arc after data is loaded
@@ -218,18 +308,22 @@ impl Server {
         send_cancellable! {{
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                world
+                player.screen_handler_sync_handler.store_player(player.clone()).await;
+                if world
                     .add_player(player.gameprofile.id, player.clone())
-                    .await;
-                // TODO: Config if we want increase online
-                if let Some(config) = player.client.config.lock().await.as_ref() {
-                    // TODO: Config so we can also just ignore this hehe
-                    if config.server_listing {
-                        self.listing.lock().await.add_player();
+                    .await.is_ok() {
+                    // TODO: Config if we want increase online
+                    if let Some(config) = player.client.config.lock().await.as_ref() {
+                        // TODO: Config so we can also just ignore this hehe
+                        if config.server_listing {
+                            self.listing.lock().await.add_player(&player);
+                        }
                     }
-                }
 
-                Some((player, world.clone()))
+                    Some((player, world.clone()))
+                } else {
+                    None
+                }
             }
 
             'cancelled: {
@@ -239,9 +333,9 @@ impl Server {
         }}
     }
 
-    pub async fn remove_player(&self) {
+    pub async fn remove_player(&self, player: &Player) {
         // TODO: Config if we want decrease online
-        self.listing.lock().await.remove_player();
+        self.listing.lock().await.remove_player(player);
     }
 
     pub async fn shutdown(&self) {
@@ -254,64 +348,14 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.shutdown().await;
         }
+        // then lets save the world info
+        if let Err(err) = self
+            .world_info_writer
+            .write_world_info(&self.level_info, &BASIC_CONFIG.get_world_path())
+        {
+            log::error!("Failed to save level.dat: {err}");
+        }
         log::info!("Completed worlds");
-    }
-
-    pub async fn try_get_container(
-        &self,
-        player_id: EntityId,
-        container_id: u64,
-    ) -> Option<Arc<Mutex<Box<dyn Container>>>> {
-        let open_containers = self.open_containers.read().await;
-        open_containers
-            .get(&container_id)?
-            .try_open(player_id)
-            .cloned()
-    }
-
-    /// Returns the first id with a matching location and block type. If this is used with unique
-    /// blocks, the output will return a random result.
-    pub async fn get_container_id(&self, location: BlockPos, block: Block) -> Option<u32> {
-        let open_containers = self.open_containers.read().await;
-        // TODO: do better than brute force
-        for (id, container) in open_containers.iter() {
-            if container.is_location(location) {
-                if let Some(container_block) = container.get_block() {
-                    if container_block.id == block.id {
-                        log::debug!("Found container id: {id}");
-                        return Some(*id as u32);
-                    }
-                }
-            }
-        }
-
-        drop(open_containers);
-
-        None
-    }
-
-    pub async fn get_all_container_ids(
-        &self,
-        location: BlockPos,
-        block: Block,
-    ) -> Option<Vec<u32>> {
-        let open_containers = self.open_containers.read().await;
-        let mut matching_container_ids: Vec<u32> = vec![];
-        // TODO: do better than brute force
-        for (id, container) in open_containers.iter() {
-            if container.is_location(location) {
-                if let Some(container_block) = container.get_block() {
-                    if container_block.id == block.id {
-                        log::debug!("Found matching container id: {id}");
-                        matching_container_ids.push(*id as u32);
-                    }
-                }
-            }
-        }
-
-        drop(open_containers);
-
-        Some(matching_container_ids)
     }
 
     /// Broadcasts a packet to all players in all worlds.

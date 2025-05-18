@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::entity::{EntityBase, player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::{BlockStateId, block::BlockDirection};
 
 use crate::{server::Server, world::World};
 
-use super::registry::BlockActionResult;
+use super::{BlockIsReplacing, registry::BlockActionResult};
 
 #[async_trait]
 pub trait PumpkinFluid: Send + Sync {
@@ -38,9 +38,9 @@ pub trait PumpkinFluid: Send + Sync {
         &self,
         _world: &World,
         _fluid: &Fluid,
-        _state_id: u16,
+        _state_id: BlockStateId,
         _block_pos: &BlockPos,
-        _old_state_id: u16,
+        _old_state_id: BlockStateId,
         _notify: bool,
     ) {
     }
@@ -51,11 +51,11 @@ pub trait PumpkinFluid: Send + Sync {
         _server: &Server,
         _world: &World,
         fluid: &Fluid,
-        _face: &BlockDirection,
+        _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _other: bool,
-    ) -> u16 {
+        _replacing: BlockIsReplacing,
+    ) -> BlockStateId {
         fluid.default_state_index
     }
 
@@ -65,7 +65,7 @@ pub trait PumpkinFluid: Send + Sync {
         _fluid: &Fluid,
         _block_pos: &BlockPos,
         _notify: bool,
-    ) -> u16 {
+    ) -> BlockStateId {
         0
     }
 
@@ -77,6 +77,8 @@ pub trait PumpkinFluid: Send + Sync {
         _notify: bool,
     ) {
     }
+
+    async fn on_entity_collision(&self, _entity: &dyn EntityBase) {}
 
     async fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
 

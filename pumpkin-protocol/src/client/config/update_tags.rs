@@ -6,12 +6,17 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_data::{
-    block::get_block,
+    block_properties::get_block,
     fluid::Fluid,
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::packet;
+use crate::{
+    ClientPacket,
+    codec::identifier::Identifier,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 #[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {

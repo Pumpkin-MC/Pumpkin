@@ -138,9 +138,9 @@ async fn handle_packet(
 
                             let plugin_manager = crate::PLUGIN_MANAGER.lock().await;
                             let plugins = plugin_manager
-                                .list_plugins()
-                                .iter()
-                                .map(|(meta, _)| meta.name.to_string())
+                                .active_plugins()
+                                .into_iter()
+                                .map(|meta| meta.name.to_string())
                                 .reduce(|acc, name| format!("{acc}, {name}"))
                                 .unwrap_or_default();
 

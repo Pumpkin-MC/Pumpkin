@@ -4,12 +4,12 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
-use crate::world::BlockFlags;
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::world::BlockFlags;
 
 const NAMES: [&str; 1] = ["fill"];
 
@@ -113,7 +113,7 @@ impl CommandExecutor for Executor {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3 { x, y, z });
                             match world.get_block_state(&block_position).await {
-                                Ok(old_state) if old_state.air => {
+                                Ok(old_state) if old_state.is_air() => {
                                     world
                                         .set_block_state(
                                             &block_position,

@@ -10,7 +10,7 @@ fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
 }
 
 fn property_group_name_from_derived_name(name: &str) -> String {
-    format!("{}_fluid_properties", name).to_upper_camel_case()
+    format!("{name}_fluid_properties").to_upper_camel_case()
 }
 
 struct PropertyVariantMapping {
@@ -55,7 +55,7 @@ impl ToTokens for PropertyStruct {
 
         let ident_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
-                format!("L{}", value)
+                format!("L{value}")
             } else {
                 value.clone()
             };
@@ -67,7 +67,7 @@ impl ToTokens for PropertyStruct {
 
         let from_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
-                format!("L{}", value)
+                format!("L{value}")
             } else {
                 value.clone()
             };
@@ -78,7 +78,7 @@ impl ToTokens for PropertyStruct {
         });
         let to_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
-                format!("L{}", value)
+                format!("L{value}")
             } else {
                 value.clone()
             };
@@ -345,7 +345,7 @@ pub(crate) fn build() -> TokenStream {
 
     let fluids: Vec<Fluid> = match serde_json::from_str(include_str!("../../assets/fluids.json")) {
         Ok(fluids) => fluids,
-        Err(e) => panic!("Failed to parse fluids.json: {}", e),
+        Err(e) => panic!("Failed to parse fluids.json: {e}"),
     };
 
     let mut constants = TokenStream::new();

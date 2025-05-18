@@ -40,10 +40,12 @@ mod time;
 mod title;
 mod transfer;
 mod weather;
+mod whitelist;
 mod worldborder;
 
 #[cfg(feature = "dhat-heap")]
 mod profile;
+mod tellraw;
 
 #[must_use]
 pub fn default_dispatcher() -> CommandDispatcher {
@@ -68,6 +70,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(seed::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(fill::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(playsound::init_command_tree(), PermissionLvl::Two);
+    dispatcher.register(tellraw::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(title::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(summon::init_command_tree(), PermissionLvl::Two);
     dispatcher.register(experience::init_command_tree(), PermissionLvl::Two);
@@ -90,6 +93,7 @@ pub fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(banlist::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(pardon::init_command_tree(), PermissionLvl::Three);
     dispatcher.register(pardonip::init_command_tree(), PermissionLvl::Three);
+    dispatcher.register(whitelist::init_command_tree(), PermissionLvl::Three);
     // Four
     dispatcher.register(stop::init_command_tree(), PermissionLvl::Four);
 

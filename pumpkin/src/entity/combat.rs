@@ -4,7 +4,6 @@ use pumpkin_data::{
 };
 use pumpkin_protocol::{client::play::CEntityVelocity, codec::var_int::VarInt};
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 
 use crate::{
     entity::{Entity, player::Player},
@@ -26,12 +25,8 @@ impl AttackType {
 
         let sprinting = entity.sprinting.load(std::sync::atomic::Ordering::Relaxed);
         let on_ground = entity.on_ground.load(std::sync::atomic::Ordering::Relaxed);
-        let sword = player
-            .inventory()
-            .lock()
-            .await
-            .held_item()
-            .is_some_and(ItemStack::is_sword);
+        let fall_distance = player.living_entity.fall_distance.load();
+        let sword = player.inventory().held_item().lock().await.is_sword();
 
         let is_strong = attack_cooldown_progress > 0.9;
         if sprinting && is_strong {
@@ -39,7 +34,7 @@ impl AttackType {
         }
 
         // TODO: even more checks
-        if is_strong && !on_ground {
+        if is_strong && !on_ground && fall_distance > 0.0 {
             // !sprinting omitted
             return Self::Critical;
         }

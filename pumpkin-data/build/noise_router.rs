@@ -1023,6 +1023,8 @@ pub(crate) fn build() -> TokenStream {
     let _ = reprs.end_islands;
 
     let overworld_router = reprs.overworld.into_token_stream();
+    let nether_router = reprs.nether.into_token_stream();
+    let end_router = reprs.end.into_token_stream();
 
     quote! {
         pub struct NoiseData {
@@ -1326,5 +1328,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
         pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = #overworld_router;
+        pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = #nether_router;
+        pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = #end_router;
     }
 }

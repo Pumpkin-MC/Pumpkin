@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::world::BlockFlags;
 
 use crate::command::args::block::BlockArgumentConsumer;
 use crate::command::args::position_block::BlockPosArgumentConsumer;
@@ -7,7 +8,6 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
-use crate::world::BlockFlags;
 
 const NAMES: [&str; 1] = ["setblock"];
 
@@ -74,7 +74,7 @@ impl CommandExecutor for Executor {
                 true
             }
             Mode::Keep => match world.get_block_state(&pos).await {
-                Ok(old_state) if old_state.air => {
+                Ok(old_state) if old_state.is_air() => {
                     world
                         .set_block_state(
                             &pos,

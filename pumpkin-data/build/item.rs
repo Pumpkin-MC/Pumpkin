@@ -16,8 +16,7 @@ pub struct Item {
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemComponents {
     #[serde(rename = "minecraft:item_name")]
-    // TODO: TextComponent
-    pub item_name: Option<TextComponent>,
+    pub item_name: TextComponent,
     #[serde(rename = "minecraft:max_stack_size")]
     pub max_stack_size: u8,
     #[serde(rename = "minecraft:jukebox_playable")]
@@ -45,14 +44,10 @@ impl ToTokens for ItemComponents {
             None => quote! { None },
         };
 
-        let item_name = match self.item_name.clone() {
-            Some(d) => {
-                // TODO: use text component
-                let text = d.get_text();
-                let item_name = LitStr::new(&text, Span::call_site());
-                quote! { Some(#item_name) }
-            }
-            None => quote! { None },
+        let item_name = {
+            let text = self.item_name.clone().get_text();
+            let item_name = LitStr::new(&text, Span::call_site());
+            quote! { #item_name }
         };
 
         let damage = match self.damage {
@@ -256,11 +251,11 @@ pub(crate) fn build() -> TokenStream {
         });
 
         type_from_raw_id_arms.extend(quote! {
-            #id_lit => Some(Self::#const_ident),
+            #id_lit => Some(&Self::#const_ident),
         });
 
         type_from_name.extend(quote! {
-            #name => Some(Self::#const_ident),
+            #name => Some(&Self::#const_ident),
         });
     }
 
@@ -283,7 +278,7 @@ pub(crate) fn build() -> TokenStream {
 
         #[derive(Clone, Copy, Debug)]
         pub struct ItemComponents {
-            pub item_name: Option<&'static str>,
+            pub item_name: &'static str,
             pub max_stack_size: u8,
             pub jukebox_playable: Option<&'static str>,
             pub damage: Option<u16>,
@@ -335,12 +330,11 @@ pub(crate) fn build() -> TokenStream {
             #constants
 
             pub fn translated_name(&self) -> TextComponent {
-                // TODO
-                TextComponent::text(self.components.item_name.unwrap())
+                TextComponent::text(self.components.item_name)
             }
 
             #[doc = "Try to parse an item from a resource location string."]
-            pub fn from_registry_key(name: &str) -> Option<Self> {
+            pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 match name {
                     #type_from_name
                     _ => None
@@ -348,7 +342,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = "Try to parse an item from a raw id."]
-            pub const fn from_id(id: u16) -> Option<Self> {
+            pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms
                     _ => None

@@ -1,6 +1,6 @@
 use crate::entity::player::Player;
 use crate::server::Server;
-use pumpkin_data::block::Block;
+use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -31,7 +31,7 @@ impl ItemRegistry {
         item: &Item,
         player: &Player,
         location: BlockPos,
-        face: &BlockDirection,
+        face: BlockDirection,
         block: &Block,
         server: &Server,
     ) {

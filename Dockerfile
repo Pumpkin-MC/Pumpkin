@@ -17,8 +17,6 @@ RUN --mount=type=cache,sharing=private,target=/pumpkin/target \
 
 FROM alpine:3.21
 
-RUN apk add --no-cache libgcc
-
 COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
 
 # set workdir to /pumpkin, this is required to influence the PWD environment variable
@@ -26,7 +24,10 @@ COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
 # executable (without requiring an `docker cp`-ing the binary to the host folder)
 WORKDIR /pumpkin
 
+RUN apk add --no-cache libgcc && chown 2613:2613 .
+
 ENV RUST_BACKTRACE=1
 EXPOSE 25565
+USER 2613:2613
 ENTRYPOINT [ "/bin/pumpkin" ]
 HEALTHCHECK CMD nc -z 127.0.0.1 25565 || exit 1

@@ -30,11 +30,7 @@ impl PlayerDataStorage {
         let path = data_path.into();
         if !path.exists() {
             if let Err(e) = create_dir_all(&path) {
-                log::error!(
-                    "Failed to create player data directory at {:?}: {}",
-                    path,
-                    e
-                );
+                log::error!("Failed to create player data directory at {path:?}: {e}");
             }
         }
 
@@ -84,25 +80,25 @@ impl PlayerDataStorage {
         // If not in cache, load from disk
         let path = self.get_player_data_path(uuid);
         if !path.exists() {
-            log::debug!("No player data file found for {}", uuid);
+            log::debug!("No player data file found for {uuid}");
             return Ok((false, NbtCompound::new()));
         }
 
         let file = match File::open(&path) {
             Ok(file) => file,
             Err(e) => {
-                log::error!("Failed to open player data file for {}: {}", uuid, e);
+                log::error!("Failed to open player data file for {uuid}: {e}");
                 return Err(PlayerDataError::Io(e));
             }
         };
 
         match pumpkin_nbt::nbt_compress::read_gzip_compound_tag(file) {
             Ok(nbt) => {
-                log::debug!("Loaded player data for {} from disk", uuid);
+                log::debug!("Loaded player data for {uuid} from disk");
                 Ok((true, nbt))
             }
             Err(e) => {
-                log::error!("Failed to read player data for {}: {}", uuid, e);
+                log::error!("Failed to read player data for {uuid}: {e}");
                 Err(PlayerDataError::Nbt(e.to_string()))
             }
         }
@@ -132,7 +128,7 @@ impl PlayerDataStorage {
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             if let Err(e) = create_dir_all(parent) {
-                log::error!("Failed to create player data directory for {}: {}", uuid, e);
+                log::error!("Failed to create player data directory for {uuid}: {e}");
                 return Err(PlayerDataError::Io(e));
             }
         }
@@ -141,15 +137,15 @@ impl PlayerDataStorage {
         match File::create(&path) {
             Ok(file) => {
                 if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data, file) {
-                    log::error!("Failed to write compressed player data for {}: {}", uuid, e);
+                    log::error!("Failed to write compressed player data for {uuid}: {e}");
                     Err(PlayerDataError::Nbt(e.to_string()))
                 } else {
-                    log::debug!("Saved player data for {} to disk", uuid);
+                    log::debug!("Saved player data for {uuid} to disk");
                     Ok(())
                 }
             }
             Err(e) => {
-                log::error!("Failed to create player data file for {}: {}", uuid, e);
+                log::error!("Failed to create player data file for {uuid}: {e}");
                 Err(PlayerDataError::Io(e))
             }
         }

@@ -228,7 +228,7 @@ impl OctavePerlinNoiseSampler {
                 if amplitudes[k] != 0f64 {
                     let l = first_octave + k as i32;
                     samplers[k] = Some(PerlinNoiseSampler::new(
-                        &mut splitter.split_string(&format!("octave_{}", l)),
+                        &mut splitter.split_string(&format!("octave_{l}")),
                     ));
                 }
             }

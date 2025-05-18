@@ -154,8 +154,7 @@ impl<W: Write> Serializer<W> {
                 } else {
                     if tag != COMPOUND_ID {
                         return Err(Error::SerdeError(format!(
-                            "Invalid state: root is not a `Compound`! ({})",
-                            tag
+                            "Invalid state: root is not a `Compound`! ({tag})"
                         )));
                     }
                     self.handled_root = true;

@@ -3,12 +3,15 @@ use std::{
     num::NonZeroU8,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicI32},
+        atomic::{AtomicBool, AtomicI32, Ordering},
     },
 };
 
 use crate::{
-    data::{banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST},
+    data::{
+        banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
+        op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
+    },
     entity::player::{ChatMode, Hand},
     server::Server,
 };
@@ -57,7 +60,6 @@ use thiserror::Error;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 pub mod authentication;
-mod container;
 pub mod lan_broadcast;
 mod packet;
 mod proxy;
@@ -146,6 +148,8 @@ pub struct Client {
     pub closed: Arc<AtomicBool>,
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
+    /// Indicates if the client is added to the server listing.
+    pub added_to_server_listing: AtomicBool,
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<NetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -184,6 +188,7 @@ impl Client {
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
+            added_to_server_listing: AtomicBool::new(false),
         }
     }
 
@@ -588,7 +593,7 @@ impl Client {
                     .await;
             }
             SAcknowledgeFinishConfig::PACKET_ID => {
-                self.handle_config_acknowledged().await;
+                self.handle_config_acknowledged(server).await;
             }
             SKnownPacks::PACKET_ID => {
                 self.handle_known_packs(server, SKnownPacks::read(payload)?)
@@ -643,7 +648,7 @@ impl Client {
     }
 
     /// Checks if the client can join the server.
-    pub async fn can_not_join(&self) -> Option<TextComponent> {
+    pub async fn can_not_join(&self, server: &Server) -> Option<TextComponent> {
         let profile = self.gameprofile.lock().await;
         let Some(profile) = profile.as_ref() else {
             return Some(TextComponent::text("Missing GameProfile"));
@@ -666,6 +671,18 @@ impl Client {
             });
         }
         drop(banned_players);
+
+        if server.white_list.load(Ordering::Relaxed) {
+            let ops = OPERATOR_CONFIG.read().await;
+            let whitelist = WHITELIST_CONFIG.read().await;
+
+            if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
+                return Some(TextComponent::translate(
+                    "multiplayer.disconnect.not_whitelisted",
+                    &[],
+                ));
+            }
+        }
 
         let mut banned_ips = BANNED_IP_LIST.write().await;
         let address = self.address.lock().await;

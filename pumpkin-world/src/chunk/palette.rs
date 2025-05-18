@@ -4,13 +4,10 @@ use std::{
     hash::Hash,
 };
 
-use pumpkin_data::{
-    block::{Block, get_state_by_state_id},
-    chunk::Biome,
-};
+use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
-use crate::block::BlockStateCodec;
+use crate::block::RawBlockState;
 
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
 
@@ -24,19 +21,6 @@ pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
 }
 
 impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
-    fn from_cube(cube: Box<AbstractCube<V, DIM>>) -> Self {
-        let counts =
-            cube.as_flattened()
-                .as_flattened()
-                .iter()
-                .fold(HashMap::new(), |mut acc, key| {
-                    acc.entry(*key).and_modify(|count| *count += 1).or_insert(1);
-                    acc
-                });
-
-        Self { cube, counts }
-    }
-
     fn get(&self, x: usize, y: usize, z: usize) -> V {
         debug_assert!(x < DIM);
         debug_assert!(y < DIM);
@@ -78,6 +62,23 @@ pub enum PalettedContainer<V: Hash + Eq + Copy + Default, const DIM: usize> {
 impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> {
     pub const SIZE: usize = DIM;
     pub const VOLUME: usize = DIM * DIM * DIM;
+
+    fn from_cube(cube: Box<AbstractCube<V, DIM>>) -> Self {
+        let counts =
+            cube.as_flattened()
+                .as_flattened()
+                .iter()
+                .fold(HashMap::new(), |mut acc, key| {
+                    acc.entry(*key).and_modify(|count| *count += 1).or_insert(1);
+                    acc
+                });
+
+        if counts.len() == 1 {
+            Self::Homogeneous(*counts.keys().next().unwrap())
+        } else {
+            Self::Heterogeneous(Box::new(HeterogeneousPaletteData { cube, counts }))
+        }
+    }
 
     fn bits_per_entry(&self) -> u8 {
         match self {
@@ -179,7 +180,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                     });
                 });
 
-            Self::Heterogeneous(Box::new(HeterogeneousPaletteData::from_cube(cube)))
+            Self::from_cube(cube)
         }
     }
 
@@ -200,8 +201,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 if value != *original {
                     let mut cube = Box::new([[[*original; DIM]; DIM]; DIM]);
                     cube[y][z][x] = value;
-                    let data = HeterogeneousPaletteData::from_cube(cube);
-                    *self = Self::Heterogeneous(Box::new(data));
+                    *self = Self::from_cube(cube);
                 }
             }
             Self::Heterogeneous(data) => {
@@ -374,7 +374,7 @@ impl BlockPalette {
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !get_state_by_state_id(*registry_id).unwrap().air {
+                if !get_state_by_state_id(*registry_id).unwrap().is_air() {
                     Self::VOLUME as u16
                 } else {
                     0
@@ -384,7 +384,7 @@ impl BlockPalette {
                 .counts
                 .iter()
                 .map(|(registry_id, count)| {
-                    if !get_state_by_state_id(*registry_id).unwrap().air {
+                    if !get_state_by_state_id(*registry_id).unwrap().is_air() {
                         *count
                     } else {
                         0
@@ -399,8 +399,9 @@ impl BlockPalette {
             .palette
             .into_iter()
             .map(|entry| {
-                if let Some(block_state) = entry.get_state() {
-                    block_state.id
+
+                if let Some(block_state) = RawBlockState::from_palette(&entry) {
+                    block_state.get_state_id()
                 } else {
                     log::warn!(
                         "Could not find valid block state for {}. Defaulting...",

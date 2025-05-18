@@ -11,7 +11,7 @@ pub(crate) fn build() -> TokenStream {
     let variants = array_to_tokenstream(&poses);
 
     quote! {
-        #[derive(Clone, Copy)]
+        #[derive(PartialEq, Clone, Copy)]
         pub enum EntityPose {
             #variants
         }

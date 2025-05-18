@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use pumpkin_util::math::vector2::Vector2;
-use pumpkin_world::{chunk::ChunkData, global_path, level::Level};
+use pumpkin_world::{chunk::ChunkData, dimension::Dimension, global_path, level::Level};
 use tokio::{runtime::Runtime, sync::RwLock};
 
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
@@ -80,7 +80,11 @@ fn initialize_level(
         let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
 
         // Our data dir is empty, so we're generating new chunks here
-        let level_to_save = Arc::new(Level::from_root_folder(root_dir.clone()));
+        let level_to_save = Arc::new(Level::from_root_folder(
+            root_dir.clone(),
+            123,
+            Dimension::Overworld,
+        ));
         println!("Level Seed is: {}", level_to_save.seed.0);
 
         let level_to_fetch = level_to_save.clone();
@@ -194,7 +198,11 @@ fn bench_chunk_io(c: &mut Criterion) {
             &chunks,
             |b, chunks| {
                 b.to_async(&async_handler).iter(async || {
-                    let level = Arc::new(Level::from_root_folder(root_dir.clone()));
+                    let level = Arc::new(Level::from_root_folder(
+                        root_dir.clone(),
+                        123,
+                        Dimension::Overworld,
+                    ));
                     test_writes(&level, chunks.to_vec()).await
                 })
             },
@@ -220,7 +228,11 @@ fn bench_chunk_io(c: &mut Criterion) {
             &positions,
             |b, positions| {
                 b.to_async(&async_handler).iter(async || {
-                    let level = Arc::new(Level::from_root_folder(root_dir.clone()));
+                    let level = Arc::new(Level::from_root_folder(
+                        root_dir.clone(),
+                        123,
+                        Dimension::Overworld,
+                    ));
                     test_reads(&level, positions.to_vec()).await
                 })
             },

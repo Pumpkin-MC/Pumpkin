@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::BlockDirection;
@@ -17,7 +17,7 @@ impl PumpkinBlock for RedstoneBlock {
         _world: &World,
         _block_pos: &BlockPos,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> u8 {
         15
     }
@@ -26,7 +26,7 @@ impl PumpkinBlock for RedstoneBlock {
         &self,
         _block: &Block,
         _state: &BlockState,
-        _direction: &BlockDirection,
+        _direction: BlockDirection,
     ) -> bool {
         true
     }

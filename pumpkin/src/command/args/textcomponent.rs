@@ -5,7 +5,7 @@ use crate::command::tree::RawArgs;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
-use pumpkin_util::text::{TextComponent, TextContent};
+use pumpkin_util::text::TextComponent;
 
 pub(crate) struct TextComponentArgConsumer;
 
@@ -64,10 +64,11 @@ impl FindArg<'_> for TextComponentArgConsumer {
 }
 
 fn parse_text_component(input: &str) -> Option<TextComponent> {
-    if input.starts_with('{') && input.ends_with('}') {
-        let text_component: Option<TextContent> = serde_json::from_str(input).unwrap_or(None);
-        Some(TextComponent::from_content(text_component?))
+    let result = serde_json::from_str(input);
+    if let Err(e) = result {
+        log::debug!("Failed to parse text component: {e}");
+        None
     } else {
-        serde_json::from_str(input).unwrap_or(None)
+        result.unwrap()
     }
 }

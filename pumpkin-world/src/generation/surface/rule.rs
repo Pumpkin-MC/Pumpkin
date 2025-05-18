@@ -19,7 +19,7 @@ pub enum MaterialRule {
     #[serde(rename = "minecraft:sequence")]
     Sequence(SequenceMaterialRule),
     #[serde(rename = "minecraft:condition")]
-    Condition(ConditionMaterialRule),
+    Condition(Box<ConditionMaterialRule>),
 }
 
 impl MaterialRule {

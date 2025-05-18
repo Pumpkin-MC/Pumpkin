@@ -11,6 +11,7 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
+use std::io::{IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::{
@@ -133,7 +134,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        if advanced_config().commands.use_console {
+        if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
@@ -141,8 +142,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 }
                 Err(e) => {
                     log::warn!(
-                        "Failed to initialize console input ({}); falling back to simple logger",
-                        e
+                        "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
                     Some((ReadlineLogWrapper::new(logger, None), level))
@@ -202,9 +202,18 @@ impl PumpkinServer {
 
         let mut ticker = Ticker::new(BASIC_CONFIG.tps);
 
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
+        if advanced_config().commands.use_console {
+            if let Some((wrapper, _)) = &*LOGGER_IMPL {
+                if let Some(rl) = wrapper.take_readline() {
+                    setup_console(rl, server.clone());
+                } else {
+                    if advanced_config().commands.use_tty {
+                        log::warn!(
+                            "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                        );
+                    }
+                    setup_stdin_console(server.clone()).await;
+                }
             }
         }
 
@@ -251,7 +260,7 @@ impl PumpkinServer {
         let mut loader_lock = PLUGIN_MANAGER.lock().await;
         loader_lock.set_server(self.server.clone());
         if let Err(err) = loader_lock.load_plugins().await {
-            log::error!("{}", err);
+            log::error!("{err}");
         };
     }
 
@@ -287,11 +296,7 @@ impl PumpkinServer {
             } else {
                 format!("{client_addr}")
             };
-            log::debug!(
-                "Accepted connection from: {} (id {})",
-                formatted_address,
-                id
-            );
+            log::debug!("Accepted connection from: {formatted_address} (id {id})");
 
             let mut client = Client::new(connection, client_addr, id);
             client.init();
@@ -315,7 +320,7 @@ impl PumpkinServer {
                         player.close().await;
 
                         //TODO: Move these somewhere less likely to be forgotten
-                        log::debug!("Cleaning up player for id {}", id);
+                        log::debug!("Cleaning up player for id {id}");
 
                         // Save player data on disconnect
                         if let Err(e) = server
@@ -323,21 +328,21 @@ impl PumpkinServer {
                             .handle_player_leave(&player)
                             .await
                         {
-                            log::error!("Failed to save player data on disconnect: {}", e);
+                            log::error!("Failed to save player data on disconnect: {e}");
                         }
 
                         // Remove the player from its world
                         player.remove().await;
                         // Tick down the online count
-                        server.remove_player().await;
+                        server.remove_player(&player).await;
                     }
                 } else {
                     // Also handle case of client connects but does not become a player (like a server
                     // ping)
                     client.close();
-                    log::debug!("Awaiting tasks for client {}", id);
+                    log::debug!("Awaiting tasks for client {id}");
                     client.await_tasks().await;
-                    log::debug!("Finished awaiting tasks for client {}", id);
+                    log::debug!("Finished awaiting tasks for client {id}");
                 }
             });
         }
@@ -350,7 +355,7 @@ impl PumpkinServer {
             .save_all_players(&self.server)
             .await
         {
-            log::error!("Error saving all players during shutdown: {}", e);
+            log::error!("Error saving all players during shutdown: {e}");
         }
 
         let kick_message = TextComponent::text("Server stopped");
@@ -376,6 +381,45 @@ impl PumpkinServer {
             }
         }
     }
+}
+
+async fn setup_stdin_console(server: Arc<Server>) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let rt = tokio::runtime::Handle::current();
+    std::thread::spawn(move || {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut line = String::new();
+            if let Ok(size) = stdin().read_line(&mut line) {
+                // if no bytes were read, we may have hit EOF
+                if size == 0 {
+                    break;
+                }
+            } else {
+                break;
+            };
+            if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
+                log::warn!("Console command was not terminated with a newline");
+            }
+            rt.block_on(tx.send(line.trim().to_string()))
+                .expect("Failed to send command to server");
+        }
+    });
+    tokio::spawn(async move {
+        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Some(command) = rx.recv().await {
+                send_cancellable! {{
+                    ServerCommandEvent::new(command.clone());
+
+                    'after: {
+                        let dispatcher = &server.command_dispatcher.read().await;
+                        dispatcher
+                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
+                            .await;
+                    };
+                }}
+            }
+        }
+    });
 }
 
 fn setup_console(rl: Readline, server: Arc<Server>) {
@@ -414,7 +458,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                 }
                 err => {
                     log::error!("Console command loop failed!");
-                    log::error!("{:?}", err);
+                    log::error!("{err:?}");
                     break;
                 }
             }

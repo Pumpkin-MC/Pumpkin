@@ -1,12 +1,10 @@
-pub mod interactive;
+pub mod entities;
 pub mod state;
 
 use std::collections::HashMap;
 
 use num_derive::FromPrimitive;
-use pumpkin_data::block::{
-    Axis, BlockState, Facing, HorizontalFacing, get_block, get_state_by_state_id,
-};
+use pumpkin_data::block_properties::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
 
 use serde::{Deserialize, Serialize};
@@ -74,6 +72,33 @@ impl BlockStateCodec {
 }
 
 impl BlockDirection {
+    pub fn to_index(&self) -> u8 {
+        match self {
+            BlockDirection::Down => 0,
+            BlockDirection::Up => 1,
+            BlockDirection::North => 2,
+            BlockDirection::South => 3,
+            BlockDirection::West => 4,
+            BlockDirection::East => 5,
+        }
+    }
+
+    pub fn from_index(index: u8) -> Option<Self> {
+        match index {
+            0 => Some(Self::Down),
+            1 => Some(Self::Up),
+            2 => Some(Self::North),
+            3 => Some(Self::South),
+            4 => Some(Self::West),
+            5 => Some(Self::East),
+            _ => None,
+        }
+    }
+
+    pub fn by_index(index: usize) -> Option<Self> {
+        Self::all().get(index % Self::all().len()).cloned()
+    }
+
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
             BlockDirection::Down => (0, -1, 0),
@@ -209,39 +234,6 @@ impl BlockDirection {
     }
 }
 
-pub trait HorizontalFacingExt {
-    fn to_block_direction(&self) -> BlockDirection;
-    fn rotate(&self) -> HorizontalFacing;
-    fn rotate_ccw(&self) -> HorizontalFacing;
-}
-
-impl HorizontalFacingExt for HorizontalFacing {
-    fn to_block_direction(&self) -> BlockDirection {
-        match self {
-            HorizontalFacing::North => BlockDirection::North,
-            HorizontalFacing::South => BlockDirection::South,
-            HorizontalFacing::West => BlockDirection::West,
-            HorizontalFacing::East => BlockDirection::East,
-        }
-    }
-    fn rotate(&self) -> HorizontalFacing {
-        match self {
-            HorizontalFacing::North => HorizontalFacing::East,
-            HorizontalFacing::South => HorizontalFacing::West,
-            HorizontalFacing::West => HorizontalFacing::North,
-            HorizontalFacing::East => HorizontalFacing::South,
-        }
-    }
-    fn rotate_ccw(&self) -> HorizontalFacing {
-        match self {
-            HorizontalFacing::North => HorizontalFacing::West,
-            HorizontalFacing::South => HorizontalFacing::East,
-            HorizontalFacing::West => HorizontalFacing::North,
-            HorizontalFacing::East => HorizontalFacing::South,
-        }
-    }
-}
-
 pub trait FacingExt {
     fn to_block_direction(&self) -> BlockDirection;
 }
@@ -249,19 +241,34 @@ pub trait FacingExt {
 impl FacingExt for Facing {
     fn to_block_direction(&self) -> BlockDirection {
         match self {
-            Facing::North => BlockDirection::North,
-            Facing::South => BlockDirection::South,
-            Facing::West => BlockDirection::West,
-            Facing::East => BlockDirection::East,
-            Facing::Up => BlockDirection::Up,
-            Facing::Down => BlockDirection::Down,
+            Self::North => BlockDirection::North,
+            Self::South => BlockDirection::South,
+            Self::West => BlockDirection::West,
+            Self::East => BlockDirection::East,
+            Self::Up => BlockDirection::Up,
+            Self::Down => BlockDirection::Down,
+        }
+    }
+}
+
+pub trait HorizontalFacingExt {
+    fn to_block_direction(&self) -> BlockDirection;
+}
+
+impl HorizontalFacingExt for HorizontalFacing {
+    fn to_block_direction(&self) -> BlockDirection {
+        match self {
+            Self::North => BlockDirection::North,
+            Self::South => BlockDirection::South,
+            Self::West => BlockDirection::West,
+            Self::East => BlockDirection::East,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::block::Block;
+    use pumpkin_data::Block;
 
     use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
 

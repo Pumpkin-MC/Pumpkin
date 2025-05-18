@@ -3,6 +3,7 @@ use crate::{
     server::Server,
 };
 use crossbeam::atomic::AtomicCell;
+use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
 use std::sync::Arc;
@@ -30,21 +31,6 @@ impl ServerPlayerData {
         }
     }
 
-    /// Handles a player joining the server.
-    ///
-    /// This function loads player data and applies it to a newly joined player.
-    ///
-    /// # Arguments
-    ///
-    /// * `player` - The player who joined.
-    ///
-    /// # Returns
-    ///
-    /// A Result indicating success or the error that occurred.
-    pub async fn handle_player_join(&self, player: &mut Player) -> Result<(), PlayerDataError> {
-        self.load_and_apply_data_to_player(player).await
-    }
-
     /// Handles a player leaving the server.
     ///
     /// This function saves player data when they disconnect.
@@ -57,6 +43,14 @@ impl ServerPlayerData {
     ///
     /// A Result indicating success or the error that occurred.
     pub async fn handle_player_leave(&self, player: &Player) -> Result<(), PlayerDataError> {
+        player
+            .player_screen_handler
+            .lock()
+            .await
+            .on_closed(player)
+            .await;
+        player.on_handled_screen_closed().await;
+
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
 
@@ -81,8 +75,7 @@ impl ServerPlayerData {
             self.last_save.store(now);
             // Save all online players periodically across all worlds
             for world in server.worlds.read().await.iter() {
-                let players = world.players.read().await;
-                for player in players.values() {
+                for player in world.players.read().await.values() {
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt).await;
 
@@ -111,8 +104,7 @@ impl ServerPlayerData {
 
         // Save players from all worlds
         for world in server.worlds.read().await.iter() {
-            let players = world.players.read().await;
-            for player in players.values() {
+            for player in world.players.read().await.values() {
                 self.extract_data_and_save_player(player).await?;
                 total_players += 1;
             }
@@ -134,19 +126,14 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn load_and_apply_data_to_player(
-        &self,
-        player: &mut Player,
-    ) -> Result<(), PlayerDataError> {
-        let uuid = &player.gameprofile.id;
+    pub fn load_data(&self, uuid: &uuid::Uuid) -> Result<Option<NbtCompound>, PlayerDataError> {
         match self.storage.load_player_data(uuid) {
-            Ok((should_load, mut data)) => {
+            Ok((should_load, data)) => {
                 if !should_load {
                     // No data to load, continue with default data
-                    return Ok(());
+                    return Ok(None);
                 }
-                player.read_nbt(&mut data).await;
-                Ok(())
+                Ok(Some(data))
             }
             Err(e) => {
                 if self.storage.is_save_enabled() {
@@ -157,7 +144,7 @@ impl ServerPlayerData {
                     log::debug!("Not loading player data for {uuid} (saving disabled)");
                 }
                 // Continue with default data even if there's an error
-                Ok(())
+                Ok(None)
             }
         }
     }

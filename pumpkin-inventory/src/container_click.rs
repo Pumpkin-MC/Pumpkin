@@ -1,4 +1,4 @@
-use crate::{InventoryError, player::SLOT_INDEX_OUTSIDE};
+use crate::InventoryError;
 use pumpkin_protocol::server::play::SlotActionType;
 use pumpkin_world::item::ItemStack;
 
@@ -14,6 +14,8 @@ const BUTTON_CLICK_RIGHT: i8 = 1;
 const KEY_CLICK_OFFHAND: i8 = 40;
 const KEY_CLICK_HOTBAR_START: i8 = 0;
 const KEY_CLICK_HOTBAR_END: i8 = 9;
+
+const SLOT_INDEX_OUTSIDE: i16 = -999;
 
 impl Click {
     pub fn new(mode: SlotActionType, button: i8, slot: i16) -> Result<Self, InventoryError> {
@@ -122,7 +124,7 @@ pub enum ClickType {
     MouseDrag { drag_state: MouseDragState },
     DoubleClick,
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MouseClick {
     Left,
     Right,
