@@ -34,7 +34,7 @@ impl CommandExecutor for Executor {
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
 
         match sender {
-            CommandSender::Console => {
+            CommandSender::Console | CommandSender::Rcon(_) => {
                 if let Some(world) = server.worlds.read().await.first() {
                     let info = &world.level_info;
                     // default position for spawning a player, in this case for mob
@@ -63,9 +63,6 @@ impl CommandExecutor for Executor {
                         [TextComponent::text(format!("{entity:?}"))],
                     ))
                     .await;
-            }
-            CommandSender::Rcon(_) => {
-                // TODO: make this work in rcon
             }
         }
 
