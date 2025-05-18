@@ -65,26 +65,17 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(
-    block: &Block,
-    state_id: u16,
-) -> Option<bool> {
-    block
-        .properties(state_id)
-        .and_then(|properties| {
-            properties
-                .to_props()
-                .into_iter()
-                .find(|p| p.0 == "waterlogged")
-                .map(|(_, value)| value == true.to_string())
-        })
+fn waterlogged_check(block: &Block, state_id: u16) -> Option<bool> {
+    block.properties(state_id).and_then(|properties| {
+        properties
+            .to_props()
+            .into_iter()
+            .find(|p| p.0 == "waterlogged")
+            .map(|(_, value)| value == true.to_string())
+    })
 }
 
-fn set_waterlogged(
-    block: &Block,
-    state_id: u16,
-    waterlogged: bool,
-) -> Option<u16> {
+fn set_waterlogged(block: &Block, state_id: u16, waterlogged: bool) -> u16 {
     let original_props = &block.properties(state_id).unwrap().to_props();
     let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
     let waterlogged = waterlogged.to_string();
@@ -95,11 +86,7 @@ fn set_waterlogged(
             props_vec.push((key.as_str(), value.as_str()));
         }
     }
-    let block_state_id = block
-        .from_properties(props_vec)
-        .unwrap()
-        .to_state_id(&block);
-    Some(block_state_id)
+    block.from_properties(props_vec).unwrap().to_state_id(block)
 }
 
 #[async_trait]
@@ -145,21 +132,11 @@ impl PumpkinItem for EmptyBucketItem {
                 })
                 .unwrap_or(false)
             {
-                let Some(state_id) = set_waterlogged(&block, state_id, false) else {
-                    return;
-                };
+                let state_id = set_waterlogged(&block, state_id, false);
                 world
-                    .set_block_state(
-                        &pos,
-                        state_id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
+                    .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
-                world.schedule_fluid_tick(
-                    block.id,
-                    pos,
-                    5,
-                ).await;
+                world.schedule_fluid_tick(block.id, pos, 5).await;
             } else if state_id == Block::LAVA.default_state_id
                 || state_id == Block::WATER.default_state_id
             {
@@ -177,13 +154,14 @@ impl PumpkinItem for EmptyBucketItem {
                 let Ok(block) = world.get_block(&pos.offset(direction.to_offset())).await else {
                     return;
                 };
-                let Ok(state_id) = world.get_block_state_id(&pos.offset(direction.to_offset())).await else {
+                let Ok(state_id) = world
+                    .get_block_state_id(&pos.offset(direction.to_offset()))
+                    .await
+                else {
                     return;
                 };
                 if waterlogged_check(&block, state_id).is_some() {
-                    let Some(state_id) = set_waterlogged(&block, state_id, false) else {
-                        return;
-                    };
+                    let state_id = set_waterlogged(&block, state_id, false);
                     world
                         .set_block_state(
                             &pos.offset(direction.to_offset()),
@@ -191,12 +169,10 @@ impl PumpkinItem for EmptyBucketItem {
                             BlockFlags::NOTIFY_NEIGHBORS,
                         )
                         .await;
-                    world.schedule_fluid_tick(
-                        block.id,
-                        pos.offset(direction.to_offset()),
-                        5,
-                    ).await;
-                }else {
+                    world
+                        .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
+                        .await;
+                } else {
                     return;
                 }
             }
@@ -261,33 +237,24 @@ impl PumpkinItem for FilledBucketItem {
             };
 
             if waterlogged_check(&block, state_id).is_some() && item.id == Item::WATER_BUCKET.id {
-                let Some(state_id) = set_waterlogged(&block, state_id, true) else {
-                    return;
-                };
+                let state_id = set_waterlogged(&block, state_id, true);
                 world
-                    .set_block_state(
-                        &pos,
-                        state_id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
+                    .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
-                world.schedule_fluid_tick(
-                    block.id,
-                    pos,
-                    5,
-                ).await;
+                world.schedule_fluid_tick(block.id, pos, 5).await;
             } else {
                 let Ok(block) = world.get_block(&pos.offset(direction.to_offset())).await else {
                     return;
                 };
-                let Ok(state_id) = world.get_block_state_id(&pos.offset(direction.to_offset())).await else {
+                let Ok(state_id) = world
+                    .get_block_state_id(&pos.offset(direction.to_offset()))
+                    .await
+                else {
                     return;
                 };
 
                 if waterlogged_check(&block, state_id).is_some() {
-                    let Some(state_id) = set_waterlogged(&block, state_id, true) else {
-                        return;
-                    };
+                    let state_id = set_waterlogged(&block, state_id, true);
 
                     world
                         .set_block_state(
@@ -296,11 +263,9 @@ impl PumpkinItem for FilledBucketItem {
                             BlockFlags::NOTIFY_NEIGHBORS,
                         )
                         .await;
-                    world.schedule_fluid_tick(
-                        block.id,
-                        pos.offset(direction.to_offset()),
-                        5,
-                    ).await;
+                    world
+                        .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
+                        .await;
                 } else {
                     world
                         .set_block_state(

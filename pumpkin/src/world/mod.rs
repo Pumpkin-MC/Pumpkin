@@ -27,13 +27,12 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::{block_properties::get_block_collision_shapes, entity::EffectType};
 use pumpkin_data::fluid::Falling;
 use pumpkin_data::fluid::FluidProperties;
 use pumpkin_data::{
     Block,
     block_properties::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id
+        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
     },
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
@@ -41,6 +40,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
+use pumpkin_data::{block_properties::get_block_collision_shapes, entity::EffectType};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::client::play::{
@@ -1789,7 +1789,12 @@ impl World {
         chunk.dirty = true;
     }
 
-    fn intersects_aabb(self: &Arc<Self>, from: Vector3<f64>, to: Vector3<f64>, min: Vector3<f64>, max: Vector3<f64>) -> bool {
+    fn intersects_aabb(
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+        min: Vector3<f64>,
+        max: Vector3<f64>,
+    ) -> bool {
         let dir = to.sub(&from);
         let mut tmin: f64 = 0.0;
         let mut tmax: f64 = 1.0;
@@ -1803,10 +1808,14 @@ impl World {
             let inv_d = 1.0 / dir.x;
             let mut t1 = (min.x - from.x) * inv_d;
             let mut t2 = (max.x - from.x) * inv_d;
-            if t1 > t2 { std::mem::swap(&mut t1, &mut t2); }
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+            }
             tmin = tmin.max(t1);
             tmax = tmax.min(t2);
-            if tmax < tmin { return false; }
+            if tmax < tmin {
+                return false;
+            }
         }
 
         // Y axis
@@ -1818,10 +1827,14 @@ impl World {
             let inv_d = 1.0 / dir.y;
             let mut t1 = (min.y - from.y) * inv_d;
             let mut t2 = (max.y - from.y) * inv_d;
-            if t1 > t2 { std::mem::swap(&mut t1, &mut t2); }
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+            }
             tmin = tmin.max(t1);
             tmax = tmax.min(t2);
-            if tmax < tmin { return false; }
+            if tmax < tmin {
+                return false;
+            }
         }
 
         // Z axis
@@ -1833,10 +1846,14 @@ impl World {
             let inv_d = 1.0 / dir.z;
             let mut t1 = (min.z - from.z) * inv_d;
             let mut t2 = (max.z - from.z) * inv_d;
-            if t1 > t2 { std::mem::swap(&mut t1, &mut t2); }
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+            }
             tmin = tmin.max(t1);
             tmax = tmax.min(t2);
-            if tmax < tmin { return false; }
+            if tmax < tmin {
+                return false;
+            }
         }
 
         true
@@ -1855,7 +1872,6 @@ impl World {
             return false;
         };
 
-
         if collision_shapes.is_empty() {
             return true;
         }
@@ -1864,7 +1880,7 @@ impl World {
             let world_min = shape.min.add(&block_pos.0.to_f64());
             let world_max = shape.max.add(&block_pos.0.to_f64());
 
-            if self.intersects_aabb(from, to, world_min, world_max) {
+            if Self::intersects_aabb(from, to, world_min, world_max) {
                 return true;
             }
         }
