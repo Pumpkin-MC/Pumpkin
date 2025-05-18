@@ -262,7 +262,7 @@ impl LivingEntity {
             .await;
     }
 
-    async fn tick_move(&self, entity: &dyn EntityBase) {
+    async fn tick_move(&self, entity: &dyn EntityBase, server: &Server) {
         let velo = self.entity.velocity.load();
         let pos = self.entity.pos.load();
         self.entity
@@ -272,7 +272,7 @@ impl LivingEntity {
         self.entity
             .velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
-        Entity::check_block_collision(entity).await;
+        Entity::check_block_collision(entity, server).await;
     }
 
     async fn tick_effects(&self) {
@@ -296,9 +296,9 @@ impl LivingEntity {
 
 #[async_trait]
 impl EntityBase for LivingEntity {
-    async fn tick(&self, caller: &dyn EntityBase, server: &Server) {
-        self.entity.tick(caller, server).await;
-        self.tick_move(caller).await;
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
+        self.entity.tick(caller.clone(), server).await;
+        self.tick_move(caller.as_ref(), server).await;
         self.tick_effects().await;
         if self.time_until_regen.load(Relaxed) > 0 {
             self.time_until_regen.fetch_sub(1, Relaxed);
@@ -355,6 +355,7 @@ impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
+        nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
         //TODO: write equipment
         // todo more...
     }
@@ -362,6 +363,8 @@ impl NBTStorage for LivingEntity {
     async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.read_nbt(nbt).await;
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+        self.fall_distance
+            .store(nbt.get_float("fall_distance").unwrap_or(0.0));
         // todo more...
     }
 }

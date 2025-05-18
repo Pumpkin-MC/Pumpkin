@@ -68,6 +68,7 @@ impl PumpkinBlock for CactusBlock {
         _pos: BlockPos,
         _block: Block,
         _state: BlockState,
+        _server: &Server,
     ) {
         entity.damage(1.0, DamageType::CACTUS).await;
     }

@@ -75,6 +75,7 @@ impl PumpkinBlock for FireBlock {
         _pos: BlockPos,
         _block: Block,
         _state: BlockState,
+        _server: &Server,
     ) {
         let base_entity = entity.get_entity();
         if !base_entity.entity_type.fire_immune {
