@@ -27,13 +27,13 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::entity::EffectType;
+use pumpkin_data::{block_properties::get_block_collision_shapes, entity::EffectType};
 use pumpkin_data::fluid::Falling;
 use pumpkin_data::fluid::FluidProperties;
 use pumpkin_data::{
     Block,
     block_properties::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id
     },
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
@@ -1789,7 +1789,90 @@ impl World {
         chunk.dirty = true;
     }
 
-    pub async fn raytrace(
+    fn intersects_aabb(self: &Arc<Self>, from: Vector3<f64>, to: Vector3<f64>, min: Vector3<f64>, max: Vector3<f64>) -> bool {
+        let dir = to.sub(&from);
+        let mut tmin: f64 = 0.0;
+        let mut tmax: f64 = 1.0;
+
+        // X axis
+        if dir.x.abs() < 1e-8 {
+            if from.x < min.x || from.x > max.x {
+                return false;
+            }
+        } else {
+            let inv_d = 1.0 / dir.x;
+            let mut t1 = (min.x - from.x) * inv_d;
+            let mut t2 = (max.x - from.x) * inv_d;
+            if t1 > t2 { std::mem::swap(&mut t1, &mut t2); }
+            tmin = tmin.max(t1);
+            tmax = tmax.min(t2);
+            if tmax < tmin { return false; }
+        }
+
+        // Y axis
+        if dir.y.abs() < 1e-8 {
+            if from.y < min.y || from.y > max.y {
+                return false;
+            }
+        } else {
+            let inv_d = 1.0 / dir.y;
+            let mut t1 = (min.y - from.y) * inv_d;
+            let mut t2 = (max.y - from.y) * inv_d;
+            if t1 > t2 { std::mem::swap(&mut t1, &mut t2); }
+            tmin = tmin.max(t1);
+            tmax = tmax.min(t2);
+            if tmax < tmin { return false; }
+        }
+
+        // Z axis
+        if dir.z.abs() < 1e-8 {
+            if from.z < min.z || from.z > max.z {
+                return false;
+            }
+        } else {
+            let inv_d = 1.0 / dir.z;
+            let mut t1 = (min.z - from.z) * inv_d;
+            let mut t2 = (max.z - from.z) * inv_d;
+            if t1 > t2 { std::mem::swap(&mut t1, &mut t2); }
+            tmin = tmin.max(t1);
+            tmax = tmax.min(t2);
+            if tmax < tmin { return false; }
+        }
+
+        true
+    }
+
+    pub async fn block_collision_check(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> bool {
+        let state_id = self.get_block_state_id(block_pos).await.unwrap();
+        //TODO this should use bounding boxes instead of collision shapes
+        // But currently we don't have a way to get all the bounding boxes of a block
+        let Some(collision_shapes) = get_block_collision_shapes(state_id) else {
+            return false;
+        };
+
+
+        if collision_shapes.is_empty() {
+            return true;
+        }
+
+        for shape in &collision_shapes {
+            let world_min = shape.min.add(&block_pos.0.to_f64());
+            let world_max = shape.max.add(&block_pos.0.to_f64());
+
+            if self.intersects_aabb(from, to, world_min, world_max) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub async fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
@@ -1805,8 +1888,8 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        if hit_check(&block, self).await {
-            return (Some(block), None);
+        if hit_check(&block, self).await && self.block_collision_check(&block, from, to).await {
+            return (Some(block), Some(BlockDirection::South));
         }
 
         let difference = to.sub(&from);
@@ -1883,7 +1966,7 @@ impl World {
                 }
             };
 
-            if hit_check(&block, self).await {
+            if hit_check(&block, self).await && self.block_collision_check(&block, from, to).await {
                 return (Some(block), Some(block_direction));
             }
         }
