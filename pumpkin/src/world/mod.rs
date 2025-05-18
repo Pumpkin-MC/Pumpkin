@@ -1789,74 +1789,62 @@ impl World {
         chunk.dirty = true;
     }
 
-    fn intersects_aabb(
+    fn intersects_aabb_with_direction(
         from: Vector3<f64>,
         to: Vector3<f64>,
         min: Vector3<f64>,
         max: Vector3<f64>,
-    ) -> bool {
+    ) -> Option<BlockDirection> {
         let dir = to.sub(&from);
         let mut tmin: f64 = 0.0;
         let mut tmax: f64 = 1.0;
 
-        // X axis
-        if dir.x.abs() < 1e-8 {
-            if from.x < min.x || from.x > max.x {
-                return false;
-            }
-        } else {
-            let inv_d = 1.0 / dir.x;
-            let mut t1 = (min.x - from.x) * inv_d;
-            let mut t2 = (max.x - from.x) * inv_d;
-            if t1 > t2 {
-                std::mem::swap(&mut t1, &mut t2);
-            }
-            tmin = tmin.max(t1);
-            tmax = tmax.min(t2);
-            if tmax < tmin {
-                return false;
-            }
+        let mut hit_axis = None;
+        let mut hit_is_min = false;
+
+        macro_rules! check_axis {
+            ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident, $direction_min:expr, $direction_max:expr) => {{
+                if dir.$dir_axis.abs() < 1e-8 {
+                    if from.$dir_axis < min.$min_axis || from.$dir_axis > max.$max_axis {
+                        return None;
+                    }
+                } else {
+                    let inv_d = 1.0 / dir.$dir_axis;
+                    let mut t1 = (min.$min_axis - from.$dir_axis) * inv_d;
+                    let mut t2 = (max.$max_axis - from.$dir_axis) * inv_d;
+                    let mut current_hit_is_min = true;
+                    if t1 > t2 {
+                        std::mem::swap(&mut t1, &mut t2);
+                        current_hit_is_min = false;
+                    }
+                    if t1 > tmin {
+                        tmin = t1;
+                        hit_axis = Some(stringify!($axis));
+                        hit_is_min = current_hit_is_min;
+                    }
+                    tmax = tmax.min(t2);
+                    if tmax < tmin {
+                        return None;
+                    }
+                }
+            }};
         }
 
-        // Y axis
-        if dir.y.abs() < 1e-8 {
-            if from.y < min.y || from.y > max.y {
-                return false;
-            }
-        } else {
-            let inv_d = 1.0 / dir.y;
-            let mut t1 = (min.y - from.y) * inv_d;
-            let mut t2 = (max.y - from.y) * inv_d;
-            if t1 > t2 {
-                std::mem::swap(&mut t1, &mut t2);
-            }
-            tmin = tmin.max(t1);
-            tmax = tmax.min(t2);
-            if tmax < tmin {
-                return false;
-            }
-        }
+        check_axis!(x, x, x, x, BlockDirection::West, BlockDirection::East);
+        check_axis!(y, y, y, y, BlockDirection::Down, BlockDirection::Up);
+        check_axis!(z, z, z, z, BlockDirection::North, BlockDirection::South);
 
-        // Z axis
-        if dir.z.abs() < 1e-8 {
-            if from.z < min.z || from.z > max.z {
-                return false;
-            }
-        } else {
-            let inv_d = 1.0 / dir.z;
-            let mut t1 = (min.z - from.z) * inv_d;
-            let mut t2 = (max.z - from.z) * inv_d;
-            if t1 > t2 {
-                std::mem::swap(&mut t1, &mut t2);
-            }
-            tmin = tmin.max(t1);
-            tmax = tmax.min(t2);
-            if tmax < tmin {
-                return false;
-            }
-        }
+        let direction = match (hit_axis, hit_is_min) {
+            (Some("x"), true) => Some(BlockDirection::West),
+            (Some("x"), false) => Some(BlockDirection::East),
+            (Some("y"), true) => Some(BlockDirection::Down),
+            (Some("y"), false) => Some(BlockDirection::Up),
+            (Some("z"), true) => Some(BlockDirection::North),
+            (Some("z"), false) => Some(BlockDirection::South),
+            _ => return None,
+        };
 
-        true
+        direction
     }
 
     pub async fn block_collision_check(
@@ -1864,28 +1852,29 @@ impl World {
         block_pos: &BlockPos,
         from: Vector3<f64>,
         to: Vector3<f64>,
-    ) -> bool {
+    ) -> (bool, Option<BlockDirection>) {
         let state_id = self.get_block_state_id(block_pos).await.unwrap();
         //TODO this should use bounding boxes instead of collision shapes
         // But currently we don't have a way to get all the bounding boxes of a block
         let Some(collision_shapes) = get_block_collision_shapes(state_id) else {
-            return false;
+            return (false, None);
         };
 
         if collision_shapes.is_empty() {
-            return true;
+            return (true, None);
         }
 
         for shape in &collision_shapes {
             let world_min = shape.min.add(&block_pos.0.to_f64());
             let world_max = shape.max.add(&block_pos.0.to_f64());
 
-            if Self::intersects_aabb(from, to, world_min, world_max) {
-                return true;
+            let direction = Self::intersects_aabb_with_direction(from, to, world_min, world_max);
+            if direction.is_some() {
+                return (true, direction);
             }
         }
 
-        false
+        (false, None)
     }
 
     pub async fn raycast(
@@ -1893,9 +1882,9 @@ impl World {
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
         hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
-    ) -> (Option<BlockPos>, Option<BlockDirection>) {
+    ) -> Option<(BlockPos, BlockDirection)> {
         if start_pos == end_pos {
-            return (None, None);
+            return None;
         }
 
         let adjust = -1.0e-7f64;
@@ -1904,8 +1893,9 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        if hit_check(&block, self).await && self.block_collision_check(&block, from, to).await {
-            return (Some(block), Some(BlockDirection::South));
+        let (collision, direction) = self.block_collision_check(&block, from, to).await;
+        if collision && direction.is_some() {
+            return Some((block, direction.unwrap()));
         }
 
         let difference = to.sub(&from);
@@ -1982,12 +1972,19 @@ impl World {
                 }
             };
 
-            if hit_check(&block, self).await && self.block_collision_check(&block, from, to).await {
-                return (Some(block), Some(block_direction));
+            if hit_check(&block, self).await {
+                let (collision, direction) = self.block_collision_check(&block, from, to).await;
+                if collision {
+                    if let Some(direction) = direction {
+                        return Some((block, direction));
+                    } else {
+                        return Some((block, block_direction));
+                    }
+                }
             }
         }
 
-        (None, None)
+        None
     }
 }
 
