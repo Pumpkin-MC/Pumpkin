@@ -100,10 +100,11 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
-};
 use pumpkin_world::inventory::Inventory;
+use pumpkin_world::{
+    biome,
+    entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
+};
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::RwLock;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -583,7 +584,7 @@ impl Player {
             .await;
     }
 
-    pub async fn tick(&self, server: &Server) {
+    pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()
             .await
@@ -663,8 +664,8 @@ impl Player {
 
         self.last_attacked_ticks.fetch_add(1, Relaxed);
 
-        self.living_entity.tick(self, server).await;
-        self.hunger_manager.tick(self).await;
+        self.living_entity.tick(self.clone(), server).await;
+        self.hunger_manager.tick(self.as_ref()).await;
 
         // experience handling
         self.tick_experience().await;
@@ -930,6 +931,7 @@ impl Player {
                 *self.living_entity.entity.world.write().await = new_world.clone();
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
+
                 let last_pos = self.living_entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.name();
                 let death_location = BlockPos(Vector3::new(
@@ -941,21 +943,21 @@ impl Player {
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension_type as u8).into(),
                         new_world.dimension_type.name(),
-                        0, // seed
+                        biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
                         false,
                         false,
                         Some((death_dimension, death_location)),
-                        0.into(),
-                        0.into(),
+                        VarInt(self.get_entity().portal_cooldown.load(Relaxed) as i32),
+                        new_world.sea_level.into(),
                         1,
                     )).await
                     ;
-                self.send_abilities_update().await;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
                 self.living_entity.last_pos.store(position);
+                self.send_abilities_update().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
             }
@@ -1816,6 +1818,16 @@ impl EntityBase for Player {
             }
         }
         result
+    }
+
+    async fn teleport(
+        self: Arc<Self>,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.teleport_world(world, position, yaw, pitch).await;
     }
 
     fn get_entity(&self) -> &Entity {

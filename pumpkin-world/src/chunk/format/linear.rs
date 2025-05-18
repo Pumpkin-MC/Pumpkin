@@ -376,6 +376,7 @@ mod tests {
     use crate::chunk::format::linear::LinearFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
     use crate::chunk::io::{ChunkIO, LoadedData};
+    use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::LevelFolder;
 
@@ -409,7 +410,7 @@ mod tests {
     async fn test_writing() {
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {

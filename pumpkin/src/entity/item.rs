@@ -63,7 +63,7 @@ impl ItemEntity {
 
 #[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server).await;
         {

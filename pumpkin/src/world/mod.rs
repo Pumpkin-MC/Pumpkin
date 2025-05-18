@@ -155,9 +155,15 @@ impl World {
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
         // TODO
-        let generation_settings = GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap();
+        let generation_settings = match dimension_type {
+            DimensionType::Overworld => GENERATION_SETTINGS
+                .get(&GeneratorSetting::Overworld)
+                .unwrap(),
+            DimensionType::OverworldCaves => todo!(),
+            DimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+            DimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+        };
+
         Self {
             level: Arc::new(level),
             level_info,
@@ -393,8 +399,10 @@ impl World {
 
         self.tick_scheduled_block_ticks().await;
 
+        let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
+
         // player ticks
-        for player in self.players.read().await.values() {
+        for player in players_to_tick {
             player.tick(server).await;
         }
 
@@ -402,7 +410,7 @@ impl World {
 
         // Entity ticks
         for entity in entities_to_tick {
-            entity.tick(entity.as_ref(), server).await;
+            entity.tick(entity.clone(), server).await;
             for player in self.players.read().await.values() {
                 if player
                     .living_entity
@@ -483,7 +491,19 @@ impl World {
 
     /// Gets the y position of the first non air block from the top down
     pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
-        for y in (-64..=319).rev() {
+        // TODO: this is bad
+        let generation_settings = match self.dimension_type {
+            DimensionType::Overworld => GENERATION_SETTINGS
+                .get(&GeneratorSetting::Overworld)
+                .unwrap(),
+            DimensionType::OverworldCaves => todo!(),
+            DimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+            DimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+        };
+        for y in (i32::from(generation_settings.shape.min_y)
+            ..=i32::from(generation_settings.shape.height))
+            .rev()
+        {
             let pos = BlockPos(Vector3::new(position.x, y, position.z));
             let block = self.get_block_state(&pos).await;
             if let Ok(block) = block {
@@ -880,7 +900,7 @@ impl World {
                 false,
                 false,
                 Some((death_dimension, death_location)),
-                0.into(),
+                VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                 self.sea_level.into(),
                 data_kept,
             ))

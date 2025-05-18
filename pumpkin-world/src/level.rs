@@ -23,6 +23,7 @@ use crate::{
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
+    dimension::Dimension,
     generation::{Seed, WorldGenerator, get_world_gen},
     world::SimpleWorld,
 };
@@ -68,7 +69,7 @@ pub struct LevelFolder {
 }
 
 impl Level {
-    pub fn from_root_folder(root_folder: PathBuf, seed: i64) -> Self {
+    pub fn from_root_folder(root_folder: PathBuf, seed: i64, dimension: Dimension) -> Self {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
         if !region_folder.exists() {
@@ -81,10 +82,8 @@ impl Level {
 
         // TODO: Load info correctly based on world format type
 
-        log::info!("Loading world with seed: {}", seed);
-
         let seed = Seed(seed as u64);
-        let world_gen = get_world_gen(seed).into();
+        let world_gen = get_world_gen(seed, dimension).into();
 
         let chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),

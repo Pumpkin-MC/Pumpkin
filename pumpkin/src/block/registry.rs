@@ -63,11 +63,12 @@ impl BlockRegistry {
         entity: &dyn EntityBase,
         pos: BlockPos,
         state: BlockState,
+        server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(&block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_entity_collision(world, entity, pos, block, state)
+                .on_entity_collision(world, entity, pos, block, state, server)
                 .await;
         }
     }

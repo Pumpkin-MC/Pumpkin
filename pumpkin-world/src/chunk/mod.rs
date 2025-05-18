@@ -179,6 +179,8 @@ pub struct ChunkHeightmaps {
     pub world_surface: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
     pub motion_blocking: Box<[i64]>,
+    #[serde(serialize_with = "nbt_long_array")]
+    pub motion_blocking_no_leaves: Box<[i64]>,
 }
 
 /// The Heightmap for a completely empty chunk
@@ -188,6 +190,7 @@ impl Default for ChunkHeightmaps {
             // 9 bits per entry
             // 0 packed into an i64 7 times.
             motion_blocking: vec![0; 37].into_boxed_slice(),
+            motion_blocking_no_leaves: vec![0; 37].into_boxed_slice(),
             world_surface: vec![0; 37].into_boxed_slice(),
         }
     }
