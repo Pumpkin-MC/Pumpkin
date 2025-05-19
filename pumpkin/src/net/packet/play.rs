@@ -1429,14 +1429,17 @@ impl Player {
         world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
-    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
+    pub async fn handle_use_item(&self, use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
         let inventory = self.inventory();
         let binding = inventory.held_item();
         let held = binding.lock().await;
-        server.item_registry.on_use(held.item, self).await;
+        let item = held.item;
+        drop(held);
+        server.item_registry.on_use(item, self).await;
+        self.update_sequence(use_item.sequence.0);
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
