@@ -27,7 +27,7 @@ impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let particle = ParticleArgumentConsumer::find_arg(args, ARG_NAME)?;
@@ -36,26 +36,44 @@ impl CommandExecutor for Executor {
         let speed = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_SPEED);
         let count = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_COUNT);
 
-        // TODO: Make this work in console
-        if let Some(player) = sender.as_player() {
-            let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
-            let delta = delta.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
-            let delta: Vector3<f32> = Vector3::new(delta.x as f32, delta.y as f32, delta.z as f32);
-            let speed = speed.unwrap_or(Ok(0.0))?;
-            let count = count.unwrap_or(Ok(0))?;
+        let delta = delta.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+        let delta: Vector3<f32> = Vector3::new(delta.x as f32, delta.y as f32, delta.z as f32);
+        let speed = speed.unwrap_or(Ok(0.0))?;
+        let count = count.unwrap_or(Ok(0))?;
+        let (world, pos) = match sender {
+            CommandSender::Console | CommandSender::Rcon(_) => {
+                let guard = server.worlds.read().await;
+                let world = guard
+                    .first()
+                    .cloned()
+                    .ok_or(CommandError::InvalidRequirement)?;
+                let info = &world.level_info;
+                // default position for spawning a player, in this case for particle
+                let pos = pos.unwrap_or(Vector3::new(
+                    f64::from(info.spawn_x),
+                    f64::from(info.spawn_y) + 1.0,
+                    f64::from(info.spawn_z),
+                ));
 
-            player
-                .world()
-                .await
-                .spawn_particle(pos, delta, speed, count, *particle)
-                .await;
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.particle.success",
-                    [TextComponent::text(format!("{particle:?}"))],
-                ))
-                .await;
-        }
+                (world, pos)
+            }
+            CommandSender::Player(player) => {
+                let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
+
+                (player.world().await, pos)
+            }
+        };
+
+        world
+            .spawn_particle(pos, delta, speed, count, *particle)
+            .await;
+
+        sender
+            .send_message(TextComponent::translate(
+                "commands.particle.success",
+                [TextComponent::text(format!("{particle:?}"))],
+            ))
+            .await;
 
         Ok(())
     }
