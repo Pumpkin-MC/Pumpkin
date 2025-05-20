@@ -74,6 +74,7 @@ impl PumpkinBlock for FireBlock {
         _pos: BlockPos,
         _block: Block,
         _state: BlockState,
+        _server: &Server,
     ) {
         let base_entity = entity.get_entity();
         if !base_entity.entity_type.fire_immune {
@@ -102,7 +103,7 @@ impl PumpkinBlock for FireBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await.unwrap()) {
+        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await) {
             return Block::AIR.default_state_id;
         }
 

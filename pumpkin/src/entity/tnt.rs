@@ -8,7 +8,10 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
-    sync::atomic::{AtomicU32, Ordering::Relaxed},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering::Relaxed},
+    },
 };
 
 use super::{Entity, EntityBase, living::LivingEntity};
@@ -31,7 +34,7 @@ impl TNTEntity {
 
 #[async_trait]
 impl EntityBase for TNTEntity {
-    async fn tick(&self, _caller: &dyn EntityBase, server: &Server) {
+    async fn tick(&self, _caller: Arc<dyn EntityBase>, server: &Server) {
         let fuse = self.fuse.fetch_sub(1, Relaxed);
         if fuse == 0 {
             self.entity.remove().await;

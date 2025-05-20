@@ -62,11 +62,12 @@ impl BlockRegistry {
         entity: &dyn EntityBase,
         pos: BlockPos,
         state: BlockState,
+        server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(&block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_entity_collision(world, entity, pos, block, state)
+                .on_entity_collision(world, entity, pos, block, state, server)
                 .await;
         }
     }
@@ -297,10 +298,10 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state = world.get_block_state(location).await.unwrap();
+        let state = world.get_block_state(location).await;
         for direction in BlockDirection::all() {
             let neighbor_pos = location.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos).await.unwrap();
+            let neighbor_state = world.get_block_state(&neighbor_pos).await;
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block

@@ -11,6 +11,7 @@ use pumpkin_world::BlockStateId;
 use crate::{
     block::pumpkin_block::{BlockMetadata, PumpkinBlock},
     entity::EntityBase,
+    server::Server,
     world::World,
 };
 
@@ -45,6 +46,7 @@ impl PumpkinBlock for WeightedPressurePlateBlock {
         pos: BlockPos,
         block: Block,
         state: BlockState,
+        _server: &Server,
     ) {
         self.on_entity_collision_pp(world, pos, block, state).await;
     }

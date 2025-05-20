@@ -43,7 +43,7 @@ impl PumpkinBlock for RedstoneLamp {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);
         let is_lit = props.lit;
         let is_receiving_power = block_receives_redstone_power(world, block_pos).await;
@@ -67,7 +67,7 @@ impl PumpkinBlock for RedstoneLamp {
     }
 
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         let mut props = RedstoneLampProperties::from_state_id(state.id, block);
         let is_lit = props.lit;
         let is_receiving_power = block_receives_redstone_power(world, block_pos).await;

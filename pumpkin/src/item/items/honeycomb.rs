@@ -45,7 +45,7 @@ impl PumpkinItem for HoneyCombItem {
                 && block.is_tagged_with("#minecraft:doors").unwrap()
             {
                 // get block state of the old log.
-                let door_information = world.get_block_state_id(&location).await.unwrap();
+                let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
                 let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
                 // create new properties for the new log.

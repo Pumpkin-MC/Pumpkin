@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use serde::Deserialize;
 
-use crate::block::BlockStateCodec;
+use crate::{block::BlockStateCodec, dimension::Dimension};
 
 use super::{biome_coords::to_block, height_limit::HeightLimitView, surface::rule::MaterialRule};
 
@@ -11,6 +11,16 @@ pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSet
         serde_json::from_str(include_str!("../../../assets/chunk_gen_settings.json"))
             .expect("Could not parse chunk_gen_settings.json registry.")
     });
+
+pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
+    match dimension {
+        Dimension::Overworld => GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap(),
+        Dimension::Nether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+        Dimension::End => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+    }
+}
 
 #[derive(Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -25,6 +35,8 @@ pub enum GeneratorSetting {
 }
 #[derive(Deserialize)]
 pub struct GenerationSettings {
+    pub aquifers_enabled: bool,
+    pub ore_veins_enabled: bool,
     pub legacy_random_source: bool,
     pub sea_level: i32,
     #[serde(rename = "noise")]

@@ -77,6 +77,6 @@ impl PumpkinBlock for FarmLandBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up()).await.unwrap();
+    let state = world.get_block_state(&block_pos.up()).await;
     !state.is_solid() // TODO: add fence gate block
 }

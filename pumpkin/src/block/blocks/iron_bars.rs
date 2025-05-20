@@ -61,11 +61,8 @@ pub async fn compute_bars_state(
 ) -> u16 {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let Ok((other_block, other_block_state)) =
-            world.get_block_and_block_state(&other_block_pos).await
-        else {
-            continue;
-        };
+        let (other_block, other_block_state) =
+            world.get_block_and_block_state(&other_block_pos).await;
 
         let connected = other_block == *block
             || other_block_state.is_side_solid(direction.opposite())

@@ -70,7 +70,6 @@ impl BlockEntity for BarrelBlockEntity {
 impl BarrelBlockEntity {
     pub const ID: &'static str = "minecraft:barrel";
     pub fn new(position: BlockPos) -> Self {
-        println!("Creating barrel");
         Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),

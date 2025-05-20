@@ -22,7 +22,7 @@ use pumpkin_data::item::Item;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
 pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> BlockStateId {
-    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, state) = world.get_block_and_block_state(block_pos).await;
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
     fence_gate_props.open = !fence_gate_props.open;

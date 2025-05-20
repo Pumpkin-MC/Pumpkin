@@ -25,7 +25,7 @@ pub trait PressurePlate {
     }
 
     async fn on_scheduled_tick_pp(&self, world: &Arc<World>, block: &Block, pos: &BlockPos) {
-        let state = world.get_block_state(pos).await.unwrap();
+        let state = world.get_block_state(pos).await;
         let output = self.get_redstone_output(block, state.id);
         if output > 0 {
             self.update_plate_state(world, *pos, block, state, output)

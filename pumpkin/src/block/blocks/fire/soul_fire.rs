@@ -38,7 +38,7 @@ impl PumpkinBlock for SoulFireBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !Self::is_soul_base(&world.get_block(&block_pos.down()).await.unwrap()) {
+        if !Self::is_soul_base(&world.get_block(&block_pos.down()).await) {
             return Block::AIR.default_state_id;
         }
 
@@ -56,7 +56,7 @@ impl PumpkinBlock for SoulFireBlock {
         _use_item_on: &SUseItemOn,
     ) -> bool {
         FireBlockBase::can_place_at(world, block_pos).await
-            && Self::is_soul_base(&world.get_block(&block_pos.down()).await.unwrap())
+            && Self::is_soul_base(&world.get_block(&block_pos.down()).await)
     }
 
     async fn broken(

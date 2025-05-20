@@ -26,7 +26,7 @@ use crate::server::Server;
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, state) = world.get_block_and_block_state(block_pos).await;
 
     let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
     if !button_props.powered {
@@ -113,7 +113,7 @@ impl PumpkinBlock for ButtonBlock {
     }
 
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         let mut props = ButtonLikeProperties::from_state_id(state.id, block);
         props.powered = false;
         world

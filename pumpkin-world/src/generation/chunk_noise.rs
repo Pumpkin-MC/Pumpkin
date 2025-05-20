@@ -186,9 +186,10 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let horizontal_biome_end = biome_coords::from_block(
             horizontal_cell_count * generation_shape.horizontal_cell_block_count() as usize,
         );
-
-        let vertical_cell_count = generation_shape.height as usize
-            / generation_shape.vertical_cell_block_count() as usize;
+        let vertical_cell_count = floor_div(
+            generation_shape.height as usize,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
         let minimum_cell_y = floor_div(
             generation_shape.min_y as i32,
             generation_shape.vertical_cell_block_count() as i32,

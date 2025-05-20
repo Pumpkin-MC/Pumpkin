@@ -56,6 +56,7 @@ pub trait PumpkinBlock: Send + Sync {
         _pos: BlockPos,
         _block: Block,
         _state: BlockState,
+        _server: &Server,
     ) {
     }
 

@@ -57,10 +57,6 @@ use pumpkin_inventory::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{
-    CCloseContainer, CEntityPositionSync, COpenScreen, CSetContainerContent, CSetContainerProperty,
-    CSetContainerSlot, CSetCursorItem, CSetPlayerInventory, PlayerInfoFlags, PreviousMessage,
-};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -91,6 +87,14 @@ use pumpkin_protocol::{
     client::play::Metadata,
     server::play::{SClickSlot, SKeepAlive},
 };
+use pumpkin_protocol::{
+    client::play::{
+        CCloseContainer, CEntityPositionSync, COpenScreen, CSetContainerContent,
+        CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetPlayerInventory,
+        PlayerInfoFlags, PreviousMessage,
+    },
+    server::play::SSetCommandBlock,
+};
 use pumpkin_util::{
     GameMode,
     math::{
@@ -100,10 +104,11 @@ use pumpkin_util::{
     permission::PermissionLvl,
     text::TextComponent,
 };
-use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
-};
 use pumpkin_world::inventory::Inventory;
+use pumpkin_world::{
+    biome,
+    entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
+};
 use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
 use tokio::sync::RwLock;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -583,7 +588,7 @@ impl Player {
             .await;
     }
 
-    pub async fn tick(&self, server: &Server) {
+    pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()
             .await
@@ -640,8 +645,8 @@ impl Player {
         if self.mining.load(Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world().await;
-            let block = world.get_block(&pos).await.unwrap();
-            let state = world.get_block_state(&pos).await.unwrap();
+            let block = world.get_block(&pos).await;
+            let state = world.get_block_state(&pos).await;
             // Is the block broken?
             if state.is_air() {
                 world
@@ -663,8 +668,8 @@ impl Player {
 
         self.last_attacked_ticks.fetch_add(1, Relaxed);
 
-        self.living_entity.tick(self, server).await;
-        self.hunger_manager.tick(self).await;
+        self.living_entity.tick(self.clone(), server).await;
+        self.hunger_manager.tick(self.as_ref()).await;
 
         // experience handling
         self.tick_experience().await;
@@ -930,6 +935,7 @@ impl Player {
                 *self.living_entity.entity.world.write().await = new_world.clone();
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
+
                 let last_pos = self.living_entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.name();
                 let death_location = BlockPos(Vector3::new(
@@ -941,21 +947,21 @@ impl Player {
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension_type as u8).into(),
                         new_world.dimension_type.name(),
-                        0, // seed
+                        biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
                         false,
                         false,
                         Some((death_dimension, death_location)),
-                        0.into(),
-                        0.into(),
+                        VarInt(self.get_entity().portal_cooldown.load(Relaxed) as i32),
+                        new_world.sea_level.into(),
                         1,
                     )).await
                     ;
-                self.send_abilities_update().await;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
                 self.living_entity.last_pos.store(position);
+                self.send_abilities_update().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
             }
@@ -1427,6 +1433,18 @@ impl Player {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
+        self.send_effect(effect.clone()).await;
+        self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn send_active_effects(&self) {
+        let effects = self.living_entity.active_effects.lock().await;
+        for effect in effects.values() {
+            self.send_effect(effect.clone()).await;
+        }
+    }
+
+    pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1452,7 +1470,6 @@ impl Player {
                 flag,
             ))
             .await;
-        self.living_entity.add_effect(effect).await;
     }
 
     pub async fn remove_effect(&self, effect_type: EffectType) {
@@ -1818,6 +1835,16 @@ impl EntityBase for Player {
         result
     }
 
+    async fn teleport(
+        self: Arc<Self>,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.teleport_world(world, position, yaw, pitch).await;
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.living_entity.entity
     }
@@ -1923,6 +1950,10 @@ impl Player {
             SPlayerAction::PACKET_ID => {
                 self.clone()
                     .handle_player_action(SPlayerAction::read(payload)?, server)
+                    .await;
+            }
+            SSetCommandBlock::PACKET_ID => {
+                self.handle_set_command_block(SSetCommandBlock::read(payload)?)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {

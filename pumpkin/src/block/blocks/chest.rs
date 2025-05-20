@@ -167,12 +167,9 @@ async fn compute_chest_props(
             return (ChestType::Single, chest_facing);
         };
 
-        let Ok((clicked_block, clicked_block_state)) = world
+        let (clicked_block, clicked_block_state) = world
             .get_block_and_block_state(&block_pos.offset(face.to_offset()))
-            .await
-        else {
-            return (ChestType::Single, chest_facing);
-        };
+            .await;
 
         if clicked_block == *block {
             let clicked_props =
@@ -229,12 +226,9 @@ async fn get_chest_properties_if_can_connect(
     direction: HorizontalFacing,
     wanted_type: ChestType,
 ) -> Option<ChestLikeProperties> {
-    let Ok((neighbor_block, neighbor_block_state)) = world
+    let (neighbor_block, neighbor_block_state) = world
         .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
-        .await
-    else {
-        return None;
-    };
+        .await;
 
     if neighbor_block != *block {
         return None;

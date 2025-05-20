@@ -2,12 +2,14 @@ use std::sync::Arc;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::EntityBase;
+use crate::server::Server;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_registry::DimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
@@ -43,11 +45,22 @@ impl PumpkinBlock for NetherPortalBlock {
 
     async fn on_entity_collision(
         &self,
-        _world: &Arc<World>,
-        _entity: &dyn EntityBase,
-        _pos: BlockPos,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        pos: BlockPos,
         _block: Block,
         _state: BlockState,
+        server: &Server,
     ) {
+        let world = if world.dimension_type == DimensionType::TheNether {
+            server
+                .get_world_from_dimension(DimensionType::Overworld)
+                .await
+        } else {
+            server
+                .get_world_from_dimension(DimensionType::TheNether)
+                .await
+        };
+        entity.get_entity().try_use_portal(80, world, pos).await;
     }
 }
