@@ -52,7 +52,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         if face == BlockDirection::Down {
-            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            let support_block = world.get_block_state(&block_pos.down()).await;
             if support_block.is_center_solid(BlockDirection::Up) {
                 return block.default_state_id;
             }
@@ -71,7 +71,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
                 directions[0] = face;
             }
         } else if directions[0] == Facing::Down {
-            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            let support_block = world.get_block_state(&block_pos.down()).await;
             if support_block.is_center_solid(BlockDirection::Up) {
                 return block.default_state_id;
             }
@@ -92,7 +92,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
             }
         }
 
-        let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+        let support_block = world.get_block_state(&block_pos.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
             block.default_state_id
         } else {
@@ -110,7 +110,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _face: BlockDirection,
         _use_item_on: &SUseItemOn,
     ) -> bool {
-        let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+        let support_block = world.get_block_state(&block_pos.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
             return true;
         }
@@ -140,7 +140,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
                 return 0;
             }
         } else if direction == BlockDirection::Down {
-            let support_block = world.get_block_state(&block_pos.down()).await.unwrap();
+            let support_block = world.get_block_state(&block_pos.down()).await;
             if !support_block.is_center_solid(BlockDirection::Up) {
                 return 0;
             }
@@ -309,9 +309,8 @@ pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos, facing: BlockDirection) -> bool {
-    let support_block = world
+    world
         .get_block_state(&block_pos.offset(facing.to_offset()))
         .await
-        .unwrap();
-    support_block.is_side_solid(facing.opposite())
+        .is_side_solid(facing.opposite())
 }

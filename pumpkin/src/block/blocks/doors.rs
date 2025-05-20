@@ -340,12 +340,9 @@ impl PumpkinBlock for DoorBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    world
-        .get_block_state(&block_pos.up())
-        .await
-        .is_ok_and(|state| state.replaceable())
+    world.get_block_state(&block_pos.up()).await.replaceable()
         && world
             .get_block_state(&block_pos.down())
             .await
-            .is_ok_and(|state| state.is_side_solid(BlockDirection::Up))
+            .is_side_solid(BlockDirection::Up)
 }

@@ -278,7 +278,7 @@ impl PumpkinBlock for RedstoneWireBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    let floor = world.get_block_state(&block_pos.down()).await.unwrap();
+    let floor = world.get_block_state(&block_pos.down()).await;
     floor.is_side_solid(BlockDirection::Up)
 }
 
