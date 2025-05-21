@@ -16,6 +16,7 @@ use crate::{inventory::Inventory, world::SimpleWorld};
 pub mod barrel;
 pub mod bed;
 pub mod chest;
+pub mod command_block;
 pub mod comparator;
 pub mod piston;
 pub mod sign;

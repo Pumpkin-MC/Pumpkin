@@ -7,11 +7,11 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
@@ -77,6 +77,6 @@ impl PumpkinBlock for FarmLandBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up()).await.unwrap();
+    let state = world.get_block_state(&block_pos.up()).await;
     !state.is_solid() // TODO: add fence gate block
 }

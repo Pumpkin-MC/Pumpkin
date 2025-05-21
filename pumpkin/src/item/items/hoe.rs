@@ -4,11 +4,11 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
@@ -61,11 +61,7 @@ impl PumpkinItem for HoeItem {
                 if (block == &Block::GRASS_BLOCK
                     || block == &Block::DIRT_PATH
                     || block == &Block::DIRT)
-                    && world
-                        .get_block_state(&location.up())
-                        .await
-                        .unwrap()
-                        .is_air()
+                    && world.get_block_state(&location.up()).await.is_air()
                 {
                     future_block = &Block::FARMLAND;
                 }

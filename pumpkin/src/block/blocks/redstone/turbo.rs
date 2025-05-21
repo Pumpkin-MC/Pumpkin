@@ -3,11 +3,14 @@
 //! <https://bugs.mojang.com/browse/MC-81098>.
 
 use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
+    Block, BlockDirection, BlockState,
+    block_properties::{
+        BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
+        get_state_by_state_id,
+    },
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_world::{block::BlockDirection, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -42,7 +45,7 @@ impl UpdateNode {
     async fn new(world: &World, pos: BlockPos) -> Self {
         Self {
             pos,
-            state: world.get_block_state(&pos).await.unwrap(),
+            state: world.get_block_state(&pos).await,
             visited: false,
             neighbors: None,
             xbias: 0,
@@ -329,9 +332,7 @@ impl RedstoneWireTurbo {
             let node = &mut self.nodes[upd1.index];
             let mut wire = unwrap_wire(&node.state);
             wire.power = new_wire.power;
-            node.state = world
-                .get_state_by_id(wire.to_state_id(&Block::REDSTONE_WIRE))
-                .unwrap();
+            node.state = get_state_by_state_id(wire.to_state_id(&Block::REDSTONE_WIRE)).unwrap();
 
             self.propagate_changes(world, upd1, layer).await;
         }

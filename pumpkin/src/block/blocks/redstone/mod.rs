@@ -4,9 +4,8 @@ use std::sync::Arc;
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 
 use crate::world::World;
 
@@ -26,7 +25,7 @@ pub mod turbo;
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     for direction in BlockDirection::all() {
         let neighbor_pos = pos.offset(direction.to_offset());
-        let block = world.get_block(&neighbor_pos).await.unwrap();
+        let block = world.get_block(&neighbor_pos).await;
         world
             .block_registry
             .on_neighbor_update(world, &block, &neighbor_pos, &block, true)
@@ -34,7 +33,7 @@ pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
 
         for n_direction in BlockDirection::all() {
             let n_neighbor_pos = neighbor_pos.offset(n_direction.to_offset());
-            let block = world.get_block(&n_neighbor_pos).await.unwrap();
+            let block = world.get_block(&n_neighbor_pos).await;
             world
                 .block_registry
                 .on_neighbor_update(world, &block, &n_neighbor_pos, &block, true)
@@ -90,8 +89,7 @@ async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -
     for side in BlockDirection::all() {
         let (block, state) = world
             .get_block_and_block_state(&pos.offset(side.to_offset()))
-            .await
-            .unwrap();
+            .await;
         max_power = max_power.max(
             get_strong_power(
                 &block,
@@ -112,8 +110,7 @@ async fn get_max_weak_power(world: &World, pos: &BlockPos, dust_power: bool) -> 
     for side in BlockDirection::all() {
         let (block, state) = world
             .get_block_and_block_state(&pos.offset(side.to_offset()))
-            .await
-            .unwrap();
+            .await;
         max_power = max_power.max(
             get_weak_power(
                 &block,
@@ -166,10 +163,7 @@ async fn get_strong_power(
 pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> bool {
     for face in BlockDirection::all() {
         let neighbor_pos = pos.offset(face.to_offset());
-        let (block, state) = world
-            .get_block_and_block_state(&neighbor_pos)
-            .await
-            .unwrap();
+        let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
         if is_emitting_redstone_power(&block, &state, world, pos, face).await {
             return true;
         }
@@ -183,7 +177,7 @@ pub fn is_diode(block: &Block) -> bool {
 
 pub async fn diode_get_input_strength(world: &World, pos: &BlockPos, facing: BlockDirection) -> u8 {
     let input_pos = pos.offset(facing.to_offset());
-    let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await.unwrap();
+    let (input_block, input_state) = world.get_block_and_block_state(&input_pos).await;
     let power: u8 = get_redstone_power(&input_block, &input_state, world, &input_pos, facing).await;
     if power == 0 && input_state.is_solid() {
         return get_max_weak_power(world, &input_pos, true).await;

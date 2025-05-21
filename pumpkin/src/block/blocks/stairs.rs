@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockHalf;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -10,7 +11,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -77,7 +77,7 @@ impl PumpkinBlock for StairBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let state_id = world.get_block_state_id(block_pos).await.unwrap();
+        let state_id = world.get_block_state_id(block_pos).await;
         let mut stair_props = StairsProperties::from_state_id(state_id, block);
 
         let new_shape =
@@ -158,7 +158,7 @@ async fn get_stair_properties_if_exists(
     world: &World,
     block_pos: &BlockPos,
 ) -> Option<StairsProperties> {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
     block
         .is_tagged_with("#minecraft:stairs")
         .unwrap()

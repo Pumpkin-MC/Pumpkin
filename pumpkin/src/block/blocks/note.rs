@@ -8,7 +8,7 @@ use pumpkin_data::block_properties::Axis;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
-    Block,
+    Block, BlockDirection,
     block_properties::{
         BlockProperties, EnumVariants, Instrument, Integer0To24, NoteBlockLikeProperties,
     },
@@ -17,7 +17,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{block::pumpkin_block::PumpkinBlock, world::World};
@@ -29,9 +28,7 @@ pub struct NoteBlock;
 
 impl NoteBlock {
     pub async fn play_note(props: &NoteBlockLikeProperties, world: &World, pos: &BlockPos) {
-        if !is_base_block(props.instrument)
-            || world.get_block_state(&pos.up()).await.unwrap().is_air()
-        {
+        if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).await.is_air() {
             world.add_synced_block_event(*pos, 0, 0).await;
         }
     }
@@ -49,7 +46,6 @@ impl NoteBlock {
             &world
                 .get_block_state(&pos.up())
                 .await
-                .unwrap()
                 .instrument
                 .to_lowercase(),
         );
@@ -62,7 +58,6 @@ impl NoteBlock {
             &world
                 .get_block_state(&pos.down())
                 .await
-                .unwrap()
                 .instrument
                 .to_lowercase(),
         );
@@ -86,7 +81,7 @@ impl PumpkinBlock for NoteBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let block_state = world.get_block_state(pos).await.unwrap();
+        let block_state = world.get_block_state(pos).await;
         let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, block);
         let powered = block_receives_redstone_power(world, pos).await;
         // check if powered state changed
@@ -109,7 +104,7 @@ impl PumpkinBlock for NoteBlock {
         _server: &Server,
         world: &Arc<World>,
     ) {
-        let block_state = world.get_block_state(&pos).await.unwrap();
+        let block_state = world.get_block_state(&pos).await;
         let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, block);
         let next_index = note_props.note.to_index() + 1;
         // Increment and check if max
@@ -145,7 +140,7 @@ impl PumpkinBlock for NoteBlock {
         _type: u8,
         _data: u8,
     ) -> bool {
-        let block_state = world.get_block_state(pos).await.unwrap();
+        let block_state = world.get_block_state(pos).await;
         let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, block);
         let instrument = note_props.instrument;
         let pitch = if is_base_block(instrument) {

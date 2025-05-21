@@ -4,14 +4,13 @@ use async_trait::async_trait;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{
-    Block,
+    Block, BlockDirection,
     block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
@@ -32,12 +31,8 @@ impl PumpkinBlock for SugarCaneBlock {
     }
 
     async fn random_tick(&self, block: &Block, world: &Arc<World>, pos: &BlockPos) {
-        if world.get_block_state(&pos.up()).await.unwrap().is_air() {
-            let state_id = world
-                .get_block_state(pos)
-                .await
-                .expect("`location` should be a sugar cane")
-                .id;
+        if world.get_block_state(&pos.up()).await.is_air() {
+            let state_id = world.get_block_state(pos).await.id;
             let age = CactusLikeProperties::from_state_id(state_id, block).age;
             if age == Integer0To15::L15 {
                 world
@@ -93,7 +88,7 @@ impl PumpkinBlock for SugarCaneBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    let block_below = world.get_block(&block_pos.down()).await.unwrap();
+    let block_below = world.get_block(&block_pos.down()).await;
 
     if block_below == Block::SUGAR_CANE {
         return true;
@@ -105,8 +100,7 @@ async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
         for direction in HorizontalFacing::all() {
             let block = world
                 .get_block(&block_pos.down().offset(direction.to_offset()))
-                .await
-                .unwrap();
+                .await;
 
             if block == Block::WATER || block == Block::FROSTED_ICE {
                 return true;

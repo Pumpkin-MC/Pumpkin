@@ -6,12 +6,11 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
 use crate::block::pumpkin_block::PumpkinBlock;
@@ -104,7 +103,7 @@ impl PumpkinBlock for FireBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await.unwrap()) {
+        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await) {
             return Block::AIR.default_state_id;
         }
 

@@ -2,18 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockFlags;
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
-use pumpkin_world::{
-    block::{BlockDirection, HorizontalFacingExt},
-    world::BlockFlags,
-};
 
 use crate::{
     block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -66,7 +63,7 @@ impl PumpkinBlock for RepeaterBlock {
         _source_block: &Block,
         _notify: bool,
     ) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         let mut rep = RepeaterProperties::from_state_id(state.id, block);
         let should_be_locked = should_be_locked(&rep.facing, world, block_pos).await;
         if !rep.locked && should_be_locked {
@@ -90,7 +87,7 @@ impl PumpkinBlock for RepeaterBlock {
     }
 
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         let mut rep = RepeaterProperties::from_state_id(state.id, block);
         if rep.locked {
             return;
@@ -120,7 +117,7 @@ impl PumpkinBlock for RepeaterBlock {
         _server: &Server,
         world: &Arc<World>,
     ) {
-        let state = world.get_block_state(&location).await.unwrap();
+        let state = world.get_block_state(&location).await;
         let props = RepeaterProperties::from_state_id(state.id, block);
         on_use(props, world, location, block).await;
     }
@@ -134,7 +131,7 @@ impl PumpkinBlock for RepeaterBlock {
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let state = world.get_block_state(&location).await.unwrap();
+        let state = world.get_block_state(&location).await;
         let props = RepeaterProperties::from_state_id(state.id, block);
         on_use(props, world, location, block).await;
         BlockActionResult::Consume
@@ -204,7 +201,7 @@ async fn should_be_locked(facing: &HorizontalFacing, world: &World, pos: &BlockP
 
 async fn get_power_on_side(world: &World, pos: &BlockPos, side: HorizontalFacing) -> u8 {
     let side_pos = pos.offset(side.to_block_direction().to_offset());
-    let (side_block, side_state) = world.get_block_and_block_state(&side_pos).await.unwrap();
+    let (side_block, side_state) = world.get_block_and_block_state(&side_pos).await;
     if is_diode(&side_block) {
         get_weak_power(
             &side_block,
@@ -222,12 +219,12 @@ async fn get_power_on_side(world: &World, pos: &BlockPos, side: HorizontalFacing
 
 async fn on_state_change(rep: RepeaterProperties, world: &Arc<World>, pos: &BlockPos) {
     let front_pos = pos.offset(rep.facing.opposite().to_block_direction().to_offset());
-    let front_block = world.get_block(&front_pos).await.unwrap();
+    let front_block = world.get_block(&front_pos).await;
     world.update_neighbor(&front_pos, &front_block).await;
 
     for direction in BlockDirection::all() {
         let neighbor_pos = front_pos.offset(direction.to_offset());
-        let block = world.get_block(&neighbor_pos).await.unwrap();
+        let block = world.get_block(&neighbor_pos).await;
         world.update_neighbor(&neighbor_pos, &block).await;
     }
 }
@@ -240,8 +237,7 @@ async fn schedule_tick(
 ) {
     let front_block = world
         .get_block(&pos.offset(rep.facing.opposite().to_block_direction().to_offset()))
-        .await
-        .unwrap();
+        .await;
     let priority = if is_diode(&front_block) {
         TickPriority::ExtremelyHigh
     } else if !should_be_powered {

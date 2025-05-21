@@ -1,8 +1,8 @@
 use piston::PistonBlock;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 
 use crate::world::World;
 
@@ -49,11 +49,7 @@ impl<'a> PistonHandler<'a> {
     pub async fn calculate_push(&mut self) -> bool {
         self.moved_blocks.clear();
         self.broken_blocks.clear();
-        let (block, block_state) = self
-            .world
-            .get_block_and_block_state(&self.pos_to)
-            .await
-            .unwrap();
+        let (block, block_state) = self.world.get_block_and_block_state(&self.pos_to).await;
         dbg!(PistonBlock::is_movable(
             &block,
             &block_state,
@@ -78,7 +74,7 @@ impl<'a> PistonHandler<'a> {
             return false;
         }
         for block_pos in self.moved_blocks.clone() {
-            let block = self.world.get_block(&block_pos).await.unwrap();
+            let block = self.world.get_block(&block_pos).await;
             if Self::is_block_sticky(&block)
                 && !self.try_move_adjacent_block(&block, block_pos).await
             {
@@ -103,8 +99,7 @@ impl<'a> PistonHandler<'a> {
     }
 
     async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
-        let (mut block, mut block_state) =
-            self.world.get_block_and_block_state(&pos).await.unwrap();
+        let (mut block, mut block_state) = self.world.get_block_and_block_state(&pos).await;
         if block_state.is_air() {
             return true;
         }
@@ -124,11 +119,7 @@ impl<'a> PistonHandler<'a> {
         while Self::is_block_sticky(&block) {
             let block_pos = pos.offset_dir(self.motion_direction.opposite().to_offset(), i as i32);
             let block2 = block;
-            (block, block_state) = self
-                .world
-                .get_block_and_block_state(&block_pos)
-                .await
-                .unwrap();
+            (block, block_state) = self.world.get_block_and_block_state(&block_pos).await;
             if block_state.is_air()
                 || !Self::is_adjacent_block_stuck(&block2, &block)
                 || !PistonBlock::is_movable(
@@ -160,7 +151,7 @@ impl<'a> PistonHandler<'a> {
                 self.set_moved_blocks(j, l);
                 for m in 0..=(l + j) {
                     let block_pos3 = self.moved_blocks[m];
-                    let block = self.world.get_block(&block_pos3).await.unwrap();
+                    let block = self.world.get_block(&block_pos3).await;
                     if Self::is_block_sticky(&block)
                         && !Box::pin(self.try_move_adjacent_block(&block, block_pos3)).await
                     {
@@ -169,11 +160,7 @@ impl<'a> PistonHandler<'a> {
                 }
                 return true;
             }
-            (block, block_state) = self
-                .world
-                .get_block_and_block_state(&block_pos2)
-                .await
-                .unwrap();
+            (block, block_state) = self.world.get_block_and_block_state(&block_pos2).await;
             if block_state.is_air() {
                 return true;
             }
@@ -219,7 +206,7 @@ impl<'a> PistonHandler<'a> {
                 continue;
             }
             let block_pos = pos.offset(direction.to_offset());
-            let block_state2 = self.world.get_block(&block_pos).await.unwrap();
+            let block_state2 = self.world.get_block(&block_pos).await;
             if Self::is_adjacent_block_stuck(&block_state2, block)
                 && !self.try_move(block_pos, direction).await
             {

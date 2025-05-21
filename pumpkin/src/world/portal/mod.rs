@@ -31,7 +31,11 @@ impl PortalManager {
             self.ticks_in_portal += 1;
             self.ticks_in_portal >= self.portal_delay
         } else {
-            self.ticks_in_portal -= 4;
+            if self.ticks_in_portal < 4 {
+                self.ticks_in_portal = 0;
+            } else {
+                self.ticks_in_portal -= 4;
+            }
             false
         }
     }

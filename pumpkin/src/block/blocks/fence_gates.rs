@@ -4,13 +4,13 @@ use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -22,7 +22,7 @@ use pumpkin_data::item::Item;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
 pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> BlockStateId {
-    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, state) = world.get_block_and_block_state(block_pos).await;
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
     fence_gate_props.open = !fence_gate_props.open;

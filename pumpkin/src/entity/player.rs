@@ -57,10 +57,6 @@ use pumpkin_inventory::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{
-    CCloseContainer, CEntityPositionSync, COpenScreen, CSetContainerContent, CSetContainerProperty,
-    CSetContainerSlot, CSetCursorItem, CSetPlayerInventory, PlayerInfoFlags, PreviousMessage,
-};
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
@@ -90,6 +86,14 @@ use pumpkin_protocol::{client::play::CUpdateTime, codec::var_int::VarInt};
 use pumpkin_protocol::{
     client::play::Metadata,
     server::play::{SClickSlot, SKeepAlive},
+};
+use pumpkin_protocol::{
+    client::play::{
+        CCloseContainer, CEntityPositionSync, COpenScreen, CSetContainerContent,
+        CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetPlayerInventory,
+        PlayerInfoFlags, PreviousMessage,
+    },
+    server::play::SSetCommandBlock,
 };
 use pumpkin_util::{
     GameMode,
@@ -641,8 +645,8 @@ impl Player {
         if self.mining.load(Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world().await;
-            let block = world.get_block(&pos).await.unwrap();
-            let state = world.get_block_state(&pos).await.unwrap();
+            let block = world.get_block(&pos).await;
+            let state = world.get_block_state(&pos).await;
             // Is the block broken?
             if state.is_air() {
                 world
@@ -1429,6 +1433,18 @@ impl Player {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
+        self.send_effect(effect.clone()).await;
+        self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn send_active_effects(&self) {
+        let effects = self.living_entity.active_effects.lock().await;
+        for effect in effects.values() {
+            self.send_effect(effect.clone()).await;
+        }
+    }
+
+    pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1454,7 +1470,6 @@ impl Player {
                 flag,
             ))
             .await;
-        self.living_entity.add_effect(effect).await;
     }
 
     pub async fn remove_effect(&self, effect_type: EffectType) {
@@ -1935,6 +1950,10 @@ impl Player {
             SPlayerAction::PACKET_ID => {
                 self.clone()
                     .handle_player_action(SPlayerAction::read(payload)?, server)
+                    .await;
+            }
+            SSetCommandBlock::PACKET_ID => {
+                self.handle_set_command_block(SSetCommandBlock::read(payload)?)
                     .await;
             }
             SPlayerCommand::PACKET_ID => {

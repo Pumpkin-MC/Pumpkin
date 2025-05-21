@@ -1,6 +1,7 @@
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
+use blocks::command::CommandBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
@@ -100,6 +101,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
+    manager.register(CommandBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
 
@@ -211,6 +213,7 @@ pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),
     Other,
+    None,
 }
 
 impl BlockIsReplacing {

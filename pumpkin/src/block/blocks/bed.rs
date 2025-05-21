@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
@@ -8,7 +9,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -47,14 +47,11 @@ impl PumpkinBlock for BedBlock {
     ) -> bool {
         let facing = player.living_entity.entity.get_horizontal_facing();
 
-        world
-            .get_block_state(block_pos)
-            .await
-            .is_ok_and(|state| state.replaceable())
+        world.get_block_state(block_pos).await.replaceable()
             && world
                 .get_block_state(&block_pos.offset(facing.to_offset()))
                 .await
-                .is_ok_and(|state| state.replaceable())
+                .replaceable()
     }
 
     async fn on_place(

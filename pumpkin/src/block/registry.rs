@@ -5,11 +5,10 @@ use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -299,10 +298,10 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state = world.get_block_state(location).await.unwrap();
+        let state = world.get_block_state(location).await;
         for direction in BlockDirection::all() {
             let neighbor_pos = location.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos).await.unwrap();
+            let neighbor_state = world.get_block_state(&neighbor_pos).await;
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block

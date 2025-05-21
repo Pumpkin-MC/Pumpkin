@@ -200,10 +200,7 @@ impl LivingEntity {
     pub async fn is_in_water(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world
-            .get_block(&block_pos)
-            .await
-            .is_ok_and(|block| block == Block::WATER)
+        world.get_block(&block_pos).await == Block::WATER
     }
 
     pub async fn update_fall_distance(
@@ -356,6 +353,22 @@ impl NBTStorage for LivingEntity {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
         nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
+        {
+            let effects = self.active_effects.lock().await;
+            if !effects.is_empty() {
+                // Iterate effects and create Box<[NbtTag]>
+                let mut effects_list = Vec::with_capacity(effects.len());
+                for effect in effects.values() {
+                    let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    effect.write_nbt(&mut effect_nbt).await;
+                    effects_list.push(NbtTag::Compound(effect_nbt));
+                }
+                nbt.put(
+                    "active_effects",
+                    NbtTag::List(effects_list.into_boxed_slice()),
+                );
+            }
+        }
         //TODO: write equipment
         // todo more...
     }
@@ -365,6 +378,24 @@ impl NBTStorage for LivingEntity {
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
         self.fall_distance
             .store(nbt.get_float("fall_distance").unwrap_or(0.0));
+        {
+            let mut active_effects = self.active_effects.lock().await;
+            let nbt_effects = nbt.get_list("active_effects");
+            if let Some(nbt_effects) = nbt_effects {
+                for effect in nbt_effects {
+                    if let NbtTag::Compound(effect_nbt) = effect {
+                        let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
+                        if effect.is_none() {
+                            log::warn!("Unable to read effect from nbt");
+                            continue;
+                        }
+                        let mut effect = effect.unwrap();
+                        effect.blend = true; // TODO: change, is taken from effect give command
+                        active_effects.insert(effect.r#type, effect);
+                    }
+                }
+            }
+        }
         // todo more...
     }
 }

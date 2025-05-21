@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::{
     command::{
@@ -8,8 +8,7 @@ use crate::{
             ConsumedArgs, FindArg, position_3d::Position3DArgumentConsumer,
             summonable_entities::SummonableEntitiesArgumentConsumer,
         },
-        tree::CommandTree,
-        tree::builder::argument,
+        tree::{CommandTree, builder::argument},
     },
     entity::mob,
 };
@@ -28,24 +27,43 @@ impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
+        let (world, pos) = match sender {
+            CommandSender::Console | CommandSender::Rcon(_) => {
+                let guard = server.worlds.read().await;
+                let world = guard
+                    .first()
+                    .cloned()
+                    .ok_or(CommandError::InvalidRequirement)?;
+                let info = &world.level_info;
+                // default position for spawning a player, in this case for mob
+                let pos = pos.unwrap_or(Vector3::new(
+                    f64::from(info.spawn_x),
+                    f64::from(info.spawn_y) + 1.0,
+                    f64::from(info.spawn_z),
+                ));
 
-        // TODO: Make this work in console
-        if let Some(player) = sender.as_player() {
-            let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
-            let mob = mob::from_type(entity, pos, &player.world().await).await;
-            player.world().await.spawn_entity(mob).await;
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.summon.success",
-                    [TextComponent::text(format!("{entity:?}"))],
-                ))
-                .await;
-        }
+                (world, pos)
+            }
+            CommandSender::Player(player) => {
+                let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
+
+                (player.world().await, pos)
+            }
+        };
+        let mob = mob::from_type(entity, pos, &world).await;
+        world.spawn_entity(mob).await;
+
+        sender
+            .send_message(TextComponent::translate(
+                "commands.summon.success",
+                [TextComponent::text(format!("{entity:?}"))],
+            ))
+            .await;
 
         Ok(())
     }

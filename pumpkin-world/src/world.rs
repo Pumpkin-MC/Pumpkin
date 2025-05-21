@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::block::BlockDirection;
 use async_trait::async_trait;
 use bitflags::bitflags;
+use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 
@@ -44,7 +44,7 @@ pub trait SimpleWorld: Send + Sync {
         flags: BlockFlags,
     ) -> BlockStateId;
 
-    async fn get_block(&self, position: &BlockPos) -> Result<pumpkin_data::Block, GetBlockError>;
+    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block;
 
     async fn update_neighbor(
         self: Arc<Self>,

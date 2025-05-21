@@ -7,7 +7,6 @@ use super::{
     biome_coords, noise_router::proto_noise_router::ProtoNoiseRouters,
     settings::gen_settings_from_dimension,
 };
-use crate::chunk::ChunkHeightmaps;
 use crate::chunk::format::LightContainer;
 use crate::{chunk::ChunkLight, dimension::Dimension};
 use crate::{
@@ -86,11 +85,6 @@ impl WorldGenerator for VanillaGenerator {
                 }
             }
         }
-        let heightmap = ChunkHeightmaps {
-            world_surface: proto_chunk.flat_surface_height_map,
-            motion_blocking: proto_chunk.flat_motion_blocking_height_map,
-            motion_blocking_no_leaves: proto_chunk.flat_motion_blocking_no_leaves_height_map,
-        };
         ChunkData {
             light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len() + 2)
@@ -101,7 +95,7 @@ impl WorldGenerator for VanillaGenerator {
                     .collect(),
             },
             section: sections,
-            heightmap,
+            heightmap: Default::default(),
             position: *at,
             dirty: true,
             block_ticks: Default::default(),

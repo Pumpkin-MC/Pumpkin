@@ -3,12 +3,12 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::world::BlockFlags;
 
 pub struct HoneyCombItem;
@@ -45,7 +45,7 @@ impl PumpkinItem for HoneyCombItem {
                 && block.is_tagged_with("#minecraft:doors").unwrap()
             {
                 // get block state of the old log.
-                let door_information = world.get_block_state_id(&location).await.unwrap();
+                let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
                 let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
                 // create new properties for the new log.
