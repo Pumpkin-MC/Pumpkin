@@ -7,7 +7,6 @@ use super::{
     biome_coords, noise_router::proto_noise_router::ProtoNoiseRouters,
     settings::gen_settings_from_dimension,
 };
-use crate::chunk::ChunkHeightmaps;
 use crate::chunk::format::LightContainer;
 use crate::{chunk::ChunkLight, dimension::Dimension};
 use crate::{
@@ -85,7 +84,6 @@ impl WorldGenerator for VanillaGenerator {
                 }
             }
         }
-       
         ChunkData {
             light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len() + 2)
