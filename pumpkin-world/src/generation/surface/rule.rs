@@ -1,6 +1,6 @@
-use pumpkin_data::block::BlockState;
 use std::sync::OnceLock;
 
+use pumpkin_data::BlockState;
 use serde::Deserialize;
 
 use super::{MaterialCondition, MaterialRuleContext};

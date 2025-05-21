@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection;
 use pumpkin_macros::default_block_state;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -7,7 +8,7 @@ use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
-    block::{BlockDirection, RawBlockState},
+    block::RawBlockState,
     generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView},
 };
 

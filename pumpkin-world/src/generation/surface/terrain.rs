@@ -1,4 +1,4 @@
-use pumpkin_data::{block::BlockState, chunk::Biome};
+use pumpkin_data::{BlockState, chunk::Biome};
 use pumpkin_macros::default_block_state;
 use pumpkin_util::{
     math::vector3::Vector3,

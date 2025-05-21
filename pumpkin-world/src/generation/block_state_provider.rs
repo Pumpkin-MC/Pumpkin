@@ -1,6 +1,5 @@
 use pumpkin_data::{
-    block::{Block, BlockState, get_state_by_state_id},
-    chunk::DoublePerlinNoiseParameters,
+    Block, BlockState, block_properties::get_state_by_state_id, chunk::DoublePerlinNoiseParameters,
 };
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,

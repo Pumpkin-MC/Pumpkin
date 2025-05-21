@@ -322,7 +322,7 @@ impl<'a> ProtoChunk<'a> {
     #[inline]
     pub fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
         let state = self.get_block_state(local_pos).to_state();
-        state.air
+        state.is_air()
     }
 
     #[inline]
@@ -336,7 +336,7 @@ impl<'a> ProtoChunk<'a> {
         self.flat_block_map[index]
     }
 
-    pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: BlockState) {
+    pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: &BlockState) {
         if !block_state.is_air() {
             self.maybe_update_surface_height_map(local_pos);
         }

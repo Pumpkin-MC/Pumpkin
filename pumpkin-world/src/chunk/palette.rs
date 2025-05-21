@@ -7,7 +7,7 @@ use std::{
 use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
-use crate::block::RawBlockState;
+use crate::block::{BlockStateCodec, RawBlockState};
 
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
 
@@ -399,9 +399,8 @@ impl BlockPalette {
             .palette
             .into_iter()
             .map(|entry| {
-
-                if let Some(block_state) = RawBlockState::from_palette(&entry) {
-                    block_state.get_state_id()
+                if let Some(block_state) = entry.get_state() {
+                    block_state.id
                 } else {
                     log::warn!(
                         "Could not find valid block state for {}. Defaulting...",

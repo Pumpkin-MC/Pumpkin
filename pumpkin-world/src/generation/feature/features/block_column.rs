@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
@@ -6,7 +7,6 @@ use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
-    block::BlockDirection,
     generation::{block_predicate::BlockPredicate, block_state_provider::BlockStateProvider},
 };
 

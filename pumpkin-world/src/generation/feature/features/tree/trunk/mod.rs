@@ -1,4 +1,4 @@
-use pumpkin_data::block::{Block, BlockState};
+use pumpkin_data::BlockState;
 use pumpkin_util::math::position::BlockPos;
 use serde::Deserialize;
 

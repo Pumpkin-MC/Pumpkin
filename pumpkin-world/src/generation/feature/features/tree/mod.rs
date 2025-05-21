@@ -1,8 +1,5 @@
 use placer::TrunkPlacer;
-use pumpkin_data::{
-    block::{Block, get_block_by_id, get_state_by_state_id},
-    tag::Tagable,
-};
+use pumpkin_data::{Block, tag::Tagable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
@@ -49,7 +46,7 @@ impl TreeFeature {
         let block = state.to_block();
         let state = state.to_state();
 
-        state.air
+        state.is_air()
             || block
                 .is_tagged_with("minecraft:replaceable_by_trees")
                 .unwrap()

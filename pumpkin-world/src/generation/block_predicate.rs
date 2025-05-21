@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use pumpkin_data::block::{Block, BlockState, get_state_by_state_id};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
@@ -130,7 +130,7 @@ pub struct SolidBlockPredicate {
 impl SolidBlockPredicate {
     pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
-        state.is_solid
+        state.is_solid()
     }
 }
 
@@ -143,7 +143,7 @@ pub struct ReplaceableBlockPredicate {
 impl ReplaceableBlockPredicate {
     pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
-        state.replaceable
+        state.replaceable()
     }
 }
 

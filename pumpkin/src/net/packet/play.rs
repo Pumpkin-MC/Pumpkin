@@ -33,7 +33,6 @@ use crate::{
     world::chunker,
 };
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block::{Block, HorizontalFacing, get_block_by_item, get_block_collision_shapes};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;

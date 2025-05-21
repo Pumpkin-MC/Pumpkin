@@ -1,4 +1,4 @@
-use pumpkin_data::block::{Block, BlockState, get_block_by_state_id};
+use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},

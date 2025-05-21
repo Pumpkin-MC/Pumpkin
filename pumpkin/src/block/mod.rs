@@ -52,6 +52,8 @@ use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::get_seed;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;

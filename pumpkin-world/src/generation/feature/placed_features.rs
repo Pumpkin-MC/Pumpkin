@@ -283,7 +283,7 @@ impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
+        let top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
         // TODO: This is nonsense and broken, add ocean floor
         top <= self.max_water_depth
     }
@@ -342,7 +342,7 @@ impl HeightmapPlacementModifier {
     ) -> Option<Box<dyn Iterator<Item = BlockPos>>> {
         let x = pos.0.x;
         let z = pos.0.z;
-        let top = chunk.top_block_height_exclusive(&Vector2::new(x, z));
+        let top = chunk.top_block_height_exclusive(&Vector2::new(x, z)) as i32;
         if top > min_y as i32 {
             return Some(Box::new(iter::once(BlockPos(Vector3::new(x, top, z)))));
         }
