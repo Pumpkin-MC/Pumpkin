@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 #[repr(u8)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum BlockDirection {
     Down = 0,
     Up,
