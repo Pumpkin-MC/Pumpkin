@@ -5,6 +5,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -18,6 +19,7 @@ use pumpkin_world::block::entities::bed::BedBlockEntity;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -149,58 +151,127 @@ impl PumpkinBlock for BedBlock {
         let state_id = world.get_block_state_id(&block_pos).await.unwrap();
         let bed_props = BedProperties::from_state_id(state_id, block);
 
-        let bed_head_pos = if bed_props.part == BedPart::Head {
-            block_pos
+        let (bed_head_pos, bed_foot_pos) = if bed_props.part == BedPart::Head {
+            (
+                block_pos,
+                block_pos.offset(bed_props.facing.opposite().to_offset()),
+            )
         } else {
-            block_pos.offset(bed_props.facing.to_offset())
+            (block_pos.offset(bed_props.facing.to_offset()), block_pos)
         };
 
-        if world.dimension_type == DimensionType::Overworld {
-            let respawn_point_set = player
-                .set_respawn_point(
-                    world.dimension_type,
-                    bed_head_pos,
-                    player.get_entity().yaw.load(),
-                )
-                .await;
-
-            if bed_props.occupied {
-                // Wake up villager
-            } else if can_sleep(world).await {
-                player.sleep(bed_head_pos).await;
-                Self::set_occupied(true, world, block, &block_pos, state_id).await;
-            } else if respawn_point_set {
-                player
-                    .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
-                    .await;
-            }
-        } else {
+        // Explode if not in the overworld
+        if world.dimension_type != DimensionType::Overworld {
             world
-                .break_block(&block_pos, None, BlockFlags::SKIP_DROPS)
+                .break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS)
                 .await;
-
-            if bed_props.part == BedPart::Head {
-                world
-                    .break_block(
-                        &block_pos.offset(bed_props.facing.opposite().to_offset()),
-                        None,
-                        BlockFlags::SKIP_DROPS,
-                    )
-                    .await;
-            } else {
-                world
-                    .break_block(
-                        &block_pos.offset(bed_props.facing.to_offset()),
-                        None,
-                        BlockFlags::SKIP_DROPS,
-                    )
-                    .await;
-            }
+            world
+                .break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS)
+                .await;
 
             world
                 .explode(server, bed_head_pos.to_centered_f64(), 5.0)
                 .await;
+
+            return;
         }
+
+        // Make sure the bed is not obstructed
+        if !world
+            .get_block_state(&bed_head_pos.up())
+            .await
+            .is_ok_and(|s| !s.is_solid())
+            || !world
+                .get_block_state(&bed_head_pos.up())
+                .await
+                .is_ok_and(|s| !s.is_solid())
+        {
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate("block.minecraft.bed.obstructed", []),
+                    true,
+                )
+                .await;
+            return;
+        }
+
+        // Make sure the bed is not occupied
+        if bed_props.occupied {
+            // TODO: Wake up villager
+
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate("block.minecraft.bed.occupied", []),
+                    true,
+                )
+                .await;
+            return;
+        }
+
+        // Make sure player is close enough
+        if !player
+            .position()
+            .is_within_bounds(bed_head_pos.to_f64(), 3.0, 3.0, 3.0)
+            && !player
+                .position()
+                .is_within_bounds(bed_foot_pos.to_f64(), 3.0, 3.0, 3.0)
+        {
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate("block.minecraft.bed.too_far_away", []),
+                    true,
+                )
+                .await;
+            return;
+        }
+
+        // Set respawn point
+        if player
+            .set_respawn_point(
+                world.dimension_type,
+                bed_head_pos,
+                player.get_entity().yaw.load(),
+            )
+            .await
+        {
+            player
+                .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
+                .await;
+        }
+
+        // Make sure the time and weather allows sleep
+        if !can_sleep(world).await {
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate("block.minecraft.bed.no_sleep", []),
+                    true,
+                )
+                .await;
+            return;
+        }
+
+        // Make sure there are no monsters nearby
+        for entity in world.entities.read().await.values() {
+            if !entity_prevents_sleep(entity.get_entity()) {
+                continue;
+            }
+
+            let pos = entity.get_entity().pos.load();
+            if pos.is_within_bounds(bed_head_pos.to_f64(), 8.0, 5.0, 8.0)
+                || pos.is_within_bounds(bed_foot_pos.to_f64(), 8.0, 5.0, 8.0)
+            {
+                player
+                    .send_system_message_raw(
+                        &TextComponent::translate("block.minecraft.bed.not_safe", []),
+                        true,
+                    )
+                    .await;
+                return;
+            }
+        }
+
+        player.sleep(bed_head_pos).await;
+        Self::set_occupied(true, world, block, &block_pos, state_id).await;
     }
 }
 
@@ -252,5 +323,48 @@ async fn can_sleep(world: &Arc<World>) -> bool {
         time.time_of_day > 12010 && time.time_of_day < 23991
     } else {
         time.time_of_day > 12542 && time.time_of_day < 23459
+    }
+}
+
+fn entity_prevents_sleep(entity: &Entity) -> bool {
+    match entity.entity_type {
+        EntityType::BLAZE
+        | EntityType::BOGGED
+        | EntityType::SKELETON
+        | EntityType::STRAY
+        | EntityType::WITHER_SKELETON
+        | EntityType::BREEZE
+        | EntityType::CREAKING
+        | EntityType::CREEPER
+        | EntityType::DROWNED
+        | EntityType::ENDERMITE
+        | EntityType::EVOKER
+        | EntityType::GIANT
+        | EntityType::GUARDIAN
+        | EntityType::ELDER_GUARDIAN
+        | EntityType::ILLUSIONER
+        | EntityType::OCELOT
+        | EntityType::PIGLIN
+        | EntityType::PIGLIN_BRUTE
+        | EntityType::PILLAGER
+        | EntityType::PHANTOM
+        | EntityType::RAVAGER
+        | EntityType::SILVERFISH
+        | EntityType::SPIDER
+        | EntityType::CAVE_SPIDER
+        | EntityType::VEX
+        | EntityType::VINDICATOR
+        | EntityType::WARDEN
+        | EntityType::WITCH
+        | EntityType::WITHER
+        | EntityType::ZOGLIN
+        | EntityType::ZOMBIE
+        | EntityType::ZOMBIE_VILLAGER
+        | EntityType::HUSK => true,
+        EntityType::ENDERMAN | EntityType::ZOMBIFIED_PIGLIN => {
+            // TODO: Only when hostile
+            true
+        }
+        _ => false,
     }
 }

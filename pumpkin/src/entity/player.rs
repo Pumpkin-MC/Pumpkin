@@ -518,11 +518,10 @@ impl Player {
             // TODO: check if there is fuel for respawn
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
         } else {
-            self.send_system_message(&TextComponent::translate(
-                "block.minecraft.spawn.not_valid",
-                [],
-            ))
-            .await;
+            self.client
+                .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
+                .await;
+
             None
         }
     }
