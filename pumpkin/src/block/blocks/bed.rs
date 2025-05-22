@@ -363,6 +363,7 @@ fn entity_prevents_sleep(entity: &Entity) -> bool {
         | EntityType::HUSK => true,
         EntityType::ENDERMAN | EntityType::ZOMBIFIED_PIGLIN => {
             // TODO: Only when hostile
+            #[allow(clippy::match_same_arms)]
             true
         }
         _ => false,
