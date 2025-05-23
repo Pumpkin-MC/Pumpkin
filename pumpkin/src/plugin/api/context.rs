@@ -5,7 +5,6 @@ use pumpkin_util::PermissionLvl;
 use tokio::sync::RwLock;
 
 use crate::{
-    entity::player::Player,
     plugin::{EventHandler, HandlerMap, TypedEventHandler},
     server::Server,
 };
@@ -20,9 +19,9 @@ use super::{Event, EventPriority, PluginMetadata};
 /// - `server`: A reference to the server on which the plugin operates.
 /// - `handlers`: A map of event handlers, protected by a read-write lock for safe access across threads.
 pub struct Context {
-    metadata: PluginMetadata<'static>,
+    pub metadata: PluginMetadata<'static>,
     pub server: Arc<Server>,
-    handlers: Arc<RwLock<HandlerMap>>,
+    pub handlers: Arc<RwLock<HandlerMap>>,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -58,17 +57,6 @@ impl Context {
             fs::create_dir_all(&path).unwrap();
         }
         path
-    }
-
-    /// Asynchronously retrieves a player by their name.
-    ///
-    /// # Arguments
-    /// - `player_name`: The name of the player to retrieve.
-    ///
-    /// # Returns
-    /// An optional reference to the player if found, or `None` if not.
-    pub async fn get_player_by_name(&self, player_name: String) -> Option<Arc<Player>> {
-        self.server.get_player_by_name(&player_name).await
     }
 
     /// Asynchronously registers a command with the server.
