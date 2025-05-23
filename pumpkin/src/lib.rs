@@ -127,12 +127,16 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_thread_level(LevelFilter::Info);
         }
 
-        let level = std::env::var("RUST_LOG")
-            .ok()
-            .as_deref()
-            .map(LevelFilter::from_str)
-            .and_then(Result::ok)
-            .unwrap_or(LevelFilter::Info);
+        let level = if !advanced_config().logging.env {
+            LevelFilter::from(advanced_config().logging.level)
+        } else {
+            std::env::var("RUST_LOG")
+                .ok()
+                .as_deref()
+                .map(LevelFilter::from_str)
+                .and_then(Result::ok)
+                .unwrap_or(LevelFilter::Info)
+        };
 
         if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
