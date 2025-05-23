@@ -239,6 +239,39 @@ impl Math for i32 {}
 impl Math for i64 {}
 impl Math for u8 {}
 
+impl<'de> serde::Deserialize<'de> for Vector3<i32> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Vector3Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Vector3Visitor {
+            type Value = Vector3<i32>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a valid Vector<i32>")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                if let Some(x) = seq.next_element::<i32>()? {
+                    if let Some(y) = seq.next_element::<i32>()? {
+                        if let Some(z) = seq.next_element::<i32>()? {
+                            return Ok(Vector3::new(x, y, z));
+                        }
+                    }
+                }
+                Err(serde::de::Error::custom("Failed to read Vector<i32>"))
+            }
+        }
+
+        deserializer.deserialize_seq(Vector3Visitor)
+    }
+}
+
 impl<'de> serde::Deserialize<'de> for Vector3<f32> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

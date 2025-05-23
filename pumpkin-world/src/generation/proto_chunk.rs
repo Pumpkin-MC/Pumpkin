@@ -5,7 +5,10 @@ use pumpkin_data::{
     tag::Tagable,
 };
 use pumpkin_macros::default_block_state;
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::{
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+    random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
+};
 
 use crate::{
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
@@ -20,6 +23,7 @@ use super::{
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     biome_coords,
     chunk_noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
+    feature::placed_features::PLACED_FEATURES,
     height_limit::HeightLimitView,
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -316,6 +320,12 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
+    pub fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
+        let state = self.get_block_state(local_pos).to_state();
+        state.is_air()
+    }
+
+    #[inline]
     pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> RawBlockState {
         let local_pos = Vector3::new(
             local_pos.x & 15,
@@ -326,7 +336,7 @@ impl<'a> ProtoChunk<'a> {
         self.flat_block_map[index]
     }
 
-    pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: BlockState) {
+    pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: &BlockState) {
         if !block_state.is_air() {
             self.maybe_update_surface_height_map(local_pos);
         }
@@ -493,7 +503,7 @@ impl<'a> ProtoChunk<'a> {
                                     .unwrap_or(self.default_block);
                                 self.set_block_state(
                                     &Vector3::new(block_x, block_y, block_z),
-                                    block_state.to_state(),
+                                    &block_state.to_state(),
                                 );
                             }
                         }
@@ -516,6 +526,10 @@ impl<'a> ProtoChunk<'a> {
         self.get_biome(&seed_biome_pos)
     }
 
+    /// Constructs the terrain surface, although "surface" is a misnomer as it also places underground blocks like bedrock and deepslate.
+    /// This stage also generates larger decorative structures, such as badlands pillars and icebergs.
+    ///
+    /// It is crucial that biome assignments are determined before this process begins.
     pub fn build_surface(&mut self) {
         let start_x = chunk_pos::start_block_x(&self.chunk_pos);
         let start_z = chunk_pos::start_block_z(&self.chunk_pos);
@@ -615,7 +629,7 @@ impl<'a> ProtoChunk<'a> {
                         let new_state = self.settings.surface_rule.try_apply(self, &mut context);
 
                         if let Some(state) = new_state {
-                            self.set_block_state(&pos, state.to_state());
+                            self.set_block_state(&pos, &state);
                         }
                     }
                 }
@@ -637,6 +651,40 @@ impl<'a> ProtoChunk<'a> {
                     );
                 }
             }
+        }
+    }
+
+    /// This generates "Features," also known as decorations, which include things like trees, grass, ores, and more.
+    /// Essentially, it encompasses everything above the surface or underground. It's crucial that this step is executed after biomes are generated,
+    /// as the decoration directly depends on the biome. Similarly, running this after the surface is built is logical, as it often involves checking block types.
+    /// For example, flowers are typically placed only on grass blocks.
+    ///
+    /// Features are defined across two separate asset files, each serving a distinct purpose:
+    ///
+    /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
+    /// 2. Then, using the second file, we determine **how** to generate the feature.
+    pub fn generate_features(&mut self) {
+        let chunk_pos = self.chunk_pos;
+        let min_y = self.noise_sampler.min_y();
+        let height = self.noise_sampler.height();
+
+        let bottom_section = section_coords::block_to_section(min_y) as i32;
+        let block_pos = BlockPos(Vector3::new(
+            section_coords::section_to_block(chunk_pos.x),
+            bottom_section,
+            section_coords::section_to_block(chunk_pos.z),
+        ));
+
+        let population_seed =
+            Xoroshiro::get_population_seed(self.random_config.seed, block_pos.0.x, block_pos.0.z);
+
+        // TODO: This needs to be different depending on what biomes are in the chunk -> affects the
+        // random
+        for (name, feature) in PLACED_FEATURES.iter() {
+            // TODO: Properly set index and step
+            let decorator_seed = get_decorator_seed(population_seed, 0, 0);
+            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
+            feature.generate(self, min_y, height, name, &mut random, block_pos);
         }
     }
 

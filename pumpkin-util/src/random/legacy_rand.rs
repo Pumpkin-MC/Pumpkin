@@ -3,7 +3,7 @@ use super::{
     hash_block_pos,
 };
 
-use crate::math::java_string_hash;
+use crate::{math::java_string_hash, population_seed_fn};
 
 pub struct LegacyRand {
     seed: u64,
@@ -11,6 +11,8 @@ pub struct LegacyRand {
 }
 
 impl LegacyRand {
+    population_seed_fn!();
+
     pub fn from_seed(seed: u64) -> Self {
         LegacyRand {
             seed: (seed ^ 0x5DEECE66D) & 0xFFFFFFFFFFFF,

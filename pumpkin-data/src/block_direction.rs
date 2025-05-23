@@ -1,8 +1,10 @@
 use crate::block_properties::{Axis, Facing, HorizontalFacing};
 use pumpkin_util::math::vector3::Vector3;
+use serde::Deserialize;
 
 #[repr(u8)]
-#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum BlockDirection {
     Down = 0,
     Up,
