@@ -31,4 +31,11 @@ impl CollisionShape {
             max: self.max + vec3,
         }
     }
+    
+    pub fn to_box(&self) -> BoundingBox {
+        BoundingBox {
+            min: self.min,
+            max: self.max,
+        }
+    }
 }

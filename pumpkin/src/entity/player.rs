@@ -501,7 +501,7 @@ impl Player {
             return;
         }
 
-        if victim.get_living_entity().is_some() {
+        if let Some(live_victim) = victim.get_living_entity() {
             let mut knockback_strength = 1.0;
             player_attack_sound(&pos, &world, attack_type).await;
             match attack_type {
@@ -514,8 +514,7 @@ impl Player {
             if config.knockback {
                 combat::handle_knockback(
                     attacker_entity,
-                    &world,
-                    victim_entity,
+                    live_victim,
                     knockback_strength,
                 )
                 .await;
@@ -667,8 +666,12 @@ impl Player {
         }
 
         self.last_attacked_ticks.fetch_add(1, Relaxed);
-
-        self.living_entity.tick(self.clone(), server).await;
+        
+        self.living_entity.entity.tick(self.clone(), server).await;
+        self.handle_physics(0.08, server).await; // Tick block collisions
+        self.living_entity.base_tick().await;
+        
+        
         self.hunger_manager.tick(self.as_ref()).await;
 
         // experience handling
@@ -936,7 +939,7 @@ impl Player {
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
 
-                let last_pos = self.living_entity.last_pos.load();
+                let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.name();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
@@ -960,7 +963,7 @@ impl Player {
                     ;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
-                self.living_entity.last_pos.store(position);
+                self.living_entity.entity.last_pos.store(position);
                 self.send_abilities_update().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
@@ -990,7 +993,7 @@ impl Player {
                     .teleport_id_count
                     .fetch_add(1, Relaxed);
                 let teleport_id = i + 1;
-                self.living_entity.set_pos(position);
+                self.set_pos(position);
                 let entity = &self.living_entity.entity;
                 entity.set_rotation(yaw, pitch);
                 *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
@@ -2015,6 +2018,11 @@ impl Player {
             }
         }
         Ok(())
+    }
+    
+    pub fn set_pos(&self, position: Vector3<f64>) {
+        self.living_entity.entity.last_pos.store(self.living_entity.entity.pos.load());
+        self.living_entity.entity.set_pos(position);
     }
 }
 

@@ -13,7 +13,7 @@ use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
     command::client_suggestions,
-    entity::{Entity, EntityBase, EntityId, player::Player},
+    entity::{Entity, EntityBase, EntityId, player::Player, item::ItemEntity},
     error::PumpkinError,
     plugin::{
         block::block_break::BlockBreakEvent,
@@ -32,8 +32,10 @@ use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikePro
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::{
     Block,
+    BlockState,
     block_properties::{
         get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+        COLLISION_SHAPES,
     },
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
@@ -78,7 +80,7 @@ use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
     world::GetBlockError,
 };
-use pumpkin_world::{world::BlockFlags, world_info::LevelData};
+use pumpkin_world::{world::BlockFlags, world_info::LevelData, item::ItemStack};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
@@ -597,7 +599,7 @@ impl World {
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
         // Firstly, send an info update to our new player, so they can see their skin
@@ -878,7 +880,7 @@ impl World {
     }
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
-        let last_pos = player.living_entity.last_pos.load();
+        let last_pos = player.living_entity.entity.last_pos.load();
         let death_dimension = player.world().await.dimension_type.name();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
@@ -930,7 +932,7 @@ impl World {
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.clone().request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
@@ -1598,12 +1600,42 @@ impl World {
 
         id
     }
+    
+    // Deprecated
+    /*
+    pub async fn get_block_state_id_result(&self, position: &BlockPos) -> Result<u16, GetBlockError> {
+        let chunk = self.get_chunk(position).await;
+        let (_, relative) = position.chunk_and_chunk_relative_position();
+
+        let chunk = chunk.read().await;
+        let Some(id) = chunk.section.get_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        ) else {
+            return Err(GetBlockError::BlockOutOfWorldBounds);
+        };
+
+        Ok(id)
+    }
+    */
 
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
         let id = self.get_block_state_id(position).await;
         get_block_by_state_id(id).unwrap_or(Block::AIR)
     }
+    
+    /*
+    // Deprecated
+    pub async fn get_block_result(
+        &self,
+        position: &BlockPos,
+    ) -> Result<Block, GetBlockError> {
+        let id = self.get_block_state_id_result(position).await?;
+        get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+    */
 
     pub async fn get_fluid(
         &self,
@@ -1612,6 +1644,17 @@ impl World {
         let id = self.get_block_state_id(position).await;
         Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
+    
+    /*
+    // Deprecated
+    pub async fn get_fluid_opt(
+        &self,
+        position: &BlockPos,
+    ) -> Result<Option<Fluid>, GetBlockError> {
+        let id = self.get_block_state_id_result(position).await?;
+        Ok(Fluid::from_state_id(id))
+    }
+    */
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
@@ -1619,6 +1662,17 @@ impl World {
         get_state_by_state_id(id)
             .unwrap_or(get_state_by_state_id(Block::AIR.default_state_id).unwrap())
     }
+    
+    /*
+    // Deprecated
+    pub async fn get_block_state_result(
+        &self,
+        position: &BlockPos,
+    ) -> Result<BlockState, GetBlockError> {
+        let id = self.get_block_state_id_result(position).await?;
+        get_state_by_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+    */
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
     pub async fn get_block_and_block_state(
@@ -1866,7 +1920,113 @@ impl World {
 
         (None, None)
     }
+    
+    
+    pub async fn get_fluid_collisions(
+        self: &Arc<Self>,
+        bounding_box: BoundingBox,
+    ) -> Vec<Fluid> {
+        let mut collisions = Vec::new();
+        
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    if let Ok(fluid) = self.get_fluid(&block_pos).await {
+                        collisions.push(fluid);
+                    }
+                }
+            }
+        }
+        
+        collisions
+    }
+
+    pub async fn get_block_collisions(
+        self: &Arc<Self>,
+        bounding_box: BoundingBox,
+    ) -> (
+        Vec<BoundingBox>, 
+        Vec<(usize, BlockState)> // Index points to the boundingbox
+    ) {
+        let mut collisions = Vec::new();
+        let mut blocks = Vec::new();
+        let mut i = 0;
+
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    let block = self.get_block_state(&block_pos).await;
+                    
+                        if block.is_full_cube() {
+                            collisions.push(
+                                COLLISION_SHAPES[block.collision_shapes[0] as usize]
+                                    .to_box()
+                                    .add_pos(block_pos),
+                            );
+                            i += 1;
+                            blocks.push((i,block));
+                            continue;
+                        }
+
+                        if block.is_air() || block.collision_shapes.is_empty() {
+                            continue;
+                        }
+
+                        let mut pushed_any = false;
+                        for shape in block.collision_shapes {
+                            let collision_shape =
+                                COLLISION_SHAPES[*shape as usize]
+                                    .to_box()
+                                    .add_pos(block_pos);
+                            if collision_shape.intersects(&bounding_box) {
+                                collisions.push(collision_shape);
+                                i += 1;
+                                pushed_any = true;
+                            }
+                        }
+                        if pushed_any {
+                            blocks.push((i,block));
+                        }
+                }
+            }
+        }
+        
+        (collisions, blocks)
+    }
+    
+    pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
+        let height = EntityType::ITEM.dimension[1] / 2.0;
+        let pos = Vector3::new(
+            f64::from(pos.0.x) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
+            f64::from(pos.0.y) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25) - f64::from(height),
+            f64::from(pos.0.z) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
+        );
+
+        let entity = self.create_entity(pos, EntityType::ITEM);
+        let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
+        self.spawn_entity(item_entity as Arc<dyn EntityBase>).await;
+    }
 }
+
+// Deprecated
+/*
+pub fn get_state_by_id(id: u16) -> Option<BlockState> {
+    if let Some(block) = Block::from_state_id(id) {
+        let state: &pumpkin_data::BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+        Some(state.get_state())
+    } else {
+        None
+    }
+}
+*/
 
 #[async_trait]
 impl pumpkin_world::world::SimpleWorld for World {
