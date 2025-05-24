@@ -128,7 +128,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
         }
 
         let level = if !advanced_config().logging.env {
-            LevelFilter::from(advanced_config().logging.level)
+            advanced_config().logging.level.into()
         } else {
             std::env::var("RUST_LOG")
                 .ok()
