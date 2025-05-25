@@ -4,7 +4,10 @@ use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::{Block, fluid::Fluid, item::Item};
 use pumpkin_registry::DimensionType;
-use pumpkin_util::{GameMode, math::{position::BlockPos,vector3::Vector3}};
+use pumpkin_util::{
+    GameMode,
+    math::{position::BlockPos, vector3::Vector3},
+};
 use pumpkin_world::{inventory::Inventory, item::ItemStack, world::BlockFlags};
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -107,9 +110,7 @@ impl PumpkinItem for EmptyBucketItem {
             return;
         };
 
-        let Ok(state_id) = world.get_block_state_id(&block_pos).await else {
-            return;
-        };
+        let state_id = world.get_block_state_id(&block_pos).await;
 
         let block = Block::from_state_id(state_id).unwrap();
 
@@ -143,18 +144,12 @@ impl PumpkinItem for EmptyBucketItem {
                 )
                 .await;
         } else {
-            let Ok(block) = world
+            let block = world
                 .get_block(&block_pos.offset(direction.to_offset()))
-                .await
-            else {
-                return;
-            };
-            let Ok(state_id) = world
+                .await;
+            let state_id = world
                 .get_block_state_id(&block_pos.offset(direction.to_offset()))
-                .await
-            else {
-                return;
-            };
+                .await;
             if waterlogged_check(&block, state_id).is_some() {
                 let state_id = set_waterlogged(&block, state_id, false);
                 world
@@ -221,14 +216,8 @@ impl PumpkinItem for FilledBucketItem {
         if item.id != Item::LAVA_BUCKET.id && world.dimension_type == DimensionType::TheNether {
             return;
         }
-        let Ok(block) = world.get_block(&pos).await else {
-            return;
-        };
-
-        let Ok(state_id) = world.get_block_state_id(&pos).await else {
-            return;
-        };
-
+        let block = world.get_block(&pos).await;
+        let state_id = world.get_block_state_id(&pos).await;
         if waterlogged_check(&block, state_id).is_some() && item.id == Item::WATER_BUCKET.id {
             let state_id = set_waterlogged(&block, state_id, true);
             world
@@ -236,15 +225,10 @@ impl PumpkinItem for FilledBucketItem {
                 .await;
             world.schedule_fluid_tick(block.id, pos, 5).await;
         } else {
-            let Ok(block) = world.get_block(&pos.offset(direction.to_offset())).await else {
-                return;
-            };
-            let Ok(state_id) = world
+            let block = world.get_block(&pos.offset(direction.to_offset())).await;
+            let state_id = world
                 .get_block_state_id(&pos.offset(direction.to_offset()))
-                .await
-            else {
-                return;
-            };
+                .await;
 
             if waterlogged_check(&block, state_id).is_some() {
                 if item.id == Item::LAVA_BUCKET.id {
@@ -274,7 +258,7 @@ impl PumpkinItem for FilledBucketItem {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
-            }else {
+            } else {
                 return;
             }
         }

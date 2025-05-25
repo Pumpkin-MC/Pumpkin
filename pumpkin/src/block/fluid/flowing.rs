@@ -80,14 +80,9 @@ pub trait FlowingFluid {
     async fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
     async fn is_waterlogged(&self, world: &Arc<World>, pos: &BlockPos) -> Option<BlockStateId> {
-        let Ok(block) = world.get_block(pos).await else {
-            return None;
-        };
+        let block = world.get_block(pos).await;
 
-        let Ok(state_id) = world.get_block_state_id(pos).await else {
-            return None;
-        };
-
+        let state_id = world.get_block_state_id(pos).await;
         // Check if the block has waterlogged property and if it's true
         if let Some(properties) = block.properties(state_id) {
             if properties
@@ -227,7 +222,9 @@ pub trait FlowingFluid {
         let above_pos = block_pos.up();
         let above_state_id = world.get_block_state_id(&above_pos).await;
 
-        if self.is_same_fluid(fluid, above_state_id) {
+        if self.is_same_fluid(fluid, above_state_id)
+            || self.is_waterlogged(world, &above_pos).await.is_some()
+        {
             return Some(self.get_flowing(fluid, Level::L8, true).await);
         }
 

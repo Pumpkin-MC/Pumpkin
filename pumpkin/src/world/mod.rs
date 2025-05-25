@@ -27,11 +27,9 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::fluid::Falling;
 use pumpkin_data::fluid::FluidProperties;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikeProperties};
-use pumpkin_data::entity::EffectType;
 use pumpkin_data::{
     Block,
     block_properties::{
@@ -1612,7 +1610,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
-        let id = self.get_block_state_id(position).await?;
+        let id = self.get_block_state_id(position).await;
         let fluid = Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId);
         if let Ok(fluid) = fluid {
             return Ok(fluid);
@@ -1809,19 +1807,22 @@ impl World {
                     }
                 } else {
                     let inv_d = 1.0 / dir.$dir_axis;
-                    let mut t1 = (min.$min_axis - from.$dir_axis) * inv_d;
-                    let mut t2 = (max.$max_axis - from.$dir_axis) * inv_d;
-                    let mut current_hit_is_min = true;
-                    if t1 > t2 {
-                        std::mem::swap(&mut t1, &mut t2);
-                        current_hit_is_min = false;
-                    }
-                    if t1 > tmin {
-                        tmin = t1;
+                    let t_near = (min.$min_axis - from.$dir_axis) * inv_d;
+                    let t_far = (max.$max_axis - from.$dir_axis) * inv_d;
+
+                    // Determine entry and exit points based on ray direction
+                    let (t_entry, t_exit, is_min_face) = if inv_d >= 0.0 {
+                        (t_near, t_far, true)
+                    } else {
+                        (t_far, t_near, false)
+                    };
+
+                    if t_entry > tmin {
+                        tmin = t_entry;
                         hit_axis = Some(stringify!($axis));
-                        hit_is_min = current_hit_is_min;
+                        hit_is_min = is_min_face;
                     }
-                    tmax = tmax.min(t2);
+                    tmax = tmax.min(t_exit);
                     if tmax < tmin {
                         return None;
                     }
@@ -1833,17 +1834,15 @@ impl World {
         check_axis!(y, y, y, y, BlockDirection::Down, BlockDirection::Up);
         check_axis!(z, z, z, z, BlockDirection::North, BlockDirection::South);
 
-        let direction = match (hit_axis, hit_is_min) {
+        match (hit_axis, hit_is_min) {
             (Some("x"), true) => Some(BlockDirection::West),
             (Some("x"), false) => Some(BlockDirection::East),
             (Some("y"), true) => Some(BlockDirection::Down),
             (Some("y"), false) => Some(BlockDirection::Up),
             (Some("z"), true) => Some(BlockDirection::North),
             (Some("z"), false) => Some(BlockDirection::South),
-            _ => return None,
-        };
-
-        direction
+            _ => None,
+        }
     }
 
     pub async fn block_collision_check(
@@ -1852,7 +1851,7 @@ impl World {
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> (bool, Option<BlockDirection>) {
-        let state_id = self.get_block_state_id(block_pos).await.unwrap();
+        let state_id = self.get_block_state_id(block_pos).await;
         //TODO this should use bounding boxes instead of collision shapes
         // But currently we don't have a way to get all the bounding boxes of a block
         let Some(collision_shapes) = get_block_collision_shapes(state_id) else {
@@ -1893,8 +1892,10 @@ impl World {
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
         let (collision, direction) = self.block_collision_check(&block, from, to).await;
-        if collision && direction.is_some() {
-            return Some((block, direction.unwrap()));
+        if let Some(dir) = direction {
+            if collision {
+                return Some((block, dir));
+            }
         }
 
         let difference = to.sub(&from);
@@ -1976,9 +1977,8 @@ impl World {
                 if collision {
                     if let Some(direction) = direction {
                         return Some((block, direction));
-                    } else {
-                        return Some((block, block_direction));
                     }
+                    return Some((block, block_direction));
                 }
             }
         }
