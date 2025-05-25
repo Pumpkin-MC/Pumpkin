@@ -34,6 +34,7 @@ impl BlockColumnFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
+        dbg!(feature);
         let i = self.layers.len();
         let mut is = vec![0; i];
         let mut j = 0;

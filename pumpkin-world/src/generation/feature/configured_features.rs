@@ -217,15 +217,3 @@ impl ConfiguredFeature {
         }
     }
 }
-
-// #[derive(Deserialize)]
-// pub struct OreFeatureConfig {
-//     targets: Vec<Target>,
-//     size: u8,
-//     discard_chance_on_air_exposure: f32,
-// }
-
-// pub struct Target {
-//     target: RuleTest,
-//     state: BlockStateCodec,
-// }

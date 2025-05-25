@@ -1,10 +1,53 @@
+use fancy::FancyTrunkPlacer;
 use pumpkin_data::BlockState;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{
+    math::position::BlockPos,
+    random::{RandomGenerator, RandomImpl},
+};
 use serde::Deserialize;
+use straight::StraightTrunkPlacer;
 
 use crate::ProtoChunk;
 
-use super::placer::TrunkPlacer;
+use super::{TreeFeature, TreeNode};
+
+mod fancy;
+mod straight;
+
+#[derive(Deserialize)]
+pub struct TrunkPlacer {
+    base_height: u8,
+    height_rand_a: u8,
+    height_rand_b: u8,
+    r#type: TrunkType,
+}
+
+impl TrunkPlacer {
+    pub fn get_height(&self, random: &mut RandomGenerator) -> u32 {
+        self.base_height as u32
+            + random.next_bounded_i32(self.height_rand_a as i32 + 1) as u32
+            + random.next_bounded_i32(self.height_rand_b as i32 + 1) as u32
+    }
+
+    pub fn place(&self, chunk: &mut ProtoChunk, pos: &BlockPos, trunk_block: &BlockState) -> bool {
+        if TreeFeature::can_replace(chunk, pos) {
+            chunk.set_block_state(&pos.0, trunk_block);
+            return true;
+        }
+        false
+    }
+
+    pub fn generate(
+        &self,
+        height: u32,
+        start_pos: BlockPos,
+        chunk: &mut ProtoChunk,
+        trunk_block: &BlockState,
+    ) -> Vec<TreeNode> {
+        self.r#type
+            .generate(self, height, start_pos, chunk, trunk_block)
+    }
+}
 
 #[derive(Deserialize)]
 pub enum TrunkType {
@@ -36,40 +79,21 @@ impl TrunkType {
         start_pos: BlockPos,
         chunk: &mut ProtoChunk,
         trunk_block: &BlockState,
-    ) {
+    ) -> Vec<TreeNode> {
         match self {
             Self::Straight => {
                 StraightTrunkPlacer::generate(placer, height, start_pos, chunk, trunk_block)
             }
-            TrunkType::Forking => todo!(),
-            TrunkType::Giant => todo!(),
-            TrunkType::MegaJungle => todo!(),
-            TrunkType::DarkOak => todo!(),
-            TrunkType::Fancy => todo!(),
-            TrunkType::Bending => todo!(),
-            TrunkType::UpwardsBranching => todo!(),
-            TrunkType::Cherry => todo!(),
-        }
-    }
-}
-
-#[derive(Deserialize)]
-pub struct StraightTrunkPlacer;
-
-impl StraightTrunkPlacer {
-    pub fn generate(
-        placer: &TrunkPlacer,
-        height: u32,
-        start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
-        trunk_block: &BlockState,
-    ) {
-        for i in 0..height {
-            placer.place(
-                chunk,
-                &BlockPos(start_pos.0.add_raw(0, i as i32, 0)),
-                trunk_block,
-            );
+            TrunkType::Forking => vec![],    // TODO
+            TrunkType::Giant => vec![],      // TODO
+            TrunkType::MegaJungle => vec![], // TODO
+            TrunkType::DarkOak => vec![],    // TODO
+            TrunkType::Fancy => {
+                FancyTrunkPlacer::generate(placer, height, start_pos, chunk, trunk_block)
+            }
+            TrunkType::Bending => vec![],          // TODO
+            TrunkType::UpwardsBranching => vec![], // TODO
+            TrunkType::Cherry => vec![],           // TODO
         }
     }
 }

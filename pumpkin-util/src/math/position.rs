@@ -168,6 +168,10 @@ impl BlockPos {
         self.offset(Vector3::new(0, 1, 0))
     }
 
+    pub fn up_height(&self, height: i32) -> Self {
+        self.offset(Vector3::new(0, height, 0))
+    }
+
     pub fn down(&self) -> Self {
         self.offset(Vector3::new(0, -1, 0))
     }

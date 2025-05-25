@@ -1,22 +1,33 @@
-use placer::TrunkPlacer;
+use foliage::FoliagePlacer;
 use pumpkin_data::{Block, tag::Tagable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
+use trunk::TrunkPlacer;
 
 use crate::{
     ProtoChunk,
     generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize},
 };
 
-mod placer;
+mod foliage;
 mod trunk;
 
 #[derive(Deserialize)]
 pub struct TreeFeature {
+    dirt_provider: BlockStateProvider,
     trunk_provider: BlockStateProvider,
     trunk_placer: TrunkPlacer,
+    foliage_provider: BlockStateProvider,
+    foliage_placer: FoliagePlacer,
     minimum_size: FeatureSize,
     ignore_vines: bool,
+    force_dirt: bool,
+}
+
+pub struct TreeNode {
+    center: BlockPos,
+    foliage_radius: i32,
+    giant_trunk: bool,
 }
 
 impl TreeFeature {
@@ -30,7 +41,6 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        return false;
         self.generate_main(chunk, min_y, height, feature_name, random, pos);
         true
     }
@@ -68,24 +78,38 @@ impl TreeFeature {
         if top < height && (clipped_height.is_none() || top < clipped_height.unwrap() as u32) {
             return;
         }
-        self.trunk_placer
-            .generate(top, pos, chunk, &self.trunk_provider.get(random, pos));
+        let nodes =
+            self.trunk_placer
+                .generate(top, pos, chunk, &self.trunk_provider.get(random, pos));
+
+        let foliage_height = self.foliage_placer.r#type.get_random_height(random);
+        let foliage_radius = self.foliage_placer.get_random_radius(random);
+        let foliage_state = &self.foliage_provider.get(random, pos);
+        for node in nodes {
+            self.foliage_placer.generate(
+                chunk,
+                random,
+                &node,
+                foliage_height,
+                foliage_radius,
+                foliage_state,
+            );
+        }
     }
 
     fn get_top(&self, height: u32, chunk: &ProtoChunk, init_pos: BlockPos) -> u32 {
-        let mut pos = BlockPos::new(0, 0, 0);
         for y in 0..=height + 1 {
             let j = self.minimum_size.r#type.get_radius(height, y as i32);
             for x in -j..=j {
                 for z in -j..=j {
-                    pos = BlockPos(init_pos.0.add_raw(x, y as i32, z));
+                    let pos = BlockPos(init_pos.0.add_raw(x, y as i32, z));
                     let block = chunk.get_block_state(&pos.0).to_block();
                     if Self::can_replace_or_log(chunk, &pos)
                         && (self.ignore_vines || block != Block::VINE)
                     {
                         continue;
                     }
-                    return y - 2;
+                    return y.saturating_sub(2);
                 }
             }
         }

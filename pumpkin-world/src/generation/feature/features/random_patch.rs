@@ -24,15 +24,18 @@ impl RandomPatchFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
+        return false;
         let mut i = 0;
         let xz = self.xz_spread as i32 + 1;
         let y = self.y_spread as i32 + 1;
         for _ in 0..self.tries {
+            dbg!(pos.0.y);
             let pos = Vector3::new(
                 pos.0.x + (random.next_bounded_i32(xz) - random.next_bounded_i32(xz)),
                 pos.0.y + (random.next_bounded_i32(y) - random.next_bounded_i32(y)),
                 pos.0.z + (random.next_bounded_i32(xz) - random.next_bounded_i32(xz)),
             );
+            dbg!(pos.y);
             if !self
                 .feature
                 .generate(chunk, min_y, height, feature, random, BlockPos(pos))

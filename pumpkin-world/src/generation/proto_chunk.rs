@@ -11,6 +11,7 @@ use pumpkin_util::{
 };
 
 use crate::{
+    HeightMap,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
     block::RawBlockState,
     chunk::CHUNK_AREA,
@@ -251,6 +252,19 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
+    pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i64 {
+        match heightmap {
+            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos), // TODO
+            HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
+            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(pos), // TODO
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(pos),
+            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(pos),
+            HeightMap::MotionBlockingNoLeaves => {
+                self.top_motion_blocking_block_no_leaves_height_exclusive(pos)
+            }
+        }
+    }
+
     pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
         let local_x = (pos.x & 15) as usize;
         let local_z = (pos.z & 15) as usize;
@@ -288,7 +302,8 @@ impl<'a> ProtoChunk<'a> {
         #[cfg(debug_assertions)]
         {
             assert!(local_pos.x >= 0 && local_pos.x <= 15);
-            assert!(local_pos.y < self.height() as i32 && local_pos.y >= 0);
+            assert!(local_pos.y < self.height() as i32);
+            assert!(local_pos.y >= 0);
             assert!(local_pos.z >= 0 && local_pos.z <= 15);
         }
         self.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
@@ -373,7 +388,6 @@ impl<'a> ProtoChunk<'a> {
             global_biome_pos.z & biome_coords::from_block(15),
         );
         let index = self.local_biome_pos_to_biome_index(&local_pos);
-
         self.flat_biome_map[index]
     }
 
@@ -515,7 +529,7 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
+    pub fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
         let seed_biome_pos = biome::get_biome_blend(
             self.bottom_y(),
             self.height(),

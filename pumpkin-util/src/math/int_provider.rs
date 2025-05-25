@@ -1,3 +1,5 @@
+use std::i32;
+
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use serde::Deserialize;
@@ -30,8 +32,8 @@ impl ToTokens for NormalIntProvider {
             }
             NormalIntProvider::WeightedList(_) => todo!(),
             NormalIntProvider::Clamped(_) => todo!(),
-            NormalIntProvider::BiasedToBottom(biased_to_bottom_int_provider) => todo!(),
-            NormalIntProvider::ClampedNormal(clamped_int_provider) => todo!(),
+            NormalIntProvider::BiasedToBottom(_biased_to_bottom_int_provider) => todo!(),
+            NormalIntProvider::ClampedNormal(_clamped_int_provider) => todo!(),
         }
     }
 }
@@ -76,7 +78,7 @@ impl IntProvider {
         match self {
             IntProvider::Object(int_provider) => match int_provider {
                 NormalIntProvider::Uniform(uniform) => uniform.get(random),
-                NormalIntProvider::WeightedList(provider) => provider.get(),
+                NormalIntProvider::WeightedList(provider) => provider.get(random),
                 NormalIntProvider::Clamped(provider) => provider.get(random),
                 NormalIntProvider::BiasedToBottom(provider) => provider.get(random),
                 NormalIntProvider::ClampedNormal(provider) => provider.get(random),
@@ -163,19 +165,67 @@ impl ClampedIntProvider {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WeightedListIntProvider {
-    // TODO
+    distribution: Vec<Weighted>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct Weighted {
+    data: IntProvider,
+    weight: i32,
+}
+
+struct FlattenedContent;
+
+impl FlattenedContent {
+    pub fn get(index: i32, entries: &[Weighted], total_weight: i32) -> IntProvider {
+        let mut final_entries = Vec::with_capacity(total_weight as usize);
+        let mut cur_index = 0;
+        for entry in entries {
+            let weight = entry.weight;
+            for i in cur_index..cur_index + weight {
+                final_entries.insert(i as usize, entry.data.clone());
+            }
+            cur_index += weight;
+        }
+        final_entries[index as usize].clone()
+    }
 }
 
 impl WeightedListIntProvider {
-    // TODO
     pub fn get_min(&self) -> i32 {
-        0
+        let mut min = i32::MAX;
+        for dist in &self.distribution {
+            let dmin = dist.data.get_min();
+            min = min.min(dmin);
+        }
+        min
     }
-    pub fn get(&self) -> i32 {
+    pub fn get(&self, random: &mut RandomGenerator) -> i32 {
+        let mut total_weight = 0;
+        for dist in &self.distribution {
+            total_weight += dist.weight;
+        }
+        let index = random.next_bounded_i32(total_weight);
+        if total_weight < 64 {
+            return FlattenedContent::get(index, &self.distribution, total_weight).get(random);
+        } else {
+            // WrappedContent
+            for dist in &self.distribution {
+                if index - dist.weight >= 0 {
+                    continue;
+                }
+                return dist.data.get(random);
+            }
+        }
         0
     }
     pub fn get_max(&self) -> i32 {
-        0
+        let mut max = i32::MIN;
+        for dist in &self.distribution {
+            let dmax = dist.data.get_max();
+            max = max.max(dmax);
+        }
+        max
     }
 }
 
