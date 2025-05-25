@@ -3,14 +3,14 @@
 //! <https://bugs.mojang.com/browse/MC-81098>.
 
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState,
     block_properties::{
         BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
         get_state_by_state_id,
     },
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_world::{block::BlockDirection, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 

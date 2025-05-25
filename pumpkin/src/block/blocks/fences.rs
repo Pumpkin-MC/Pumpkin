@@ -2,6 +2,7 @@ use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
@@ -10,7 +11,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
@@ -93,7 +93,7 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
         return true;
     }
 
-    if to_state.is_solid() && to_state.is_full_cube() {
+    if to_state.is_side_solid(direction.opposite()) {
         return true;
     }
 

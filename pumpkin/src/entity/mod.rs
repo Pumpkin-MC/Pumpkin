@@ -486,6 +486,63 @@ impl Entity {
         }
     }
 
+    pub fn get_entity_facing_order(&self) -> [Facing; 6] {
+        let pitch = self.pitch.load().to_radians();
+        let yaw = -self.yaw.load().to_radians();
+
+        let sin_p = pitch.sin();
+        let cos_p = pitch.cos();
+        let sin_y = yaw.sin();
+        let cos_y = yaw.cos();
+
+        let east_west = if sin_y > 0.0 {
+            Facing::East
+        } else {
+            Facing::West
+        };
+        let up_down = if sin_p < 0.0 {
+            Facing::Up
+        } else {
+            Facing::Down
+        };
+        let south_north = if cos_y > 0.0 {
+            Facing::South
+        } else {
+            Facing::North
+        };
+
+        let x_axis = sin_y.abs();
+        let y_axis = sin_p.abs();
+        let z_axis = cos_y.abs();
+        let x_weight = x_axis * cos_p;
+        let z_weight = z_axis * cos_p;
+
+        let (first, second, third) = if x_axis > z_axis {
+            if y_axis > x_weight {
+                (up_down, east_west, south_north)
+            } else if z_weight > y_axis {
+                (east_west, south_north, up_down)
+            } else {
+                (east_west, up_down, south_north)
+            }
+        } else if y_axis > z_weight {
+            (up_down, south_north, east_west)
+        } else if x_weight > y_axis {
+            (south_north, east_west, up_down)
+        } else {
+            (south_north, up_down, east_west)
+        };
+
+        [
+            first,
+            second,
+            third,
+            third.opposite(),
+            second.opposite(),
+            first.opposite(),
+        ]
+    }
+
     pub async fn set_sprinting(&self, sprinting: bool) {
         assert!(self.sprinting.load(Relaxed) != sprinting);
         self.sprinting.store(sprinting, Relaxed);

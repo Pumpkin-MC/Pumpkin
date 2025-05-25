@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::DoorHinge;
@@ -12,8 +14,6 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
-use pumpkin_world::block::HorizontalFacingExt;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -340,8 +340,9 @@ impl PumpkinBlock for DoorBlock {
 }
 
 async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    let down = world.get_block_state(&block_pos.down()).await;
     world.get_block_state(&block_pos.up()).await.replaceable()
-        && down.is_solid()
-        && down.is_full_cube()
+        && world
+            .get_block_state(&block_pos.down())
+            .await
+            .is_side_solid(BlockDirection::Up)
 }

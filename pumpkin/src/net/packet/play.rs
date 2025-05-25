@@ -41,6 +41,7 @@ use pumpkin_data::{
     block_properties::{get_block_by_item, get_block_collision_shapes},
 };
 
+use pumpkin_data::BlockDirection;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
@@ -73,7 +74,6 @@ use pumpkin_util::{
     math::{vector3::Vector3, wrap_degrees},
     text::TextComponent,
 };
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 
@@ -1624,16 +1624,16 @@ impl Player {
                 )
                 .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
+        } else if clicked_block_state.replaceable() {
+            if clicked_block == Block::WATER {
+                let water_props =
+                    WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
+                Some(BlockIsReplacing::Water(water_props.level))
+            } else {
+                Some(BlockIsReplacing::Other)
+            }
         } else {
-            clicked_block_state.replaceable().then(|| {
-                if clicked_block == Block::WATER {
-                    let water_props =
-                        WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
-                    BlockIsReplacing::Water(water_props.level)
-                } else {
-                    BlockIsReplacing::Other
-                }
-            })
+            None
         };
 
         let (final_block_pos, final_face, replacing) =
@@ -1666,7 +1666,7 @@ impl Player {
                             );
                             BlockIsReplacing::Water(water_props.level)
                         } else {
-                            BlockIsReplacing::Other
+                            BlockIsReplacing::None
                         }
                     })
                 };

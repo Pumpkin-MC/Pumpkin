@@ -32,39 +32,38 @@ impl CommandExecutor for Executor {
     ) -> Result<(), CommandError> {
         let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
-
-        match sender {
+        let (world, pos) = match sender {
             CommandSender::Console | CommandSender::Rcon(_) => {
-                if let Some(world) = server.worlds.read().await.first() {
-                    let info = &world.level_info;
-                    // default position for spawning a player, in this case for mob
-                    let pos = pos.unwrap_or(Vector3::new(
-                        f64::from(info.spawn_x),
-                        f64::from(info.spawn_y) + 1.0,
-                        f64::from(info.spawn_z),
-                    ));
-                    let mob = mob::from_type(entity, pos, world).await;
-                    world.spawn_entity(mob).await;
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.summon.success",
-                            [TextComponent::text(format!("{entity:?}"))],
-                        ))
-                        .await;
-                }
+                let guard = server.worlds.read().await;
+                let world = guard
+                    .first()
+                    .cloned()
+                    .ok_or(CommandError::InvalidRequirement)?;
+                let info = &world.level_info;
+                // default position for spawning a player, in this case for mob
+                let pos = pos.unwrap_or(Vector3::new(
+                    f64::from(info.spawn_x),
+                    f64::from(info.spawn_y) + 1.0,
+                    f64::from(info.spawn_z),
+                ));
+
+                (world, pos)
             }
             CommandSender::Player(player) => {
                 let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
-                let mob = mob::from_type(entity, pos, &player.world().await).await;
-                player.world().await.spawn_entity(mob).await;
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.summon.success",
-                        [TextComponent::text(format!("{entity:?}"))],
-                    ))
-                    .await;
+
+                (player.world().await, pos)
             }
-        }
+        };
+        let mob = mob::from_type(entity, pos, &world).await;
+        world.spawn_entity(mob).await;
+
+        sender
+            .send_message(TextComponent::translate(
+                "commands.summon.success",
+                [TextComponent::text(format!("{entity:?}"))],
+            ))
+            .await;
 
         Ok(())
     }
