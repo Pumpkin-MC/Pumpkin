@@ -156,6 +156,10 @@ impl BlockPos {
         BlockPos(self.0 + offset)
     }
 
+    pub fn add(&self, x: i32, y: i32, z: i32) -> Self {
+        BlockPos::new(self.0.x + x, self.0.y + y, self.0.z + z)
+    }
+
     pub fn offset_dir(&self, offset: Vector3<i32>, direction: i32) -> Self {
         BlockPos(Vector3::new(
             self.0.x + offset.x * direction,

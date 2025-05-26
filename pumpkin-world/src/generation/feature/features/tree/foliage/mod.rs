@@ -1,5 +1,7 @@
+use acacia::AcaciaFoliagePlacer;
 use blob::BlobFoliagePlacer;
 use bush::BushFoliagePlacer;
+use fancy::LargeOakFoliagePlacer;
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
@@ -11,8 +13,10 @@ use crate::ProtoChunk;
 
 use super::{TreeFeature, TreeNode};
 
+mod acacia;
 mod blob;
 mod bush;
+mod fancy;
 
 #[derive(Deserialize)]
 pub struct FoliagePlacer {
@@ -123,11 +127,11 @@ pub enum FoliageType {
     #[serde(rename = "minecraft:pine_foliage_placer")]
     Pine,
     #[serde(rename = "minecraft:acacia_foliage_placer")]
-    Acacia,
+    Acacia(AcaciaFoliagePlacer),
     #[serde(rename = "minecraft:bush_foliage_placer")]
     Bush(BushFoliagePlacer),
     #[serde(rename = "minecraft:fancy_foliage_placer")]
-    Fancy,
+    Fancy(LargeOakFoliagePlacer),
     #[serde(rename = "minecraft:jungle_foliage_placer")]
     Jungle,
     #[serde(rename = "minecraft:mega_pine_foliage_placer")]
@@ -163,7 +167,15 @@ impl FoliageType {
             ),
             FoliageType::Spruce => {}
             FoliageType::Pine => {}
-            FoliageType::Acacia => {}
+            FoliageType::Acacia(acacia) => acacia.generate(
+                chunk,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
             FoliageType::Bush(bush) => bush.generate(
                 chunk,
                 random,
@@ -173,7 +185,15 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Fancy => {}
+            FoliageType::Fancy(fancy) => fancy.generate(
+                chunk,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
             FoliageType::Jungle => {}
             FoliageType::MegaPine => {}
             FoliageType::DarkOak => {}
@@ -187,9 +207,9 @@ impl FoliageType {
             FoliageType::Blob(blob) => blob.get_random_height(random),
             FoliageType::Spruce => 0,
             FoliageType::Pine => 0,
-            FoliageType::Acacia => 0,
+            FoliageType::Acacia(acacia) => acacia.get_random_height(random),
             FoliageType::Bush(bush) => bush.get_random_height(random),
-            FoliageType::Fancy => 0,
+            FoliageType::Fancy(fancy) => fancy.get_random_height(random),
             FoliageType::Jungle => 0,
             FoliageType::MegaPine => 0,
             FoliageType::DarkOak => 0,

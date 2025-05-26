@@ -18,11 +18,7 @@ impl StraightTrunkPlacer {
         trunk_block: &BlockState,
     ) -> Vec<TreeNode> {
         for i in 0..height {
-            placer.place(
-                chunk,
-                &BlockPos(start_pos.0.add_raw(0, i as i32, 0)),
-                trunk_block,
-            );
+            placer.place(chunk, &start_pos.up_height(i as i32), trunk_block);
         }
         vec![TreeNode {
             center: start_pos.up_height(height as i32),

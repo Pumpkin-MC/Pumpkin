@@ -213,6 +213,12 @@ impl ConfiguredFeature {
             Self::SimpleRandomSelector(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::Seagrass(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::SeaPickle(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
             _ => false, // TODO
         }
     }

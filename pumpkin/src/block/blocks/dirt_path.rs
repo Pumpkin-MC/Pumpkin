@@ -13,6 +13,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:dirt_path")]
@@ -65,13 +66,14 @@ impl PumpkinBlock for DirtPathBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
+        _server: Option<&Server>,
         world: &World,
-        _player: &Player,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         can_place_at(world, block_pos).await
     }

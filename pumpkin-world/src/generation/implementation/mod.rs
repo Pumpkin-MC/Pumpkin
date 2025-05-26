@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
@@ -8,6 +10,7 @@ use super::{
     settings::gen_settings_from_dimension,
 };
 use crate::chunk::format::LightContainer;
+use crate::world::SimpleWorld;
 use crate::{chunk::ChunkLight, dimension::Dimension};
 use crate::{
     chunk::{
@@ -45,7 +48,7 @@ impl GeneratorInit for VanillaGenerator {
 }
 
 impl WorldGenerator for VanillaGenerator {
-    fn generate_chunk(&self, at: &Vector2<i32>) -> ChunkData {
+    fn generate_chunk(&self, world: &dyn SimpleWorld, at: &Vector2<i32>) -> ChunkData {
         let generation_settings = gen_settings_from_dimension(&self.dimension);
 
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;

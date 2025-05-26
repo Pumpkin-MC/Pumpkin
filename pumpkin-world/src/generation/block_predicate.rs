@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use itertools::Itertools;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::get_block_by_id};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
+use tokio::runtime::Handle;
 
-use crate::ProtoChunk;
+use crate::{ProtoChunk, world::SimpleWorld};
 #[derive(Deserialize)]
 pub struct EmptyTODOStruct {}
 
@@ -23,7 +26,7 @@ pub enum BlockPredicate {
     #[serde(rename = "minecraft:replaceable")]
     ReplaceableBlockPredicate(ReplaceableBlockPredicate),
     #[serde(rename = "minecraft:would_survive")]
-    WouldSurviveBlockPredicate(EmptyTODOStruct),
+    WouldSurviveBlockPredicate(WouldSurviveBlockPredicate),
     #[serde(rename = "minecraft:inside_world_bounds")]
     InsideWorldBoundsBlockPredicate(EmptyTODOStruct),
     #[serde(rename = "minecraft:any_of")]
@@ -48,7 +51,7 @@ impl BlockPredicate {
             Self::NotBlockPredicate(predicate) => predicate.test(chunk, pos),
             Self::AnyOfBlockPredicate(predicate) => predicate.test(chunk, pos),
             Self::AllOfBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::WouldSurviveBlockPredicate(_) => true, // TODO
+            Self::WouldSurviveBlockPredicate(predicate) => predicate.test(world, chunk, pos), // TODO
             _ => false,
         }
     }
@@ -131,6 +134,21 @@ impl SolidBlockPredicate {
     pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
         state.is_solid()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct WouldSurviveBlockPredicate;
+
+impl WouldSurviveBlockPredicate {
+    pub fn test(&self, world: Arc<dyn SimpleWorld>, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+        let state = chunk.get_block_state(&pos.0);
+        Handle::current().block_on(async move {
+            return world
+                .can_place_at(&state.to_block(), chunk, pos, BlockDirection::Up)
+                .await;
+        });
+        false
     }
 }
 

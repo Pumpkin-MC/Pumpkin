@@ -8,6 +8,7 @@ use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockAccessor;
 
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
@@ -102,15 +103,16 @@ impl PumpkinBlock for TorchBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
+        _server: Option<&Server>,
         world: &World,
-        _player: &Player,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let support_block = world.get_block_state(&block_pos.down()).await;
+        let support_block = block_accessor.get_block_state(&block_pos.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
             return true;
         }

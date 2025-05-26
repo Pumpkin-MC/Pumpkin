@@ -21,6 +21,7 @@ pub mod note;
 pub mod piston;
 pub mod pumpkin;
 pub mod redstone;
+pub mod sapling;
 pub mod signs;
 pub mod slabs;
 pub mod stairs;

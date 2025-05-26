@@ -36,7 +36,7 @@ impl std::fmt::Display for GetBlockError {
 }
 
 #[async_trait]
-pub trait SimpleWorld: Send + Sync {
+pub trait SimpleWorld: BlockAccessor + Send + Sync {
     async fn set_block_state(
         self: Arc<Self>,
         position: &BlockPos,
@@ -44,13 +44,19 @@ pub trait SimpleWorld: Send + Sync {
         flags: BlockFlags,
     ) -> BlockStateId;
 
-    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block;
-
     async fn update_neighbor(
         self: Arc<Self>,
         neighbor_block_pos: &BlockPos,
         source_block: &pumpkin_data::Block,
     );
+
+    async fn can_place_at(
+        &self,
+        block: &pumpkin_data::Block,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool;
 
     async fn update_neighbors(
         self: Arc<Self>,
@@ -59,4 +65,11 @@ pub trait SimpleWorld: Send + Sync {
     );
 
     async fn remove_block_entity(&self, block_pos: &BlockPos);
+}
+
+#[async_trait]
+pub trait BlockAccessor: Send + Sync {
+    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block;
+
+    async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState;
 }

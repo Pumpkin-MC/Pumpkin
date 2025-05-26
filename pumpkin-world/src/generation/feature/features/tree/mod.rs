@@ -65,9 +65,9 @@ impl TreeFeature {
     fn generate_main(
         &self,
         chunk: &mut ProtoChunk,
-        min_y: i8,
-        height: u16,
-        feature_name: &str, // This placed feature
+        _min_y: i8,
+        _height: u16,
+        _feature_name: &str, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) {
@@ -78,13 +78,14 @@ impl TreeFeature {
         if top < height && (clipped_height.is_none() || top < clipped_height.unwrap() as u32) {
             return;
         }
-        let nodes =
-            self.trunk_placer
-                .generate(top, pos, chunk, &self.trunk_provider.get(random, pos));
+        let trunk_state = self.trunk_provider.get(random, pos);
+        let nodes = self
+            .trunk_placer
+            .generate(top, pos, chunk, random, &trunk_state);
 
         let foliage_height = self.foliage_placer.r#type.get_random_height(random);
         let foliage_radius = self.foliage_placer.get_random_radius(random);
-        let foliage_state = &self.foliage_provider.get(random, pos);
+        let foliage_state = self.foliage_provider.get(random, pos);
         for node in nodes {
             self.foliage_placer.generate(
                 chunk,
@@ -92,7 +93,7 @@ impl TreeFeature {
                 &node,
                 foliage_height,
                 foliage_radius,
-                foliage_state,
+                &foliage_state,
             );
         }
     }

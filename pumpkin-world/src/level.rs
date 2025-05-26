@@ -25,7 +25,7 @@ use crate::{
     },
     dimension::Dimension,
     generation::{Seed, WorldGenerator, get_world_gen},
-    world::SimpleWorld,
+    world::{BlockAccessor, SimpleWorld},
 };
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -355,10 +355,14 @@ impl Level {
     }
 
     /// Initializes the spawn chunks to these chunks
-    pub async fn read_spawn_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+    pub async fn read_spawn_chunks(
+        self: &Arc<Self>,
+        world: &dyn SimpleWorld,
+        chunks: &[Vector2<i32>],
+    ) {
         let (send, mut recv) = mpsc::unbounded_channel();
 
-        let fetcher = self.fetch_chunks(chunks, send);
+        let fetcher = self.fetch_chunks(world, chunks, send);
         let handler = async {
             while let Some((chunk, _)) = recv.recv().await {
                 let pos = chunk.read().await.position;
@@ -374,6 +378,7 @@ impl Level {
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
     pub async fn fetch_chunks(
         self: &Arc<Self>,
+        world: &dyn SimpleWorld,
         chunks: &[Vector2<i32>],
         channel: mpsc::UnboundedSender<(SyncChunk, bool)>,
     ) {
@@ -489,6 +494,7 @@ impl Level {
                 let world_gen = world_gen.clone();
                 let channel = channel.clone();
                 let cloned_continue_to_generate = continue_to_generate.clone();
+                let world = world.clone();
                 rayon::spawn(move || {
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
@@ -499,7 +505,7 @@ impl Level {
                         .entry(pos)
                         .or_insert_with(|| {
                             // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk = world_gen.generate_chunk(&pos);
+                            let generated_chunk = world_gen.generate_chunk(world, &pos);
                             Arc::new(RwLock::new(generated_chunk))
                         })
                         .value()

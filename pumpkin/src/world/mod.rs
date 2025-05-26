@@ -68,11 +68,11 @@ use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
     level::SyncChunk,
 };
+use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{chunk::TickPriority, level::Level};
 use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
@@ -149,12 +149,7 @@ pub struct World {
 
 impl World {
     #[must_use]
-    pub fn load(
-        level: Level,
-        level_info: Arc<LevelData>,
-        dimension_type: DimensionType,
-        block_registry: Arc<BlockRegistry>,
-    ) -> Self {
+    pub fn load(level: Level, level_info: Arc<LevelData>, dimension_type: DimensionType) -> Self {
         // TODO
         let generation_settings = match dimension_type {
             DimensionType::Overworld => GENERATION_SETTINGS
@@ -1879,12 +1874,29 @@ impl pumpkin_world::world::SimpleWorld for World {
         Self::set_block_state(&self, position, block_state_id, flags).await
     }
 
-    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
-        Self::get_block(self, position).await
-    }
-
     async fn update_neighbor(self: Arc<Self>, neighbor_block_pos: &BlockPos, source_block: &Block) {
         Self::update_neighbor(&self, neighbor_block_pos, source_block).await;
+    }
+
+    async fn can_place_at(
+        &self,
+        block: &Block,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool {
+        self.block_registry
+            .can_place_at(
+                None,
+                self,
+                block_accessor,
+                None,
+                block,
+                block_pos,
+                face,
+                None,
+            )
+            .await
     }
 
     async fn update_neighbors(
@@ -1897,5 +1909,15 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn remove_block_entity(&self, block_pos: &BlockPos) {
         self.remove_block_entity(block_pos).await;
+    }
+}
+
+#[async_trait]
+impl BlockAccessor for World {
+    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
+        Self::get_block(self, position).await
+    }
+    async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
+        Self::get_block_state(&self, position).await
     }
 }

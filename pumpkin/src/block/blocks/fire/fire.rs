@@ -1,6 +1,7 @@
 use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::entity::EntityType;
 use pumpkin_registry::DimensionType;
+use pumpkin_world::world::BlockAccessor;
 use rand::Rng;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -112,13 +113,14 @@ impl PumpkinBlock for FireBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
+        _server: Option<&Server>,
         world: &World,
-        _player: &Player,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         FireBlockBase::can_place_at(world, block_pos).await
     }

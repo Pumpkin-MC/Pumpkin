@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use pumpkin_data::{
     BlockState,
-    block_properties::{blocks_movement, get_block_by_state_id},
+    block_properties::{blocks_movement, get_block_by_state_id, get_state_by_state_id},
     chunk::Biome,
     tag::Tagable,
 };
@@ -11,12 +14,13 @@ use pumpkin_util::{
 };
 
 use crate::{
-    HeightMap,
+    BlockStateId, HeightMap,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     dimension::Dimension,
     generation::{biome, positions::chunk_pos},
+    world::{BlockAccessor, BlockFlags},
 };
 
 use super::{
@@ -716,6 +720,17 @@ impl<'a> ProtoChunk<'a> {
 
     fn start_block_z(&self) -> i32 {
         start_block_z(&self.chunk_pos)
+    }
+}
+
+#[async_trait]
+impl BlockAccessor for ProtoChunk<'_> {
+    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
+        self.get_block_state(&position.0).to_block()
+    }
+
+    async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
+        self.get_block_state(&position.0).to_state()
     }
 }
 

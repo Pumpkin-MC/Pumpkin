@@ -42,10 +42,11 @@ impl TrunkPlacer {
         height: u32,
         start_pos: BlockPos,
         chunk: &mut ProtoChunk,
+        random: &mut RandomGenerator,
         trunk_block: &BlockState,
     ) -> Vec<TreeNode> {
         self.r#type
-            .generate(self, height, start_pos, chunk, trunk_block)
+            .generate(self, height, start_pos, chunk, random, trunk_block)
     }
 }
 
@@ -78,6 +79,7 @@ impl TrunkType {
         height: u32,
         start_pos: BlockPos,
         chunk: &mut ProtoChunk,
+        random: &mut RandomGenerator,
         trunk_block: &BlockState,
     ) -> Vec<TreeNode> {
         match self {
@@ -89,7 +91,7 @@ impl TrunkType {
             TrunkType::MegaJungle => vec![], // TODO
             TrunkType::DarkOak => vec![],    // TODO
             TrunkType::Fancy => {
-                FancyTrunkPlacer::generate(placer, height, start_pos, chunk, trunk_block)
+                FancyTrunkPlacer::generate(placer, height, start_pos, chunk, random, trunk_block)
             }
             TrunkType::Bending => vec![],          // TODO
             TrunkType::UpwardsBranching => vec![], // TODO
