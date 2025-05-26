@@ -52,8 +52,7 @@ impl<'de> Deserialize<'de> for PermissionLvl {
             3 => Ok(PermissionLvl::Three),
             4 => Ok(PermissionLvl::Four),
             _ => Err(serde::de::Error::custom(format!(
-                "Invalid value for OpLevel: {}",
-                value
+                "Invalid value for OpLevel: {value}"
             ))),
         }
     }

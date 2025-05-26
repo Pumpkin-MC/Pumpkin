@@ -1,13 +1,17 @@
+use std::sync::Arc;
+
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::entity::EntityBase;
+use crate::server::Server;
 use crate::world::World;
-use crate::world::portal::NetherPortal;
+use crate::world::portal::nether::NetherPortal;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_registry::DimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 #[pumpkin_block("minecraft:nether_portal")]
 pub struct NetherPortalBlock;
@@ -37,5 +41,26 @@ impl PumpkinBlock for NetherPortalBlock {
             return state;
         }
         Block::AIR.default_state_id
+    }
+
+    async fn on_entity_collision(
+        &self,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        pos: BlockPos,
+        _block: Block,
+        _state: BlockState,
+        server: &Server,
+    ) {
+        let world = if world.dimension_type == DimensionType::TheNether {
+            server
+                .get_world_from_dimension(DimensionType::Overworld)
+                .await
+        } else {
+            server
+                .get_world_from_dimension(DimensionType::TheNether)
+                .await
+        };
+        entity.get_entity().try_use_portal(80, world, pos).await;
     }
 }

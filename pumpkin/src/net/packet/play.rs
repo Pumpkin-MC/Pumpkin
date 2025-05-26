@@ -9,46 +9,42 @@ use sha1::Sha1;
 use thiserror::Error;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     BlockProperties, WaterLikeProperties, get_block_by_item, get_block_collision_shapes,
 };
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
-use pumpkin_data::sound::Sound;
-use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::player::{
-    PlayerInventory, SLOT_HOTBAR_END, SLOT_HOTBAR_START, SLOT_OFFHAND,
-};
+use pumpkin_inventory::equipment_slot::EquipmentSlot;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::play::{
-    Animation, CCommandSuggestions, CEntityAnimation, CHeadRot, CPingResponse, CUpdateEntityPos,
-    CUpdateEntityPosRot, CUpdateEntityRot,
+    Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
+    COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
+    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
+    PlayerAction,
 };
-use pumpkin_protocol::client::play::{
-    CBlockUpdate, CEntityPositionSync, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
-    CSetContainerSlot, CSetHeldItem, CSystemChatMessage, EquipmentSlot, InitChat, PlayerAction,
-};
-use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    Action, ActionType, SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay,
-    SCloseContainer, SCommandSuggestion, SConfirmTeleport, SInteract, SKeepAlive,
-    SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
-};
-use pumpkin_protocol::server::play::{
-    FLAG_ON_GROUND, SChunkBatch, SCookieResponse as SPCookieResponse, SPlayerSession, SUpdateSign,
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChatCommand, SChatMessage, SChunkBatch,
+    SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
+    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::block::entities::BlockEntity;
+use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
@@ -61,7 +57,7 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
-use crate::world::{BlockFlags, World, chunker};
+use crate::world::{World, chunker};
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -72,9 +68,7 @@ pub enum BlockPlacingError {
     BlockOutOfReach,
     InvalidBlockFace,
     BlockOutOfWorld,
-    InventoryInvalid,
     InvalidGamemode,
-    NoBaseBlock,
 }
 
 impl std::fmt::Display for BlockPlacingError {
@@ -87,15 +81,14 @@ impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
-            Self::InvalidBlockFace | Self::InventoryInvalid | Self::NoBaseBlock => true,
+            Self::InvalidBlockFace => true,
         }
     }
 
     fn severity(&self) -> log::Level {
         match self {
-            Self::BlockOutOfWorld | Self::InvalidGamemode | Self::NoBaseBlock => log::Level::Trace,
+            Self::BlockOutOfWorld | Self::InvalidGamemode => log::Level::Trace,
             Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
-            Self::InventoryInvalid => log::Level::Error,
         }
     }
 
@@ -103,8 +96,6 @@ impl PumpkinError for BlockPlacingError {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
-            Self::InventoryInvalid => Some("Held item invalid".into()),
-            Self::NoBaseBlock => Some("No base block".into()),
         }
     }
 }
@@ -549,111 +540,77 @@ impl Player {
             .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub async fn update_single_slot(
-        &self,
-        inventory: &mut PlayerInventory,
-        slot: usize,
-        stack: ItemStack,
-    ) {
-        inventory.increment_state_id();
-        let slot_data = ItemStackSerializer::from(stack.clone());
-        if let Err(err) = inventory.set_slot(slot, Some(stack), false) {
-            log::error!("Pick item set slot error: {err}");
-        } else {
-            let dest_packet = CSetContainerSlot::new(
-                PlayerInventory::CONTAINER_ID,
-                inventory.state_id as i32,
-                slot as i16,
-                &slot_data,
-            );
-            self.client.enqueue_packet(&dest_packet).await;
-        }
-    }
-
     pub async fn handle_pick_item_from_block(&self, pick_item: SPickItemFromBlock) {
         if !self.can_interact_with_block_at(&pick_item.pos, 1.0) {
             return;
         }
 
         let world = self.world().await;
-        let Ok(block) = world.get_block(&pick_item.pos).await else {
-            return;
-        };
+        let block = world.get_block(&pick_item.pos).await;
 
         if block.item_id == 0 {
             // Invalid block id (blocks such as tall seagrass)
             return;
         }
 
-        let mut inventory = self.inventory().lock().await;
+        let stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
 
-        let source_slot = inventory.get_slot_with_item(block.item_id);
-        let mut dest_slot = inventory.get_empty_hotbar_slot();
+        let slot_with_stack = self.inventory().get_slot_with_stack(&stack).await;
 
-        let dest_slot_data = match inventory.get_slot(dest_slot + SLOT_HOTBAR_START) {
-            Ok(Some(stack)) => stack.clone(),
-            _ => ItemStack::new(0, Item::AIR),
-        };
-
-        // Early return if no source slot and not in creative mode
-        if source_slot.is_none() && self.gamemode.load() != GameMode::Creative {
-            return;
-        }
-
-        match source_slot {
-            Some(slot_index) if (SLOT_HOTBAR_START..=SLOT_HOTBAR_END).contains(&slot_index) => {
-                // Case where item is in hotbar
-                dest_slot = slot_index - SLOT_HOTBAR_START;
-            }
-            Some(slot_index) => {
-                // Case where item is in inventory
-
-                // Update destination slot
-                let source_slot_data = match inventory.get_slot(slot_index) {
-                    Ok(Some(stack)) => stack.clone(),
-                    _ => return,
-                };
-                self.update_single_slot(
-                    &mut inventory,
-                    dest_slot + SLOT_HOTBAR_START,
-                    source_slot_data,
-                )
-                .await;
-
-                // Update source slot
-                self.update_single_slot(&mut inventory, slot_index, dest_slot_data)
+        if slot_with_stack != -1 {
+            if PlayerInventory::is_valid_hotbar_index(slot_with_stack as usize) {
+                self.inventory.set_selected_slot(slot_with_stack as u8);
+            } else {
+                self.inventory
+                    .swap_slot_with_hotbar(slot_with_stack as usize)
                     .await;
             }
-            None if self.gamemode.load() == GameMode::Creative => {
-                // Case where item is not present, if in creative mode create the item
-                let item_stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
-                self.update_single_slot(&mut inventory, dest_slot + SLOT_HOTBAR_START, item_stack)
-                    .await;
-
-                // Check if there is any empty slot in the player inventory
-                if let Some(slot_index) = inventory.get_empty_slot_no_order() {
-                    inventory.increment_state_id();
-                    self.update_single_slot(&mut inventory, slot_index, dest_slot_data)
-                        .await;
-                }
-            }
-            _ => return,
+        } else if self.gamemode.load() == GameMode::Creative {
+            self.inventory.swap_stack_with_hotbar(stack).await;
         }
 
-        // Update held item
-        inventory.set_selected(dest_slot);
-        let empty = &ItemStack::new(0, Item::AIR);
-        let stack = inventory.held_item().unwrap_or(empty);
-        let equipment = &[(EquipmentSlot::MainHand, stack.clone())];
-        self.living_entity.send_equipment_changes(equipment).await;
         self.client
-            .enqueue_packet(&CSetHeldItem::new(dest_slot as i8))
+            .enqueue_packet(&CSetSelectedSlot::new(
+                self.inventory.get_selected_slot() as i8
+            ))
+            .await;
+        self.player_screen_handler
+            .lock()
+            .await
+            .send_content_updates()
             .await;
     }
 
     // pub fn handle_pick_item_from_entity(&self, _pick_item: SPickItemFromEntity) {
     //     // TODO: Implement and merge any redundant code with pick_item_from_block
     // }
+
+    pub async fn handle_set_command_block(&self, command: SSetCommandBlock) {
+        // TODO: check things
+        let pos = command.pos;
+        if let Some((nbt, block_entity)) = self.world().await.get_block_entity(&pos).await {
+            let command_entity = CommandBlockEntity::from_nbt(&nbt, pos);
+
+            if block_entity.identifier() != command_entity.identifier() {
+                log::warn!(
+                    "Client tried to change Command block but not Command block entity found"
+                );
+                return;
+            }
+
+            let Ok(command_block_mode) = CommandBlockMode::try_from(command.mode) else {
+                self.kick(TextComponent::text("Invalid Command block mode"))
+                    .await;
+                return;
+            };
+
+            let _block_state = match command_block_mode {
+                CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
+                CommandBlockMode::Repeating => Block::REPEATING_COMMAND_BLOCK,
+                CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
+            };
+        }
+    }
 
     pub async fn handle_player_command(&self, command: SPlayerCommand) {
         if command.entity_id != self.entity_id().into() {
@@ -1149,28 +1106,25 @@ impl Player {
                     let location = player_action.location;
                     let entity = &self.living_entity.entity;
                     let world = &entity.world.read().await;
-                    let block = world.get_block(&location).await.unwrap();
-                    let state = world.get_block_state(&location).await.unwrap();
+                    let (block, state) = world.get_block_and_block_state(&location).await;
 
-                    if let Some(held) = self.inventory.lock().await.held_item() {
-                        if !server.item_registry.can_mine(&held.item, self) {
-                            self.client
-                                .enqueue_packet(&CBlockUpdate::new(
-                                    location,
-                                    VarInt(i32::from(state.id)),
-                                ))
-                                .await;
-                            self.update_sequence(player_action.sequence.0);
-                            return;
-                        }
+                    let inventory = self.inventory();
+                    let held = inventory.held_item();
+                    if !server.item_registry.can_mine(held.lock().await.item, self) {
+                        self.client
+                            .enqueue_packet(&CBlockUpdate::new(
+                                location,
+                                VarInt(i32::from(state.id)),
+                            ))
+                            .await;
+                        self.update_sequence(player_action.sequence.0);
+                        return;
                     }
 
                     // TODO: do validation
                     // TODO: Config
                     if self.gamemode.load() == GameMode::Creative {
                         // Block break & play sound
-
-                        let broken_state = world.get_block_state(&location).await.unwrap();
                         world
                             .break_block(
                                 &location,
@@ -1180,14 +1134,7 @@ impl Player {
                             .await;
                         server
                             .block_registry
-                            .broken(
-                                Arc::clone(world),
-                                &block,
-                                self,
-                                location,
-                                server,
-                                broken_state,
-                            )
+                            .broken(Arc::clone(world), &block, self, location, server, state)
                             .await;
                         self.update_sequence(player_action.sequence.0);
                         return;
@@ -1200,7 +1147,7 @@ impl Player {
                         let speed = block::calc_block_breaking(self, &state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&location).await.unwrap();
+                            let broken_state = world.get_block_state(&location).await;
                             world
                                 .break_block(
                                     &location,
@@ -1269,27 +1216,26 @@ impl Player {
                         .store(false, std::sync::atomic::Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
-                    if let Ok((block, state)) = world.get_block_and_block_state(&location).await {
-                        let drop = self.gamemode.load() != GameMode::Creative
-                            && self.can_harvest(&state, block.name).await;
+                    let (block, state) = world.get_block_and_block_state(&location).await;
+                    let drop = self.gamemode.load() != GameMode::Creative
+                        && self.can_harvest(&state, block.name).await;
 
-                        world
-                            .break_block(
-                                &location,
-                                Some(self.clone()),
-                                if drop {
-                                    BlockFlags::NOTIFY_NEIGHBORS
-                                } else {
-                                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                                },
-                            )
-                            .await;
+                    world
+                        .break_block(
+                            &location,
+                            Some(self.clone()),
+                            if drop {
+                                BlockFlags::NOTIFY_NEIGHBORS
+                            } else {
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            },
+                        )
+                        .await;
 
-                        server
-                            .block_registry
-                            .broken(Arc::clone(world), &block, self, location, server, state)
-                            .await;
-                    }
+                    server
+                        .block_registry
+                        .broken(Arc::clone(world), &block, self, location, server, state)
+                        .await;
 
                     self.update_sequence(player_action.sequence.0);
                 }
@@ -1374,24 +1320,19 @@ impl Player {
             return Err(BlockPlacingError::InvalidBlockFace.into());
         };
 
-        let inventory = self.inventory().lock().await;
-        let slot_id = inventory.get_selected_slot();
-        let held_item = inventory.held_item().cloned();
-        drop(inventory);
+        let inventory = self.inventory();
+        let held_item = inventory.held_item();
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
-        let Ok(block) = world.get_block(&location).await else {
-            return Err(BlockPlacingError::NoBaseBlock.into());
-        };
+        let block = world.get_block(&location).await;
 
         let sneaking = self
             .living_entity
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-
-        let Some(stack) = held_item else {
+        if held_item.lock().await.is_empty() {
             if !sneaking {
                 // Using block with empty hand
                 server
@@ -1400,17 +1341,26 @@ impl Player {
                     .await;
             }
             return Ok(());
-        };
-
+        }
         if !sneaking {
             server
                 .item_registry
-                .use_on_block(&stack.item, self, location, face, &block, server)
+                .use_on_block(
+                    held_item.lock().await.item,
+                    self,
+                    location,
+                    face,
+                    &block,
+                    server,
+                )
                 .await;
             self.update_sequence(use_item_on.sequence.0);
+            let item_stack = held_item.lock().await;
+            let item = item_stack.item;
+            drop(item_stack);
             let action_result = server
                 .block_registry
-                .use_with_item(&block, self, location, &stack.item, server, world)
+                .use_with_item(&block, self, location, item, server, world)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1421,14 +1371,14 @@ impl Player {
         }
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(stack.item.id) {
+        if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
             should_try_decrement = self
                 .run_is_block_place(block, server, use_item_on, location, face)
                 .await?;
         }
 
         // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(stack.item.id) {
+        if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
             self.spawn_entity_from_egg(entity, location, face).await;
             should_try_decrement = true;
         }
@@ -1437,20 +1387,7 @@ impl Player {
             // TODO: Config
             // Decrease block count
             if self.gamemode.load() != GameMode::Creative {
-                let mut inventory = self.inventory().lock().await;
-
-                if !inventory.decrease_current_stack(1) {
-                    return Err(BlockPlacingError::InventoryInvalid.into());
-                }
-                // TODO: this should be by use item on not currently selected as they might be different
-                let _ = self
-                    .handle_decrease_item(
-                        server,
-                        slot_id as i16,
-                        inventory.held_item().cloned().as_ref(),
-                        &mut inventory.state_id,
-                    )
-                    .await;
+                held_item.lock().await.decrement(1);
             }
         }
 
@@ -1473,19 +1410,14 @@ impl Player {
         world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
-    pub async fn handle_use_item(&self, use_item: &SUseItem, server: &Server) {
+    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
-        let held = {
-            let inventory = self.inventory().lock().await;
-            inventory.held_item().cloned()
-        };
-
-        if held.is_some() {
-            server.item_registry.on_use(&held.unwrap().item, self).await;
-        }
-        self.update_sequence(use_item.sequence.0);
+        let inventory = self.inventory();
+        let binding = inventory.held_item();
+        let held = binding.lock().await;
+        server.item_registry.on_use(held.item, self).await;
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
@@ -1494,11 +1426,10 @@ impl Player {
             self.kick(TextComponent::text("Invalid held slot")).await;
             return;
         }
-        let mut inv = self.inventory().lock().await;
-        inv.set_selected(slot as usize);
-        let empty = &ItemStack::new(0, Item::AIR);
-        let stack = inv.held_item().unwrap_or(empty);
-        let equipment = &[(EquipmentSlot::MainHand, stack.clone())];
+        let inv = self.inventory();
+        inv.set_selected_slot(slot as u8);
+        let stack = *inv.held_item().lock().await;
+        let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         self.living_entity.send_equipment_changes(equipment).await;
     }
 
@@ -1509,18 +1440,26 @@ impl Player {
         if self.gamemode.load() != GameMode::Creative {
             return Err(InventoryError::PermissionError);
         }
-        let valid_slot = packet.slot >= 0 && packet.slot as usize <= SLOT_OFFHAND;
-        // TODO: Handle error
+        let is_negative = packet.slot < 0;
+        let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
         let item_stack = packet.clicked_item.to_stack();
-        if valid_slot {
-            self.inventory()
-                .lock()
+        let is_legal =
+            item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
+
+        if valid_slot && is_legal {
+            let mut player_screen_handler = self.player_screen_handler.lock().await;
+            player_screen_handler
+                .get_slot(packet.slot as usize)
                 .await
-                .set_slot(packet.slot as usize, Some(item_stack), true)?;
-        } else {
-            // Item drop
-            self.drop_item(item_stack.item.id, u32::from(item_stack.item_count))
+                .set_stack(item_stack)
                 .await;
+            player_screen_handler
+                .set_received_stack(packet.slot as usize, item_stack)
+                .await;
+            player_screen_handler.send_content_updates().await;
+        } else if is_negative && is_legal {
+            // Item drop
+            self.drop_item(item_stack).await;
         }
         Ok(())
     }
@@ -1535,42 +1474,8 @@ impl Player {
         );
     }
 
-    // TODO:
-    // In the future, this function will be used to keep track of if the client is in a valid state.
-    // However, this is not possible yet.
-    pub async fn handle_close_container(&self, server: &Server, _packet: SCloseContainer) {
-        // TODO: This should check if player sent this packet before
-        // let Some(_window_type) = WindowType::from_i32(packet.window_id.0) else {
-        //     log::info!("Closed ID: {}", packet.window_id.0);
-        //     self.kick(TextComponent::text("Invalid window ID")).await;
-        //     return;
-        // };
-        // window_id 0 represents both 9x1 Generic AND inventory here
-        let open_container = self.open_container.load();
-        if let Some(id) = open_container {
-            let mut open_containers = server.open_containers.write().await;
-            if let Some(container) = open_containers.get_mut(&id) {
-                // If the container contains both a location and a type, run the `on_close` `block_manager` handler
-                if let Some(pos) = container.get_location() {
-                    if let Some(block) = container.get_block() {
-                        server
-                            .block_registry
-                            .close(&block, self, pos, server, container) //block, self, location, server)
-                            .await;
-                    }
-                }
-                // Remove the player from the container
-                container.remove_player(self.entity_id());
-
-                let mut inventory = self.inventory().lock().await;
-                if inventory.state_id >= 2 {
-                    inventory.state_id -= 2;
-                } else {
-                    inventory.state_id = 0;
-                }
-            }
-            self.open_container.store(None);
-        }
+    pub async fn handle_close_container(&self, _server: &Server, _packet: SCloseContainer) {
+        self.on_handled_screen_closed().await;
     }
 
     pub async fn handle_command_suggestion(
@@ -1682,7 +1587,7 @@ impl Player {
 
         let clicked_block_pos = BlockPos(location.0);
         let (clicked_block, clicked_block_state) =
-            world.get_block_and_block_state(&clicked_block_pos).await?;
+            world.get_block_and_block_state(&clicked_block_pos).await;
 
         let replace_clicked_block = if clicked_block == block {
             world
@@ -1697,16 +1602,16 @@ impl Player {
                 )
                 .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
+        } else if clicked_block_state.replaceable() {
+            if clicked_block == Block::WATER {
+                let water_props =
+                    WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
+                Some(BlockIsReplacing::Water(water_props.level))
+            } else {
+                Some(BlockIsReplacing::Other)
+            }
         } else {
-            clicked_block_state.replaceable().then(|| {
-                if clicked_block == Block::WATER {
-                    let water_props =
-                        WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
-                    BlockIsReplacing::Water(water_props.level)
-                } else {
-                    BlockIsReplacing::Other
-                }
-            })
+            None
         };
 
         let (final_block_pos, final_face, replacing) =
@@ -1715,7 +1620,7 @@ impl Player {
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
                 let (previous_block, previous_block_state) =
-                    world.get_block_and_block_state(&block_pos).await?;
+                    world.get_block_and_block_state(&block_pos).await;
 
                 let replace_previous_block = if previous_block == block {
                     world
@@ -1739,7 +1644,7 @@ impl Player {
                             );
                             BlockIsReplacing::Water(water_props.level)
                         } else {
-                            BlockIsReplacing::Other
+                            BlockIsReplacing::None
                         }
                     })
                 };

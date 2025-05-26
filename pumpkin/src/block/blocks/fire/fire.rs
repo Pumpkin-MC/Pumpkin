@@ -1,22 +1,24 @@
 use pumpkin_data::block_properties::HorizontalAxis;
+use pumpkin_data::entity::EntityType;
 use pumpkin_registry::DimensionType;
 use rand::Rng;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
 
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use crate::world::portal::NetherPortal;
+use crate::world::portal::nether::NetherPortal;
 
 use super::FireBlockBase;
 
@@ -65,6 +67,32 @@ impl PumpkinBlock for FireBlock {
             .await;
     }
 
+    async fn on_entity_collision(
+        &self,
+        _world: &Arc<World>,
+        entity: &dyn EntityBase,
+        _pos: BlockPos,
+        _block: Block,
+        _state: BlockState,
+        _server: &Server,
+    ) {
+        let base_entity = entity.get_entity();
+        if !base_entity.entity_type.fire_immune {
+            let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
+            if ticks < 0 {
+                base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
+            } else if base_entity.entity_type == EntityType::PLAYER {
+                let rnd_ticks = rand::thread_rng().gen_range(1..3);
+                base_entity
+                    .fire_ticks
+                    .store(ticks + rnd_ticks, Ordering::Relaxed);
+            }
+            if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
+                base_entity.set_on_fire_for(8.0);
+            }
+        }
+    }
+
     async fn get_state_for_neighbor_update(
         &self,
         world: &World,
@@ -75,7 +103,7 @@ impl PumpkinBlock for FireBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await.unwrap()) {
+        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await) {
             return Block::AIR.default_state_id;
         }
 

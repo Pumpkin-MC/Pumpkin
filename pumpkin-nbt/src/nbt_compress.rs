@@ -203,7 +203,7 @@ mod tests {
 
         // Add 1000 integer entries
         for i in 0..1000 {
-            compound.put_int(&format!("value_{}", i), i);
+            compound.put_int(&format!("value_{i}"), i);
         }
 
         let mut buffer = Vec::new();
@@ -281,7 +281,7 @@ mod tests {
         let mut buffer = Vec::new();
         write_gzip_compound_tag(&compound, &mut buffer).expect("Failed to compress compound");
 
-        println!("Uncompressed size (est): {} bytes", uncompressed);
+        println!("Uncompressed size (est): {uncompressed} bytes");
         println!("Compressed size: {} bytes", buffer.len());
         println!(
             "Compression ratio: {:.2}x",

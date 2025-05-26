@@ -1,29 +1,26 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::Block;
-use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{BlockState, block_properties::BedPart};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_registry::DimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::block::entities::bed::BedBlockEntity;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::entity::Entity;
-use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::entity::{Entity, EntityBase};
+
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -53,14 +50,11 @@ impl PumpkinBlock for BedBlock {
     ) -> bool {
         let facing = player.living_entity.entity.get_horizontal_facing();
 
-        world
-            .get_block_state(block_pos)
-            .await
-            .is_ok_and(|state| state.replaceable())
+        world.get_block_state(block_pos).await.replaceable()
             && world
                 .get_block_state(&block_pos.offset(facing.to_offset()))
                 .await
-                .is_ok_and(|state| state.replaceable())
+                .replaceable()
     }
 
     async fn on_place(
@@ -148,7 +142,7 @@ impl PumpkinBlock for BedBlock {
         server: &Server,
         world: &Arc<World>,
     ) {
-        let state_id = world.get_block_state_id(&block_pos).await.unwrap();
+        let state_id = world.get_block_state_id(&block_pos).await;
         let bed_props = BedProperties::from_state_id(state_id, block);
 
         let (bed_head_pos, bed_foot_pos) = if bed_props.part == BedPart::Head {
@@ -177,14 +171,8 @@ impl PumpkinBlock for BedBlock {
         }
 
         // Make sure the bed is not obstructed
-        if !world
-            .get_block_state(&bed_head_pos.up())
-            .await
-            .is_ok_and(|s| !s.is_solid())
-            || !world
-                .get_block_state(&bed_head_pos.up())
-                .await
-                .is_ok_and(|s| !s.is_solid())
+        if world.get_block_state(&bed_head_pos.up()).await.is_solid()
+            || world.get_block_state(&bed_head_pos.up()).await.is_solid()
         {
             player
                 .send_system_message_raw(

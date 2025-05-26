@@ -24,8 +24,8 @@ impl ClientPacket for CChunkData<'_> {
         write.write_i32_be(self.0.position.z)?;
 
         let heightmaps = &self.0.heightmap;
-        // the heighmap is a map, we put 2 values in so the size is 2
-        write.write_var_int(&VarInt(2))?;
+        // the heighmap is a map, we put 3 values in so the size is 3
+        write.write_var_int(&VarInt(3))?;
 
         // heighmap index
         write.write_var_int(&VarInt(1))?;
@@ -38,6 +38,13 @@ impl ClientPacket for CChunkData<'_> {
         write.write_var_int(&VarInt(4))?;
         // write long array
         write.write_var_int(&VarInt(heightmaps.motion_blocking.len() as i32))?;
+        for mb in &heightmaps.motion_blocking {
+            write.write_i64_be(*mb)?;
+        }
+        // heighmap index
+        write.write_var_int(&VarInt(5))?;
+        // write long array
+        write.write_var_int(&VarInt(heightmaps.motion_blocking_no_leaves.len() as i32))?;
         for mb in &heightmaps.motion_blocking {
             write.write_i64_be(*mb)?;
         }
@@ -116,6 +123,7 @@ impl ClientPacket for CChunkData<'_> {
         // TODO: block entities
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
         for block_entity in self.0.block_entities.values() {
+            let block_entity = &block_entity.1;
             let chunk_data_nbt = block_entity.chunk_data_nbt();
             let pos = block_entity.get_position();
             let block_entity_id = block_entity.get_id();

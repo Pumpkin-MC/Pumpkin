@@ -274,8 +274,7 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
                 }
             } else {
                 Err(Error::UnsupportedType(format!(
-                    "Non-byte bool (found type {})",
-                    tag_id
+                    "Non-byte bool (found type {tag_id})"
                 )))
             }
         } else {

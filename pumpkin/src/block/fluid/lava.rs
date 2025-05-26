@@ -6,17 +6,17 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
-use crate::{block::pumpkin_fluid::PumpkinFluid, world::World};
+use crate::{block::pumpkin_fluid::PumpkinFluid, entity::EntityBase, world::World};
 
-use super::flowing_fluid::FlowingFluid;
+use super::flowing::FlowingFluid;
 
-#[pumpkin_block("minecraft:flowing_water")]
-pub struct FlowingWater;
+#[pumpkin_block("minecraft:flowing_lava")]
+pub struct FlowingLava;
 
-const WATER_FLOW_SPEED: u16 = 5;
+const LAVA_FLOW_SPEED: u16 = 30;
 
 #[async_trait]
-impl PumpkinFluid for FlowingWater {
+impl PumpkinFluid for FlowingLava {
     async fn placed(
         &self,
         world: &World,
@@ -27,7 +27,7 @@ impl PumpkinFluid for FlowingWater {
         _notify: bool,
     ) {
         world
-            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+            .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
             .await;
     }
 
@@ -43,23 +43,30 @@ impl PumpkinFluid for FlowingWater {
         _notify: bool,
     ) {
         world
-            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+            .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
             .await;
+    }
+
+    async fn on_entity_collision(&self, entity: &dyn EntityBase) {
+        let base_entity = entity.get_entity();
+        if !base_entity.entity_type.fire_immune {
+            base_entity.set_on_fire_for(15.0);
+        }
     }
 }
 
 #[async_trait]
-impl FlowingFluid for FlowingWater {
+impl FlowingFluid for FlowingLava {
     async fn get_drop_off(&self) -> i32 {
-        1
+        2
     }
 
     async fn get_slope_find_distance(&self) -> i32 {
-        4
+        2
     }
 
     async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
-        //TODO add game rule check for water conversion
-        true
+        //TODO add game rule check for lava conversion
+        false
     }
 }

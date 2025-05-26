@@ -194,8 +194,7 @@ mod test {
             let expected = Vector3::new(result_x, result_y, result_z);
             assert_eq!(
                 result, expected,
-                "Expected: {:?}, was: {:?} ({})",
-                expected, result, i
+                "Expected: {expected:?}, was: {result:?} ({i})"
             );
         }
     }

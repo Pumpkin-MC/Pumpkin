@@ -1,15 +1,15 @@
 use std::{
     fs::OpenOptions,
     io::Read,
+    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    level::LevelFolder,
-    world_info::{MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION},
+use crate::world_info::{
+    MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
 };
 
 use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
@@ -54,8 +54,8 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 }
 
 impl WorldInfoReader for AnvilLevelInfo {
-    fn read_world_info(&self, level_folder: &LevelFolder) -> Result<LevelData, WorldInfoError> {
-        let path = level_folder.root_folder.join(LEVEL_DAT_FILE_NAME);
+    fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
+        let path = level_folder.join(LEVEL_DAT_FILE_NAME);
 
         let world_info_file = OpenOptions::new().read(true).open(path)?;
         let mut compression_reader = GzDecoder::new(world_info_file);
@@ -75,19 +75,21 @@ impl WorldInfoReader for AnvilLevelInfo {
 impl WorldInfoWriter for AnvilLevelInfo {
     fn write_world_info(
         &self,
-        info: LevelData,
-        level_folder: &LevelFolder,
+        info: &LevelData,
+        level_folder: &Path,
     ) -> Result<(), WorldInfoError> {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
-        let mut level_data = info;
+        let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
-        let level = LevelDat { data: level_data };
+        let level = LevelDat {
+            data: level_data.clone(),
+        };
 
         // open file
-        let path = level_folder.root_folder.join(LEVEL_DAT_FILE_NAME);
+        let path = level_folder.join(LEVEL_DAT_FILE_NAME);
         let world_info_file = OpenOptions::new()
             .truncate(true)
             .create(true)
@@ -122,7 +124,6 @@ mod test {
 
     use crate::{
         global_path,
-        level::LevelFolder,
         world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
     };
 
@@ -136,16 +137,12 @@ mod test {
         data.world_gen_settings.seed = seed;
 
         let temp_dir = TempDir::new().unwrap();
-        let level_folder = LevelFolder {
-            root_folder: temp_dir.path().to_path_buf(),
-            region_folder: temp_dir.path().join("region"),
-        };
 
         AnvilLevelInfo
-            .write_world_info(data, &level_folder)
+            .write_world_info(&data, temp_dir.path())
             .unwrap();
 
-        let data = AnvilLevelInfo.read_world_info(&level_folder).unwrap();
+        let data = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
 
         assert_eq!(data.world_gen_settings.seed, seed);
     }
@@ -219,15 +216,15 @@ mod test {
     #[test]
     fn failed_deserialize_old_level_dat() {
         let temp_dir = TempDir::new().unwrap();
-        let level_folder = LevelFolder {
-            root_folder: temp_dir.path().to_path_buf(),
-            region_folder: temp_dir.path().join("region"),
-        };
 
         let test_dat = global_path!("../../assets/level_1_20.dat");
-        fs::copy(test_dat, level_folder.root_folder.join(LEVEL_DAT_FILE_NAME)).unwrap();
+        fs::copy(
+            test_dat,
+            temp_dir.path().to_path_buf().join(LEVEL_DAT_FILE_NAME),
+        )
+        .unwrap();
 
-        let result = AnvilLevelInfo.read_world_info(&level_folder);
+        let result = AnvilLevelInfo.read_world_info(temp_dir.path());
         match result {
             Ok(_) => panic!("This should fail!"),
             Err(WorldInfoError::UnsupportedVersion(_)) => {}

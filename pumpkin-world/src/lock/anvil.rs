@@ -2,7 +2,7 @@ use file_guard::{FileGuard, Lock};
 
 use super::{LevelLocker, LockError};
 
-use std::{fs::File, io::Write, sync::Arc};
+use std::{fs::File, io::Write, path::Path, sync::Arc};
 
 pub struct AnvilLevelLocker {
     _lock: Option<FileGuard<Arc<File>>>,
@@ -13,8 +13,8 @@ const SESSION_LOCK_FILE_NAME: &str = "session.lock";
 const SNOWMAN: &[u8] = "☃".as_bytes();
 
 impl LevelLocker<Self> for AnvilLevelLocker {
-    fn look(folder: &crate::level::LevelFolder) -> Result<Self, LockError> {
-        let file_path = folder.root_folder.join(SESSION_LOCK_FILE_NAME);
+    fn look(folder: &Path) -> Result<Self, LockError> {
+        let file_path = folder.join(SESSION_LOCK_FILE_NAME);
         let mut file = File::options()
             .create(true)
             .truncate(false)

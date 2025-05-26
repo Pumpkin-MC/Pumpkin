@@ -1,3 +1,4 @@
+use dimension::Dimension;
 use generation::settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
 
@@ -8,10 +9,12 @@ pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
 pub mod entity;
-mod generation;
+pub mod generation;
+pub mod inventory;
 pub mod item;
 pub mod level;
-mod lock;
+pub mod lock;
+pub mod world;
 pub mod world_info;
 
 pub type BlockId = u16;
@@ -62,7 +65,7 @@ pub fn bench_create_and_populate_biome(
     settings: &GenerationSettings,
 ) {
     let mut chunk = ProtoChunk::new(Vector2::new(0, 0), base_router, random_config, settings);
-    chunk.populate_biomes();
+    chunk.populate_biomes(Dimension::Overworld);
 }
 
 pub fn bench_create_and_populate_noise_with_surface(
@@ -71,7 +74,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     settings: &GenerationSettings,
 ) {
     let mut chunk = ProtoChunk::new(Vector2::new(0, 0), base_router, random_config, settings);
-    chunk.populate_biomes();
+    chunk.populate_biomes(Dimension::Overworld);
     chunk.populate_noise();
     chunk.build_surface();
 }

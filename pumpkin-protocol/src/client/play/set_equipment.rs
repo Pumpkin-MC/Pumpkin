@@ -13,14 +13,11 @@ use crate::{
 #[packet(PLAY_SET_EQUIPMENT)]
 pub struct CSetEquipment {
     entity_id: VarInt,
-    equipment: Vec<(EquipmentSlot, ItemStackSerializer<'static>)>,
+    equipment: Vec<(i8, ItemStackSerializer<'static>)>,
 }
 
 impl CSetEquipment {
-    pub fn new(
-        entity_id: VarInt,
-        equipment: Vec<(EquipmentSlot, ItemStackSerializer<'static>)>,
-    ) -> Self {
+    pub fn new(entity_id: VarInt, equipment: Vec<(i8, ItemStackSerializer<'static>)>) -> Self {
         Self {
             entity_id,
             equipment,
@@ -39,7 +36,7 @@ impl ClientPacket for CSetEquipment {
             if i != self.equipment.len() - 1 {
                 write.write_i8_be(-128)?;
             } else {
-                write.write_i8_be(*slot as i8)?;
+                write.write_i8_be(*slot)?;
             }
             let mut serializer = Serializer::new(&mut write);
             equipment
@@ -50,15 +47,4 @@ impl ClientPacket for CSetEquipment {
 
         Ok(())
     }
-}
-
-#[derive(Clone, Copy)]
-pub enum EquipmentSlot {
-    MainHand,
-    OffHand,
-    Feet,
-    Legs,
-    Chest,
-    Head,
-    Body,
 }

@@ -1,5 +1,7 @@
+use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
+use blocks::command::CommandBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
 use blocks::farmland::FarmLandBlock;
@@ -9,11 +11,18 @@ use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
 use blocks::glass_panes::GlassPaneBlock;
 use blocks::iron_bars::IronBarsBlock;
+use blocks::lily_pad::LilyPadBlock;
 use blocks::logs::LogBlock;
 use blocks::nether_portal::NetherPortalBlock;
+use blocks::note::NoteBlock;
+use blocks::piston::piston::PistonBlock;
+use blocks::piston::piston_extension::PistonExtensionBlock;
+use blocks::piston::piston_head::PistonHeadBlock;
+use blocks::pumpkin::PumpkinBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
-use blocks::redstone::piston::PistonBlock;
+use blocks::redstone::pressure_plate::plate::PressurePlateBlock;
+use blocks::redstone::pressure_plate::weighted::WeightedPressurePlateBlock;
 use blocks::redstone::rails::activator_rail::ActivatorRailBlock;
 use blocks::redstone::rails::detector_rail::DetectorRailBlock;
 use blocks::redstone::rails::powered_rail::PoweredRailBlock;
@@ -29,12 +38,13 @@ use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
+use blocks::trapdoor::TrapDoorBlock;
 use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
-use fluids::lava::FlowingLava;
-use fluids::water::FlowingWater;
+use fluid::lava::FlowingLava;
+use fluid::water::FlowingWater;
 use loot::LootTableExt;
 use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::entity::EntityType;
@@ -54,7 +64,7 @@ use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::Experi
 use std::sync::Arc;
 
 pub(crate) mod blocks;
-mod fluids;
+mod fluid;
 mod loot;
 pub mod pumpkin_block;
 pub mod pumpkin_fluid;
@@ -82,11 +92,18 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(StairBlock);
+    manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);
     manager.register(TorchBlock);
+    manager.register(TrapDoorBlock);
     manager.register(WallBlock);
     manager.register(NetherPortalBlock);
+    manager.register(NoteBlock);
+    manager.register(PumpkinBlock);
+    manager.register(CommandBlock);
+    manager.register(PressurePlateBlock);
+    manager.register(WeightedPressurePlateBlock);
 
     // Fire
     manager.register(SoulFireBlock);
@@ -96,13 +113,19 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ButtonBlock);
     manager.register(LeverBlock);
     manager.register(ObserverBlock);
+
+    // Piston
     manager.register(PistonBlock);
+    manager.register(PistonExtensionBlock);
+    manager.register(PistonHeadBlock);
+
     manager.register(RedstoneBlock);
     manager.register(RedstoneLamp);
     manager.register(RedstoneTorchBlock);
     manager.register(RedstoneWireBlock);
     manager.register(RepeaterBlock);
     manager.register(TargetBlock);
+    manager.register(BarrelBlock);
 
     // Rails
     manager.register(RailBlock);
@@ -114,6 +137,13 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register_fluid(FlowingWater);
     manager.register_fluid(FlowingLava);
     Arc::new(manager)
+}
+
+#[derive(Clone)]
+pub struct BlockEvent {
+    pub pos: BlockPos,
+    pub r#type: u8,
+    pub data: u8,
 }
 
 pub async fn drop_loot(
@@ -152,10 +182,8 @@ async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     );
 
     let entity = world.create_entity(pos, EntityType::ITEM);
-    let item_entity =
-        Arc::new(ItemEntity::new(entity, stack.item.id, u32::from(stack.item_count)).await);
-    world.spawn_entity(item_entity.clone()).await;
-    item_entity.send_meta_packet().await;
+    let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
+    world.spawn_entity(item_entity).await;
 }
 
 pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {
@@ -179,6 +207,7 @@ pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),
     Other,
+    None,
 }
 
 impl BlockIsReplacing {

@@ -3,23 +3,15 @@ use std::sync::Arc;
 use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState, FacingExt,
     block_properties::{BlockProperties, ObserverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    block::{BlockDirection, FacingExt},
-    chunk::TickPriority,
-};
+use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
 
-use crate::{
-    block::pumpkin_block::PumpkinBlock,
-    server::Server,
-    world::{BlockFlags, World},
-};
+use crate::{block::pumpkin_block::PumpkinBlock, server::Server, world::World};
 
 #[pumpkin_block("minecraft:observer")]
 pub struct ObserverBlock;
@@ -53,7 +45,7 @@ impl PumpkinBlock for ObserverBlock {
     }
 
     async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-        let state = world.get_block_state(block_pos).await.unwrap();
+        let state = world.get_block_state(block_pos).await;
         let mut props = ObserverLikeProperties::from_state_id(state.id, block);
 
         if props.powered {

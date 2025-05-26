@@ -1,15 +1,15 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState};
-use pumpkin_inventory::OpenContainer;
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockFlags;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -36,6 +36,47 @@ impl BlockRegistry {
 
     pub fn register_fluid<T: PumpkinFluid + BlockMetadata + 'static>(&mut self, fluid: T) {
         self.fluids.insert(fluid.names(), Arc::new(fluid));
+    }
+
+    pub async fn on_synced_block_event(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        r#type: u8,
+        data: u8,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .on_synced_block_event(block, world, pos, r#type, data)
+                .await;
+        }
+        false
+    }
+
+    pub async fn on_entity_collision(
+        &self,
+        block: Block,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        pos: BlockPos,
+        state: BlockState,
+        server: &Server,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(&block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .on_entity_collision(world, entity, pos, block, state, server)
+                .await;
+        }
+    }
+
+    pub async fn on_entity_collision_fluid(&self, fluid: &Fluid, entity: &dyn EntityBase) {
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        if let Some(pumpkin_fluid) = pumpkin_fluid {
+            pumpkin_fluid.on_entity_collision(entity).await;
+        }
     }
 
     pub async fn on_use(
@@ -233,22 +274,6 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn close(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        server: &Server,
-        container: &mut OpenContainer,
-    ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
-                .close(block, player, location, server, container)
-                .await;
-        }
-    }
-
     pub async fn on_state_replaced(
         &self,
         world: &Arc<World>,
@@ -273,10 +298,10 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state = world.get_block_state(location).await.unwrap();
+        let state = world.get_block_state(location).await;
         for direction in BlockDirection::all() {
             let neighbor_pos = location.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos).await.unwrap();
+            let neighbor_state = world.get_block_state(&neighbor_pos).await;
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block

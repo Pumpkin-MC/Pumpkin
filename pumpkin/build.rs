@@ -15,5 +15,5 @@ fn main() {
         "unknown" => env::var("GIT_VERSION").unwrap_or("unknown".to_string()),
         _ => version.to_string(),
     };
-    println!("cargo:rustc-env=GIT_VERSION={}", git_version);
+    println!("cargo:rustc-env=GIT_VERSION={git_version}");
 }

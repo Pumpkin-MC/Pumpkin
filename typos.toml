@@ -1,4 +1,6 @@
 [files]
-extend-exclude = [
-    "assets/"
-]
+extend-exclude = ["assets/"]
+
+[default.extend-words]
+handled = "handled"
+received = "received"

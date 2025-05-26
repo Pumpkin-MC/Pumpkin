@@ -85,16 +85,16 @@ impl LootPoolEntryExt for LootPoolEntry {
                         enchantment: _,
                         formula: _,
                         parameters: _,
-                    } => todo!(),
-                    LootFunctionTypes::CopyComponents {
+                    }
+                    | LootFunctionTypes::CopyComponents {
                         source: _,
                         include: _,
-                    } => todo!(),
-                    LootFunctionTypes::CopyState {
+                    }
+                    | LootFunctionTypes::CopyState {
                         block: _,
                         properties: _,
-                    } => todo!(),
-                    LootFunctionTypes::ExplosionDecay => {
+                    }
+                    | LootFunctionTypes::ExplosionDecay => {
                         // TODO: shouldnt crash here but needs to be implemented someday
                     }
                 }

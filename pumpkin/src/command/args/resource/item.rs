@@ -54,7 +54,7 @@ impl DefaultNameArgConsumer for ItemArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for ItemArgumentConsumer {
-    type Data = (&'a str, Item);
+    type Data = (&'a str, &'static Item);
 
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

@@ -60,7 +60,6 @@ use thiserror::Error;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 pub mod authentication;
-mod container;
 pub mod lan_broadcast;
 mod packet;
 mod proxy;

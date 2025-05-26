@@ -11,7 +11,7 @@ fn const_block_name_from_block_name(block: &str) -> String {
 }
 
 fn property_group_name_from_derived_name(name: &str) -> String {
-    format!("{}_properties", name).to_upper_camel_case()
+    format!("{name}_properties").to_upper_camel_case()
 }
 
 enum PropertyType {
@@ -355,12 +355,36 @@ impl ToTokens for CollisionShape {
 pub struct BlockState {
     pub id: u16,
     pub state_flags: u8,
+    pub side_flags: u8,
+    pub instrument: String, // TODO: make this an enum
     pub luminance: u8,
+    pub piston_behavior: PistonBehavior,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
-    // pub instrument: String, // TODO: make this an enum
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PistonBehavior {
+    Normal,
+    Destroy,
+    Block,
+    Ignore,
+    PushOnly,
+}
+
+impl PistonBehavior {
+    fn to_tokens(&self) -> TokenStream {
+        match self {
+            PistonBehavior::Normal => quote! { PistonBehavior::Normal },
+            PistonBehavior::Destroy => quote! { PistonBehavior::Destroy },
+            PistonBehavior::Block => quote! { PistonBehavior::Block },
+            PistonBehavior::Ignore => quote! { PistonBehavior::Ignore },
+            PistonBehavior::PushOnly => quote! { PistonBehavior::PushOnly },
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -374,6 +398,8 @@ impl BlockState {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
+        let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
+        let instrument = self.instrument.clone();
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
         let opacity = match self.opacity {
@@ -396,12 +422,16 @@ impl BlockState {
             .collision_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
             BlockState {
                 id: #id,
                 state_flags: #state_flags,
+                side_flags: #side_flags,
+                instrument: #instrument,
                 luminance: #luminance,
+                piston_behavior: #piston_behavior,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
                 opacity: #opacity,
@@ -1015,7 +1045,7 @@ impl GeneratedProperty {
     fn to_property(&self) -> Property {
         let enum_name = match &self.property_type {
             GeneratedPropertyType::Boolean => "boolean".to_string(),
-            GeneratedPropertyType::Int { min, max } => format!("integer_{}_to_{}", min, max),
+            GeneratedPropertyType::Int { min, max } => format!("integer_{min}_to_{max}"),
             GeneratedPropertyType::Enum { .. } => self.enum_name.clone(),
         };
 
@@ -1026,7 +1056,7 @@ impl GeneratedProperty {
             GeneratedPropertyType::Int { min, max } => {
                 let mut values = Vec::new();
                 for i in *min..=*max {
-                    values.push(format!("L{}", i));
+                    values.push(format!("L{i}"));
                 }
                 values
             }
@@ -1268,6 +1298,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use crate::{BlockState, BlockStateRef, Block, CollisionShape};
+        use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
