@@ -11,6 +11,7 @@ use rsa::signature::Verifier;
 use sha1::Sha1;
 
 use std::num::NonZeroU8;
+use std::ops::Add;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -650,6 +651,44 @@ impl Player {
                 }
                 pumpkin_protocol::server::play::Action::StopSneaking => {
                     if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
+                        let block_up = &entity.pos.load().add_raw(0.0, 1.0, 0.0);
+
+                        if !self.world().await.get_block(&BlockPos::new(block_up.x as i32, block_up.y as i32, block_up.z as i32))
+                            .await.eq(&Block::AIR) {
+                            return;
+                        }
+
+
+                        if !self.world().await.get_block(&BlockPos::new(
+                            entity.pos.load().x.add(0.5) as i32,
+                            entity.pos.load().y as i32+1,
+                            entity.pos.load().z.add(0.5) as i32
+                        )).await.eq(&Block::AIR)  {
+                            return;
+                        }
+                        if !self.world().await.get_block(&BlockPos::new(
+                            entity.pos.load().x.add(-0.5) as i32,
+                            entity.pos.load().y as i32+1,
+                            entity.pos.load().z.add(0.5) as i32
+                        )).await.eq(&Block::AIR)  {
+                            return;
+                        }
+                        if !self.world().await.get_block(&BlockPos::new(
+                            entity.pos.load().x.add(0.5) as i32,
+                            entity.pos.load().y as i32+1,
+                            entity.pos.load().z.add(-0.5) as i32
+                        )).await.eq(&Block::AIR)  {
+                            return;
+                        }
+
+                        if !self.world().await.get_block(&BlockPos::new(
+                            entity.pos.load().x.add(-0.5) as i32,
+                            entity.pos.load().y as i32+1,
+                            entity.pos.load().z.add(-0.5) as i32
+                        )).await.eq(&Block::AIR)  {
+                            return;
+                        }
+
                         entity.set_sneaking(false).await;
                     }
                 }
