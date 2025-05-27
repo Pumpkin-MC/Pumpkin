@@ -958,7 +958,7 @@ impl World {
                 player
                     .sleeping_since
                     .load()
-                    .is_some_and(|since| since == 101)
+                    .is_some_and(|since| since >= 100)
             })
             .count();
 
