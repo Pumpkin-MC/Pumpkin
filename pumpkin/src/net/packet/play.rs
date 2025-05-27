@@ -11,7 +11,6 @@ use rsa::signature::Verifier;
 use sha1::Sha1;
 
 use std::num::NonZeroU8;
-use std::ops::Add;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -651,44 +650,31 @@ impl Player {
                 }
                 pumpkin_protocol::server::play::Action::StopSneaking => {
                     if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
-                        let block_up = &entity.pos.load().add_raw(0.0, 1.0, 0.0);
+                        let pos = entity.pos.load();
+                        let x = pos.x;
+                        let y = pos.y + 1.0;
+                        let z = pos.z;
 
-                        if !self.world().await.get_block(&BlockPos::new(block_up.x as i32, block_up.y as i32, block_up.z as i32))
-                            .await.eq(&Block::AIR) {
-                            return;
-                        }
+                        // Check the center and all corner of the block
+                        let positions = [
+                            (x, y, z),
+                            (x + 0.5, y, z + 0.5),
+                            (x - 0.5, y, z + 0.5),
+                            (x + 0.5, y, z - 0.5),
+                            (x - 0.5, y, z - 0.5),
+                        ];
 
-
-                        if !self.world().await.get_block(&BlockPos::new(
-                            entity.pos.load().x.add(0.5) as i32,
-                            entity.pos.load().y as i32+1,
-                            entity.pos.load().z.add(0.5) as i32
-                        )).await.eq(&Block::AIR)  {
-                            return;
+                        for (x, y, z) in &positions {
+                            if !self
+                                .world()
+                                .await
+                                .get_block(&BlockPos::new(*x as i32, *y as i32, *z as i32))
+                                .await
+                                .eq(&Block::AIR)
+                            {
+                                return;
+                            }
                         }
-                        if !self.world().await.get_block(&BlockPos::new(
-                            entity.pos.load().x.add(-0.5) as i32,
-                            entity.pos.load().y as i32+1,
-                            entity.pos.load().z.add(0.5) as i32
-                        )).await.eq(&Block::AIR)  {
-                            return;
-                        }
-                        if !self.world().await.get_block(&BlockPos::new(
-                            entity.pos.load().x.add(0.5) as i32,
-                            entity.pos.load().y as i32+1,
-                            entity.pos.load().z.add(-0.5) as i32
-                        )).await.eq(&Block::AIR)  {
-                            return;
-                        }
-
-                        if !self.world().await.get_block(&BlockPos::new(
-                            entity.pos.load().x.add(-0.5) as i32,
-                            entity.pos.load().y as i32+1,
-                            entity.pos.load().z.add(-0.5) as i32
-                        )).await.eq(&Block::AIR)  {
-                            return;
-                        }
-
                         entity.set_sneaking(false).await;
                     }
                 }
