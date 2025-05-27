@@ -3,13 +3,14 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use async_trait::async_trait;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -27,6 +28,29 @@ pub enum BlockActionResult {
 pub struct BlockRegistry {
     blocks: HashMap<Vec<String>, Arc<dyn PumpkinBlock>>,
     fluids: HashMap<Vec<String>, Arc<dyn PumpkinFluid>>,
+}
+
+#[async_trait]
+impl BlockRegistryExt for BlockRegistry {
+    async fn can_place_at(
+        &self,
+        block: &pumpkin_data::Block,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool {
+        self.can_place_at(
+            None,
+            None,
+            block_accessor,
+            None,
+            block,
+            block_pos,
+            face,
+            None,
+        )
+        .await
+    }
 }
 
 impl BlockRegistry {
@@ -142,7 +166,7 @@ impl BlockRegistry {
     pub async fn can_place_at(
         &self,
         server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         block_accessor: &dyn BlockAccessor,
         player: Option<&Player>,
         block: &Block,

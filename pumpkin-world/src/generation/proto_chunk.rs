@@ -20,7 +20,7 @@ use crate::{
     chunk::CHUNK_AREA,
     dimension::Dimension,
     generation::{biome, positions::chunk_pos},
-    world::{BlockAccessor, BlockFlags},
+    world::{BlockAccessor, BlockFlags, BlockRegistryExt, SimpleWorld},
 };
 
 use super::{
@@ -351,6 +351,9 @@ impl<'a> ProtoChunk<'a> {
             local_pos.y - self.bottom_y() as i32,
             local_pos.z & 15,
         );
+        if local_pos.y < 0 || local_pos.y > self.height() as i32 {
+            return RawBlockState::AIR;
+        }
         let index = self.local_pos_to_block_index(&local_pos);
         self.flat_block_map[index]
     }
@@ -681,7 +684,7 @@ impl<'a> ProtoChunk<'a> {
     ///
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
-    pub fn generate_features(&mut self) {
+    pub fn generate_features(&mut self, block_registry: &dyn BlockRegistryExt) {
         let chunk_pos = self.chunk_pos;
         let min_y = self.noise_sampler.min_y();
         let height = self.noise_sampler.height();
@@ -702,7 +705,15 @@ impl<'a> ProtoChunk<'a> {
             // TODO: Properly set index and step
             let decorator_seed = get_decorator_seed(population_seed, 0, 0);
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
-            feature.generate(self, min_y, height, name, &mut random, block_pos);
+            feature.generate(
+                self,
+                block_registry,
+                min_y,
+                height,
+                name,
+                &mut random,
+                block_pos,
+            );
         }
     }
 

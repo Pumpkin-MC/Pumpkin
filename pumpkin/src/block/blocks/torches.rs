@@ -104,7 +104,7 @@ impl PumpkinBlock for TorchBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
@@ -117,7 +117,7 @@ impl PumpkinBlock for TorchBlock {
             return true;
         }
         for dir in BlockDirection::horizontal() {
-            if can_place_at(world, block_pos, dir).await {
+            if can_place_at(world.unwrap(), block_pos, dir).await {
                 return true;
             }
         }

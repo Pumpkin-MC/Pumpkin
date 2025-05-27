@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
@@ -10,17 +11,24 @@ use super::{
     settings::gen_settings_from_dimension,
 };
 use crate::chunk::format::LightContainer;
-use crate::world::SimpleWorld;
+use crate::world::{BlockRegistryExt, SimpleWorld};
 use crate::{chunk::ChunkLight, dimension::Dimension};
 use crate::{
     chunk::{
         ChunkData, ChunkSections, SubChunk,
         palette::{BiomePalette, BlockPalette},
     },
-    generation::{
-        GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit, proto_chunk::ProtoChunk,
-    },
+    generation::{GlobalRandomConfig, Seed, proto_chunk::ProtoChunk},
 };
+
+pub trait GeneratorInit {
+    fn new(seed: Seed, dimension: Dimension) -> Self;
+}
+
+pub trait WorldGenerator: Sync + Send {
+    fn generate_chunk(&self, block_registry: &dyn BlockRegistryExt, at: &Vector2<i32>)
+    -> ChunkData;
+}
 
 pub struct VanillaGenerator {
     random_config: GlobalRandomConfig,
@@ -48,7 +56,11 @@ impl GeneratorInit for VanillaGenerator {
 }
 
 impl WorldGenerator for VanillaGenerator {
-    fn generate_chunk(&self, world: &dyn SimpleWorld, at: &Vector2<i32>) -> ChunkData {
+    fn generate_chunk(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        at: &Vector2<i32>,
+    ) -> ChunkData {
         let generation_settings = gen_settings_from_dimension(&self.dimension);
 
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
@@ -64,7 +76,7 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_biomes(self.dimension);
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
-        proto_chunk.generate_features();
+        proto_chunk.generate_features(block_registry);
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             for z in 0..BiomePalette::SIZE {

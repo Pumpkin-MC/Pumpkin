@@ -78,7 +78,7 @@ impl PumpkinBlock for ActivatorRailBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         _block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
@@ -86,6 +86,6 @@ impl PumpkinBlock for ActivatorRailBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        can_place_rail_at(world, block_pos).await
+        can_place_rail_at(world.unwrap(), block_pos).await
     }
 }

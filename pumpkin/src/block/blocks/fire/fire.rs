@@ -114,7 +114,7 @@ impl PumpkinBlock for FireBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         _block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
@@ -122,7 +122,7 @@ impl PumpkinBlock for FireBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        FireBlockBase::can_place_at(world, block_pos).await
+        FireBlockBase::can_place_at(world.unwrap(), block_pos).await
     }
 
     async fn broken(

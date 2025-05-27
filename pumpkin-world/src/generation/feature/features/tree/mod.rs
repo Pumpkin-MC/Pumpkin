@@ -71,6 +71,7 @@ impl TreeFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) {
+        dbg!(&pos);
         let height = self.trunk_placer.get_height(random);
 
         let clipped_height = self.minimum_size.min_clipped_height;

@@ -27,7 +27,7 @@ impl PumpkinBlock for SaplingBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         block: &Block,
@@ -35,7 +35,7 @@ impl PumpkinBlock for SaplingBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let block_below = block_accessor.get_block(block_pos).await;
+        let block_below = block_accessor.get_block(&block_pos.down()).await;
         block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == Block::FARMLAND
     }
 }

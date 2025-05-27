@@ -149,7 +149,12 @@ pub struct World {
 
 impl World {
     #[must_use]
-    pub fn load(level: Level, level_info: Arc<LevelData>, dimension_type: DimensionType) -> Self {
+    pub fn load(
+        level: Level,
+        level_info: Arc<LevelData>,
+        dimension_type: DimensionType,
+        block_registry: Arc<BlockRegistry>,
+    ) -> Self {
         // TODO
         let generation_settings = match dimension_type {
             DimensionType::Overworld => GENERATION_SETTINGS
@@ -1876,27 +1881,6 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn update_neighbor(self: Arc<Self>, neighbor_block_pos: &BlockPos, source_block: &Block) {
         Self::update_neighbor(&self, neighbor_block_pos, source_block).await;
-    }
-
-    async fn can_place_at(
-        &self,
-        block: &Block,
-        block_accessor: &dyn BlockAccessor,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-    ) -> bool {
-        self.block_registry
-            .can_place_at(
-                None,
-                self,
-                block_accessor,
-                None,
-                block,
-                block_pos,
-                face,
-                None,
-            )
-            .await
     }
 
     async fn update_neighbors(

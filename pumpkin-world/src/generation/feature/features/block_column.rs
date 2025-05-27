@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
@@ -8,6 +10,7 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     generation::{block_predicate::BlockPredicate, block_state_provider::BlockStateProvider},
+    world::{BlockRegistryExt, SimpleWorld},
 };
 
 #[derive(Deserialize)]
@@ -28,6 +31,7 @@ impl BlockColumnFeature {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
+        block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
         feature: &str, // This placed feature
@@ -53,7 +57,10 @@ impl BlockColumnFeature {
 
         let mut l = 0;
         while l < j {
-            if !self.allowed_placement.test(chunk, &mutable2) {
+            if !self
+                .allowed_placement
+                .test(block_registry, chunk, &mutable2)
+            {
                 Self::adjust_layer_heights(&mut is, j, l, self.prioritize_tip);
                 break;
             }

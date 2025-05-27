@@ -102,7 +102,7 @@ pub trait PumpkinBlock: Send + Sync {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        _world: &World,
+        _world: Option<&World>,
         _block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,

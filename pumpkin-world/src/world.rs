@@ -50,14 +50,6 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         source_block: &pumpkin_data::Block,
     );
 
-    async fn can_place_at(
-        &self,
-        block: &pumpkin_data::Block,
-        block_accessor: &dyn BlockAccessor,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-    ) -> bool;
-
     async fn update_neighbors(
         self: Arc<Self>,
         block_pos: &BlockPos,
@@ -65,6 +57,17 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     );
 
     async fn remove_block_entity(&self, block_pos: &BlockPos);
+}
+
+#[async_trait]
+pub trait BlockRegistryExt: Send + Sync {
+    async fn can_place_at(
+        &self,
+        block: &pumpkin_data::Block,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool;
 }
 
 #[async_trait]

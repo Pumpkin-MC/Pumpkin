@@ -104,7 +104,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         _block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
@@ -112,6 +112,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
+        let world = world.unwrap();
         let support_block = world.get_block_state(&block_pos.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
             return true;

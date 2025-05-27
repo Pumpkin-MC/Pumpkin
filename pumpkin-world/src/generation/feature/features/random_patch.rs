@@ -1,10 +1,16 @@
+use std::sync::Arc;
+
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::feature::placed_features::PlacedFeature};
+use crate::{
+    ProtoChunk,
+    generation::feature::placed_features::PlacedFeature,
+    world::{BlockRegistryExt, SimpleWorld},
+};
 
 #[derive(Deserialize)]
 pub struct RandomPatchFeature {
@@ -18,6 +24,7 @@ impl RandomPatchFeature {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
+        block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
         feature: &str, // This placed feature
@@ -36,10 +43,15 @@ impl RandomPatchFeature {
                 pos.0.z + (random.next_bounded_i32(xz) - random.next_bounded_i32(xz)),
             );
             dbg!(pos.y);
-            if !self
-                .feature
-                .generate(chunk, min_y, height, feature, random, BlockPos(pos))
-            {
+            if !self.feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature,
+                random,
+                BlockPos(pos),
+            ) {
                 continue;
             }
             i += 1;

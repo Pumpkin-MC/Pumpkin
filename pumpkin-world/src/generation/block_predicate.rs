@@ -1,12 +1,17 @@
-use std::sync::Arc;
-
 use itertools::Itertools;
-use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::get_block_by_id};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState,
+    block_properties::{get_block_by_state_id, get_state_by_state_id},
+};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
-use tokio::runtime::Handle;
+use tokio::runtime::{Handle, Runtime};
 
-use crate::{ProtoChunk, world::SimpleWorld};
+use crate::{
+    ProtoChunk,
+    block::BlockStateCodec,
+    world::{BlockRegistryExt, SimpleWorld},
+};
 #[derive(Deserialize)]
 pub struct EmptyTODOStruct {}
 
@@ -42,16 +47,23 @@ pub enum BlockPredicate {
 }
 
 impl BlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &ProtoChunk,
+        pos: &BlockPos,
+    ) -> bool {
         match self {
             Self::MatchingBlocksBlockPredicate(predicate) => predicate.test(chunk, pos),
             Self::ReplaceableBlockPredicate(predicate) => predicate.test(chunk, pos),
             Self::SolidBlockPredicate(predicate) => predicate.test(chunk, pos),
             Self::AlwaysTrueBlockPredicate => true,
-            Self::NotBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::AnyOfBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::AllOfBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::WouldSurviveBlockPredicate(predicate) => predicate.test(world, chunk, pos), // TODO
+            Self::NotBlockPredicate(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::AnyOfBlockPredicate(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::AllOfBlockPredicate(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::WouldSurviveBlockPredicate(predicate) => {
+                predicate.test(block_registry, chunk, pos)
+            } // TODO
             _ => false,
         }
     }
@@ -85,9 +97,14 @@ pub struct AnyOfBlockPredicate {
 }
 
 impl AnyOfBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &ProtoChunk,
+        pos: &BlockPos,
+    ) -> bool {
         for predicate in &self.predicates {
-            if !predicate.test(chunk, pos) {
+            if !predicate.test(block_registry, chunk, pos) {
                 continue;
             }
             return true;
@@ -102,9 +119,14 @@ pub struct AllOfBlockPredicate {
 }
 
 impl AllOfBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &ProtoChunk,
+        pos: &BlockPos,
+    ) -> bool {
         for predicate in &self.predicates {
-            if predicate.test(chunk, pos) {
+            if predicate.test(block_registry, chunk, pos) {
                 continue;
             }
             return false;
@@ -119,8 +141,13 @@ pub struct NotBlockPredicate {
 }
 
 impl NotBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
-        !self.predicate.test(chunk, pos)
+    pub fn test(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &ProtoChunk,
+        pos: &BlockPos,
+    ) -> bool {
+        !self.predicate.test(block_registry, chunk, pos)
     }
 }
 
@@ -138,17 +165,31 @@ impl SolidBlockPredicate {
 }
 
 #[derive(Deserialize)]
-pub struct WouldSurviveBlockPredicate;
+pub struct WouldSurviveBlockPredicate {
+    #[serde(flatten)]
+    offset: OffsetBlocksBlockPredicate,
+    state: BlockStateCodec,
+}
 
 impl WouldSurviveBlockPredicate {
-    pub fn test(&self, world: Arc<dyn SimpleWorld>, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
-        let state = chunk.get_block_state(&pos.0);
-        Handle::current().block_on(async move {
-            return world
-                .can_place_at(&state.to_block(), chunk, pos, BlockDirection::Up)
+    pub fn test(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &ProtoChunk,
+        pos: &BlockPos,
+    ) -> bool {
+        let state = self.state.get_state().unwrap();
+        let pos = self.offset.get(pos);
+        futures::executor::block_on(async move {
+            return block_registry
+                .can_place_at(
+                    &get_block_by_state_id(state.id).unwrap(),
+                    chunk,
+                    &pos,
+                    BlockDirection::Up,
+                )
                 .await;
-        });
-        false
+        })
     }
 }
 

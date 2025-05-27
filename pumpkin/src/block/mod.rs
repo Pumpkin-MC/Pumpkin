@@ -33,6 +33,7 @@ use blocks::redstone::redstone_torch::RedstoneTorchBlock;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
+use blocks::sapling::SaplingBlock;
 use blocks::signs::SignBlock;
 use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
@@ -78,6 +79,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Blocks
     manager.register(BedBlock);
+    manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(ChestBlock);
     manager.register(CraftingTableBlock);

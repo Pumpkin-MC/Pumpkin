@@ -39,7 +39,7 @@ impl PumpkinBlock for BedBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         _block_accessor: &dyn BlockAccessor,
         player: Option<&Player>,
         _block: &Block,
@@ -49,7 +49,7 @@ impl PumpkinBlock for BedBlock {
     ) -> bool {
         if let Some(player) = player {
             let facing = player.living_entity.entity.get_horizontal_facing();
-
+            let world = world.unwrap();
             return world.get_block_state(block_pos).await.replaceable()
                 && world
                     .get_block_state(&block_pos.offset(facing.to_offset()))

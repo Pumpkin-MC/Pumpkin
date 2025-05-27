@@ -1,9 +1,15 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
-use crate::ProtoChunk;
+use crate::{
+    ProtoChunk,
+    world::{BlockRegistryExt, SimpleWorld},
+};
 
 use super::features::{
     bamboo::BambooFeature, basalt_columns::BasaltColumnsFeature,
@@ -178,6 +184,7 @@ impl ConfiguredFeature {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
+        block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
         feature_name: &str, // This placed feature
@@ -186,33 +193,75 @@ impl ConfiguredFeature {
     ) -> bool {
         match self {
             Self::SimpleBlock(feature) => feature.generate(chunk, random, pos),
-            Self::Flower(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
-            Self::NoBonemealFlower(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::Flower(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::NoBonemealFlower(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::DesertWell(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::BlockColumn(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
-            Self::RandomPatch(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
-            Self::RandomBooleanSelector(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::BlockColumn(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::RandomPatch(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::RandomBooleanSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Tree(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::RandomSelector(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
-            Self::SimpleRandomSelector(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::RandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::SimpleRandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Seagrass(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }

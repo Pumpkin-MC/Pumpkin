@@ -1681,7 +1681,7 @@ impl Player {
             .block_registry
             .can_place_at(
                 Some(server),
-                world,
+                Some(world),
                 world.as_ref(),
                 Some(self),
                 &block,

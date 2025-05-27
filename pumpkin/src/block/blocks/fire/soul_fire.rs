@@ -49,7 +49,7 @@ impl PumpkinBlock for SoulFireBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: &World,
+        world: Option<&World>,
         _block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
@@ -57,6 +57,7 @@ impl PumpkinBlock for SoulFireBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
+        let world = world.unwrap();
         FireBlockBase::can_place_at(world, block_pos).await
             && Self::is_soul_base(&world.get_block(&block_pos.down()).await)
     }

@@ -24,8 +24,8 @@ use crate::{
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, WorldGenerator, get_world_gen},
-    world::{BlockAccessor, SimpleWorld},
+    generation::{Seed, get_world_gen, implementation::WorldGenerator},
+    world::{BlockRegistryExt, SimpleWorld},
 };
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -41,6 +41,7 @@ pub type SyncChunk = Arc<RwLock<ChunkData>>;
 /// For more details on world generation, refer to the `WorldGenerator` module.
 pub struct Level {
     pub seed: Seed,
+    block_registry: Arc<dyn BlockRegistryExt>,
     level_folder: LevelFolder,
 
     // Holds this level's spawn chunks, which are always loaded
@@ -69,7 +70,12 @@ pub struct LevelFolder {
 }
 
 impl Level {
-    pub fn from_root_folder(root_folder: PathBuf, seed: i64, dimension: Dimension) -> Self {
+    pub fn from_root_folder(
+        root_folder: PathBuf,
+        block_registry: Arc<dyn BlockRegistryExt>,
+        seed: i64,
+        dimension: Dimension,
+    ) -> Self {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
         if !region_folder.exists() {
@@ -93,6 +99,7 @@ impl Level {
 
         Self {
             seed,
+            block_registry,
             world_gen,
             level_folder,
             chunk_saver,
@@ -355,14 +362,10 @@ impl Level {
     }
 
     /// Initializes the spawn chunks to these chunks
-    pub async fn read_spawn_chunks(
-        self: &Arc<Self>,
-        world: &dyn SimpleWorld,
-        chunks: &[Vector2<i32>],
-    ) {
+    pub async fn read_spawn_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
         let (send, mut recv) = mpsc::unbounded_channel();
 
-        let fetcher = self.fetch_chunks(world, chunks, send);
+        let fetcher = self.fetch_chunks(chunks, send);
         let handler = async {
             while let Some((chunk, _)) = recv.recv().await {
                 let pos = chunk.read().await.position;
@@ -378,7 +381,6 @@ impl Level {
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
     pub async fn fetch_chunks(
         self: &Arc<Self>,
-        world: &dyn SimpleWorld,
         chunks: &[Vector2<i32>],
         channel: mpsc::UnboundedSender<(SyncChunk, bool)>,
     ) {
@@ -483,6 +485,7 @@ impl Level {
 
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
+        let block_registry = self.block_registry.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -494,7 +497,8 @@ impl Level {
                 let world_gen = world_gen.clone();
                 let channel = channel.clone();
                 let cloned_continue_to_generate = continue_to_generate.clone();
-                let world = world.clone();
+                let block_registry = block_registry.clone();
+
                 rayon::spawn(move || {
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
@@ -505,7 +509,8 @@ impl Level {
                         .entry(pos)
                         .or_insert_with(|| {
                             // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk = world_gen.generate_chunk(world, &pos);
+                            let generated_chunk =
+                                world_gen.generate_chunk(block_registry.as_ref(), &pos);
                             Arc::new(RwLock::new(generated_chunk))
                         })
                         .value()
