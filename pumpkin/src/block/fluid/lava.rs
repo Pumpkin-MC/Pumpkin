@@ -52,6 +52,13 @@ impl PumpkinFluid for FlowingLava {
         if !base_entity.entity_type.fire_immune {
             base_entity.set_on_fire_for(15.0);
         }
+
+        if let Some(living) = entity.get_living_entity() {
+            let halved_fall = living.fall_distance.load() / 2.0;
+            if halved_fall != 0.0 {
+                living.fall_distance.store(halved_fall);
+            }
+        }
     }
 }
 

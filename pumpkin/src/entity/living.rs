@@ -8,7 +8,6 @@ use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
-use pumpkin_data::Block;
 use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
@@ -30,8 +29,6 @@ use tokio::sync::Mutex;
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
-    /// The last known position of the entity.
-    pub last_pos: AtomicCell<Vector3<f64>>,
     /// Tracks the remaining time until the entity can regenerate health.
     pub time_until_regen: AtomicI32,
     /// Stores the amount of damage the entity last received.
@@ -46,10 +43,8 @@ pub struct LivingEntity {
 }
 impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
-        let pos = entity.pos.load();
         Self {
             entity,
-            last_pos: AtomicCell::new(pos),
             time_until_regen: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
@@ -89,11 +84,6 @@ impl LivingEntity {
                 stack_amount.try_into().unwrap(),
             ))
             .await;
-    }
-
-    pub fn set_pos(&self, position: Vector3<f64>) {
-        self.last_pos.store(self.entity.pos.load());
-        self.entity.set_pos(position);
     }
 
     pub async fn heal(&self, additional_health: f32) {
@@ -197,11 +187,13 @@ impl LivingEntity {
     }
 
     // Check if the entity is in water
+    /*
     pub async fn is_in_water(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
         world.get_block(&block_pos).await == Block::WATER
     }
+    */
 
     pub async fn update_fall_distance(
         &self,
@@ -211,7 +203,7 @@ impl LivingEntity {
     ) {
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
-            if fall_distance <= 0.0 || dont_damage || self.is_in_water().await {
+            if fall_distance <= 0.0 || dont_damage {
                 return;
             }
 
@@ -259,19 +251,6 @@ impl LivingEntity {
             .await;
     }
 
-    async fn tick_move(&self, entity: &dyn EntityBase, server: &Server) {
-        let velo = self.entity.velocity.load();
-        let pos = self.entity.pos.load();
-        self.entity
-            .pos
-            .store(Vector3::new(pos.x + velo.x, pos.y + velo.y, pos.z + velo.z));
-        let multiplier = f64::from(Entity::velocity_multiplier(pos));
-        self.entity
-            .velocity
-            .store(velo.multiply(multiplier, 1.0, multiplier));
-        Entity::check_block_collision(entity, server).await;
-    }
-
     async fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
 
@@ -289,21 +268,16 @@ impl LivingEntity {
             self.remove_effect(effect_type).await;
         }
     }
-}
 
-#[async_trait]
-impl EntityBase for LivingEntity {
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        self.entity.tick(caller.clone(), server).await;
-        self.tick_move(caller.as_ref(), server).await;
+    pub async fn base_tick(&self) {
+        //self.entity.tick(caller.clone(), server).await;
+        //self.tick_move(caller.as_ref(), server).await;
         self.tick_effects().await;
         if self.time_until_regen.load(Relaxed) > 0 {
             self.time_until_regen.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
-            let time = self
-                .death_time
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let time = self.death_time.fetch_add(1, Relaxed);
             if time == 20 {
                 // Spawn Death particles
                 self.entity
@@ -316,6 +290,18 @@ impl EntityBase for LivingEntity {
             }
         }
     }
+}
+
+#[async_trait]
+impl EntityBase for LivingEntity {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
+        self.entity.tick(caller, server).await;
+
+        Entity::handle_physics(self, 0.08, server).await;
+        self.tick_move(self.entity.velocity.load()).await;
+        self.base_tick().await;
+    }
+
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
         let world = self.entity.world.read().await;
         if !self.check_damage(amount) {

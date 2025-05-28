@@ -47,8 +47,20 @@ impl PumpkinFluid for FlowingWater {
             .await;
     }
 
-    async fn on_entity_collision(&self, entity: &dyn EntityBase) {
-        entity.get_entity().extinguish();
+    async fn on_entity_collision(&self, entity_base: &dyn EntityBase) {
+        let entity = entity_base.get_entity();
+        entity.extinguish();
+
+        if !entity.in_water.load(std::sync::atomic::Ordering::Relaxed) {
+            // TODO: Spawn splash particles
+        }
+        entity
+            .in_water
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        if let Some(living) = entity_base.get_living_entity() {
+            living.fall_distance.store(0.0);
+        }
     }
 }
 

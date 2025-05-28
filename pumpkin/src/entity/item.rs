@@ -59,13 +59,8 @@ impl ItemEntity {
             pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
         }
     }
-}
 
-#[async_trait]
-impl EntityBase for ItemEntity {
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        let entity = &self.entity;
-        entity.tick(caller, server).await;
+    async fn base_tick(&self) {
         {
             let mut delay = self.pickup_delay.lock().await;
             *delay = delay.saturating_sub(1);
@@ -73,8 +68,20 @@ impl EntityBase for ItemEntity {
 
         let age = self.item_age.fetch_add(1, Relaxed);
         if age >= 6000 {
-            entity.remove().await;
+            self.entity.remove().await;
         }
+    }
+}
+
+#[async_trait]
+impl EntityBase for ItemEntity {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
+        self.entity.tick(caller, server).await;
+
+        Entity::handle_physics(self, 0.04, server).await;
+
+        self.tick_move(self.entity.velocity.load()).await;
+        self.base_tick().await;
     }
 
     async fn init_data_tracker(&self) {

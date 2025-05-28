@@ -13,7 +13,7 @@ use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
     command::client_suggestions,
-    entity::{Entity, EntityBase, EntityId, player::Player},
+    entity::{Entity, EntityBase, EntityId, item::ItemEntity, player::Player},
     error::PumpkinError,
     plugin::{
         block::block_break::BlockBreakEvent,
@@ -31,9 +31,10 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::fluid::Falling;
 use pumpkin_data::fluid::FluidProperties;
 use pumpkin_data::{
-    Block,
+    Block, BlockState,
     block_properties::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+        COLLISION_SHAPES, get_block_and_state_by_state_id, get_block_by_state_id,
+        get_state_by_state_id,
     },
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
@@ -79,7 +80,7 @@ use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
     world::GetBlockError,
 };
-use pumpkin_world::{world::BlockFlags, world_info::LevelData};
+use pumpkin_world::{item::ItemStack, world::BlockFlags, world_info::LevelData};
 use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
@@ -597,7 +598,7 @@ impl World {
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
         // Firstly, send an info update to our new player, so they can see their skin
@@ -878,7 +879,7 @@ impl World {
     }
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
-        let last_pos = player.living_entity.last_pos.load();
+        let last_pos = player.living_entity.entity.last_pos.load();
         let death_dimension = player.world().await.dimension_type.name();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
@@ -930,7 +931,7 @@ impl World {
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.clone().request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
@@ -1984,6 +1985,130 @@ impl World {
         }
 
         None
+    }
+
+    pub async fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<Fluid> {
+        let mut collisions = Vec::new();
+
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    if let Ok(fluid) = self.get_fluid(&block_pos).await {
+                        collisions.push(fluid);
+                    }
+                }
+            }
+        }
+
+        collisions
+    }
+/*
+    // For adjusting movement
+    pub async fn get_block_collisions(
+        self: &Arc<Self>,
+        bounding_box: BoundingBox,
+    ) -> Vec<BoundingBox> {
+        let mut collisions = Vec::new();
+
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    let state = self.get_block_state(&block_pos).await;
+
+                    if state.is_full_cube() {
+                        collisions.push(
+                            COLLISION_SHAPES[state.collision_shapes[0] as usize].at_pos(block_pos),
+                        );
+                        continue;
+                    }
+
+                    if state.is_air() || state.collision_shapes.is_empty() {
+                        continue;
+                    }
+
+                    for shape in state.collision_shapes {
+                        let collision_shape = COLLISION_SHAPES[*shape as usize].at_pos(block_pos);
+                        if collision_shape.intersects(&bounding_box) {
+                            collisions.push(collision_shape);
+                        }
+                    }
+                }
+            }
+        }
+
+        collisions
+    }
+*/
+    pub fn check_collision<F>(bounding_box: &BoundingBox, pos: BlockPos, state: &BlockState, mut use_collision_shape: Option<F>) -> bool
+    where F: FnMut(&BoundingBox) {
+        let mut collided = false;
+        if state.is_full_cube() {
+            collided = true;
+
+            if let Some(mut function) = use_collision_shape {
+                let collision_shape = COLLISION_SHAPES[state.collision_shapes[0] as usize].at_pos(pos);
+                function(&collision_shape);
+            }
+        } else if !state.is_air() && !state.collision_shapes.is_empty() {
+            'shapes: for shape in state.collision_shapes {
+                let collision_shape = COLLISION_SHAPES[*shape as usize].at_pos(pos);
+                if collision_shape.intersects(bounding_box) {
+                    collided = true;
+
+                    if let Some(ref mut function) = use_collision_shape {
+                        function(&collision_shape);
+                    } else {
+                        break 'shapes;
+                    }
+                }
+            }
+        }
+        collided
+    }
+
+    // For adjusting movement
+    pub async fn get_block_collisions(
+        self: &Arc<Self>,
+        bounding_box: BoundingBox,
+    ) -> Vec<BoundingBox> {
+        let mut collisions = Vec::new();
+
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let pos = BlockPos::new(x, y, z);
+                    let state = self.get_block_state(&pos).await;
+                    let _collided = Self::check_collision(&bounding_box, pos, &state, Some(|collision_shape: &BoundingBox|
+                        { collisions.push(*collision_shape); }
+                    ));
+                }
+            }
+        }
+        collisions
+    }
+
+    pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
+        let height = EntityType::ITEM.dimension[1] / 2.0;
+        let pos = Vector3::new(
+            f64::from(pos.0.x) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
+            f64::from(pos.0.y) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25)
+                - f64::from(height),
+            f64::from(pos.0.z) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
+        );
+
+        let entity = self.create_entity(pos, EntityType::ITEM);
+        let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
+        self.spawn_entity(item_entity as Arc<dyn EntityBase>).await;
     }
 }
 
