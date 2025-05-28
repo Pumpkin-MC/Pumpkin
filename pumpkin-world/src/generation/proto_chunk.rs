@@ -351,7 +351,7 @@ impl<'a> ProtoChunk<'a> {
             local_pos.y - self.bottom_y() as i32,
             local_pos.z & 15,
         );
-        if local_pos.y < 0 || local_pos.y > self.height() as i32 {
+        if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
             return RawBlockState::AIR;
         }
         let index = self.local_pos_to_block_index(&local_pos);

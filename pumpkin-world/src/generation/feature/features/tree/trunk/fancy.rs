@@ -38,12 +38,8 @@ impl FancyTrunkPlacer {
         let m = start_pos.0.y + k;
         let mut list: Vec<BranchPosition> = Vec::new();
 
-        // `n` needs to be defined before its first use in the `up` call
-        let n_initial = j - 5; // Placeholder for initial `n` value, adjusted as it's not used in `up(n)` directly
-        list.push(BranchPosition::new(
-            start_pos.up_height(n_initial as i32),
-            m,
-        ));
+        let n_initial = 0;
+        list.push(BranchPosition::new(start_pos, m));
 
         for n in (0..=(j - 5)).rev() {
             let f = Self::should_generate_branch(j as i32, n as i32);
@@ -52,7 +48,6 @@ impl FancyTrunkPlacer {
             }
 
             for _o in 0..l {
-                let e = 1.0f64; // Not used, consider removing if truly unused
                 let g = (1.0f32 * f * (random.next_f32() + 0.328f32)) as f64;
                 let h = (random.next_f32() * 2.0f32 * f32::consts::PI) as f64;
                 let p = g * h.sin() + 0.5f64;
@@ -167,9 +162,11 @@ impl FancyTrunkPlacer {
                     );
                     continue;
                 }
-            } else if !TreeFeature::can_replace_or_log(&chunk, &block_pos_2) {
-                return false;
             }
+            if TreeFeature::can_replace_or_log(&chunk, &block_pos_2) {
+                continue;
+            }
+            return false;
         }
         true
     }

@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::square,
+    math::int_provider::IntProvider,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -10,11 +10,11 @@ use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
 use super::{FoliagePlacer, LeaveValidator};
 
 #[derive(Deserialize)]
-pub struct LargeOakFoliagePlacer {
+pub struct JungleFoliagePlacer {
     height: i32,
 }
 
-impl LargeOakFoliagePlacer {
+impl JungleFoliagePlacer {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
@@ -25,13 +25,13 @@ impl LargeOakFoliagePlacer {
         offset: i32,
         foliage_provider: &BlockState,
     ) {
-        for y in (offset..=offset - foliage_height).rev() {
-            let radius = radius
-                + if y == offset || y == offset - foliage_height {
-                    0
-                } else {
-                    1
-                };
+        let height = if node.giant_trunk {
+            foliage_height
+        } else {
+            1 + random.next_bounded_i32(2)
+        };
+        for y in offset..-offset - height {
+            let radius = radius + node.foliage_radius + 1 - y;
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -44,13 +44,12 @@ impl LargeOakFoliagePlacer {
             );
         }
     }
-
-    pub fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
+    pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
         self.height
     }
 }
 
-impl LeaveValidator for LargeOakFoliagePlacer {
+impl LeaveValidator for JungleFoliagePlacer {
     fn is_invalid_for_leaves(
         &self,
         _random: &mut pumpkin_util::random::RandomGenerator,
@@ -60,6 +59,9 @@ impl LeaveValidator for LargeOakFoliagePlacer {
         radius: i32,
         _giant_trunk: bool,
     ) -> bool {
-        square(dx as f32 + 0.5) + square(dz as f32 + 0.5) > (radius * radius) as f32
+        if dx + dz >= 7 {
+            return true;
+        }
+        dx * dx + dz * dz > radius * radius
     }
 }

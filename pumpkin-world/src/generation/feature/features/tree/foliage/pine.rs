@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::square,
+    math::int_provider::IntProvider,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -10,28 +10,23 @@ use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
 use super::{FoliagePlacer, LeaveValidator};
 
 #[derive(Deserialize)]
-pub struct LargeOakFoliagePlacer {
-    height: i32,
+pub struct PineFoliagePlacer {
+    height: IntProvider,
 }
 
-impl LargeOakFoliagePlacer {
+impl PineFoliagePlacer {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
-        radius: i32,
+        iradius: i32,
         offset: i32,
         foliage_provider: &BlockState,
     ) {
-        for y in (offset..=offset - foliage_height).rev() {
-            let radius = radius
-                + if y == offset || y == offset - foliage_height {
-                    0
-                } else {
-                    1
-                };
+        let mut radius = 0;
+        for y in offset..offset - foliage_height {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -42,15 +37,23 @@ impl LargeOakFoliagePlacer {
                 node.giant_trunk,
                 foliage_provider,
             );
+            if radius >= 1 && y == offset - foliage_height + 1 {
+                radius -= 1;
+                continue;
+            }
+            if radius >= iradius + node.foliage_radius {
+                continue;
+            }
+            radius += 1;
         }
     }
-
-    pub fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
-        self.height
+    // TODO: getRandomRadius
+    pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
+        self.height.get(random)
     }
 }
 
-impl LeaveValidator for LargeOakFoliagePlacer {
+impl LeaveValidator for PineFoliagePlacer {
     fn is_invalid_for_leaves(
         &self,
         _random: &mut pumpkin_util::random::RandomGenerator,
@@ -60,6 +63,6 @@ impl LeaveValidator for LargeOakFoliagePlacer {
         radius: i32,
         _giant_trunk: bool,
     ) -> bool {
-        square(dx as f32 + 0.5) + square(dz as f32 + 0.5) > (radius * radius) as f32
+        dx == radius && dz == radius && radius > 0
     }
 }

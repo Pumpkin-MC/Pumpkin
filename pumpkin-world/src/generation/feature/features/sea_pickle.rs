@@ -38,7 +38,7 @@ impl SeaPickleFeature {
                 continue;
             }
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
-            props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16 + 1);
+            props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
             let pos = BlockPos::new(x, y, z);
             chunk.set_block_state(
                 &pos.0,

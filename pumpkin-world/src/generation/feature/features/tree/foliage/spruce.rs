@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::square,
+    math::int_provider::IntProvider,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -10,28 +10,25 @@ use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
 use super::{FoliagePlacer, LeaveValidator};
 
 #[derive(Deserialize)]
-pub struct LargeOakFoliagePlacer {
-    height: i32,
+pub struct SpruceFoliagePlacer {
+    trunk_height: IntProvider,
 }
 
-impl LargeOakFoliagePlacer {
+impl SpruceFoliagePlacer {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
-        radius: i32,
+        _radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
     ) {
-        for y in (offset..=offset - foliage_height).rev() {
-            let radius = radius
-                + if y == offset || y == offset - foliage_height {
-                    0
-                } else {
-                    1
-                };
+        let mut radius = random.next_bounded_i32(2);
+        let mut max = 1;
+        let mut next = 0;
+        for y in offset..-foliage_height {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -42,15 +39,21 @@ impl LargeOakFoliagePlacer {
                 node.giant_trunk,
                 foliage_provider,
             );
+            if radius >= max {
+                radius = next;
+                next = 1;
+                max = (radius + node.foliage_radius).min(max + 1);
+                continue;
+            }
+            radius += 1;
         }
     }
-
-    pub fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
-        self.height
+    pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
+        (trunk_height - self.trunk_height.get(random)).max(4)
     }
 }
 
-impl LeaveValidator for LargeOakFoliagePlacer {
+impl LeaveValidator for SpruceFoliagePlacer {
     fn is_invalid_for_leaves(
         &self,
         _random: &mut pumpkin_util::random::RandomGenerator,
@@ -60,6 +63,6 @@ impl LeaveValidator for LargeOakFoliagePlacer {
         radius: i32,
         _giant_trunk: bool,
     ) -> bool {
-        square(dx as f32 + 0.5) + square(dz as f32 + 0.5) > (radius * radius) as f32
+        dx == radius && dz == radius && radius > 0
     }
 }
