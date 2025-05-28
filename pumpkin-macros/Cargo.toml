@@ -1,0 +1,18 @@
+[package]
+name = "pumpkin-macros"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+pumpkin-data = { path = "../pumpkin-data" }
+
+serde.workspace = true
+serde_json.workspace = true
+
+heck = "0.5"
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "2.0"

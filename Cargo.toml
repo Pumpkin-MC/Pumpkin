@@ -1,0 +1,63 @@
+[workspace]
+resolver = "2"
+members = [
+    "pumpkin-api-macros",
+    "pumpkin-config",
+    "pumpkin-util",
+    "pumpkin-inventory",
+    "pumpkin-macros/",
+    "pumpkin-protocol/",
+    "pumpkin-registry/",
+    "pumpkin-world",
+    "pumpkin/",
+    "pumpkin-data",
+]
+
+[workspace.package]
+version = "0.1.0-dev+1.21.5"
+edition = "2024"
+
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.bench]
+debug = true
+
+[profile.profiling]
+inherits = "release"
+debug = true
+
+[workspace.dependencies]
+log = "0.4"
+tokio = { version = "1.45", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+] }
+
+thiserror = "2.0"
+
+bytes = "1.10"
+
+# Concurrency/Parallelism and Synchronization
+futures = "0.3"
+rayon = "1.10"
+crossbeam = "0.8"
+
+uuid = { version = "1.16", features = ["serde", "v3", "v4"] }
+derive_more = { version = "2.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+async-trait = "0.1"
+
+tempfile = "3.20.0"

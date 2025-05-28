@@ -1,0 +1,107 @@
+[package]
+name = "pumpkin"
+version.workspace = true
+description = "Empowering everyone to host fast and efficient Minecraft servers."
+edition.workspace = true
+rust-version = "1.85"
+
+[package.metadata.tauri-winres]
+# FileDescription is handled as the Program name by Windows!
+FileDescription = "Pumpkin"
+OriginalFilename = "pumpkin.exe"
+LegalCopyright = "Copyright © 2025 Aleksander Medvedev"
+
+# Required to expose pumpkin plugin API
+[lib]
+doctest = false
+
+[dependencies]
+# pumpkin
+pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-nbt = { path = "../pumpkin-nbt" }
+pumpkin-config = { path = "../pumpkin-config" }
+pumpkin-inventory = { path = "../pumpkin-inventory" }
+pumpkin-world = { path = "../pumpkin-world" }
+pumpkin-data = { path = "../pumpkin-data" }
+pumpkin-protocol = { path = "../pumpkin-protocol" }
+pumpkin-registry = { path = "../pumpkin-registry" }
+pumpkin-macros = { path = "../pumpkin-macros" }
+
+log.workspace = true
+crossbeam.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+
+# config
+serde.workspace = true
+serde_json.workspace = true
+
+bytes.workspace = true
+
+rand = "0.8"
+
+num-bigint = "0.4"
+
+# Console line reading
+rustyline-async = "0.4.6"
+
+# encryption
+rsa = { version = "0.9", features = ["sha1"] }
+rsa-der = "0.3"
+
+# authentication
+reqwest = { version = "0.12", default-features = false, features = [
+    "http2",
+    "json",
+    "macos-system-configuration",
+    "rustls-tls",
+] }
+
+sha1 = "0.10"
+
+# velocity en
+hmac = "0.12"
+sha2 = "0.10"
+
+base64 = "0.22"
+
+# icon loading
+png = "0.17"
+
+# logging
+simplelog = { version = "0.12.2", features = ["ansi_term"] }
+
+# Remove time in favor of chrono?
+time = "0.3"
+
+chrono = { version = "0.4", features = ["serde"] }
+
+# plugins
+libloading = "0.8"
+bitflags = "2.9.1"
+rustc-hash = "2.1.1"
+
+# Task handling
+tokio-util = { version = "0.7.15", features = ["rt"] }
+
+# Memory profiling
+dhat = { version = "0.3.3", optional = true }
+
+[build-dependencies]
+git-version = "0.3"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+# This makes it so the entire project doesn't recompile on each build on linux.
+[target.'cfg(target_os = "windows")'.build-dependencies]
+tauri-winres = "0.3"
+
+[features]
+#https://nnethercote.github.io/dh_view/dh_view.html
+#https://valgrind.org/docs/manual/dh-manual.html
+dhat-heap = ["dep:dhat"]

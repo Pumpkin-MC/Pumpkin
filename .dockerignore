@@ -1,0 +1,16 @@
+# A whitelist of files that should be included into Docker.
+# Put an exclaimation mark before everything to include.
+
+# Ignore everything
+*
+
+# Allow the source code folders
+!/pumpkin*/
+!/assets
+
+# Allow build.rs to read git commit sha
+!/.git
+
+# Dependencies
+!Cargo.lock
+!Cargo.toml

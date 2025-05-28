@@ -1,0 +1,15 @@
+[package]
+name = "pumpkin-registry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pumpkin-data = { path = "../pumpkin-data" }
+pumpkin-protocol = { path = "../pumpkin-protocol" }
+pumpkin-nbt = { path = "../pumpkin-nbt" }
+pumpkin-util = { path = "../pumpkin-util" }
+
+indexmap = { version = "2.9", features = ["serde"] }
+
+serde.workspace = true
+serde_json.workspace = true

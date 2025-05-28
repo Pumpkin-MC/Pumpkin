@@ -1,0 +1,16 @@
+[package]
+name = "pumpkin-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pumpkin-util = { path = "../pumpkin-util" }
+serde.workspace = true
+log.workspace = true
+uuid.workspace = true
+
+toml = "0.8"
+
+[features]
+# Adds helper to change the config at runtime
+test_helper = []
