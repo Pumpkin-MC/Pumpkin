@@ -244,16 +244,16 @@ impl PluginManager {
             .ok_or(ManagerError::ServerNotInitialized)?;
         let (mut instance, metadata, loader_data) = loader.load(path).await?;
 
-        let context = Context::new(
+        let context = Arc::new(Context::new(
             metadata.clone(),
             Arc::clone(server),
             Arc::clone(&self.handlers),
-        );
+        ));
 
-        if let Err(e) = instance.on_load(&context).await {
+        if let Err(e) = instance.on_load(context.clone()).await {
             let data = loader_data;
             let loader = loader.clone();
-            let _ = instance.on_unload(&context).await;
+            let _ = instance.on_unload(context).await;
             tokio::spawn(async move {
                 loader.unload(data).await.ok();
             });
@@ -315,13 +315,13 @@ impl PluginManager {
             .as_ref()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
-        let context = Context::new(
+        let context = Arc::new(Context::new(
             plugin.metadata.clone(),
             Arc::clone(server),
             Arc::clone(&self.handlers),
-        );
+        ));
 
-        plugin.instance.on_unload(&context).await.ok();
+        plugin.instance.on_unload(context).await.ok();
 
         if plugin.loader.can_unload() {
             plugin.loader.unload(plugin.loader_data).await?;
