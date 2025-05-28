@@ -1,20 +1,20 @@
-use pumpkin_util::{
-    biome::TEMPERATURE_NOISE,
-    math::{int_provider::IntProvider, position::BlockPos, vector2::Vector2, vector3::Vector3},
-    random::{RandomGenerator, RandomImpl},
-};
 use serde::Deserialize;
-use std::{
-    collections::HashMap,
-    iter,
-    sync::{Arc, LazyLock},
-};
+use std::collections::HashMap;
+use std::iter;
+use std::ops::Deref;
+use std::sync::LazyLock;
 
-use crate::{
-    HeightMap, ProtoChunk,
-    generation::{block_predicate::BlockPredicate, height_provider::HeightProvider},
-    world::BlockRegistryExt,
-};
+use pumpkin_util::biome::TEMPERATURE_NOISE;
+use pumpkin_util::math::int_provider::IntProvider;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomGenerator, RandomImpl};
+
+use crate::generation::block_predicate::BlockPredicate;
+use crate::generation::height_provider::HeightProvider;
+use crate::world::BlockRegistryExt;
+use crate::{HeightMap, ProtoChunk};
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
@@ -33,7 +33,9 @@ pub enum PlacedFeatureWrapper {
 impl PlacedFeatureWrapper {
     pub fn get(&self) -> &PlacedFeature {
         match self {
-            Self::Named(name) => PLACED_FEATURES.get(name).unwrap(),
+            Self::Named(name) => PLACED_FEATURES
+                .get(name.strip_prefix("minecraft:").unwrap_or(name))
+                .unwrap(),
             Self::Direct(feature) => feature,
         }
     }
@@ -241,7 +243,6 @@ impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        // :crying
         self.predicate.test(block_registry, chunk, &pos)
     }
 }
@@ -340,7 +341,7 @@ pub struct BiomePlacementModifier;
 impl ConditionalPlacementModifier for BiomePlacementModifier {
     fn should_place(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn BlockRegistryExt,
 
         this_feature: &str,
         chunk: &ProtoChunk,
@@ -348,8 +349,11 @@ impl ConditionalPlacementModifier for BiomePlacementModifier {
         pos: BlockPos,
     ) -> bool {
         // we check if the current feature can be applied to the biome at the pos
-        for feature in chunk.get_biome_for_terrain_gen(&pos.0).features {
-            if feature.contains(&this_feature) {
+        let name = format!("minecraft:{this_feature}");
+        let biome = chunk.get_biome_for_terrain_gen(&pos.0);
+
+        for feature in biome.features {
+            if feature.contains(&name.deref()) {
                 return true;
             }
         }
