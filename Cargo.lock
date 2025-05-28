@@ -2003,6 +2003,8 @@ dependencies = [
  "serde",
  "serde_json",
  "syn",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
