@@ -75,4 +75,9 @@ pub trait BlockAccessor: Send + Sync {
     async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block;
 
     async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState;
+
+    async fn get_block_and_block_state(
+        &self,
+        position: &BlockPos,
+    ) -> (pumpkin_data::Block, pumpkin_data::BlockState);
 }

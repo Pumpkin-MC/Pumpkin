@@ -38,7 +38,6 @@ impl BlockColumnFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        dbg!(feature);
         let i = self.layers.len();
         let mut is = vec![0; i];
         let mut j = 0;
@@ -53,7 +52,7 @@ impl BlockColumnFeature {
         }
 
         let mut mutable = pos;
-        let mut mutable2 = BlockPos(mutable.0.add(&self.direction.to_offset()));
+        let mut mutable2 = mutable.offset(self.direction.to_offset());
 
         let mut l = 0;
         while l < j {
@@ -64,7 +63,7 @@ impl BlockColumnFeature {
                 Self::adjust_layer_heights(&mut is, j, l, self.prioritize_tip);
                 break;
             }
-            mutable2 = BlockPos(mutable2.0.add(&self.direction.to_offset()));
+            mutable2 = mutable2.offset(self.direction.to_offset());
             l += 1;
         }
 
@@ -77,7 +76,7 @@ impl BlockColumnFeature {
             for _n in 0..m {
                 let state = layer.provider.get(random, mutable);
                 chunk.set_block_state(&mutable.0, &state);
-                mutable = BlockPos(mutable.0.add(&self.direction.to_offset()));
+                mutable = mutable.offset(self.direction.to_offset());
             }
         }
 

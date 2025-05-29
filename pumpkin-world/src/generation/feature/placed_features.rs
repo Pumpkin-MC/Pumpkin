@@ -201,7 +201,7 @@ pub struct NoiseThresholdCountPlacementModifier {
 
 impl CountPlacementModifierBase for NoiseThresholdCountPlacementModifier {
     fn get_count(&self, _random: &mut RandomGenerator, pos: BlockPos) -> i32 {
-        let noise = TEMPERATURE_NOISE.sample(pos.0.x as f64 / 200.0, pos.0.z as f64, false);
+        let noise = TEMPERATURE_NOISE.sample(pos.0.x as f64 / 200.0, pos.0.z as f64 / 200.0, false);
         if noise < self.noise_level {
             self.below_noise
         } else {

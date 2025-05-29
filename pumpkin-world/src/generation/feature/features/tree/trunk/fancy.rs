@@ -38,7 +38,6 @@ impl FancyTrunkPlacer {
         let m = start_pos.0.y + k;
         let mut list: Vec<BranchPosition> = Vec::new();
 
-        let n_initial = 0;
         list.push(BranchPosition::new(start_pos, m));
 
         for n in (0..=(j - 5)).rev() {

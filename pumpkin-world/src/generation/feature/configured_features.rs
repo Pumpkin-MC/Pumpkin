@@ -192,7 +192,7 @@ impl ConfiguredFeature {
         pos: BlockPos,
     ) -> bool {
         match self {
-            Self::SimpleBlock(feature) => feature.generate(chunk, random, pos),
+            Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::Flower(feature) => feature.generate(
                 chunk,
                 block_registry,

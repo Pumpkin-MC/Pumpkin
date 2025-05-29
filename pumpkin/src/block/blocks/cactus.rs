@@ -26,7 +26,7 @@ pub struct CactusBlock;
 #[async_trait]
 impl PumpkinBlock for CactusBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
-        if !can_place_at(world, pos).await {
+        if !can_place_at(world.as_ref(), pos).await {
             world.break_block(pos, None, BlockFlags::empty()).await;
         }
     }
@@ -91,18 +91,18 @@ impl PumpkinBlock for CactusBlock {
         &self,
         _server: Option<&Server>,
         world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
+        block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        can_place_at(world.unwrap(), block_pos).await
+        can_place_at(block_accessor, block_pos).await
     }
 }
 
-async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     // TODO: use tags
     // Disallow to place any blocks nearby a cactus
     for direction in BlockDirection::horizontal() {

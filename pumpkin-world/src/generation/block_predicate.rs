@@ -2,6 +2,7 @@ use itertools::Itertools;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{get_block_by_state_id, get_state_by_state_id},
+    tag::Tagable,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
@@ -12,6 +13,8 @@ use crate::{
     block::BlockStateCodec,
     world::{BlockRegistryExt, SimpleWorld},
 };
+
+use super::Direction;
 #[derive(Deserialize)]
 pub struct EmptyTODOStruct {}
 
@@ -21,11 +24,11 @@ pub enum BlockPredicate {
     #[serde(rename = "minecraft:matching_blocks")]
     MatchingBlocksBlockPredicate(MatchingBlocksBlockPredicate),
     #[serde(rename = "minecraft:matching_block_tag")]
-    MatchingBlockTagPredicate(EmptyTODOStruct),
+    MatchingBlockTagPredicate(MatchingBlockTagPredicate),
     #[serde(rename = "minecraft:matching_fluids")]
     MatchingFluidsBlockPredicate(EmptyTODOStruct),
     #[serde(rename = "minecraft:has_sturdy_face")]
-    HasSturdyFacePredicate(EmptyTODOStruct),
+    HasSturdyFacePredicate(HasSturdyFacePredicate),
     #[serde(rename = "minecraft:solid")]
     SolidBlockPredicate(SolidBlockPredicate),
     #[serde(rename = "minecraft:replaceable")]
@@ -42,6 +45,7 @@ pub enum BlockPredicate {
     NotBlockPredicate(NotBlockPredicate),
     #[serde(rename = "minecraft:true")]
     AlwaysTrueBlockPredicate,
+    /// Not used
     #[serde(rename = "minecraft:unobstructed")]
     UnobstructedBlockPredicate(EmptyTODOStruct),
 }
@@ -54,17 +58,27 @@ impl BlockPredicate {
         pos: &BlockPos,
     ) -> bool {
         match self {
-            Self::MatchingBlocksBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::ReplaceableBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::SolidBlockPredicate(predicate) => predicate.test(chunk, pos),
-            Self::AlwaysTrueBlockPredicate => true,
-            Self::NotBlockPredicate(predicate) => predicate.test(block_registry, chunk, pos),
-            Self::AnyOfBlockPredicate(predicate) => predicate.test(block_registry, chunk, pos),
-            Self::AllOfBlockPredicate(predicate) => predicate.test(block_registry, chunk, pos),
-            Self::WouldSurviveBlockPredicate(predicate) => {
+            BlockPredicate::MatchingBlocksBlockPredicate(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::MatchingBlockTagPredicate(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::MatchingFluidsBlockPredicate(predicate) => false,
+            BlockPredicate::HasSturdyFacePredicate(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::SolidBlockPredicate(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::ReplaceableBlockPredicate(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::WouldSurviveBlockPredicate(predicate) => {
                 predicate.test(block_registry, chunk, pos)
-            } // TODO
-            _ => false,
+            }
+            BlockPredicate::InsideWorldBoundsBlockPredicate(predicate) => false,
+            BlockPredicate::AnyOfBlockPredicate(predicate) => {
+                predicate.test(block_registry, chunk, pos)
+            }
+            BlockPredicate::AllOfBlockPredicate(predicate) => {
+                predicate.test(block_registry, chunk, pos)
+            }
+            BlockPredicate::NotBlockPredicate(predicate) => {
+                predicate.test(block_registry, chunk, pos)
+            }
+            BlockPredicate::AlwaysTrueBlockPredicate => true,
+            BlockPredicate::UnobstructedBlockPredicate(predicate) => false,
         }
     }
 }
@@ -88,6 +102,34 @@ impl MatchingBlocksBlockPredicate {
                 .map(|s| s.replace("minecraft:", ""))
                 .contains(block.name),
         }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MatchingBlockTagPredicate {
+    #[serde(flatten)]
+    offset: OffsetBlocksBlockPredicate,
+    tag: String,
+}
+
+impl MatchingBlockTagPredicate {
+    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+        let block = self.offset.get_block(chunk, pos);
+        block.is_tagged_with(&self.tag).unwrap()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct HasSturdyFacePredicate {
+    #[serde(flatten)]
+    offset: OffsetBlocksBlockPredicate,
+    direction: BlockDirection,
+}
+
+impl HasSturdyFacePredicate {
+    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+        let state = self.offset.get_state(chunk, pos);
+        state.is_side_solid(self.direction)
     }
 }
 

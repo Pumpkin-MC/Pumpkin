@@ -115,14 +115,14 @@ impl PumpkinBlock for FireBlock {
         &self,
         _server: Option<&Server>,
         world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
+        block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        FireBlockBase::can_place_at(world.unwrap(), block_pos).await
+        FireBlockBase::can_place_at(block_accessor, block_pos).await
     }
 
     async fn broken(

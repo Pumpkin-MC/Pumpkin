@@ -2,8 +2,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    BlockState,
-    block_properties::{blocks_movement, get_block_by_state_id, get_state_by_state_id},
+    Block, BlockState,
+    block_properties::{
+        blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id,
+        get_state_by_state_id,
+    },
     chunk::Biome,
     tag::Tagable,
 };
@@ -258,9 +261,9 @@ impl<'a> ProtoChunk<'a> {
 
     pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i64 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos), // TODO
+            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos),
             HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(pos), // TODO
+            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(pos),
             HeightMap::OceanFloor => self.ocean_floor_height_exclusive(pos),
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(pos),
             HeightMap::MotionBlockingNoLeaves => {
@@ -358,29 +361,28 @@ impl<'a> ProtoChunk<'a> {
         self.flat_block_map[index]
     }
 
-    pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: &BlockState) {
+    pub fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
+        let local_pos = Vector3::new(pos.x & 15, pos.y - self.bottom_y() as i32, pos.z & 15);
+        if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
+            return;
+        }
         if !block_state.is_air() {
-            self.maybe_update_surface_height_map(local_pos);
+            self.maybe_update_surface_height_map(pos);
         }
 
         if blocks_movement(&block_state) {
-            self.maybe_update_ocean_floor_height_map(local_pos);
+            self.maybe_update_ocean_floor_height_map(pos);
         }
 
         if blocks_movement(&block_state) || block_state.is_liquid() {
-            self.maybe_update_motion_blocking_height_map(local_pos);
+            self.maybe_update_motion_blocking_height_map(pos);
             if let Some(block) = get_block_by_state_id(block_state.id) {
                 if !block.is_tagged_with("minecraft:leaves").unwrap() {
-                    self.maybe_update_motion_blocking_no_leaves_height_map(local_pos);
+                    self.maybe_update_motion_blocking_no_leaves_height_map(pos);
                 }
             }
         }
 
-        let local_pos = Vector3::new(
-            local_pos.x & 15,
-            local_pos.y - self.bottom_y() as i32,
-            local_pos.z & 15,
-        );
         let index = self.local_pos_to_block_index(&local_pos);
         self.flat_block_map[index] = RawBlockState {
             state_id: block_state.id,
@@ -742,6 +744,17 @@ impl BlockAccessor for ProtoChunk<'_> {
 
     async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
         self.get_block_state(&position.0).to_state()
+    }
+
+    async fn get_block_and_block_state(
+        &self,
+        position: &BlockPos,
+    ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
+        let id = self.get_block_state(&position.0).state_id;
+        get_block_and_state_by_state_id(id).unwrap_or((
+            Block::AIR,
+            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
+        ))
     }
 }
 
