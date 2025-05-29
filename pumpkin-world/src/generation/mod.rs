@@ -16,6 +16,7 @@ pub mod noise_router;
 pub mod ore_sampler;
 pub mod positions;
 pub mod proto_chunk;
+pub mod rule;
 mod rule_test;
 mod seed;
 pub mod settings;
