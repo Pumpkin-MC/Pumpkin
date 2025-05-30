@@ -52,6 +52,7 @@ use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro, get_seed};
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
@@ -164,7 +165,8 @@ pub async fn drop_loot(
 
     if experience {
         if let Some(experience) = &block.experience {
-            let amount = experience.experience.get();
+            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+            let amount = experience.experience.get(&mut random);
             // TODO: Silk touch gives no exp
             if amount > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
