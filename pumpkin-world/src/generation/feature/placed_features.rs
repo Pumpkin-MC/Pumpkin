@@ -4,7 +4,7 @@ use std::iter;
 use std::ops::Deref;
 use std::sync::LazyLock;
 
-use pumpkin_util::biome::TEMPERATURE_NOISE;
+use pumpkin_util::biome::{FOLIAGE_NOISE, TEMPERATURE_NOISE};
 use pumpkin_util::math::int_provider::IntProvider;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -70,7 +70,6 @@ impl PlacedFeature {
         for modifier in &self.placement {
             let mut new_stream = Vec::with_capacity(stream.len());
 
-            // Using filter map gives an annoying error
             for block_pos in stream {
                 let positions = modifier.get_positions(
                     chunk,
@@ -128,7 +127,7 @@ pub enum PlacementModifier {
     #[serde(rename = "minecraft:count")]
     Count(CountPlacementModifier),
     #[serde(rename = "minecraft:noise_based_count")]
-    NoiseBasedCount,
+    NoiseBasedCount(NoiseBasedCountPlacementModifier),
     #[serde(rename = "minecraft:noise_threshold_count")]
     NoiseThresholdCount(NoiseThresholdCountPlacementModifier),
     #[serde(rename = "minecraft:count_on_every_layer")]
@@ -175,7 +174,9 @@ impl PlacementModifier {
                 modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
             PlacementModifier::Count(modifier) => modifier.get_positions(random, pos),
-            PlacementModifier::NoiseBasedCount => Box::new(iter::empty()),
+            PlacementModifier::NoiseBasedCount(modifier) => {
+                Box::new(modifier.get_positions(random, pos))
+            }
             PlacementModifier::NoiseThresholdCount(feature) => feature.get_positions(random, pos),
             PlacementModifier::CountOnEveryLayer => Box::new(iter::empty()),
             PlacementModifier::EnvironmentScan => Box::new(iter::empty()),
@@ -193,6 +194,26 @@ impl PlacementModifier {
 }
 
 #[derive(Deserialize)]
+pub struct NoiseBasedCountPlacementModifier {
+    noise_to_count_ratio: i32,
+    noise_factor: f64,
+    noise_offset: f64,
+}
+
+impl CountPlacementModifierBase for NoiseBasedCountPlacementModifier {
+    fn get_count(&self, _random: &mut RandomGenerator, pos: BlockPos) -> i32 {
+        let noise = FOLIAGE_NOISE
+            .sample(
+                pos.0.x as f64 / self.noise_factor,
+                pos.0.z as f64 / self.noise_factor,
+                false,
+            )
+            .max(0.0); // TODO: max is wrong
+        ((noise + self.noise_offset) * self.noise_to_count_ratio as f64).ceil() as i32
+    }
+}
+
+#[derive(Deserialize)]
 pub struct NoiseThresholdCountPlacementModifier {
     noise_level: f64,
     below_noise: i32,
@@ -201,7 +222,7 @@ pub struct NoiseThresholdCountPlacementModifier {
 
 impl CountPlacementModifierBase for NoiseThresholdCountPlacementModifier {
     fn get_count(&self, _random: &mut RandomGenerator, pos: BlockPos) -> i32 {
-        let noise = TEMPERATURE_NOISE.sample(pos.0.x as f64 / 200.0, pos.0.z as f64 / 200.0, false);
+        let noise = FOLIAGE_NOISE.sample(pos.0.x as f64 / 200.0, pos.0.z as f64 / 200.0, false);
         if noise < self.noise_level {
             self.below_noise
         } else {
@@ -279,7 +300,6 @@ impl ConditionalPlacementModifier for RarityFilterPlacementModifier {
     fn should_place(
         &self,
         block_registry: &dyn BlockRegistryExt,
-
         feature: &str,
         chunk: &ProtoChunk,
         random: &mut RandomGenerator,
