@@ -1,3 +1,4 @@
+pub mod bamboo;
 pub mod barrel;
 pub mod bed;
 pub mod cactus;

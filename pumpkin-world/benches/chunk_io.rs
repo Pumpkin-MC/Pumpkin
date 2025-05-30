@@ -227,7 +227,7 @@ fn bench_chunk_io(c: &mut Criterion) {
                 b.to_async(&async_handler).iter(async || {
                     let level = Arc::new(Level::from_root_folder(
                         root_dir.clone(),
-                        block_registry,
+                        block_registry.clone(),
                         123,
                         Dimension::Overworld,
                     ));

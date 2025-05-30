@@ -192,6 +192,7 @@ impl ConfiguredFeature {
         pos: BlockPos,
     ) -> bool {
         match self {
+            Self::SpringFeature(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::Flower(feature) => feature.generate(
                 chunk,
@@ -214,6 +215,15 @@ impl ConfiguredFeature {
             Self::DesertWell(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::Bamboo(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::BlockColumn(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -254,6 +264,15 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::SimpleRandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::Vines(feature) => feature.generate(
                 chunk,
                 block_registry,
                 min_y,

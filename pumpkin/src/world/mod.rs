@@ -70,7 +70,6 @@ use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    level::SyncChunk,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{chunk::TickPriority, level::Level};
@@ -83,11 +82,8 @@ use rand::{Rng, thread_rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;
-use tokio::sync::{RwLock, mpsc};
-use tokio::{
-    select,
-    sync::{Mutex, mpsc::UnboundedReceiver},
-};
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 pub mod border;
 pub mod bossbar;
@@ -965,7 +961,7 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        let mut receiver = self.receive_chunks(chunks);
+        let mut receiver = self.level.receive_chunks(chunks);
         let level = self.level.clone();
 
         player.clone().spawn_task(async move {
@@ -1335,7 +1331,7 @@ impl World {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
-        let chunk = self.get_chunk(position).await;
+        let chunk = self.level.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
         let mut chunk = chunk.write().await;
         let replaced_block_state_id = chunk
@@ -1477,39 +1473,6 @@ impl World {
             .is_block_tick_scheduled(block_pos, block.id)
             .await
     }
-    // Stream the chunks (don't collect them and then do stuff with them)
-    /// Spawns a tokio task to stream chunks.
-    /// Important: must be called from an async function (or changed to accept a tokio runtime
-    /// handle)
-    pub fn receive_chunks(
-        &self,
-        chunks: Vec<Vector2<i32>>,
-    ) -> UnboundedReceiver<(SyncChunk, bool)> {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        // Put this in another thread so we aren't blocking on it
-        let level = self.level.clone();
-        self.level.spawn_task(async move {
-            let cancel_notifier = level.shutdown_notifier.notified();
-            let fetch_task = level.fetch_chunks(&chunks, sender);
-
-            // Don't continue to handle chunks if we are shutting down
-            select! {
-                () = cancel_notifier => {},
-                () = fetch_task => {}
-            };
-        });
-
-        receiver
-    }
-
-    pub async fn receive_chunk(&self, chunk_pos: Vector2<i32>) -> (Arc<RwLock<ChunkData>>, bool) {
-        let mut receiver = self.receive_chunks(vec![chunk_pos]);
-
-        receiver
-            .recv()
-            .await
-            .expect("Channel closed for unknown reason")
-    }
 
     pub async fn break_block(
         self: &Arc<Self>,
@@ -1574,17 +1537,8 @@ impl World {
             .await;
     }
 
-    pub async fn get_chunk(&self, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
-        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
-
-        match self.level.try_get_chunk(chunk_coordinate) {
-            Some(chunk) => chunk.clone(),
-            None => self.receive_chunk(chunk_coordinate).await.0,
-        }
-    }
-
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        let chunk = self.get_chunk(position).await;
+        let chunk = self.level.get_chunk(position).await;
         let (_, relative) = position.chunk_and_chunk_relative_position();
 
         let chunk = chunk.read().await;
@@ -1728,7 +1682,7 @@ impl World {
         &self,
         block_pos: &BlockPos,
     ) -> Option<(NbtCompound, Arc<dyn BlockEntity>)> {
-        let chunk = self.get_chunk(block_pos).await;
+        let chunk = self.level.get_chunk(block_pos).await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         chunk.block_entities.get(block_pos).cloned()
@@ -1736,7 +1690,7 @@ impl World {
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
-        let chunk = self.get_chunk(&block_pos).await;
+        let chunk = self.level.get_chunk(&block_pos).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
@@ -1759,7 +1713,7 @@ impl World {
     }
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
-        let chunk = self.get_chunk(block_pos).await;
+        let chunk = self.level.get_chunk(block_pos).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         chunk.block_entities.remove(block_pos);
         chunk.dirty = true;

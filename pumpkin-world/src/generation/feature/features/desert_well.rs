@@ -32,7 +32,6 @@ impl DesertWellFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        dbg!("aaa");
         let mut block_pos = pos.up();
         while chunk.is_air(&block_pos.0) && block_pos.0.y > chunk.bottom_y() as i32 + 2 {
             block_pos = block_pos.down();

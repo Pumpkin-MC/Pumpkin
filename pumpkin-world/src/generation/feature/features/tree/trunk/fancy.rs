@@ -22,7 +22,7 @@ pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     pub fn generate(
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut ProtoChunk,

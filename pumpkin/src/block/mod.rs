@@ -1,3 +1,4 @@
+use blocks::bamboo::BambooBlock;
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
@@ -18,6 +19,7 @@ use blocks::piston::piston::PistonBlock;
 use blocks::piston::piston_extension::PistonExtensionBlock;
 use blocks::piston::piston_head::PistonHeadBlock;
 use blocks::plant::bush::BushBlock;
+use blocks::plant::dry_vegetation::DryVegetationBlock;
 use blocks::plant::flower::FlowerBlock;
 use blocks::plant::lily_pad::LilyPadBlock;
 use blocks::plant::mushroom_plant::MushroomPlantBlock;
@@ -98,10 +100,12 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
+    manager.register(BambooBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(StairBlock);
     manager.register(ShortPlantBlock);
+    manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
     manager.register(TNTBlock);

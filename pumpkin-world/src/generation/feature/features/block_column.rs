@@ -32,9 +32,9 @@ impl BlockColumnFeature {
         &self,
         chunk: &mut ProtoChunk,
         block_registry: &dyn BlockRegistryExt,
-        min_y: i8,
-        height: u16,
-        feature: &str, // This placed feature
+        _min_y: i8,
+        _height: u16,
+        _feature: &str, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

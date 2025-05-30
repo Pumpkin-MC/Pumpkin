@@ -1,4 +1,5 @@
 pub mod bush;
+pub mod dry_vegetation;
 pub mod flower;
 pub mod lily_pad;
 pub mod mushroom_plant;
