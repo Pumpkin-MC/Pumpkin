@@ -48,7 +48,7 @@ impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(&self, at: &Vector2<i32>) -> ChunkData {
         let generation_settings = gen_settings_from_dimension(&self.dimension);
 
-        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
+        let sub_chunks = generation_settings.shape.height as u64 / BlockPalette::SIZE as u64;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
