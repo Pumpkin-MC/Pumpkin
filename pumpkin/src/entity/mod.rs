@@ -449,7 +449,7 @@ impl Entity {
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
-        let adjusted_yaw = (self.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
+        let adjusted_yaw = self.yaw.load().rem_euclid(360.0); // Normalize yaw to [0, 360)
 
         match adjusted_yaw {
             0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,

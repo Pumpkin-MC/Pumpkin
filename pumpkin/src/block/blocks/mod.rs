@@ -6,6 +6,7 @@ pub mod command;
 pub mod crafting_table;
 pub mod dirt_path;
 pub mod doors;
+pub mod end_portal_frame;
 pub mod farmland;
 pub mod fence_gates;
 pub mod fences;

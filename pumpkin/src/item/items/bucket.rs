@@ -4,10 +4,7 @@ use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockState, fluid::Fluid, item::Item};
 use pumpkin_registry::DimensionType;
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector3::Vector3},
-};
+use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{inventory::Inventory, item::ItemStack, world::BlockFlags};
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -46,22 +43,6 @@ impl ItemMetadata for MilkBucketItem {
     }
 }
 
-fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
-    let start_pos = player.eye_position();
-    let (yaw, pitch) = player.rotation();
-    let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
-    let block_interaction_range = 4.5; // This is not the same as the block_interaction_range in the
-    // player entity.
-    let direction = Vector3::new(
-        -yaw_rad.sin() * pitch_rad.cos() * block_interaction_range,
-        -pitch_rad.sin() * block_interaction_range,
-        pitch_rad.cos() * yaw_rad.cos() * block_interaction_range,
-    );
-
-    let end_pos = start_pos.add(&direction);
-    (start_pos, end_pos)
-}
-
 fn waterlogged_check(block: &Block, state: &BlockState) -> Option<bool> {
     block.properties(state.id).and_then(|properties| {
         properties
@@ -90,7 +71,7 @@ fn set_waterlogged(block: &Block, state: &BlockState, waterlogged: bool) -> u16 
 impl PumpkinItem for EmptyBucketItem {
     async fn normal_use(&self, _item: &Item, player: &Player) {
         let world = player.world().await.clone();
-        let (start_pos, end_pos) = get_start_and_end_pos(player);
+        let (start_pos, end_pos) = self.get_start_and_end_pos(player);
 
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos).await;
@@ -198,7 +179,7 @@ impl PumpkinItem for EmptyBucketItem {
 impl PumpkinItem for FilledBucketItem {
     async fn normal_use(&self, item: &Item, player: &Player) {
         let world = player.world().await.clone();
-        let (start_pos, end_pos) = get_start_and_end_pos(player);
+        let (start_pos, end_pos) = self.get_start_and_end_pos(player);
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos).await;
             if Fluid::from_state_id(state_id).is_some() {
