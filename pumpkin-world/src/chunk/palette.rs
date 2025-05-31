@@ -171,9 +171,9 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 .for_each(|(values, packed)| {
                     values.iter_mut().enumerate().for_each(|(index, value)| {
                         let lookup_index =
-                            (*packed as usize >> (index * bits_per_key as usize)) & index_mask;
+                            (*packed as u64 >> (index as u64 * bits_per_key as u64)) & index_mask;
 
-                        if let Some(v) = palette.get(lookup_index) {
+                        if let Some(v) = palette.get(lookup_index as usize) {
                             *value = *v;
                         } else {
                             // The cube is already initialized to the default
