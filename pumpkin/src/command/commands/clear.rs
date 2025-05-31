@@ -20,7 +20,7 @@ const DESCRIPTION: &str = "Clear yours or targets inventory.";
 
 const ARG_TARGET: &str = "target";
 
-async fn clear_player(target: &Player) -> usize {
+async fn clear_player(target: &Player) -> u64 {
     let inventory = target.inventory();
 
     inventory.clear().await;
@@ -28,7 +28,7 @@ async fn clear_player(target: &Player) -> usize {
     0 //TODO: Count items
 }
 
-fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> TextComponent {
+fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
         [target] if item_count == 0 => TextComponent::translate(
             "clear.failed.single",
