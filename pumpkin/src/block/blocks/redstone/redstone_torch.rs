@@ -15,6 +15,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
 type RWallTorchProps = pumpkin_data::block_properties::FurnaceLikeProperties;
@@ -102,14 +103,16 @@ impl PumpkinBlock for RedstoneTorchBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
+        let world = world.unwrap();
         let support_block = world.get_block_state(&block_pos.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
             return true;

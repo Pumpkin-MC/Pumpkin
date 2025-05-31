@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::Block;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockAccessor;
 use soul_fire::SoulFireBlock;
 
 use crate::world::World;
@@ -31,9 +32,10 @@ impl FireBlockBase {
         true
     }
 
-    pub async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-        let block_state = world.get_block_state(block_pos).await;
-        block_state.is_air() && Self::can_place_on(&world.get_block(&block_pos.down()).await)
+    pub async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        let block_state = block_accessor.get_block_state(block_pos).await;
+        block_state.is_air()
+            && Self::can_place_on(&block_accessor.get_block(&block_pos.down()).await)
     }
 
     async fn broken(world: Arc<World>, block_pos: BlockPos) {

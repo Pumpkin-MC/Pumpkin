@@ -12,7 +12,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::BlockIsReplacing;
 use crate::block::registry::BlockActionResult;
@@ -31,15 +31,16 @@ pub struct RedstoneWireBlock;
 impl PumpkinBlock for RedstoneWireBlock {
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        can_place_at(world, block_pos).await
+        can_place_at(world.unwrap(), block_pos).await
     }
 
     async fn on_place(

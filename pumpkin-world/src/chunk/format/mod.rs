@@ -7,6 +7,8 @@ use crate::{block::entities::block_entity_from_nbt, generation::section_coords};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
+use crate::block::BlockStateCodec;
+
 use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections, ScheduledTick,
     SubChunk, TickPriority,
@@ -216,7 +218,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBlockEntry>,
+    pub(crate) palette: Vec<BlockStateCodec>,
 }
 
 #[derive(Debug, Clone)]
@@ -291,16 +293,6 @@ impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct PaletteBlockEntry {
-    /// Block name
-    pub name: String,
-    /// Key-value pairs of properties
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

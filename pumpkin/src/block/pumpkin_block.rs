@@ -9,7 +9,7 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use std::sync::Arc;
 
 use super::BlockIsReplacing;
@@ -101,13 +101,14 @@ pub trait PumpkinBlock: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     async fn can_place_at(
         &self,
-        _server: &Server,
-        _world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         _block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         true
     }

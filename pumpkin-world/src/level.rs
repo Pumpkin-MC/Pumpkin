@@ -12,20 +12,25 @@ use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use tokio::{
-    sync::{Mutex, Notify, RwLock, mpsc},
+    select,
+    sync::{
+        Mutex, Notify, RwLock,
+        mpsc::{self, UnboundedReceiver},
+    },
     task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
 
 use crate::{
+    BlockStateId,
     chunk::{
         ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, WorldGenerator, get_world_gen},
-    world::SimpleWorld,
+    generation::{Seed, get_world_gen, implementation::WorldGenerator},
+    world::{BlockRegistryExt, SimpleWorld},
 };
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -41,6 +46,7 @@ pub type SyncChunk = Arc<RwLock<ChunkData>>;
 /// For more details on world generation, refer to the `WorldGenerator` module.
 pub struct Level {
     pub seed: Seed,
+    block_registry: Arc<dyn BlockRegistryExt>,
     level_folder: LevelFolder,
 
     // Holds this level's spawn chunks, which are always loaded
@@ -69,7 +75,12 @@ pub struct LevelFolder {
 }
 
 impl Level {
-    pub fn from_root_folder(root_folder: PathBuf, seed: i64, dimension: Dimension) -> Self {
+    pub fn from_root_folder(
+        root_folder: PathBuf,
+        block_registry: Arc<dyn BlockRegistryExt>,
+        seed: i64,
+        dimension: Dimension,
+    ) -> Self {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
         if !region_folder.exists() {
@@ -93,6 +104,7 @@ impl Level {
 
         Self {
             seed,
+            block_registry,
             world_gen,
             level_folder,
             chunk_saver,
@@ -306,6 +318,80 @@ impl Level {
         }
     }
 
+    // Stream the chunks (don't collect them and then do stuff with them)
+    /// Spawns a tokio task to stream chunks.
+    /// Important: must be called from an async function (or changed to accept a tokio runtime
+    /// handle)
+    pub fn receive_chunks(
+        self: &Arc<Self>,
+        chunks: Vec<Vector2<i32>>,
+    ) -> UnboundedReceiver<(SyncChunk, bool)> {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        // Put this in another thread so we aren't blocking on it
+        let level = self.clone();
+        self.spawn_task(async move {
+            let cancel_notifier = level.shutdown_notifier.notified();
+            let fetch_task = level.fetch_chunks(&chunks, sender);
+
+            // Don't continue to handle chunks if we are shutting down
+            select! {
+                () = cancel_notifier => {},
+                () = fetch_task => {}
+            };
+        });
+
+        receiver
+    }
+
+    pub async fn get_chunk(self: &Arc<Self>, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
+        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
+
+        match self.try_get_chunk(chunk_coordinate) {
+            Some(chunk) => chunk.clone(),
+            None => self.receive_chunk(chunk_coordinate).await.0,
+        }
+    }
+
+    pub async fn receive_chunk(
+        self: &Arc<Self>,
+        chunk_pos: Vector2<i32>,
+    ) -> (Arc<RwLock<ChunkData>>, bool) {
+        let mut receiver = self.receive_chunks(vec![chunk_pos]);
+
+        receiver
+            .recv()
+            .await
+            .expect("Channel closed for unknown reason")
+    }
+
+    pub async fn set_block_state(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+    ) -> BlockStateId {
+        let chunk = self.get_chunk(position).await;
+        let (_, relative) = position.chunk_and_chunk_relative_position();
+        let mut chunk = chunk.write().await;
+        let replaced_block_state_id = chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+            .unwrap();
+
+        if replaced_block_state_id == block_state_id {
+            return block_state_id;
+        }
+
+        chunk.dirty = true;
+
+        chunk.section.set_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+            block_state_id,
+        );
+        replaced_block_state_id
+    }
+
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
         if chunks_to_write.is_empty() {
             return;
@@ -478,6 +564,7 @@ impl Level {
 
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
+        let block_registry = self.block_registry.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -489,6 +576,8 @@ impl Level {
                 let world_gen = world_gen.clone();
                 let channel = channel.clone();
                 let cloned_continue_to_generate = continue_to_generate.clone();
+                let block_registry = block_registry.clone();
+
                 rayon::spawn(move || {
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
@@ -499,7 +588,8 @@ impl Level {
                         .entry(pos)
                         .or_insert_with(|| {
                             // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk = world_gen.generate_chunk(&pos);
+                            let generated_chunk =
+                                world_gen.generate_chunk(block_registry.as_ref(), &pos);
                             Arc::new(RwLock::new(generated_chunk))
                         })
                         .value()

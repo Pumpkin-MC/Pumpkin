@@ -32,7 +32,7 @@ impl PumpkinItem for FlintAndSteelItem {
         // TODO: check CampfireBlock, CandleBlock and CandleCakeBlock
         let world = player.world().await;
         let pos = location.offset(face.to_offset());
-        if FireBlockBase::can_place_at(&world, &pos).await {
+        if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
             let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
 
             world
