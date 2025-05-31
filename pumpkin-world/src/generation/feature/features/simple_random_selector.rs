@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -7,9 +5,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::{
-    ProtoChunk,
-    generation::feature::placed_features::PlacedFeature,
-    world::{BlockRegistryExt, SimpleWorld},
+    ProtoChunk, generation::feature::placed_features::PlacedFeature, world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]

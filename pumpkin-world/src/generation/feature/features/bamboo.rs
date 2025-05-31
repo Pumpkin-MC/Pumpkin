@@ -1,8 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_block_by_state_id,
-        get_state_by_state_id,
+        BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_state_by_state_id,
     },
     tag::Tagable,
 };

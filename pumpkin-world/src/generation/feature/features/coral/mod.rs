@@ -4,7 +4,6 @@ use pumpkin_data::{
         BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties, get_block,
         get_state_by_state_id,
     },
-    block_state,
     tag::{RegistryKey, Tagable, get_tag_values},
 };
 use pumpkin_util::{
@@ -12,10 +11,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{
-    ProtoChunk,
-    world::{BlockAccessor, BlockRegistryExt},
-};
+use crate::{ProtoChunk, world::BlockAccessor};
 
 pub mod coral_claw;
 pub mod coral_mushroom;

@@ -1,15 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashMap, sync::LazyLock};
 
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    world::{BlockRegistryExt, SimpleWorld},
-};
+use crate::{ProtoChunk, world::BlockRegistryExt};
 
 use super::features::{
     bamboo::BambooFeature,

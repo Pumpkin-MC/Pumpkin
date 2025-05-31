@@ -2,8 +2,6 @@ use pumpkin_data::block_properties::{get_block, get_block_by_state_id, get_state
 
 use crate::BlockStateId;
 
-use super::BlockStateCodec;
-
 /// Instead of using a memory heavy normal BlockState This is used for internal representation in chunks to save memory
 #[derive(Clone, Copy, Debug, Eq)]
 pub struct RawBlockState {

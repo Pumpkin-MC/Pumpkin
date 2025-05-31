@@ -1856,14 +1856,14 @@ impl BlockAccessor for World {
         Self::get_block(self, position).await
     }
     async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
-        Self::get_block_state(&self, position).await
+        Self::get_block_state(self, position).await
     }
 
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
-        let id = self.get_block_state(&position).await.id;
+        let id = self.get_block_state(position).await.id;
         get_block_and_state_by_state_id(id).unwrap_or((
             Block::AIR,
             get_state_by_state_id(Block::AIR.default_state_id).unwrap(),

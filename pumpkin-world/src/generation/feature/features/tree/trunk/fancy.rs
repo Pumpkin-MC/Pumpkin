@@ -5,7 +5,7 @@ use pumpkin_data::{
     block_properties::{Axis, EnumVariants, get_block_by_state_id, get_state_by_state_id},
 };
 use pumpkin_util::{
-    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -42,7 +42,7 @@ impl FancyTrunkPlacer {
         list.push(BranchPosition::new(start_pos, m));
 
         for n in (0..=(j - 5)).rev() {
-            let f = Self::should_generate_branch(j as i32, n as i32);
+            let f = Self::should_generate_branch(j, n);
             if f < 0.0f32 {
                 continue;
             }
@@ -95,11 +95,11 @@ impl FancyTrunkPlacer {
         Self::make_or_check_branch(
             chunk,
             start_pos.0,
-            start_pos.up_height(k as i32).0,
+            start_pos.up_height(k).0,
             trunk_block,
             true,
         );
-        Self::make_branches(chunk, j as i32, start_pos.0, trunk_block, &list);
+        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -171,7 +171,7 @@ impl FancyTrunkPlacer {
                     continue;
                 }
             }
-            if TreeFeature::can_replace_or_log(&chunk, &block_pos_2) {
+            if TreeFeature::can_replace_or_log(chunk, &block_pos_2) {
                 continue;
             }
             return (false, logs);

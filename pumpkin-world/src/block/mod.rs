@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use pumpkin_data::{
     BlockState,
-    block_properties::{get_block, get_block_by_state_id, get_state_by_state_id},
+    block_properties::{get_block, get_state_by_state_id},
 };
 use serde::{Deserialize, Serialize};
 pub use state::RawBlockState;

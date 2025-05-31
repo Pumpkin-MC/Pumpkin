@@ -1,13 +1,8 @@
-use std::sync::OnceLock;
-
 use pumpkin_data::BlockState;
 use serde::Deserialize;
 
 use super::{MaterialCondition, MaterialRuleContext};
-use crate::{
-    ProtoChunk,
-    block::{BlockStateCodec, RawBlockState},
-};
+use crate::{ProtoChunk, block::BlockStateCodec};
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]

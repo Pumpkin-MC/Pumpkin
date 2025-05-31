@@ -1,7 +1,7 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
-    random::{RandomGenerator, RandomImpl},
+    random::RandomGenerator,
 };
 use serde::Deserialize;
 

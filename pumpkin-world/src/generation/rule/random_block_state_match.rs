@@ -1,4 +1,4 @@
-use pumpkin_data::{BlockState, block_properties::get_block_by_state_id};
+use pumpkin_data::BlockState;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use serde::Deserialize;
 

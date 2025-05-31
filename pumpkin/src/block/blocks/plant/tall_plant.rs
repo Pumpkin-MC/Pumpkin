@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_data::block_properties::{BlockProperties, DoubleBlockHalf};
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -49,8 +49,7 @@ impl PumpkinBlock for TallPlantBlock {
         if let Some(props) = block.properties(state.id).map(|s| s.to_props()) {
             if props
                 .iter()
-                .find(|(key, value)| key == "half" && value == "upper")
-                .is_some()
+                .any(|(key, value)| key == "half" && value == "upper")
             {
                 let (block, below_state) = block_accessor
                     .get_block_and_block_state(&block_pos.down())
@@ -58,8 +57,7 @@ impl PumpkinBlock for TallPlantBlock {
                 if let Some(props) = block.properties(below_state.id).map(|s| s.to_props()) {
                     let is_lower = props
                         .iter()
-                        .find(|(key, value)| key == "half" && value == "lower")
-                        .is_some();
+                        .any(|(key, value)| key == "half" && value == "lower");
                     return below_state.id == state.id && is_lower;
                 }
             }

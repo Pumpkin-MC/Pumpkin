@@ -98,7 +98,7 @@ impl OreFeature {
             let h = random.next_f64() * j as f64 / 16.0;
             let l = (((f32::consts::PI * f).sin() + 1.0) * h as f32 + 1.0) / 2.0;
 
-            ds[k as usize * 4 + 0] = d;
+            ds[k as usize * 4] = d;
             ds[k as usize * 4 + 1] = e;
             ds[k as usize * 4 + 2] = g;
             ds[k as usize * 4 + 3] = l as f64;
@@ -113,7 +113,7 @@ impl OreFeature {
                     continue;
                 }
                 let h_val = ds[k as usize * 4 + 3] - ds[m as usize * 4 + 3];
-                let d_val = ds[k as usize * 4 + 0] - ds[m as usize * 4 + 0];
+                let d_val = ds[k as usize * 4] - ds[m as usize * 4];
                 let e_val = ds[k as usize * 4 + 1] - ds[m as usize * 4 + 1];
                 let g_val = ds[k as usize * 4 + 2] - ds[m as usize * 4 + 2];
 
@@ -132,7 +132,7 @@ impl OreFeature {
             if d_val < 0.0 {
                 continue;
             }
-            let e_val = ds[m_idx as usize * 4 + 0];
+            let e_val = ds[m_idx as usize * 4];
             let g_val = ds[m_idx as usize * 4 + 1];
             let h_val = ds[m_idx as usize * 4 + 2];
 

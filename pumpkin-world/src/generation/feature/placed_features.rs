@@ -5,7 +5,7 @@ use std::iter;
 use std::ops::Deref;
 use std::sync::LazyLock;
 
-use pumpkin_util::biome::{FOLIAGE_NOISE, TEMPERATURE_NOISE};
+use pumpkin_util::biome::FOLIAGE_NOISE;
 use pumpkin_util::math::int_provider::IntProvider;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;

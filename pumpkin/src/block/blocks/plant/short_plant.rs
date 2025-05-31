@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -27,10 +27,10 @@ impl PumpkinBlock for ShortPlantBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: Option<&World>,
+        _world: Option<&World>,
         block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
-        block: &Block,
+        _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,

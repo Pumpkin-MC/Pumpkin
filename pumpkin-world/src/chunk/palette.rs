@@ -7,7 +7,7 @@ use std::{
 use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
-use crate::block::{BlockStateCodec, RawBlockState};
+use crate::block::BlockStateCodec;
 
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
 

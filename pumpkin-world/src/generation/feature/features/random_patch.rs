@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},

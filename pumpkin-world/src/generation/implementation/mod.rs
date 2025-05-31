@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
@@ -11,7 +8,7 @@ use super::{
     settings::gen_settings_from_dimension,
 };
 use crate::chunk::format::LightContainer;
-use crate::world::{BlockRegistryExt, SimpleWorld};
+use crate::world::BlockRegistryExt;
 use crate::{chunk::ChunkLight, dimension::Dimension};
 use crate::{
     chunk::{

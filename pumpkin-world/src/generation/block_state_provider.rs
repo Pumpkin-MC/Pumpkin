@@ -1,6 +1,4 @@
-use pumpkin_data::{
-    Block, BlockState, block_properties::get_state_by_state_id, chunk::DoublePerlinNoiseParameters,
-};
+use pumpkin_data::{BlockState, chunk::DoublePerlinNoiseParameters};
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,
     math::{
@@ -64,9 +62,8 @@ pub struct RandomizedIntBlockStateProvider {
 
 impl RandomizedIntBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> BlockState {
-        let state = self.source.get(random, pos);
         // TODO
-        state
+        self.source.get(random, pos)
     }
 }
 

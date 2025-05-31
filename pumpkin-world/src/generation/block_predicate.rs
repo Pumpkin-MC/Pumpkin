@@ -1,20 +1,12 @@
 use itertools::Itertools;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
-    block_properties::{get_block_by_state_id, get_state_by_state_id},
-    tag::Tagable,
+    Block, BlockDirection, BlockState, block_properties::get_block_by_state_id, tag::Tagable,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
-use tokio::runtime::{Handle, Runtime};
 
-use crate::{
-    ProtoChunk,
-    block::BlockStateCodec,
-    world::{BlockRegistryExt, SimpleWorld},
-};
+use crate::{ProtoChunk, block::BlockStateCodec, world::BlockRegistryExt};
 
-use super::Direction;
 #[derive(Deserialize)]
 pub struct EmptyTODOStruct {}
 

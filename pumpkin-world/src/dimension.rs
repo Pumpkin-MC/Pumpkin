@@ -2,10 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use serde::Deserialize;
 
-use crate::{
-    level::Level,
-    world::{BlockRegistryExt, SimpleWorld},
-};
+use crate::{level::Level, world::BlockRegistryExt};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]

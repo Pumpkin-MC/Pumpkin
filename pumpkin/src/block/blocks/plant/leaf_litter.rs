@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;

@@ -1,7 +1,3 @@
-use pumpkin_data::{
-    block_properties::get_block,
-    tag::{RegistryKey, get_tag_values},
-};
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -43,7 +39,7 @@ impl CoralMushroomFeature {
                     let condition_a = (m != 0 && m != j) || (n != 0 && n != i);
                     let condition_b = (o != 0 && o != k) || (n != 0 && n != i);
                     let condition_c = (m != 0 && m != j) || (o != 0 && o != k);
-                    let condition_d = (m == 0 || m == j || n == 0 || n == i || o == 0 || o == k);
+                    let condition_d = m == 0 || m == j || n == 0 || n == i || o == 0 || o == k;
                     let random_check = random.next_f32() < 0.1f32;
 
                     if !((condition_a && condition_b && condition_c && condition_d)

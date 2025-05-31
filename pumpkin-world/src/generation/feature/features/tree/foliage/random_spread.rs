@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
 
-use super::{FoliagePlacer, LeaveValidator};
+use super::FoliagePlacer;
 
 #[derive(Deserialize)]
 pub struct RandomSpreadFoliagePlacer {

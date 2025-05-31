@@ -1,12 +1,11 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
-use crate::block::pumpkin_block::{self, BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;

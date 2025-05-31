@@ -1,10 +1,6 @@
-use pumpkin_data::{
-    BlockDirection,
-    block_properties::get_block,
-    tag::{RegistryKey, get_tag_values},
-};
+use pumpkin_data::BlockDirection;
 use pumpkin_util::{
-    math::{position::BlockPos, vector3::Vector3},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;

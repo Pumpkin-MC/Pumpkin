@@ -1,8 +1,5 @@
 use pumpkin_data::BlockState;
-use pumpkin_util::{
-    math::int_provider::IntProvider,
-    random::{RandomGenerator, RandomImpl},
-};
+use pumpkin_util::{math::int_provider::IntProvider, random::RandomGenerator};
 use serde::Deserialize;
 
 use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};

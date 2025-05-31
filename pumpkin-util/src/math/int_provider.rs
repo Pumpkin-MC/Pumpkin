@@ -1,5 +1,3 @@
-use std::i32;
-
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use serde::Deserialize;

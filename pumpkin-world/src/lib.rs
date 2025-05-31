@@ -60,7 +60,7 @@ pub use generation::{
     GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 pub fn bench_create_and_populate_noise(
     base_router: &ProtoNoiseRouters,

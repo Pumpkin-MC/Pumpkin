@@ -17,7 +17,7 @@ impl Pool {
         }
         let index = random.next_bounded_i32(total_weight);
         if total_weight < 64 {
-            return Some(FlattenedContent::get(index, &distribution, total_weight));
+            return Some(FlattenedContent::get(index, distribution, total_weight));
         } else {
             // WrappedContent
             for dist in distribution {

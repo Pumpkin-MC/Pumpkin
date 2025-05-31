@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},

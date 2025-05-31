@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
@@ -17,13 +15,13 @@ use pumpkin_util::{
 };
 
 use crate::{
-    BlockStateId, HeightMap,
+    HeightMap,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     dimension::Dimension,
     generation::{biome, positions::chunk_pos},
-    world::{BlockAccessor, BlockFlags, BlockRegistryExt, SimpleWorld},
+    world::{BlockAccessor, BlockRegistryExt, SimpleWorld},
 };
 
 use super::{
@@ -370,11 +368,11 @@ impl<'a> ProtoChunk<'a> {
             self.maybe_update_surface_height_map(pos);
         }
 
-        if blocks_movement(&block_state) {
+        if blocks_movement(block_state) {
             self.maybe_update_ocean_floor_height_map(pos);
         }
 
-        if blocks_movement(&block_state) || block_state.is_liquid() {
+        if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
             if let Some(block) = get_block_by_state_id(block_state.id) {
                 if !block.is_tagged_with("minecraft:leaves").unwrap() {
