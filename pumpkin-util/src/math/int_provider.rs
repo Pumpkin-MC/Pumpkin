@@ -1,8 +1,8 @@
+use crate::random::RandomImpl;
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use serde::Deserialize;
 use syn::LitInt;
-use crate::random::RandomImpl;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -174,7 +174,10 @@ impl ToTokens for BiasedToBottomIntProvider {
 
 impl BiasedToBottomIntProvider {
     pub fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
-        Self { min_inclusive, max_inclusive }
+        Self {
+            min_inclusive,
+            max_inclusive,
+        }
     }
 
     pub fn get_min(&self) -> i32 {
@@ -207,10 +210,10 @@ impl ToTokens for ClampedIntProvider {
         let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
         let max_inclusive = LitInt::new(&self.max_inclusive.to_string(), Span::call_site());
         tokens.extend(quote! {
-            ClampedIntProvider { 
-                source: Box::new(#source), 
-                min_inclusive: #min_inclusive, 
-                max_inclusive: #max_inclusive 
+            ClampedIntProvider {
+                source: Box::new(#source),
+                min_inclusive: #min_inclusive,
+                max_inclusive: #max_inclusive
             }
         });
     }
@@ -218,7 +221,11 @@ impl ToTokens for ClampedIntProvider {
 
 impl ClampedIntProvider {
     pub fn new(source: IntProvider, min_inclusive: i32, max_inclusive: i32) -> Self {
-        Self { source: Box::new(source), min_inclusive, max_inclusive }
+        Self {
+            source: Box::new(source),
+            min_inclusive,
+            max_inclusive,
+        }
     }
 
     pub fn get_min(&self) -> i32 {
@@ -226,7 +233,9 @@ impl ClampedIntProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        self.source.get(random).clamp(self.min_inclusive, self.max_inclusive)
+        self.source
+            .get(random)
+            .clamp(self.min_inclusive, self.max_inclusive)
     }
 
     pub fn get_max(&self) -> i32 {
@@ -249,11 +258,11 @@ impl ToTokens for ClampedNormalIntProvider {
         let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
         let max_inclusive = LitInt::new(&self.max_inclusive.to_string(), Span::call_site());
         tokens.extend(quote! {
-            ClampedNormalIntProvider { 
-                mean: #mean, 
-                deviation: #deviation, 
-                min_inclusive: #min_inclusive, 
-                max_inclusive: #max_inclusive 
+            ClampedNormalIntProvider {
+                mean: #mean,
+                deviation: #deviation,
+                min_inclusive: #min_inclusive,
+                max_inclusive: #max_inclusive
             }
         });
     }
@@ -261,7 +270,12 @@ impl ToTokens for ClampedNormalIntProvider {
 
 impl ClampedNormalIntProvider {
     pub fn new(mean: f32, deviation: f32, min_inclusive: i32, max_inclusive: i32) -> Self {
-        Self { mean, deviation, min_inclusive, max_inclusive }
+        Self {
+            mean,
+            deviation,
+            min_inclusive,
+            max_inclusive,
+        }
     }
 
     pub fn get_min(&self) -> i32 {
@@ -316,7 +330,8 @@ impl WeightedListIntProvider {
     }
 
     pub fn get_min(&self) -> i32 {
-        self.distribution.iter()
+        self.distribution
+            .iter()
             .map(|entry| entry.data.get_min())
             .min()
             .unwrap_or(0)
@@ -328,9 +343,7 @@ impl WeightedListIntProvider {
         }
 
         // Calculate total weight
-        let total_weight: i32 = self.distribution.iter()
-            .map(|entry| entry.weight)
-            .sum();
+        let total_weight: i32 = self.distribution.iter().map(|entry| entry.weight).sum();
 
         if total_weight == 0 {
             return 0;
@@ -353,7 +366,8 @@ impl WeightedListIntProvider {
     }
 
     pub fn get_max(&self) -> i32 {
-        self.distribution.iter()
+        self.distribution
+            .iter()
             .map(|entry| entry.data.get_max())
             .max()
             .unwrap_or(0)
@@ -379,17 +393,20 @@ impl ToTokens for UniformIntProvider {
 
 impl UniformIntProvider {
     pub fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
-        Self { min_inclusive, max_inclusive }
+        Self {
+            min_inclusive,
+            max_inclusive,
+        }
     }
 
     pub fn get_min(&self) -> i32 {
         self.min_inclusive
     }
-    
+
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         random.next_inbetween_i32(self.min_inclusive, self.max_inclusive)
     }
-    
+
     pub fn get_max(&self) -> i32 {
         self.max_inclusive
     }
@@ -402,9 +419,11 @@ mod tests {
 
     #[test]
     fn test_constant_int_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = ConstantIntProvider::new(42);
-        
+
         assert_eq!(provider.get_min(), 42);
         assert_eq!(provider.get_max(), 42);
         assert_eq!(provider.get(&mut random), 42);
@@ -413,101 +432,134 @@ mod tests {
 
     #[test]
     fn test_uniform_int_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = UniformIntProvider::new(1, 10);
-        
+
         assert_eq!(provider.get_min(), 1);
         assert_eq!(provider.get_max(), 10);
-        
+
         // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((1..=10).contains(&value), "Value {} is outside range [1, 10]", value);
+            assert!(
+                (1..=10).contains(&value),
+                "Value {} is outside range [1, 10]",
+                value
+            );
         }
     }
 
     #[test]
     fn test_biased_to_bottom_int_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = BiasedToBottomIntProvider::new(1, 20);
-        
+
         assert_eq!(provider.get_min(), 1);
         assert_eq!(provider.get_max(), 20);
-        
+
         // Test that values are within range (biased toward lower values)
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((1..=20).contains(&value), "Value {} is outside range [1, 20]", value);
+            assert!(
+                (1..=20).contains(&value),
+                "Value {} is outside range [1, 20]",
+                value
+            );
         }
     }
 
     #[test]
     fn test_clamped_normal_int_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = ClampedNormalIntProvider::new(5.0, 2.0, 1, 10);
-        
+
         assert_eq!(provider.get_min(), 1);
         assert_eq!(provider.get_max(), 10);
-        
+
         // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((1..=10).contains(&value), "Value {} is outside range [1, 10]", value);
+            assert!(
+                (1..=10).contains(&value),
+                "Value {} is outside range [1, 10]",
+                value
+            );
         }
     }
 
     #[test]
     fn test_clamped_int_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
-        let source = IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider::new(1, 100)));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
+        let source =
+            IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider::new(1, 100)));
         let provider = ClampedIntProvider::new(source, 5, 15);
-        
+
         assert_eq!(provider.get_min(), 5);
         assert_eq!(provider.get_max(), 15);
-        
+
         // Test that values are within clamped range
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((5..=15).contains(&value), "Value {} is outside clamped range [5, 15]", value);
+            assert!(
+                (5..=15).contains(&value),
+                "Value {} is outside clamped range [5, 15]",
+                value
+            );
         }
     }
 
     #[test]
     fn test_weighted_list_int_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
-        
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
+
         let entries = vec![
-            WeightedEntry { 
-                data: IntProvider::Constant(1), 
-                weight: 10 
+            WeightedEntry {
+                data: IntProvider::Constant(1),
+                weight: 10,
             },
-            WeightedEntry { 
-                data: IntProvider::Constant(2), 
-                weight: 20 
+            WeightedEntry {
+                data: IntProvider::Constant(2),
+                weight: 20,
             },
-            WeightedEntry { 
-                data: IntProvider::Constant(3), 
-                weight: 5 
+            WeightedEntry {
+                data: IntProvider::Constant(3),
+                weight: 5,
             },
         ];
-        
+
         let provider = WeightedListIntProvider::new(entries);
-        
+
         assert_eq!(provider.get_min(), 1);
         assert_eq!(provider.get_max(), 3);
-        
+
         // Test that values are from the weighted list
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((1..=3).contains(&value), "Value {} is not from the weighted list", value);
+            assert!(
+                (1..=3).contains(&value),
+                "Value {} is not from the weighted list",
+                value
+            );
         }
     }
 
     #[test]
     fn test_int_provider_enum_constant() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = IntProvider::Constant(25);
-        
+
         assert_eq!(provider.get_min(), 25);
         assert_eq!(provider.get_max(), 25);
         assert_eq!(provider.get(&mut random), 25);
@@ -515,14 +567,20 @@ mod tests {
 
     #[test]
     fn test_int_provider_enum_object() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let uniform = UniformIntProvider::new(5, 15);
         let provider = IntProvider::Object(NormalIntProvider::Uniform(uniform));
-        
+
         assert_eq!(provider.get_min(), 5);
         assert_eq!(provider.get_max(), 15);
-        
+
         let value = provider.get(&mut random);
-        assert!((5..=15).contains(&value), "Value {} is outside range [5, 15]", value);
+        assert!(
+            (5..=15).contains(&value),
+            "Value {} is outside range [5, 15]",
+            value
+        );
     }
 }

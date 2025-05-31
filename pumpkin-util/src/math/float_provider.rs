@@ -1,8 +1,8 @@
-use serde::Deserialize;
+use crate::random::RandomImpl;
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
+use serde::Deserialize;
 use syn::LitFloat;
-use crate::random::RandomImpl;
 
 #[derive(Deserialize, Clone)]
 #[serde(tag = "type")]
@@ -154,7 +154,10 @@ impl ToTokens for UniformFloatProvider {
 
 impl UniformFloatProvider {
     pub fn new(min_inclusive: f32, max_exclusive: f32) -> Self {
-        Self { min_inclusive, max_exclusive }
+        Self {
+            min_inclusive,
+            max_exclusive,
+        }
     }
 
     pub fn get_min(&self) -> f32 {
@@ -187,11 +190,11 @@ impl ToTokens for ClampedNormalFloatProvider {
         let min = LitFloat::new(&self.min.to_string(), Span::call_site());
         let max = LitFloat::new(&self.max.to_string(), Span::call_site());
         tokens.extend(quote! {
-            ClampedNormalFloatProvider { 
-                mean: #mean, 
-                deviation: #deviation, 
-                min: #min, 
-                max: #max 
+            ClampedNormalFloatProvider {
+                mean: #mean,
+                deviation: #deviation,
+                min: #min,
+                max: #max
             }
         });
     }
@@ -199,7 +202,12 @@ impl ToTokens for ClampedNormalFloatProvider {
 
 impl ClampedNormalFloatProvider {
     pub fn new(mean: f32, deviation: f32, min: f32, max: f32) -> Self {
-        Self { mean, deviation, min, max }
+        Self {
+            mean,
+            deviation,
+            min,
+            max,
+        }
     }
 
     pub fn get_min(&self) -> f32 {
@@ -210,7 +218,7 @@ impl ClampedNormalFloatProvider {
         // Generate normal distribution value
         let gaussian = random.next_gaussian() as f32;
         let value = self.mean + gaussian * self.deviation;
-        
+
         // Clamp to min/max range
         value.clamp(self.min, self.max)
     }
@@ -233,10 +241,10 @@ impl ToTokens for TrapezoidFloatProvider {
         let max = LitFloat::new(&self.max.to_string(), Span::call_site());
         let plateau = LitFloat::new(&self.plateau.to_string(), Span::call_site());
         tokens.extend(quote! {
-            TrapezoidFloatProvider { 
-                min: #min, 
-                max: #max, 
-                plateau: #plateau 
+            TrapezoidFloatProvider {
+                min: #min,
+                max: #max,
+                plateau: #plateau
             }
         });
     }
@@ -256,9 +264,9 @@ impl TrapezoidFloatProvider {
         let range = self.max - self.min;
         let plateau_range = range * self.plateau;
         let ramp_range = (range - plateau_range) * 0.5;
-        
+
         let random_value = random.next_f32();
-        
+
         if random_value < 0.5 - self.plateau * 0.5 {
             // Left ramp: quadratic distribution biased toward plateau
             let scaled = random_value / (0.5 - self.plateau * 0.5);
@@ -288,9 +296,11 @@ mod tests {
 
     #[test]
     fn test_constant_float_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = ConstantFloatProvider::new(5.5);
-        
+
         assert_eq!(provider.get_min(), 5.5);
         assert_eq!(provider.get_max(), 5.5);
         assert_eq!(provider.get(&mut random), 5.5);
@@ -299,54 +309,74 @@ mod tests {
 
     #[test]
     fn test_uniform_float_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = UniformFloatProvider::new(1.0, 5.0);
-        
+
         assert_eq!(provider.get_min(), 1.0);
         assert_eq!(provider.get_max(), 5.0);
-        
+
         // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((1.0..5.0).contains(&value), "Value {} is outside range [1.0, 5.0)", value);
+            assert!(
+                (1.0..5.0).contains(&value),
+                "Value {} is outside range [1.0, 5.0)",
+                value
+            );
         }
     }
 
     #[test]
     fn test_clamped_normal_float_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = ClampedNormalFloatProvider::new(3.0, 1.0, 1.0, 5.0);
-        
+
         assert_eq!(provider.get_min(), 1.0);
         assert_eq!(provider.get_max(), 5.0);
-        
+
         // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((1.0..=5.0).contains(&value), "Value {} is outside range [1.0, 5.0]", value);
+            assert!(
+                (1.0..=5.0).contains(&value),
+                "Value {} is outside range [1.0, 5.0]",
+                value
+            );
         }
     }
 
     #[test]
     fn test_trapezoid_float_provider() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = TrapezoidFloatProvider::new(0.0, 10.0, 0.5);
-        
+
         assert_eq!(provider.get_min(), 0.0);
         assert_eq!(provider.get_max(), 10.0);
-        
+
         // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
-            assert!((0.0..=10.0).contains(&value), "Value {} is outside range [0.0, 10.0]", value);
+            assert!(
+                (0.0..=10.0).contains(&value),
+                "Value {} is outside range [0.0, 10.0]",
+                value
+            );
         }
     }
 
     #[test]
     fn test_float_provider_enum_constant() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let provider = FloatProvider::Constant(7.5);
-        
+
         assert_eq!(provider.get_min(), 7.5);
         assert_eq!(provider.get_max(), 7.5);
         assert_eq!(provider.get(&mut random), 7.5);
@@ -354,16 +384,20 @@ mod tests {
 
     #[test]
     fn test_float_provider_enum_object() {
-        let mut random = RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()));
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
         let uniform = UniformFloatProvider::new(2.0, 8.0);
         let provider = FloatProvider::Object(NormalFloatProvider::Uniform(uniform));
-        
+
         assert_eq!(provider.get_min(), 2.0);
         assert_eq!(provider.get_max(), 8.0);
-        
+
         let value = provider.get(&mut random);
-        assert!((2.0..8.0).contains(&value), "Value {} is outside range [2.0, 8.0)", value);
+        assert!(
+            (2.0..8.0).contains(&value),
+            "Value {} is outside range [2.0, 8.0)",
+            value
+        );
     }
 }
-
-
