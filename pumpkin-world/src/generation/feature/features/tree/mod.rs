@@ -1,3 +1,4 @@
+use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::{Block, tag::Tagable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
@@ -9,6 +10,7 @@ use crate::{
     generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize},
 };
 
+mod decorator;
 mod foliage;
 mod trunk;
 
@@ -22,6 +24,7 @@ pub struct TreeFeature {
     minimum_size: FeatureSize,
     ignore_vines: bool,
     force_dirt: bool,
+    decorators: Vec<TreeDecorator>,
 }
 
 pub struct TreeNode {
@@ -41,7 +44,11 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        self.generate_main(chunk, min_y, height, feature_name, random, pos);
+        let log_positions = self.generate_main(chunk, min_y, height, feature_name, random, pos);
+
+        for decorator in &self.decorators {
+            decorator.generate(chunk, random, Vec::new(), log_positions.clone());
+        }
         true
     }
 
@@ -70,16 +77,16 @@ impl TreeFeature {
         _feature_name: &str, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
-    ) {
+    ) -> Vec<BlockPos> {
         let height = self.trunk_placer.get_height(random);
 
         let clipped_height = self.minimum_size.min_clipped_height;
         let top = self.get_top(height, chunk, pos); // TODO: roots   
         if top < height && (clipped_height.is_none() || top < clipped_height.unwrap() as u32) {
-            return;
+            return vec![];
         }
         let trunk_state = self.trunk_provider.get(random, pos);
-        let nodes = self
+        let (nodes, logs) = self
             .trunk_placer
             .generate(top, pos, chunk, random, &trunk_state);
 
@@ -99,6 +106,7 @@ impl TreeFeature {
                 &foliage_state,
             );
         }
+        logs
     }
 
     fn get_top(&self, height: u32, chunk: &ProtoChunk, init_pos: BlockPos) -> u32 {

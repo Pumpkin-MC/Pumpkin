@@ -27,7 +27,10 @@ use super::features::{
     delta_feature::DeltaFeatureFeature,
     desert_well::DesertWellFeature,
     disk::DiskFeature,
-    dripstone_cluster::DripstoneClusterFeature,
+    drip_stone::{
+        cluster::DripstoneClusterFeature, large::LargeDripstoneFeature,
+        small::SmallDripstoneFeature,
+    },
     end_gateway::EndGatewayFeature,
     end_island::EndIslandFeature,
     end_platform::EndPlatformFeature,
@@ -46,13 +49,11 @@ use super::features::{
     iceberg::IcebergFeature,
     kelp::KelpFeature,
     lake::LakeFeature,
-    large_dripstone::LargeDripstoneFeature,
     monster_room::DungeonFeature,
     multiface_growth::MultifaceGrowthFeature,
     nether_forest_vegetation::NetherForestVegetationFeature,
     netherrack_replace_blobs::ReplaceBlobsFeature,
     ore::OreFeature,
-    pointed_dripstone::SmallDripstoneFeature,
     random_boolean_selector::RandomBooleanFeature,
     random_patch::RandomPatchFeature,
     random_selector::RandomFeature,
@@ -225,6 +226,7 @@ impl ConfiguredFeature {
         pos: BlockPos,
     ) -> bool {
         match self {
+            Self::PointedDripstone(feature) => feature.generate(chunk, random, pos),
             Self::CoralMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }

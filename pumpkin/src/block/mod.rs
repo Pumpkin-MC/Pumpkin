@@ -21,6 +21,8 @@ use blocks::piston::piston_head::PistonHeadBlock;
 use blocks::plant::bush::BushBlock;
 use blocks::plant::dry_vegetation::DryVegetationBlock;
 use blocks::plant::flower::FlowerBlock;
+use blocks::plant::flowerbed::FlowerbedBlock;
+use blocks::plant::leaf_litter::LeafLitterBlock;
 use blocks::plant::lily_pad::LilyPadBlock;
 use blocks::plant::mushroom_plant::MushroomPlantBlock;
 use blocks::plant::sapling::SaplingBlock;
@@ -47,6 +49,7 @@ use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
 use blocks::trapdoor::TrapDoorBlock;
+use blocks::vine::VineBlock;
 use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
@@ -108,12 +111,15 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
+    manager.register(VineBlock);
     manager.register(TNTBlock);
     manager.register(BushBlock);
     manager.register(FlowerBlock);
     manager.register(TorchBlock);
     manager.register(TrapDoorBlock);
     manager.register(MushroomPlantBlock);
+    manager.register(FlowerbedBlock);
+    manager.register(LeafLitterBlock);
     manager.register(WallBlock);
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);

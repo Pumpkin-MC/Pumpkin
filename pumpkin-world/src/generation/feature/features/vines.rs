@@ -25,7 +25,13 @@ impl VinesFeature {
             return false;
         }
         for dir in BlockDirection::all() {
-            if dir == BlockDirection::Down {
+            // TODO
+            if dir == BlockDirection::Down
+                || chunk
+                    .get_block_state(&pos.offset(dir.to_offset()).0)
+                    .to_state()
+                    .is_full_cube()
+            {
                 continue;
             }
             let mut vine =

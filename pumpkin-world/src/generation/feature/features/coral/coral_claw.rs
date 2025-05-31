@@ -50,8 +50,9 @@ impl CoralClawFeature {
                 pos = pos.up();
                 let directions = [direction2, BlockDirection::Up];
                 direction3 = directions[random
-                    .next_bounded_i32(BlockDirection::horizontal().len() as i32 - 1)
-                    as usize];
+                    .next_bounded_i32(BlockDirection::horizontal().len() as i32)
+                    as usize
+                    - 1];
                 k = random.next_bounded_i32(3) + 5;
             }
 

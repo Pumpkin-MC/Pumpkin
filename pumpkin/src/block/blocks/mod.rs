@@ -29,4 +29,5 @@ pub mod sugar_cane;
 pub mod tnt;
 pub mod torches;
 pub mod trapdoor;
+pub mod vine;
 pub mod walls;

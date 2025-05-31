@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
@@ -12,6 +13,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
 use crate::generation::block_predicate::BlockPredicate;
+use crate::generation::height_limit::HeightLimitView;
 use crate::generation::height_provider::HeightProvider;
 use crate::world::BlockRegistryExt;
 use crate::{HeightMap, ProtoChunk};
@@ -133,7 +135,7 @@ pub enum PlacementModifier {
     #[serde(rename = "minecraft:count_on_every_layer")]
     CountOnEveryLayer,
     #[serde(rename = "minecraft:environment_scan")]
-    EnvironmentScan,
+    EnvironmentScan(EnvironmentScanPlacementModifier),
     #[serde(rename = "minecraft:heightmap")]
     Heightmap(HeightmapPlacementModifier),
     #[serde(rename = "minecraft:height_range")]
@@ -177,9 +179,11 @@ impl PlacementModifier {
             PlacementModifier::NoiseBasedCount(modifier) => {
                 Box::new(modifier.get_positions(random, pos))
             }
-            PlacementModifier::NoiseThresholdCount(feature) => feature.get_positions(random, pos),
+            PlacementModifier::NoiseThresholdCount(modifier) => modifier.get_positions(random, pos),
             PlacementModifier::CountOnEveryLayer => Box::new(iter::empty()),
-            PlacementModifier::EnvironmentScan => Box::new(iter::empty()),
+            PlacementModifier::EnvironmentScan(modifier) => {
+                modifier.get_positions(chunk, block_registry, pos)
+            }
             PlacementModifier::Heightmap(modifier) => {
                 modifier.get_positions(chunk, min_y, height, random, pos)
             }
@@ -228,6 +232,52 @@ impl CountPlacementModifierBase for NoiseThresholdCountPlacementModifier {
         } else {
             self.above_noise
         }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct EnvironmentScanPlacementModifier {
+    direction_of_search: BlockDirection,
+    target_condition: BlockPredicate,
+    allowed_search_condition: Option<BlockPredicate>,
+    max_steps: i32,
+}
+
+impl EnvironmentScanPlacementModifier {
+    pub fn get_positions(
+        &self,
+        chunk: &ProtoChunk,
+        block_registry: &dyn BlockRegistryExt,
+        pos: BlockPos,
+    ) -> Box<dyn Iterator<Item = BlockPos>> {
+        let allowed_search_condition = self
+            .allowed_search_condition
+            .as_ref()
+            .unwrap_or(&BlockPredicate::AlwaysTrueBlockPredicate);
+
+        if !allowed_search_condition.test(block_registry, chunk, &pos) {
+            return Box::new(iter::empty());
+        }
+        let mut pos = pos;
+        for _ in 0..self.max_steps {
+            if self.target_condition.test(block_registry, chunk, &pos) {
+                return Box::new(iter::once(pos));
+            }
+            pos = pos.offset(self.direction_of_search.to_offset());
+
+            if chunk.out_of_height(pos.0.y as i16) {
+                return Box::new(iter::empty());
+            }
+
+            if !allowed_search_condition.test(block_registry, chunk, &pos) {
+                break;
+            }
+        }
+        if self.target_condition.test(block_registry, chunk, &pos) {
+            return Box::new(iter::once(pos));
+        }
+
+        Box::new(iter::empty())
     }
 }
 
@@ -343,7 +393,6 @@ impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
     fn should_place(
         &self,
         block_registry: &dyn BlockRegistryExt,
-
         _feature: &str,
         chunk: &ProtoChunk,
         _random: &mut RandomGenerator,

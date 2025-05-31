@@ -3,7 +3,13 @@ use pumpkin_data::{
 };
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,
-    math::{clamped_map, position::BlockPos, vector3::Vector3},
+    math::{
+        clamped_map,
+        int_provider::IntProvider,
+        pool::{Pool, Weighted},
+        position::BlockPos,
+        vector3::Vector3,
+    },
     random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand},
 };
 use serde::Deserialize;
@@ -39,21 +45,30 @@ impl BlockStateProvider {
             }
             BlockStateProvider::NoiseProvider(provider) => provider.get(pos),
             BlockStateProvider::SimpleStateProvider(provider) => provider.get(pos),
-            BlockStateProvider::WeightedBlockStateProvider(weighted_block_state_provider) => {
-                // TODO
-                get_state_by_state_id(Block::AIR.default_state_id).unwrap()
-            }
+            BlockStateProvider::WeightedBlockStateProvider(provider) => provider.get(random),
             BlockStateProvider::DualNoiseBlockStateProvider(provider) => provider.get(pos),
             BlockStateProvider::PillarBlockStateProvider(pillar_block_state_provider) => todo!(),
-            BlockStateProvider::RandomizedIntBlockStateProvider(
-                randomized_int_block_state_provider,
-            ) => todo!(),
+            BlockStateProvider::RandomizedIntBlockStateProvider(provider) => {
+                provider.get(random, pos)
+            }
         }
     }
 }
 
 #[derive(Deserialize)]
-pub struct RandomizedIntBlockStateProvider {}
+pub struct RandomizedIntBlockStateProvider {
+    source: Box<BlockStateProvider>,
+    property: String,
+    values: IntProvider,
+}
+
+impl RandomizedIntBlockStateProvider {
+    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> BlockState {
+        let state = self.source.get(random, pos);
+        // TODO
+        state
+    }
+}
 
 #[derive(Deserialize)]
 pub struct PillarBlockStateProvider {
@@ -111,7 +126,16 @@ impl DualNoiseBlockStateProvider {
 
 #[derive(Deserialize)]
 pub struct WeightedBlockStateProvider {
-    // TODO
+    entries: Vec<Weighted<BlockStateCodec>>,
+}
+
+impl WeightedBlockStateProvider {
+    pub fn get(&self, random: &mut RandomGenerator) -> BlockState {
+        Pool.get(&self.entries, random)
+            .unwrap()
+            .get_state()
+            .unwrap()
+    }
 }
 
 #[derive(Deserialize)]

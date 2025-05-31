@@ -7,6 +7,8 @@ use syn::LitInt;
 
 use crate::random::{RandomGenerator, RandomImpl};
 
+use super::pool::{Pool, Weighted};
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum NormalIntProvider {
@@ -165,30 +167,7 @@ impl ClampedIntProvider {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WeightedListIntProvider {
-    distribution: Vec<Weighted>,
-}
-
-#[derive(Deserialize, Clone, Debug)]
-struct Weighted {
-    data: IntProvider,
-    weight: i32,
-}
-
-struct FlattenedContent;
-
-impl FlattenedContent {
-    pub fn get(index: i32, entries: &[Weighted], total_weight: i32) -> IntProvider {
-        let mut final_entries = Vec::with_capacity(total_weight as usize);
-        let mut cur_index = 0;
-        for entry in entries {
-            let weight = entry.weight;
-            for i in cur_index..cur_index + weight {
-                final_entries.insert(i as usize, entry.data.clone());
-            }
-            cur_index += weight;
-        }
-        final_entries[index as usize].clone()
-    }
+    distribution: Vec<Weighted<IntProvider>>,
 }
 
 impl WeightedListIntProvider {
@@ -201,21 +180,8 @@ impl WeightedListIntProvider {
         min
     }
     pub fn get(&self, random: &mut RandomGenerator) -> i32 {
-        let mut total_weight = 0;
-        for dist in &self.distribution {
-            total_weight += dist.weight;
-        }
-        let index = random.next_bounded_i32(total_weight);
-        if total_weight < 64 {
-            return FlattenedContent::get(index, &self.distribution, total_weight).get(random);
-        } else {
-            // WrappedContent
-            for dist in &self.distribution {
-                if index - dist.weight >= 0 {
-                    continue;
-                }
-                return dist.data.get(random);
-            }
+        if let Some(int) = Pool.get(&self.distribution, random) {
+            return int.get(random);
         }
         0
     }

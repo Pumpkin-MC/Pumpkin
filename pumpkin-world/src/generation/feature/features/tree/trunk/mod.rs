@@ -44,7 +44,7 @@ impl TrunkPlacer {
         chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         trunk_block: &BlockState,
-    ) -> Vec<TreeNode> {
+    ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         self.r#type
             .generate(self, height, start_pos, chunk, random, trunk_block)
     }
@@ -81,21 +81,21 @@ impl TrunkType {
         chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         trunk_block: &BlockState,
-    ) -> Vec<TreeNode> {
+    ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         match self {
             Self::Straight => {
                 StraightTrunkPlacer::generate(placer, height, start_pos, chunk, trunk_block)
             }
-            TrunkType::Forking => vec![],    // TODO
-            TrunkType::Giant => vec![],      // TODO
-            TrunkType::MegaJungle => vec![], // TODO
-            TrunkType::DarkOak => vec![],    // TODO
+            TrunkType::Forking => (vec![], vec![]),    // TODO
+            TrunkType::Giant => (vec![], vec![]),      // TODO
+            TrunkType::MegaJungle => (vec![], vec![]), // TODO
+            TrunkType::DarkOak => (vec![], vec![]),    // TODO
             TrunkType::Fancy => {
                 FancyTrunkPlacer::generate(placer, height, start_pos, chunk, random, trunk_block)
             }
-            TrunkType::Bending => vec![],          // TODO
-            TrunkType::UpwardsBranching => vec![], // TODO
-            TrunkType::Cherry => vec![],           // TODO
+            TrunkType::Bending => (vec![], vec![]), // TODO
+            TrunkType::UpwardsBranching => (vec![], vec![]), // TODO
+            TrunkType::Cherry => (vec![], vec![]),  // TODO
         }
     }
 }

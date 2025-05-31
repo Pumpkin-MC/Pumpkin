@@ -21,14 +21,14 @@ impl SpruceFoliagePlacer {
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
-        _radius: i32,
+        iradius: i32,
         offset: i32,
         foliage_provider: &BlockState,
     ) {
         let mut radius = random.next_bounded_i32(2);
         let mut max = 1;
         let mut next = 0;
-        for y in offset..-foliage_height {
+        for y in ((-foliage_height)..=offset).rev() {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -42,7 +42,7 @@ impl SpruceFoliagePlacer {
             if radius >= max {
                 radius = next;
                 next = 1;
-                max = (radius + node.foliage_radius).min(max + 1);
+                max = (iradius + node.foliage_radius).min(max + 1);
                 continue;
             }
             radius += 1;

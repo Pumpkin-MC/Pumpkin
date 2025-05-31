@@ -16,14 +16,21 @@ impl StraightTrunkPlacer {
         start_pos: BlockPos,
         chunk: &mut ProtoChunk,
         trunk_block: &BlockState,
-    ) -> Vec<TreeNode> {
+    ) -> (Vec<TreeNode>, Vec<BlockPos>) {
+        let mut logs = Vec::new();
         for i in 0..height {
-            placer.place(chunk, &start_pos.up_height(i as i32), trunk_block);
+            let pos = start_pos.up_height(i as i32);
+            if placer.place(chunk, &pos, trunk_block) {
+                logs.push(pos);
+            }
         }
-        vec![TreeNode {
-            center: start_pos.up_height(height as i32),
-            foliage_radius: 0,
-            giant_trunk: false,
-        }]
+        (
+            vec![TreeNode {
+                center: start_pos.up_height(height as i32),
+                foliage_radius: 0,
+                giant_trunk: false,
+            }],
+            logs,
+        )
     }
 }

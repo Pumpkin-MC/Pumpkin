@@ -28,7 +28,7 @@ impl SpringFeatureFeature {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        // i don't think this is the most efficent way, but it works
+        // i don't think this is the most efficient way, but it works
         let valid_blocks = match self.valid_blocks.clone() {
             BlockWrapper::Single(item) => vec![item],
             BlockWrapper::Multi(items) => items,

@@ -28,7 +28,7 @@ impl FancyTrunkPlacer {
         chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         trunk_block: &BlockState,
-    ) -> Vec<TreeNode> {
+    ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let j = height as i32 + 2;
         let k = ((j as f64) * 0.618).floor() as i32;
 
@@ -37,6 +37,7 @@ impl FancyTrunkPlacer {
         let l = ((1.382 + (1.0 * (j as f64) / 13.0).powf(2.0)).floor() as i32).min(1);
         let m = start_pos.0.y + k;
         let mut list: Vec<BranchPosition> = Vec::new();
+        let mut logs = Vec::new();
 
         list.push(BranchPosition::new(start_pos, m));
 
@@ -55,13 +56,16 @@ impl FancyTrunkPlacer {
                 let block_pos = start_pos.add(p.floor() as i32, n - 1, q.floor() as i32);
                 let block_pos_2 = block_pos.up_height(5);
 
-                if !Self::make_or_check_branch(
+                let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
                     block_pos.0,
                     block_pos_2.0,
                     trunk_block,
                     false,
-                ) {
+                );
+                logs.extend_from_slice(&new_logs);
+
+                if !i {
                     continue;
                 }
 
@@ -72,13 +76,16 @@ impl FancyTrunkPlacer {
 
                 let block_pos_3 = BlockPos::new(start_pos.0.x, u, start_pos.0.z);
 
-                if !Self::make_or_check_branch(
+                let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
                     block_pos_3.0,
                     block_pos.0,
                     trunk_block,
                     false,
-                ) {
+                );
+                logs.extend_from_slice(&new_logs);
+
+                if !i {
                     continue;
                 }
                 list.push(BranchPosition::new(block_pos, block_pos_3.0.y));
@@ -100,7 +107,7 @@ impl FancyTrunkPlacer {
                 list_2.push(branch_position.node);
             }
         }
-        list_2
+        (list_2, logs)
     }
 
     fn make_or_check_branch(
@@ -109,9 +116,9 @@ impl FancyTrunkPlacer {
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
         make: bool,
-    ) -> bool {
+    ) -> (bool, Vec<BlockPos>) {
         if !make && start_pos == branch_pos {
-            return true;
+            return (true, vec![]);
         }
 
         let block_pos_offset = Vector3::new(
@@ -125,6 +132,7 @@ impl FancyTrunkPlacer {
         let g = block_pos_offset.y as f32 / i as f32;
         let h = block_pos_offset.z as f32 / i as f32;
 
+        let mut logs = Vec::new();
         for j in 0..=i {
             let block_pos_2 = BlockPos(start_pos.add_raw(
                 (0.5f32 + j as f32 * f).floor() as i32,
@@ -159,15 +167,16 @@ impl FancyTrunkPlacer {
                         )
                         .unwrap(),
                     );
+                    logs.push(block_pos_2);
                     continue;
                 }
             }
             if TreeFeature::can_replace_or_log(&chunk, &block_pos_2) {
                 continue;
             }
-            return false;
+            return (false, logs);
         }
-        true
+        (true, logs)
     }
 
     fn make_branches(
