@@ -27,7 +27,7 @@ impl VinesFeature {
         for dir in BlockDirection::all() {
             // TODO
             if dir == BlockDirection::Down
-                || chunk
+                || !chunk
                     .get_block_state(&pos.offset(dir.to_offset()).0)
                     .to_state()
                     .is_full_cube()
