@@ -26,10 +26,10 @@ impl PumpkinBlock for LeafLitterBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: Option<&World>,
+        _world: Option<&World>,
         block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
-        block: &Block,
+        _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,

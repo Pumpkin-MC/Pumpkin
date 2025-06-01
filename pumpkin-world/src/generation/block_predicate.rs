@@ -43,10 +43,10 @@ pub enum BlockPredicate {
 }
 
 impl BlockPredicate {
-    pub fn test(
+    pub async fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
         match self {
@@ -57,17 +57,17 @@ impl BlockPredicate {
             BlockPredicate::SolidBlockPredicate(predicate) => predicate.test(chunk, pos),
             BlockPredicate::ReplaceableBlockPredicate(predicate) => predicate.test(chunk, pos),
             BlockPredicate::WouldSurviveBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos)
+                predicate.test(block_registry, chunk, pos).await
             }
             BlockPredicate::InsideWorldBoundsBlockPredicate(predicate) => false,
             BlockPredicate::AnyOfBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos)
+                predicate.test(block_registry, chunk, pos).await
             }
             BlockPredicate::AllOfBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos)
+                predicate.test(block_registry, chunk, pos).await
             }
             BlockPredicate::NotBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos)
+                predicate.test(block_registry, chunk, pos).await
             }
             BlockPredicate::AlwaysTrueBlockPredicate => true,
             BlockPredicate::UnobstructedBlockPredicate(predicate) => false,
@@ -131,14 +131,14 @@ pub struct AnyOfBlockPredicate {
 }
 
 impl AnyOfBlockPredicate {
-    pub fn test(
+    pub async fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
-            if !predicate.test(block_registry, chunk, pos) {
+            if !Box::pin(predicate.test(block_registry, chunk, pos)).await {
                 continue;
             }
             return true;
@@ -153,14 +153,14 @@ pub struct AllOfBlockPredicate {
 }
 
 impl AllOfBlockPredicate {
-    pub fn test(
+    pub async fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
-            if predicate.test(block_registry, chunk, pos) {
+            if Box::pin(predicate.test(block_registry, chunk, pos)).await {
                 continue;
             }
             return false;
@@ -175,13 +175,13 @@ pub struct NotBlockPredicate {
 }
 
 impl NotBlockPredicate {
-    pub fn test(
+    pub async fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
-        !self.predicate.test(block_registry, chunk, pos)
+        !Box::pin(self.predicate.test(block_registry, chunk, pos)).await
     }
 }
 
@@ -206,24 +206,22 @@ pub struct WouldSurviveBlockPredicate {
 }
 
 impl WouldSurviveBlockPredicate {
-    pub fn test(
+    pub async fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
         let state = self.state.get_state().unwrap();
         let pos = self.offset.get(pos);
-        futures::executor::block_on(async move {
-            return block_registry
-                .can_place_at(
-                    &get_block_by_state_id(state.id).unwrap(),
-                    chunk,
-                    &pos,
-                    BlockDirection::Up,
-                )
-                .await;
-        })
+        return block_registry
+            .can_place_at(
+                &get_block_by_state_id(state.id).unwrap(),
+                chunk,
+                &pos,
+                BlockDirection::Up,
+            )
+            .await;
     }
 }
 

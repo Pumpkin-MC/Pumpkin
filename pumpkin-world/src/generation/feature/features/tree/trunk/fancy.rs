@@ -1,4 +1,5 @@
 use core::f32;
+use std::sync::Arc;
 
 use pumpkin_data::{
     BlockState,
@@ -13,6 +14,7 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     generation::feature::features::tree::{TreeFeature, TreeNode},
+    level::Level,
 };
 
 use super::TrunkPlacer;
@@ -21,11 +23,12 @@ use super::TrunkPlacer;
 pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
-    pub fn generate(
+    pub async fn generate(
         _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
@@ -58,11 +61,13 @@ impl FancyTrunkPlacer {
 
                 let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
+                    level,
                     block_pos.0,
                     block_pos_2.0,
                     trunk_block,
                     false,
-                );
+                )
+                .await;
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -78,11 +83,13 @@ impl FancyTrunkPlacer {
 
                 let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
+                    level,
                     block_pos_3.0,
                     block_pos.0,
                     trunk_block,
                     false,
-                );
+                )
+                .await;
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -94,12 +101,14 @@ impl FancyTrunkPlacer {
 
         Self::make_or_check_branch(
             chunk,
+            level,
             start_pos.0,
             start_pos.up_height(k).0,
             trunk_block,
             true,
-        );
-        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
+        )
+        .await;
+        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list).await;
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -110,8 +119,9 @@ impl FancyTrunkPlacer {
         (list_2, logs)
     }
 
-    fn make_or_check_branch(
-        chunk: &mut ProtoChunk,
+    async fn make_or_check_branch(
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -157,16 +167,18 @@ impl FancyTrunkPlacer {
                             }
                         })
                         .collect();
-                    chunk.set_block_state(
-                        &block_pos_2.0,
-                        &get_state_by_state_id(
-                            block
-                                .from_properties(props_vec)
-                                .unwrap()
-                                .to_state_id(&block),
-                        )
-                        .unwrap(),
-                    );
+                    let state = block
+                        .from_properties(props_vec)
+                        .unwrap()
+                        .to_state_id(&block);
+                    if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
+                        chunk.set_block_state(
+                            &block_pos_2.0,
+                            &get_state_by_state_id(state).unwrap(),
+                        );
+                    } else {
+                        level.set_block_state(&block_pos_2, state).await;
+                    }
                     logs.push(block_pos_2);
                     continue;
                 }
@@ -179,8 +191,9 @@ impl FancyTrunkPlacer {
         (true, logs)
     }
 
-    fn make_branches(
-        chunk: &mut ProtoChunk,
+    async fn make_branches(
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         tree_height: i32,
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -196,11 +209,13 @@ impl FancyTrunkPlacer {
             }
             Self::make_or_check_branch(
                 chunk,
+                level,
                 block_pos.0,
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
-            );
+            )
+            .await;
         }
     }
 

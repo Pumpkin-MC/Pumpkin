@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use pumpkin_data::BlockState;
 use pumpkin_util::{math::int_provider::IntProvider, random::RandomGenerator};
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
+use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
 
 use super::{FoliagePlacer, LeaveValidator};
 
@@ -12,9 +14,10 @@ pub struct PineFoliagePlacer {
 }
 
 impl PineFoliagePlacer {
-    pub fn generate(
+    pub async fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
@@ -27,13 +30,15 @@ impl PineFoliagePlacer {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 node.center,
                 radius,
                 y,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
             if radius >= 1 && y == offset - foliage_height + 1 {
                 radius -= 1;
                 continue;

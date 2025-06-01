@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;

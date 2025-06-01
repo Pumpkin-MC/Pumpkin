@@ -10,6 +10,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
+use pumpkin_data::Block;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use tokio::{
     select,
@@ -343,9 +344,10 @@ impl Level {
         receiver
     }
 
-    pub async fn get_chunk(self: &Arc<Self>, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
-        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
-
+    pub async fn get_chunk(
+        self: &Arc<Self>,
+        chunk_coordinate: Vector2<i32>,
+    ) -> Arc<RwLock<ChunkData>> {
         match self.try_get_chunk(chunk_coordinate) {
             Some(chunk) => chunk.clone(),
             None => self.receive_chunk(chunk_coordinate).await.0,
@@ -364,14 +366,31 @@ impl Level {
             .expect("Channel closed for unknown reason")
     }
 
+    pub async fn get_block_state_id(self: &Arc<Self>, position: &BlockPos) -> BlockStateId {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(chunk_coordinate).await;
+
+        let chunk = chunk.read().await;
+        let Some(id) = chunk.section.get_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        ) else {
+            return Block::AIR.default_state_id;
+        };
+
+        id
+    }
+
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
         block_state_id: BlockStateId,
     ) -> BlockStateId {
-        let chunk = self.get_chunk(position).await;
-        let (_, relative) = position.chunk_and_chunk_relative_position();
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(chunk_coordinate).await;
         let mut chunk = chunk.write().await;
+
         let replaced_block_state_id = chunk
             .section
             .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
@@ -565,6 +584,7 @@ impl Level {
         let loaded_chunks = self.loaded_chunks.clone();
         let world_gen = self.world_gen.clone();
         let block_registry = self.block_registry.clone();
+        let self_clone = self.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -577,23 +597,31 @@ impl Level {
                 let channel = channel.clone();
                 let cloned_continue_to_generate = continue_to_generate.clone();
                 let block_registry = block_registry.clone();
+                let self_clone = self_clone.clone();
 
-                rayon::spawn(move || {
+                tokio::spawn(async move {
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
                         return;
                     }
 
-                    let result = loaded_chunks
-                        .entry(pos)
-                        .or_insert_with(|| {
-                            // Avoid possible duplicating work by doing this within the dashmap lock
-                            let generated_chunk =
-                                world_gen.generate_chunk(block_registry.as_ref(), &pos);
-                            Arc::new(RwLock::new(generated_chunk))
-                        })
+                    let result = {
+                        let entry = loaded_chunks.entry(pos); // Get the entry for the position
+
+                        // Check if the entry already exists.
+                        // If not, generate the chunk asynchronously and insert it.
+                        match entry {
+                            Entry::Occupied(entry) => entry.into_ref(),
+                            Entry::Vacant(entry) => {
+                                let generated_chunk = world_gen
+                                    .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
+                                    .await;
+                                entry.insert(Arc::new(RwLock::new(generated_chunk)))
+                            }
+                        }
                         .value()
-                        .clone();
+                        .clone()
+                    };
 
                     if !send_chunk(true, result, &channel) {
                         // Stop any additional queued generations

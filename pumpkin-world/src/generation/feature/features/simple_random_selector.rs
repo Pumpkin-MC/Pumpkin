@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -5,7 +7,8 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::{
-    ProtoChunk, generation::feature::placed_features::PlacedFeature, world::BlockRegistryExt,
+    ProtoChunk, generation::feature::placed_features::PlacedFeature, level::Level,
+    world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]
@@ -14,9 +17,10 @@ pub struct SimpleRandomFeature {
 }
 
 impl SimpleRandomFeature {
-    pub fn generate(
+    pub async fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -26,14 +30,16 @@ impl SimpleRandomFeature {
     ) -> bool {
         let i = random.next_bounded_i32(self.features.len() as i32);
         let feature = &self.features[i as usize];
-        feature.generate(
+        Box::pin(feature.generate(
             chunk,
+            level,
             block_registry,
             min_y,
             height,
             feature_name,
             random,
             pos,
-        )
+        ))
+        .await
     }
 }

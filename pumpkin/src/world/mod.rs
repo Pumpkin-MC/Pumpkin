@@ -1331,8 +1331,8 @@ impl World {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
-        let chunk = self.level.get_chunk(position).await;
-        let (_, relative) = position.chunk_and_chunk_relative_position();
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.get_chunk(chunk_coordinate).await;
         let mut chunk = chunk.write().await;
         let replaced_block_state_id = chunk
             .section
@@ -1537,25 +1537,9 @@ impl World {
             .await;
     }
 
-    pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        let chunk = self.level.get_chunk(position).await;
-        let (_, relative) = position.chunk_and_chunk_relative_position();
-
-        let chunk = chunk.read().await;
-        let Some(id) = chunk.section.get_block_absolute_y(
-            relative.x as usize,
-            relative.y,
-            relative.z as usize,
-        ) else {
-            return Block::AIR.default_state_id;
-        };
-
-        id
-    }
-
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
-        let id = self.get_block_state_id(position).await;
+        let id = self.level.get_block_state_id(position).await;
         get_block_by_state_id(id).unwrap_or(Block::AIR)
     }
 
@@ -1563,13 +1547,13 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
-        let id = self.get_block_state_id(position).await;
+        let id = self.level.get_block_state_id(position).await;
         Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
-        let id = self.get_block_state_id(position).await;
+        let id = self.level.get_block_state_id(position).await;
         get_state_by_state_id(id)
             .unwrap_or(get_state_by_state_id(Block::AIR.default_state_id).unwrap())
     }
@@ -1579,7 +1563,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
-        let id = self.get_block_state_id(position).await;
+        let id = self.level.get_block_state_id(position).await;
         get_block_and_state_by_state_id(id).unwrap_or((
             Block::AIR,
             get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
@@ -1682,7 +1666,10 @@ impl World {
         &self,
         block_pos: &BlockPos,
     ) -> Option<(NbtCompound, Arc<dyn BlockEntity>)> {
-        let chunk = self.level.get_chunk(block_pos).await;
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         chunk.block_entities.get(block_pos).cloned()
@@ -1690,7 +1677,10 @@ impl World {
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
-        let chunk = self.level.get_chunk(&block_pos).await;
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
@@ -1713,7 +1703,10 @@ impl World {
     }
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
-        let chunk = self.level.get_chunk(block_pos).await;
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         chunk.block_entities.remove(block_pos);
         chunk.dirty = true;

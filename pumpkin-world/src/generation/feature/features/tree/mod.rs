@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::{Block, tag::Tagable};
@@ -8,6 +10,7 @@ use trunk::TrunkPlacer;
 use crate::{
     ProtoChunk,
     generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize},
+    level::Level,
 };
 
 mod decorator;
@@ -34,9 +37,10 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
-    pub fn generate(
+    pub async fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         min_y: i8,
         height: u16,
         feature_name: &str, // This placed feature
@@ -44,7 +48,9 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        let log_positions = self.generate_main(chunk, min_y, height, feature_name, random, pos);
+        let log_positions = self
+            .generate_main(chunk, level, min_y, height, feature_name, random, pos)
+            .await;
 
         for decorator in &self.decorators {
             decorator.generate(chunk, random, Vec::new(), log_positions.clone());
@@ -58,7 +64,7 @@ impl TreeFeature {
         Self::can_replace(chunk, pos) || block.is_tagged_with("minecraft:logs").unwrap()
     }
 
-    pub fn can_replace(chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub async fn can_replace(chunk: &Level, pos: &BlockPos) -> bool {
         let state = chunk.get_block_state(&pos.0);
         let block = state.to_block();
         let state = state.to_state();
@@ -69,9 +75,10 @@ impl TreeFeature {
                 .unwrap()
     }
 
-    fn generate_main(
+    async fn generate_main(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         _min_y: i8,
         _height: u16,
         _feature_name: &str, // This placed feature
@@ -88,7 +95,8 @@ impl TreeFeature {
         let trunk_state = self.trunk_provider.get(random, pos);
         let (nodes, logs) = self
             .trunk_placer
-            .generate(top, pos, chunk, random, &trunk_state);
+            .generate(top, pos, chunk, level, random, &trunk_state)
+            .await;
 
         let foliage_height = self
             .foliage_placer
@@ -97,14 +105,17 @@ impl TreeFeature {
         let foliage_radius = self.foliage_placer.get_random_radius(random);
         let foliage_state = self.foliage_provider.get(random, pos);
         for node in nodes {
-            self.foliage_placer.generate(
-                chunk,
-                random,
-                &node,
-                foliage_height,
-                foliage_radius,
-                &foliage_state,
-            );
+            self.foliage_placer
+                .generate(
+                    chunk,
+                    level,
+                    random,
+                    &node,
+                    foliage_height,
+                    foliage_radius,
+                    &foliage_state,
+                )
+                .await;
         }
         logs
     }

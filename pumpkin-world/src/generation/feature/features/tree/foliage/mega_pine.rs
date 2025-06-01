@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
@@ -5,7 +7,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
+use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
 
 use super::{FoliagePlacer, LeaveValidator};
 
@@ -15,9 +17,10 @@ pub struct MegaPineFoliagePlacer {
 }
 
 impl MegaPineFoliagePlacer {
-    pub fn generate(
+    pub async fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
@@ -40,17 +43,19 @@ impl MegaPineFoliagePlacer {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 BlockPos::new(pos.0.x, y, pos.0.z),
                 radius,
                 0,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
             current = rad;
         }
     }
-    pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
+    pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
         self.crown_height.get(random)
     }
 }

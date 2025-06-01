@@ -26,9 +26,9 @@ struct Layer {
 }
 
 impl BlockColumnFeature {
-    pub fn generate(
+    pub async fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -54,9 +54,11 @@ impl BlockColumnFeature {
 
         let mut l = 0;
         while l < j {
-            if !self
-                .allowed_placement
-                .test(block_registry, chunk, &mutable2)
+            if !Box::pin(
+                self.allowed_placement
+                    .test(block_registry, chunk, &mutable2),
+            )
+            .await
             {
                 Self::adjust_layer_heights(&mut is, j, l, self.prioritize_tip);
                 break;

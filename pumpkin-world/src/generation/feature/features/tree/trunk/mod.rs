@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fancy::FancyTrunkPlacer;
 use pumpkin_data::BlockState;
 use pumpkin_util::{
@@ -7,7 +9,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 use straight::StraightTrunkPlacer;
 
-use crate::ProtoChunk;
+use crate::{ProtoChunk, level::Level};
 
 use super::{TreeFeature, TreeNode};
 
@@ -37,16 +39,18 @@ impl TrunkPlacer {
         false
     }
 
-    pub fn generate(
+    pub async fn generate(
         &self,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         self.r#type
-            .generate(self, height, start_pos, chunk, random, trunk_block)
+            .generate(self, height, start_pos, chunk, level, random, trunk_block)
+            .await
     }
 }
 
@@ -73,12 +77,13 @@ pub enum TrunkType {
 }
 
 impl TrunkType {
-    pub fn generate(
+    pub async fn generate(
         &self,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
@@ -91,7 +96,16 @@ impl TrunkType {
             TrunkType::MegaJungle => (vec![], vec![]), // TODO
             TrunkType::DarkOak => (vec![], vec![]),    // TODO
             TrunkType::Fancy => {
-                FancyTrunkPlacer::generate(placer, height, start_pos, chunk, random, trunk_block)
+                FancyTrunkPlacer::generate(
+                    placer,
+                    height,
+                    start_pos,
+                    chunk,
+                    level,
+                    random,
+                    trunk_block,
+                )
+                .await
             }
             TrunkType::Bending => (vec![], vec![]), // TODO
             TrunkType::UpwardsBranching => (vec![], vec![]), // TODO

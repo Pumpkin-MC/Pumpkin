@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use pumpkin_data::BlockState;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
+use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
 
 use super::{FoliagePlacer, LeaveValidator};
 
@@ -10,12 +12,13 @@ use super::{FoliagePlacer, LeaveValidator};
 pub struct DarkOakFoliagePlacer;
 
 impl DarkOakFoliagePlacer {
-    pub fn generate(
+    pub async fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,
-        foliage_height: i32,
+        _foliage_height: i32,
         radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
@@ -26,66 +29,78 @@ impl DarkOakFoliagePlacer {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 pos,
                 radius + 2,
                 -1,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 pos,
                 radius + 3,
                 0,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 pos,
                 radius + 2,
                 1,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
             if random.next_bool() {
                 FoliagePlacer::generate_square(
                     self,
                     chunk,
+                    level,
                     random,
                     pos,
                     radius,
                     2,
                     node.giant_trunk,
                     foliage_provider,
-                );
+                )
+                .await;
             }
         } else {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 pos,
                 radius + 2,
                 -1,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 pos,
                 radius + 1,
                 0,
                 node.giant_trunk,
                 foliage_provider,
-            );
+            )
+            .await;
         }
     }
 
