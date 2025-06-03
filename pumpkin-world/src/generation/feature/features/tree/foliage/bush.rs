@@ -14,6 +14,7 @@ pub struct BushFoliagePlacer {
 }
 
 impl BushFoliagePlacer {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

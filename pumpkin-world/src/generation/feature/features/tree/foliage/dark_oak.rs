@@ -12,6 +12,7 @@ use super::{FoliagePlacer, LeaveValidator};
 pub struct DarkOakFoliagePlacer;
 
 impl DarkOakFoliagePlacer {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

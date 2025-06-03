@@ -18,6 +18,7 @@ pub struct RandomBooleanFeature {
 }
 
 impl RandomBooleanFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

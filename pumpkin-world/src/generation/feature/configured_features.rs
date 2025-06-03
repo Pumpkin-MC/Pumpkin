@@ -86,7 +86,7 @@ pub enum ConfiguredFeature {
     #[serde(rename = "minecraft:no_op")]
     NoOp,
     #[serde(rename = "minecraft:tree")]
-    Tree(TreeFeature),
+    Tree(Box<TreeFeature>),
     #[serde(rename = "minecraft:fallen_tree")]
     FallenTree(FallenTreeFeature),
     #[serde(rename = "minecraft:flower")]
@@ -212,6 +212,7 @@ pub enum ConfiguredFeature {
 }
 
 impl ConfiguredFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

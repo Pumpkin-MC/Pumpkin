@@ -381,7 +381,7 @@ mod tests {
     use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
-    use crate::level::LevelFolder;
+    use crate::level::{Level, LevelFolder};
     use crate::world::{BlockAccessor, BlockRegistryExt};
 
     struct BlockRegistry;
@@ -441,10 +441,18 @@ mod tests {
         let block_registry = Arc::new(BlockRegistry);
         // Generate chunks
         let mut chunks = vec![];
+        let level = Arc::new(Level::from_root_folder(
+            temp_dir.path().to_path_buf(),
+            block_registry.clone(),
+            0,
+            Dimension::Overworld,
+        ));
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(block_registry.as_ref(), &position);
+                let chunk = generator
+                    .generate_chunk(&level, block_registry.as_ref(), &position)
+                    .await;
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }

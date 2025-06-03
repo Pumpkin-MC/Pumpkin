@@ -30,7 +30,7 @@ pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock:
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum PlacedFeatureWrapper {
-    Direct(PlacedFeature),
+    Direct(Box<PlacedFeature>),
     Named(String),
 }
 
@@ -56,10 +56,11 @@ pub struct PlacedFeature {
 #[serde(untagged)]
 pub enum Feature {
     Named(String),
-    Inlined(ConfiguredFeature),
+    Inlined(Box<ConfiguredFeature>),
 }
 
 impl PlacedFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
@@ -158,6 +159,7 @@ pub enum PlacementModifier {
 }
 
 impl PlacementModifier {
+    #[expect(clippy::too_many_arguments)]
     pub async fn get_positions(
         &self,
         chunk: &ProtoChunk<'_>,
@@ -272,7 +274,7 @@ impl EnvironmentScanPlacementModifier {
         let allowed_search_condition = self
             .allowed_search_condition
             .as_ref()
-            .unwrap_or(&BlockPredicate::AlwaysTrueBlockPredicate);
+            .unwrap_or(&BlockPredicate::AlwaysTrue);
 
         if !allowed_search_condition
             .test(block_registry, chunk, &pos)

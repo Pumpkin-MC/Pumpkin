@@ -11,10 +11,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    world::{BlockAccessor, BlockRegistryExt},
-};
+use crate::{ProtoChunk, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct BambooFeature {
@@ -22,6 +19,7 @@ pub struct BambooFeature {
 }
 
 impl BambooFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

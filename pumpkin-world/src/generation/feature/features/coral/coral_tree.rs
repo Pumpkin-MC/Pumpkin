@@ -49,7 +49,7 @@ impl CoralTreeFeature {
                 }
                 pos = pos.up();
                 m += 1;
-                if n != 0 && (m < 2 || !(random.next_f32() < 0.25)) {
+                if n != 0 && (m < 2 || random.next_f32() >= 0.25) {
                     continue;
                 }
                 pos = pos.offset(dir.to_offset());

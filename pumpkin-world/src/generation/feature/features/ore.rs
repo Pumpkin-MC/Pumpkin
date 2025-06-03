@@ -11,8 +11,8 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     block::BlockStateCodec,
-    generation::rule::RuleTest,
-    world::{BlockAccessor, BlockRegistryExt},
+    generation::{height_limit::HeightLimitView, rule::RuleTest},
+    world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]
@@ -29,6 +29,7 @@ struct OreTarget {
 }
 
 impl OreFeature {
+    #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
@@ -58,8 +59,8 @@ impl OreFeature {
         let q = 2 * (g.ceil() as i32 + i);
         let r = 2 * (2 + i);
 
-        for s in n..=(n + q) {
-            for t in p..=(p + q) {
+        for _ in n..=(n + q) {
+            for _ in p..=(p + q) {
                 if o > chunk.ocean_floor_height_exclusive(&pos.0.to_vec2_i32()) as i32 {
                     continue;
                 }
@@ -69,6 +70,7 @@ impl OreFeature {
         false
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn generate_vein_part(
         &self,
         chunk: &mut ProtoChunk,
@@ -145,22 +147,22 @@ impl OreFeature {
 
             for t_val in n_bound..=q_bound {
                 let u_val = (t_val as f64 + 0.5 - e_val) / d_val;
-                if !(u_val * u_val < 1.0) {
+                if u_val * u_val >= 1.0 {
                     continue;
                 }
                 for v_val in o_bound..=r_bound {
                     let w_val = (v_val as f64 + 0.5 - g_val) / d_val;
-                    if !(u_val * u_val + w_val * w_val < 1.0) {
+                    if u_val * u_val + w_val * w_val >= 1.0 {
                         continue;
                     }
                     for aa_val in p_bound..=s_bound {
                         let ab_val = (aa_val as f64 + 0.5 - h_val) / d_val;
-                        if !(u_val * u_val + w_val * w_val + ab_val * ab_val < 1.0) {
+                        if u_val * u_val + w_val * w_val + ab_val * ab_val >= 1.0 {
                             continue;
                         }
-                        // if world.is_out_of_height_limit(v_val) {
-                        //     continue;
-                        // }
+                        if chunk.out_of_height(v_val as i16) {
+                            continue;
+                        }
 
                         let ac = (t_val - x_bound)
                             + (v_val - y_bound) * horizontal_size

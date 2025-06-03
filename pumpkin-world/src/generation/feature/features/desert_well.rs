@@ -26,10 +26,10 @@ impl DesertWellFeature {
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,
-        min_y: i8,
-        height: u16,
-        feature: &str, // This placed feature
-        random: &mut RandomGenerator,
+        _min_y: i8,
+        _height: u16,
+        _feature: &str, // This placed feature
+        _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
         let mut block_pos = pos.up();

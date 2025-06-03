@@ -20,35 +20,31 @@ use super::noise::perlin::DoublePerlinNoiseSampler;
 #[serde(tag = "type")]
 pub enum BlockStateProvider {
     #[serde(rename = "minecraft:simple_state_provider")]
-    SimpleStateProvider(SimpleStateProvider),
+    Simple(SimpleStateProvider),
     #[serde(rename = "minecraft:weighted_state_provider")]
-    WeightedBlockStateProvider(WeightedBlockStateProvider),
+    Weighted(WeightedBlockStateProvider),
     #[serde(rename = "minecraft:noise_threshold_provider")]
-    NoiseThresholdBlockStateProvider(NoiseThresholdBlockStateProvider),
+    NoiseThreshold(NoiseThresholdBlockStateProvider),
     #[serde(rename = "minecraft:noise_provider")]
     NoiseProvider(NoiseBlockStateProvider),
     #[serde(rename = "minecraft:dual_noise_provider")]
-    DualNoiseBlockStateProvider(DualNoiseBlockStateProvider),
+    DualNoise(DualNoiseBlockStateProvider),
     #[serde(rename = "minecraft:rotated_block_provider")]
-    PillarBlockStateProvider(PillarBlockStateProvider),
+    Pillar(PillarBlockStateProvider),
     #[serde(rename = "minecraft:randomized_int_state_provider")]
-    RandomizedIntBlockStateProvider(RandomizedIntBlockStateProvider),
+    RandomizedInt(RandomizedIntBlockStateProvider),
 }
 
 impl BlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> BlockState {
         match self {
-            BlockStateProvider::NoiseThresholdBlockStateProvider(provider) => {
-                provider.get(random, pos)
-            }
+            BlockStateProvider::NoiseThreshold(provider) => provider.get(random, pos),
             BlockStateProvider::NoiseProvider(provider) => provider.get(pos),
-            BlockStateProvider::SimpleStateProvider(provider) => provider.get(pos),
-            BlockStateProvider::WeightedBlockStateProvider(provider) => provider.get(random),
-            BlockStateProvider::DualNoiseBlockStateProvider(provider) => provider.get(pos),
-            BlockStateProvider::PillarBlockStateProvider(pillar_block_state_provider) => todo!(),
-            BlockStateProvider::RandomizedIntBlockStateProvider(provider) => {
-                provider.get(random, pos)
-            }
+            BlockStateProvider::Simple(provider) => provider.get(pos),
+            BlockStateProvider::Weighted(provider) => provider.get(random),
+            BlockStateProvider::DualNoise(provider) => provider.get(pos),
+            BlockStateProvider::Pillar(provider) => provider.get(pos),
+            BlockStateProvider::RandomizedInt(provider) => provider.get(random, pos),
         }
     }
 }
@@ -69,7 +65,14 @@ impl RandomizedIntBlockStateProvider {
 
 #[derive(Deserialize)]
 pub struct PillarBlockStateProvider {
-    // TODO
+    state: BlockStateCodec,
+}
+
+impl PillarBlockStateProvider {
+    pub fn get(&self, _pos: BlockPos) -> BlockState {
+        // TODO: random axis
+        self.state.get_state().unwrap()
+    }
 }
 
 #[derive(Deserialize)]
@@ -189,7 +192,7 @@ impl NoiseBlockStateProvider {
             .unwrap()
     }
 
-    fn get_state_by_value(&self, states: &Vec<BlockStateCodec>, value: f64) -> BlockStateCodec {
+    fn get_state_by_value(&self, states: &[BlockStateCodec], value: f64) -> BlockStateCodec {
         let val = ((1.0 + value) / 2.0).clamp(0.0, 0.9999);
         states[(val * states.len() as f64) as usize].clone()
     }

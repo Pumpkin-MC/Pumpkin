@@ -52,11 +52,11 @@ impl CoralClawFeature {
                 direction3 = directions[random
                     .next_bounded_i32(BlockDirection::horizontal().len() as i32)
                     as usize
-                    - 1];
+                    - 2];
                 k = random.next_bounded_i32(3) + 5;
             }
 
-            for l in 0..j {
+            for _ in 0..j {
                 if !CoralFeature::generate_coral_piece(chunk, random, &block, pos) {
                     break;
                 }

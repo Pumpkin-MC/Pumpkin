@@ -20,6 +20,7 @@ pub struct RandomPatchFeature {
 }
 
 impl RandomPatchFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

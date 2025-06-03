@@ -77,6 +77,7 @@ pub trait LeaveValidator {
 }
 
 impl FoliagePlacer {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate_square<T: LeaveValidator>(
         validator: &T,
         chunk: &mut ProtoChunk<'_>,
@@ -101,6 +102,7 @@ impl FoliagePlacer {
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
@@ -176,6 +178,7 @@ pub enum FoliageType {
 }
 
 impl FoliageType {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

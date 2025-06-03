@@ -11,7 +11,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{ProtoChunk, world::BlockAccessor};
+use crate::ProtoChunk;
 
 pub mod coral_claw;
 pub mod coral_mushroom;
@@ -50,7 +50,7 @@ impl CoralFeature {
         }
         for dir in BlockDirection::horizontal() {
             let dir_pos = pos.offset(dir.to_offset());
-            if !(random.next_f32() < 0.2)
+            if random.next_f32() >= 0.2
                 || chunk.get_block_state(&dir_pos.0).to_block() != Block::WATER
             {
                 continue;

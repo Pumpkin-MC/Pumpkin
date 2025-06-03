@@ -18,18 +18,19 @@ pub struct RandomSpreadFoliagePlacer {
 }
 
 impl RandomSpreadFoliagePlacer {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
-        node: &TreeNode,
+        _node: &TreeNode,
         foliage_height: i32,
         radius: i32,
-        offset: i32,
+        _offset: i32,
         foliage_provider: &BlockState,
     ) {
-        for y in 0..self.leaf_placement_attempts {
+        for _ in 0..self.leaf_placement_attempts {
             let pos = BlockPos::new(
                 random.next_bounded_i32(radius) - random.next_bounded_i32(radius),
                 random.next_bounded_i32(foliage_height) - random.next_bounded_i32(foliage_height),
@@ -39,7 +40,7 @@ impl RandomSpreadFoliagePlacer {
         }
     }
     // TODO: getRandomRadius
-    pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
+    pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
         self.foliage_height.get(random)
     }
 }

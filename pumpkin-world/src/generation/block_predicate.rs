@@ -5,7 +5,10 @@ use pumpkin_data::{
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
-use crate::{ProtoChunk, block::BlockStateCodec, world::BlockRegistryExt};
+use crate::{
+    ProtoChunk, block::BlockStateCodec, generation::height_limit::HeightLimitView,
+    world::BlockRegistryExt,
+};
 
 #[derive(Deserialize)]
 pub struct EmptyTODOStruct {}
@@ -14,32 +17,32 @@ pub struct EmptyTODOStruct {}
 #[serde(tag = "type")]
 pub enum BlockPredicate {
     #[serde(rename = "minecraft:matching_blocks")]
-    MatchingBlocksBlockPredicate(MatchingBlocksBlockPredicate),
+    MatchingBlocks(MatchingBlocksBlockPredicate),
     #[serde(rename = "minecraft:matching_block_tag")]
-    MatchingBlockTagPredicate(MatchingBlockTagPredicate),
+    MatchingBlockTag(MatchingBlockTagPredicate),
     #[serde(rename = "minecraft:matching_fluids")]
-    MatchingFluidsBlockPredicate(EmptyTODOStruct),
+    MatchingFluids(EmptyTODOStruct),
     #[serde(rename = "minecraft:has_sturdy_face")]
-    HasSturdyFacePredicate(HasSturdyFacePredicate),
+    HasSturdyFace(HasSturdyFacePredicate),
     #[serde(rename = "minecraft:solid")]
-    SolidBlockPredicate(SolidBlockPredicate),
+    Solid(SolidBlockPredicate),
     #[serde(rename = "minecraft:replaceable")]
-    ReplaceableBlockPredicate(ReplaceableBlockPredicate),
+    Replaceable(ReplaceableBlockPredicate),
     #[serde(rename = "minecraft:would_survive")]
-    WouldSurviveBlockPredicate(WouldSurviveBlockPredicate),
+    WouldSurvive(WouldSurviveBlockPredicate),
     #[serde(rename = "minecraft:inside_world_bounds")]
-    InsideWorldBoundsBlockPredicate(EmptyTODOStruct),
+    InsideWorldBounds(InsideWorldBoundsBlockPredicate),
     #[serde(rename = "minecraft:any_of")]
-    AnyOfBlockPredicate(AnyOfBlockPredicate),
+    AnyOf(AnyOfBlockPredicate),
     #[serde(rename = "minecraft:all_of")]
-    AllOfBlockPredicate(AllOfBlockPredicate),
+    AllOf(AllOfBlockPredicate),
     #[serde(rename = "minecraft:not")]
-    NotBlockPredicate(NotBlockPredicate),
+    Not(NotBlockPredicate),
     #[serde(rename = "minecraft:true")]
-    AlwaysTrueBlockPredicate,
+    AlwaysTrue,
     /// Not used
     #[serde(rename = "minecraft:unobstructed")]
-    UnobstructedBlockPredicate(EmptyTODOStruct),
+    Unobstructed(EmptyTODOStruct),
 }
 
 impl BlockPredicate {
@@ -50,27 +53,21 @@ impl BlockPredicate {
         pos: &BlockPos,
     ) -> bool {
         match self {
-            BlockPredicate::MatchingBlocksBlockPredicate(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingBlockTagPredicate(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingFluidsBlockPredicate(predicate) => false,
-            BlockPredicate::HasSturdyFacePredicate(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::SolidBlockPredicate(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::ReplaceableBlockPredicate(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::WouldSurviveBlockPredicate(predicate) => {
+            BlockPredicate::MatchingBlocks(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::MatchingBlockTag(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::MatchingFluids(_predicate) => false,
+            BlockPredicate::HasSturdyFace(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::Solid(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::Replaceable(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::WouldSurvive(predicate) => {
                 predicate.test(block_registry, chunk, pos).await
             }
-            BlockPredicate::InsideWorldBoundsBlockPredicate(predicate) => false,
-            BlockPredicate::AnyOfBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos).await
-            }
-            BlockPredicate::AllOfBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos).await
-            }
-            BlockPredicate::NotBlockPredicate(predicate) => {
-                predicate.test(block_registry, chunk, pos).await
-            }
-            BlockPredicate::AlwaysTrueBlockPredicate => true,
-            BlockPredicate::UnobstructedBlockPredicate(predicate) => false,
+            BlockPredicate::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
+            BlockPredicate::AnyOf(predicate) => predicate.test(block_registry, chunk, pos).await,
+            BlockPredicate::AllOf(predicate) => predicate.test(block_registry, chunk, pos).await,
+            BlockPredicate::Not(predicate) => predicate.test(block_registry, chunk, pos).await,
+            BlockPredicate::AlwaysTrue => true,
+            BlockPredicate::Unobstructed(_predicate) => false,
         }
     }
 }
@@ -94,6 +91,18 @@ impl MatchingBlocksBlockPredicate {
                 .map(|s| s.replace("minecraft:", ""))
                 .contains(block.name),
         }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct InsideWorldBoundsBlockPredicate {
+    offset: Vector3<i32>,
+}
+
+impl InsideWorldBoundsBlockPredicate {
+    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+        let pos = pos.offset(self.offset);
+        chunk.out_of_height(pos.0.y as i16)
     }
 }
 

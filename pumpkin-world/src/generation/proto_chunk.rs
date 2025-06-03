@@ -24,7 +24,7 @@ use crate::{
     dimension::Dimension,
     generation::{biome, positions::chunk_pos},
     level::Level,
-    world::{BlockAccessor, BlockRegistryExt, SimpleWorld},
+    world::{BlockAccessor, BlockRegistryExt},
 };
 
 use super::{

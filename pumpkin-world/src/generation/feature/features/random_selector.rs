@@ -24,6 +24,7 @@ struct RandomFeatureEntry {
 }
 
 impl RandomFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,

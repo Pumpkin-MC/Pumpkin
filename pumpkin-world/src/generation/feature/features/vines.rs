@@ -11,6 +11,7 @@ use crate::{ProtoChunk, world::BlockRegistryExt};
 pub struct VinesFeature;
 
 impl VinesFeature {
+    #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
         chunk: &mut ProtoChunk,

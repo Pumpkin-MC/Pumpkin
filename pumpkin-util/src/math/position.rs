@@ -179,6 +179,10 @@ impl BlockPos {
     pub fn down(&self) -> Self {
         self.offset(Vector3::new(0, -1, 0))
     }
+
+    pub fn down_height(&self, height: i32) -> Self {
+        self.offset(Vector3::new(0, -height, 0))
+    }
 }
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

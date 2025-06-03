@@ -8,7 +8,7 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     generation::{block_predicate::BlockPredicate, block_state_provider::BlockStateProvider},
-    world::{BlockRegistryExt, SimpleWorld},
+    world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]
@@ -26,6 +26,7 @@ struct Layer {
 }
 
 impl BlockColumnFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
@@ -40,9 +41,9 @@ impl BlockColumnFeature {
         let mut is = vec![0; i];
         let mut j = 0;
 
-        for k in 0..i {
-            is[k] = (self.layers[k].height).get(random);
-            j += is[k];
+        for (k, item) in is.iter_mut().enumerate().take(i) {
+            *item = (self.layers[k].height).get(random);
+            j += *item;
         }
 
         if j == 0 {
@@ -67,13 +68,12 @@ impl BlockColumnFeature {
             l += 1;
         }
 
-        for l in 0..i {
-            let m = is[l];
-            if m == 0 {
+        for (l, m) in is.iter().enumerate().take(i) {
+            if *m == 0 {
                 continue;
             }
             let layer = &self.layers[l];
-            for _n in 0..m {
+            for _n in 0..*m {
                 let state = layer.provider.get(random, mutable);
                 chunk.set_block_state(&mutable.0, &state);
                 mutable = mutable.offset(self.direction.to_offset());

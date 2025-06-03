@@ -14,6 +14,7 @@ pub struct PineFoliagePlacer {
 }
 
 impl PineFoliagePlacer {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
@@ -50,7 +51,7 @@ impl PineFoliagePlacer {
         }
     }
     // TODO: getRandomRadius
-    pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
+    pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
         self.height.get(random)
     }
 }

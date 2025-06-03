@@ -59,17 +59,17 @@ impl TreeDecorator {
     ) {
         match self {
             TreeDecorator::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
-            TreeDecorator::LeaveVine(leaves_vine_tree_decorator) => {}
-            TreeDecorator::PaleMoss(pale_moss_tree_decorator) => {}
-            TreeDecorator::CreakingHeart(creaking_heart_tree_decorator) => {}
-            TreeDecorator::Cocoa(cocoa_tree_decorator) => {}
-            TreeDecorator::Beehive(decorator) => {}
-            TreeDecorator::AlterGround(alter_ground_tree_decorator) => {}
+            TreeDecorator::LeaveVine(_decorator) => {}
+            TreeDecorator::PaleMoss(_decorator) => {}
+            TreeDecorator::CreakingHeart(_decorator) => {}
+            TreeDecorator::Cocoa(_decorator) => {}
+            TreeDecorator::Beehive(_decorator) => {}
+            TreeDecorator::AlterGround(_decorator) => {}
             TreeDecorator::PlaceOnGround(decorator) => {
                 decorator.generate(chunk, random, root_positions, log_positions)
             }
-            TreeDecorator::AttachedToLeaves(attached_to_leaves_tree_decorator) => {}
-            TreeDecorator::AttachedToLogs(attached_to_logs_tree_decorator) => {}
+            TreeDecorator::AttachedToLeaves(_decorator) => {}
+            TreeDecorator::AttachedToLogs(_decorator) => {}
         }
     }
 

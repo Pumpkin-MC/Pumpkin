@@ -37,6 +37,7 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
@@ -59,7 +60,7 @@ impl TreeFeature {
     }
 
     pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
-        Self::can_replace(state, &block) || block.is_tagged_with("minecraft:logs").unwrap()
+        Self::can_replace(state, block) || block.is_tagged_with("minecraft:logs").unwrap()
     }
 
     pub fn can_replace(state: &BlockState, block: &Block) -> bool {
@@ -69,6 +70,7 @@ impl TreeFeature {
                 .unwrap()
     }
 
+    #[expect(clippy::too_many_arguments)]
     async fn generate_main(
         &self,
         chunk: &mut ProtoChunk<'_>,

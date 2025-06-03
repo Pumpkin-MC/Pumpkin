@@ -18,7 +18,7 @@ impl BlockMetadata for DryVegetationBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &["dead_bush"]
+        &["dead_bush", "tall_dry_grass", "short_dry_grass"]
     }
 }
 

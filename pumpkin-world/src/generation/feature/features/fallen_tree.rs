@@ -11,12 +11,12 @@ pub struct FallenTreeFeature {
 impl FallenTreeFeature {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
-        min_y: i8,
-        height: u16,
-        feature: &str, // This placed feature
-        random: &mut RandomGenerator,
-        pos: BlockPos,
+        _chunk: &mut ProtoChunk,
+        _min_y: i8,
+        _height: u16,
+        _feature: &str, // This placed feature
+        _random: &mut RandomGenerator,
+        _pos: BlockPos,
     ) -> bool {
         false
     }
