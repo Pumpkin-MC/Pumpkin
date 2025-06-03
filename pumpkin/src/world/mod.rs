@@ -1539,7 +1539,7 @@ impl World {
 
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
-        let id = self.level.get_block_state_id(position).await;
+        let id = self.get_block_state_id(position).await;
         get_block_by_state_id(id).unwrap_or(Block::AIR)
     }
 
@@ -1547,13 +1547,17 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
-        let id = self.level.get_block_state_id(position).await;
+        let id = self.get_block_state_id(position).await;
         Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+    }
+
+    pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+        self.level.get_block_state(position).await.state_id
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
-        let id = self.level.get_block_state_id(position).await;
+        let id = self.get_block_state_id(position).await;
         get_state_by_state_id(id)
             .unwrap_or(get_state_by_state_id(Block::AIR.default_state_id).unwrap())
     }
@@ -1563,7 +1567,7 @@ impl World {
         &self,
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
-        let id = self.level.get_block_state_id(position).await;
+        let id = self.get_block_state_id(position).await;
         get_block_and_state_by_state_id(id).unwrap_or((
             Block::AIR,
             get_state_by_state_id(Block::AIR.default_state_id).unwrap(),

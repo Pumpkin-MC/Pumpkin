@@ -24,6 +24,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::{
     BlockStateId,
+    block::RawBlockState,
     chunk::{
         ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
@@ -366,7 +367,7 @@ impl Level {
             .expect("Channel closed for unknown reason")
     }
 
-    pub async fn get_block_state_id(self: &Arc<Self>, position: &BlockPos) -> BlockStateId {
+    pub async fn get_block_state(self: &Arc<Self>, position: &BlockPos) -> RawBlockState {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;
 
@@ -376,10 +377,12 @@ impl Level {
             relative.y,
             relative.z as usize,
         ) else {
-            return Block::AIR.default_state_id;
+            return RawBlockState {
+                state_id: Block::AIR.default_state_id,
+            };
         };
 
-        id
+        RawBlockState { state_id: id }
     }
 
     pub async fn set_block_state(

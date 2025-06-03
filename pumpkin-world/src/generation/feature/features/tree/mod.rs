@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
-use pumpkin_data::{Block, tag::Tagable};
+use pumpkin_data::{Block, BlockState, tag::Tagable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk::TrunkPlacer;
@@ -58,17 +58,11 @@ impl TreeFeature {
         true
     }
 
-    pub fn can_replace_or_log(chunk: &ProtoChunk, pos: &BlockPos) -> bool {
-        let block = chunk.get_block_state(&pos.0).to_block();
-
-        Self::can_replace(chunk, pos) || block.is_tagged_with("minecraft:logs").unwrap()
+    pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
+        Self::can_replace(state, &block) || block.is_tagged_with("minecraft:logs").unwrap()
     }
 
-    pub async fn can_replace(chunk: &Level, pos: &BlockPos) -> bool {
-        let state = chunk.get_block_state(&pos.0);
-        let block = state.to_block();
-        let state = state.to_state();
-
+    pub fn can_replace(state: &BlockState, block: &Block) -> bool {
         state.is_air()
             || block
                 .is_tagged_with("minecraft:replaceable_by_trees")
@@ -126,8 +120,9 @@ impl TreeFeature {
             for x in -j..=j {
                 for z in -j..=j {
                     let pos = BlockPos(init_pos.0.add_raw(x, y as i32, z));
-                    let block = chunk.get_block_state(&pos.0).to_block();
-                    if Self::can_replace_or_log(chunk, &pos)
+                    let rstate = chunk.get_block_state(&pos.0);
+                    let block = rstate.to_block();
+                    if Self::can_replace_or_log(&rstate.to_state(), &block)
                         && (self.ignore_vines || block != Block::VINE)
                     {
                         continue;

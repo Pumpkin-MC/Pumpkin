@@ -31,8 +31,14 @@ impl TrunkPlacer {
             + random.next_bounded_i32(self.height_rand_b as i32 + 1) as u32
     }
 
-    pub fn place(&self, chunk: &mut ProtoChunk, pos: &BlockPos, trunk_block: &BlockState) -> bool {
-        if TreeFeature::can_replace(chunk, pos) {
+    pub fn place(
+        &self,
+        chunk: &mut ProtoChunk<'_>,
+        pos: &BlockPos,
+        trunk_block: &BlockState,
+    ) -> bool {
+        let block = chunk.get_block_state(&pos.0);
+        if TreeFeature::can_replace(&block.to_state(), &block.to_block()) {
             chunk.set_block_state(&pos.0, trunk_block);
             return true;
         }
