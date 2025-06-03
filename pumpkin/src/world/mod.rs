@@ -80,7 +80,7 @@ use pumpkin_world::{
     world::GetBlockError,
 };
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::{Rng, thread_rng};
+use rand::Rng;
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;
@@ -362,7 +362,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = thread_rng().r#gen::<f64>();
+        let seed = rand::rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
@@ -1335,8 +1335,8 @@ impl World {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
-        let chunk = self.get_chunk(position).await;
-        let (_, relative) = position.chunk_and_chunk_relative_position();
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(chunk_coordinate).await;
         let mut chunk = chunk.write().await;
         let replaced_block_state_id = chunk
             .section
@@ -1575,9 +1575,7 @@ impl World {
             .await;
     }
 
-    pub async fn get_chunk(&self, position: &BlockPos) -> Arc<RwLock<ChunkData>> {
-        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
-
+    pub async fn get_chunk(&self, chunk_coordinate: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
         match self.level.try_get_chunk(chunk_coordinate) {
             Some(chunk) => chunk.clone(),
             None => self.receive_chunk(chunk_coordinate).await.0,
@@ -1585,8 +1583,8 @@ impl World {
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        let chunk = self.get_chunk(position).await;
-        let (_, relative) = position.chunk_and_chunk_relative_position();
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(chunk_coordinate).await;
 
         let chunk = chunk.read().await;
         let Some(id) = chunk.section.get_block_absolute_y(
@@ -1749,7 +1747,9 @@ impl World {
         &self,
         block_pos: &BlockPos,
     ) -> Option<(NbtCompound, Arc<dyn BlockEntity>)> {
-        let chunk = self.get_chunk(block_pos).await;
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         chunk.block_entities.get(block_pos).cloned()
@@ -1757,7 +1757,9 @@ impl World {
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
-        let chunk = self.get_chunk(&block_pos).await;
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
@@ -1780,7 +1782,9 @@ impl World {
     }
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
-        let chunk = self.get_chunk(block_pos).await;
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         chunk.block_entities.remove(block_pos);
         chunk.dirty = true;

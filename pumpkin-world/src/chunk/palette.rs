@@ -402,7 +402,7 @@ impl BlockPalette {
             .into_iter()
             .map(|entry| {
                 if let Some(block_state) = RawBlockState::from_palette(&entry) {
-                    block_state.get_state_id()
+                    block_state.state_id
                 } else {
                     log::warn!(
                         "Could not find valid block state for {}. Defaulting...",

@@ -29,7 +29,7 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::prelude::SliceRandom;
+use rand::seq::IndexedRandom;
 use rsa::RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
@@ -456,7 +456,7 @@ impl Server {
     pub async fn get_random_player(&self) -> Option<Arc<Player>> {
         let players = self.get_all_players().await;
 
-        players.choose(&mut rand::thread_rng()).map(Arc::<_>::clone)
+        players.choose(&mut rand::rng()).map(Arc::<_>::clone)
     }
 
     /// Searches for a player by their UUID across all worlds.
