@@ -947,16 +947,17 @@ impl Player {
                             .sneaking
                             .load(std::sync::atomic::Ordering::Relaxed);
 
-                        let event = PlayerInteractEvent::new(
-                            self.clone(),
-                            InteractAction::LeftClick,
-                            block.clone(),
-                            face,
-                            held_item.clone(),
-                            *location,
+                        let event = PlayerInteractEvent {
+                            player: self.clone(),
+                            action: InteractAction::LeftClick,
+                            block: block.clone(),
+                            block_direction: face,
+                            item_stack: held_item.clone(),
+                            position: *location,
                             sneaking,
-                            !self.can_interact_with_block_at(location, 1.0), // Default cancel condition
-                        );
+                            cancelled: !self.can_interact_with_block_at(location, 1.0), // Default cancel condition
+                        };
+
                         let event = PLUGIN_MANAGER
                             .lock()
                             .await
@@ -1228,16 +1229,16 @@ impl Player {
             .load(std::sync::atomic::Ordering::Relaxed);
 
         send_cancellable! {{
-            PlayerInteractEvent::new(
-                self.clone(),
-                InteractAction::LeftClick,
-                block.clone(),
-                Ok(face),
-                held_item.clone(),
-                location,
+            PlayerInteractEvent {
+                player: self.clone(),
+                action: InteractAction::LeftClick,
+                block: block.clone(),
+                block_direction: Ok(face),
+                item_stack: held_item.clone(),
+                position: location,
                 sneaking,
-                !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
-            );
+                cancelled: !self.can_interact_with_block_at(&location, 1.0), // Default cancel condition
+            };
 
             'cancelled: {
                 // Block out of reach seems to be the most sensible error as it is a. somewhat generic, b. doesn't kick and c. is the correct type for the default cancel condition

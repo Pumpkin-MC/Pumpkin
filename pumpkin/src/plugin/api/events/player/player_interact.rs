@@ -40,44 +40,6 @@ pub struct PlayerInteractEvent {
     pub sneaking: bool,
 }
 
-impl PlayerInteractEvent {
-    /// Creates a new instance of `PlayerInteractEvent`.
-    ///
-    /// # Arguments
-    /// - `player`: A reference to the player who interacted.
-    /// - `action`: The type of interaction performed.
-    /// - `block`: The block the player is interacting with.
-    /// - `block_face`: The face of the block the player is interacting with.
-    /// - `item`: The `ItemStack` the player is interacting using.
-    /// - `position`: The position of the block being interacted with.
-    /// - `cancelled`: A boolean indicating whether the interaction should be cancelled.
-    ///
-    /// # Returns
-    /// A new instance of `PlayerInteractEvent`.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        player: Arc<Player>,
-        action: InteractAction,
-        block: Result<Block, GetBlockError>,
-        block_direction: Result<BlockDirection, InvalidBlockFace>,
-        item_stack: Arc<Option<ItemStack>>,
-        position: BlockPos,
-        sneaking: bool,
-        cancelled: bool,
-    ) -> Self {
-        Self {
-            player,
-            action,
-            block,
-            block_direction,
-            item_stack,
-            position,
-            sneaking,
-            cancelled,
-        }
-    }
-}
-
 impl PlayerEvent for PlayerInteractEvent {
     fn get_player(&self) -> &Arc<Player> {
         &self.player
@@ -89,4 +51,5 @@ impl PlayerEvent for PlayerInteractEvent {
 pub enum InteractAction {
     LeftClick,
     RightClick,
+    // TODO: Add and implement a middle-click interaction type.
 }
