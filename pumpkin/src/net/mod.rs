@@ -408,7 +408,7 @@ impl Client {
         {
             // It is expected that the packet will fail if we are closed
             if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                log::warn!("Failed to send packet to client {}: {}", self.id, err);
+                log::warn!("Failed to send packet {} to client {}: {}", std::any::type_name::<P>(), self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
                 self.close();
