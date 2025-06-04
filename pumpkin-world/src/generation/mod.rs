@@ -40,7 +40,7 @@ pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<dyn WorldGenerator
 pub struct GlobalRandomConfig {
     seed: u64,
     base_random_deriver: RandomDeriver,
-    aquifier_random_deriver: RandomDeriver,
+    aquifer_random_deriver: RandomDeriver,
     ore_random_deriver: RandomDeriver,
 }
 
@@ -59,7 +59,7 @@ impl GlobalRandomConfig {
         Self {
             seed,
             base_random_deriver: random_deriver,
-            aquifier_random_deriver: aquifer_deriver,
+            aquifer_random_deriver: aquifer_deriver,
             ore_random_deriver: ore_deriver,
         }
     }
