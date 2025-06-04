@@ -15,12 +15,15 @@ impl StraightTrunkPlacer {
         height: u32,
         start_pos: BlockPos,
         chunk: &mut ProtoChunk,
-        trunk_block: &BlockState,
+        force_dirt: bool,
+        dirt_state: &BlockState,
+        trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
+        placer.set_dirt(chunk, &start_pos.down(), force_dirt, dirt_state);
         let mut logs = Vec::new();
         for i in 0..height {
             let pos = start_pos.up_height(i as i32);
-            if placer.place(chunk, &pos, trunk_block) {
+            if placer.place(chunk, &pos, trunk_state) {
                 logs.push(pos);
             }
         }

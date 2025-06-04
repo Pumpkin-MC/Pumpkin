@@ -89,9 +89,20 @@ impl TreeFeature {
             return vec![];
         }
         let trunk_state = self.trunk_provider.get(random, pos);
+        let dirt_state = self.dirt_provider.get(random, pos);
+
         let (nodes, logs) = self
             .trunk_placer
-            .generate(top, pos, chunk, level, random, &trunk_state)
+            .generate(
+                top,
+                pos,
+                chunk,
+                level,
+                random,
+                self.force_dirt,
+                &dirt_state,
+                &trunk_state,
+            )
             .await;
 
         let foliage_height = self

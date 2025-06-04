@@ -24,18 +24,20 @@ pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     pub async fn generate(
-        _placer: &TrunkPlacer,
+        placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
+        force_dirt: bool,
+        dirt_state: &BlockState,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let j = height as i32 + 2;
         let k = ((j as f64) * 0.618).floor() as i32;
 
-        // Self::set_to_dirt(world, replacer, random, start_pos.down(), config);
+        placer.set_dirt(chunk, &start_pos.down(), force_dirt, dirt_state);
 
         let l = ((1.382 + (1.0 * (j as f64) / 13.0).powf(2.0)).floor() as i32).min(1);
         let m = start_pos.0.y + k;
@@ -121,7 +123,7 @@ impl FancyTrunkPlacer {
 
     async fn make_or_check_branch(
         chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        _level: &Arc<Level>,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -180,7 +182,7 @@ impl FancyTrunkPlacer {
                             &get_state_by_state_id(state).unwrap(),
                         );
                     } else {
-                        level.set_block_state(&block_pos_2, state).await;
+                        // level.set_block_state(&block_pos_2, state).await;
                     }
                     logs.push(block_pos_2);
                     continue;

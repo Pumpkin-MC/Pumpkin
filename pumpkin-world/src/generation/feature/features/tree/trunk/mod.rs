@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fancy::FancyTrunkPlacer;
-use pumpkin_data::BlockState;
+use pumpkin_data::{Block, BlockState, tag::Tagable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -31,6 +31,23 @@ impl TrunkPlacer {
             + random.next_bounded_i32(self.height_rand_b as i32 + 1) as u32
     }
 
+    pub fn set_dirt(
+        &self,
+        chunk: &mut ProtoChunk<'_>,
+        pos: &BlockPos,
+        force_dirt: bool,
+        dirt_state: &BlockState,
+    ) {
+        let block = chunk.get_block_state(&pos.0).to_block();
+        if force_dirt
+            || !(block.is_tagged_with("minecraft:dirt").unwrap()
+                && block != Block::GRASS_BLOCK
+                && block != Block::MYCELIUM)
+        {
+            chunk.set_block_state(&pos.0, dirt_state);
+        }
+    }
+
     pub fn place(
         &self,
         chunk: &mut ProtoChunk<'_>,
@@ -52,10 +69,22 @@ impl TrunkPlacer {
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
-        trunk_block: &BlockState,
+        force_dirt: bool,
+        dirt_state: &BlockState,
+        trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         self.r#type
-            .generate(self, height, start_pos, chunk, level, random, trunk_block)
+            .generate(
+                self,
+                height,
+                start_pos,
+                chunk,
+                level,
+                random,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            )
             .await
     }
 }
@@ -92,12 +121,20 @@ impl TrunkType {
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
-        trunk_block: &BlockState,
+        force_dirt: bool,
+        dirt_state: &BlockState,
+        trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         match self {
-            Self::Straight => {
-                StraightTrunkPlacer::generate(placer, height, start_pos, chunk, trunk_block)
-            }
+            Self::Straight => StraightTrunkPlacer::generate(
+                placer,
+                height,
+                start_pos,
+                chunk,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            ),
             TrunkType::Forking => (vec![], vec![]),    // TODO
             TrunkType::Giant => (vec![], vec![]),      // TODO
             TrunkType::MegaJungle => (vec![], vec![]), // TODO
@@ -110,7 +147,9 @@ impl TrunkType {
                     chunk,
                     level,
                     random,
-                    trunk_block,
+                    force_dirt,
+                    dirt_state,
+                    trunk_state,
                 )
                 .await
             }
