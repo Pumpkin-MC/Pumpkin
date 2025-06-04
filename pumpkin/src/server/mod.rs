@@ -164,7 +164,7 @@ impl Server {
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
-        let locker = AnvilLevelLocker::look(&world_path).expect("Failed to lock level");
+        let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
