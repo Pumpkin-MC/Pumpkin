@@ -102,7 +102,7 @@ pub struct InsideWorldBoundsBlockPredicate {
 impl InsideWorldBoundsBlockPredicate {
     pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
         let pos = pos.offset(self.offset);
-        chunk.out_of_height(pos.0.y as i16)
+        !chunk.out_of_height(pos.0.y as i16)
     }
 }
 
