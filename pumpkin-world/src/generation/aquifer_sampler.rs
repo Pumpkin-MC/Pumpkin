@@ -74,7 +74,7 @@ pub trait FluidLevelSamplerImpl {
 #[enum_dispatch(AquiferSamplerImpl)]
 pub enum AquiferSampler {
     SeaLevel(SeaLevelAquiferSampler),
-    Aquifier(WorldAquiferSampler),
+    Aquifer(WorldAquiferSampler),
 }
 
 macro_rules! local_xz {
@@ -729,7 +729,7 @@ mod test {
             _ => unreachable!(),
         };
         let aquifer = match sampler {
-            AquiferSampler::Aquifier(aquifer) => aquifer,
+            AquiferSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),
         };
 

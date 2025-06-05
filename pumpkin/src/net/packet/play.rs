@@ -1680,13 +1680,14 @@ impl Player {
         if !server
             .block_registry
             .can_place_at(
-                server,
-                world,
-                self,
+                Some(server),
+                Some(world),
+                world.as_ref(),
+                Some(self),
                 &block,
                 &final_block_pos,
                 final_face,
-                &use_item_on,
+                Some(&use_item_on),
             )
             .await
         {

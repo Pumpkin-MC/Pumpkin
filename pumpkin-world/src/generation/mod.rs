@@ -3,31 +3,32 @@
 pub mod aquifer_sampler;
 mod biome;
 mod blender;
+mod block_predicate;
+mod block_state_provider;
 pub mod carver;
 pub mod chunk_noise;
-mod generator;
+mod feature;
 pub mod height_limit;
 pub mod height_provider;
-mod implementation;
+pub mod implementation;
 pub mod noise;
 pub mod noise_router;
 pub mod ore_sampler;
 pub mod positions;
 pub mod proto_chunk;
+pub mod rule;
+mod rule_test;
 mod seed;
 pub mod settings;
 mod surface;
 pub mod y_offset;
 
 use derive_getters::Getters;
-pub use generator::WorldGenerator;
-use implementation::VanillaGenerator;
+use implementation::{GeneratorInit, VanillaGenerator, WorldGenerator};
 use pumpkin_util::random::{
     RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
 };
 pub use seed::Seed;
-
-use generator::GeneratorInit;
 
 use crate::dimension::Dimension;
 
@@ -40,7 +41,7 @@ pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<dyn WorldGenerator
 pub struct GlobalRandomConfig {
     seed: u64,
     base_random_deriver: RandomDeriver,
-    aquifier_random_deriver: RandomDeriver,
+    aquifer_random_deriver: RandomDeriver,
     ore_random_deriver: RandomDeriver,
 }
 
@@ -59,7 +60,7 @@ impl GlobalRandomConfig {
         Self {
             seed,
             base_random_deriver: random_deriver,
-            aquifier_random_deriver: aquifer_deriver,
+            aquifer_random_deriver: aquifer_deriver,
             ore_random_deriver: ore_deriver,
         }
     }

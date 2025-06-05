@@ -142,14 +142,14 @@ impl Server {
         let seed = level_info.world_gen_settings.seed;
         log::info!("Loading Overworld: {seed}");
         let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), seed),
+            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             DimensionType::Overworld,
             block_registry.clone(),
         );
         log::info!("Loading Nether: {seed}");
         let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), seed),
+            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             DimensionType::TheNether,
             block_registry.clone(),
@@ -164,7 +164,7 @@ impl Server {
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
-        let locker = AnvilLevelLocker::look(&world_path).expect("Failed to lock level");
+        let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
