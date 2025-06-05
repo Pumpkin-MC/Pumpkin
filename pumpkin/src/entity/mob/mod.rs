@@ -63,6 +63,7 @@ pub async fn from_type(
         navigator: Mutex::new(Navigator::default()),
     };
 
+    #[allow(clippy::single_match)
     match entity_type {
         EntityType::ZOMBIE => Zombie::make(&mob).await,
         // TODO
