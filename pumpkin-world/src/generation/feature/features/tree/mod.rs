@@ -63,6 +63,10 @@ impl TreeFeature {
         Self::can_replace(state, block) || block.is_tagged_with("minecraft:logs").unwrap()
     }
 
+    pub fn is_air_or_leaves(state: &BlockState, block: &Block) -> bool {
+        state.is_air() || block.is_tagged_with("minecraft:leaves").unwrap()
+    }
+
     pub fn can_replace(state: &BlockState, block: &Block) -> bool {
         state.is_air()
             || block

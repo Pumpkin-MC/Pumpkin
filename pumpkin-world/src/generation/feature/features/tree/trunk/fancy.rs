@@ -23,6 +23,7 @@ use super::TrunkPlacer;
 pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
+    #[expect(clippy::too_many_arguments)]
     pub async fn generate(
         placer: &TrunkPlacer,
         height: u32,

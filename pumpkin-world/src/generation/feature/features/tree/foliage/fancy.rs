@@ -26,7 +26,7 @@ impl LargeOakFoliagePlacer {
         offset: i32,
         foliage_provider: &BlockState,
     ) {
-        for y in (offset..=offset - foliage_height).rev() {
+        for y in (offset - foliage_height..=offset).rev() {
             let radius = radius
                 + if y == offset || y == offset - foliage_height {
                     0

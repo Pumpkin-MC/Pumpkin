@@ -69,7 +69,9 @@ impl TreeDecorator {
                 decorator.generate(chunk, random, root_positions, log_positions)
             }
             TreeDecorator::AttachedToLeaves(_decorator) => {}
-            TreeDecorator::AttachedToLogs(_decorator) => {}
+            TreeDecorator::AttachedToLogs(decorator) => {
+                decorator.generate(chunk, random, root_positions, log_positions)
+            }
         }
     }
 

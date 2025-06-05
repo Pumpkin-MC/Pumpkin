@@ -31,7 +31,7 @@ impl JungleFoliagePlacer {
         } else {
             1 + random.next_bounded_i32(2)
         };
-        for y in offset..-offset - height {
+        for y in (offset - height..=offset).rev() {
             let radius = radius + node.foliage_radius + 1 - y;
             FoliagePlacer::generate_square(
                 self,
