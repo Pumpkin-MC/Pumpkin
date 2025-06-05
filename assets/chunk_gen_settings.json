@@ -4952,7 +4952,7 @@
     },
     "noise": {
       "min_y": 0,
-      "height": 128,
+      "height": 256,
       "size_horizontal": 2,
       "size_vertical": 1
     },
@@ -10467,7 +10467,7 @@
     },
     "noise": {
       "min_y": 0,
-      "height": 128,
+      "height": 256,
       "size_horizontal": 1,
       "size_vertical": 2
     },
