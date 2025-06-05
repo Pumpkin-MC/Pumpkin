@@ -1429,17 +1429,14 @@ impl Player {
         world.add_block_entity(Arc::new(updated_sign)).await;
     }
 
-    pub async fn handle_use_item(&self, use_item: &SUseItem, server: &Server) {
+    pub async fn handle_use_item(&self, _use_item: &SUseItem, server: &Server) {
         if !self.has_client_loaded() {
             return;
         }
         let inventory = self.inventory();
         let binding = inventory.held_item();
         let held = binding.lock().await;
-        let item = held.item;
-        drop(held);
-        server.item_registry.on_use(item, self).await;
-        self.update_sequence(use_item.sequence.0);
+        server.item_registry.on_use(held.item, self).await;
     }
 
     pub async fn handle_set_held_item(&self, held: SSetHeldItem) {
@@ -1683,13 +1680,14 @@ impl Player {
         if !server
             .block_registry
             .can_place_at(
-                server,
-                world,
-                self,
+                Some(server),
+                Some(world),
+                world.as_ref(),
+                Some(self),
                 &block,
                 &final_block_pos,
                 final_face,
-                &use_item_on,
+                Some(&use_item_on),
             )
             .await
         {

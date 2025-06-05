@@ -1,8 +1,16 @@
 use std::{fs, path::PathBuf, sync::Arc};
 
+use async_trait::async_trait;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use pumpkin_util::math::vector2::Vector2;
-use pumpkin_world::{chunk::ChunkData, dimension::Dimension, global_path, level::Level};
+use pumpkin_data::BlockDirection;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_world::{
+    chunk::ChunkData,
+    dimension::Dimension,
+    global_path,
+    level::Level,
+    world::{BlockAccessor, BlockRegistryExt},
+};
 use tokio::{runtime::Runtime, sync::RwLock};
 
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
@@ -69,6 +77,21 @@ const MAX_CHUNK: i32 = 16;
 // How many chunks to use on parallel tests
 //const CHUNKS_ON_PARALLEL: usize = 32;
 
+struct BlockRegistry;
+
+#[async_trait]
+impl BlockRegistryExt for BlockRegistry {
+    async fn can_place_at(
+        &self,
+        _block: &pumpkin_data::Block,
+        _block_accessor: &dyn BlockAccessor,
+        _block_pos: &BlockPos,
+        _face: BlockDirection,
+    ) -> bool {
+        true
+    }
+}
+
 fn initialize_level(
     async_handler: &Runtime,
     root_dir: PathBuf,
@@ -78,10 +101,12 @@ fn initialize_level(
     let mut chunks = Vec::new();
     async_handler.block_on(async {
         let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
+        let block_registry = Arc::new(BlockRegistry);
 
         // Our data dir is empty, so we're generating new chunks here
         let level_to_save = Arc::new(Level::from_root_folder(
             root_dir.clone(),
+            block_registry,
             123,
             Dimension::Overworld,
         ));
@@ -193,6 +218,8 @@ fn bench_chunk_io(c: &mut Criterion) {
             n_chunks,
             chunks.len()
         );
+        let block_registry = Arc::new(BlockRegistry);
+
         write_group.bench_with_input(
             BenchmarkId::new("Single", n_chunks),
             &chunks,
@@ -200,6 +227,7 @@ fn bench_chunk_io(c: &mut Criterion) {
                 b.to_async(&async_handler).iter(async || {
                     let level = Arc::new(Level::from_root_folder(
                         root_dir.clone(),
+                        block_registry.clone(),
                         123,
                         Dimension::Overworld,
                     ));
@@ -222,6 +250,7 @@ fn bench_chunk_io(c: &mut Criterion) {
             n_chunks,
             positions.len()
         );
+        let block_registry = Arc::new(BlockRegistry);
 
         read_group.bench_with_input(
             BenchmarkId::new("Single", n_chunks),
@@ -230,6 +259,7 @@ fn bench_chunk_io(c: &mut Criterion) {
                 b.to_async(&async_handler).iter(async || {
                     let level = Arc::new(Level::from_root_folder(
                         root_dir.clone(),
+                        block_registry.clone(),
                         123,
                         Dimension::Overworld,
                     ));

@@ -1,3 +1,4 @@
+use blocks::bamboo::BambooBlock;
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
@@ -11,13 +12,22 @@ use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
 use blocks::glass_panes::GlassPaneBlock;
 use blocks::iron_bars::IronBarsBlock;
-use blocks::lily_pad::LilyPadBlock;
 use blocks::logs::LogBlock;
 use blocks::nether_portal::NetherPortalBlock;
 use blocks::note::NoteBlock;
 use blocks::piston::piston::PistonBlock;
 use blocks::piston::piston_extension::PistonExtensionBlock;
 use blocks::piston::piston_head::PistonHeadBlock;
+use blocks::plant::bush::BushBlock;
+use blocks::plant::dry_vegetation::DryVegetationBlock;
+use blocks::plant::flower::FlowerBlock;
+use blocks::plant::flowerbed::FlowerbedBlock;
+use blocks::plant::leaf_litter::LeafLitterBlock;
+use blocks::plant::lily_pad::LilyPadBlock;
+use blocks::plant::mushroom_plant::MushroomPlantBlock;
+use blocks::plant::sapling::SaplingBlock;
+use blocks::plant::short_plant::ShortPlantBlock;
+use blocks::plant::tall_plant::TallPlantBlock;
 use blocks::pumpkin::PumpkinBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
@@ -39,6 +49,7 @@ use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
 use blocks::trapdoor::TrapDoorBlock;
+use blocks::vine::VineBlock;
 use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
@@ -77,6 +88,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Blocks
     manager.register(BedBlock);
+    manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(ChestBlock);
     manager.register(CraftingTableBlock);
@@ -90,16 +102,26 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
+    manager.register(BambooBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(StairBlock);
+    manager.register(ShortPlantBlock);
+    manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
+    manager.register(VineBlock);
     manager.register(TNTBlock);
+    manager.register(BushBlock);
+    manager.register(FlowerBlock);
     manager.register(TorchBlock);
     manager.register(TrapDoorBlock);
+    manager.register(MushroomPlantBlock);
+    manager.register(FlowerbedBlock);
+    manager.register(LeafLitterBlock);
     manager.register(WallBlock);
     manager.register(NetherPortalBlock);
+    manager.register(TallPlantBlock);
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);

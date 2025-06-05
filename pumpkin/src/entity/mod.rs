@@ -670,7 +670,6 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
-        dbg!("aa");
         // TODO: handle world change
         self.world
             .read()

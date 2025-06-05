@@ -300,7 +300,7 @@ pub fn estimate_surface_height(
             context.estimated_surface_heights[3] as f64,
         )
         .floor() as i32;
-        context.surface_min_y = surface + context.run_depth - 8;
+        context.surface_min_y = surface.saturating_add(context.run_depth) - 8;
     }
     context.surface_min_y
 }

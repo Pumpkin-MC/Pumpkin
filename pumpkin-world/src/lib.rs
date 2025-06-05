@@ -20,6 +20,17 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HeightMap {
+    WorldSurfaceWg,
+    WorldSurface,
+    OceanFloorWg,
+    OceanFloor,
+    MotionBlocking,
+    MotionBlockingNoLeaves,
+}
+
 #[macro_export]
 macro_rules! global_path {
     ($path:expr) => {{
@@ -49,6 +60,7 @@ pub use generation::{
     GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
+use serde::Deserialize;
 
 pub fn bench_create_and_populate_noise(
     base_router: &ProtoNoiseRouters,

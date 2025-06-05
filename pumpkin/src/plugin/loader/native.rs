@@ -1,5 +1,6 @@
 use std::any::Any;
 
+#[cfg(not(target_family = "wasm"))]
 use libloading::Library;
 
 use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata, async_trait};

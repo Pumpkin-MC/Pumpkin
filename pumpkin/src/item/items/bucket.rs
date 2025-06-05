@@ -2,20 +2,19 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockState, fluid::Fluid, item::Item};
-use pumpkin_registry::DimensionType;
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector3::Vector3},
-};
-use pumpkin_world::{inventory::Inventory, item::ItemStack, world::BlockFlags};
+use pumpkin_data::Block;
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item::Item;
+use pumpkin_util::GameMode;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::world::BlockFlags;
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
-pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
@@ -28,21 +27,18 @@ impl ItemMetadata for FilledBucketItem {
         [
             Item::WATER_BUCKET.id,
             Item::LAVA_BUCKET.id,
-            Item::POWDER_SNOW_BUCKET.id,
-            Item::AXOLOTL_BUCKET.id,
-            Item::COD_BUCKET.id,
-            Item::SALMON_BUCKET.id,
-            Item::TROPICAL_FISH_BUCKET.id,
-            Item::PUFFERFISH_BUCKET.id,
-            Item::TADPOLE_BUCKET.id,
+            // TODO drink milk
+            // Item::MILK_BUCKET.id,
+            // TODO implement these buckets, and getting the item from the world
+            // Item::POWDER_SNOW_BUCKET.id,
+            // Item::AXOLOTL_BUCKET.id,
+            // Item::COD_BUCKET.id,
+            // Item::SALMON_BUCKET.id,
+            // Item::TROPICAL_FISH_BUCKET.id,
+            // Item::PUFFERFISH_BUCKET.id,
+            // Item::TADPOLE_BUCKET.id,
         ]
         .into()
-    }
-}
-
-impl ItemMetadata for MilkBucketItem {
-    fn ids() -> Box<[u16]> {
-        [Item::MILK_BUCKET.id].into()
     }
 }
 
@@ -62,30 +58,6 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(block: &Block, state: &BlockState) -> Option<bool> {
-    block.properties(state.id).and_then(|properties| {
-        properties
-            .to_props()
-            .into_iter()
-            .find(|p| p.0 == "waterlogged")
-            .map(|(_, value)| value == true.to_string())
-    })
-}
-
-fn set_waterlogged(block: &Block, state: &BlockState, waterlogged: bool) -> u16 {
-    let original_props = &block.properties(state.id).unwrap().to_props();
-    let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
-    let waterlogged = waterlogged.to_string();
-    for (key, value) in original_props {
-        if key == "waterlogged" {
-            props_vec.push((key.as_str(), &waterlogged));
-        } else {
-            props_vec.push((key.as_str(), value.as_str()));
-        }
-    }
-    block.from_properties(props_vec).unwrap().to_state_id(block)
-}
-
 #[async_trait]
 impl PumpkinItem for EmptyBucketItem {
     async fn normal_use(&self, _item: &Item, player: &Player) {
@@ -95,101 +67,16 @@ impl PumpkinItem for EmptyBucketItem {
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos).await;
 
-            let block = Block::from_state_id(state_id).unwrap();
-
-            if state_id == Block::AIR.default_state_id {
-                return false;
-            }
-
-            (block.id != Block::WATER.id && block.id != Block::LAVA.id)
-                || ((block.id == Block::WATER.id && state_id == Block::WATER.default_state_id)
-                    || (block.id == Block::LAVA.id && state_id == Block::LAVA.default_state_id))
+            state_id == Block::WATER.default_state_id || state_id == Block::LAVA.default_state_id
         };
 
-        let Some((block_pos, direction)) = world.raycast(start_pos, end_pos, checker).await else {
-            return;
-        };
+        let (block_pos, _) = world.raytrace(start_pos, end_pos, checker).await;
 
-        // let state_id = world.get_block_state_id(&block_pos).await;
-        //
-        // let block = Block::from_state_id(state_id).unwrap();
-        let (block, state) = world.get_block_and_block_state(&block_pos).await;
-
-        if block
-            .properties(state.id)
-            .and_then(|properties| {
-                properties
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| value == true.to_string())
-            })
-            .unwrap_or(false)
-        {
-            let state_id = set_waterlogged(&block, &state, false);
+        if let Some(pos) = block_pos {
             world
-                .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                .set_block_state(&pos, Block::AIR.id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
-            world.schedule_fluid_tick(block.id, block_pos, 5).await;
-        } else if state.id == Block::LAVA.default_state_id
-            || state.id == Block::WATER.default_state_id
-        {
-            world
-                .break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
-                .await;
-            world
-                .set_block_state(
-                    &block_pos,
-                    Block::AIR.default_state_id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                )
-                .await;
-        } else {
-            let (block, state) = world
-                .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
-                .await;
-            if waterlogged_check(&block, &state).is_some() {
-                let state_id = set_waterlogged(&block, &state, false);
-                world
-                    .set_block_state(
-                        &block_pos.offset(direction.to_offset()),
-                        state_id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-                world
-                    .schedule_fluid_tick(block.id, block_pos.offset(direction.to_offset()), 5)
-                    .await;
-            } else {
-                return;
-            }
-        }
-
-        let item = if state.id == Block::LAVA.default_state_id {
-            &Item::LAVA_BUCKET
-        } else {
-            &Item::WATER_BUCKET
-        };
-
-        if player.gamemode.load() == GameMode::Creative {
-            //Check if player already has the item in their inventory
-            for i in 0..player.inventory.main_inventory.len() {
-                if player.inventory.main_inventory[i].lock().await.item.id == item.id {
-                    return;
-                }
-            }
-            //If not, add it to the inventory
-            let mut item_stack = ItemStack::new(1, item);
-            player
-                .inventory
-                .insert_stack_anywhere(&mut item_stack)
-                .await;
-        } else {
-            let item_stack = ItemStack::new(1, item);
-            player
-                .inventory
-                .set_stack(player.inventory.get_selected_slot().into(), item_stack)
-                .await;
+            //TODO: Pickup in inv
         }
     }
 }
@@ -197,6 +84,11 @@ impl PumpkinItem for EmptyBucketItem {
 #[async_trait]
 impl PumpkinItem for FilledBucketItem {
     async fn normal_use(&self, item: &Item, player: &Player) {
+        if item.id == Item::MILK_BUCKET.id {
+            // TODO implement milk bucket
+            return;
+        }
+
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
@@ -207,67 +99,24 @@ impl PumpkinItem for FilledBucketItem {
             state_id != Block::AIR.id
         };
 
-        let Some((pos, direction)) = world.raycast(start_pos, end_pos, checker).await else {
-            return;
-        };
+        let (block_pos, block_direction) = world.raytrace(start_pos, end_pos, checker).await;
 
-        if item.id != Item::LAVA_BUCKET.id && world.dimension_type == DimensionType::TheNether {
-            return;
-        }
-        let (block, state) = world.get_block_and_block_state(&pos).await;
-        if waterlogged_check(&block, &state).is_some() && item.id == Item::WATER_BUCKET.id {
-            let state_id = set_waterlogged(&block, &state, true);
+        if let (Some(pos), Some(direction)) = (block_pos, block_direction) {
             world
-                .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                .set_block_state(
+                    &pos.offset(direction.to_offset()),
+                    // Block::WATER.default_state_id,
+                    if item.id == Item::WATER_BUCKET.id {
+                        Block::WATER.default_state_id
+                    } else {
+                        Block::LAVA.default_state_id
+                    },
+                    BlockFlags::NOTIFY_NEIGHBORS,
+                )
                 .await;
-            world.schedule_fluid_tick(block.id, pos, 5).await;
-        } else {
-            let (block, state) = world
-                .get_block_and_block_state(&pos.offset(direction.to_offset()))
-                .await;
-
-            if waterlogged_check(&block, &state).is_some() {
-                if item.id == Item::LAVA_BUCKET.id {
-                    return;
-                }
-                let state_id = set_waterlogged(&block, &state, true);
-
-                world
-                    .set_block_state(
-                        &pos.offset(direction.to_offset()),
-                        state_id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-                world
-                    .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
-                    .await;
-            } else if state.id == Block::AIR.default_state_id {
-                world
-                    .set_block_state(
-                        &pos.offset(direction.to_offset()),
-                        if item.id == Item::LAVA_BUCKET.id {
-                            Block::LAVA.default_state_id
-                        } else {
-                            Block::WATER.default_state_id
-                        },
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-            } else {
-                return;
+            if player.gamemode.load() != GameMode::Creative {
+                //TODO: Pickup in inv
             }
-        }
-
-        //TODO: Spawn entity if applicable
-        if player.gamemode.load() != GameMode::Creative {
-            let item_stack = ItemStack::new(1, &Item::BUCKET);
-            player
-                .inventory
-                .set_stack(player.inventory.get_selected_slot().into(), item_stack)
-                .await;
         }
     }
 }
-
-//TODO: Implement MilkBucketItem
