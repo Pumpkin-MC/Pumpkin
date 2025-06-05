@@ -12,7 +12,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
@@ -25,7 +25,7 @@ pub struct SugarCaneBlock;
 #[async_trait]
 impl PumpkinBlock for SugarCaneBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
-        if !can_place_at(world, pos).await {
+        if !can_place_at(world.as_ref(), pos).await {
             world.break_block(pos, None, BlockFlags::empty()).await;
         }
     }
@@ -75,20 +75,21 @@ impl PumpkinBlock for SugarCaneBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        can_place_at(world, block_pos).await
+        can_place_at(block_accessor, block_pos).await
     }
 }
 
-async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
-    let block_below = world.get_block(&block_pos.down()).await;
+async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let block_below = block_accessor.get_block(&block_pos.down()).await;
 
     if block_below == Block::SUGAR_CANE {
         return true;
@@ -98,7 +99,7 @@ async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
         || block_below.is_tagged_with("minecraft:sand").unwrap()
     {
         for direction in HorizontalFacing::all() {
-            let block = world
+            let block = block_accessor
                 .get_block(&block_pos.down().offset(direction.to_offset()))
                 .await;
 

@@ -12,7 +12,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::EntityBase;
@@ -26,7 +26,7 @@ pub struct CactusBlock;
 #[async_trait]
 impl PumpkinBlock for CactusBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
-        if !can_place_at(world, pos).await {
+        if !can_place_at(world.as_ref(), pos).await {
             world.break_block(pos, None, BlockFlags::empty()).await;
         }
     }
@@ -89,19 +89,20 @@ impl PumpkinBlock for CactusBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        can_place_at(world, block_pos).await
+        can_place_at(block_accessor, block_pos).await
     }
 }
 
-async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     // TODO: use tags
     // Disallow to place any blocks nearby a cactus
     for direction in BlockDirection::horizontal() {

@@ -156,6 +156,10 @@ impl BlockPos {
         BlockPos(self.0 + offset)
     }
 
+    pub fn add(&self, x: i32, y: i32, z: i32) -> Self {
+        BlockPos::new(self.0.x + x, self.0.y + y, self.0.z + z)
+    }
+
     pub fn offset_dir(&self, offset: Vector3<i32>, direction: i32) -> Self {
         BlockPos(Vector3::new(
             self.0.x + offset.x * direction,
@@ -168,8 +172,16 @@ impl BlockPos {
         self.offset(Vector3::new(0, 1, 0))
     }
 
+    pub fn up_height(&self, height: i32) -> Self {
+        self.offset(Vector3::new(0, height, 0))
+    }
+
     pub fn down(&self) -> Self {
         self.offset(Vector3::new(0, -1, 0))
+    }
+
+    pub fn down_height(&self, height: i32) -> Self {
+        self.offset(Vector3::new(0, -height, 0))
     }
 }
 impl Serialize for BlockPos {

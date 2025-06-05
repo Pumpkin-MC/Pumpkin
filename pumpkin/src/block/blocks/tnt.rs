@@ -98,7 +98,7 @@ impl PumpkinBlock for TNTBlock {
         entity
             .set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02))
             .await;
-        let fuse = rand::rng().random_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
+        let fuse = rand::thread_rng().gen_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
         world.spawn_entity(tnt).await;
     }

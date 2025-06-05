@@ -29,7 +29,7 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::IndexedRandom;
+use rand::prelude::SliceRandom;
 use rsa::RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
@@ -142,14 +142,14 @@ impl Server {
         let seed = level_info.world_gen_settings.seed;
         log::info!("Loading Overworld: {seed}");
         let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), seed),
+            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             DimensionType::Overworld,
             block_registry.clone(),
         );
         log::info!("Loading Nether: {seed}");
         let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), seed),
+            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             DimensionType::TheNether,
             block_registry.clone(),
@@ -164,7 +164,7 @@ impl Server {
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
-        let locker = AnvilLevelLocker::look(&world_path).expect("Failed to lock level");
+        let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
@@ -456,7 +456,7 @@ impl Server {
     pub async fn get_random_player(&self) -> Option<Arc<Player>> {
         let players = self.get_all_players().await;
 
-        players.choose(&mut rand::rng()).map(Arc::<_>::clone)
+        players.choose(&mut rand::thread_rng()).map(Arc::<_>::clone)
     }
 
     /// Searches for a player by their UUID across all worlds.

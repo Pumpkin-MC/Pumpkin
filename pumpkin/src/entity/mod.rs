@@ -6,13 +6,9 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
-    Block,
-    block_properties::{
-        Facing, HorizontalFacing, get_block_and_state_by_state_id, get_state_by_state_id,
-    },
+    block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
     entity::{EntityPose, EntityType},
-    fluid::Fluid,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -651,20 +647,15 @@ impl Entity {
             for y in blockpos.0.y..=blockpos1.0.y {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
-                    let id = world.get_block_state_id(&pos).await;
-                    if let Some(fluid) = Fluid::from_state_id(id) {
+                    let (block, state) = world.get_block_and_block_state(&pos).await;
+                    world
+                        .block_registry
+                        .on_entity_collision(block, &world, entity, pos, state, server)
+                        .await;
+                    if let Ok(fluid) = world.get_fluid(&pos).await {
                         world
                             .block_registry
                             .on_entity_collision_fluid(&fluid, entity)
-                            .await;
-                    } else {
-                        let (block, state) = get_block_and_state_by_state_id(id).unwrap_or((
-                            Block::AIR,
-                            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-                        ));
-                        world
-                            .block_registry
-                            .on_entity_collision(block, &world, entity, pos, state, server)
                             .await;
                     }
                 }
@@ -679,7 +670,6 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
-        dbg!("aa");
         // TODO: handle world change
         self.world
             .read()

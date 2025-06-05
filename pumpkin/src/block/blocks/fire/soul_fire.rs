@@ -7,6 +7,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockAccessor;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
@@ -47,16 +48,17 @@ impl PumpkinBlock for SoulFireBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        FireBlockBase::can_place_at(world, block_pos).await
-            && Self::is_soul_base(&world.get_block(&block_pos.down()).await)
+        FireBlockBase::can_place_at(block_accessor, block_pos).await
+            && Self::is_soul_base(&block_accessor.get_block(&block_pos.down()).await)
     }
 
     async fn broken(

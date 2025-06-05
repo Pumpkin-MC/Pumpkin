@@ -1,3 +1,4 @@
+use blocks::bamboo::BambooBlock;
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
@@ -11,13 +12,22 @@ use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
 use blocks::glass_panes::GlassPaneBlock;
 use blocks::iron_bars::IronBarsBlock;
-use blocks::lily_pad::LilyPadBlock;
 use blocks::logs::LogBlock;
 use blocks::nether_portal::NetherPortalBlock;
 use blocks::note::NoteBlock;
 use blocks::piston::piston::PistonBlock;
 use blocks::piston::piston_extension::PistonExtensionBlock;
 use blocks::piston::piston_head::PistonHeadBlock;
+use blocks::plant::bush::BushBlock;
+use blocks::plant::dry_vegetation::DryVegetationBlock;
+use blocks::plant::flower::FlowerBlock;
+use blocks::plant::flowerbed::FlowerbedBlock;
+use blocks::plant::leaf_litter::LeafLitterBlock;
+use blocks::plant::lily_pad::LilyPadBlock;
+use blocks::plant::mushroom_plant::MushroomPlantBlock;
+use blocks::plant::sapling::SaplingBlock;
+use blocks::plant::short_plant::ShortPlantBlock;
+use blocks::plant::tall_plant::TallPlantBlock;
 use blocks::pumpkin::PumpkinBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::observer::ObserverBlock;
@@ -39,6 +49,7 @@ use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
 use blocks::trapdoor::TrapDoorBlock;
+use blocks::vine::VineBlock;
 use blocks::walls::WallBlock;
 use blocks::{
     chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
@@ -52,6 +63,8 @@ use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::get_seed;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
@@ -76,6 +89,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Blocks
     manager.register(BedBlock);
+    manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(ChestBlock);
     manager.register(CraftingTableBlock);
@@ -89,16 +103,26 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
+    manager.register(BambooBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(StairBlock);
+    manager.register(ShortPlantBlock);
+    manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
+    manager.register(VineBlock);
     manager.register(TNTBlock);
+    manager.register(BushBlock);
+    manager.register(FlowerBlock);
     manager.register(TorchBlock);
     manager.register(TrapDoorBlock);
+    manager.register(MushroomPlantBlock);
+    manager.register(FlowerbedBlock);
+    manager.register(LeafLitterBlock);
     manager.register(WallBlock);
     manager.register(NetherPortalBlock);
+    manager.register(TallPlantBlock);
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);
@@ -164,7 +188,13 @@ pub async fn drop_loot(
 
     if experience {
         if let Some(experience) = &block.experience {
-            let amount = experience.experience.get();
+            // TODO: this is bad, this is ugly, this is used :D
+            let amount =
+                experience
+                    .experience
+                    .get(&mut pumpkin_util::random::RandomGenerator::Xoroshiro(
+                        Xoroshiro::from_seed(get_seed()),
+                    ));
             // TODO: Silk touch gives no exp
             if amount > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
@@ -176,9 +206,9 @@ pub async fn drop_loot(
 async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     let height = EntityType::ITEM.dimension[1] / 2.0;
     let pos = Vector3::new(
-        f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
-        f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
-        f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
+        f64::from(pos.0.x) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
+        f64::from(pos.0.y) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25) - f64::from(height),
+        f64::from(pos.0.z) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
     );
 
     let entity = world.create_entity(pos, EntityType::ITEM);
