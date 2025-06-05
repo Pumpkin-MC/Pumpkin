@@ -901,7 +901,10 @@ pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSeri
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use pumpkin_config::{AdvancedConfiguration, advanced_config, override_config_for_testing};
+    use pumpkin_data::BlockDirection;
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
@@ -914,7 +917,23 @@ mod tests {
     use crate::chunk::io::{ChunkIO, LoadedData};
     use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
-    use crate::level::{LevelFolder, SyncChunk};
+    use crate::level::{Level, LevelFolder, SyncChunk};
+    use crate::world::{BlockAccessor, BlockRegistryExt};
+
+    struct BlockRegistry;
+
+    #[async_trait]
+    impl BlockRegistryExt for BlockRegistry {
+        async fn can_place_at(
+            &self,
+            _block: &pumpkin_data::Block,
+            _block_accessor: &dyn BlockAccessor,
+            _block_pos: &BlockPos,
+            _face: BlockDirection,
+        ) -> bool {
+            true
+        }
+    }
 
     async fn get_chunks(
         saver: &ChunkFileManager<AnvilChunkFile>,
@@ -992,13 +1011,22 @@ mod tests {
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let block_registry = Arc::new(BlockRegistry);
 
         // Generate chunks
         let mut chunks = vec![];
+        let level = Arc::new(Level::from_root_folder(
+            temp_dir.path().to_path_buf(),
+            block_registry.clone(),
+            0,
+            Dimension::Overworld,
+        ));
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(&position);
+                let chunk = generator
+                    .generate_chunk(&level, block_registry.as_ref(), &position)
+                    .await;
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1260,13 +1288,22 @@ mod tests {
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let block_registry = Arc::new(BlockRegistry);
 
         // Generate chunks
         let mut chunks = vec![];
+        let level = Arc::new(Level::from_root_folder(
+            temp_dir.path().to_path_buf(),
+            block_registry.clone(),
+            0,
+            Dimension::Overworld,
+        ));
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(&position);
+                let chunk = generator
+                    .generate_chunk(&level, block_registry.as_ref(), &position)
+                    .await;
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }

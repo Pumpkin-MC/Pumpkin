@@ -44,6 +44,30 @@ pub enum RandomDeriver {
     Legacy(LegacySplitter),
 }
 
+// TODO: Write unit test for this
+#[macro_export]
+macro_rules! population_seed_fn {
+    () => {
+        pub fn get_population_seed(world_seed: u64, block_x: i32, block_z: i32) -> u64 {
+            let mut rand = Self::from_seed(world_seed);
+            let l = rand.next_i64() | 1;
+            let m = rand.next_i64() | 1;
+            let base = (block_x as i64)
+                .wrapping_mul(l)
+                .wrapping_add((block_z as i64).wrapping_mul(m));
+            (base as u64) ^ world_seed
+        }
+    };
+}
+
+// TODO: Write unit test for this
+#[inline]
+pub fn get_decorator_seed(population_seed: u64, index: usize, step: usize) -> u64 {
+    population_seed
+        .wrapping_add(index as u64)
+        .wrapping_add(10_000u64.wrapping_mul(step as u64))
+}
+
 #[enum_dispatch]
 pub trait RandomImpl {
     fn split(&mut self) -> Self;

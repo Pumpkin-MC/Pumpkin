@@ -224,7 +224,7 @@ impl ChunkSections {
         block_state: BlockStateId,
     ) {
         let y = y - self.min_y;
-        debug_assert!(y >= 0);
+        debug_assert!(y > 0);
         let relative_y = y as usize;
 
         self.set_relative_block(relative_x, relative_y, relative_z, block_state);

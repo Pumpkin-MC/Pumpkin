@@ -61,7 +61,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Biomes
   - [x] Redstone (W.I.P)
   - [x] Liquid Physics
-  - [ ] Vegetation
+  - [x] Vegetation
 - Player
   - [x] Skins
   - [x] Client brand
