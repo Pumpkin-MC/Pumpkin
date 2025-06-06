@@ -62,10 +62,10 @@ pub async fn from_type(
         goals: Mutex::new(vec![]),
         navigator: Mutex::new(Navigator::default()),
     };
-    #[allow(clippy::single_match)]
+    #[expect(clippy::single_match)]
     match entity_type {
         EntityType::ZOMBIE => Zombie::make(&mob).await,
-        // TODO!
+        // TODO
         _ => (),
     }
     Arc::new(mob)
