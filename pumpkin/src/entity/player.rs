@@ -1377,6 +1377,25 @@ impl Player {
         }
     }
 
+    pub async fn swap_item(&self) {
+        let (off_hand_item, main_hand_item) = {
+            let (off_hand_binding, main_hand_binding) = (
+                self.inventory.get_stack(40).await,
+                self.inventory.held_item(),
+            );
+            (
+                *off_hand_binding.lock().await,
+                *main_hand_binding.lock().await,
+            )
+        };
+        self.inventory.set_stack(40, main_hand_item).await;
+        self.inventory
+            .set_stack(self.inventory.get_selected_slot() as usize, off_hand_item)
+            .await;
+
+        // todo this.player.stopUsingItem();
+    }
+
     pub async fn send_system_message(&self, text: &TextComponent) {
         self.send_system_message_raw(text, false).await;
     }
