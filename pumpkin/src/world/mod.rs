@@ -44,7 +44,7 @@ use pumpkin_data::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::client::play::{
-    CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
+    CBlockEvent, CChangeDifficulty, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::ser::serializer::Serializer;
@@ -65,9 +65,12 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::{
+    Difficulty,
+    math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
+};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
 };
@@ -119,7 +122,7 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
-    pub level_info: Arc<LevelData>,
+    pub level_info: Arc<RwLock<LevelData>>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
@@ -147,7 +150,7 @@ impl World {
     #[must_use]
     pub fn load(
         level: Level,
-        level_info: Arc<LevelData>,
+        level_info: LevelData,
         dimension_type: DimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
@@ -163,7 +166,7 @@ impl World {
 
         Self {
             level: Arc::new(level),
-            level_info,
+            level_info: Arc::new(RwLock::new(level_info)),
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -193,6 +196,18 @@ impl World {
         self.broadcast_packet_all(&CRemoveMobEffect::new(
             entity.entity_id.into(),
             VarInt(effect_type as i32),
+        ))
+        .await;
+    }
+
+    pub async fn change_difficulty(&self, difficulty: Difficulty) {
+        let mut level_info = self.level_info.write().await;
+
+        level_info.difficulty = difficulty;
+
+        self.broadcast_packet_all(&CChangeDifficulty::new(
+            difficulty as u8,
+            level_info.difficulty_locked,
         ))
         .await;
     }
@@ -565,6 +580,9 @@ impl World {
 
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
+
+        // Difficulty of the world
+        player.send_difficulty_update().await;
         {
             let command_dispatcher = server.command_dispatcher.read().await;
             client_suggestions::send_c_commands_packet(&player, &command_dispatcher).await;
@@ -582,9 +600,10 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let spawn_position = Vector2::new(self.level_info.spawn_x, self.level_info.spawn_z);
+            let info = &self.level_info.read().await;
+            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
             let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
-            let info = &self.level_info;
+            
             let position = Vector3::new(
                 f64::from(info.spawn_x),
                 f64::from(pos_y),
@@ -914,7 +933,7 @@ impl World {
         player.send_permission_lvl_update().await;
 
         // Teleport
-        let info = &self.level_info;
+        let info = &self.level_info.read().await;
         let mut position = Vector3::new(
             f64::from(info.spawn_x),
             f64::from(info.spawn_y),

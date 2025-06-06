@@ -32,7 +32,7 @@ impl HungerManager {
         let level = self.level.load();
         let exhaustion = self.exhaustion.load();
         let health = player.living_entity.health.load();
-        let difficulty = player.world().await.level_info.difficulty.clone();
+        let difficulty = player.world().await.level_info.read().await.difficulty;
         // Decrease hunger level on exhaustion
         if level != 0 && exhaustion > 4.0 {
             self.exhaustion.store(exhaustion - 4.0);

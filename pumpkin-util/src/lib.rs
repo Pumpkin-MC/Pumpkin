@@ -1,11 +1,12 @@
-use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub use difficulty::Difficulty;
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;
 
 pub mod biome;
+pub mod difficulty;
 pub mod gamemode;
 pub mod loot_table;
 pub mod math;
@@ -49,14 +50,6 @@ pub fn encompassing_bits(count: usize) -> u8 {
     } else {
         count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
     }
-}
-
-#[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Clone, Debug)]
-pub enum Difficulty {
-    Peaceful,
-    Easy,
-    Normal,
-    Hard,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]

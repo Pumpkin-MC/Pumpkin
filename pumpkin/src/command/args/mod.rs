@@ -7,6 +7,7 @@ use pumpkin_data::entity::EffectType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
     GameMode,
@@ -28,6 +29,7 @@ pub mod bossbar_style;
 pub mod bounded_num;
 pub mod command;
 mod coordinate;
+pub mod difficulty;
 pub mod entities;
 pub mod entity;
 pub mod gamemode;
@@ -88,6 +90,7 @@ pub enum Arg<'a> {
     Pos2D(Vector2<f64>),
     Rotation(f32, f32),
     GameMode(GameMode),
+    Difficulty(Difficulty),
     CommandTree(CommandTree),
     Item(&'a str),
     ResourceLocation(&'a str),

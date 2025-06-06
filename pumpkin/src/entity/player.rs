@@ -60,11 +60,11 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::{
     IdOr, RawPacket, ServerPacket,
     client::play::{
-        CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
-        CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
-        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
-        GameEvent, MetaDataType, PlayerAction,
+        CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd, CChunkBatchStart,
+        CChunkData, CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle,
+        CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn,
+        CSetExperience, CSetHealth, CStopSound, CSubtitle, CSystemChatMessage, CTitleText,
+        CUnloadChunk, CUpdateMobEffect, GameEvent, MetaDataType, PlayerAction,
     },
     codec::identifier::Identifier,
     ser::packet::Packet,
@@ -831,6 +831,18 @@ impl Player {
             .await;
     }
 
+    /// Sets the player's difficulty level.
+    pub async fn send_difficulty_update(&self) {
+        let world = self.world().await;
+        let level_info = world.level_info.read().await;
+        self.client
+            .enqueue_packet(&CChangeDifficulty::new(
+                level_info.difficulty as u8,
+                level_info.difficulty_locked,
+            ))
+            .await;
+    }
+
     /// Sets the player's permission level and notifies the client.
     pub async fn set_permission_lvl(
         self: &Arc<Self>,
@@ -891,7 +903,7 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
-        let info = &new_world.level_info;
+        let info = &new_world.level_info.read().await;
         let position = if let Some(pos) = position {
             pos
         } else {
