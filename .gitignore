@@ -133,5 +133,5 @@ run/
 result
 result-*
 
-# Generate Data
+# Generated Data
 pumpkin-data/src/generated
