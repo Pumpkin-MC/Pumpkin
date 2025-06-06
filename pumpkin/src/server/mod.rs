@@ -407,19 +407,19 @@ impl Server {
     }
 
     /// Sets the difficulty of the server.
-    /// 
+    ///
     /// This function updates the difficulty level of the server and broadcasts the change to all players.
     /// It also iterates through all worlds to ensure the difficulty is applied consistently.
     /// If `force_update` is `Some(true)`, the difficulty will be set regardless of the current state.
     /// If `force_update` is `Some(false)` or `None`, the difficulty will only be updated if it is not locked.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `difficulty`: The new difficulty level to set. This should be one of the variants of the `Difficulty` enum.
     /// * `force_update`: An optional boolean that, if set to `Some(true)`, forces the difficulty to be updated even if it is currently locked.
-    /// 
+    ///
     /// # Note
-    /// 
+    ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
     pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: Option<bool>) {
         let mut level_info = self.level_info.write().await;

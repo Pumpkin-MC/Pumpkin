@@ -603,7 +603,7 @@ impl World {
             let info = &self.level_info.read().await;
             let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
             let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
-            
+
             let position = Vector3::new(
                 f64::from(info.spawn_x),
                 f64::from(pos_y),
