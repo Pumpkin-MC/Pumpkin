@@ -563,16 +563,16 @@ impl World {
             ))
             .await;
 
-        // Spawn in initial chunks
-        // This is made before the player teleport so that the player doesn't glitch out when spawning
-        chunker::player_join(&player).await;
-
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
         {
             let command_dispatcher = server.command_dispatcher.read().await;
             client_suggestions::send_c_commands_packet(&player, &command_dispatcher).await;
         };
+
+        // Spawn in initial chunks
+        // This is made before the player teleport so that the player doesn't glitch out when spawning
+        chunker::player_join(&player).await;
 
         // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
