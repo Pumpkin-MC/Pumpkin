@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fs,
     hash::{DefaultHasher, Hash, Hasher},
 };
 
@@ -1010,7 +1011,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/density_function.json");
 
     let mut reprs: NoiseRouterReprs =
-        serde_json5::from_str(include_str!("../../assets/density_function.json"))
+        serde_json5::from_str(&fs::read_to_string("../assets/density_function.json").unwrap())
             .expect("could not deserialize density_function.json");
 
     // The `final_density` function is mutated at runtime for the aquifer generator in Java.

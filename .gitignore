@@ -132,3 +132,6 @@ run/
 .direnv
 result
 result-*
+
+# Generate Data
+pumpkin-data/src/generated

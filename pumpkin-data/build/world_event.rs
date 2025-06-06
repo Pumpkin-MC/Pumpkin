@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
@@ -8,7 +8,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/world_event.json");
 
     let events: HashMap<String, u16> =
-        serde_json::from_str(include_str!("../../assets/world_event.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/world_event.json").unwrap())
             .expect("Failed to parse world_event.json");
     let mut variants = TokenStream::new();
 

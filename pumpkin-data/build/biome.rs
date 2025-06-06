@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
@@ -105,10 +105,10 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/multi_noise_biome_tree.json");
 
     let biomes: HashMap<String, Biome> =
-        serde_json::from_str(include_str!("../../assets/biome.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/biome.json").unwrap())
             .expect("Failed to parse biome.json");
     let biome_trees: MultiNoiseBiomeSuppliers =
-        serde_json::from_str(include_str!("../../assets/multi_noise_biome_tree.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/multi_noise_biome_tree.json").unwrap())
             .expect("Failed to parse multi_noise_biome_tree.json");
 
     let mut variants = TokenStream::new();
@@ -158,6 +158,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         use pumpkin_util::biome::{TemperatureModifier, Weather};
         use serde::{de, Deserializer};
+        use crate::biome::de::Deserialize;
         use std::{fmt, hash::{Hasher, Hash}};
 
         #[derive(Debug)]

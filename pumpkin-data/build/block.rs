@@ -3,7 +3,10 @@ use proc_macro2::{Span, TokenStream};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 use syn::{Ident, LitInt, LitStr};
 
 fn const_block_name_from_block_name(block: &str) -> String {
@@ -399,7 +402,7 @@ impl BlockState {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
-        let instrument = self.instrument.clone();
+        let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
         let opacity = match self.opacity {
@@ -429,7 +432,7 @@ impl BlockState {
                 id: #id,
                 state_flags: #state_flags,
                 side_flags: #side_flags,
-                instrument: #instrument,
+                instrument: Instrument::#instrument,
                 luminance: #luminance,
                 piston_behavior: #piston_behavior,
                 hardness: #hardness,
@@ -1089,11 +1092,12 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/properties.json");
 
-    let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
-        .expect("Failed to parse blocks.json");
+    let blocks_assets: BlockAssets =
+        serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
+            .expect("Failed to parse blocks.json");
 
     let generated_properties: Vec<GeneratedProperty> =
-        serde_json::from_str(include_str!("../../assets/properties.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
     let mut type_from_raw_id_arms = TokenStream::new();
@@ -1338,8 +1342,6 @@ pub(crate) fn build() -> TokenStream {
             fn from_value(value: &str) -> Self;
         }
 
-
-
         pub static COLLISION_SHAPES: &[CollisionShape] = &[
             #(#shapes),*
         ];
@@ -1352,7 +1354,59 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
+        pub fn get_block(registry_id: &str) -> Option<Block> {
+           let key = registry_id.replace("minecraft:", "");
+           Block::from_registry_key(key.as_str())
+        }
 
+        pub fn get_block_by_id(id: u16) -> Option<Block> {
+            Block::from_id(id)
+        }
+
+        pub fn get_state_by_state_id(id: u16) -> Option<BlockState> {
+            if let Some(block) = Block::from_state_id(id) {
+                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+                Some(state.get_state())
+            } else {
+                None
+            }
+        }
+
+        pub fn get_block_by_state_id(id: u16) -> Option<Block> {
+            Block::from_state_id(id)
+        }
+
+        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(Block, BlockState)> {
+            if let Some(block) = Block::from_state_id(id) {
+                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+                Some((block, state.get_state()))
+            } else {
+                None
+            }
+        }
+
+        pub fn get_block_by_item(item_id: u16) -> Option<Block> {
+            Block::from_item_id(item_id)
+        }
+
+        pub fn get_block_collision_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
+            let state = get_state_by_state_id(state_id)?;
+            let mut shapes: Vec<CollisionShape> = vec![];
+            for i in 0..state.collision_shapes.len() {
+               let shape = &COLLISION_SHAPES[state.collision_shapes[i] as usize];
+                shapes.push(*shape);
+            }
+            Some(shapes)
+        }
+
+        pub fn blocks_movement(block_state: &BlockState) -> bool {
+            if block_state.is_solid() {
+                if let Some(block) = get_block_by_state_id(block_state.id) {
+                    return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
+                }
+            }
+            false
+        }
 
         impl Block {
             #constants
