@@ -24,12 +24,14 @@ impl FireBlockBase {
         Block::FIRE
     }
 
-    pub fn can_place_on(_block: &Block) -> bool {
-        // TODO: make sure the block can be lit
-        // block
-        //     .is_tagged_with("minecraft:soul_fire_base_blocks")
-        //     .unwrap()
-        true
+    pub fn can_place_on(block: &Block) -> bool {
+        let block = block.clone();
+
+        // Make sure the block below is not a fire block or fluid block
+        block != Block::SOUL_FIRE
+            && block != Block::FIRE
+            && block != Block::WATER
+            && block != Block::LAVA
     }
 
     pub async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {

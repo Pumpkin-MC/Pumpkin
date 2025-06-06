@@ -122,7 +122,9 @@ impl PumpkinBlock for FireBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        FireBlockBase::can_place_at(block_accessor, block_pos).await
+        let state = block_accessor.get_block_state(block_pos).await;
+        // TODO: add more
+        state.is_side_solid(BlockDirection::Up)
     }
 
     async fn broken(
