@@ -562,6 +562,11 @@ impl World {
                 true,
             ))
             .await;
+
+        // Spawn in initial chunks
+        // This is made before the player teleport so that the player doesn't glitch out when spawning
+        chunker::player_join(&player).await;
+
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
         {
@@ -577,10 +582,12 @@ impl World {
 
             (position, yaw, pitch)
         } else {
+            let spawn_position = Vector2::new(self.level_info.spawn_x, self.level_info.spawn_z);
+            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
             let info = &self.level_info;
             let position = Vector3::new(
                 f64::from(info.spawn_x),
-                f64::from(info.spawn_y) + 1.0,
+                f64::from(pos_y),
                 f64::from(info.spawn_z),
             );
             let yaw = info.spawn_angle;
@@ -784,9 +791,6 @@ impl World {
                 ))
                 .await;
         }
-
-        // Spawn in initial chunks
-        chunker::player_join(&player).await;
 
         // if let Some(bossbars) = self..lock().await.get_player_bars(&player.gameprofile.id) {
         //     for bossbar in bossbars {
