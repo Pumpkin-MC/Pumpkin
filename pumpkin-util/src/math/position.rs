@@ -152,6 +152,14 @@ impl BlockPos {
         )
     }
 
+    pub fn to_centered_f64(&self) -> Vector3<f64> {
+        Vector3::new(
+            self.0.x as f64 + 0.5,
+            self.0.y as f64 + 0.5,
+            self.0.z as f64 + 0.5,
+        )
+    }
+
     pub fn offset(&self, offset: Vector3<i32>) -> Self {
         BlockPos(self.0 + offset)
     }
@@ -184,6 +192,7 @@ impl BlockPos {
         self.offset(Vector3::new(0, -height, 0))
     }
 }
+
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
