@@ -157,7 +157,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use pumpkin_util::biome::{TemperatureModifier, Weather};
-        use serde::{de, Deserializer};
+        use serde::{Deserializer, de};
         use crate::biome::de::Deserialize;
         use std::{fmt, hash::{Hasher, Hash}};
 
