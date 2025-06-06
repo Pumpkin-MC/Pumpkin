@@ -79,23 +79,6 @@ pub trait FlowingFluid {
 
     async fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
-    async fn is_waterlogged(&self, world: &Arc<World>, pos: &BlockPos) -> Option<BlockStateId> {
-        let block = world.get_block(pos).await;
-
-        let state_id = world.get_block_state_id(pos).await;
-        // Check if the block has waterlogged property and if it's true
-        if let Some(properties) = block.properties(state_id) {
-            if properties
-                .to_props()
-                .iter()
-                .any(|(key, value)| key == "waterlogged" && value == "true")
-            {
-                return Some(state_id);
-            }
-        }
-        None
-    }
-
     fn is_same_fluid(&self, fluid: &Fluid, other_state_id: BlockStateId) -> bool {
         if let Some(other_fluid) = Fluid::from_state_id(other_state_id) {
             return fluid.id == other_fluid.id;
@@ -106,9 +89,7 @@ pub trait FlowingFluid {
     async fn spread_fluid(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
         let block_state_id = world.get_block_state_id(block_pos).await;
         if let Some(new_fluid_state) = self.get_new_liquid(world, fluid, block_pos).await {
-            if new_fluid_state.to_state_id(fluid) != block_state_id
-                && self.is_waterlogged(world, block_pos).await.is_none()
-            {
+            if new_fluid_state.to_state_id(fluid) != block_state_id {
                 world
                     .set_block_state(
                         block_pos,
@@ -118,14 +99,6 @@ pub trait FlowingFluid {
                     .await;
             }
             self.spread(world, fluid, block_pos, &new_fluid_state).await;
-        } else if self.is_waterlogged(world, block_pos).await.is_some() {
-            self.spread(
-                world,
-                fluid,
-                block_pos,
-                &FlowingFluidProperties::default(fluid),
-            )
-            .await;
         } else {
             world
                 .break_block(block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
@@ -186,14 +159,6 @@ pub trait FlowingFluid {
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
 
-            if fluid.default_state_index == Fluid::WATER.default_state_index
-                && self.is_waterlogged(world, &neighbor_pos).await.is_some()
-            {
-                source_count += 1;
-                highest_level = highest_level.max(8);
-                continue;
-            }
-
             if !self.is_same_fluid(fluid, neighbor_state_id) {
                 continue;
             }
@@ -222,9 +187,7 @@ pub trait FlowingFluid {
         let above_pos = block_pos.up();
         let above_state_id = world.get_block_state_id(&above_pos).await;
 
-        if self.is_same_fluid(fluid, above_state_id)
-            || self.is_waterlogged(world, &above_pos).await.is_some()
-        {
+        if self.is_same_fluid(fluid, above_state_id) {
             return Some(self.get_flowing(fluid, Level::L8, true).await);
         }
 
@@ -407,9 +370,7 @@ pub trait FlowingFluid {
         state_id: BlockStateId,
     ) {
         //TODO Implement lava water mix
-        if self.is_waterlogged(world, pos).await.is_some() {
-            return;
-        }
+
         world
             .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
             .await;

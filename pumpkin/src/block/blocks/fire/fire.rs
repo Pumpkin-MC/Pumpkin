@@ -1,6 +1,7 @@
 use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::entity::EntityType;
 use pumpkin_registry::DimensionType;
+use pumpkin_world::world::BlockAccessor;
 use rand::Rng;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -27,7 +28,7 @@ pub struct FireBlock;
 
 impl FireBlock {
     pub fn get_fire_tick_delay() -> i32 {
-        30 + rand::rng().random_range(0..10)
+        30 + rand::thread_rng().gen_range(0..10)
     }
 }
 
@@ -82,7 +83,7 @@ impl PumpkinBlock for FireBlock {
             if ticks < 0 {
                 base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
             } else if base_entity.entity_type == EntityType::PLAYER {
-                let rnd_ticks = rand::rng().random_range(1..3);
+                let rnd_ticks = rand::thread_rng().gen_range(1..3);
                 base_entity
                     .fire_ticks
                     .store(ticks + rnd_ticks, Ordering::Relaxed);
@@ -112,15 +113,18 @@ impl PumpkinBlock for FireBlock {
 
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        FireBlockBase::can_place_at(world, block_pos).await
+        let state = block_accessor.get_block_state(block_pos).await;
+        // TODO: add more
+        state.is_side_solid(BlockDirection::Up)
     }
 
     async fn broken(

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::text::TextComponent;
-use rand::Rng;
+use rand::{Rng, thread_rng};
 
 use crate::command::{
     CommandError, CommandExecutor, CommandSender,
@@ -109,7 +109,7 @@ impl CommandExecutor for Executor {
         };
 
         // Use same random seed for all targets to ensure sound synchronization
-        let seed = rand::rng().random::<f64>();
+        let seed = thread_rng().r#gen::<f64>();
 
         // Track how many players actually received the sound
         let mut players_who_heard = 0;

@@ -4,6 +4,7 @@ pub mod boundingbox;
 pub mod experience;
 pub mod float_provider;
 pub mod int_provider;
+pub mod pool;
 pub mod position;
 pub mod vector2;
 pub mod vector3;

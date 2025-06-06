@@ -1,5 +1,6 @@
 use num_bigint::BigInt;
 use pumpkin_protocol::client::login::CEncryptionRequest;
+use rand::rngs::OsRng;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, traits::PublicKeyParts as _};
 use sha1::Sha1;
 use sha2::Digest;
@@ -18,8 +19,8 @@ impl KeyStore {
         let private_key = Self::generate_private_key();
 
         let public_key_der = rsa_der::public_key_to_der(
-            &private_key.n().to_be_bytes(),
-            &private_key.e().to_be_bytes(),
+            &private_key.n().to_bytes_be(),
+            &private_key.e().to_bytes_be(),
         )
         .into_boxed_slice();
         Self {
@@ -30,7 +31,7 @@ impl KeyStore {
 
     fn generate_private_key() -> RsaPrivateKey {
         // Found out that OsRng is faster than rand::thread_rng here
-        let mut rng = rand::rng();
+        let mut rng = OsRng;
 
         // let pub_key = RsaPublicKey::from(&priv_key);
         RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")

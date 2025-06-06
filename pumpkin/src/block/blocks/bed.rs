@@ -9,6 +9,7 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -37,21 +38,25 @@ impl BlockMetadata for BedBlock {
 impl PumpkinBlock for BedBlock {
     async fn can_place_at(
         &self,
-        _server: &Server,
-        world: &World,
-        player: &Player,
+        _server: Option<&Server>,
+        world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let facing = player.living_entity.entity.get_horizontal_facing();
-
-        world.get_block_state(block_pos).await.replaceable()
-            && world
-                .get_block_state(&block_pos.offset(facing.to_offset()))
-                .await
-                .replaceable()
+        if let Some(player) = player {
+            let facing = player.living_entity.entity.get_horizontal_facing();
+            let world = world.unwrap();
+            return world.get_block_state(block_pos).await.replaceable()
+                && world
+                    .get_block_state(&block_pos.offset(facing.to_offset()))
+                    .await
+                    .replaceable();
+        }
+        false
     }
 
     async fn on_place(

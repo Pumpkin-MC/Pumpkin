@@ -1,4 +1,4 @@
-use pumpkin_data::chunk::Biome;
+use pumpkin_data::{BlockState, chunk::Biome};
 use pumpkin_macros::default_block_state;
 use pumpkin_util::{
     math::vector3::Vector3,
@@ -172,7 +172,7 @@ impl SurfaceTerrainBuilder {
                         break;
                     }
 
-                    chunk.set_block_state(&pos, default_state.to_state());
+                    chunk.set_block_state(&pos, &default_state.to_state());
                 }
             }
         }
@@ -247,17 +247,17 @@ impl SurfaceTerrainBuilder {
                         && rand.next_f64() > 0.15)
                 {
                     if snow_blocks <= snow_block_count && y > snow_bottom {
-                        chunk.set_block_state(&pos, Self::SNOW_BLOCK.to_state());
+                        chunk.set_block_state(&pos, &Self::SNOW_BLOCK.to_state());
                         snow_blocks += 1;
                     } else {
-                        chunk.set_block_state(&pos, Self::PACKED_ICE.to_state());
+                        chunk.set_block_state(&pos, &Self::PACKED_ICE.to_state());
                     }
                 }
             }
         }
     }
 
-    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> RawBlockState {
+    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> BlockState {
         let offset = (self
             .terracotta_bands_offset_noise
             .sample(pos.x as f64, 0.0, pos.z as f64)
@@ -266,5 +266,6 @@ impl SurfaceTerrainBuilder {
         let offset = pos.y + offset;
         self.terracotta_bands
             [(offset as usize + self.terracotta_bands.len()) % self.terracotta_bands.len()]
+        .to_state()
     }
 }

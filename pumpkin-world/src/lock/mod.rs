@@ -6,7 +6,7 @@ pub mod anvil;
 
 // Gets unlocked when dropped
 pub trait LevelLocker<T>: Send + Sync {
-    fn look(folder: &Path) -> Result<T, LockError>;
+    fn lock(folder: &Path) -> Result<T, LockError>;
 }
 
 #[derive(Error, Debug)]
