@@ -56,8 +56,11 @@ pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
 
-pub static PERMISSION_MANAGER: LazyLock<RwLock<PermissionManager>> =
-    LazyLock::new(|| RwLock::new(PermissionManager::new(PERMISSION_REGISTRY.clone())));
+pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLock::new(|| {
+    Arc::new(RwLock::new(PermissionManager::new(
+        PERMISSION_REGISTRY.clone(),
+    )))
+});
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched

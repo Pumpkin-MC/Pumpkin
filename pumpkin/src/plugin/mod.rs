@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 pub mod api;
 pub mod loader;
 
-use crate::server::Server;
+use crate::{PERMISSION_MANAGER, server::Server};
 pub use api::*;
 
 /// A trait for handling events dynamically.
@@ -316,6 +316,7 @@ impl PluginManager {
             Arc::clone(server),
             Arc::clone(&self.handlers),
             Arc::clone(self_ref),
+            Arc::clone(&PERMISSION_MANAGER),
         );
 
         if let Err(e) = instance.on_load(&context).await {
@@ -394,6 +395,7 @@ impl PluginManager {
             Arc::clone(server),
             Arc::clone(&self.handlers),
             Arc::clone(self_ref),
+            Arc::clone(&PERMISSION_MANAGER),
         );
 
         plugin.instance.on_unload(&context).await.ok();

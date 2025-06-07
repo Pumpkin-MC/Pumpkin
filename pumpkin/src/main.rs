@@ -88,8 +88,11 @@ pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
 
-pub static PERMISSION_MANAGER: LazyLock<RwLock<PermissionManager>> =
-    LazyLock::new(|| RwLock::new(PermissionManager::new(PERMISSION_REGISTRY.clone())));
+pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLock::new(|| {
+    Arc::new(RwLock::new(PermissionManager::new(
+        PERMISSION_REGISTRY.clone(),
+    )))
+});
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_VERSION: &str = env!("GIT_VERSION");
