@@ -68,8 +68,8 @@ impl Cylindrical {
         // for view distances 2-32 it usually gives 5 - 20 chunks more than needed if the player is on ground
         // this looks scary but this few calculations are definitely faster than ~5 reallocations
         // this part "3167) >> 10" is a replacement for flointing point multiplication
-        let estimated_capacity = ((self.view_distance.get() as usize + 3).pow(2) * 3167) >> 10;
-        let mut all_chunks = Vec::with_capacity(estimated_capacity);
+        let estimated_capacity = ((self.view_distance.get() as u64 + 3).pow(2) * 3167) >> 10;
+        let mut all_chunks = Vec::with_capacity(estimated_capacity as usize);
 
         for x in self.left()..=self.right() {
             let mut was_in = false;
