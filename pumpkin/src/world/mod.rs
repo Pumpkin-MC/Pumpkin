@@ -44,7 +44,7 @@ use pumpkin_data::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::client::play::{
-    CBlockEvent, CChangeDifficulty, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
+    CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::ser::serializer::Serializer;
@@ -200,16 +200,10 @@ impl World {
         .await;
     }
 
-    pub async fn change_difficulty(&self, difficulty: Difficulty) {
+    pub async fn set_difficulty(&self, difficulty: Difficulty) {
         let mut level_info = self.level_info.write().await;
 
         level_info.difficulty = difficulty;
-
-        self.broadcast_packet_all(&CChangeDifficulty::new(
-            difficulty as u8,
-            level_info.difficulty_locked,
-        ))
-        .await;
     }
 
     pub async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
