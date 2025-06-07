@@ -55,8 +55,8 @@ mod entity_pose;
 
 #[rustfmt::skip]
 #[path = "generated/entity_status.rs"]
-
 mod entity_status;
+
 #[rustfmt::skip]
 #[path = "generated/entity_type.rs"]
 mod entity_type;
