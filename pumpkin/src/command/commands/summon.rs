@@ -39,13 +39,15 @@ impl CommandExecutor for Executor {
                     .first()
                     .cloned()
                     .ok_or(CommandError::InvalidRequirement)?;
-                let info = &world.level_info;
-                // default position for spawning a player, in this case for mob
-                let pos = pos.unwrap_or(Vector3::new(
-                    f64::from(info.spawn_x),
-                    f64::from(info.spawn_y) + 1.0,
-                    f64::from(info.spawn_z),
-                ));
+                let pos = {
+                    let info = &world.level_info.read().await;
+                    // default position for spawning a player, in this case for mob
+                    pos.unwrap_or(Vector3::new(
+                        f64::from(info.spawn_x),
+                        f64::from(info.spawn_y) + 1.0,
+                        f64::from(info.spawn_z),
+                    ))
+                };
 
                 (world, pos)
             }

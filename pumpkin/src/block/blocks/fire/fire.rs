@@ -27,6 +27,7 @@ use super::FireBlockBase;
 pub struct FireBlock;
 
 impl FireBlock {
+    #[must_use]
     pub fn get_fire_tick_delay() -> i32 {
         30 + rand::thread_rng().gen_range(0..10)
     }

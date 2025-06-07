@@ -1,3 +1,3 @@
-pub(crate) mod flowing;
-pub(crate) mod lava;
-pub(crate) mod water;
+pub mod flowing;
+pub mod lava;
+pub mod water;

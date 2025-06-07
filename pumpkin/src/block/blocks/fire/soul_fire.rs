@@ -20,6 +20,7 @@ use super::FireBlockBase;
 pub struct SoulFireBlock;
 
 impl SoulFireBlock {
+    #[must_use]
     pub fn is_soul_base(block: &Block) -> bool {
         block
             .is_tagged_with("minecraft:soul_fire_base_blocks")

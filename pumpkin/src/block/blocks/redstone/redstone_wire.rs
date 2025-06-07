@@ -308,6 +308,7 @@ async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &Bl
     false
 }
 
+#[must_use]
 pub fn make_cross(power: Integer0To15) -> RedstoneWireProperties {
     RedstoneWireProperties {
         north: NorthWireConnection::Side,
@@ -392,6 +393,7 @@ async fn get_all_sides(
     wire
 }
 
+#[must_use]
 pub fn is_dot(wire: RedstoneWireProperties) -> bool {
     wire.north == NorthWireConnection::None
         && wire.south == SouthWireConnection::None
@@ -399,6 +401,7 @@ pub fn is_dot(wire: RedstoneWireProperties) -> bool {
         && wire.west == WestWireConnection::None
 }
 
+#[must_use]
 pub fn is_cross(wire: RedstoneWireProperties) -> bool {
     wire.north == NorthWireConnection::Side
         && wire.south == SouthWireConnection::Side

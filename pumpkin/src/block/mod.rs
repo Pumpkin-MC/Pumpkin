@@ -63,8 +63,7 @@ use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::get_seed;
-use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
@@ -76,7 +75,7 @@ use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::P
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
 
-pub(crate) mod blocks;
+pub mod blocks;
 mod fluid;
 mod loot;
 pub mod pumpkin_block;
@@ -188,13 +187,8 @@ pub async fn drop_loot(
 
     if experience {
         if let Some(experience) = &block.experience {
-            // TODO: this is bad, this is ugly, this is used :D
-            let amount =
-                experience
-                    .experience
-                    .get(&mut pumpkin_util::random::RandomGenerator::Xoroshiro(
-                        Xoroshiro::from_seed(get_seed()),
-                    ));
+            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+            let amount = experience.experience.get(&mut random);
             // TODO: Silk touch gives no exp
             if amount > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;

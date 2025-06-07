@@ -7,9 +7,9 @@ use pumpkin_util::math::position::BlockPos;
 use crate::world::World;
 
 #[expect(clippy::module_inception)]
-pub(crate) mod piston;
-pub(crate) mod piston_extension;
-pub(crate) mod piston_head;
+pub mod piston;
+pub mod piston_extension;
+pub mod piston_head;
 
 const MAX_MOVABLE_BLOCKS: usize = 12;
 

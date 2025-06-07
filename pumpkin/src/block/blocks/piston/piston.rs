@@ -45,6 +45,7 @@ impl BlockMetadata for PistonBlock {
 }
 
 impl PistonBlock {
+    #[must_use]
     pub fn is_movable(
         block: &Block,
         state: &BlockState,

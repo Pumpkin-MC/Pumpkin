@@ -81,6 +81,14 @@ impl CommandSender {
         }
     }
 
+    /// Check if the sender has a specific permission
+    pub async fn has_permission(&self, node: &str) -> bool {
+        match self {
+            Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
+            Self::Player(p) => p.has_permission(node).await,
+        }
+    }
+
     #[must_use]
     pub fn position(&self) -> Option<Vector3<f64>> {
         match self {
