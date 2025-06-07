@@ -120,9 +120,9 @@ impl PermissionAttachment {
 #[derive(Default)]
 pub struct PermissionManager {
     /// Global registry of permissions
-    registry: Arc<RwLock<PermissionRegistry>>,
+    pub registry: Arc<RwLock<PermissionRegistry>>,
     /// Player permission attachments
-    attachments: HashMap<uuid::Uuid, Arc<RwLock<PermissionAttachment>>>,
+    pub attachments: HashMap<uuid::Uuid, Arc<RwLock<PermissionAttachment>>>,
 }
 
 impl PermissionManager {

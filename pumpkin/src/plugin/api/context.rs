@@ -1,7 +1,10 @@
 use std::{fs, path::Path, sync::Arc};
 
-use crate::{PERMISSION_MANAGER, PERMISSION_REGISTRY, command::client_suggestions};
-use pumpkin_util::{PermissionLvl, permission::Permission};
+use crate::command::client_suggestions;
+use pumpkin_util::{
+    PermissionLvl,
+    permission::{Permission, PermissionManager},
+};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -24,6 +27,7 @@ pub struct Context {
     pub server: Arc<Server>,
     pub handlers: Arc<RwLock<HandlerMap>>,
     pub plugin_manager: Arc<RwLock<PluginManager>>,
+    pub permission_manager: Arc<RwLock<PermissionManager>>,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -41,12 +45,14 @@ impl Context {
         server: Arc<Server>,
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<RwLock<PluginManager>>,
+        permission_manager: Arc<RwLock<PermissionManager>>,
     ) -> Self {
         Self {
             metadata,
             server,
             handlers,
             plugin_manager,
+            permission_manager,
         }
     }
 
@@ -134,13 +140,14 @@ impl Context {
             ));
         }
 
-        let mut registry = PERMISSION_REGISTRY.write().await;
+        let manager = self.permission_manager.read().await;
+        let mut registry = manager.registry.write().await;
         registry.register_permission(permission)
     }
 
     /// Check if a player has a permission
     pub async fn player_has_permission(&self, player_uuid: &uuid::Uuid, permission: &str) -> bool {
-        let permission_manager = PERMISSION_MANAGER.read().await;
+        let permission_manager = self.permission_manager.read().await;
 
         // If the player isn't online, we need to find their op level
         let player_op_level = (self.server.get_player_by_uuid(*player_uuid).await)
