@@ -19,7 +19,7 @@ impl GetClientSideArgParser for DifficultyArgumentConsumer {
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
-        None
+        Some(SuggestionProviders::AskServer)
     }
 }
 
@@ -43,7 +43,12 @@ impl ArgumentConsumer for DifficultyArgumentConsumer {
         _server: &'a Server,
         _input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        let difficulties = ["easy", "normal", "hard", "peaceful"];
+        let suggestions: Vec<CommandSuggestion> = difficulties
+            .iter()
+            .map(|difficulty| CommandSuggestion::new((*difficulty).to_string(), None))
+            .collect();
+        Ok(Some(suggestions))
     }
 }
 
