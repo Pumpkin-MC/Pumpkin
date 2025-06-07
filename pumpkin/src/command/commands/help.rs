@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::StreamExt;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -124,20 +125,24 @@ impl CommandExecutor for BaseHelpExecutor {
         };
 
         let dispatcher = server.command_dispatcher.read().await;
-        let mut commands: Vec<&CommandTree> = dispatcher
+        let commands: Vec<&CommandTree> = dispatcher
             .commands
             .values()
             .filter_map(|cmd| match cmd {
                 Command::Tree(tree) => Some(tree),
                 Command::Alias(_) => None,
             })
-            .filter(|tree| {
-                dispatcher
-                    .permissions
-                    .get(&tree.names[0])
-                    .is_none_or(|perm| sender.has_permission_lvl(*perm))
-            })
             .collect();
+
+        let mut commands: Vec<&CommandTree> = futures::stream::iter(commands.iter())
+            .filter(|tree| async {
+                if let Some(perm) = dispatcher.permissions.get(&tree.names[0]) {
+                    return sender.has_permission(perm.as_str()).await;
+                }
+                false
+            })
+            .collect()
+            .await;
 
         commands.sort_by(|a, b| a.names[0].cmp(&b.names[0]));
 

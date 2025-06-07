@@ -22,7 +22,7 @@ use super::{
     item::ItemEntity,
 };
 use crate::{
-    block,
+    PERMISSION_MANAGER, block,
     command::{client_suggestions, dispatcher::CommandDispatcher},
     data::op_data::OPERATOR_CONFIG,
     net::{Client, PlayerConfig},
@@ -1723,6 +1723,14 @@ impl Player {
         } else {
             screen_handler.send_content_updates().await;
         }
+    }
+
+    /// Check if the player has a specific permission
+    pub async fn has_permission(&self, node: &str) -> bool {
+        let perm_manager = PERMISSION_MANAGER.read().await;
+        perm_manager
+            .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
+            .await
     }
 }
 

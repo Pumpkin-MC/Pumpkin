@@ -40,17 +40,20 @@ use plugin::PluginManager;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
-    sync::LazyLock,
+    sync::{Arc, LazyLock},
 };
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::server::CURRENT_MC_VERSION;
 use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
-use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::{
+    permission::{PermissionManager, PermissionRegistry},
+    text::{TextComponent, color::NamedColor},
+};
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -74,6 +77,12 @@ use pumpkin::HEAP_PROFILER;
 
 pub static PLUGIN_MANAGER: LazyLock<Mutex<PluginManager>> =
     LazyLock::new(|| Mutex::new(PluginManager::new()));
+
+pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
+
+pub static PERMISSION_MANAGER: LazyLock<RwLock<PermissionManager>> =
+    LazyLock::new(|| RwLock::new(PermissionManager::new(PERMISSION_REGISTRY.clone())));
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_VERSION: &str = env!("GIT_VERSION");

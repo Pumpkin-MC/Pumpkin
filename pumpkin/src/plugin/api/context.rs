@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc};
 
-use crate::command::client_suggestions;
-use pumpkin_util::PermissionLvl;
+use crate::{PERMISSION_MANAGER, PERMISSION_REGISTRY, command::client_suggestions};
+use pumpkin_util::{PermissionLvl, permission::Permission};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -79,11 +79,18 @@ impl Context {
     pub async fn register_command(
         &self,
         tree: crate::command::tree::CommandTree,
-        permission: PermissionLvl,
+        permission_node: &str,
     ) {
+        let plugin_name = self.metadata.name;
+        let full_permission_node = if permission_node.contains(':') {
+            permission_node.to_string()
+        } else {
+            format!("{plugin_name}:{permission_node}")
+        };
+
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, permission);
+            dispatcher_lock.register(tree, full_permission_node.as_str());
         };
 
         for world in self.server.worlds.read().await.iter() {
@@ -110,6 +117,35 @@ impl Context {
                 client_suggestions::send_c_commands_packet(player, &command_dispatcher).await;
             }
         }
+    }
+
+    /// Register a permission for this plugin
+    pub async fn register_permission(&self, permission: Permission) -> Result<(), String> {
+        // Ensure the permission has the correct namespace
+        let plugin_name = self.metadata.name;
+
+        if !permission.node.starts_with(&format!("{plugin_name}:")) {
+            return Err(format!(
+                "Permission {} must use the plugin's namespace ({})",
+                permission.node, plugin_name
+            ));
+        }
+
+        let mut registry = PERMISSION_REGISTRY.write().await;
+        registry.register_permission(permission)
+    }
+
+    /// Check if a player has a permission
+    pub async fn player_has_permission(&self, player_uuid: &uuid::Uuid, permission: &str) -> bool {
+        let permission_manager = PERMISSION_MANAGER.read().await;
+
+        // If the player isn't online, we need to find their op level
+        let player_op_level = (self.server.get_player_by_uuid(*player_uuid).await)
+            .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
+
+        permission_manager
+            .has_permission(player_uuid, permission, player_op_level)
+            .await
     }
 
     /// Asynchronously registers an event handler for a specific event type.
