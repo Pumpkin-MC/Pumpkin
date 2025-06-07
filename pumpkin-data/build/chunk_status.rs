@@ -1,3 +1,5 @@
+use std::fs;
+
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -6,7 +8,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/chunk_status.json");
 
     let chunk_status: Vec<String> =
-        serde_json::from_str(include_str!("../../assets/chunk_status.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/chunk_status.json").unwrap())
             .expect("Failed to parse chunk_status.json");
     let mut variants = TokenStream::new();
 

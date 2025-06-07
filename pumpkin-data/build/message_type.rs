@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use proc_macro2::TokenStream;
 use pumpkin_util::text::style::Style;
@@ -29,7 +29,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/message_type.json");
 
     let json: HashMap<String, RawChatType> =
-        serde_json::from_str(include_str!("../../assets/message_type.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/message_type.json").unwrap())
             .expect("Failed to parse message_type.json");
     let mut variants = TokenStream::new();
 

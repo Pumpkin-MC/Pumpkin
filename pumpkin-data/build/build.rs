@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use std::{env, fs, path::Path, process::Command};
+use std::{fs, path::Path, process::Command};
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
@@ -27,6 +27,8 @@ mod spawn_egg;
 mod status_effect;
 mod tag;
 mod world_event;
+
+pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
     write_generated_file(packet::build(), "packet.rs");
@@ -67,8 +69,7 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
 }
 
 pub fn write_generated_file(content: TokenStream, out_file: &str) {
-    let out_dir = env::var_os("OUT_DIR").expect("failed to get OUT_DIR env var");
-    let path = Path::new(&out_dir).join(out_file);
+    let path = Path::new(OUT_DIR).join(out_file);
     let code = content.to_string();
 
     fs::write(&path, code).expect("Failed to write to fs");

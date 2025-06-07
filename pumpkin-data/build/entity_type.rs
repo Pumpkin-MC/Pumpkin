@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -60,7 +60,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/entities.json");
 
     let json: HashMap<String, EntityType> =
-        serde_json::from_str(include_str!("../../assets/entities.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/entities.json").unwrap())
             .expect("Failed to parse entities.json");
 
     let mut consts = TokenStream::new();
