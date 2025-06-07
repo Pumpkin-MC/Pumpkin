@@ -1,6 +1,6 @@
 use std::{fs, path::Path, sync::Arc};
 
-use crate::{PERMISSION_MANAGER, PERMISSION_REGISTRY, command::client_suggestions};
+use crate::command::client_suggestions;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
