@@ -365,6 +365,7 @@ pub struct BlockState {
     pub piston_behavior: PistonBehavior,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
+    pub outline_shapes: Vec<u16>,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -426,6 +427,10 @@ impl BlockState {
             .collision_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let outline_shapes = self
+            .outline_shapes
+            .iter()
+            .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -438,6 +443,7 @@ impl BlockState {
                 piston_behavior: #piston_behavior,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
+                outline_shapes: &[#(#outline_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }

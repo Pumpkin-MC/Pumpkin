@@ -104,6 +104,31 @@ pub mod block_properties {
         Some(shapes)
     }
 
+    pub fn get_block_outline_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
+        let state = get_state_by_state_id(state_id)?;
+        let mut shapes: Vec<CollisionShape> = vec![];
+        for i in 0..state.outline_shapes.len() {
+            let shape = &COLLISION_SHAPES[state.outline_shapes[i] as usize];
+            shapes.push(*shape);
+        }
+        let block = get_block_by_state_id(state_id)?;
+        if block.properties(state.id).and_then(|properties| {
+            properties
+                .to_props()
+                .into_iter()
+                .find(|p| p.0 == "waterlogged")
+                .map(|(_, value)| value == true.to_string())
+        }) == Some(true)
+        {
+            // If the block is waterlogged, add a water shape
+            let shape =
+                &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
+            shapes.push(*shape);
+        }
+
+        Some(shapes)
+    }
+
     pub fn blocks_movement(block_state: &BlockState) -> bool {
         if block_state.is_solid() {
             if let Some(block) = get_block_by_state_id(block_state.id) {
