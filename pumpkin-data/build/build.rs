@@ -31,6 +31,10 @@ mod world_event;
 pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
+    let path = Path::new(OUT_DIR);
+    if !path.exists() {
+        let _ = fs::create_dir(OUT_DIR);
+    }
     write_generated_file(packet::build(), "packet.rs");
     write_generated_file(screen::build(), "screen.rs");
     write_generated_file(particle::build(), "particle.rs");
