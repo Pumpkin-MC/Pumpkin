@@ -97,7 +97,10 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
-    dispatcher.register(difficulty::init_command_tree(), "minecraft:command.difficulty");
+    dispatcher.register(
+        difficulty::init_command_tree(),
+        "minecraft:command.difficulty",
+    );
     dispatcher.register(
         stopsound::init_command_tree(),
         "minecraft:command.stopsound",
