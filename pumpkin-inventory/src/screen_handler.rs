@@ -466,7 +466,19 @@ pub trait ScreenHandler: Send + Sync {
         action_type: SlotActionType,
         player: &dyn InventoryPlayer,
     ) {
-        //TODO: Implement quickcraft, Clone, PickupAll, Throw
+        // azom jump-point
+        log::info!("=========================on_slot_click=========================");
+        log::info!("SlotActionType: {:?}", action_type);
+        log::info!("slot_index: {:?}", slot_index);
+        log::info!("button: {:?}", button);
+
+        if action_type == SlotActionType::PickupAll && button == 0 {
+            let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
+            let item_type = cursor_stack.get_item();
+            log::info!("item_type: {:?}", item_type);
+        }
+
+        //TODO: Implement quickcraft, PickupAll, Throw
         if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
             && (button == 0 || button == 1)
         {
