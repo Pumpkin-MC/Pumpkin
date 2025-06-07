@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{
     block::entities::{BlockEntity, command_block::CommandBlockEntity},
     chunk::TickPriority,
@@ -87,5 +87,25 @@ impl PumpkinBlock for CommandBlock {
             }
             // TODO
         }
+    }
+
+    async fn can_place_at(
+        &self,
+        _server: Option<&crate::server::Server>,
+        _world: Option<&World>,
+        _block_accessor: &dyn pumpkin_world::world::BlockAccessor,
+        player: Option<&crate::entity::player::Player>,
+        _block: &Block,
+        _block_pos: &BlockPos,
+        _face: pumpkin_data::BlockDirection,
+        _use_item_on: Option<&pumpkin_protocol::server::play::SUseItemOn>,
+    ) -> bool {
+        if let Some(player) = player {
+            if player.gamemode.load() == GameMode::Creative {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

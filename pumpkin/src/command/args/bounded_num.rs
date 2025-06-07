@@ -14,7 +14,7 @@ use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
 /// Consumes a single generic num, but only if it's in bounds.
-pub(crate) struct BoundedNumArgumentConsumer<T: ToFromNumber> {
+pub struct BoundedNumArgumentConsumer<T: ToFromNumber> {
     min_inclusive: Option<T>,
     max_inclusive: Option<T>,
     name: Option<&'static str>,
@@ -139,7 +139,8 @@ impl Display for Number {
 }
 
 impl<T: ToFromNumber> BoundedNumArgumentConsumer<T> {
-    pub(crate) const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             min_inclusive: None,
             max_inclusive: None,
@@ -147,26 +148,35 @@ impl<T: ToFromNumber> BoundedNumArgumentConsumer<T> {
         }
     }
 
-    pub(crate) const fn min(mut self, min_inclusive: T) -> Self {
+    #[must_use]
+    pub const fn min(mut self, min_inclusive: T) -> Self {
         self.min_inclusive = Some(min_inclusive);
         self
     }
 
+    #[must_use]
     #[allow(unused)]
-    pub(crate) const fn max(mut self, max_inclusive: T) -> Self {
+    pub const fn max(mut self, max_inclusive: T) -> Self {
         self.max_inclusive = Some(max_inclusive);
         self
     }
 
-    pub(crate) const fn name(mut self, name: &'static str) -> Self {
+    #[must_use]
+    pub const fn name(mut self, name: &'static str) -> Self {
         self.name = Some(name);
         self
     }
 }
 
-pub(crate) trait ToFromNumber: PartialOrd + Copy + Send + Sync + FromStr {
+pub trait ToFromNumber: PartialOrd + Copy + Send + Sync + FromStr {
     fn to_number(self) -> Number;
     fn from_number(arg: &Number) -> Option<Self>;
+}
+
+impl<T: ToFromNumber> Default for BoundedNumArgumentConsumer<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ToFromNumber for f64 {

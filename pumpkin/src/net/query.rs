@@ -136,7 +136,7 @@ async fn handle_packet(
                                 }
                             }
 
-                            let plugin_manager = crate::PLUGIN_MANAGER.lock().await;
+                            let plugin_manager = crate::PLUGIN_MANAGER.read().await;
                             let plugins = plugin_manager
                                 .active_plugins()
                                 .into_iter()

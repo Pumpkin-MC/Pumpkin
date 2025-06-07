@@ -12,7 +12,7 @@ use super::{
     Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };
 
-pub(crate) struct SoundArgumentConsumer;
+pub struct SoundArgumentConsumer;
 
 impl GetClientSideArgParser for SoundArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {

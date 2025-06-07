@@ -7,14 +7,32 @@ use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::DimensionType;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 #[pumpkin_block("minecraft:nether_portal")]
 pub struct NetherPortalBlock;
+
+impl NetherPortalBlock {
+    /// Gets the portal delay time based on entity type and gamemode
+    async fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
+        let entity_type = entity.get_entity().entity_type;
+
+        match entity_type {
+            EntityType::PLAYER => (world.get_player_by_id(entity.get_entity().entity_id).await)
+                .map_or(80, |player| match player.gamemode.load() {
+                    GameMode::Creative => 0,
+                    _ => 80,
+                }),
+            _ => 0,
+        }
+    }
+}
 
 #[async_trait]
 impl PumpkinBlock for NetherPortalBlock {
@@ -52,7 +70,7 @@ impl PumpkinBlock for NetherPortalBlock {
         _state: BlockState,
         server: &Server,
     ) {
-        let world = if world.dimension_type == DimensionType::TheNether {
+        let target_world = if world.dimension_type == DimensionType::TheNether {
             server
                 .get_world_from_dimension(DimensionType::Overworld)
                 .await
@@ -61,6 +79,12 @@ impl PumpkinBlock for NetherPortalBlock {
                 .get_world_from_dimension(DimensionType::TheNether)
                 .await
         };
-        entity.get_entity().try_use_portal(80, world, pos).await;
+
+        let portal_delay = Self::get_portal_time(world, entity).await;
+
+        entity
+            .get_entity()
+            .try_use_portal(portal_delay, target_world, pos)
+            .await;
     }
 }

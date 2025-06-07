@@ -34,14 +34,14 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
-    CCloseContainer, CCombatDeath, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync,
-    CGameEvent, CKeepAlive, COpenScreen, CParticle, CPlayDisconnect, CPlayerAbilities,
-    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetContainerContent,
-    CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth,
-    CSetPlayerInventory, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTitleText,
-    CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction,
-    PlayerInfoFlags, PreviousMessage,
+    Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
+    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
+    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
+    CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition,
+    CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -70,7 +70,6 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::SyncChunk;
 
-use crate::block;
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
@@ -83,6 +82,7 @@ use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
+use crate::{PERMISSION_MANAGER, block};
 
 use super::combat::{self, AttackType, player_attack_sound};
 use super::effect::Effect;
@@ -930,6 +930,18 @@ impl Player {
             .await;
     }
 
+    /// Sets the player's difficulty level.
+    pub async fn send_difficulty_update(&self) {
+        let world = self.world().await;
+        let level_info = world.level_info.read().await;
+        self.client
+            .enqueue_packet(&CChangeDifficulty::new(
+                level_info.difficulty as u8,
+                level_info.difficulty_locked,
+            ))
+            .await;
+    }
+
     /// Sets the player's permission level and notifies the client.
     pub async fn set_permission_lvl(
         self: &Arc<Self>,
@@ -990,7 +1002,7 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
-        let info = &new_world.level_info;
+        let info = &new_world.level_info.read().await;
         let position = if let Some(pos) = position {
             pos
         } else {
@@ -1811,6 +1823,14 @@ impl Player {
         } else {
             screen_handler.send_content_updates().await;
         }
+    }
+
+    /// Check if the player has a specific permission
+    pub async fn has_permission(&self, node: &str) -> bool {
+        let perm_manager = PERMISSION_MANAGER.read().await;
+        perm_manager
+            .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
+            .await
     }
 }
 

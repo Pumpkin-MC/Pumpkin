@@ -65,9 +65,12 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
 };
 use pumpkin_registry::DimensionType;
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::{
+    Difficulty,
+    math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
+};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
 };
@@ -119,7 +122,7 @@ impl PumpkinError for GetBlockError {
 pub struct World {
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
-    pub level_info: Arc<LevelData>,
+    pub level_info: Arc<RwLock<LevelData>>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: Arc<RwLock<HashMap<uuid::Uuid, Arc<Player>>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
@@ -147,7 +150,7 @@ impl World {
     #[must_use]
     pub fn load(
         level: Level,
-        level_info: Arc<LevelData>,
+        level_info: LevelData,
         dimension_type: DimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
@@ -163,7 +166,7 @@ impl World {
 
         Self {
             level: Arc::new(level),
-            level_info,
+            level_info: Arc::new(RwLock::new(level_info)),
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -195,6 +198,12 @@ impl World {
             VarInt(effect_type as i32),
         ))
         .await;
+    }
+
+    pub async fn set_difficulty(&self, difficulty: Difficulty) {
+        let mut level_info = self.level_info.write().await;
+
+        level_info.difficulty = difficulty;
     }
 
     pub async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
@@ -572,12 +581,20 @@ impl World {
                 true,
             ))
             .await;
+
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
+
+        // Difficulty of the world
+        player.send_difficulty_update().await;
         {
             let command_dispatcher = server.command_dispatcher.read().await;
             client_suggestions::send_c_commands_packet(&player, &command_dispatcher).await;
         };
+
+        // Spawn in initial chunks
+        // This is made before the player teleport so that the player doesn't glitch out when spawning
+        chunker::player_join(&player).await;
 
         // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
@@ -587,10 +604,13 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let info = &self.level_info;
+            let info = &self.level_info.read().await;
+            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
+
             let position = Vector3::new(
                 f64::from(info.spawn_x),
-                f64::from(info.spawn_y) + 1.0,
+                f64::from(pos_y),
                 f64::from(info.spawn_z),
             );
             let yaw = info.spawn_angle;
@@ -795,9 +815,6 @@ impl World {
                 .await;
         }
 
-        // Spawn in initial chunks
-        chunker::player_join(&player).await;
-
         // if let Some(bossbars) = self..lock().await.get_player_bars(&player.gameprofile.id) {
         //     for bossbar in bossbars {
         //         player.send_bossbar(bossbar).await;
@@ -920,7 +937,7 @@ impl World {
         player.send_permission_lvl_update().await;
 
         // Teleport
-        let info = &self.level_info;
+        let info = &self.level_info.read().await;
         let pitch = 0.0;
         let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
             respawn
@@ -1247,11 +1264,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-            let event = PLUGIN_MANAGER
-                .lock()
-                .await
-                .fire::<PlayerJoinEvent>(event)
-                .await;
+            let event = PLUGIN_MANAGER.read().await.fire(event).await;
 
             if !event.cancelled {
                 let current_players = current_players.clone();
@@ -1304,11 +1317,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
-            let event = PLUGIN_MANAGER
-                .lock()
-                .await
-                .fire::<PlayerLeaveEvent>(event)
-                .await;
+            let event = PLUGIN_MANAGER.read().await.fire(event).await;
 
             if !event.cancelled {
                 let players = self.players.read().await;
@@ -1517,7 +1526,7 @@ impl World {
         let event = BlockBreakEvent::new(cause.clone(), broken_block.clone(), *position, 0, false);
 
         let event = PLUGIN_MANAGER
-            .lock()
+            .read()
             .await
             .fire::<BlockBreakEvent>(event)
             .await;

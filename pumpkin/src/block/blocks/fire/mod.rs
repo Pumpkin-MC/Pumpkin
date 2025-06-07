@@ -24,6 +24,7 @@ impl FireBlockBase {
         Block::FIRE
     }
 
+    #[must_use]
     pub fn can_place_on(block: &Block) -> bool {
         let block = block.clone();
 

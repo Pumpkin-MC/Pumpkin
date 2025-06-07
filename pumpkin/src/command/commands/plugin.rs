@@ -36,7 +36,7 @@ impl CommandExecutor for ListExecutor {
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let plugin_manager = PLUGIN_MANAGER.lock().await;
+        let plugin_manager = PLUGIN_MANAGER.read().await;
         let plugins = plugin_manager.active_plugins();
 
         let message_text = if plugins.is_empty() {
@@ -84,7 +84,7 @@ impl CommandExecutor for LoadExecutor {
         let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
             return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
         };
-        let mut plugin_manager = PLUGIN_MANAGER.lock().await;
+        let mut plugin_manager = PLUGIN_MANAGER.write().await;
 
         if plugin_manager.is_plugin_active(plugin_name) {
             sender
@@ -134,7 +134,7 @@ impl CommandExecutor for UnloadExecutor {
         let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
             return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
         };
-        let mut plugin_manager = PLUGIN_MANAGER.lock().await;
+        let mut plugin_manager = PLUGIN_MANAGER.write().await;
 
         if !plugin_manager.is_plugin_active(plugin_name) {
             sender

@@ -7,6 +7,7 @@ use pumpkin_data::entity::EffectType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
     GameMode,
@@ -28,6 +29,7 @@ pub mod bossbar_style;
 pub mod bounded_num;
 pub mod command;
 mod coordinate;
+pub mod difficulty;
 pub mod entities;
 pub mod entity;
 pub mod gamemode;
@@ -88,6 +90,7 @@ pub enum Arg<'a> {
     Pos2D(Vector2<f64>),
     Rotation(f32, f32),
     GameMode(GameMode),
+    Difficulty(Difficulty),
     CommandTree(CommandTree),
     Item(&'a str),
     ResourceLocation(&'a str),
@@ -110,11 +113,11 @@ pub enum Arg<'a> {
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]
 pub type ConsumedArgs<'a> = HashMap<&'a str, Arg<'a>>;
 
-pub(crate) trait GetCloned<K, V: Clone> {
+pub trait GetCloned<K, V: Clone, S: ::std::hash::BuildHasher> {
     fn get_cloned(&self, key: &K) -> Option<V>;
 }
 
-impl<K: Eq + Hash, V: Clone> GetCloned<K, V> for HashMap<K, V> {
+impl<K: Eq + Hash, V: Clone, S: ::std::hash::BuildHasher> GetCloned<K, V, S> for HashMap<K, V, S> {
     fn get_cloned(&self, key: &K) -> Option<V> {
         self.get(key).cloned()
     }
@@ -126,7 +129,7 @@ pub trait FindArg<'a> {
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError>;
 }
 
-pub(crate) trait FindArgDefaultName<'a, T> {
+pub trait FindArgDefaultName<'a, T> {
     fn find_arg_default_name(&self, args: &'a ConsumedArgs) -> Result<T, CommandError>;
 }
 
