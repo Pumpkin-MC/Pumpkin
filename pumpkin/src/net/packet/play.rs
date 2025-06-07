@@ -1268,7 +1268,7 @@ impl Player {
                     log::debug!("todo");
                 }
                 Status::SwapItem => {
-                    self.swap_item().await;
+                    self.inventory.swap_item().await;
                 }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
