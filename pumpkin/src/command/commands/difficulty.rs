@@ -11,7 +11,7 @@ use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["difficulty"];
 
-const DESCRIPTION: &str = "Change the difficulty of the server";
+const DESCRIPTION: &str = "Change the difficulty of the world.";
 
 pub const ARG_DIFFICULTY: &str = "difficulty";
 struct DifficultyExecutor;
