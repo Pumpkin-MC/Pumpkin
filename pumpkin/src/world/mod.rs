@@ -469,7 +469,7 @@ impl World {
         let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
         let fluids_to_tick = self.level.get_and_tick_fluid_ticks().await;
 
-        for scheduled_tick in blocks_to_tick {
+        while let Some(scheduled_tick) = { blocks_to_tick.lock().await.pop_front() } {
             let block = self.get_block(&scheduled_tick.block_pos).await;
             if scheduled_tick.target_block_id != block.id {
                 continue;
