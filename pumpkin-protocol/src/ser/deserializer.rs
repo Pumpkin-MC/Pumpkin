@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::ser::NetworkReadExt;
+use serde::de::IntoDeserializer;
 
 use super::{Read, ReadingError};
 use serde::de::{self, DeserializeSeed, SeqAccess};
@@ -295,12 +296,12 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        visitor.visit_enum(self)
     }
 
     fn deserialize_identifier<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -315,5 +316,58 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         V: de::Visitor<'de>,
     {
         unimplemented!()
+    }
+}
+
+impl<'de, R: Read> de::EnumAccess<'de> for &mut Deserializer<R> {
+    type Error = ReadingError;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        let variant_index_i32 = self.inner.get_var_int()?.0;
+        let variant_index_u32: u32 = variant_index_i32.try_into().map_err(|_|
+            ReadingError::Message(format!(
+                "Invalid variant index {} for enum, cannot convert to u32",
+                variant_index_i32
+            )),
+        )?;
+        let val = seed.deserialize(variant_index_u32.into_deserializer())?;
+        Ok((val, self))
+    }
+}
+
+impl<'de, R: Read> de::VariantAccess<'de> for &mut Deserializer<R> {
+    type Error = ReadingError;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: de::DeserializeSeed<'de>,
+    {
+        seed.deserialize(self)
+    }
+
+    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        de::Deserializer::deserialize_tuple(self, len, visitor)
+    }
+
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        de::Deserializer::deserialize_struct(self, "", fields, visitor)
     }
 }

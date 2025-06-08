@@ -654,4 +654,53 @@ mod test {
                 .unwrap();
         assert_eq!(original_with_unit, deserialized_with_unit);
     }
+
+    #[test]
+    fn test_enum_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        enum MyEnum {
+            A,
+            B(i32),
+            C { x: i32, y: String },
+        }
+
+        let original_a = MyEnum::A;
+        let mut bytes_a = Vec::new();
+        let mut ser_a = serializer::Serializer::new(&mut bytes_a);
+        original_a.serialize(&mut ser_a).unwrap();
+        // VarInt for index 0
+        assert_eq!(bytes_a, vec![0x00]);
+        let de_cursor_a = Cursor::new(bytes_a);
+        let deserialized_a: MyEnum =
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_a)).unwrap();
+        assert_eq!(original_a, deserialized_a);
+
+        let original_b = MyEnum::B(123);
+        let mut bytes_b = Vec::new();
+        let mut ser_b = serializer::Serializer::new(&mut bytes_b);
+        original_b.serialize(&mut ser_b).unwrap();
+        // VarInt for index 1, then i32 for 123
+        let mut expected_bytes_b = vec![0x01];
+        expected_bytes_b.extend_from_slice(&123i32.to_be_bytes());
+        assert_eq!(bytes_b, expected_bytes_b);
+        let de_cursor_b = Cursor::new(bytes_b);
+        let deserialized_b: MyEnum =
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_b)).unwrap();
+        assert_eq!(original_b, deserialized_b);
+
+        let original_c = MyEnum::C { x: 456, y: "hello".to_string() };
+        let mut bytes_c = Vec::new();
+        let mut ser_c = serializer::Serializer::new(&mut bytes_c);
+        original_c.serialize(&mut ser_c).unwrap();
+        // VarInt for index 2, then i32 for 456, then string "hello"
+        let mut expected_bytes_c = vec![0x02];
+        expected_bytes_c.extend_from_slice(&456i32.to_be_bytes());
+        expected_bytes_c.push(0x05); // VarInt for string length 5
+        expected_bytes_c.extend_from_slice("hello".as_bytes());
+        assert_eq!(bytes_c, expected_bytes_c);
+        let de_cursor_c = Cursor::new(bytes_c);
+        let deserialized_c: MyEnum =
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_c)).unwrap();
+        assert_eq!(original_c, deserialized_c);
+    }
 }
