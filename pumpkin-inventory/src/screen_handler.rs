@@ -476,6 +476,7 @@ pub trait ScreenHandler: Send + Sync {
             let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
             let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
+            // TODO: we also need to iterate over the item stacks in the crafting spaces
             for item_stack in player.get_inventory().main_inventory.iter() {
                 if to_pick_up == 0 {
                     break;
@@ -534,7 +535,6 @@ pub trait ScreenHandler: Send + Sync {
             }
         }
 
-        //TODO: Implement Throw
         if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
             && (button == 0 || button == 1)
         {
