@@ -706,4 +706,26 @@ mod test {
             MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_c)).unwrap();
         assert_eq!(original_c, deserialized_c);
     }
+
+    #[test]
+    fn test_tuple_struct_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct MyTupleStruct(i32, String);
+
+        let original = MyTupleStruct(789, "world".to_string());
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+
+        let mut expected_bytes = Vec::new();
+        expected_bytes.extend_from_slice(&789i32.to_be_bytes());
+        expected_bytes.push(0x05); // VarInt for string length 5
+        expected_bytes.extend_from_slice("world".as_bytes());
+        assert_eq!(bytes, expected_bytes);
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: MyTupleStruct =
+            MyTupleStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+    }
 }
