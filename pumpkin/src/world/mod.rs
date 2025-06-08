@@ -71,6 +71,7 @@ use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
+use pumpkin_world::world::SimpleWorld;
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
 };
@@ -433,6 +434,10 @@ impl World {
                 }
             }
         }
+
+        self.level
+            .tick_block_entities(self.clone() as Arc<dyn SimpleWorld>)
+            .await;
     }
 
     pub async fn flush_block_updates(&self) {

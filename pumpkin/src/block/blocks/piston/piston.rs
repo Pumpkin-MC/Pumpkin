@@ -363,7 +363,6 @@ async fn move_piston(
 
     let mut moved_blocks_map: HashMap<BlockPos, BlockState> = HashMap::new();
     let moved_blocks: Vec<BlockPos> = handler.moved_blocks;
-    dbg!(&moved_blocks);
 
     let mut moved_block_states: Vec<BlockState> = Vec::new();
 
