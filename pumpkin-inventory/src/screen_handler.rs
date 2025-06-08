@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use log::warn;
-use pumpkin_data::screen::WindowType;
+use pumpkin_data::{item::Item, screen::WindowType};
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
@@ -474,11 +474,67 @@ pub trait ScreenHandler: Send + Sync {
 
         if action_type == SlotActionType::PickupAll && button == 0 {
             let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
-            let item_type = cursor_stack.get_item();
-            log::info!("item_type: {:?}", item_type);
+            let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
+
+            for item_stack in player.get_inventory().main_inventory.iter() {
+                if to_pick_up == 0 {
+                    break;
+                }
+
+                let mut item_stack = item_stack.lock().await;
+                if item_stack.item != cursor_stack.get_item() {
+                    continue;
+                }
+
+                let take = item_stack.item_count.min(to_pick_up);
+                cursor_stack.increment(take);
+                to_pick_up -= take;
+
+                if item_stack.item_count == take {
+                    *item_stack = ItemStack::EMPTY;
+                } else {
+                    item_stack.item_count -= take;
+                }
+            }
+        } else if action_type == SlotActionType::QuickCraft && button == 5 {
+            if slot_index == SLOT_INDEX_OUTSIDE {
+                return;
+            }
+            let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
+            let slot = self.get_behaviour().slots[slot_index as usize].clone();
+            let stack_lock = slot.get_stack().await;
+            let mut target_stack = stack_lock.lock().await;
+
+            if target_stack.is_empty() {
+                cursor_stack.decrement(1);
+                *target_stack = ItemStack::new(1, cursor_stack.item);
+            } else if target_stack.item == cursor_stack.item {
+                cursor_stack.decrement(1);
+                target_stack.increment(1);
+            }
+            if cursor_stack.item_count == 0 {
+                *cursor_stack = ItemStack::EMPTY;
+            }
+        } else if action_type == SlotActionType::QuickCraft
+            && (button == 0 || button == 1 || button == 2)
+        {
+            todo!("Implement QuickCraft left click");
+            // https://minecraft.wiki/w/Java_Edition_protocol/Packets#Click_Container
+        } else if action_type == SlotActionType::Throw {
+            let slot = self.get_behaviour().slots[slot_index as usize].clone();
+            let stack_lock = slot.get_stack().await;
+            let mut target_stack = stack_lock.lock().await;
+            if !target_stack.is_empty() {
+                if button == 1 {
+                    player.drop_item(*target_stack, true).await;
+                    *target_stack = ItemStack::EMPTY;
+                } else {
+                    player.drop_item(target_stack.split(1), true).await;
+                }
+            }
         }
 
-        //TODO: Implement quickcraft, PickupAll, Throw
+        //TODO: Implement Throw
         if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
             && (button == 0 || button == 1)
         {
