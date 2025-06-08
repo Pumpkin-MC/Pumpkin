@@ -42,6 +42,7 @@ tokio = { version = "1.45", features = [
     "io-std",
     "signal",
     "fs",
+    "io-util",
 ] }
 
 thiserror = "2.0"

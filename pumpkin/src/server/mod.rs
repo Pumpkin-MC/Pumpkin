@@ -18,8 +18,10 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
+use pumpkin_protocol::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
+use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
@@ -87,7 +89,7 @@ pub struct Server {
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
-    pub level_info: Arc<LevelData>,
+    pub level_info: Arc<RwLock<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
@@ -97,7 +99,7 @@ pub struct Server {
 impl Server {
     #[allow(clippy::new_without_default)]
     #[must_use]
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let auth_client = BASIC_CONFIG.online_mode.then(|| {
             reqwest::Client::builder()
                 .connect_timeout(Duration::from_millis(u64::from(
@@ -111,7 +113,7 @@ impl Server {
         });
 
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher = RwLock::new(default_dispatcher());
+        let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
 
         let block_registry = super::block::default_registry();
@@ -138,7 +140,7 @@ impl Server {
             }
         }
 
-        let level_info = Arc::new(level_info.unwrap_or_default()); // TODO: Improve error handling
+        let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
         let seed = level_info.world_gen_settings.seed;
         log::info!("Loading Overworld: {seed}");
         let overworld = World::load(
@@ -197,7 +199,7 @@ impl Server {
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info,
+            level_info: Arc::new(RwLock::new(level_info)),
             _locker: Arc::new(locker),
         }
     }
@@ -349,10 +351,10 @@ impl Server {
             world.shutdown().await;
         }
         // then lets save the world info
-        if let Err(err) = self
-            .world_info_writer
-            .write_world_info(&self.level_info, &BASIC_CONFIG.get_world_path())
-        {
+        if let Err(err) = self.world_info_writer.write_world_info(
+            &*self.level_info.read().await,
+            &BASIC_CONFIG.get_world_path(),
+        ) {
             log::error!("Failed to save level.dat: {err}");
         }
         log::info!("Completed worlds");
@@ -402,6 +404,45 @@ impl Server {
                 }
             }
         }}
+    }
+
+    /// Sets the difficulty of the server.
+    ///
+    /// This function updates the difficulty level of the server and broadcasts the change to all players.
+    /// It also iterates through all worlds to ensure the difficulty is applied consistently.
+    /// If `force_update` is `Some(true)`, the difficulty will be set regardless of the current state.
+    /// If `force_update` is `Some(false)` or `None`, the difficulty will only be updated if it is not locked.
+    ///
+    /// # Arguments
+    ///
+    /// * `difficulty`: The new difficulty level to set. This should be one of the variants of the `Difficulty` enum.
+    /// * `force_update`: An optional boolean that, if set to `Some(true)`, forces the difficulty to be updated even if it is currently locked.
+    ///
+    /// # Note
+    ///
+    /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
+    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: Option<bool>) {
+        let mut level_info = self.level_info.write().await;
+        if force_update.unwrap_or_default() || !level_info.difficulty_locked {
+            level_info.difficulty = if BASIC_CONFIG.hardcore {
+                Difficulty::Hard
+            } else {
+                difficulty
+            };
+            // Minecraft server updates mob spawn options here
+            // but its not implemented in Pumpkin yet
+            // todo: update mob spawn options
+
+            for world in &*self.worlds.read().await {
+                world.level_info.write().await.difficulty = level_info.difficulty;
+            }
+
+            self.broadcast_packet_all(&CChangeDifficulty::new(
+                level_info.difficulty as u8,
+                level_info.difficulty_locked,
+            ))
+            .await;
+        }
     }
 
     /// Searches for a player by their username across all worlds.

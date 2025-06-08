@@ -171,6 +171,7 @@ pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> boo
     false
 }
 
+#[must_use]
 pub fn is_diode(block: &Block) -> bool {
     block == &Block::REPEATER || block == &Block::COMPARATOR
 }

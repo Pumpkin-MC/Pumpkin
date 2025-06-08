@@ -101,7 +101,7 @@ impl From<i32> for TickPriority {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ScheduledTick {
     pub block_pos: BlockPos,
     pub delay: u16,
@@ -224,7 +224,7 @@ impl ChunkSections {
         block_state: BlockStateId,
     ) {
         let y = y - self.min_y;
-        debug_assert!(y > 0);
+        debug_assert!(y >= 0);
         let relative_y = y as usize;
 
         self.set_relative_block(relative_x, relative_y, relative_z, block_state);

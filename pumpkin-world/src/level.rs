@@ -1,17 +1,17 @@
-use std::{
-    path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-};
-
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::Block;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use std::{
+    collections::VecDeque,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 use tokio::{
     select,
     sync::{
@@ -63,6 +63,7 @@ pub struct Level {
     world_gen: Arc<dyn WorldGenerator>,
 
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
+    remaining_block_ticks_this_tick: Arc<Mutex<VecDeque<ScheduledTick>>>,
     fluid_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
@@ -116,6 +117,7 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             block_ticks: Arc::new(Mutex::new(Vec::new())),
+            remaining_block_ticks_this_tick: Arc::new(Mutex::new(VecDeque::new())),
             fluid_ticks: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -430,7 +432,7 @@ impl Level {
                 let (chunk_coord, _relative_coord) =
                     tick.block_pos.chunk_and_chunk_relative_position();
                 if chunk_coord == *coord {
-                    chunk_data.block_ticks.push(tick.clone());
+                    chunk_data.block_ticks.push(*tick);
                     false
                 } else {
                     true
@@ -440,7 +442,7 @@ impl Level {
                 let (chunk_coord, _relative_coord) =
                     tick.block_pos.chunk_and_chunk_relative_position();
                 if chunk_coord == *coord {
-                    chunk_data.fluid_ticks.push(tick.clone());
+                    chunk_data.fluid_ticks.push(*tick);
                     false
                 } else {
                     true
@@ -653,22 +655,23 @@ impl Level {
         self.loaded_chunks.try_get(&coordinates).try_unwrap()
     }
 
-    pub async fn get_and_tick_block_ticks(&self) -> Vec<ScheduledTick> {
+    pub async fn get_and_tick_block_ticks(&self) -> Arc<Mutex<VecDeque<ScheduledTick>>> {
         let mut block_ticks = self.block_ticks.lock().await;
-        let mut ticks = Vec::new();
+        let mut ticks = VecDeque::new();
         let mut remaining_ticks = Vec::new();
         for mut tick in block_ticks.drain(..) {
             tick.delay = tick.delay.saturating_sub(1);
             if tick.delay == 0 {
-                ticks.push(tick);
+                ticks.push_back(tick);
             } else {
                 remaining_ticks.push(tick);
             }
         }
 
         *block_ticks = remaining_ticks;
-        ticks.sort_by_key(|tick| tick.priority);
-        ticks
+        ticks.make_contiguous().sort_by_key(|tick| tick.priority);
+        *self.remaining_block_ticks_this_tick.lock().await = ticks;
+        self.remaining_block_ticks_this_tick.clone()
     }
 
     pub async fn get_and_tick_fluid_ticks(&self) -> Vec<ScheduledTick> {
@@ -677,7 +680,7 @@ impl Level {
         fluid_ticks.retain_mut(|tick| {
             tick.delay = tick.delay.saturating_sub(1);
             if tick.delay == 0 {
-                ticks.push(tick.clone());
+                ticks.push(*tick);
                 false
             } else {
                 true
@@ -688,8 +691,10 @@ impl Level {
 
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
         let block_ticks = self.block_ticks.lock().await;
+        let remaining_block_ticks_this_tick = self.remaining_block_ticks_this_tick.lock().await;
         block_ticks
             .iter()
+            .chain(remaining_block_ticks_this_tick.iter())
             .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
     }
 

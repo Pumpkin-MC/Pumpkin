@@ -12,7 +12,7 @@ use super::{
     Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };
 
-pub(crate) struct SummonableEntitiesArgumentConsumer;
+pub struct SummonableEntitiesArgumentConsumer;
 
 impl GetClientSideArgParser for SummonableEntitiesArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {

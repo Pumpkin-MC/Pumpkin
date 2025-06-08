@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
@@ -226,7 +226,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/items.json");
 
     let items: HashMap<String, Item> =
-        serde_json::from_str(include_str!("../../assets/items.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
 
     let mut type_from_raw_id_arms = TokenStream::new();

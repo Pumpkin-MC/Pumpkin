@@ -9,7 +9,7 @@ use crate::world::World;
 pub mod plate;
 pub mod weighted;
 
-pub trait PressurePlate {
+pub(crate) trait PressurePlate {
     async fn on_entity_collision_pp(
         &self,
         world: &Arc<World>,
