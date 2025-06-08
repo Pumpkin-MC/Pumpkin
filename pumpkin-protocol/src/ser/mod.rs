@@ -688,7 +688,10 @@ mod test {
             MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_b)).unwrap();
         assert_eq!(original_b, deserialized_b);
 
-        let original_c = MyEnum::C { x: 456, y: "hello".to_string() };
+        let original_c = MyEnum::C {
+            x: 456,
+            y: "hello".to_string(),
+        };
         let mut bytes_c = Vec::new();
         let mut ser_c = serializer::Serializer::new(&mut bytes_c);
         original_c.serialize(&mut ser_c).unwrap();
