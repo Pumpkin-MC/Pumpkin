@@ -110,11 +110,17 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         visitor.visit_f64(self.inner.get_f64_be()?)
     }
 
-    fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        let u32_val = self.inner.get_u32_be()?;
+        match char::from_u32(u32_val) {
+            Some(c) => visitor.visit_char(c),
+            None => Err(ReadingError::Message(format!(
+                "Invalid char value: {u32_val}"
+            ))),
+        }
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>

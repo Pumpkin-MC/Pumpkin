@@ -493,4 +493,49 @@ mod test {
 
         assert_eq!(foo, deserialized);
     }
+
+    #[test]
+    fn test_char_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct CharStruct {
+            c: char,
+        }
+
+        // Test with normal char
+        let original = CharStruct { c: 'A' };
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert_eq!(bytes, vec![0, 0, 0, 0x41]);
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: CharStruct =
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+
+        // Test with complex char
+        let original_complex = CharStruct { c: 'Ω' }; // Greek Omega, U+03A9
+        let mut bytes_complex = Vec::new();
+        let mut ser_complex = serializer::Serializer::new(&mut bytes_complex);
+        original_complex.serialize(&mut ser_complex).unwrap();
+        assert_eq!(bytes_complex, vec![0, 0, 0x03, 0xA9]);
+
+        let de_cursor_complex = Cursor::new(bytes_complex);
+        let deserialized_complex: CharStruct =
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_complex))
+                .unwrap();
+        assert_eq!(original_complex, deserialized_complex);
+
+        // Test with an emoji
+        let original_emoji = CharStruct { c: '\u{1F383}' }; // Pumpkin emoji, U+1F383
+        let mut bytes_emoji = Vec::new();
+        let mut ser_emoji = serializer::Serializer::new(&mut bytes_emoji);
+        original_emoji.serialize(&mut ser_emoji).unwrap();
+        assert_eq!(bytes_emoji, vec![0, 0x01, 0xF3, 0x83]);
+
+        let de_cursor_emoji = Cursor::new(bytes_emoji);
+        let deserialized_emoji: CharStruct =
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_emoji)).unwrap();
+        assert_eq!(original_emoji, deserialized_emoji);
+    }
 }

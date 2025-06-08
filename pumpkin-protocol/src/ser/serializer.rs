@@ -233,8 +233,8 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         self.write.write_slice(v)
     }
-    fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
+        self.write.write_u32_be(v as u32)
     }
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         self.write.write_f32_be(v)
