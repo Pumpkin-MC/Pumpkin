@@ -56,6 +56,8 @@ pub trait NetworkReadExt {
     fn get_u64_be(&mut self) -> Result<u64, ReadingError>;
     fn get_f32_be(&mut self) -> Result<f32, ReadingError>;
     fn get_f64_be(&mut self) -> Result<f64, ReadingError>;
+    fn get_i128_be(&mut self) -> Result<i128, ReadingError>;
+    fn get_u128_be(&mut self) -> Result<u128, ReadingError>;
     fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError>;
 
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
@@ -159,6 +161,20 @@ impl<R: Read> NetworkReadExt for R {
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
         Ok(f64::from_be_bytes(buf))
+    }
+
+    fn get_i128_be(&mut self) -> Result<i128, ReadingError> {
+        let mut buf = [0u8; 16];
+        self.read_exact(&mut buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+        Ok(i128::from_be_bytes(buf))
+    }
+
+    fn get_u128_be(&mut self) -> Result<u128, ReadingError> {
+        let mut buf = [0u8; 16];
+        self.read_exact(&mut buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+        Ok(u128::from_be_bytes(buf))
     }
 
     fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError> {
@@ -537,5 +553,60 @@ mod test {
         let deserialized_emoji: CharStruct =
             CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_emoji)).unwrap();
         assert_eq!(original_emoji, deserialized_emoji);
+    }
+
+    #[test]
+    fn test_i128_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct I128Struct {
+            val: i128,
+        }
+
+        let original = I128Struct {
+            val: 12345678901234567890123456789012345678,
+        };
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert_eq!(bytes, original.val.to_be_bytes());
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: I128Struct =
+            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+
+        let original_neg = I128Struct {
+            val: -12345678901234567890123456789012345678,
+        };
+        let mut bytes_neg = Vec::new();
+        let mut ser_neg = serializer::Serializer::new(&mut bytes_neg);
+        original_neg.serialize(&mut ser_neg).unwrap();
+        assert_eq!(bytes_neg, original_neg.val.to_be_bytes());
+
+        let de_cursor_neg = Cursor::new(bytes_neg);
+        let deserialized_neg: I128Struct =
+            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor_neg)).unwrap();
+        assert_eq!(original_neg, deserialized_neg);
+    }
+
+    #[test]
+    fn test_u128_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct U128Struct {
+            val: u128,
+        }
+
+        let original = U128Struct {
+            val: 123456789012345678901234567890123456789,
+        };
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert_eq!(bytes, original.val.to_be_bytes());
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: U128Struct =
+            U128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
     }
 }

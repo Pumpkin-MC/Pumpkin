@@ -242,8 +242,10 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
         self.write.write_f64_be(v)
     }
-    fn serialize_i128(self, _v: i128) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
+        self.write
+            .write_all(&v.to_be_bytes())
+            .map_err(WritingError::IoError)
     }
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
         self.write.write_i16_be(v)
@@ -364,8 +366,10 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             })?)?;
         Ok(self)
     }
-    fn serialize_u128(self, _v: u128) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
+        self.write
+            .write_all(&v.to_be_bytes())
+            .map_err(WritingError::IoError)
     }
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
         self.write.write_u16_be(v)

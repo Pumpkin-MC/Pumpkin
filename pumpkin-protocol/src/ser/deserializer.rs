@@ -110,6 +110,20 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         visitor.visit_f64(self.inner.get_f64_be()?)
     }
 
+    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        visitor.visit_i128(self.inner.get_i128_be()?)
+    }
+
+    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        visitor.visit_u128(self.inner.get_u128_be()?)
+    }
+
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
