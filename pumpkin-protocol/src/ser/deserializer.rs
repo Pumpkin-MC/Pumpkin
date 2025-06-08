@@ -4,7 +4,7 @@ use crate::ser::NetworkReadExt;
 use serde::de::IntoDeserializer;
 
 use super::{Read, ReadingError};
-use serde::de::{self, DeserializeSeed, SeqAccess};
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess};
 
 pub struct Deserializer<R: Read> {
     inner: R,
@@ -273,11 +273,42 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         self.deserialize_tuple(len, visitor)
     }
 
-    fn deserialize_map<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        let len = self.inner.get_var_int()?.0 as usize;
+        struct Access<'a, R: Read> {
+            deserializer: &'a mut Deserializer<R>,
+            len: usize,
+        }
+
+        impl<'de, R: Read> MapAccess<'de> for Access<'_, R> {
+            type Error = ReadingError;
+
+            fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
+            where
+                K: DeserializeSeed<'de>,
+            {
+                if self.len == 0 {
+                    return Ok(None);
+                }
+                seed.deserialize(&mut *self.deserializer).map(Some)
+            }
+
+            fn next_value_seed<Val>(&mut self, seed: Val) -> Result<Val::Value, Self::Error>
+            where
+                Val: DeserializeSeed<'de>,
+            {
+                self.len -= 1;
+                seed.deserialize(&mut *self.deserializer)
+            }
+        }
+
+        visitor.visit_map(Access {
+            deserializer: self,
+            len,
+        })
     }
 
     fn deserialize_struct<V>(

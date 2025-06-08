@@ -728,4 +728,51 @@ mod test {
             MyTupleStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
         assert_eq!(original, deserialized);
     }
+
+    #[test]
+    fn test_map_reserialize() {
+        use std::collections::HashMap;
+
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct MyMapStruct {
+            map: HashMap<String, i32>,
+        }
+
+        let mut map = HashMap::new();
+        map.insert("one".to_string(), 1);
+        map.insert("two".to_string(), 2);
+
+        let original = MyMapStruct { map };
+
+        let mut bytes = Vec::new();
+        let mut serializer = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut serializer).unwrap();
+
+        // Expected bytes: VarInt for map length (2), then key1, value1, key2, value2
+        // Order of elements in HashMap is not guaranteed, so we check deserialized content
+
+        let de_cursor = Cursor::new(bytes.clone()); // Clone bytes for potential debug
+        let deserialized: MyMapStruct =
+            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+
+        assert_eq!(original.map.len(), deserialized.map.len());
+        for (k, v) in original.map {
+            assert_eq!(deserialized.map.get(&k), Some(&v));
+        }
+
+        // Test with an empty map
+        let empty_map_original = MyMapStruct {
+            map: HashMap::new(),
+        };
+        let mut empty_map_bytes = Vec::new();
+        let mut empty_map_ser = serializer::Serializer::new(&mut empty_map_bytes);
+        empty_map_original.serialize(&mut empty_map_ser).unwrap();
+        assert_eq!(empty_map_bytes, vec![0x00]); // VarInt for length 0
+
+        let empty_map_de_cursor = Cursor::new(empty_map_bytes);
+        let empty_map_deserialized: MyMapStruct =
+            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(empty_map_de_cursor))
+                .unwrap();
+        assert_eq!(empty_map_original, empty_map_deserialized);
+    }
 }

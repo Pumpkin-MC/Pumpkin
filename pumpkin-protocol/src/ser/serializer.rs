@@ -259,8 +259,16 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
         self.write.write_i8_be(v)
     }
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        unimplemented!()
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        let Some(len) = len else {
+            return Err(WritingError::Serde("Maps must have a known length".into()));
+        };
+
+        self.write.write_var_int(&len.try_into().map_err(|_| {
+            WritingError::Message(format!("{len} isn't representable as a VarInt"))
+        })?)?;
+
+        Ok(self)
     }
     fn serialize_newtype_struct<T>(
         self,
@@ -501,33 +509,22 @@ impl<W: Write> ser::SerializeMap for &mut Serializer<W> {
     type Ok = ();
     type Error = WritingError;
 
-    // The Serde data model allows map keys to be any serializable type. JSON
-    // only allows string keys, so the implementation below will produce invalid
-    // JSON if the key serializes as something other than a string.
-    //
-    // A real JSON serializer would need to validate that map keys are strings.
-    // This can be done by using a different `Serializer` to serialize the key
-    // (instead of `&mut **self`) and having that other `Serializer` only
-    // implement `serialize_str` and return an error on any other data type.
-    fn serialize_key<T>(&mut self, _key: &T) -> Result<(), Self::Error>
+    fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        key.serialize(&mut **self)
     }
 
-    // It doesn't make a difference whether the colon is printed at the end of
-    // `serialize_key` or at the beginning of `serialize_value`. In this case,
-    // the code is a bit simpler having it here.
-    fn serialize_value<T>(&mut self, _value: &T) -> Result<(), Self::Error>
+    fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), Self::Error> {
-        todo!()
+        Ok(())
     }
 }
 
