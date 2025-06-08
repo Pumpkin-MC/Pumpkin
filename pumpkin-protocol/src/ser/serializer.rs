@@ -384,7 +384,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         self.write.write_u8_be(v)
     }
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+        Ok(())
     }
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
         Ok(())

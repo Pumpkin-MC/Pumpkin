@@ -609,4 +609,49 @@ mod test {
             U128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
         assert_eq!(original, deserialized);
     }
+
+    #[test]
+    fn test_unit_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct UnitStruct;
+
+        let original = UnitStruct;
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert!(bytes.is_empty());
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: UnitStruct =
+            UnitStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct StructWithUnit {
+            a: i32,
+            b: UnitStruct,
+            c: i32,
+        }
+
+        let original_with_unit = StructWithUnit {
+            a: 1,
+            b: UnitStruct,
+            c: 2,
+        };
+        let mut bytes_with_unit = Vec::new();
+        let mut ser_with_unit = serializer::Serializer::new(&mut bytes_with_unit);
+        original_with_unit.serialize(&mut ser_with_unit).unwrap();
+
+        // Check that only a and c were serialized
+        let mut expected_bytes = Vec::new();
+        expected_bytes.extend_from_slice(&1i32.to_be_bytes());
+        expected_bytes.extend_from_slice(&2i32.to_be_bytes());
+        assert_eq!(bytes_with_unit, expected_bytes);
+
+        let de_cursor_with_unit = Cursor::new(bytes_with_unit);
+        let deserialized_with_unit: StructWithUnit =
+            StructWithUnit::deserialize(&mut deserializer::Deserializer::new(de_cursor_with_unit))
+                .unwrap();
+        assert_eq!(original_with_unit, deserialized_with_unit);
+    }
 }
