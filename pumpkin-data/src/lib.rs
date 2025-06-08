@@ -16,6 +16,10 @@ pub mod particle {
     include!(concat!(env!("OUT_DIR"), "/particle.rs"));
 }
 
+pub mod recipes {
+    include!(concat!(env!("OUT_DIR"), "/recipes.rs"));
+}
+
 pub mod sound {
     include!(concat!(env!("OUT_DIR"), "/sound.rs"));
     include!(concat!(env!("OUT_DIR"), "/sound_category.rs"));

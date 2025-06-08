@@ -19,6 +19,7 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod recipes;
 mod scoreboard_slot;
 mod screen;
 mod sound;
@@ -52,6 +53,7 @@ pub fn main() {
     write_generated_file(block::build(), "block.rs");
     write_generated_file(tag::build(), "tag.rs");
     write_generated_file(noise_router::build(), "noise_router.rs");
+    write_generated_file(recipes::build(), "recipes.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
