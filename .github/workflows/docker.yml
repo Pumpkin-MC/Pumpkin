@@ -20,6 +20,13 @@ jobs:
       id-token: write
 
     steps:
+      - name: Check Repository
+        run: |
+          if [ "${{ github.repository }}" != "Pumpkin-MC/Pumpkin" ]; then
+            echo "Not the target repository. Exiting successfully."
+            exit 0
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
