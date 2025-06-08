@@ -101,7 +101,7 @@ impl From<i32> for TickPriority {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ScheduledTick {
     pub block_pos: BlockPos,
     pub delay: u16,
