@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
@@ -31,7 +31,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tags.json");
 
     let tags: HashMap<String, HashMap<String, Vec<String>>> =
-        serde_json::from_str(include_str!("../../assets/tags.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/tags.json").unwrap())
             .expect("Failed to parse tags.json");
     let registry_key_enum = EnumCreator {
         name: "RegistryKey".to_string(),
