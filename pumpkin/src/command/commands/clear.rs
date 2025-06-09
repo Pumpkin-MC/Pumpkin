@@ -23,14 +23,14 @@ const ARG_TARGET: &str = "target";
 async fn clear_player(target: &Player) -> u64 {
     let inventory = target.inventory();
     let mut count: u64 = 0;
-    for slot in inventory.main_inventory.iter() {
+    for slot in &inventory.main_inventory {
         let mut slot_lock = slot.lock().await;
         count += u64::from(slot_lock.item_count);
         *slot_lock = ItemStack::EMPTY;
     }
 
     let entity_equipment_lock = inventory.entity_equipment.lock().await;
-    for (_, slot) in entity_equipment_lock.equipment.iter() {
+    for slot in entity_equipment_lock.equipment.values() {
         let mut slot_lock = slot.lock().await;
         if slot_lock.is_empty() {
             continue;
