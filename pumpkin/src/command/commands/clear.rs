@@ -5,7 +5,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::inventory::Clearable;
+use pumpkin_world::item::ItemStack;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
@@ -22,10 +22,14 @@ const ARG_TARGET: &str = "target";
 
 async fn clear_player(target: &Player) -> u64 {
     let inventory = target.inventory();
+    let mut count: u64 = 0;
+    for slot in inventory.main_inventory.iter() {
+        let mut slot_lock = slot.lock().await;
+        count += slot_lock.item_count as u64;
+        *slot_lock = ItemStack::EMPTY;
+    }
 
-    inventory.clear().await;
-    //target.set_container_content(None).await; TODO: Inv
-    0 //TODO: Count items
+    count
 }
 
 fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
