@@ -26,7 +26,6 @@ pub mod pumpkin;
 pub mod redstone;
 pub mod signs;
 pub mod slabs;
-pub mod sponge;
 pub mod stairs;
 pub mod sugar_cane;
 pub mod tnt;
