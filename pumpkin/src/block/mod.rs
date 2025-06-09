@@ -47,6 +47,7 @@ use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
 use blocks::signs::SignBlock;
 use blocks::slabs::SlabBlock;
+use blocks::sponge::{SpongeBlock, WetSpongeBlock};
 use blocks::stairs::StairBlock;
 use blocks::sugar_cane::SugarCaneBlock;
 use blocks::torches::TorchBlock;
@@ -107,6 +108,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BambooBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
+    manager.register(SpongeBlock);
+    manager.register(WetSpongeBlock);
     manager.register(StairBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
