@@ -300,6 +300,27 @@ impl LivingEntity {
             self.remove_effect(effect_type).await;
         }
     }
+
+    pub async fn update_air(&self) {
+        let mut air_remaining = self.entity.air.load(Relaxed);
+
+        if air_remaining == -20 {
+            self.damage(1f32, DamageType::DROWN).await;
+            air_remaining = 0;
+        } else if self.entity.submerged_in_water.load(Relaxed) {
+            air_remaining -= 1;
+        } else if air_remaining != 300 {
+            air_remaining += 1;
+        }
+        self.entity.air.store(air_remaining, Relaxed);
+        self.entity
+            .send_meta_data(&[Metadata::new(
+                1,
+                MetaDataType::Integer,
+                VarInt(i32::from(air_remaining)),
+            )])
+            .await;
+    }
 }
 
 #[async_trait]
@@ -326,6 +347,8 @@ impl EntityBase for LivingEntity {
                 self.entity.remove().await;
             }
         }
+
+        self.update_air().await;
     }
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
         let world = self.entity.world.read().await;

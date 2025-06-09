@@ -1,10 +1,13 @@
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
 use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
+use log::info;
 use player::Player;
+use pumpkin_data::fluid::{EnumVariants, FlowingWaterLikeFluidProperties, FluidProperties};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing, get_block_outline_shapes},
     damage::DamageType,
@@ -29,6 +32,7 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use serde::Serialize;
+use std::sync::atomic::AtomicI16;
 use std::sync::{
     Arc,
     atomic::{
@@ -37,8 +41,6 @@ use std::sync::{
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
-use crate::world::World;
 
 pub mod ai;
 pub mod effect;
@@ -123,6 +125,14 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is swimming
+    pub swimming: AtomicBool,
+    /// Indicates whether the entity is touching water
+    pub touching_water: AtomicBool,
+    /// Indicates whether the entity is submerged in water
+    pub submerged_in_water: AtomicBool,
+    /// Indicates how much air the player has left (negative values means drowning) (-20 means taking damage)
+    pub air: AtomicI16,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -183,6 +193,10 @@ impl Entity {
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
             sprinting: AtomicBool::new(false),
+            swimming: AtomicBool::new(false),
+            touching_water: AtomicBool::new(false),
+            submerged_in_water: AtomicBool::new(false),
+            air: AtomicI16::new(300),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
             head_yaw: AtomicCell::new(0.0),
@@ -704,6 +718,7 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
+        dbg!("aa");
         // TODO: handle world change
         self.world
             .read()
@@ -717,6 +732,84 @@ impl Entity {
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
+    }
+
+    pub fn eye_position(&self) -> Vector3<f64> {
+        let eye_height = if self.pose.load() == EntityPose::Crouching {
+            1.27
+        } else if self.pose.load() == EntityPose::Swimming {
+            0.5
+        } else {
+            f64::from(self.standing_eye_height)
+        };
+        Vector3::new(
+            self.pos.load().x,
+            self.pos.load().y + eye_height,
+            self.pos.load().z,
+        )
+    }
+
+    pub async fn check_water_state(&self) {
+        //TODO: check if in boat
+        let world = self.world.read().await;
+        let min_bounding_box = self.bounding_box.load().min.to_i32();
+        let max_bounding_box = self.bounding_box.load().max.to_i32();
+        let mut touching_water = false;
+        let mut submerged = false;
+        //Scan over player bounding box
+        for x in min_bounding_box.x..=max_bounding_box.x {
+            for y in min_bounding_box.y..=max_bounding_box.y {
+                for z in min_bounding_box.z..=max_bounding_box.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    let result = world.get_fluid(&block_pos).await;
+                    match result {
+                        Ok(fluid) => {
+                            info!("Found fluid {} at {}", fluid.name, block_pos);
+                            if fluid.id == 1 {
+                                let block_state_id = world.get_block_state_id(&block_pos).await;
+                                let properties = FlowingWaterLikeFluidProperties::from_state_id(
+                                    block_state_id,
+                                    &fluid,
+                                );
+                                let level = properties.level;
+                                let height = (f64::from(level.to_index()) + 1f64) / 9f64;
+
+                                touching_water = true;
+                                if (f64::from(block_pos.0.y) + height) > self.eye_position().y {
+                                    submerged = true;
+                                }
+                            }
+                        }
+                        Err(_err) => {
+                            //This only occurs when the players eyes are inside a block that isnt a fluid or air
+                            //log::warn!("Invalid Block ID at {:?}", block_pos);
+                        }
+                    }
+                }
+            }
+        }
+        self.touching_water.store(touching_water, Relaxed);
+        self.submerged_in_water.store(submerged, Relaxed);
+    }
+
+    pub async fn update_swimming(&self) {
+        let swimming = self.swimming.load(Relaxed);
+        let sprinting = self.sprinting.load(Relaxed);
+        let touching_water = self.touching_water.load(Relaxed);
+        let submerged_in_water = self.submerged_in_water.load(Relaxed);
+        if swimming {
+            let val = sprinting && touching_water;
+            self.swimming.store(sprinting && touching_water, Relaxed);
+            if !val {
+                self.set_pose(EntityPose::Standing).await;
+            }
+        } else {
+            let val = sprinting && touching_water && submerged_in_water;
+            self.swimming.store(val, Relaxed);
+            if val {
+                self.set_pose(EntityPose::Swimming).await;
+            }
+        }
     }
 }
 
@@ -745,6 +838,9 @@ impl EntityBase for Entity {
         }
         self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
             .await;
+
+        self.check_water_state().await;
+        self.update_swimming().await;
         // TODO: Tick
     }
 

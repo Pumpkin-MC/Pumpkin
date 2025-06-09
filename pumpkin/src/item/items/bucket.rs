@@ -47,7 +47,7 @@ impl ItemMetadata for MilkBucketItem {
 }
 
 fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
-    let start_pos = player.eye_position();
+    let start_pos = player.living_entity.entity.eye_position();
     let (yaw, pitch) = player.rotation();
     let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
     let block_interaction_range = 4.5; // This is not the same as the block_interaction_range in the
