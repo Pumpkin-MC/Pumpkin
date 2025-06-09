@@ -47,6 +47,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_inventory::{
+    equipment_slot::EquipmentSlot,
     player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
     screen_handler::{
         InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
@@ -1375,6 +1376,16 @@ impl Player {
                     .await;
             }
         }
+    }
+
+    pub async fn swap_item(&self) {
+        let (main_hand_item, off_hand_item) = self.inventory.swap_item().await;
+        let equipment = &[
+            (EquipmentSlot::MAIN_HAND, main_hand_item),
+            (EquipmentSlot::OFF_HAND, off_hand_item),
+        ];
+        self.living_entity.send_equipment_changes(equipment).await;
+        // todo this.player.stopUsingItem();
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
