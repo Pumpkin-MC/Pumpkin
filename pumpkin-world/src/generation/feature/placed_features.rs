@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
+use pumpkin_util::HeightMap;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
@@ -13,12 +14,12 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
+use crate::ProtoChunk;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::height_provider::HeightProvider;
 use crate::level::Level;
 use crate::world::BlockRegistryExt;
-use crate::{HeightMap, ProtoChunk};
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 

@@ -38,7 +38,7 @@ impl ArgumentConsumer for EffectTypeArgumentConsumer {
         let name = args.pop()?;
 
         // Create a static damage type first
-        let damage_type = EffectType::from_name(&name.replace("minecraft:", ""))?;
+        let damage_type = EffectType::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
         // Find matching static damage type from values array
         Some(Arg::Effect(damage_type))
     }

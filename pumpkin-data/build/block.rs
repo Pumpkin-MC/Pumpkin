@@ -1368,8 +1368,8 @@ pub(crate) fn build() -> TokenStream {
         ];
 
         pub fn get_block(registry_id: &str) -> Option<Block> {
-           let key = registry_id.replace("minecraft:", "");
-           Block::from_registry_key(key.as_str())
+           let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
+           Block::from_registry_key(key)
         }
 
         pub fn get_block_by_id(id: u16) -> Option<Block> {
