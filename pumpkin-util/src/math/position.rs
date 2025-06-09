@@ -191,6 +191,74 @@ impl BlockPos {
     pub fn down_height(&self, height: i32) -> Self {
         self.offset(Vector3::new(0, -height, 0))
     }
+
+    pub fn iterate_recursively<F>(
+        start: BlockPos,
+        end: BlockPos,
+        mut visitor: F,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: FnMut(BlockPos) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>,
+    {
+        fn recurse_visit<F>(
+            current: BlockPos,
+            start: BlockPos,
+            end: BlockPos,
+            visitor: &mut F,
+            visited: &mut std::collections::HashSet<BlockPos>,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+        where
+            F: FnMut(BlockPos) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>,
+        {
+            if visited.contains(&current) {
+                return Ok(());
+            }
+
+            visited.insert(current); // Visit current position
+            let should_continue = visitor(current)?;
+            if !should_continue {
+                return Ok(());
+            }
+
+            // Calculate bounds
+            let min_x = start.0.x.min(end.0.x);
+            let max_x = start.0.x.max(end.0.x);
+            let min_y = start.0.y.min(end.0.y);
+            let max_y = start.0.y.max(end.0.y);
+            let min_z = start.0.z.min(end.0.z);
+            let max_z = start.0.z.max(end.0.z);
+
+            // Recursively visit adjacent positions within bounds
+            for dx in -1..=1 {
+                for dy in -1..=1 {
+                    for dz in -1..=1 {
+                        if dx == 0 && dy == 0 && dz == 0 {
+                            continue;
+                        }
+
+                        let next =
+                            BlockPos::new(current.0.x + dx, current.0.y + dy, current.0.z + dz);
+
+                        // Check bounds
+                        if next.0.x >= min_x
+                            && next.0.x <= max_x
+                            && next.0.y >= min_y
+                            && next.0.y <= max_y
+                            && next.0.z >= min_z
+                            && next.0.z <= max_z
+                        {
+                            recurse_visit(next, start, end, visitor, visited)?;
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        let mut visited = std::collections::HashSet::new();
+        recurse_visit(start, start, end, &mut visitor, &mut visited)
+    }
 }
 
 impl Serialize for BlockPos {

@@ -3,6 +3,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::world::WorldEvent;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -138,7 +139,20 @@ pub struct WetSpongeBlock;
 
 #[async_trait]
 impl PumpkinBlock for WetSpongeBlock {
-    // WetSpongeBlock doesn't need special behavior for placement, just exists
+    async fn placed(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        _state_id: BlockStateId,
+        block_pos: &BlockPos,
+        _old_state_id: BlockStateId,
+        _notify: bool,
+    ) {
+        // When a wet sponge is placed, check if it should immediately dry out
+        if let Err(e) = self.tick(world, *block_pos).await {
+            log::warn!("Failed to check wet sponge drying conditions at {block_pos:?}: {e}");
+        }
+    }
 }
 
 // WetSpongeBlock implementation for drying the sponge
@@ -156,6 +170,11 @@ impl WetSpongeBlock {
             )
             .await;
 
+        // Trigger the WET_SPONGE_DRIES_OUT world event
+        world
+            .sync_world_event(WorldEvent::WetSpongeDriesOut, pos, 0)
+            .await;
+
         let sound_pos = Vector3::new(
             f64::from(pos.0.x) + 0.5,
             f64::from(pos.0.y) + 0.5,
@@ -170,6 +189,42 @@ impl WetSpongeBlock {
             )
             .await;
 
+        Ok(())
+    }
+
+    /// Check if this wet sponge should dry out due to environmental conditions
+    pub async fn should_dry_out(
+        &self,
+        world: &Arc<World>,
+        pos: BlockPos,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        // Check for fire nearby (within 2 blocks)
+        for dx in -2..=2 {
+            for dy in -2..=2 {
+                for dz in -2..=2 {
+                    let check_pos = BlockPos::new(pos.0.x + dx, pos.0.y + dy, pos.0.z + dz);
+                    let block = world.get_block(&check_pos).await;
+
+                    // Dry out if there's fire or lava nearby
+                    if block == Block::FIRE || block == Block::LAVA {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Tick function to check if wet sponge should dry out
+    pub async fn tick(
+        &self,
+        world: &Arc<World>,
+        pos: BlockPos,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if self.should_dry_out(world, pos).await? {
+            self.dry_sponge(world, pos).await?;
+        }
         Ok(())
     }
 }
