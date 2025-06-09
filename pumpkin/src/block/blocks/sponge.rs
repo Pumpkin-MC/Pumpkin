@@ -23,10 +23,9 @@ impl PumpkinBlock for SpongeBlock {
         block_pos: &BlockPos,
         _old_state_id: BlockStateId,
         _notify: bool,
-    ) {
-        // When a dry sponge is placed, check if it should absorb water
+    ) {        // When a dry sponge is placed, check if it should absorb water
         if let Err(e) = self.absorb_water(world, *block_pos).await {
-            log::warn!("Failed to absorb water when placing sponge at {:?}: {}", block_pos, e);
+            log::warn!("Failed to absorb water when placing sponge at {block_pos:?}: {e}");
         }
     }
 }
@@ -53,10 +52,9 @@ impl SpongeBlock {
 
             if dx > Self::ABSORPTION_RADIUS || dy > Self::ABSORPTION_RADIUS || dz > Self::ABSORPTION_RADIUS {
                 continue;
-            }
-
-            let block = world.get_block(&current_pos).await;
-            if self.is_water_block(&block) {                water_blocks.push(current_pos);
+            }            let block = world.get_block(&current_pos).await;
+            if Self::is_water_block(&block) {
+                water_blocks.push(current_pos);
             }
 
             for dx in -1..=1 {
@@ -79,7 +77,8 @@ impl SpongeBlock {
                     }
                 }
             }
-        }        if !water_blocks.is_empty() {
+        }
+        if !water_blocks.is_empty() {
             for water_pos in water_blocks {
                 world.set_block_state(&water_pos, Block::AIR.default_state_id, BlockFlags::NOTIFY_LISTENERS).await;
                 world.update_neighbors(&water_pos, None).await;
@@ -89,10 +88,9 @@ impl SpongeBlock {
             self.play_absorption_sound(world, sponge_pos).await;
         }
 
-        Ok(())
-    }
+        Ok(())    }
     // Checks if a block represents water
-    fn is_water_block(&self, block: &Block) -> bool {
+    fn is_water_block(block: &Block) -> bool {
         block == &Block::WATER
     }
 
@@ -121,6 +119,7 @@ impl PumpkinBlock for WetSpongeBlock {
     // WetSpongeBlock doesn't need special behavior for placement, just exists
 }
 
+// WetSpongeBlock implementation for drying the sponge
 impl WetSpongeBlock {
     pub async fn dry_sponge(&self, world: &Arc<World>, pos: BlockPos) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         world.set_block_state(&pos, Block::SPONGE.default_state_id, BlockFlags::NOTIFY_LISTENERS).await;
