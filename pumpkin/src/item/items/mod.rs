@@ -9,6 +9,7 @@ mod shovel;
 mod snowball;
 mod sword;
 mod trident;
+mod fire_charge;
 
 use axe::AxeItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
@@ -22,7 +23,7 @@ use snowball::SnowBallItem;
 use std::sync::Arc;
 use sword::SwordItem;
 use trident::TridentItem;
-
+use fire_charge::FireChargeItem;
 use super::registry::ItemRegistry;
 #[must_use]
 pub fn default_registry() -> Arc<ItemRegistry> {
@@ -40,6 +41,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(AxeItem);
     manager.register(HoneyCombItem);
     manager.register(EnderEyeItem);
+    manager.register(FireChargeItem);
 
     Arc::new(manager)
 }
