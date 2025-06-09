@@ -27,9 +27,8 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, Integer0To15, WaterLikeProperties};
 use pumpkin_data::entity::EffectType;
+use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
     block_properties::{
@@ -41,6 +40,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
+use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::client::play::{
@@ -95,6 +95,8 @@ pub mod scoreboard;
 pub mod weather;
 
 use weather::Weather;
+
+type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
@@ -485,9 +487,6 @@ impl World {
             let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
                 continue;
             };
-            if scheduled_tick.target_block_id != fluid.id {
-                continue;
-            }
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
                 pumpkin_fluid
                     .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
@@ -1514,10 +1513,10 @@ impl World {
                 })
                 .unwrap_or(false)
             {
-                // Broken block was waterlogged
-                let mut water_props = WaterLikeProperties::default(&Block::WATER);
-                water_props.level = Integer0To15::L15;
-                water_props.to_state_id(&Block::WATER)
+                let mut water_props = FlowingFluidProperties::default(&Fluid::FLOWING_WATER);
+                water_props.level = pumpkin_data::fluid::Level::L8;
+                water_props.falling = Falling::False;
+                water_props.to_state_id(&Fluid::FLOWING_WATER)
             } else {
                 0
             };
@@ -1561,7 +1560,27 @@ impl World {
         position: &BlockPos,
     ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
         let id = self.get_block_state_id(position).await;
-        Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId)
+        let fluid = Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId);
+        if let Ok(fluid) = fluid {
+            return Ok(fluid);
+        }
+        let block = get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)?;
+        block
+            .properties(id)
+            .and_then(|props| {
+                props
+                    .to_props()
+                    .into_iter()
+                    .find(|p| p.0 == "waterlogged")
+                    .map(|(_, value)| {
+                        if value == true.to_string() {
+                            Ok(Fluid::FLOWING_WATER)
+                        } else {
+                            Err(GetBlockError::InvalidBlockId)
+                        }
+                    })
+            })
+            .unwrap_or(Err(GetBlockError::InvalidBlockId))
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -1729,14 +1748,102 @@ impl World {
         chunk.dirty = true;
     }
 
-    pub async fn raytrace(
+    fn intersects_aabb_with_direction(
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+        min: Vector3<f64>,
+        max: Vector3<f64>,
+    ) -> Option<BlockDirection> {
+        let dir = to.sub(&from);
+        let mut tmin: f64 = 0.0;
+        let mut tmax: f64 = 1.0;
+
+        let mut hit_axis = None;
+        let mut hit_is_min = false;
+
+        macro_rules! check_axis {
+            ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident, $direction_min:expr, $direction_max:expr) => {{
+                if dir.$dir_axis.abs() < 1e-8 {
+                    if from.$dir_axis < min.$min_axis || from.$dir_axis > max.$max_axis {
+                        return None;
+                    }
+                } else {
+                    let inv_d = 1.0 / dir.$dir_axis;
+                    let t_near = (min.$min_axis - from.$dir_axis) * inv_d;
+                    let t_far = (max.$max_axis - from.$dir_axis) * inv_d;
+
+                    // Determine entry and exit points based on ray direction
+                    let (t_entry, t_exit, is_min_face) = if inv_d >= 0.0 {
+                        (t_near, t_far, true)
+                    } else {
+                        (t_far, t_near, false)
+                    };
+
+                    if t_entry > tmin {
+                        tmin = t_entry;
+                        hit_axis = Some(stringify!($axis));
+                        hit_is_min = is_min_face;
+                    }
+                    tmax = tmax.min(t_exit);
+                    if tmax < tmin {
+                        return None;
+                    }
+                }
+            }};
+        }
+
+        check_axis!(x, x, x, x, BlockDirection::West, BlockDirection::East);
+        check_axis!(y, y, y, y, BlockDirection::Down, BlockDirection::Up);
+        check_axis!(z, z, z, z, BlockDirection::North, BlockDirection::South);
+
+        match (hit_axis, hit_is_min) {
+            (Some("x"), true) => Some(BlockDirection::West),
+            (Some("x"), false) => Some(BlockDirection::East),
+            (Some("y"), true) => Some(BlockDirection::Down),
+            (Some("y"), false) => Some(BlockDirection::Up),
+            (Some("z"), true) => Some(BlockDirection::North),
+            (Some("z"), false) => Some(BlockDirection::South),
+            _ => None,
+        }
+    }
+
+    async fn ray_outline_check(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> (bool, Option<BlockDirection>) {
+        let state_id = self.get_block_state_id(block_pos).await;
+
+        let Some(bounding_boxes) = get_block_outline_shapes(state_id) else {
+            return (false, None);
+        };
+
+        if bounding_boxes.is_empty() {
+            return (true, None);
+        }
+
+        for shape in &bounding_boxes {
+            let world_min = shape.min.add(&block_pos.0.to_f64());
+            let world_max = shape.max.add(&block_pos.0.to_f64());
+
+            let direction = Self::intersects_aabb_with_direction(from, to, world_min, world_max);
+            if direction.is_some() {
+                return (true, direction);
+            }
+        }
+
+        (false, None)
+    }
+
+    pub async fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
         hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
-    ) -> (Option<BlockPos>, Option<BlockDirection>) {
+    ) -> Option<(BlockPos, BlockDirection)> {
         if start_pos == end_pos {
-            return (None, None);
+            return None;
         }
 
         let adjust = -1.0e-7f64;
@@ -1745,8 +1852,11 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        if hit_check(&block, self).await {
-            return (Some(block), None);
+        let (collision, direction) = self.ray_outline_check(&block, from, to).await;
+        if let Some(dir) = direction {
+            if collision {
+                return Some((block, dir));
+            }
         }
 
         let difference = to.sub(&from);
@@ -1824,11 +1934,17 @@ impl World {
             };
 
             if hit_check(&block, self).await {
-                return (Some(block), Some(block_direction));
+                let (collision, direction) = self.ray_outline_check(&block, from, to).await;
+                if collision {
+                    if let Some(dir) = direction {
+                        return Some((block, dir));
+                    }
+                    return Some((block, block_direction));
+                }
             }
         }
 
-        (None, None)
+        None
     }
 }
 

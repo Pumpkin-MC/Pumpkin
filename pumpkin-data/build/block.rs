@@ -368,6 +368,7 @@ pub struct BlockState {
     pub piston_behavior: PistonBehavior,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
+    pub outline_shapes: Vec<u16>,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -429,6 +430,10 @@ impl BlockState {
             .collision_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let outline_shapes = self
+            .outline_shapes
+            .iter()
+            .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -441,6 +446,7 @@ impl BlockState {
                 piston_behavior: #piston_behavior,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
+                outline_shapes: &[#(#outline_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }
@@ -1403,6 +1409,31 @@ pub(crate) fn build() -> TokenStream {
                let shape = &COLLISION_SHAPES[state.collision_shapes[i] as usize];
                 shapes.push(*shape);
             }
+            Some(shapes)
+        }
+
+        pub fn get_block_outline_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
+            let state = get_state_by_state_id(state_id)?;
+            let mut shapes: Vec<CollisionShape> = vec![];
+            for i in 0..state.outline_shapes.len() {
+                let shape = &COLLISION_SHAPES[state.outline_shapes[i] as usize];
+                shapes.push(*shape);
+            }
+            let block = get_block_by_state_id(state_id)?;
+            if block.properties(state.id).and_then(|properties| {
+                properties
+                    .to_props()
+                    .into_iter()
+                    .find(|p| p.0 == "waterlogged")
+                    .map(|(_, value)| value == true.to_string())
+            }) == Some(true)
+            {
+                // If the block is waterlogged, add a water shape
+                let shape =
+                    &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
+                shapes.push(*shape);
+            }
+
             Some(shapes)
         }
 

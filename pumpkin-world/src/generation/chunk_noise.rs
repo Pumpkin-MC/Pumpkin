@@ -262,7 +262,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
     fn sample_density(&mut self, start: bool, current_x: i32) {
         let x = current_x * self.horizontal_cell_block_count() as i32;
 
-        for cell_z in 0..=self.horizontal_cell_block_count() {
+        for cell_z in 0..=(16 / self.horizontal_cell_block_count()) {
             let current_cell_z_pos = self.start_cell_pos.z + cell_z as i32;
             let z = current_cell_z_pos * self.horizontal_cell_block_count() as i32;
             self.cache_fill_unique_id += 1;

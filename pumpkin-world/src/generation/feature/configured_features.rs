@@ -235,6 +235,24 @@ impl ConfiguredFeature {
             Self::CoralClaw(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::EndPlatform(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::EndSpike(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::SpringFeature(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::Flower(feature) => {

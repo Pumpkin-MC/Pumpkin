@@ -18,7 +18,7 @@ use pumpkin_util::{
 
 use crate::{
     HeightMap,
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed},
+    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     dimension::Dimension,
@@ -427,11 +427,19 @@ impl<'a> ProtoChunk<'a> {
                         // panic!("{}:{}", start_y, y);
                         let biome_pos =
                             Vector3::new(start_biome_x + x, start_biome_y + y, start_biome_z + z);
-                        let biome = MultiNoiseBiomeSupplier::biome(
-                            &biome_pos,
-                            &mut self.multi_noise_sampler,
-                            dimension,
-                        );
+                        let biome = if dimension == Dimension::End {
+                            TheEndBiomeSupplier::biome(
+                                &biome_pos,
+                                &mut self.multi_noise_sampler,
+                                dimension,
+                            )
+                        } else {
+                            MultiNoiseBiomeSupplier::biome(
+                                &biome_pos,
+                                &mut self.multi_noise_sampler,
+                                dimension,
+                            )
+                        };
                         //panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
                         let local_biome_pos = Vector3 {

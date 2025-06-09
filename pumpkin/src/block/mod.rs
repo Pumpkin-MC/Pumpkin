@@ -5,6 +5,8 @@ use blocks::cactus::CactusBlock;
 use blocks::command::CommandBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
+use blocks::end_portal::EndPortalBlock;
+use blocks::end_portal_frame::EndPortalFrameBlock;
 use blocks::farmland::FarmLandBlock;
 use blocks::fence_gates::FenceGateBlock;
 use blocks::fences::FenceBlock;
@@ -127,6 +129,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CommandBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
+    manager.register(EndPortalBlock);
+    manager.register(EndPortalFrameBlock);
 
     // Fire
     manager.register(SoulFireBlock);

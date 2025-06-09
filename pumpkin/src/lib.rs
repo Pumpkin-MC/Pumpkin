@@ -293,7 +293,7 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
-        let mut master_client_id: usize = 0;
+        let mut master_client_id: u64 = 0;
         let tasks = TaskTracker::new();
 
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {

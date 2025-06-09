@@ -131,7 +131,7 @@ pub enum PacketHandlerState {
 pub struct Client {
     /// The client id. This is good for coorelating a connection with a player
     /// Only used for logging purposes
-    pub id: usize,
+    pub id: u64,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
@@ -168,7 +168,7 @@ pub struct Client {
 
 impl Client {
     #[must_use]
-    pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: usize) -> Self {
+    pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
         let (send, recv) = tokio::sync::mpsc::channel(128);
         Self {
