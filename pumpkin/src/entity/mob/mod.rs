@@ -57,10 +57,12 @@ pub async fn from_type(
     world: &Arc<World>,
 ) -> Arc<dyn EntityBase> {
     let entity = world.create_entity(position, entity_type);
-    let mob = MobEntity {        living_entity: LivingEntity::new(entity),
+    let mob = MobEntity {
+        living_entity: LivingEntity::new(entity),
         goals: Mutex::new(vec![]),
         navigator: Mutex::new(Navigator::default()),
     };
+    #[expect(clippy::single_match)]
     match entity_type {
         EntityType::ZOMBIE => Zombie::make(&mob).await,
         // TODO
