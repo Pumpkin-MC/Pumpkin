@@ -40,7 +40,7 @@ impl PumpkinItem for FireChargeItem {
                 .await;
 
             world
-                .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, &pos)
+                .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
                 .await;
 
             // TODO
