@@ -84,11 +84,11 @@ impl MatchingBlocksBlockPredicate {
         let block = self.offset.get_block(chunk, pos);
         match &self.blocks {
             MatchingBlocksWrapper::Single(single_block) => {
-                single_block.replace("minecraft:", "") == block.name
+                single_block.strip_prefix("minecraft:").unwrap() == block.name
             }
             MatchingBlocksWrapper::Multiple(blocks) => blocks
                 .iter()
-                .map(|s| s.replace("minecraft:", ""))
+                .map(|s| s.strip_prefix("minecraft:").unwrap())
                 .contains(block.name),
         }
     }

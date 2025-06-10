@@ -114,7 +114,7 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
         match self {
             Self::Empty => Vec::new(),
             Self::Item(item_entry) => {
-                let key = &item_entry.name.replace("minecraft:", "");
+                let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
                 vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
             }
             Self::LootTable => todo!(),
