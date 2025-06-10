@@ -2,6 +2,7 @@ use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EastWallShape;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -14,7 +15,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
@@ -41,12 +41,12 @@ impl PumpkinBlock for WallBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> u16 {
         let mut wall_props = WallProperties::default(block);
         wall_props.waterlogged = replacing.water_source();
@@ -75,18 +75,12 @@ pub async fn compute_wall_state(
     block: &Block,
     block_pos: &BlockPos,
 ) -> u16 {
-    let (block_above, block_above_state) = world
-        .get_block_and_block_state(&block_pos.up())
-        .await
-        .unwrap();
+    let (block_above, block_above_state) = world.get_block_and_block_state(&block_pos.up()).await;
 
     for direction in HorizontalFacing::all() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let Ok((other_block, other_block_state)) =
-            world.get_block_and_block_state(&other_block_pos).await
-        else {
-            continue;
-        };
+        let (other_block, other_block_state) =
+            world.get_block_and_block_state(&other_block_pos).await;
 
         let connected = other_block == *block
             || (other_block_state.is_solid() && other_block_state.is_full_cube())

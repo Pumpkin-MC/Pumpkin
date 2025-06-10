@@ -1,9 +1,11 @@
+use std::path::Path;
+
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::{Difficulty, serde_enum_as_integer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{generation::Seed, level::LevelFolder};
+use crate::generation::Seed;
 
 pub mod anvil;
 
@@ -11,16 +13,13 @@ pub mod anvil;
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4325; // 1.21.5
 pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4325; // 1.21.5
 
-pub(crate) trait WorldInfoReader {
-    fn read_world_info(&self, level_folder: &LevelFolder) -> Result<LevelData, WorldInfoError>;
+pub trait WorldInfoReader {
+    fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError>;
 }
 
-pub(crate) trait WorldInfoWriter: Sync + Send {
-    fn write_world_info(
-        &self,
-        info: LevelData,
-        level_folder: &LevelFolder,
-    ) -> Result<(), WorldInfoError>;
+pub trait WorldInfoWriter: Sync + Send {
+    fn write_world_info(&self, info: &LevelData, level_folder: &Path)
+    -> Result<(), WorldInfoError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]

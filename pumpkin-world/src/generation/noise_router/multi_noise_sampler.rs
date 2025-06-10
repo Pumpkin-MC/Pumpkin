@@ -101,6 +101,18 @@ impl<'a> MultiNoiseSampler<'a> {
         }
     }
 
+    pub fn sample_erosion(&mut self, block_x: i32, block_y: i32, block_z: i32) -> f64 {
+        let pos = UnblendedNoisePos::new(block_x, block_y, block_z);
+        let sample_options =
+            ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
+
+        ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut self.component_stack[..=self.erosion],
+            &pos,
+            &sample_options,
+        )
+    }
+
     pub fn generate(
         base: &'a ProtoMultiNoiseRouter,
         build_options: &MultiNoiseSamplerBuilderOptions,

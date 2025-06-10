@@ -8,7 +8,10 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
-    sync::atomic::{AtomicU32, Ordering::Relaxed},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering::Relaxed},
+    },
 };
 
 use super::{Entity, EntityBase, living::LivingEntity};
@@ -27,7 +30,24 @@ impl TNTEntity {
             fuse: AtomicU32::new(fuse),
         }
     }
-    pub async fn send_meta_packet(&self) {
+}
+
+#[async_trait]
+impl EntityBase for TNTEntity {
+    async fn tick(&self, _caller: Arc<dyn EntityBase>, server: &Server) {
+        let fuse = self.fuse.fetch_sub(1, Relaxed);
+        if fuse == 0 {
+            self.entity.remove().await;
+            self.entity
+                .world
+                .read()
+                .await
+                .explode(server, self.entity.pos.load(), self.power)
+                .await;
+        }
+    }
+
+    async fn init_data_tracker(&self) {
         // TODO: Yes, this is the wrong function, but we need to send this after spawning the entity.
         let pos: f64 = rand::random::<f64>() * TAU;
 
@@ -50,22 +70,7 @@ impl TNTEntity {
             ])
             .await;
     }
-}
 
-#[async_trait]
-impl EntityBase for TNTEntity {
-    async fn tick(&self, server: &Server) {
-        let fuse = self.fuse.fetch_sub(1, Relaxed);
-        if fuse == 0 {
-            self.entity.remove().await;
-            self.entity
-                .world
-                .read()
-                .await
-                .explode(server, self.entity.pos.load(), self.power)
-                .await;
-        }
-    }
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
         false
     }

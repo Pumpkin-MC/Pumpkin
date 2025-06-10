@@ -54,19 +54,21 @@ impl DefaultNameArgConsumer for ItemArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for ItemArgumentConsumer {
-    type Data = (&'a str, Item);
+    type Data = (&'a str, &'static Item);
 
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Item(name)) => Item::from_registry_key(&name.replace("minecraft:", ""))
-                .map_or_else(
-                    || {
-                        Err(CommandError::GeneralCommandIssue(format!(
-                            "Item {name} does not exist."
-                        )))
-                    },
-                    |item| Ok((*name, item)),
-                ),
+            Some(Arg::Item(name)) => {
+                Item::from_registry_key(name.strip_prefix("minecraft:").unwrap_or(name))
+                    .map_or_else(
+                        || {
+                            Err(CommandError::GeneralCommandIssue(format!(
+                                "Item {name} does not exist."
+                            )))
+                        },
+                        |item| Ok((*name, item)),
+                    )
+            }
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

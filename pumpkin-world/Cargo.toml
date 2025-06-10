@@ -22,9 +22,11 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
+crossbeam.workspace = true
 
 num-derive = "0.4"
 sha2 = "0.10"
+bitflags = "2.9.1"
 
 dashmap = "6.1"
 
@@ -42,13 +44,13 @@ enum_dispatch = "0.3"
 derive-getters = "0.5.0"
 
 thread_local = "1.1.8"
-lru = "0.13.0"
+lru = "0.14.0"
 
 tokio-util = { version = "0.7.15", features = ["rt"] }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
-temp-dir = "0.1.14"
+criterion = { version = "0.6", features = ["html_reports", "async_tokio"] }
+temp-dir = "0.1.16"
 # Print log info inside tests when needed
 env_logger = "0.11.8"
 # Allows us to modify the config

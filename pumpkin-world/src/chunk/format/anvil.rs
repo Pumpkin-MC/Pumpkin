@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+use futures::future::join_all;
 use itertools::Itertools;
 use lz4_java_wrc::Context;
 use pumpkin_config::advanced_config;
@@ -317,11 +318,12 @@ impl AnvilChunkData {
         Ok(chunk)
     }
 
-    fn from_chunk(
+    async fn from_chunk(
         chunk: &ChunkData,
         compression: Option<Compression>,
     ) -> Result<Self, ChunkWritingError> {
         let raw_bytes = chunk_to_bytes(chunk)
+            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression
@@ -353,7 +355,7 @@ impl AnvilChunkFile {
     }
 
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
-        log::trace!("Writing in place: {:?}", path);
+        log::trace!("Writing in place: {path:?}");
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -453,7 +455,7 @@ impl AnvilChunkFile {
     /// Write entire file, disregarding saved offsets
     async fn write_all(&self, path: &Path) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+        log::trace!("Writing tmp file to disk: {temp_path:?}");
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -499,7 +501,7 @@ impl AnvilChunkFile {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {:?}", path);
+        log::trace!("Wrote file to Disk: {path:?}");
         Ok(())
     }
 }
@@ -526,17 +528,14 @@ impl ChunkSerializer for AnvilChunkFile {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = Self::get_region_coords(chunk);
-        format!("./r.{}.{}.mca", region_x, region_z)
+        format!("./r.{region_x}.{region_z}.mca")
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!(
-                    "Skipping write for {:?} as there were no dirty chunks",
-                    path
-                );
+                log::debug!("Skipping write for {path:?} as there were no dirty chunks");
                 Ok(())
             }
             WriteAction::All => self.write_all(&path).await,
@@ -623,7 +622,7 @@ impl ChunkSerializer for AnvilChunkFile {
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type)?;
+        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type).await?;
 
         let mut write_action = self.write_action.lock().await;
         if !advanced_config().chunk.write_in_place {
@@ -756,11 +755,7 @@ impl ChunkSerializer for AnvilChunkFile {
                                 let offset = new_sectors as i64 - swapped_sectors as i64;
 
                                 log::trace!(
-                                    "Swapping {} with {}, shifting all chunks {} and after by {}",
-                                    index,
-                                    swapped_index,
-                                    swapped_index,
-                                    offset
+                                    "Swapping {index} with {swapped_index}, shifting all chunks {swapped_index} and after by {offset}"
                                 );
 
                                 for shift_index in indices_to_shift {
@@ -817,7 +812,7 @@ impl ChunkSerializer for AnvilChunkFile {
     }
 }
 
-pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
+pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
     let sections: Vec<_> = (0..chunk_data.section.sections.len() + 2)
         .map(|i| {
             let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
@@ -888,15 +883,14 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
                 })
                 .collect()
         },
-        block_entities: chunk_data
-            .block_entities
-            .values()
-            .map(|block_entity| {
+        block_entities: join_all(chunk_data.block_entities.values().map(
+            |block_entity| async move {
                 let mut nbt = NbtCompound::new();
-                block_entity.write_internal(&mut nbt);
+                block_entity.1.write_internal(&mut nbt).await;
                 nbt
-            })
-            .collect(),
+            },
+        ))
+        .await,
         // we have not implemented light engine
         light_correct: false,
     };
@@ -908,7 +902,10 @@ pub fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializin
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use pumpkin_config::{AdvancedConfiguration, advanced_config, override_config_for_testing};
+    use pumpkin_data::BlockDirection;
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
@@ -919,8 +916,25 @@ mod tests {
     use crate::chunk::format::anvil::AnvilChunkFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
     use crate::chunk::io::{ChunkIO, LoadedData};
+    use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
-    use crate::level::{LevelFolder, SyncChunk};
+    use crate::level::{Level, LevelFolder, SyncChunk};
+    use crate::world::{BlockAccessor, BlockRegistryExt};
+
+    struct BlockRegistry;
+
+    #[async_trait]
+    impl BlockRegistryExt for BlockRegistry {
+        async fn can_place_at(
+            &self,
+            _block: &pumpkin_data::Block,
+            _block_accessor: &dyn BlockAccessor,
+            _block_pos: &BlockPos,
+            _face: BlockDirection,
+        ) -> bool {
+            true
+        }
+    }
 
     async fn get_chunks(
         saver: &ChunkFileManager<AnvilChunkFile>,
@@ -946,7 +960,7 @@ mod tests {
                 LoadedData::Loaded(chunk) => chunk,
                 LoadedData::Missing(_) => panic!("Missing chunk"),
                 LoadedData::Error((position, error)) => {
-                    panic!("Error reading chunk at {:?} | Error: {:?}", position, error)
+                    panic!("Error reading chunk at {position:?} | Error: {error:?}")
                 }
             })
             .collect::<Vec<_>>();
@@ -989,7 +1003,7 @@ mod tests {
 
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
@@ -998,13 +1012,22 @@ mod tests {
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let block_registry = Arc::new(BlockRegistry);
 
         // Generate chunks
         let mut chunks = vec![];
+        let level = Arc::new(Level::from_root_folder(
+            temp_dir.path().to_path_buf(),
+            block_registry.clone(),
+            0,
+            Dimension::Overworld,
+        ));
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(&position);
+                let chunk = generator
+                    .generate_chunk(&level, block_registry.as_ref(), &position)
+                    .await;
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1034,7 +1057,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1047,7 +1070,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
                     break;
@@ -1092,7 +1115,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1105,7 +1128,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1165,7 +1188,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1178,7 +1201,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1226,7 +1249,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
 
@@ -1239,7 +1262,7 @@ mod tests {
                         .enumerate()
                         .for_each(|(i, (o, r))| {
                             if o != r {
-                                panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                panic!("Data miss-match expected {o}, got {r} ({i})");
                             }
                         });
                     break;
@@ -1257,7 +1280,7 @@ mod tests {
 
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
@@ -1266,13 +1289,22 @@ mod tests {
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let block_registry = Arc::new(BlockRegistry);
 
         // Generate chunks
         let mut chunks = vec![];
+        let level = Arc::new(Level::from_root_folder(
+            temp_dir.path().to_path_buf(),
+            block_registry.clone(),
+            0,
+            Dimension::Overworld,
+        ));
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(&position);
+                let chunk = generator
+                    .generate_chunk(&level, block_registry.as_ref(), &position)
+                    .await;
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1307,7 +1339,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {o}, got {r} ({i})");
                                 }
                             });
 
@@ -1320,7 +1352,7 @@ mod tests {
                             .enumerate()
                             .for_each(|(i, (o, r))| {
                                 if o != r {
-                                    panic!("Data miss-match expected {}, got {} ({})", o, r, i);
+                                    panic!("Data miss-match expected {o}, got {r} ({i})");
                                 }
                             });
                         break;

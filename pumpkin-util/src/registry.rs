@@ -13,7 +13,7 @@ impl TagType {
     pub fn serialize(&self) -> String {
         match self {
             TagType::Item(name) => name.clone(),
-            TagType::Tag(tag) => format!("#{}", tag),
+            TagType::Tag(tag) => format!("#{tag}"),
         }
     }
 }

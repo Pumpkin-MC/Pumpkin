@@ -169,7 +169,7 @@ impl ChunkSerializer for LinearFile {
 
     fn get_chunk_key(chunk: &Vector2<i32>) -> String {
         let (region_x, region_z) = AnvilChunkFile::get_region_coords(chunk);
-        format!("./r.{}.{}.linear", region_x, region_z)
+        format!("./r.{region_x}.{region_z}.linear")
     }
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
@@ -318,6 +318,7 @@ impl ChunkSerializer for LinearFile {
     async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
         let index = LinearFile::get_chunk_index(&chunk.position);
         let chunk_raw: Bytes = chunk_to_bytes(chunk)
+            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?
             .into();
 
@@ -364,7 +365,10 @@ impl ChunkSerializer for LinearFile {
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use core::panic;
+    use pumpkin_data::BlockDirection;
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use std::fs;
     use std::path::PathBuf;
@@ -375,8 +379,25 @@ mod tests {
     use crate::chunk::format::linear::LinearFile;
     use crate::chunk::io::chunk_file_manager::ChunkFileManager;
     use crate::chunk::io::{ChunkIO, LoadedData};
+    use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
-    use crate::level::LevelFolder;
+    use crate::level::{Level, LevelFolder};
+    use crate::world::{BlockAccessor, BlockRegistryExt};
+
+    struct BlockRegistry;
+
+    #[async_trait]
+    impl BlockRegistryExt for BlockRegistry {
+        async fn can_place_at(
+            &self,
+            _block: &pumpkin_data::Block,
+            _block_accessor: &dyn BlockAccessor,
+            _block_pos: &BlockPos,
+            _face: BlockDirection,
+        ) -> bool {
+            true
+        }
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
@@ -408,7 +429,7 @@ mod tests {
     async fn test_writing() {
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0));
+        let generator = get_world_gen(Seed(0), Dimension::Overworld);
 
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
@@ -417,13 +438,21 @@ mod tests {
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<LinearFile>::default();
-
+        let block_registry = Arc::new(BlockRegistry);
         // Generate chunks
         let mut chunks = vec![];
+        let level = Arc::new(Level::from_root_folder(
+            temp_dir.path().to_path_buf(),
+            block_registry.clone(),
+            0,
+            Dimension::Overworld,
+        ));
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(&position);
+                let chunk = generator
+                    .generate_chunk(&level, block_registry.as_ref(), &position)
+                    .await;
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }

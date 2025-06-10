@@ -74,7 +74,7 @@ pub trait FluidLevelSamplerImpl {
 #[enum_dispatch(AquiferSamplerImpl)]
 pub enum AquiferSampler {
     SeaLevel(SeaLevelAquiferSampler),
-    Aquifier(WorldAquiferSampler),
+    Aquifer(WorldAquiferSampler),
 }
 
 macro_rules! local_xz {
@@ -93,10 +93,10 @@ pub struct WorldAquiferSampler {
     random_deriver: RandomDeriver,
     fluid_level: FluidLevelSampler,
     start_x: i32,
-    size_x: usize,
+    size_x: u64,
     start_y: i8,
     start_z: i32,
-    size_z: usize,
+    size_z: u64,
     levels: Box<[Option<FluidLevel>]>,
     packed_positions: Box<[i64]>,
 }
@@ -128,19 +128,19 @@ impl WorldAquiferSampler {
     ) -> Self {
         let start_x = local_xz!(chunk_pos::start_block_x(&chunk_pos)) - 1;
         let end_x = local_xz!(chunk_pos::end_block_x(&chunk_pos)) + 1;
-        let size_x = (end_x - start_x) as usize + 1;
+        let size_x = (end_x - start_x) as u64 + 1;
 
         let start_y = local_y!(minimum_y) - 1;
         let end_y = local_y!(minimum_y as i32 + height as i32) + 1;
-        let size_y = (end_y - start_y as i32) as usize + 1;
+        let size_y = (end_y - start_y as i32) as u64 + 1;
 
         let start_z = local_xz!(chunk_pos::start_block_z(&chunk_pos)) - 1;
         let end_z = local_xz!(chunk_pos::end_block_z(&chunk_pos)) + 1;
-        let size_z = (end_z - start_z) as usize + 1;
+        let size_z = (end_z - start_z) as u64 + 1;
 
         let cache_size = size_x * size_y * size_z;
 
-        let mut packed_positions = vec![0; cache_size];
+        let mut packed_positions = vec![0; cache_size as usize];
 
         for offset_x in 0..size_x {
             for offset_y in 0..size_y {
@@ -155,7 +155,7 @@ impl WorldAquiferSampler {
                     let rand_z = z * 16 + random.next_bounded_i32(10);
 
                     let index = (offset_y * size_z + offset_z) * size_x + offset_x;
-                    packed_positions[index] =
+                    packed_positions[index as usize] =
                         block_pos::packed(&Vector3::new(rand_x, rand_y, rand_z));
                 }
             }
@@ -169,18 +169,18 @@ impl WorldAquiferSampler {
             start_y,
             start_z,
             size_z,
-            levels: vec![None; cache_size].into(),
+            levels: vec![None; cache_size as usize].into(),
             packed_positions: packed_positions.into(),
         }
     }
 
     #[inline]
     fn index(&self, x: i32, y: i32, z: i32) -> usize {
-        let i = (x - self.start_x) as usize;
-        let j = (y - self.start_y as i32) as usize;
-        let k = (z - self.start_z) as usize;
+        let i = (x - self.start_x) as u64;
+        let j = (y - self.start_y as i32) as u64;
+        let k = (z - self.start_z) as u64;
 
-        (j * self.size_z + k) * self.size_x + i
+        ((j * self.size_z + k) * self.size_x + i) as usize
     }
 
     #[inline]
@@ -729,7 +729,7 @@ mod test {
             _ => unreachable!(),
         };
         let aquifer = match sampler {
-            AquiferSampler::Aquifier(aquifer) => aquifer,
+            AquiferSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),
         };
 

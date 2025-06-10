@@ -137,7 +137,7 @@ pub enum MaterialCondition {
     #[serde(rename = "minecraft:noise_threshold")]
     NoiseThreshold(NoiseThresholdMaterialCondition),
     #[serde(rename = "minecraft:vertical_gradient")]
-    VerticalGradient(VerticalGradientMaterialCondition),
+    VerticalGradient(Box<VerticalGradientMaterialCondition>),
     #[serde(rename = "minecraft:y_above")]
     YAbove(AboveYMaterialCondition),
     #[serde(rename = "minecraft:water")]
@@ -300,7 +300,7 @@ pub fn estimate_surface_height(
             context.estimated_surface_heights[3] as f64,
         )
         .floor() as i32;
-        context.surface_min_y = surface + context.run_depth - 8;
+        context.surface_min_y = surface.saturating_add(context.run_depth) - 8;
     }
     context.surface_min_y
 }
@@ -327,7 +327,7 @@ impl NoiseThresholdMaterialCondition {
     pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
         let sampler = context
             .noise_builder
-            .get_noise_sampler_for_id(&self.noise.replace("minecraft:", ""));
+            .get_noise_sampler_for_id(self.noise.strip_prefix("minecraft:").unwrap());
         let value = sampler.sample(context.block_pos.x as f64, 0.0, context.block_pos.z as f64);
         value >= self.min_threshold && value <= self.max_threshold
     }

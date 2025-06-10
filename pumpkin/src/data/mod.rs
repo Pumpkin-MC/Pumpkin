@@ -27,12 +27,13 @@ pub trait LoadJSONConfiguration {
         let path = data_dir.join(Self::get_path());
 
         let config = if path.exists() {
-            let file_content = fs::read_to_string(&path)
-                .unwrap_or_else(|_| panic!("Couldn't read configuration file at {path:?}"));
+            let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
+                panic!("Couldn't read configuration file at {}", path.display())
+            });
 
             serde_json::from_str(&file_content).unwrap_or_else(|err| {
                 panic!(
-                    "Couldn't parse data config at {path:?}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
+                    "Couldn't parse data config at {}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.", path.display(),
                 )
             })
         } else {
@@ -40,7 +41,8 @@ pub trait LoadJSONConfiguration {
 
             if let Err(err) = fs::write(&path, serde_json::to_string_pretty(&content).unwrap()) {
                 log::error!(
-                    "Couldn't write default data config to {path:?}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
+                    "Couldn't write default data config to {}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
+                    path.display(),
                 );
             }
 
@@ -72,13 +74,19 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
         let content = match serde_json::to_string_pretty(self) {
             Ok(content) => content,
             Err(err) => {
-                log::warn!("Couldn't serialize operator data config to {path:?}. Reason: {err}",);
+                log::warn!(
+                    "Couldn't serialize operator data config to {}. Reason: {err}",
+                    path.display()
+                );
                 return;
             }
         };
 
         if let Err(err) = std::fs::write(&path, content) {
-            log::warn!("Couldn't write operator config to {path:?}. Reason: {err}",);
+            log::warn!(
+                "Couldn't write operator config to {}. Reason: {err}",
+                path.display()
+            );
         }
     }
 }

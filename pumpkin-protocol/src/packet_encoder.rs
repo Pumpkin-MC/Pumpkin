@@ -146,8 +146,7 @@ impl<W: AsyncWrite + Unpin> NetworkEncoder<W> {
         }
         let data_len_var_int: VarInt = data_len.try_into().map_err(|_| {
             PacketEncodeError::Message(format!(
-                "Packet data length is too large to fit in VarInt! ({})",
-                data_len
+                "Packet data length is too large to fit in VarInt! ({data_len})"
             ))
         })?;
 
@@ -180,8 +179,7 @@ impl<W: AsyncWrite + Unpin> NetworkEncoder<W> {
                 .try_into()
                 .map_err(|_| {
                     PacketEncodeError::Message(format!(
-                        "Full packet length is too large to fit in VarInt! ({})",
-                        data_len
+                        "Full packet length is too large to fit in VarInt! ({data_len})"
                     ))
                 })?;
 
@@ -213,8 +211,7 @@ impl<W: AsyncWrite + Unpin> NetworkEncoder<W> {
                     .try_into()
                     .map_err(|_| {
                         PacketEncodeError::Message(format!(
-                            "Full packet length is too large to fit in VarInt! ({})",
-                            data_len
+                            "Full packet length is too large to fit in VarInt! ({data_len})"
                         ))
                     })?;
 

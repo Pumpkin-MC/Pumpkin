@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SlabType;
 use pumpkin_data::tag::RegistryKey;
@@ -7,7 +8,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -34,12 +34,12 @@ impl PumpkinBlock for SlabBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        face: BlockDirection,
-        _block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = replacing {
             let mut slab_props = SlabProperties::from_state_id(state_id, block);
@@ -82,13 +82,5 @@ impl PumpkinBlock for SlabBlock {
                     _ => SlabType::Bottom,
                 },
             }
-    }
-}
-
-impl SlabBlock {
-    pub fn drop_double_loot(block: &Block, state_id: BlockStateId) -> bool {
-        let slab_props = SlabProperties::from_state_id(state_id, block);
-
-        slab_props.r#type == SlabType::Double
     }
 }

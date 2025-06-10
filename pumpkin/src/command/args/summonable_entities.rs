@@ -12,7 +12,7 @@ use super::{
     Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };
 
-pub(crate) struct SummonableEntitiesArgumentConsumer;
+pub struct SummonableEntitiesArgumentConsumer;
 
 impl GetClientSideArgParser for SummonableEntitiesArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
@@ -57,15 +57,16 @@ impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Block(name)) => EntityType::from_name(&name.replace("minecraft:", ""))
-                .map_or_else(
+            Some(Arg::Block(name)) => {
+                EntityType::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
                         Err(CommandError::GeneralCommandIssue(format!(
                             "Entity {name} does not exist."
                         )))
                     },
                     Result::Ok,
-                ),
+                )
+            }
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

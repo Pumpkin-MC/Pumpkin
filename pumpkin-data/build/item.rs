@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
@@ -226,7 +226,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/items.json");
 
     let items: HashMap<String, Item> =
-        serde_json::from_str(include_str!("../../assets/items.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
 
     let mut type_from_raw_id_arms = TokenStream::new();
@@ -251,11 +251,11 @@ pub(crate) fn build() -> TokenStream {
         });
 
         type_from_raw_id_arms.extend(quote! {
-            #id_lit => Some(Self::#const_ident),
+            #id_lit => Some(&Self::#const_ident),
         });
 
         type_from_name.extend(quote! {
-            #name => Some(Self::#const_ident),
+            #name => Some(&Self::#const_ident),
         });
     }
 
@@ -334,7 +334,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = "Try to parse an item from a resource location string."]
-            pub fn from_registry_key(name: &str) -> Option<Self> {
+            pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 match name {
                     #type_from_name
                     _ => None
@@ -342,7 +342,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = "Try to parse an item from a raw id."]
-            pub const fn from_id(id: u16) -> Option<Self> {
+            pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms
                     _ => None

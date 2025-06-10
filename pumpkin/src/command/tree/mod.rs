@@ -10,8 +10,8 @@ pub type RawArgs<'a> = Vec<&'a str>;
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    pub(crate) children: Vec<usize>,
-    pub(crate) node_type: NodeType,
+    pub children: Vec<usize>,
+    pub node_type: NodeType,
 }
 
 #[derive(Clone)]
@@ -56,10 +56,10 @@ pub enum Command {
 
 #[derive(Debug, Clone)]
 pub struct CommandTree {
-    pub(crate) nodes: Vec<Node>,
-    pub(crate) children: Vec<usize>,
-    pub(crate) names: Vec<String>,
-    pub(crate) description: String,
+    pub nodes: Vec<Node>,
+    pub children: Vec<usize>,
+    pub names: Vec<String>,
+    pub description: String,
 }
 
 impl CommandTree {

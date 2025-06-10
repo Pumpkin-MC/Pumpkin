@@ -2,6 +2,7 @@ use crate::block::BlockIsReplacing;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
@@ -9,7 +10,6 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
@@ -34,12 +34,12 @@ impl PumpkinBlock for GlassPaneBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> u16 {
         let mut pane_props = GlassPaneProperties::default(block);
         pane_props.waterlogged = replacing.water_source();
@@ -70,14 +70,11 @@ pub async fn compute_pane_state(
 ) -> u16 {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let Ok((other_block, other_block_state)) =
-            world.get_block_and_block_state(&other_block_pos).await
-        else {
-            continue;
-        };
+        let (other_block, other_block_state) =
+            world.get_block_and_block_state(&other_block_pos).await;
 
         let connected = other_block == *block
-            || (other_block_state.is_solid() && other_block_state.is_full_cube())
+            || other_block_state.is_side_solid(direction.opposite())
             || other_block.is_tagged_with("c:glass_panes").unwrap()
             || other_block == Block::IRON_BARS
             || other_block.is_tagged_with("minecraft:walls").unwrap();

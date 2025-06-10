@@ -4,6 +4,7 @@ pub mod boundingbox;
 pub mod experience;
 pub mod float_provider;
 pub mod int_provider;
+pub mod pool;
 pub mod position;
 pub mod vector2;
 pub mod vector3;
@@ -49,7 +50,7 @@ pub const fn ceil_log2(value: u32) -> u8 {
         smallest_encompassing_power_of_two(value)
     };
 
-    MULTIPLY_DE_BRUIJN_BIT_POSITION[(((value as usize) * 125613361) >> 27) & 31]
+    MULTIPLY_DE_BRUIJN_BIT_POSITION[((((value as u64) * 125613361) >> 27) & 31) as usize]
 }
 
 /// Maximum return value: 30

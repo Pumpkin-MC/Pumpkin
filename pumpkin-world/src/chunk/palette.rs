@@ -7,14 +7,12 @@ use std::{
 use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
-use crate::block::RawBlockState;
+use crate::block::BlockStateCodec;
 
-use super::format::{
-    ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry, PaletteBlockEntry,
-};
+use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
 
 /// 3d array indexed by y,z,x
-type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
+type AbstractCube<T, const DIM: u64> = [[[T; DIM]; DIM]; DIM];
 
 #[derive(Debug)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
@@ -116,7 +114,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                             debug_assert!((1 << bits_per_entry) > *key_index);
 
                             let packed_offset_index =
-                                (*key_index as u64) << (bits_per_entry as usize * index);
+                                (*key_index as u64) << (bits_per_entry as u64 * index as u64);
                             acc | packed_offset_index as i64
                         })
                     })
@@ -171,9 +169,9 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 .for_each(|(values, packed)| {
                     values.iter_mut().enumerate().for_each(|(index, value)| {
                         let lookup_index =
-                            (*packed as usize >> (index * bits_per_key as usize)) & index_mask;
+                            (*packed as u64 >> (index as u64 * bits_per_key as u64)) & index_mask;
 
-                        if let Some(v) = palette.get(lookup_index) {
+                        if let Some(v) = palette.get(lookup_index as usize) {
                             *value = *v;
                         } else {
                             // The cube is already initialized to the default
@@ -266,7 +264,7 @@ impl BiomePalette {
                             chunk.iter().enumerate().fold(0, |acc, (index, value)| {
                                 debug_assert!((1 << bits_per_entry) > *value);
                                 let packed_offset_index =
-                                    (*value as u64) << (bits_per_entry as usize * index);
+                                    (*value as u64) << (bits_per_entry as u64 * index as u64);
                                 acc | packed_offset_index as i64
                             })
                         })
@@ -348,7 +346,7 @@ impl BlockPalette {
                                 debug_assert!((1 << bits_per_entry) > *value);
 
                                 let packed_offset_index =
-                                    (*value as i64) << (bits_per_entry as usize * index);
+                                    (*value as i64) << (bits_per_entry as u64 * index as u64);
                                 acc | packed_offset_index
                             })
                         })
@@ -401,8 +399,8 @@ impl BlockPalette {
             .palette
             .into_iter()
             .map(|entry| {
-                if let Some(block_state) = RawBlockState::from_palette(&entry) {
-                    block_state.get_state_id()
+                if let Some(block_state) = entry.get_state() {
+                    block_state.id
                 } else {
                     log::warn!(
                         "Could not find valid block state for {}. Defaulting...",
@@ -436,10 +434,10 @@ impl BlockPalette {
         }
     }
 
-    fn block_state_id_to_palette_entry(registry_id: u16) -> PaletteBlockEntry {
+    fn block_state_id_to_palette_entry(registry_id: u16) -> BlockStateCodec {
         let block = Block::from_state_id(registry_id).unwrap();
 
-        PaletteBlockEntry {
+        BlockStateCodec {
             name: block.name.into(),
             properties: {
                 if let Some(properties) = block.properties(registry_id) {

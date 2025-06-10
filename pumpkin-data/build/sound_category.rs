@@ -1,3 +1,5 @@
+use std::fs;
+
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -8,7 +10,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/sound_category.json");
 
     let sound_categories: Vec<String> =
-        serde_json::from_str(include_str!("../../assets/sound_category.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/sound_category.json").unwrap())
             .expect("Failed to parse sound_category.json");
     let variants = array_to_tokenstream(&sound_categories);
     let type_from_name = &sound_categories

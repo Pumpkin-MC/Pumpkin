@@ -27,14 +27,18 @@ impl CommandExecutor for Executor {
     async fn execute<'a>(
         &self,
         sender: &mut CommandSender,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let world = sender
-            .world()
-            .await
-            .ok_or(CommandError::InvalidRequirement)?;
         let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
+        let world = {
+            let guard = server.worlds.read().await;
+
+            guard
+                .first()
+                .cloned()
+                .ok_or(CommandError::InvalidRequirement)?
+        };
         let mut weather = world.weather.lock().await;
 
         match self.mode {

@@ -3,6 +3,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_world::item::ItemStack;
 
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -60,7 +61,11 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            target.give_items(item.clone(), item_count as u32).await;
+            let mut stack = ItemStack::new(item_count as u8, item);
+            target.inventory().insert_stack_anywhere(&mut stack).await;
+            if stack.is_empty() {
+                target.drop_item(stack).await;
+            }
         }
         let msg = if targets.len() == 1 {
             TextComponent::translate(

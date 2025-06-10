@@ -36,6 +36,7 @@ mod test {
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+        dimension::Dimension,
         generation::noise_router::{
             multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
             proto_noise_router::ProtoNoiseRouters,
@@ -89,7 +90,11 @@ mod test {
 
         for (x, y, z, biome_id) in expected_data {
             let global_biome_pos = Vector3::new(x, y, z);
-            let calculated_biome = MultiNoiseBiomeSupplier::biome(&global_biome_pos, &mut sampler);
+            let calculated_biome = MultiNoiseBiomeSupplier::biome(
+                &global_biome_pos,
+                &mut sampler,
+                Dimension::Overworld,
+            );
 
             assert_eq!(
                 biome_id,

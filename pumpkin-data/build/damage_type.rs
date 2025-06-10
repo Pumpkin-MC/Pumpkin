@@ -2,7 +2,7 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 use syn::{Ident, LitInt};
 
 #[derive(Deserialize)]
@@ -51,7 +51,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/damage_type.json");
 
     let damage_types: HashMap<String, DamageTypeEntry> =
-        serde_json::from_str(include_str!("../../assets/damage_type.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/damage_type.json").unwrap())
             .expect("Failed to parse damage_type.json");
 
     let mut constants = Vec::new();
@@ -68,7 +68,7 @@ pub(crate) fn build() -> TokenStream {
         let data = &entry.components;
         let death_message_type = match &data.death_message_type {
             Some(msg) => {
-                let msg_ident = Ident::new(&format!("{:?}", msg), proc_macro2::Span::call_site());
+                let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
                 quote! { Some(DeathMessageType::#msg_ident) }
             }
             None => quote! { None },
@@ -76,7 +76,7 @@ pub(crate) fn build() -> TokenStream {
 
         let effects = match &data.effects {
             Some(msg) => {
-                let msg_ident = Ident::new(&format!("{:?}", msg), proc_macro2::Span::call_site());
+                let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
                 quote! { Some(DamageEffects::#msg_ident) }
             }
             None => quote! { None },

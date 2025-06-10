@@ -2,7 +2,10 @@ use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 use syn::{Ident, LitInt, LitStr};
 
 fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
@@ -10,7 +13,7 @@ fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
 }
 
 fn property_group_name_from_derived_name(name: &str) -> String {
-    format!("{}_fluid_properties", name).to_upper_camel_case()
+    format!("{name}_fluid_properties").to_upper_camel_case()
 }
 
 struct PropertyVariantMapping {
@@ -55,7 +58,7 @@ impl ToTokens for PropertyStruct {
 
         let ident_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
-                format!("L{}", value)
+                format!("L{value}")
             } else {
                 value.clone()
             };
@@ -67,7 +70,7 @@ impl ToTokens for PropertyStruct {
 
         let from_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
-                format!("L{}", value)
+                format!("L{value}")
             } else {
                 value.clone()
             };
@@ -78,7 +81,7 @@ impl ToTokens for PropertyStruct {
         });
         let to_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
-                format!("L{}", value)
+                format!("L{value}")
             } else {
                 value.clone()
             };
@@ -343,10 +346,11 @@ fn default_flow_distance() -> u32 {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/fluids.json");
 
-    let fluids: Vec<Fluid> = match serde_json::from_str(include_str!("../../assets/fluids.json")) {
-        Ok(fluids) => fluids,
-        Err(e) => panic!("Failed to parse fluids.json: {}", e),
-    };
+    let fluids: Vec<Fluid> =
+        match serde_json::from_str(&fs::read_to_string("../assets/fluids.json").unwrap()) {
+            Ok(fluids) => fluids,
+            Err(e) => panic!("Failed to parse fluids.json: {e}"),
+        };
 
     let mut constants = TokenStream::new();
     let mut id_matches = Vec::new();

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_inventory::Container;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_world::inventory::Clearable;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
@@ -20,23 +20,15 @@ const DESCRIPTION: &str = "Clear yours or targets inventory.";
 
 const ARG_TARGET: &str = "target";
 
-async fn clear_player(target: &Player) -> usize {
-    let mut inventory = target.inventory().lock().await;
+async fn clear_player(target: &Player) -> u64 {
+    let inventory = target.inventory();
 
-    let slots = inventory.all_slots();
-    let items_count = slots
-        .iter()
-        .filter_map(|slot| slot.as_ref().map(|slot| slot.item_count as usize))
-        .sum();
-    for slot in slots {
-        *slot = None;
-    }
-    drop(inventory);
-    target.set_container_content(None).await;
-    items_count
+    inventory.clear().await;
+    //target.set_container_content(None).await; TODO: Inv
+    0 //TODO: Count items
 }
 
-fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> TextComponent {
+fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
         [target] if item_count == 0 => TextComponent::translate(
             "clear.failed.single",

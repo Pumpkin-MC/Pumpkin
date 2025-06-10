@@ -9,6 +9,65 @@ use crate::math::vector2::Vector2;
 use num_traits::Euclid;
 use serde::{Deserialize, Serialize};
 
+pub struct BlockPosIterator {
+    start_x: i32,
+    start_y: i32,
+    start_z: i32,
+    end_x: i32,
+    end_y: i32,
+    index: usize,
+    count: usize,
+}
+
+impl BlockPosIterator {
+    pub fn new(
+        start_x: i32,
+        start_y: i32,
+        start_z: i32,
+        end_x: i32,
+        end_y: i32,
+        end_z: i32,
+    ) -> Self {
+        let count_x = end_x - start_x + 1;
+        let count_y = end_y - start_y + 1;
+        let count_z = end_z - start_z + 1;
+        let count = (count_x * count_y * count_z) as usize;
+        BlockPosIterator {
+            start_x,
+            start_y,
+            start_z,
+            end_x,
+            end_y,
+            index: 0,
+            count,
+        }
+    }
+}
+
+impl Iterator for BlockPosIterator {
+    type Item = BlockPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.count {
+            return None;
+        }
+
+        let size_x = (self.end_x - self.start_x + 1) as usize;
+        let size_y = (self.end_y - self.start_y + 1) as usize;
+
+        let x_offset = self.index % size_x;
+        let y_offset = (self.index / size_x) % size_y;
+        let z_offset = (self.index / size_x) / size_y;
+
+        let x = self.start_x + x_offset as i32;
+        let y = self.start_y + y_offset as i32;
+        let z = self.start_z + z_offset as i32;
+
+        self.index += 1;
+        Some(BlockPos::new(x, y, z))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Aka Block Position
 pub struct BlockPos(pub Vector3<i32>);
@@ -16,6 +75,28 @@ pub struct BlockPos(pub Vector3<i32>);
 impl BlockPos {
     pub fn new(x: i32, y: i32, z: i32) -> Self {
         Self(Vector3::new(x, y, z))
+    }
+
+    pub fn iterate(start: BlockPos, end: BlockPos) -> BlockPosIterator {
+        BlockPosIterator::new(
+            start.0.x.min(end.0.x),
+            start.0.y.min(end.0.y),
+            start.0.z.min(end.0.z),
+            start.0.x.max(end.0.x),
+            start.0.y.max(end.0.y),
+            start.0.z.max(end.0.z),
+        )
+    }
+
+    pub fn iterate_block_pos(
+        start_x: i32,
+        start_y: i32,
+        start_z: i32,
+        end_x: i32,
+        end_y: i32,
+        end_z: i32,
+    ) -> BlockPosIterator {
+        BlockPosIterator::new(start_x, start_y, start_z, end_x, end_y, end_z)
     }
 
     pub fn chunk_and_chunk_relative_position(&self) -> (Vector2<i32>, Vector3<i32>) {
@@ -71,18 +152,47 @@ impl BlockPos {
         )
     }
 
+    pub fn to_centered_f64(&self) -> Vector3<f64> {
+        Vector3::new(
+            self.0.x as f64 + 0.5,
+            self.0.y as f64 + 0.5,
+            self.0.z as f64 + 0.5,
+        )
+    }
+
     pub fn offset(&self, offset: Vector3<i32>) -> Self {
         BlockPos(self.0 + offset)
+    }
+
+    pub fn add(&self, x: i32, y: i32, z: i32) -> Self {
+        BlockPos::new(self.0.x + x, self.0.y + y, self.0.z + z)
+    }
+
+    pub fn offset_dir(&self, offset: Vector3<i32>, direction: i32) -> Self {
+        BlockPos(Vector3::new(
+            self.0.x + offset.x * direction,
+            self.0.y + offset.y * direction,
+            self.0.z + offset.z * direction,
+        ))
     }
 
     pub fn up(&self) -> Self {
         self.offset(Vector3::new(0, 1, 0))
     }
 
+    pub fn up_height(&self, height: i32) -> Self {
+        self.offset(Vector3::new(0, height, 0))
+    }
+
     pub fn down(&self) -> Self {
         self.offset(Vector3::new(0, -1, 0))
     }
+
+    pub fn down_height(&self, height: i32) -> Self {
+        self.offset(Vector3::new(0, -height, 0))
+    }
 }
+
 impl Serialize for BlockPos {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

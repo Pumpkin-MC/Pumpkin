@@ -70,7 +70,7 @@ impl<'a> DoublePerlinNoiseBuilder<'a> {
 
     pub fn get_noise_sampler_for_id(&mut self, id: &str) -> DoublePerlinNoiseSampler {
         let parameters = DoublePerlinNoiseParameters::id_to_parameters(id)
-            .unwrap_or_else(|| panic!("Unknown noise id: {}", id));
+            .unwrap_or_else(|| panic!("Unknown noise id: {id}"));
 
         // Note that the parameters' id is different than `id`
         let mut random = self

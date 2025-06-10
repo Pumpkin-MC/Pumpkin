@@ -1,18 +1,16 @@
 use std::sync::Arc;
 
-use crate::world::BlockFlags;
 use crate::{block::BlockIsReplacing, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
-use pumpkin_world::block::{BlockDirection, HorizontalFacingExt};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -21,7 +19,7 @@ use crate::{
 };
 
 async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await.unwrap();
+    let (block, state) = world.get_block_and_block_state(block_pos).await;
 
     let mut lever_props = LeverLikeProperties::from_state_id(state.id, &block);
     lever_props.powered = !lever_props.powered;
@@ -45,12 +43,12 @@ impl PumpkinBlock for LeverBlock {
         &self,
         _server: &Server,
         _world: &World,
-        block: &Block,
-        face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
 

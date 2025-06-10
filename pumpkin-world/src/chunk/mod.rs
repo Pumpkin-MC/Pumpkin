@@ -1,5 +1,6 @@
 use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
@@ -95,12 +96,12 @@ impl From<i32> for TickPriority {
             1 => TickPriority::Low,
             2 => TickPriority::VeryLow,
             3 => TickPriority::ExtremelyLow,
-            _ => panic!("Invalid tick priority: {}", value),
+            _ => panic!("Invalid tick priority: {value}"),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ScheduledTick {
     pub block_pos: BlockPos,
     pub delay: u16,
@@ -115,8 +116,8 @@ pub struct ChunkData {
     pub position: Vector2<i32>,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
-    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
-    pub light_engine: ChunkLightEngine,
+    pub block_entities: HashMap<BlockPos, (NbtCompound, Arc<dyn BlockEntity>)>,
+    pub light_engine: ChunkLight,
 
     pub dirty: bool,
 }
@@ -166,7 +167,7 @@ pub struct SubChunk {
 }
 
 #[derive(Debug, Default)]
-pub struct ChunkLightEngine {
+pub struct ChunkLight {
     pub sky_light: Box<[LightContainer]>,
     pub block_light: Box<[LightContainer]>,
 }
@@ -178,6 +179,8 @@ pub struct ChunkHeightmaps {
     pub world_surface: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
     pub motion_blocking: Box<[i64]>,
+    #[serde(serialize_with = "nbt_long_array")]
+    pub motion_blocking_no_leaves: Box<[i64]>,
 }
 
 /// The Heightmap for a completely empty chunk
@@ -187,6 +190,7 @@ impl Default for ChunkHeightmaps {
             // 9 bits per entry
             // 0 packed into an i64 7 times.
             motion_blocking: vec![0; 37].into_boxed_slice(),
+            motion_blocking_no_leaves: vec![0; 37].into_boxed_slice(),
             world_surface: vec![0; 37].into_boxed_slice(),
         }
     }
@@ -220,7 +224,7 @@ impl ChunkSections {
         block_state: BlockStateId,
     ) {
         let y = y - self.min_y;
-        debug_assert!(y > 0);
+        debug_assert!(y >= 0);
         let relative_y = y as usize;
 
         self.set_relative_block(relative_x, relative_y, relative_z, block_state);

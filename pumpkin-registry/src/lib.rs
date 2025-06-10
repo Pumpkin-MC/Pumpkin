@@ -72,7 +72,7 @@ pub struct SyncedRegistry {
     instrument: IndexMap<String, Instrument>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DimensionType {
     Overworld,
     OverworldCaves,
@@ -93,6 +93,16 @@ impl DimensionType {
             Self::OverworldCaves => Identifier::vanilla("overworld_caves"),
             Self::TheEnd => Identifier::vanilla("the_end"),
             Self::TheNether => Identifier::vanilla("the_nether"),
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "minecraft:overworld" => Some(Self::Overworld),
+            "minecraft:overworld_caves" => Some(Self::OverworldCaves),
+            "minecraft:the_end" => Some(Self::TheEnd),
+            "minecraft:the_nether" => Some(Self::TheNether),
+            _ => None,
         }
     }
 }

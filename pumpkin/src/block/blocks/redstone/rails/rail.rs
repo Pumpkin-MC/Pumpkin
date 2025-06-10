@@ -1,19 +1,20 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::RailShape;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 
 use super::StraightRailShapeExt;
@@ -29,12 +30,12 @@ impl PumpkinBlock for RailBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let mut rail_props = RailProperties::default(block);
         rail_props.set_waterlogged(replacing.water_source());
@@ -146,7 +147,17 @@ impl PumpkinBlock for RailBlock {
         }
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: BlockDirection) -> bool {
-        can_place_rail_at(world, pos).await
+    async fn can_place_at(
+        &self,
+        _server: Option<&Server>,
+        world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: Option<&SUseItemOn>,
+    ) -> bool {
+        can_place_rail_at(world.unwrap(), block_pos).await
     }
 }

@@ -1,7 +1,10 @@
 use bytes::BufMut;
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-use num_traits::Float;
+use num_traits::{Float, Num};
+
+use super::position::BlockPos;
+use super::vector2::Vector2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector3<T> {
@@ -10,7 +13,7 @@ pub struct Vector3<T> {
     pub z: T,
 }
 
-impl<T: Math + Copy> Vector3<T> {
+impl<T: Math + PartialOrd + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Vector3 { x, y, z }
     }
@@ -47,11 +50,56 @@ impl<T: Math + Copy> Vector3<T> {
         }
     }
 
+    pub fn sub_raw(&self, x: T, y: T, z: T) -> Self {
+        Vector3 {
+            x: self.x - x,
+            y: self.y - y,
+            z: self.z - z,
+        }
+    }
+
     pub fn multiply(self, x: T, y: T, z: T) -> Self {
         Self {
             x: self.x * x,
             y: self.y * y,
             z: self.z * z,
+        }
+    }
+
+    pub fn lerp(&self, other: &Vector3<T>, t: T) -> Self {
+        Vector3 {
+            x: self.x + (other.x - self.x) * t,
+            y: self.y + (other.y - self.y) * t,
+            z: self.z + (other.z - self.z) * t,
+        }
+    }
+
+    pub fn sign(&self) -> Vector3<i32>
+    where
+        T: Num + PartialOrd + Copy,
+    {
+        Vector3 {
+            x: if self.x > T::zero() {
+                1
+            } else if self.x < T::zero() {
+                -1
+            } else {
+                0
+            },
+            y: if self.y > T::zero() {
+                1
+            } else if self.y < T::zero() {
+                -1
+            } else {
+                0
+            },
+            z: if self.z > T::zero() {
+                1
+            } else if self.z < T::zero() {
+                -1
+            } else {
+                0
+            },
         }
     }
 
@@ -64,6 +112,22 @@ impl<T: Math + Copy> Vector3<T> {
         let delta_y = self.y - y;
         let delta_z = self.z - z;
         delta_x * delta_x + delta_y * delta_y + delta_z * delta_z
+    }
+
+    pub fn is_within_bounds(&self, block_pos: Self, x: T, y: T, z: T) -> bool {
+        let min_x = block_pos.x - x;
+        let max_x = block_pos.x + x;
+        let min_y = block_pos.y - y;
+        let max_y = block_pos.y + y;
+        let min_z = block_pos.z - z;
+        let max_z = block_pos.z + z;
+
+        self.x >= min_x
+            && self.x <= max_x
+            && self.y >= min_y
+            && self.y <= max_y
+            && self.z >= min_z
+            && self.z <= max_z
     }
 }
 
@@ -172,6 +236,24 @@ where
             z: z.round() as i32,
         }
     }
+
+    pub fn to_vec2_i32(&self) -> Vector2<i32> {
+        let x: f64 = self.x.into();
+        let z: f64 = self.z.into();
+        Vector2 {
+            x: x.round() as i32,
+            z: z.round() as i32,
+        }
+    }
+}
+
+impl<T: Math + Copy> Vector3<T>
+where
+    T: Into<f64>,
+{
+    pub fn to_block_pos(&self) -> BlockPos {
+        BlockPos(self.to_i32())
+    }
 }
 
 pub trait Math:
@@ -190,6 +272,39 @@ impl Math for f32 {}
 impl Math for i32 {}
 impl Math for i64 {}
 impl Math for u8 {}
+
+impl<'de> serde::Deserialize<'de> for Vector3<i32> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Vector3Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Vector3Visitor {
+            type Value = Vector3<i32>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a valid Vector<i32>")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                if let Some(x) = seq.next_element::<i32>()? {
+                    if let Some(y) = seq.next_element::<i32>()? {
+                        if let Some(z) = seq.next_element::<i32>()? {
+                            return Ok(Vector3::new(x, y, z));
+                        }
+                    }
+                }
+                Err(serde::de::Error::custom("Failed to read Vector<i32>"))
+            }
+        }
+
+        deserializer.deserialize_seq(Vector3Visitor)
+    }
+}
 
 impl<'de> serde::Deserialize<'de> for Vector3<f32> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

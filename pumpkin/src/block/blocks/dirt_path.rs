@@ -4,16 +4,17 @@ use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::BlockFlags;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:dirt_path")]
 pub struct DirtPathBlock;
@@ -31,16 +32,17 @@ impl PumpkinBlock for DirtPathBlock {
         &self,
         _server: &Server,
         world: &World,
-        block: &Block,
-        _face: BlockDirection,
-        pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
         _player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
         _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        if !self.can_place_at(world, pos, BlockDirection::Down).await {
+        if !can_place_at(world, block_pos).await {
             return Block::DIRT.default_state_id;
         }
+
         block.default_state_id
     }
 
@@ -54,9 +56,7 @@ impl PumpkinBlock for DirtPathBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if direction == BlockDirection::Up
-            && !self.can_place_at(world, pos, BlockDirection::Down).await
-        {
+        if direction == BlockDirection::Up && !can_place_at(world, pos).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
@@ -64,8 +64,22 @@ impl PumpkinBlock for DirtPathBlock {
         state
     }
 
-    async fn can_place_at(&self, world: &World, pos: &BlockPos, _face: BlockDirection) -> bool {
-        let state = world.get_block_state(&pos.up()).await.unwrap();
-        !state.is_solid() // TODO: add fence gata block
+    async fn can_place_at(
+        &self,
+        _server: Option<&Server>,
+        world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
+        _block: &Block,
+        block_pos: &BlockPos,
+        _face: BlockDirection,
+        _use_item_on: Option<&SUseItemOn>,
+    ) -> bool {
+        can_place_at(world.unwrap(), block_pos).await
     }
+}
+
+async fn can_place_at(world: &World, block_pos: &BlockPos) -> bool {
+    let state = world.get_block_state(&block_pos.up()).await;
+    !state.is_solid() // TODO: add fence gate block
 }

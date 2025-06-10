@@ -1,14 +1,19 @@
 use async_trait::async_trait;
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
-use std::{any::Any, collections::HashMap, path::Path, sync::Arc};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
 pub mod api;
 pub mod loader;
 
-use crate::server::Server;
+use crate::{PERMISSION_MANAGER, server::Server};
 pub use api::*;
 
 /// A trait for handling events dynamically.
@@ -129,6 +134,9 @@ pub struct PluginManager {
     loaders: Vec<Arc<dyn PluginLoader>>,
     server: Option<Arc<Server>>,
     handlers: Arc<RwLock<HandlerMap>>,
+    unloaded_files: HashSet<PathBuf>,
+    // Self-reference for sharing with contexts
+    self_ref: Option<Arc<RwLock<PluginManager>>>,
 }
 
 /// Represents a successfully loaded plugin
@@ -157,6 +165,9 @@ pub enum ManagerError {
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("Plugin manager not initialized properly")]
+    ManagerNotInitialized,
 }
 
 impl Default for PluginManager {
@@ -166,6 +177,8 @@ impl Default for PluginManager {
             loaders: vec![Arc::new(NativePluginLoader)],
             server: None,
             handlers: Arc::new(RwLock::new(HashMap::new())),
+            unloaded_files: HashSet::new(),
+            self_ref: None,
         }
     }
 }
@@ -177,14 +190,56 @@ impl PluginManager {
         Self::default()
     }
 
+    /// Unload all loaded plugins
+    pub async fn unload_all_plugins(&mut self) -> Result<(), ManagerError> {
+        let plugin_names: Vec<&str> = self
+            .plugins
+            .iter()
+            .filter(|p| p.is_active)
+            .map(|p| p.metadata.name)
+            .collect();
+
+        for name in plugin_names {
+            if let Err(e) = self.unload_plugin(name).await {
+                log::error!("Failed to unload plugin {name}: {e}");
+            }
+        }
+
+        Ok(())
+    }
+
     /// Add a new plugin loader implementation
-    pub fn add_loader(&mut self, loader: Arc<dyn PluginLoader>) {
+    pub async fn add_loader(&mut self, loader: Arc<dyn PluginLoader>) {
         self.loaders.push(loader);
+
+        // Try to load previously unloaded files with the new loader
+        self.retry_unloaded_files().await;
+    }
+
+    /// Retry loading files that couldn't be loaded previously
+    async fn retry_unloaded_files(&mut self) {
+        let files_to_retry: Vec<PathBuf> = self.unloaded_files.iter().cloned().collect();
+        for path in files_to_retry {
+            if matches!(self.try_load_plugin(&path).await, Ok(())) {
+                self.unloaded_files.remove(&path);
+            }
+        }
     }
 
     /// Set server reference for plugin context
     pub fn set_server(&mut self, server: Arc<Server>) {
         self.server = Some(server);
+    }
+
+    /// Set self reference for creating contexts
+    pub fn set_self_ref(&mut self, self_ref: Arc<RwLock<Self>>) {
+        self.self_ref = Some(self_ref);
+    }
+
+    /// Get a clone of the loaders for context use
+    #[must_use]
+    pub fn get_loaders(&self) -> Vec<Arc<dyn PluginLoader>> {
+        self.loaders.clone()
     }
 
     /// Load all plugins from the plugin directory
@@ -218,6 +273,8 @@ impl PluginManager {
                 match self.load_with_loader(loader, path).await {
                     Ok(plugin) => {
                         self.plugins.push(plugin);
+                        // Remove from unloaded files if it was there
+                        self.unloaded_files.remove(path);
                         return Ok(());
                     }
                     Err(e) => {
@@ -227,6 +284,10 @@ impl PluginManager {
                 }
             }
         }
+
+        // No loader could handle this file, track it for future attempts
+        self.unloaded_files.insert(path.to_path_buf());
+
         Err(ManagerError::PluginNotFound(
             path.to_string_lossy().to_string(),
         ))
@@ -244,10 +305,18 @@ impl PluginManager {
             .ok_or(ManagerError::ServerNotInitialized)?;
         let (mut instance, metadata, loader_data) = loader.load(path).await?;
 
+        // Get a self_ref for the context or fail if not set
+        let self_ref = self
+            .self_ref
+            .as_ref()
+            .ok_or(ManagerError::ServerNotInitialized)?;
+
         let context = Context::new(
             metadata.clone(),
             Arc::clone(server),
             Arc::clone(&self.handlers),
+            Arc::clone(self_ref),
+            Arc::clone(&PERMISSION_MANAGER),
         );
 
         if let Err(e) = instance.on_load(&context).await {
@@ -315,10 +384,18 @@ impl PluginManager {
             .as_ref()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
+        // Get a self_ref for the context or fail if not set
+        let self_ref = self
+            .self_ref
+            .as_ref()
+            .ok_or(ManagerError::ServerNotInitialized)?;
+
         let context = Context::new(
             plugin.metadata.clone(),
             Arc::clone(server),
             Arc::clone(&self.handlers),
+            Arc::clone(self_ref),
+            Arc::clone(&PERMISSION_MANAGER),
         );
 
         plugin.instance.on_unload(&context).await.ok();

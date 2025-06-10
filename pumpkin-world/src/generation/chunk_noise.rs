@@ -186,9 +186,10 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let horizontal_biome_end = biome_coords::from_block(
             horizontal_cell_count * generation_shape.horizontal_cell_block_count() as usize,
         );
-
-        let vertical_cell_count = generation_shape.height as usize
-            / generation_shape.vertical_cell_block_count() as usize;
+        let vertical_cell_count = floor_div(
+            generation_shape.height as usize,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
         let minimum_cell_y = floor_div(
             generation_shape.min_y as i32,
             generation_shape.vertical_cell_block_count() as i32,
@@ -209,9 +210,9 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let aquifer_sampler = if aquifers {
             let section_x = section_coords::block_to_section(start_block_x);
             let section_z = section_coords::block_to_section(start_block_z);
-            AquiferSampler::Aquifier(WorldAquiferSampler::new(
+            AquiferSampler::Aquifer(WorldAquiferSampler::new(
                 Vector2::new(section_x, section_z),
-                random_config.aquifier_random_deriver.clone(),
+                random_config.aquifer_random_deriver.clone(),
                 generation_shape.min_y,
                 generation_shape.height,
                 level_sampler,
@@ -261,7 +262,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
     fn sample_density(&mut self, start: bool, current_x: i32) {
         let x = current_x * self.horizontal_cell_block_count() as i32;
 
-        for cell_z in 0..=self.horizontal_cell_block_count() {
+        for cell_z in 0..=(16 / self.horizontal_cell_block_count()) {
             let current_cell_z_pos = self.start_cell_pos.z + cell_z as i32;
             let z = current_cell_z_pos * self.horizontal_cell_block_count() as i32;
             self.cache_fill_unique_id += 1;

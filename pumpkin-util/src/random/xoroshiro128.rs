@@ -1,3 +1,5 @@
+use crate::population_seed_fn;
+
 use super::{
     RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl, gaussian::GaussianGenerator,
     hash_block_pos,
@@ -10,6 +12,8 @@ pub struct Xoroshiro {
 }
 
 impl Xoroshiro {
+    population_seed_fn!();
+
     pub fn from_seed(seed: u64) -> Self {
         let (lo, hi) = Self::mix_u64(seed);
         let lo = mix_stafford_13(lo);

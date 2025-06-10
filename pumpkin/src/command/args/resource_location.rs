@@ -8,7 +8,7 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
-pub(crate) struct ResourceLocationArgumentConsumer {
+pub struct ResourceLocationArgumentConsumer {
     autocomplete: bool,
 }
 
@@ -75,7 +75,8 @@ impl<'a> FindArg<'a> for ResourceLocationArgumentConsumer {
 }
 
 impl ResourceLocationArgumentConsumer {
-    pub(crate) const fn new(autocomplete: bool) -> Self {
+    #[must_use]
+    pub const fn new(autocomplete: bool) -> Self {
         Self { autocomplete }
     }
 }

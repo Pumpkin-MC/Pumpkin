@@ -1,5 +1,5 @@
 use crate::VarInt;
-use crate::codec::item_stack_seralizer::ItemStackSerializer;
+use crate::codec::item_stack_seralizer::OptionalItemStackHash;
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
 use pumpkin_macros::packet;
 use serde::de::SeqAccess;
@@ -7,25 +7,25 @@ use serde::{Deserialize, de};
 
 #[derive(Debug)]
 #[packet(PLAY_CONTAINER_CLICK)]
-pub struct SClickContainer {
-    pub window_id: VarInt,
-    pub state_id: VarInt,
+pub struct SClickSlot {
+    pub sync_id: VarInt,
+    pub revision: VarInt,
     pub slot: i16,
     pub button: i8,
     pub mode: SlotActionType,
     pub length_of_array: VarInt,
-    pub array_of_changed_slots: Vec<(i16, ItemStackSerializer<'static>)>,
-    pub carried_item: ItemStackSerializer<'static>,
+    pub array_of_changed_slots: Vec<(i16, OptionalItemStackHash)>,
+    pub carried_item: OptionalItemStackHash,
 }
 
-impl<'de> Deserialize<'de> for SClickContainer {
+impl<'de> Deserialize<'de> for SClickSlot {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
-            type Value = SClickContainer;
+            type Value = SClickSlot;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
@@ -35,10 +35,10 @@ impl<'de> Deserialize<'de> for SClickContainer {
             where
                 A: SeqAccess<'de>,
             {
-                let window_id = seq
-                    .next_element::<u8>()?
+                let sync_id = seq
+                    .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode u8"))?;
-                let state_id = seq
+                let revision = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
 
@@ -60,18 +60,18 @@ impl<'de> Deserialize<'de> for SClickContainer {
                         .next_element::<i16>()?
                         .ok_or(de::Error::custom("Unable to parse slot"))?;
                     let slot = seq
-                        .next_element::<ItemStackSerializer>()?
+                        .next_element::<OptionalItemStackHash>()?
                         .ok_or(de::Error::custom("Unable to parse item"))?;
                     array_of_changed_slots.push((slot_number, slot));
                 }
 
                 let carried_item = seq
-                    .next_element::<ItemStackSerializer>()?
+                    .next_element::<OptionalItemStackHash>()?
                     .ok_or(de::Error::custom("Failed to decode carried item"))?;
 
-                Ok(SClickContainer {
-                    window_id: window_id.into(),
-                    state_id,
+                Ok(SClickSlot {
+                    sync_id,
+                    revision,
                     slot,
                     button,
                     mode: SlotActionType::try_from(mode.0)
@@ -87,7 +87,7 @@ impl<'de> Deserialize<'de> for SClickContainer {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub enum SlotActionType {
     /// Performs a normal slot click. This can pick up or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
     Pickup,

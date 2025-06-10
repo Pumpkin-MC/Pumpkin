@@ -1,15 +1,16 @@
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
-use crate::world::{BlockFlags, World};
+use crate::world::World;
+use async_trait::async_trait;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
-use pumpkin_data::{Block, BlockState};
-use pumpkin_inventory::OpenContainer;
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::BlockDirection;
+use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -29,6 +30,29 @@ pub struct BlockRegistry {
     fluids: HashMap<Vec<String>, Arc<dyn PumpkinFluid>>,
 }
 
+#[async_trait]
+impl BlockRegistryExt for BlockRegistry {
+    async fn can_place_at(
+        &self,
+        block: &pumpkin_data::Block,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool {
+        self.can_place_at(
+            None,
+            None,
+            block_accessor,
+            None,
+            block,
+            block_pos,
+            face,
+            None,
+        )
+        .await
+    }
+}
+
 impl BlockRegistry {
     pub fn register<T: PumpkinBlock + BlockMetadata + 'static>(&mut self, block: T) {
         self.blocks.insert(block.names(), Arc::new(block));
@@ -36,6 +60,47 @@ impl BlockRegistry {
 
     pub fn register_fluid<T: PumpkinFluid + BlockMetadata + 'static>(&mut self, fluid: T) {
         self.fluids.insert(fluid.names(), Arc::new(fluid));
+    }
+
+    pub async fn on_synced_block_event(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        r#type: u8,
+        data: u8,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .on_synced_block_event(block, world, pos, r#type, data)
+                .await;
+        }
+        false
+    }
+
+    pub async fn on_entity_collision(
+        &self,
+        block: Block,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        pos: BlockPos,
+        state: BlockState,
+        server: &Server,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(&block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .on_entity_collision(world, entity, pos, block, state, server)
+                .await;
+        }
+    }
+
+    pub async fn on_entity_collision_fluid(&self, fluid: &Fluid, entity: &dyn EntityBase) {
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        if let Some(pumpkin_fluid) = pumpkin_fluid {
+            pumpkin_fluid.on_entity_collision(entity).await;
+        }
     }
 
     pub async fn on_use(
@@ -98,16 +163,64 @@ impl BlockRegistry {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub async fn can_place_at(
+        &self,
+        server: Option<&Server>,
+        world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        player: Option<&Player>,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        use_item_on: Option<&SUseItemOn>,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_place_at(
+                    server,
+                    world,
+                    block_accessor,
+                    player,
+                    block,
+                    block_pos,
+                    face,
+                    use_item_on,
+                )
+                .await;
+        }
+        true
+    }
+
+    pub async fn can_update_at(
+        &self,
+        world: &World,
+        block: &Block,
+        state_id: BlockStateId,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        use_item_on: &SUseItemOn,
+    ) -> bool {
+        let pumpkin_block = self.get_pumpkin_block(block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            return pumpkin_block
+                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
+                .await;
+        }
+        false
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub async fn on_place(
         &self,
         server: &Server,
         world: &World,
-        block: &Block,
-        face: BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
         player: &Player,
+        block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -115,12 +228,12 @@ impl BlockRegistry {
                 .on_place(
                     server,
                     world,
-                    block,
-                    face,
-                    block_pos,
-                    use_item_on,
                     player,
+                    block,
+                    block_pos,
+                    face,
                     replacing,
+                    use_item_on,
                 )
                 .await;
         }
@@ -142,38 +255,6 @@ impl BlockRegistry {
                 .player_placed(world, block, state_id, pos, face, player)
                 .await;
         }
-    }
-
-    pub async fn can_place_at(
-        &self,
-        world: &World,
-        block: &Block,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-    ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.can_place_at(world, block_pos, face).await;
-        }
-        true
-    }
-
-    pub async fn can_update_at(
-        &self,
-        world: &World,
-        block: &Block,
-        state_id: BlockStateId,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-        use_item_on: &SUseItemOn,
-    ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
-                .await;
-        }
-        false
     }
 
     pub async fn on_placed(
@@ -214,7 +295,7 @@ impl BlockRegistry {
         &self,
         world: Arc<World>,
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         location: BlockPos,
         server: &Server,
         state: BlockState,
@@ -223,22 +304,6 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .broken(block, player, location, server, world.clone(), state)
-                .await;
-        }
-    }
-
-    pub async fn close(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        server: &Server,
-        container: &mut OpenContainer,
-    ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
-        if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
-                .close(block, player, location, server, container)
                 .await;
         }
     }
@@ -267,10 +332,10 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state = world.get_block_state(location).await.unwrap();
+        let state = world.get_block_state(location).await;
         for direction in BlockDirection::all() {
             let neighbor_pos = location.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos).await.unwrap();
+            let neighbor_state = world.get_block_state(&neighbor_pos).await;
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block

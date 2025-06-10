@@ -3,7 +3,10 @@ use proc_macro2::{Span, TokenStream};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 use syn::{Ident, LitInt, LitStr};
 
 fn const_block_name_from_block_name(block: &str) -> String {
@@ -11,7 +14,7 @@ fn const_block_name_from_block_name(block: &str) -> String {
 }
 
 fn property_group_name_from_derived_name(name: &str) -> String {
-    format!("{}_properties", name).to_upper_camel_case()
+    format!("{name}_properties").to_upper_camel_case()
 }
 
 enum PropertyType {
@@ -275,15 +278,20 @@ impl ToTokens for BlockPropertyStruct {
                     }
                 }
 
+                #[inline]
+                fn handles_block_id(block_id: u16) -> bool where Self: Sized {
+                    [#(#block_ids),*].contains(&block_id)
+                }
+
                 fn to_state_id(&self, block: &Block) -> u16 {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     block.states[0].id + self.to_index()
                 }
 
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     if state_id >= block.states[0].id && state_id <= block.states.last().unwrap().id {
@@ -295,7 +303,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn default(block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     Self::from_state_id(block.default_state_id, block)
@@ -307,7 +315,6 @@ impl ToTokens for BlockPropertyStruct {
                     #(#to_props_values)*
                     props
                 }
-
                 fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
@@ -355,12 +362,37 @@ impl ToTokens for CollisionShape {
 pub struct BlockState {
     pub id: u16,
     pub state_flags: u8,
+    pub side_flags: u8,
+    pub instrument: String, // TODO: make this an enum
     pub luminance: u8,
+    pub piston_behavior: PistonBehavior,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
+    pub outline_shapes: Vec<u16>,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
-    // pub instrument: String, // TODO: make this an enum
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PistonBehavior {
+    Normal,
+    Destroy,
+    Block,
+    Ignore,
+    PushOnly,
+}
+
+impl PistonBehavior {
+    fn to_tokens(&self) -> TokenStream {
+        match self {
+            PistonBehavior::Normal => quote! { PistonBehavior::Normal },
+            PistonBehavior::Destroy => quote! { PistonBehavior::Destroy },
+            PistonBehavior::Block => quote! { PistonBehavior::Block },
+            PistonBehavior::Ignore => quote! { PistonBehavior::Ignore },
+            PistonBehavior::PushOnly => quote! { PistonBehavior::PushOnly },
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -374,6 +406,8 @@ impl BlockState {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
+        let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
+        let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
         let opacity = match self.opacity {
@@ -396,14 +430,23 @@ impl BlockState {
             .collision_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let outline_shapes = self
+            .outline_shapes
+            .iter()
+            .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
             BlockState {
                 id: #id,
                 state_flags: #state_flags,
+                side_flags: #side_flags,
+                instrument: Instrument::#instrument,
                 luminance: #luminance,
+                piston_behavior: #piston_behavior,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
+                outline_shapes: &[#(#outline_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }
@@ -592,7 +635,10 @@ pub enum LootConditionStruct {
     #[serde(rename = "minecraft:entity_scores")]
     EntityScores,
     #[serde(rename = "minecraft:block_state_property")]
-    BlockStateProperty { properties: HashMap<String, String> },
+    BlockStateProperty {
+        block: String,
+        properties: HashMap<String, String>,
+    },
     #[serde(rename = "minecraft:match_tool")]
     MatchTool,
     #[serde(rename = "minecraft:table_bonus")]
@@ -628,12 +674,12 @@ impl ToTokens for LootConditionStruct {
             LootConditionStruct::EntityProperties => quote! { LootCondition::EntityProperties },
             LootConditionStruct::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
             LootConditionStruct::EntityScores => quote! { LootCondition::EntityScores },
-            LootConditionStruct::BlockStateProperty { properties } => {
+            LootConditionStruct::BlockStateProperty { block, properties } => {
                 let properties: Vec<_> = properties
                     .iter()
                     .map(|(k, v)| quote! { (#k, #v) })
                     .collect();
-                quote! { LootCondition::BlockStateProperty { properties: &[#(#properties),*] } }
+                quote! { LootCondition::BlockStateProperty { block: #block, properties: &[#(#properties),*] } }
             }
             LootConditionStruct::MatchTool => quote! { LootCondition::MatchTool },
             LootConditionStruct::TableBonus => quote! { LootCondition::TableBonus },
@@ -656,10 +702,197 @@ impl ToTokens for LootConditionStruct {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+pub struct LootFunctionStruct {
+    #[serde(flatten)]
+    content: LootFunctionTypesStruct,
+    conditions: Option<Vec<LootConditionStruct>>,
+}
+
+impl ToTokens for LootFunctionStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let functions_tokens = &self.content.to_token_stream();
+
+        let conditions_tokens = match &self.conditions {
+            Some(conds) => {
+                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+
+        tokens.extend(quote! {
+            LootFunction {
+                content: #functions_tokens,
+                conditions: #conditions_tokens,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "function")]
+pub enum LootFunctionTypesStruct {
+    #[serde(rename = "minecraft:set_count")]
+    SetCount {
+        count: LootFunctionNumberProviderStruct,
+        add: Option<bool>,
+    },
+    #[serde(rename = "minecraft:limit_count")]
+    LimitCount { limit: LootFunctionLimitCountStruct },
+    #[serde(rename = "minecraft:apply_bonus")]
+    ApplyBonus {
+        enchantment: String,
+        formula: String,
+        parameters: Option<LootFunctionBonusParameterStruct>,
+    },
+    #[serde(rename = "minecraft:copy_components")]
+    CopyComponents {
+        source: String,
+        include: Vec<String>,
+    },
+    #[serde(rename = "minecraft:copy_state")]
+    CopyState {
+        block: String,
+        properties: Vec<String>,
+    },
+    #[serde(rename = "minecraft:explosion_decay")]
+    ExplosionDecay,
+}
+
+impl ToTokens for LootFunctionTypesStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            LootFunctionTypesStruct::SetCount { count, add } => {
+                let count = count.to_token_stream();
+                let add = add.unwrap_or(false);
+                quote! { LootFunctionTypes::SetCount { count: #count, add: #add } }
+            }
+            LootFunctionTypesStruct::LimitCount { limit } => {
+                let min = match limit.min {
+                    Some(min) => quote! { Some(#min) },
+                    None => quote! { None },
+                };
+                let max = match limit.max {
+                    Some(max) => quote! { Some(#max) },
+                    None => quote! { None },
+                };
+                quote! { LootFunctionTypes::LimitCount { min: #min, max: #max } }
+            }
+            LootFunctionTypesStruct::ApplyBonus {
+                enchantment,
+                formula,
+                parameters,
+            } => {
+                let parameters = match parameters {
+                    Some(params) => {
+                        let params = params.to_token_stream();
+                        quote! { Some(#params) }
+                    }
+                    None => quote! { None },
+                };
+
+                quote! {
+                    LootFunctionTypes::ApplyBonus {
+                        enchantment: #enchantment,
+                        formula: #formula,
+                        parameters: #parameters,
+                    }
+                }
+            }
+            LootFunctionTypesStruct::CopyComponents { source, include } => {
+                quote! {
+                    LootFunctionTypes::CopyComponents {
+                        source: #source,
+                        include: &[#(#include),*],
+                    }
+                }
+            }
+            LootFunctionTypesStruct::CopyState { block, properties } => {
+                quote! {
+                    LootFunctionTypes::CopyState {
+                        block: #block,
+                        properties: &[#(#properties),*],
+                    }
+                }
+            }
+            LootFunctionTypesStruct::ExplosionDecay => {
+                quote! { LootFunctionTypes::ExplosionDecay }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum LootFunctionNumberProviderStruct {
+    #[serde(rename = "minecraft:uniform")]
+    Uniform { min: f32, max: f32 },
+    #[serde(rename = "minecraft:binomial")]
+    Binomial { n: f32, p: f32 },
+    #[serde(rename = "minecraft:constant", untagged)]
+    Constant(f32),
+}
+
+impl ToTokens for LootFunctionNumberProviderStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            Self::Constant(value) => {
+                quote! { LootFunctionNumberProvider::Constant { value: #value } }
+            }
+            Self::Uniform { min, max } => {
+                quote! { LootFunctionNumberProvider::Uniform { min: #min, max: #max } }
+            }
+            Self::Binomial { n, p } => {
+                quote! { LootFunctionNumberProvider::Binomial { n: #n, p: #p } }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootFunctionLimitCountStruct {
+    min: Option<f32>,
+    max: Option<f32>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum LootFunctionBonusParameterStruct {
+    Multiplier {
+        #[serde(rename = "bonusMultiplier")]
+        bonus_multiplier: i32,
+    },
+    Probability {
+        extra: i32,
+        probability: f32,
+    },
+}
+
+impl ToTokens for LootFunctionBonusParameterStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = match self {
+            Self::Multiplier { bonus_multiplier } => {
+                quote! { LootFunctionBonusParameter::Multiplier { bonus_multiplier: #bonus_multiplier } }
+            }
+            Self::Probability { extra, probability } => {
+                quote! { LootFunctionBonusParameter::Probability { extra: #extra, probability: #probability } }
+            }
+        };
+
+        tokens.extend(name);
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct LootPoolEntryStruct {
     #[serde(flatten)]
     content: LootPoolEntryTypesStruct,
     conditions: Option<Vec<LootConditionStruct>>,
+    functions: Option<Vec<LootFunctionStruct>>,
 }
 
 impl ToTokens for LootPoolEntryStruct {
@@ -672,11 +905,19 @@ impl ToTokens for LootPoolEntryStruct {
             }
             None => quote! { None },
         };
+        let functions_tokens = match &self.functions {
+            Some(fns) => {
+                let cond_tokens: Vec<_> = fns.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
 
         tokens.extend(quote! {
             LootPoolEntry {
                 content: #content,
                 conditions: #conditions_tokens,
+                functions: #functions_tokens,
             }
         });
     }
@@ -817,7 +1058,7 @@ impl GeneratedProperty {
     fn to_property(&self) -> Property {
         let enum_name = match &self.property_type {
             GeneratedPropertyType::Boolean => "boolean".to_string(),
-            GeneratedPropertyType::Int { min, max } => format!("integer_{}_to_{}", min, max),
+            GeneratedPropertyType::Int { min, max } => format!("integer_{min}_to_{max}"),
             GeneratedPropertyType::Enum { .. } => self.enum_name.clone(),
         };
 
@@ -828,7 +1069,7 @@ impl GeneratedProperty {
             GeneratedPropertyType::Int { min, max } => {
                 let mut values = Vec::new();
                 for i in *min..=*max {
-                    values.push(format!("L{}", i));
+                    values.push(format!("L{i}"));
                 }
                 values
             }
@@ -861,11 +1102,12 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/properties.json");
 
-    let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
-        .expect("Failed to parse blocks.json");
+    let blocks_assets: BlockAssets =
+        serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
+            .expect("Failed to parse blocks.json");
 
     let generated_properties: Vec<GeneratedProperty> =
-        serde_json::from_str(include_str!("../../assets/properties.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
     let mut type_from_raw_id_arms = TokenStream::new();
@@ -1070,6 +1312,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use crate::{BlockState, BlockStateRef, Block, CollisionShape};
+        use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
@@ -1086,6 +1329,9 @@ pub(crate) fn build() -> TokenStream {
             fn to_index(&self) -> u16;
             // Convert an index back to properties.
             fn from_index(index: u16) -> Self where Self: Sized;
+
+            // Check if a block uses this property
+            fn handles_block_id(block_id: u16) -> bool where Self: Sized;
 
             // Convert properties to a state id.
             fn to_state_id(&self, block: &Block) -> u16;
@@ -1109,8 +1355,6 @@ pub(crate) fn build() -> TokenStream {
             fn from_value(value: &str) -> Self;
         }
 
-
-
         pub static COLLISION_SHAPES: &[CollisionShape] = &[
             #(#shapes),*
         ];
@@ -1123,7 +1367,84 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
+        pub fn get_block(registry_id: &str) -> Option<Block> {
+           let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
+           Block::from_registry_key(key)
+        }
 
+        pub fn get_block_by_id(id: u16) -> Option<Block> {
+            Block::from_id(id)
+        }
+
+        pub fn get_state_by_state_id(id: u16) -> Option<BlockState> {
+            if let Some(block) = Block::from_state_id(id) {
+                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+                Some(state.get_state())
+            } else {
+                None
+            }
+        }
+
+        pub fn get_block_by_state_id(id: u16) -> Option<Block> {
+            Block::from_state_id(id)
+        }
+
+        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(Block, BlockState)> {
+            if let Some(block) = Block::from_state_id(id) {
+                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+                Some((block, state.get_state()))
+            } else {
+                None
+            }
+        }
+
+        pub fn get_block_by_item(item_id: u16) -> Option<Block> {
+            Block::from_item_id(item_id)
+        }
+
+        pub fn get_block_collision_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
+            let state = get_state_by_state_id(state_id)?;
+            let mut shapes: Vec<CollisionShape> = vec![];
+            for i in 0..state.collision_shapes.len() {
+               let shape = &COLLISION_SHAPES[state.collision_shapes[i] as usize];
+                shapes.push(*shape);
+            }
+            Some(shapes)
+        }
+
+        pub fn get_block_outline_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
+            let state = get_state_by_state_id(state_id)?;
+            let mut shapes: Vec<CollisionShape> = vec![];
+            for i in 0..state.outline_shapes.len() {
+                let shape = &COLLISION_SHAPES[state.outline_shapes[i] as usize];
+                shapes.push(*shape);
+            }
+            let block = get_block_by_state_id(state_id)?;
+            if block.properties(state.id).and_then(|properties| {
+                properties
+                    .to_props()
+                    .into_iter()
+                    .find(|p| p.0 == "waterlogged")
+                    .map(|(_, value)| value == true.to_string())
+            }) == Some(true)
+            {
+                // If the block is waterlogged, add a water shape
+                let shape =
+                    &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
+                shapes.push(*shape);
+            }
+
+            Some(shapes)
+        }
+
+        pub fn blocks_movement(block_state: &BlockState) -> bool {
+            if block_state.is_solid() {
+                if let Some(block) = get_block_by_state_id(block_state.id) {
+                    return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
+                }
+            }
+            false
+        }
 
         impl Block {
             #constants

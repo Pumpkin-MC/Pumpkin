@@ -1,9 +1,10 @@
 use std::fmt::Display;
 
 use crate::ser::NetworkReadExt;
+use serde::de::IntoDeserializer;
 
 use super::{Read, ReadingError};
-use serde::de::{self, DeserializeSeed, SeqAccess};
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess};
 
 pub struct Deserializer<R: Read> {
     inner: R,
@@ -110,11 +111,31 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         visitor.visit_f64(self.inner.get_f64_be()?)
     }
 
-    fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        visitor.visit_i128(self.inner.get_i128_be()?)
+    }
+
+    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        visitor.visit_u128(self.inner.get_u128_be()?)
+    }
+
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        let u32_val = self.inner.get_u32_be()?;
+        match char::from_u32(u32_val) {
+            Some(c) => visitor.visit_char(c),
+            None => Err(ReadingError::Message(format!(
+                "Invalid char value: {u32_val}"
+            ))),
+        }
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -156,22 +177,22 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         }
     }
 
-    fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        visitor.visit_unit()
     }
 
     fn deserialize_unit_struct<V>(
         self,
         _name: &'static str,
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        visitor.visit_unit()
     }
 
     fn deserialize_newtype_struct<V>(
@@ -243,20 +264,51 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
-        _len: usize,
-        _visitor: V,
+        len: usize,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_tuple(len, visitor)
     }
 
-    fn deserialize_map<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        let len = self.inner.get_var_int()?.0 as usize;
+        struct Access<'a, R: Read> {
+            deserializer: &'a mut Deserializer<R>,
+            len: usize,
+        }
+
+        impl<'de, R: Read> MapAccess<'de> for Access<'_, R> {
+            type Error = ReadingError;
+
+            fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
+            where
+                K: DeserializeSeed<'de>,
+            {
+                if self.len == 0 {
+                    return Ok(None);
+                }
+                seed.deserialize(&mut *self.deserializer).map(Some)
+            }
+
+            fn next_value_seed<Val>(&mut self, seed: Val) -> Result<Val::Value, Self::Error>
+            where
+                Val: DeserializeSeed<'de>,
+            {
+                self.len -= 1;
+                seed.deserialize(&mut *self.deserializer)
+            }
+        }
+
+        visitor.visit_map(Access {
+            deserializer: self,
+            len,
+        })
     }
 
     fn deserialize_struct<V>(
@@ -275,12 +327,12 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        unimplemented!()
+        visitor.visit_enum(self)
     }
 
     fn deserialize_identifier<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -295,5 +347,58 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         V: de::Visitor<'de>,
     {
         unimplemented!()
+    }
+}
+
+impl<'de, R: Read> de::EnumAccess<'de> for &mut Deserializer<R> {
+    type Error = ReadingError;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        let variant_index_i32 = self.inner.get_var_int()?.0;
+        let variant_index_u32: u32 = variant_index_i32.try_into().map_err(|_| {
+            ReadingError::Message(format!(
+                "Invalid variant index {} for enum, cannot convert to u32",
+                variant_index_i32
+            ))
+        })?;
+        let val = seed.deserialize(variant_index_u32.into_deserializer())?;
+        Ok((val, self))
+    }
+}
+
+impl<'de, R: Read> de::VariantAccess<'de> for &mut Deserializer<R> {
+    type Error = ReadingError;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: de::DeserializeSeed<'de>,
+    {
+        seed.deserialize(self)
+    }
+
+    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        de::Deserializer::deserialize_tuple(self, len, visitor)
+    }
+
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        de::Deserializer::deserialize_struct(self, "", fields, visitor)
     }
 }

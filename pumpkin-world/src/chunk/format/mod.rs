@@ -7,8 +7,10 @@ use crate::{block::entities::block_entity_from_nbt, generation::section_coords};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
+use crate::block::BlockStateCodec;
+
 use super::{
-    ChunkData, ChunkHeightmaps, ChunkLightEngine, ChunkParsingError, ChunkSections, ScheduledTick,
+    ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections, ScheduledTick,
     SubChunk, TickPriority,
     palette::{BiomePalette, BlockPalette},
 };
@@ -82,7 +84,7 @@ impl ChunkData {
             )));
         }
 
-        let light_engine = ChunkLightEngine {
+        let light_engine = ChunkLight {
             block_light: (0..chunk_data.sections.len() + 2)
                 .map(|index| {
                     chunk_data
@@ -142,7 +144,9 @@ impl ChunkData {
                     delay: tick.delay as u16,
                     priority: TickPriority::from(tick.priority),
                     target_block_id: Block::from_registry_key(
-                        &tick.target_block.replace("minecraft:", ""),
+                        tick.target_block
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(&tick.target_block),
                     )
                     .unwrap_or(Block::AIR)
                     .id,
@@ -156,7 +160,9 @@ impl ChunkData {
                     delay: tick.delay as u16,
                     priority: TickPriority::from(tick.priority),
                     target_block_id: Block::from_registry_key(
-                        &tick.target_block.replace("minecraft:", ""),
+                        tick.target_block
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(&tick.target_block),
                     )
                     .unwrap_or(Block::AIR)
                     .id,
@@ -167,7 +173,7 @@ impl ChunkData {
                 for nbt in chunk_data.block_entities {
                     let block_entity = block_entity_from_nbt(&nbt);
                     if let Some(block_entity) = block_entity {
-                        block_entities.insert(block_entity.get_position(), block_entity);
+                        block_entities.insert(block_entity.get_position(), (nbt, block_entity));
                     }
                 }
                 block_entities
@@ -216,7 +222,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBlockEntry>,
+    pub(crate) palette: Vec<BlockStateCodec>,
 }
 
 #[derive(Debug, Clone)]
@@ -291,16 +297,6 @@ impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct PaletteBlockEntry {
-    /// Block name
-    pub name: String,
-    /// Key-value pairs of properties
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

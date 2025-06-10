@@ -1,5 +1,7 @@
 mod axe;
+mod bucket;
 mod egg;
+mod ender_eye;
 mod flint_and_steel;
 mod hoe;
 mod honeycomb;
@@ -9,7 +11,9 @@ mod sword;
 mod trident;
 
 use axe::AxeItem;
+use bucket::{EmptyBucketItem, FilledBucketItem};
 use egg::EggItem;
+use ender_eye::EnderEyeItem;
 use flint_and_steel::FlintAndSteelItem;
 use hoe::HoeItem;
 use honeycomb::HoneyCombItem;
@@ -30,9 +34,12 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(FlintAndSteelItem);
     manager.register(SwordItem);
     manager.register(TridentItem);
+    manager.register(EmptyBucketItem);
+    manager.register(FilledBucketItem);
     manager.register(ShovelItem);
     manager.register(AxeItem);
     manager.register(HoneyCombItem);
+    manager.register(EnderEyeItem);
 
     Arc::new(manager)
 }

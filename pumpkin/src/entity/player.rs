@@ -1,106 +1,95 @@
-use std::{
-    collections::VecDeque,
-    f64::{self, consts::TAU},
-    num::NonZeroU8,
-    ops::AddAssign,
-    sync::{
-        Arc,
-        atomic::{
-            AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32,
-            Ordering::{self, Relaxed},
-        },
-    },
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::f64::consts::TAU;
+use std::num::NonZeroU8;
+use std::ops::AddAssign;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
-use super::living::LivingEntity;
-use super::{
-    Entity, EntityBase, EntityId, NBTStorage,
-    combat::{self, AttackType, player_attack_sound},
-    effect::Effect,
-    hunger::HungerManager,
-    item::ItemEntity,
-};
-use crate::{
-    block,
-    command::{client_suggestions, dispatcher::CommandDispatcher},
-    data::op_data::OPERATOR_CONFIG,
-    net::{Client, PlayerConfig},
-    plugin::player::{
-        player_change_world::PlayerChangeWorldEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent, player_teleport::PlayerTeleportEvent,
-    },
-    server::Server,
-    world::World,
-};
-use crate::{error::PumpkinError, net::GameProfile};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use log::warn;
+use pumpkin_world::inventory::Inventory;
+use tokio::sync::{Mutex, RwLock};
+use tokio::task::JoinHandle;
+use uuid::Uuid;
+
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::{
-    BlockState,
-    damage::DamageType,
-    entity::{EffectType, EntityStatus, EntityType},
-    item::Operation,
-    particle::Particle,
-    sound::{Sound, SoundCategory},
-};
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item::Operation;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Tagable;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_inventory::player::{
-    PlayerInventory, SLOT_BOOT, SLOT_CRAFT_INPUT_END, SLOT_CRAFT_INPUT_START, SLOT_HELM,
-    SLOT_HOTBAR_END, SLOT_INV_START, SLOT_OFFHAND,
+    player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
+use pumpkin_inventory::screen_handler::{
+    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
+    ScreenHandlerListener,
+};
+use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::client::play::{
-    CEntityPositionSync, CSetHeldItem, PlayerInfoFlags, PreviousMessage,
+    Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
+    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
+    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
+    CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition,
+    CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::{
-    IdOr, RawPacket, ServerPacket,
-    client::play::{
-        CAcknowledgeBlockChange, CActionBar, CChunkBatchEnd, CChunkBatchStart, CChunkData,
-        CCombatDeath, CDisguisedChatMessage, CGameEvent, CKeepAlive, CParticle, CPlayDisconnect,
-        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CRespawn, CSetExperience, CSetHealth,
-        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
-        GameEvent, MetaDataType, PlayerAction,
-    },
-    codec::identifier::Identifier,
-    ser::packet::Packet,
-    server::play::{
-        SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay,
-        SClientTickEnd, SCommandSuggestion, SConfirmTeleport, SInteract, SPickItemFromBlock,
-        SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-        SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCreativeSlot, SSetHeldItem,
-        SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-    },
+use pumpkin_protocol::codec::identifier::Identifier;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::ser::packet::Packet;
+use pumpkin_protocol::server::play::{
+    SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay,
+    SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
+    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
+    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
+    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
-use pumpkin_protocol::{
-    client::play::CSoundEffect,
-    server::play::{
-        SCloseContainer, SCookieResponse as SPCookieResponse, SPlayPingRequest, SPlayerLoaded,
-    },
+use pumpkin_protocol::{IdOr, RawPacket, ServerPacket};
+use pumpkin_registry::DimensionType;
+use pumpkin_util::GameMode;
+use pumpkin_util::math::{
+    boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
-use pumpkin_protocol::{client::play::CUpdateTime, codec::var_int::VarInt};
-use pumpkin_protocol::{
-    client::play::Metadata,
-    server::play::{SClickContainer, SKeepAlive},
-};
-use pumpkin_util::{
-    GameMode,
-    math::{
-        boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2,
-        vector3::Vector3,
-    },
-    permission::PermissionLvl,
-    text::TextComponent,
-};
+use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::biome;
+use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION,
+    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
 };
-use pumpkin_world::{cylindrical_chunk_iterator::Cylindrical, item::ItemStack, level::SyncChunk};
-use tokio::sync::RwLock;
-use tokio::{sync::Mutex, task::JoinHandle};
-use uuid::Uuid;
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::level::SyncChunk;
+
+use crate::block::blocks::bed::BedBlock;
+use crate::command::client_suggestions;
+use crate::command::dispatcher::CommandDispatcher;
+use crate::data::op_data::OPERATOR_CONFIG;
+use crate::error::PumpkinError;
+use crate::net::GameProfile;
+use crate::net::{Client, PlayerConfig};
+use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+use crate::plugin::player::player_teleport::PlayerTeleportEvent;
+use crate::server::Server;
+use crate::world::World;
+use crate::{PERMISSION_MANAGER, block};
+
+use super::combat::{self, AttackType, player_attack_sound};
+use super::effect::Effect;
+use super::hunger::HungerManager;
+use super::item::ItemEntity;
+use super::living::LivingEntity;
+use super::{Entity, EntityBase, EntityId, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -188,13 +177,17 @@ pub struct Player {
     /// The client connection associated with the player.
     pub client: Client,
     /// The player's inventory.
-    pub inventory: Mutex<PlayerInventory>,
+    pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
     pub config: RwLock<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
     /// The player's previous gamemode
     pub previous_gamemode: AtomicCell<Option<GameMode>>,
+    /// The player's spawnpoint
+    pub respawn_point: AtomicCell<Option<RespawnPoint>>,
+    /// The player's sleep status
+    pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -251,10 +244,28 @@ pub struct Player {
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
+    pub player_screen_handler: Arc<Mutex<PlayerScreenHandler>>,
+    pub current_screen_handler: Mutex<Arc<Mutex<dyn ScreenHandler>>>,
+    pub screen_handler_sync_id: AtomicU8,
+    pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
+    pub screen_handler_sync_handler: Arc<SyncHandler>,
 }
 
 impl Player {
     pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
+        struct ScreenListener;
+
+        impl ScreenHandlerListener for ScreenListener {
+            fn on_slot_update(
+                &self,
+                _screen_handler: &ScreenHandlerBehaviour,
+                _slot: u8,
+                _stack: ItemStack,
+            ) {
+                //println!("Slot updated: {slot:?}, {stack:?}");
+            }
+        }
+
         let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
             || {
                 log::error!("Client {} has no game profile!", client.id);
@@ -271,14 +282,22 @@ impl Player {
 
         let config = client.config.lock().await.clone().unwrap_or_default();
 
+        let living_entity = LivingEntity::new(Entity::new(
+            player_uuid,
+            world,
+            Vector3::new(0.0, 0.0, 0.0),
+            EntityType::PLAYER,
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+        ));
+
+        let inventory = Arc::new(PlayerInventory::new(living_entity.entity_equipment.clone()));
+
+        let player_screen_handler = Arc::new(Mutex::new(
+            PlayerScreenHandler::new(&inventory, None, 0).await,
+        ));
+
         Self {
-            living_entity: LivingEntity::new(Entity::new(
-                player_uuid,
-                world,
-                Vector3::new(0.0, 0.0, 0.0),
-                EntityType::PLAYER,
-                matches!(gamemode, GameMode::Creative | GameMode::Spectator),
-            )),
+            living_entity,
             config: RwLock::new(config),
             gameprofile,
             client,
@@ -298,6 +317,9 @@ impl Player {
             abilities: Mutex::new(Abilities::default()),
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
+            // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
+            respawn_point: AtomicCell::new(None),
+            sleeping_since: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `player_chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -317,7 +339,8 @@ impl Player {
                 AtomicCell::new(advanced_config().commands.default_op_level),
                 |op| AtomicCell::new(op.level),
             ),
-            inventory: Mutex::new(PlayerInventory::new()),
+            inventory,
+            // TODO: enderChestInventory
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
@@ -330,6 +353,11 @@ impl Player {
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
+            player_screen_handler: player_screen_handler.clone(),
+            current_screen_handler: Mutex::new(player_screen_handler),
+            screen_handler_sync_id: AtomicU8::new(0),
+            screen_handler_listener: Arc::new(ScreenListener {}),
+            screen_handler_sync_handler: Arc::new(SyncHandler::new()),
         }
     }
 
@@ -346,7 +374,7 @@ impl Player {
         self.client.spawn_task(task)
     }
 
-    pub fn inventory(&self) -> &Mutex<PlayerInventory> {
+    pub fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
 
@@ -397,8 +425,8 @@ impl Player {
         let attacker_entity = &self.living_entity.entity;
         let config = &advanced_config().pvp;
 
-        let inventory = self.inventory().lock().await;
-        let item_slot = inventory.held_item();
+        let inventory = self.inventory();
+        let item_stack = inventory.held_item();
 
         let base_damage = 1.0;
         let base_attack_speed = 4.0;
@@ -408,27 +436,24 @@ impl Player {
         let mut add_speed = 0.0;
 
         // Get the attack damage
-        if let Some(item_stack) = item_slot {
-            // TODO: this should be cached in memory
-            if let Some(modifiers) = item_stack.item.components.attribute_modifiers {
-                for item_mod in modifiers {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        }
-                        if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+        // TODO: this should be cached in memory, we shouldn't just use default here either
+        if let Some(modifiers) = item_stack.lock().await.item.components.attribute_modifiers {
+            for item_mod in modifiers {
+                if item_mod.operation == Operation::AddValue {
+                    if item_mod.id == "minecraft:base_attack_damage" {
+                        add_damage = item_mod.amount;
+                    }
+                    if item_mod.id == "minecraft:base_attack_speed" {
+                        add_speed = item_mod.amount;
                     }
                 }
             }
         }
-        drop(inventory);
 
         let attack_speed = base_attack_speed + add_speed;
 
         let attack_cooldown_progress = self.get_attack_cooldown_progress(0.5, attack_speed);
-        self.last_attacked_ticks.store(0, Relaxed);
+        self.last_attacked_ticks.store(0, Ordering::Relaxed);
 
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
@@ -482,6 +507,120 @@ impl Player {
         }
 
         if config.swing {}
+    }
+
+    pub async fn set_respawn_point(
+        &self,
+        dimension: DimensionType,
+        block_pos: BlockPos,
+        yaw: f32,
+    ) -> bool {
+        if let Some(respawn_point) = self.respawn_point.load() {
+            if dimension == respawn_point.dimension && block_pos == respawn_point.position {
+                return false;
+            }
+        }
+
+        self.respawn_point.store(Some(RespawnPoint {
+            dimension,
+            position: block_pos,
+            yaw,
+            force: false,
+        }));
+
+        self.client
+            .send_packet_now(&CPlayerSpawnPosition::new(block_pos, yaw))
+            .await;
+        true
+    }
+
+    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
+        let respawn_point = self.respawn_point.load()?;
+
+        let (block, _block_state) = self
+            .world()
+            .await
+            .get_block_and_block_state(&respawn_point.position)
+            .await;
+
+        if respawn_point.dimension == DimensionType::Overworld
+            && block.is_tagged_with("#minecraft:beds").unwrap()
+        {
+            // TODO: calculate respawn position
+            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+        } else if respawn_point.dimension == DimensionType::TheNether
+            && block == Block::RESPAWN_ANCHOR
+        {
+            // TODO: calculate respawn position
+            // TODO: check if there is fuel for respawn
+            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+        } else {
+            self.client
+                .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
+                .await;
+
+            None
+        }
+    }
+
+    pub async fn sleep(&self, bed_head_pos: BlockPos) {
+        // TODO: Stop riding
+
+        self.get_entity().set_pose(EntityPose::Sleeping).await;
+        self.living_entity
+            .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
+        self.get_entity()
+            .send_meta_data(&[Metadata::new(
+                SLEEPING_POS_ID,
+                MetaDataType::OptionalBlockPos,
+                Some(bed_head_pos),
+            )])
+            .await;
+        self.get_entity()
+            .set_velocity(Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            })
+            .await;
+
+        self.sleeping_since.store(Some(0));
+    }
+
+    pub async fn wake_up(&self) {
+        let world = self.world().await;
+        let respawn_point = self
+            .respawn_point
+            .load()
+            .expect("Player waking up should have it's respawn point set on the bed.");
+
+        let (bed, bed_state) = world
+            .get_block_and_block_state(&respawn_point.position)
+            .await;
+        BedBlock::set_occupied(false, &world, &bed, &respawn_point.position, bed_state.id).await;
+
+        self.living_entity
+            .entity
+            .set_pose(EntityPose::Standing)
+            .await;
+        self.living_entity.entity.set_pos(self.position());
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                SLEEPING_POS_ID,
+                MetaDataType::OptionalBlockPos,
+                None::<BlockPos>,
+            )])
+            .await;
+
+        world
+            .broadcast_packet_all(&CEntityAnimation::new(
+                self.entity_id().into(),
+                Animation::LeaveBed,
+            ))
+            .await;
+
+        self.sleeping_since.store(None);
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -547,14 +686,23 @@ impl Player {
             .await;
     }
 
-    pub async fn tick(&self, server: &Server) {
-        if self.client.closed.load(Relaxed) {
+    pub async fn tick(self: &Arc<Self>, server: &Server) {
+        self.current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .send_content_updates()
+            .await;
+
+        if self.client.closed.load(Ordering::Relaxed) {
             return;
         }
-        if self.packet_sequence.load(Relaxed) > -1 {
+
+        if self.packet_sequence.load(Ordering::Relaxed) > -1 {
             self.client
                 .enqueue_packet(&CAcknowledgeBlockChange::new(
-                    self.packet_sequence.swap(-1, Relaxed).into(),
+                    self.packet_sequence.swap(-1, Ordering::Relaxed).into(),
                 ))
                 .await;
         }
@@ -586,36 +734,42 @@ impl Player {
                 .await;
         }
 
-        self.tick_counter.fetch_add(1, Relaxed);
+        self.tick_counter.fetch_add(1, Ordering::Relaxed);
+        if let Some(sleeping_since) = self.sleeping_since.load() {
+            if sleeping_since < 101 {
+                self.sleeping_since.store(Some(sleeping_since + 1));
+            }
+        }
 
-        if self.mining.load(Relaxed) {
+        if self.mining.load(Ordering::Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world().await;
-            let block = world.get_block(&pos).await.unwrap();
-            let state = world.get_block_state(&pos).await.unwrap();
+            let block = world.get_block(&pos).await;
+            let state = world.get_block_state(&pos).await;
             // Is the block broken?
             if state.is_air() {
                 world
                     .set_block_breaking(&self.living_entity.entity, *pos, -1)
                     .await;
-                self.current_block_destroy_stage.store(-1, Relaxed);
-                self.mining.store(false, Relaxed);
+                self.current_block_destroy_stage
+                    .store(-1, Ordering::Relaxed);
+                self.mining.store(false, Ordering::Relaxed);
             } else {
                 self.continue_mining(
                     *pos,
                     &world,
                     &state,
                     block.name,
-                    self.start_mining_time.load(Relaxed),
+                    self.start_mining_time.load(Ordering::Relaxed),
                 )
                 .await;
             }
         }
 
-        self.last_attacked_ticks.fetch_add(1, Relaxed);
+        self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
-        self.living_entity.tick(server).await;
-        self.hunger_manager.tick(self).await;
+        self.living_entity.tick(self.clone(), server).await;
+        self.hunger_manager.tick(self.as_ref()).await;
 
         // experience handling
         self.tick_experience().await;
@@ -627,15 +781,15 @@ impl Player {
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
             // We never got a response from the last keep alive we sent.
-            if self.wait_for_keep_alive.load(Relaxed) {
+            if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(TextComponent::translate("disconnect.timeout", []))
                     .await;
                 return;
             }
-            self.wait_for_keep_alive.store(true, Relaxed);
+            self.wait_for_keep_alive.store(true, Ordering::Relaxed);
             self.last_keep_alive_time.store(now);
             let id = now.elapsed().as_millis() as i64;
-            self.keep_alive_id.store(id, Relaxed);
+            self.keep_alive_id.store(id, Ordering::Relaxed);
             self.client.enqueue_packet(&CKeepAlive::new(id)).await;
         }
     }
@@ -648,19 +802,20 @@ impl Player {
         block_name: &str,
         starting_time: i32,
     ) {
-        let time = self.tick_counter.load(Relaxed) - starting_time;
+        let time = self.tick_counter.load(Ordering::Relaxed) - starting_time;
         let speed = block::calc_block_breaking(self, state, block_name).await * (time + 1) as f32;
         let progress = (speed * 10.0) as i32;
-        if progress != self.current_block_destroy_stage.load(Relaxed) {
+        if progress != self.current_block_destroy_stage.load(Ordering::Relaxed) {
             world
                 .set_block_breaking(&self.living_entity.entity, location, progress)
                 .await;
-            self.current_block_destroy_stage.store(progress, Relaxed);
+            self.current_block_destroy_stage
+                .store(progress, Ordering::Relaxed);
         }
     }
 
     pub async fn jump(&self) {
-        if self.living_entity.entity.sprinting.load(Relaxed) {
+        if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
             self.add_exhaustion(0.2).await;
         } else {
             self.add_exhaustion(0.05).await;
@@ -670,10 +825,10 @@ impl Player {
     #[expect(clippy::cast_precision_loss)]
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
-        if self.living_entity.entity.on_ground.load(Relaxed) {
+        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
             if delta > 0 {
-                if self.living_entity.entity.sprinting.load(Relaxed) {
+                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
                     self.add_exhaustion(0.1 * delta as f32 * 0.01).await;
                 } else {
                     self.add_exhaustion(0.0 * delta as f32 * 0.01).await;
@@ -683,21 +838,19 @@ impl Player {
     }
 
     pub fn has_client_loaded(&self) -> bool {
-        self.client_loaded.load(Relaxed) || self.client_loaded_timeout.load(Relaxed) == 0
+        self.client_loaded.load(Ordering::Relaxed)
+            || self.client_loaded_timeout.load(Ordering::Relaxed) == 0
     }
 
     pub fn set_client_loaded(&self, loaded: bool) {
         if !loaded {
-            self.client_loaded_timeout.store(60, Relaxed);
+            self.client_loaded_timeout.store(60, Ordering::Relaxed);
         }
-        self.client_loaded.store(loaded, Relaxed);
+        self.client_loaded.store(loaded, Ordering::Relaxed);
     }
 
     pub fn get_attack_cooldown_progress(&self, base_time: f64, attack_speed: f64) -> f64 {
-        let x = f64::from(
-            self.last_attacked_ticks
-                .load(std::sync::atomic::Ordering::Acquire),
-        ) + base_time;
+        let x = f64::from(self.last_attacked_ticks.load(Ordering::Acquire)) + base_time;
 
         let progress_per_tick = f64::from(BASIC_CONFIG.tps) / attack_speed;
         let progress = x / progress_per_tick;
@@ -714,6 +867,26 @@ impl Player {
 
     pub fn position(&self) -> Vector3<f64> {
         self.living_entity.entity.pos.load()
+    }
+
+    pub fn eye_position(&self) -> Vector3<f64> {
+        let eye_height = if self.living_entity.entity.pose.load() == EntityPose::Crouching {
+            1.27
+        } else {
+            f64::from(self.living_entity.entity.standing_eye_height)
+        };
+        Vector3::new(
+            self.living_entity.entity.pos.load().x,
+            self.living_entity.entity.pos.load().y + eye_height,
+            self.living_entity.entity.pos.load().z,
+        )
+    }
+
+    pub fn rotation(&self) -> (f32, f32) {
+        (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        )
     }
 
     /// Updates the current abilities the player has.
@@ -754,6 +927,18 @@ impl Player {
         self.world()
             .await
             .send_entity_status(&self.living_entity.entity, status)
+            .await;
+    }
+
+    /// Sets the player's difficulty level.
+    pub async fn send_difficulty_update(&self) {
+        let world = self.world().await;
+        let level_info = world.level_info.read().await;
+        self.client
+            .enqueue_packet(&CChangeDifficulty::new(
+                level_info.difficulty as u8,
+                level_info.difficulty_locked,
+            ))
             .await;
     }
 
@@ -817,7 +1002,7 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
-        let info = &new_world.level.level_info;
+        let info = &new_world.level_info.read().await;
         let position = if let Some(pos) = position {
             pos
         } else {
@@ -861,6 +1046,7 @@ impl Player {
                 *self.living_entity.entity.world.write().await = new_world.clone();
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
+
                 let last_pos = self.living_entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.name();
                 let death_location = BlockPos(Vector3::new(
@@ -872,21 +1058,21 @@ impl Player {
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension_type as u8).into(),
                         new_world.dimension_type.name(),
-                        0, // seed
+                        biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
                         false,
                         false,
                         Some((death_dimension, death_location)),
-                        0.into(),
-                        0.into(),
+                        VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
+                        new_world.sea_level.into(),
                         1,
                     )).await
                     ;
-                self.send_abilities_update().await;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
                 self.living_entity.last_pos.store(position);
+                self.send_abilities_update().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
             }
@@ -913,7 +1099,7 @@ impl Player {
                 let position = event.to;
                 let i = self
                     .teleport_id_count
-                    .fetch_add(1, Relaxed);
+                    .fetch_add(1, Ordering::Relaxed);
                 let teleport_id = i + 1;
                 self.living_entity.set_pos(position);
                 let entity = &self.living_entity.entity;
@@ -986,7 +1172,7 @@ impl Player {
 
     /// Kicks the player with a reason depending on the connection state.
     pub async fn kick(&self, reason: TextComponent) {
-        if self.client.closed.load(Relaxed) {
+        if self.client.closed.load(Ordering::Relaxed) {
             log::debug!(
                 "Tried to kick client id {} but connection is closed!",
                 self.client.id
@@ -1042,14 +1228,15 @@ impl Player {
         let food = self.hunger_manager.level.load();
         let saturation = self.hunger_manager.saturation.load();
 
-        let last_health = self.last_sent_health.load(Relaxed);
-        let last_food = self.last_sent_food.load(Relaxed);
-        let last_saturation = self.last_food_saturation.load(Relaxed);
+        let last_health = self.last_sent_health.load(Ordering::Relaxed);
+        let last_food = self.last_sent_food.load(Ordering::Relaxed);
+        let last_saturation = self.last_food_saturation.load(Ordering::Relaxed);
 
         if health != last_health || food != last_food || (saturation == 0.0) != last_saturation {
-            self.last_sent_health.store(health, Relaxed);
-            self.last_sent_food.store(food, Relaxed);
-            self.last_food_saturation.store(saturation == 0.0, Relaxed);
+            self.last_sent_health.store(health, Ordering::Relaxed);
+            self.last_sent_food.store(food, Ordering::Relaxed);
+            self.last_food_saturation
+                .store(saturation == 0.0, Ordering::Relaxed);
             self.send_health().await;
         }
     }
@@ -1060,10 +1247,10 @@ impl Player {
     }
 
     pub fn tick_client_load_timeout(&self) {
-        if !self.client_loaded.load(Relaxed) {
-            let timeout = self.client_loaded_timeout.load(Relaxed);
+        if !self.client_loaded.load(Ordering::Relaxed) {
+            let timeout = self.client_loaded_timeout.load(Ordering::Relaxed);
             self.client_loaded_timeout
-                .store(timeout.saturating_sub(1), Relaxed);
+                .store(timeout.saturating_sub(1), Ordering::Relaxed);
         }
     }
 
@@ -1112,7 +1299,7 @@ impl Player {
 
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
-                    Relaxed,
+                    Ordering::Relaxed,
                 );
                 self.living_entity
                     .entity
@@ -1161,19 +1348,19 @@ impl Player {
         !block.tool_required()
             || self
                 .inventory
+                .held_item()
                 .lock()
                 .await
-                .held_item()
-                .map_or_else(|| false, |e| e.is_correct_for_drops(block_name))
+                .is_correct_for_drops(block_name)
     }
 
     pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
         let mut speed = self
             .inventory
+            .held_item()
             .lock()
             .await
-            .get_mining_speed(block_name)
-            .await;
+            .get_speed(block_name);
         // Haste
         if self.living_entity.has_effect(EffectType::Haste).await
             || self
@@ -1198,7 +1385,7 @@ impl Player {
             speed *= fatigue_speed;
         }
         // TODO: Handle when in water
-        if !self.living_entity.entity.on_ground.load(Relaxed) {
+        if !self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             speed /= 5.0;
         }
         speed
@@ -1237,7 +1424,7 @@ impl Player {
             .await;
     }
 
-    pub async fn drop_item(&self, item_id: u16, count: u32) {
+    pub async fn drop_item(&self, item_stack: ItemStack) {
         let entity = self.world().await.create_entity(
             self.living_entity.entity.pos.load()
                 + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0),
@@ -1261,18 +1448,32 @@ impl Player {
 
         // TODO: Merge stacks together
         let item_entity =
-            Arc::new(ItemEntity::new_with_velocity(entity, item_id, count, velocity, 40).await);
-        self.world().await.spawn_entity(item_entity.clone()).await;
-        item_entity.send_meta_packet().await;
+            Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
+        self.world().await.spawn_entity(item_entity).await;
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        let mut inv = self.inventory.lock().await;
-        if let Some(item_stack) = inv.held_item_mut() {
+        let binding = self.inventory.held_item();
+        let mut item_stack = binding.lock().await;
+
+        if !item_stack.is_empty() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.item.id, u32::from(drop_amount))
+            self.drop_item(item_stack.copy_with_count(drop_amount))
                 .await;
-            inv.decrease_current_stack(drop_amount);
+            item_stack.decrement(drop_amount);
+            let selected_slot = self.inventory.get_selected_slot();
+            let inv: Arc<dyn Inventory> = self.inventory.clone();
+            let binding = self.current_screen_handler.lock().await;
+            let mut screen_handler = binding.lock().await;
+            let slot_index = screen_handler
+                .get_slot_index(&inv, selected_slot as usize)
+                .await;
+
+            if let Some(slot_index) = slot_index {
+                screen_handler
+                    .set_received_stack(slot_index, *item_stack)
+                    .await;
+            }
         }
     }
 
@@ -1287,12 +1488,12 @@ impl Player {
     }
 
     pub async fn tick_experience(&self) {
-        let level = self.experience_level.load(Relaxed);
-        if self.last_sent_xp.load(Relaxed) != level {
+        let level = self.experience_level.load(Ordering::Relaxed);
+        if self.last_sent_xp.load(Ordering::Relaxed) != level {
             let progress = self.experience_progress.load();
-            let points = self.experience_points.load(Relaxed);
+            let points = self.experience_points.load(Ordering::Relaxed);
 
-            self.last_sent_xp.store(level, Relaxed);
+            self.last_sent_xp.store(level, Ordering::Relaxed);
 
             self.client
                 .send_packet_now(&CSetExperience::new(
@@ -1307,10 +1508,10 @@ impl Player {
     /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
-        self.experience_level.store(level, Relaxed);
+        self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
-        self.experience_points.store(points, Relaxed);
-        self.last_sent_xp.store(-1, Relaxed);
+        self.experience_points.store(points, Ordering::Relaxed);
+        self.last_sent_xp.store(-1, Ordering::Relaxed);
         self.tick_experience().await;
 
         self.client
@@ -1325,12 +1526,12 @@ impl Player {
     /// Sets the player's experience level directly.
     pub async fn set_experience_level(&self, new_level: i32, keep_progress: bool) {
         let progress = self.experience_progress.load();
-        let mut points = self.experience_points.load(Relaxed);
+        let mut points = self.experience_points.load(Ordering::Relaxed);
 
         // If `keep_progress` is `true` then calculate the number of points needed to keep the same progress scaled.
         if keep_progress {
             // Get our current level
-            let current_level = self.experience_level.load(Relaxed);
+            let current_level = self.experience_level.load(Ordering::Relaxed);
             let current_max_points = experience::points_in_level(current_level);
             // Calculate the max value for the new level
             let new_max_points = experience::points_in_level(new_level);
@@ -1344,6 +1545,18 @@ impl Player {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
+        self.send_effect(effect.clone()).await;
+        self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn send_active_effects(&self) {
+        let effects = self.living_entity.active_effects.lock().await;
+        for effect in effects.values() {
+            self.send_effect(effect.clone()).await;
+        }
+    }
+
+    pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
         if effect.ambient {
@@ -1369,7 +1582,6 @@ impl Player {
                 flag,
             ))
             .await;
-        self.living_entity.add_effect(effect).await;
     }
 
     pub async fn remove_effect(&self, effect_type: EffectType) {
@@ -1409,20 +1621,20 @@ impl Player {
 
     /// Add experience levels to the player.
     pub async fn add_experience_levels(&self, added_levels: i32) {
-        let current_level = self.experience_level.load(Relaxed);
+        let current_level = self.experience_level.load(Ordering::Relaxed);
         let new_level = current_level + added_levels;
         self.set_experience_level(new_level, true).await;
     }
 
     /// Set the player's experience points directly. Returns `true` if successful.
     pub async fn set_experience_points(&self, new_points: i32) -> bool {
-        let current_points = self.experience_points.load(Relaxed);
+        let current_points = self.experience_points.load(Ordering::Relaxed);
 
         if new_points == current_points {
             return true;
         }
 
-        let current_level = self.experience_level.load(Relaxed);
+        let current_level = self.experience_level.load(Ordering::Relaxed);
         let max_points = experience::points_in_level(current_level);
 
         if new_points < 0 || new_points > max_points {
@@ -1437,8 +1649,8 @@ impl Player {
 
     /// Add experience points to the player.
     pub async fn add_experience_points(&self, added_points: i32) {
-        let current_level = self.experience_level.load(Relaxed);
-        let current_points = self.experience_points.load(Relaxed);
+        let current_level = self.experience_level.load(Ordering::Relaxed);
+        let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
         let new_total_exp = total_exp + added_points;
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
@@ -1446,14 +1658,179 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    /// Send the player's inventory to the client.
-    pub async fn send_inventory(&self) {
-        self.set_container_content(None).await;
+    pub fn increment_screen_handler_sync_id(&self) {
+        let current_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
+        self.screen_handler_sync_id
+            .store(current_id % 100 + 1, Ordering::Relaxed);
+    }
+
+    pub async fn close_handled_screen(&self) {
         self.client
-            .send_packet_now(&CSetHeldItem::new(
-                self.inventory.lock().await.selected as i8,
+            .enqueue_packet(&CCloseContainer::new(
+                self.current_screen_handler
+                    .lock()
+                    .await
+                    .lock()
+                    .await
+                    .sync_id()
+                    .into(),
             ))
             .await;
+        self.on_handled_screen_closed().await;
+    }
+
+    pub async fn on_handled_screen_closed(&self) {
+        self.current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .on_closed(self)
+            .await;
+
+        let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
+            self.player_screen_handler.clone();
+        let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
+            self.current_screen_handler.lock().await.clone();
+
+        if !Arc::ptr_eq(&player_screen_handler, &current_screen_handler) {
+            player_screen_handler
+                .lock()
+                .await
+                .copy_shared_slots(current_screen_handler)
+                .await;
+        }
+
+        *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
+    }
+
+    pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
+        let mut screen_handler = screen_handler.lock().await;
+
+        screen_handler
+            .add_listener(self.screen_handler_listener.clone())
+            .await;
+
+        screen_handler
+            .update_sync_handler(self.screen_handler_sync_handler.clone())
+            .await;
+    }
+
+    pub async fn open_handled_screen(
+        &self,
+        screen_handler_factory: &dyn ScreenHandlerFactory,
+    ) -> Option<u8> {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen().await;
+        }
+
+        self.increment_screen_handler_sync_id();
+
+        if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
+            self.screen_handler_sync_id.load(Ordering::Relaxed),
+            &self.inventory,
+            self,
+        ) {
+            let screen_handler_temp = screen_handler.lock().await;
+            self.client
+                .enqueue_packet(&COpenScreen::new(
+                    screen_handler_temp.sync_id().into(),
+                    (screen_handler_temp
+                        .window_type()
+                        .expect("Can't open PlayerScreenHandler") as i32)
+                        .into(),
+                    &screen_handler_factory.get_display_name(),
+                ))
+                .await;
+            drop(screen_handler_temp);
+            self.on_screen_handler_opened(screen_handler.clone()).await;
+            *self.current_screen_handler.lock().await = screen_handler;
+            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+        } else {
+            //TODO: Send message if spectator
+
+            None
+        }
+    }
+
+    pub async fn on_slot_click(&self, packet: SClickSlot) {
+        let screen_handler = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler.lock().await;
+        let behaviour = screen_handler.get_behaviour();
+
+        // behaviour is dropped here
+        if i32::from(behaviour.sync_id) != packet.sync_id.0 {
+            return;
+        }
+
+        if self.gamemode.load() == GameMode::Spectator {
+            screen_handler.sync_state().await;
+            return;
+        }
+
+        if !screen_handler.can_use(self) {
+            warn!(
+                "Player {} interacted with invalid menu {:?}",
+                self.gameprofile.name,
+                screen_handler.window_type()
+            );
+            return;
+        }
+
+        let slot = packet.slot;
+
+        if !screen_handler.is_slot_valid(i32::from(slot)).await {
+            warn!(
+                "Player {} clicked invalid slot index: {}, available slots: {}",
+                self.gameprofile.name,
+                slot,
+                screen_handler.get_behaviour().slots.len()
+            );
+            return;
+        }
+
+        let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
+
+        screen_handler.disable_sync().await;
+        screen_handler
+            .on_slot_click(
+                i32::from(slot),
+                i32::from(packet.button),
+                packet.mode.clone(),
+                self,
+            )
+            .await;
+
+        for (key, value) in packet.array_of_changed_slots {
+            screen_handler.set_received_hash(key as usize, value).await;
+        }
+
+        screen_handler
+            .set_received_cursor_hash(packet.carried_item)
+            .await;
+        screen_handler.enable_sync().await;
+
+        if not_in_sync {
+            screen_handler.update_to_client().await;
+        } else {
+            screen_handler.send_content_updates().await;
+        }
+    }
+
+    /// Check if the player has a specific permission
+    pub async fn has_permission(&self, node: &str) -> bool {
+        let perm_manager = PERMISSION_MANAGER.read().await;
+        perm_manager
+            .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
+            .await
     }
 }
 
@@ -1461,20 +1838,23 @@ impl Player {
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.living_entity.write_nbt(nbt).await;
-        self.inventory.lock().await.write_nbt(nbt).await;
+        self.inventory.write_nbt(nbt).await;
 
         self.abilities.lock().await.write_nbt(nbt).await;
 
         // Store total XP instead of individual components
-        let total_exp = experience::points_to_level(self.experience_level.load(Relaxed))
-            + self.experience_points.load(Relaxed);
+        let total_exp = experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
+            + self.experience_points.load(Ordering::Relaxed);
         nbt.put_int("XpTotal", total_exp);
         nbt.put_byte("playerGameType", self.gamemode.load() as i8);
         if let Some(previous_gamemode) = self.previous_gamemode.load() {
             nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
         }
 
-        nbt.put_bool("HasPlayedBefore", self.has_played_before.load(Relaxed));
+        nbt.put_bool(
+            "HasPlayedBefore",
+            self.has_played_before.load(Ordering::Relaxed),
+        );
 
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt).await;
@@ -1482,7 +1862,7 @@ impl NBTStorage for Player {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
-        self.inventory.lock().await.read_nbt(nbt).await;
+        self.inventory.read_nbt_non_mut(nbt).await;
         self.abilities.lock().await.read_nbt(nbt).await;
 
         self.gamemode.store(
@@ -1495,8 +1875,10 @@ impl NBTStorage for Player {
                 .and_then(|byte| GameMode::try_from(byte).ok()),
         );
 
-        self.has_played_before
-            .store(nbt.get_bool("HasPlayedBefore").unwrap_or(false), Relaxed);
+        self.has_played_before.store(
+            nbt.get_bool("HasPlayedBefore").unwrap_or(false),
+            Ordering::Relaxed,
+        );
 
         // Load food level, saturation, exhaustion, and tick timer
         self.hunger_manager.read_nbt(nbt).await;
@@ -1505,9 +1887,9 @@ impl NBTStorage for Player {
         let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
         let (level, points) = experience::total_to_level_and_points(total_exp);
         let progress = experience::progress_in_level(level, points);
-        self.experience_level.store(level, Relaxed);
+        self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress);
-        self.experience_points.store(points, Relaxed);
+        self.experience_points.store(points, Ordering::Relaxed);
     }
 }
 
@@ -1515,46 +1897,28 @@ impl NBTStorage for Player {
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Save the selected slot (hotbar)
-        nbt.put_int("SelectedItemSlot", self.selected as i32);
+        nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::with_capacity(SLOT_OFFHAND);
+        let mut vec: Vec<NbtTag> = Vec::new();
 
-        // Helper function to add items to the vector
-        let mut add_item = |slot: usize, stack_ref: Option<&ItemStack>| {
-            if let Some(stack) = stack_ref {
+        for i in 0..self.main_inventory.len() {
+            let stack = self.main_inventory[i].lock().await;
+            if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
-                item_compound.put_byte("Slot", slot as i8);
+                item_compound.put_byte("Slot", i as i8);
                 stack.write_item_stack(&mut item_compound);
                 vec.push(NbtTag::Compound(item_compound));
             }
-        };
-
-        // Crafting input slots
-        for slot in SLOT_CRAFT_INPUT_START..=SLOT_CRAFT_INPUT_END {
-            add_item(slot, self.crafting_slots()[slot - SLOT_CRAFT_INPUT_START]);
         }
-
-        // Armor slots
-        for slot in SLOT_HELM..=SLOT_BOOT {
-            add_item(slot, self.armor_slots()[slot - SLOT_HELM]);
-        }
-
-        // Main inventory slots (includes hotbar in the data structure)
-        for slot in SLOT_INV_START..=SLOT_HOTBAR_END {
-            add_item(slot, self.item_slots()[slot - SLOT_INV_START]);
-        }
-
-        // Offhand
-        add_item(SLOT_OFFHAND, self.offhand_slot());
 
         // Save the inventory list
         nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
     }
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+    async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
-        self.selected = nbt.get_int("SelectedItemSlot").unwrap_or(0) as usize;
+        self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
 
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
@@ -1563,7 +1927,7 @@ impl NBTStorage for PlayerInventory {
                     if let Some(slot_byte) = item_compound.get_byte("Slot") {
                         let slot = slot_byte as usize;
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                            let _ = self.set_slot(slot, Some(item_stack), true);
+                            self.set_stack(slot, item_stack).await;
                         }
                     }
                 }
@@ -1575,6 +1939,9 @@ impl NBTStorage for PlayerInventory {
 #[async_trait]
 impl EntityBase for Player {
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+        if self.abilities.lock().await.invulnerable {
+            return false;
+        }
         self.world()
             .await
             .play_sound(
@@ -1591,6 +1958,16 @@ impl EntityBase for Player {
             }
         }
         result
+    }
+
+    async fn teleport(
+        self: Arc<Self>,
+        position: Option<Vector3<f64>>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.teleport_world(world, position, yaw, pitch).await;
     }
 
     fn get_entity(&self) -> &Entity {
@@ -1700,6 +2077,10 @@ impl Player {
                     .handle_player_action(SPlayerAction::read(payload)?, server)
                     .await;
             }
+            SSetCommandBlock::PACKET_ID => {
+                self.handle_set_command_block(SSetCommandBlock::read(payload)?)
+                    .await;
+            }
             SPlayerCommand::PACKET_ID => {
                 self.handle_player_command(SPlayerCommand::read(payload)?)
                     .await;
@@ -1709,9 +2090,8 @@ impl Player {
                 self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
                     .await;
             }
-            SClickContainer::PACKET_ID => {
-                self.handle_click_container(server, SClickContainer::read(payload)?)
-                    .await?;
+            SClickSlot::PACKET_ID => {
+                self.on_slot_click(SClickSlot::read(payload)?).await;
             }
             SSetHeldItem::PACKET_ID => {
                 self.handle_set_held_item(SSetHeldItem::read(payload)?)
@@ -1879,6 +2259,15 @@ impl TryFrom<i32> for Hand {
     }
 }
 
+/// Represents the player's respawn point.
+#[derive(Copy, Debug, Clone, PartialEq)]
+pub struct RespawnPoint {
+    pub dimension: DimensionType,
+    pub position: BlockPos,
+    pub yaw: f32,
+    pub force: bool,
+}
+
 /// Represents the player's chat mode settings.
 #[derive(Debug, Clone)]
 pub enum ChatMode {
@@ -2031,5 +2420,36 @@ impl MessageCache {
             self.full_cache.pop_back();
         }
         self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
+    }
+}
+
+#[async_trait]
+impl InventoryPlayer for Player {
+    async fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
+        self.drop_item(item).await;
+    }
+
+    fn get_inventory(&self) -> Arc<PlayerInventory> {
+        self.inventory.clone()
+    }
+
+    async fn enqueue_inventory_packet(&self, packet: &CSetContainerContent) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_slot_packet(&self, packet: &CSetContainerSlot) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_property_packet(&self, packet: &CSetContainerProperty) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory) {
+        self.client.enqueue_packet(packet).await;
     }
 }

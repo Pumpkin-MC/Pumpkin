@@ -64,8 +64,8 @@ impl ExperienceOrbEntity {
 
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {
-    async fn tick(&self, server: &Server) {
-        self.entity.tick(server).await;
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
+        self.entity.tick(caller, server).await;
 
         let age = self
             .orb_age
@@ -79,7 +79,7 @@ impl EntityBase for ExperienceOrbEntity {
         &self.entity
     }
 
-    async fn on_player_collision(&self, player: Arc<Player>) {
+    async fn on_player_collision(&self, player: &Arc<Player>) {
         let mut delay = player.experience_pick_up_delay.lock().await;
         if *delay == 0 {
             *delay = 2;

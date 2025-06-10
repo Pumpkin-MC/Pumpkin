@@ -5,9 +5,9 @@ use pumpkin_data::{
     block_properties::{HorizontalFacing, RailShape, StraightRailShape},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
-use crate::world::{BlockFlags, World};
+use crate::world::World;
 
 use super::{HorizontalFacingRailExt, Rail, RailElevation, RailProperties, StraightRailShapeExt};
 
@@ -16,7 +16,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
         return false;
     }
 
-    let state_id = world.get_block_state_id(pos).await.unwrap();
+    let state_id = world.get_block_state_id(pos).await;
     let rail_props = RailProperties::new(state_id, block);
     let rail_leaning_direction = match rail_props.shape() {
         RailShape::AscendingNorth => Some(HorizontalFacing::North),
@@ -36,7 +36,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
 }
 
 pub(super) async fn can_place_rail_at(world: &World, pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&pos.down()).await.unwrap();
+    let state = world.get_block_state(&pos.down()).await;
     state.is_solid()
 }
 
