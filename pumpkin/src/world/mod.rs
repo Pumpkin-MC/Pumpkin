@@ -393,18 +393,28 @@ impl World {
         self.flush_synced_block_events().await;
 
         // world ticks
-        {
-            let mut level_time = self.level_time.lock().await;
-            level_time.tick_time();
-            if level_time.world_age % 20 == 0 {
-                level_time.send_time(self).await;
-            }
-        }
+        let mut level_time = self.level_time.lock().await;
+        level_time.tick_time();
+        let mut weather = self.weather.lock().await;
+        weather.tick_weather(self).await;
 
-        {
-            let mut weather = self.weather.lock().await;
-            weather.tick_weather(self).await;
-        };
+        if self.should_skip_night().await {
+            let time = level_time.time_of_day + 24000;
+            level_time.set_time(time - time % 24000);
+            level_time.send_time(self).await;
+
+            for player in self.players.read().await.values() {
+                player.wake_up().await;
+            }
+
+            if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                weather.reset_weather_cycle(self).await;
+            }
+        } else if level_time.world_age % 20 == 0 {
+            level_time.send_time(self).await;
+        }
+        drop(level_time);
+        drop(weather);
 
         self.tick_scheduled_block_ticks().await;
 
@@ -927,27 +937,46 @@ impl World {
 
         // Teleport
         let info = &self.level_info.read().await;
-        let mut position = Vector3::new(
-            f64::from(info.spawn_x),
-            f64::from(info.spawn_y),
-            f64::from(info.spawn_z),
-        );
-        let yaw = info.spawn_angle;
         let pitch = 0.0;
+        let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
+            respawn
+        } else {
+            let top = self
+                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                .await;
 
-        let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
-            .await;
-        position.y = f64::from(top + 1);
+            (
+                Vector3::new(info.spawn_x.into(), (top + 1).into(), info.spawn_z.into()),
+                info.spawn_angle,
+            )
+        };
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.clone().request_teleport(position, yaw, pitch).await;
-
+        player.request_teleport(position, yaw, pitch).await;
         player.living_entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
         self.send_world_info(player, position, yaw, pitch).await;
+    }
+
+    /// Returns true if enough players are sleeping and we should skip the night.
+    async fn should_skip_night(&self) -> bool {
+        let players = self.players.read().await;
+
+        let player_count = players.len();
+        let sleeping_player_count = players
+            .values()
+            .filter(|player| {
+                player
+                    .sleeping_since
+                    .load()
+                    .is_some_and(|since| since >= 100)
+            })
+            .count();
+
+        // TODO: sleep ratio
+        sleeping_player_count == player_count
     }
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks

@@ -144,7 +144,9 @@ impl ChunkData {
                     delay: tick.delay as u16,
                     priority: TickPriority::from(tick.priority),
                     target_block_id: Block::from_registry_key(
-                        &tick.target_block.replace("minecraft:", ""),
+                        tick.target_block
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(&tick.target_block),
                     )
                     .unwrap_or(Block::AIR)
                     .id,
@@ -158,7 +160,9 @@ impl ChunkData {
                     delay: tick.delay as u16,
                     priority: TickPriority::from(tick.priority),
                     target_block_id: Block::from_registry_key(
-                        &tick.target_block.replace("minecraft:", ""),
+                        tick.target_block
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(&tick.target_block),
                     )
                     .unwrap_or(Block::AIR)
                     .id,
