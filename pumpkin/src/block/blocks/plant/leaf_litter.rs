@@ -55,7 +55,7 @@ impl PumpkinBlock for LeafLitterBlock {
     ) -> bool {
         // Allow placing multiple leaf litter in same position
         let current_props = LeafLitterProperties::from_state_id(state_id, block);
-        can_add_segment(&current_props)
+        can_add_segment(current_props)
     }
 
     async fn on_place(
@@ -69,30 +69,27 @@ impl PumpkinBlock for LeafLitterBlock {
         replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        match replacing {
-            BlockIsReplacing::Itself(existing_state_id) => {
-                let mut props = LeafLitterProperties::from_state_id(existing_state_id, block);
+        if let BlockIsReplacing::Itself(existing_state_id) = replacing {
+            let mut props = LeafLitterProperties::from_state_id(existing_state_id, block);
 
-                if can_add_segment(&props) {
-                    props.segment_amount = get_next_segment_amount(props.segment_amount);
-                    props.to_state_id(block)
-                } else {
-                    existing_state_id
-                }
-            }
-            _ => {
-                // Set first segment orientation based on player direction
-                let player_facing = player.living_entity.entity.get_horizontal_facing();
-                let mut props = LeafLitterProperties::default(block);
-                props.segment_amount = Integer1To4::L1;
-                props.facing = get_facing_for_segment(player_facing, Integer1To4::L1);
+            if can_add_segment(props) {
+                props.segment_amount = get_next_segment_amount(props.segment_amount);
                 props.to_state_id(block)
+            } else {
+                existing_state_id
             }
+        } else {
+            // Set first segment orientation based on player direction
+            let player_facing = player.living_entity.entity.get_horizontal_facing();
+            let mut props = LeafLitterProperties::default(block);
+            props.segment_amount = Integer1To4::L1;
+            props.facing = get_facing_for_segment(player_facing, Integer1To4::L1);
+            props.to_state_id(block)
         }
     }
 }
 
-fn can_add_segment(props: &LeafLitterProperties) -> bool {
+fn can_add_segment(props: LeafLitterProperties) -> bool {
     matches!(
         props.segment_amount,
         Integer1To4::L1 | Integer1To4::L2 | Integer1To4::L3
@@ -103,8 +100,7 @@ fn get_next_segment_amount(current: Integer1To4) -> Integer1To4 {
     match current {
         Integer1To4::L1 => Integer1To4::L2,
         Integer1To4::L2 => Integer1To4::L3,
-        Integer1To4::L3 => Integer1To4::L4,
-        Integer1To4::L4 => Integer1To4::L4,
+        Integer1To4::L3 | Integer1To4::L4 => Integer1To4::L4,
     }
 }
 
@@ -114,24 +110,28 @@ fn get_facing_for_segment(
     segment_amount: Integer1To4,
 ) -> HorizontalFacing {
     match (player_facing, segment_amount) {
-        (HorizontalFacing::North, Integer1To4::L1) => HorizontalFacing::South, // bottom right
-        (HorizontalFacing::North, Integer1To4::L2) => HorizontalFacing::East,  // top right
-        (HorizontalFacing::North, Integer1To4::L3) => HorizontalFacing::North, // top left
-        (HorizontalFacing::North, Integer1To4::L4) => HorizontalFacing::West,  // bottom left
+        // Returns South
+        (HorizontalFacing::North, Integer1To4::L1)
+        | (HorizontalFacing::South, Integer1To4::L3)
+        | (HorizontalFacing::East, Integer1To4::L2)
+        | (HorizontalFacing::West, Integer1To4::L4) => HorizontalFacing::South,
 
-        (HorizontalFacing::South, Integer1To4::L1) => HorizontalFacing::North, // bottom right
-        (HorizontalFacing::South, Integer1To4::L2) => HorizontalFacing::West,  // top right
-        (HorizontalFacing::South, Integer1To4::L3) => HorizontalFacing::South, // top left
-        (HorizontalFacing::South, Integer1To4::L4) => HorizontalFacing::East,  // bottom left
+        // Returns East
+        (HorizontalFacing::North, Integer1To4::L2)
+        | (HorizontalFacing::South, Integer1To4::L4)
+        | (HorizontalFacing::East, Integer1To4::L3)
+        | (HorizontalFacing::West, Integer1To4::L1) => HorizontalFacing::East,
 
-        (HorizontalFacing::East, Integer1To4::L1) => HorizontalFacing::West, // bottom right
-        (HorizontalFacing::East, Integer1To4::L2) => HorizontalFacing::South, // top right
-        (HorizontalFacing::East, Integer1To4::L3) => HorizontalFacing::East, // top left
-        (HorizontalFacing::East, Integer1To4::L4) => HorizontalFacing::North, // bottom left
+        // Returns North
+        (HorizontalFacing::North, Integer1To4::L3)
+        | (HorizontalFacing::South, Integer1To4::L1)
+        | (HorizontalFacing::East, Integer1To4::L4)
+        | (HorizontalFacing::West, Integer1To4::L2) => HorizontalFacing::North,
 
-        (HorizontalFacing::West, Integer1To4::L1) => HorizontalFacing::East, // bottom right
-        (HorizontalFacing::West, Integer1To4::L2) => HorizontalFacing::North, // top right
-        (HorizontalFacing::West, Integer1To4::L3) => HorizontalFacing::West, // top left
-        (HorizontalFacing::West, Integer1To4::L4) => HorizontalFacing::South, // bottom left
+        // Returns West
+        (HorizontalFacing::North, Integer1To4::L4)
+        | (HorizontalFacing::South, Integer1To4::L2)
+        | (HorizontalFacing::East, Integer1To4::L1)
+        | (HorizontalFacing::West, Integer1To4::L3) => HorizontalFacing::West,
     }
 }
