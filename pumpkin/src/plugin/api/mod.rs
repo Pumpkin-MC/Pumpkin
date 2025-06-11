@@ -57,6 +57,7 @@ pub trait Plugin: Send + Sync + 'static {
 }
 
 /// The `NamespacedKey` struct
+#[allow(dead_code)]
 pub struct NamespacedKey {
     namespace: String,
     key: String,
@@ -89,4 +90,3 @@ macro_rules! ns_key {
         $crate::NamespacedKey::new(env!("CARGO_PKG_NAME"), $value)
     };
 }
-
