@@ -6,6 +6,7 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
+use pumpkin_data::entity::EntityPose;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -31,16 +32,16 @@ impl PumpkinBlock for SeaPickleBlock {
         replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        //TODO place around when player is crouching
-        if player.get_entity().pose.load() != pumpkin_data::entity::EntityPose::Crouching {
+        if player.get_entity().pose.load() != EntityPose::Crouching {
             if let BlockIsReplacing::Itself(state_id) = replacing {
                 let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, block);
-
-                sea_pickle_prop.pickles = match sea_pickle_prop.pickles {
-                    Integer1To4::L1 => Integer1To4::L2,
-                    Integer1To4::L2 => Integer1To4::L3,
-                    _ => Integer1To4::L4,
-                };
+                if sea_pickle_prop.pickles != Integer1To4::L4 {
+                    sea_pickle_prop.pickles = match sea_pickle_prop.pickles {
+                        Integer1To4::L1 => Integer1To4::L2,
+                        Integer1To4::L2 => Integer1To4::L3,
+                        _ => Integer1To4::L4,
+                    };
+                }
                 return sea_pickle_prop.to_state_id(block);
             }
         }
@@ -65,6 +66,7 @@ impl PumpkinBlock for SeaPickleBlock {
         support_block.is_center_solid(BlockDirection::Up)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn can_update_at(
         &self,
         _world: &World,
@@ -73,8 +75,11 @@ impl PumpkinBlock for SeaPickleBlock {
         _block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: &SUseItemOn,
+        player: &Player,
     ) -> bool {
-        let sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, block);
-        !sea_pickle_prop.pickles.eq(&Integer1To4::L4)
+        player.get_entity().pose.load() != EntityPose::Crouching
+            && SeaPickleProperties::from_state_id(state_id, block).pickles != Integer1To4::L4
     }
+
+    //TODO grow the sea_pickle
 }
