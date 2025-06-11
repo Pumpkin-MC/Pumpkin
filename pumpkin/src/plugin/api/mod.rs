@@ -55,3 +55,38 @@ pub trait Plugin: Send + Sync + 'static {
         Ok(())
     }
 }
+
+/// The `NamespacedKey` struct
+pub struct NamespacedKey {
+    namespace: String,
+    key: String,
+}
+
+/// The `NamespacedKey` constructor
+/// 
+/// # Parameters
+/// - `namespace`: namespace of the key, must be equal to the `CARGO_PKG_NAME`
+/// - `key`: The key as a String
+/// 
+/// # Returns
+/// - Self
+impl NamespacedKey {
+    pub fn new(namespace: &str, key: &str) -> Self {
+        Self {
+            namespace: namespace.to_ascii_lowercase(),
+            key: key.to_string(),
+        }
+    }
+}
+
+/// A macro used to create a new `NamespacedKey` without having to manually pass the `CARGO_PKG_NAME` by using the `env!()` macro
+/// 
+/// # Parameters
+/// - `$value`: the key you want to create as a String.
+#[macro_export]
+macro_rules! ns_key {
+    ($value:expr) => {
+        $crate::NamespacedKey::new(env!("CARGO_PKG_NAME"), $value)
+    };
+}
+
