@@ -1,7 +1,7 @@
-use std::ops::{Range, RangeInclusive};
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use std::ops::RangeInclusive;
 
 use crate::command::CommandError;
 use crate::command::args::ConsumedArgs;
