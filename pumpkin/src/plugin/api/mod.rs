@@ -72,6 +72,7 @@ pub struct NamespacedKey {
 /// # Returns
 /// - Self
 impl NamespacedKey {
+    #[must_use]
     pub fn new(namespace: &str, key: &str) -> Self {
         Self {
             namespace: namespace.to_ascii_lowercase(),
