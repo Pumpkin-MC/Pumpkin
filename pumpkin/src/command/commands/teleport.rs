@@ -1,3 +1,4 @@
+use std::ops::{Range, RangeInclusive};
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -34,6 +35,9 @@ const ARG_FACING_ENTITY: &str = "facingEntity";
 /// position
 const ARG_FACING_LOCATION: &str = "facingLocation";
 
+/// Max tp range
+const RANGE: RangeInclusive<f64> = -30_000_000.0..=30_000_000.0;
+
 fn yaw_pitch_facing_position(
     looking_from: &Vector3<f64>,
     looking_towards: &Vector3<f64>,
@@ -50,9 +54,7 @@ fn yaw_pitch_facing_position(
 }
 
 fn dest_in_range(dest: &Vector3<f64>) -> bool {
-    let range = -30_000_000.0..=30_000_000.0;
-
-    range.contains(&dest.x) && range.contains(&dest.y) && range.contains(&dest.z)
+    RANGE.contains(&dest.x) && RANGE.contains(&dest.y) && RANGE.contains(&dest.z)
 }
 
 struct EntitiesToEntityExecutor;
