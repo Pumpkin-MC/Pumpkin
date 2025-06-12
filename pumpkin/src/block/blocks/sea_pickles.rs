@@ -10,7 +10,7 @@ use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -51,9 +51,9 @@ impl PumpkinBlock for SeaPickleBlock {
         //1:1 vanilla algorithm
         //TODO use pumpkin random
 
-        let mut i = 5;
+        //let mut i = 5;
         let mut j = 1;
-        let mut k = 2;
+        //let mut k = 2;
         let mut l = 0;
         let mut m = location.0.x - 2;
         let mut n = 0;
@@ -61,7 +61,7 @@ impl PumpkinBlock for SeaPickleBlock {
             for p in 0..j {
                 let q = 2 + location.0.y - 1;
                 for r in (q - 2)..q {
-                    let mut lv2: BlockState;
+                    //let mut lv2: BlockState;
                     let mut lv = BlockPos::new(m + o, r, location.0.z - n + p);
                     if &lv == &location
                         || rand::thread_rng().gen_range(0..6) != 0
@@ -172,13 +172,4 @@ impl PumpkinBlock for SeaPickleBlock {
         player.get_entity().pose.load() != EntityPose::Crouching
             && SeaPickleProperties::from_state_id(state_id, block).pickles != Integer1To4::L4
     }
-}
-
-async fn seed_to_array(seed: u64) -> [u8; 32] {
-    let mut array = [0u8; 32];
-    let seed_bytes = seed.to_le_bytes();
-    for i in 0..8 {
-        array[i] = seed_bytes[i];
-    }
-    array
 }
