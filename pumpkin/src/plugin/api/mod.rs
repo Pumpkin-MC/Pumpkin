@@ -63,7 +63,9 @@ pub struct NamespacedKey {
     key: String,
 }
 
-/// The `NamespacedKey` constructor, `new()` must only be called my the `ns_key!` macro.
+/// The `NamespacedKey` constructor
+///
+/// `new()` must only be called via the `ns_key!` macro.
 ///
 /// # Parameters
 /// - `namespace`: namespace of the key, must be equal to the `CARGO_PKG_NAME`
