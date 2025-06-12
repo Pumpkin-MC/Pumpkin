@@ -1,5 +1,6 @@
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -7,12 +8,16 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::item::Item;
+use pumpkin_data::tag::Tagable;
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use rand::Rng;
+use std::sync::Arc;
 
 type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperties;
 
@@ -21,6 +26,93 @@ pub struct SeaPickleBlock;
 
 #[async_trait]
 impl PumpkinBlock for SeaPickleBlock {
+    async fn use_with_item(
+        &self,
+        block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        item: &Item,
+        _server: &Server,
+        world: &Arc<World>,
+    ) -> BlockActionResult {
+        if item != &Item::BONE_MEAL
+            || !world
+                .get_block(&location.down())
+                .await
+                .is_tagged_with("minecraft:coral_blocks")
+                .unwrap()
+            || SeaPickleProperties::from_state_id(world.get_block_state_id(&location).await, block)
+                .waterlogged
+                != true
+        {
+            return BlockActionResult::Continue;
+        }
+
+        //1:1 vanilla algorithm
+        //TODO use pumpkin random
+
+        let mut i = 5;
+        let mut j = 1;
+        let mut k = 2;
+        let mut l = 0;
+        let mut m = location.0.x - 2;
+        let mut n = 0;
+        for o in 0..5 {
+            for p in 0..j {
+                let q = 2 + location.0.y - 1;
+                for r in (q - 2)..q {
+                    let mut lv2: BlockState;
+                    let mut lv = BlockPos::new(m + o, r, location.0.z - n + p);
+                    if &lv == &location
+                        || rand::thread_rng().gen_range(0..6) != 0
+                        || !world.get_block(&lv).await.eq(&Block::WATER)
+                        || !world
+                            .get_block(&lv.down())
+                            .await
+                            .is_tagged_with("minecraft:coral_blocks")
+                            .unwrap()
+                    {
+                        continue;
+                    }
+                    let mut sea_pickle_prop = SeaPickleProperties::default(block);
+
+                    sea_pickle_prop.pickles = match rand::thread_rng().gen_range(0..4) + 1 {
+                        1 => Integer1To4::L1,
+                        2 => Integer1To4::L2,
+                        3 => Integer1To4::L3,
+                        _ => Integer1To4::L4,
+                    };
+                    world
+                        .set_block_state(
+                            &lv,
+                            sea_pickle_prop.to_state_id(block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+            }
+            if l < 2 {
+                j += 2;
+                n += 1;
+            } else {
+                j -= 2;
+                n -= 1;
+            }
+            l += 1;
+        }
+        let mut sea_pickle_prop = SeaPickleProperties::default(block);
+        sea_pickle_prop.pickles = Integer1To4::L4;
+        world
+            .set_block_state(
+                &location,
+                sea_pickle_prop.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+
+        BlockActionResult::Consume
+    }
+
     async fn on_place(
         &self,
         _server: &Server,
@@ -80,6 +172,13 @@ impl PumpkinBlock for SeaPickleBlock {
         player.get_entity().pose.load() != EntityPose::Crouching
             && SeaPickleProperties::from_state_id(state_id, block).pickles != Integer1To4::L4
     }
+}
 
-    //TODO grow the sea_pickle
+async fn seed_to_array(seed: u64) -> [u8; 32] {
+    let mut array = [0u8; 32];
+    let seed_bytes = seed.to_le_bytes();
+    for i in 0..8 {
+        array[i] = seed_bytes[i];
+    }
+    array
 }
