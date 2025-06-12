@@ -3,7 +3,10 @@ pub mod persistent_data_container;
 // Tests
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::plugin::{
+        NamespacedKey,
+        api::persistence::persistent_data_container::{PersistentDataHolder, PersistentValue},
+    };
 
     #[derive(Debug)]
     struct Dummy;

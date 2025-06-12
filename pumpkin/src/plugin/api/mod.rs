@@ -59,6 +59,7 @@ pub trait Plugin: Send + Sync + 'static {
 
 /// The `NamespacedKey` struct
 #[allow(dead_code)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct NamespacedKey {
     namespace: String,
     key: String,
