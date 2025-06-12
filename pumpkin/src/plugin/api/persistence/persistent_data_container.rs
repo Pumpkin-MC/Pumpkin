@@ -162,10 +162,10 @@ impl<'a, T> PersistentDataHolder<'a, T> {
     /// # Panics
     /// This method will panic if the underlying mutex is poisoned.
     pub fn remove_by_key(&self, key: NamespacedKey) {
-      if let Some(container) = &self.container{
-         let mut map = container.data.lock().unwrap();
-         map.remove(&key);
-      }
+        if let Some(container) = &self.container {
+            let mut map = container.data.lock().unwrap();
+            map.remove(&key);
+        }
     }
 
     /// Clears all entries from the associated data container.
