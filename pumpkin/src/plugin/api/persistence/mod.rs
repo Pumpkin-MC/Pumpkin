@@ -12,7 +12,7 @@ mod tests {
     struct Dummy;
 
     fn test_key() -> NamespacedKey {
-        NamespacedKey::new("example", "test_key")
+        NamespacedKey::new("example", "test_key").expect("Invalid NamespacedKey.")
     }
 
     #[test]

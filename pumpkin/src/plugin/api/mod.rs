@@ -59,7 +59,7 @@ pub trait Plugin: Send + Sync + 'static {
 
 /// The `NamespacedKey` struct
 #[allow(dead_code)]
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq, Clone)]
 pub struct NamespacedKey {
     namespace: String,
     key: String,
@@ -95,6 +95,15 @@ impl NamespacedKey {
             namespace: namespace.to_ascii_lowercase(),
             key: key.to_ascii_lowercase(),
         })
+    }
+}
+
+impl Clone for NamespacedKey {
+    fn clone(&self) -> Self {
+        Self {
+            namespace: self.namespace.clone(),
+            key: self.key.clone(),
+        }
     }
 }
 
