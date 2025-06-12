@@ -63,7 +63,7 @@ pub struct NamespacedKey {
     key: String,
 }
 
-/// The `NamespacedKey` constructor
+/// The `NamespacedKey` constructor, `new()` must only be called my the `ns_key!` macro.
 ///
 /// # Parameters
 /// - `namespace`: namespace of the key, must be equal to the `CARGO_PKG_NAME`
@@ -73,7 +73,8 @@ pub struct NamespacedKey {
 /// - Self
 impl NamespacedKey {
     #[must_use]
-    pub fn new(namespace: &str, key: &str) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn new(namespace: &str, key: &str) -> Self {
         Self {
             namespace: namespace.to_ascii_lowercase(),
             key: key.to_string(),
