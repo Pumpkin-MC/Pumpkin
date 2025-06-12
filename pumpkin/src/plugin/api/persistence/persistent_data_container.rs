@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::plugin::NamespacedKey;
 
 /// The supported persistent data types.
+#[allow(dead_code)]
 #[derive(PartialEq, Debug, Clone)]
 pub enum PersistentValue {
     Bool(bool),
@@ -21,11 +22,13 @@ pub enum PersistentValue {
 /// The `PersistentDataContainer` struct
 ///
 /// This struct contains `NamespacedKey`s and associates them with `PersistentValue`s using a `HashMap`.
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct PersistentDataContainer {
     pub data: Arc<Mutex<HashMap<NamespacedKey, PersistentValue>>>,
 }
 
+#[allow(dead_code)]
 impl PersistentDataContainer {
     /// Creates a new, empty `PersistentDataContainer`.
     ///
@@ -104,6 +107,7 @@ impl PersistentDataContainer {
 /// let key = ns_key!("example_key");
 /// holder.save_data(key, PersistentValue::String("value".to_string()));
 /// ```
+#[allow(dead_code)]
 pub struct PersistentDataHolder<'a, T> {
     /// A reference to the wrapped inner struct.
     pub inner: &'a T,
@@ -112,6 +116,7 @@ pub struct PersistentDataHolder<'a, T> {
     pub container: Option<PersistentDataContainer>,
 }
 
+#[allow(dead_code)]
 impl<'a, T> PersistentDataHolder<'a, T> {
     /// Creates a new `PersistentDataHolder` for a given struct reference.
     ///
