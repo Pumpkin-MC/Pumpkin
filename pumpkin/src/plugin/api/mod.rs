@@ -98,15 +98,6 @@ impl NamespacedKey {
     }
 }
 
-impl Clone for NamespacedKey {
-    fn clone(&self) -> Self {
-        Self {
-            namespace: self.namespace.clone(),
-            key: self.key.clone(),
-        }
-    }
-}
-
 /// A macro used to create a new `NamespacedKey` without having to manually pass the `CARGO_PKG_NAME` by using the `env!()` macro
 ///
 /// # Parameters

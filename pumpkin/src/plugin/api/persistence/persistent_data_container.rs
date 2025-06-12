@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::plugin::NamespacedKey;
 
 /// The supported persistent data types.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum PersistentValue {
     Bool(bool),
     String(String),
