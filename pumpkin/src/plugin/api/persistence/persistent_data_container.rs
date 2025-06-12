@@ -7,16 +7,16 @@ use crate::plugin::NamespacedKey;
 #[allow(dead_code)]
 #[derive(PartialEq, Debug, Clone)]
 pub enum PersistentValue {
-   Bool(bool),
-   String(String),
-   I32(i32),
-   I64(i64),
-   U32(u32),
-   U64(u64),
-   F32(f32),
-   F64(f64),
-   Bytes(Vec<u8>),
-   List(Vec<PersistentValue>),
+    Bool(bool),
+    String(String),
+    I32(i32),
+    I64(i64),
+    U32(u32),
+    U64(u64),
+    F32(f32),
+    F64(f64),
+    Bytes(Vec<u8>),
+    List(Vec<PersistentValue>),
 }
 
 /// The `PersistentDataContainer` struct
@@ -25,65 +25,65 @@ pub enum PersistentValue {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct PersistentDataContainer {
-   pub data: Arc<Mutex<HashMap<NamespacedKey, PersistentValue>>>,
+    pub data: Arc<Mutex<HashMap<NamespacedKey, PersistentValue>>>,
 }
 
 #[allow(dead_code)]
 impl PersistentDataContainer {
-   /// Creates a new, empty `PersistentDataContainer`.
-   ///
-   /// This initializes the internal storage as an empty `HashMap`
-   /// wrapped in an `Arc<Mutex<...>>` for thread-safe, shared access.
-   ///
-   /// # Returns
-   /// A new instance of `PersistentDataContainer`.
-   pub fn new() -> Self {
-      Self {
-         data: Arc::new(Mutex::new(HashMap::new())),
-      }
-   }
+    /// Creates a new, empty `PersistentDataContainer`.
+    ///
+    /// This initializes the internal storage as an empty `HashMap`
+    /// wrapped in an `Arc<Mutex<...>>` for thread-safe, shared access.
+    ///
+    /// # Returns
+    /// A new instance of `PersistentDataContainer`.
+    pub fn new() -> Self {
+        Self {
+            data: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
 
-   /// Clears all stored key-value pairs in the container.
-   ///
-   /// This method acquires a lock on the internal `HashMap`
-   /// and removes all entries.
-   ///
-   /// # Panics
-   /// This method panics if the mutex is poisoned.
-   pub fn clear(&self) {
-      let mut map = self.data.lock().unwrap();
-      map.clear();
-   }
+    /// Clears all stored key-value pairs in the container.
+    ///
+    /// This method acquires a lock on the internal `HashMap`
+    /// and removes all entries.
+    ///
+    /// # Panics
+    /// This method panics if the mutex is poisoned.
+    pub fn clear(&self) {
+        let mut map = self.data.lock().unwrap();
+        map.clear();
+    }
 
-   /// Saves a value under the given `NamespacedKey`.
-   ///
-   /// If the key already exists, its value is overwritten.
-   ///
-   /// # Parameters
-   /// - `key`: The unique key under which the value should be stored.
-   /// - `value`: The `PersistentValue` to store.
-   ///
-   /// # Panics
-   /// This method panics if the mutex is poisoned.
-   pub fn save_data(&self, key: NamespacedKey, value: PersistentValue) {
-      let mut map = self.data.lock().unwrap();
-      map.insert(key, value);
-   }
+    /// Saves a value under the given `NamespacedKey`.
+    ///
+    /// If the key already exists, its value is overwritten.
+    ///
+    /// # Parameters
+    /// - `key`: The unique key under which the value should be stored.
+    /// - `value`: The `PersistentValue` to store.
+    ///
+    /// # Panics
+    /// This method panics if the mutex is poisoned.
+    pub fn save_data(&self, key: NamespacedKey, value: PersistentValue) {
+        let mut map = self.data.lock().unwrap();
+        map.insert(key, value);
+    }
 
-   /// Retrieves a stored value by its `NamespacedKey`.
-   ///
-   /// # Parameters
-   /// - `key`: A reference to the `NamespacedKey` to look up.
-   ///
-   /// # Returns
-   /// An `Option<PersistentValue>`: `Some(value)` if the key exists, `None` otherwise.
-   ///
-   /// # Panics
-   /// This method panics if the mutex is poisoned.
-   pub fn get_data(&self, key: &NamespacedKey) -> Option<PersistentValue> {
-      let map = self.data.lock().unwrap();
-      map.get(key).cloned()
-   }
+    /// Retrieves a stored value by its `NamespacedKey`.
+    ///
+    /// # Parameters
+    /// - `key`: A reference to the `NamespacedKey` to look up.
+    ///
+    /// # Returns
+    /// An `Option<PersistentValue>`: `Some(value)` if the key exists, `None` otherwise.
+    ///
+    /// # Panics
+    /// This method panics if the mutex is poisoned.
+    pub fn get_data(&self, key: &NamespacedKey) -> Option<PersistentValue> {
+        let map = self.data.lock().unwrap();
+        map.get(key).cloned()
+    }
 }
 
 /// A generic wrapper that associates a `PersistentDataContainer` with any arbitrary struct.
