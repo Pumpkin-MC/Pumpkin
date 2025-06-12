@@ -80,7 +80,6 @@ pub enum NamespacedKeyError {
 /// # Returns
 /// - Self
 impl NamespacedKey {
-    #[must_use]
     #[allow(dead_code)]
     pub(crate) fn new(namespace: &str, key: &str) -> Result<Self, NamespacedKeyError> {
         if !namespace.is_ascii() {
