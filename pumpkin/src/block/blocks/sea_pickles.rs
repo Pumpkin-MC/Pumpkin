@@ -26,6 +26,7 @@ pub struct SeaPickleBlock;
 
 #[async_trait]
 impl PumpkinBlock for SeaPickleBlock {
+    #[allow(clippy::many_single_char_names)]
     async fn use_with_item(
         &self,
         block: &Block,
@@ -41,9 +42,8 @@ impl PumpkinBlock for SeaPickleBlock {
                 .await
                 .is_tagged_with("minecraft:coral_blocks")
                 .unwrap()
-            || SeaPickleProperties::from_state_id(world.get_block_state_id(&location).await, block)
+            || !SeaPickleProperties::from_state_id(world.get_block_state_id(&location).await, block)
                 .waterlogged
-                != true
         {
             return BlockActionResult::Continue;
         }
@@ -55,15 +55,15 @@ impl PumpkinBlock for SeaPickleBlock {
         let mut j = 1;
         //let mut k = 2;
         let mut l = 0;
-        let mut m = location.0.x - 2;
+        let m = location.0.x - 2;
         let mut n = 0;
         for o in 0..5 {
             for p in 0..j {
                 let q = 2 + location.0.y - 1;
                 for r in (q - 2)..q {
                     //let mut lv2: BlockState;
-                    let mut lv = BlockPos::new(m + o, r, location.0.z - n + p);
-                    if &lv == &location
+                    let lv = BlockPos::new(m + o, r, location.0.z - n + p);
+                    if lv == location
                         || rand::thread_rng().gen_range(0..6) != 0
                         || !world.get_block(&lv).await.eq(&Block::WATER)
                         || !world
