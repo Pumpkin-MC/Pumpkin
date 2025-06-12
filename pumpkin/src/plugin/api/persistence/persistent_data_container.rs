@@ -169,7 +169,7 @@ impl<'a, T> PersistentDataHolder<'a, T> {
     pub fn remove_by_key(&self, key: &NamespacedKey) {
         if let Some(container) = &self.container {
             let mut map = container.data.lock().unwrap();
-            map.remove(&key);
+            map.remove(key);
         }
     }
 
