@@ -630,6 +630,31 @@ impl Player {
                 }
                 pumpkin_protocol::server::play::Action::StopSneaking => {
                     if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
+                        let pos = entity.pos.load();
+                        let x = pos.x;
+                        let y = pos.y + 1.0;
+                        let z = pos.z;
+
+                        // Check the center and all corner of the block
+                        let positions = [
+                            (x, y, z),
+                            (x + 0.5, y, z + 0.5),
+                            (x - 0.5, y, z + 0.5),
+                            (x + 0.5, y, z - 0.5),
+                            (x - 0.5, y, z - 0.5),
+                        ];
+
+                        for (x, y, z) in &positions {
+                            if !self
+                                .world()
+                                .await
+                                .get_block(&BlockPos::new(*x as i32, *y as i32, *z as i32))
+                                .await
+                                .eq(&Block::AIR)
+                            {
+                                return;
+                            }
+                        }
                         entity.set_sneaking(false).await;
                     }
                 }
