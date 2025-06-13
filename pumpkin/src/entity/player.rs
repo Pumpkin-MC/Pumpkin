@@ -40,9 +40,9 @@ use pumpkin_protocol::client::play::{
     CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
     CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition,
     CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
+    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
+    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -1930,7 +1930,6 @@ impl NBTStorage for PlayerInventory {
     async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
         self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
-
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
             for tag in inventory_list {
@@ -2461,6 +2460,10 @@ impl InventoryPlayer for Player {
     }
 
     async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot) {
         self.client.enqueue_packet(packet).await;
     }
 }
