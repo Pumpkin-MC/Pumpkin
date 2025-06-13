@@ -2,8 +2,6 @@ mod axe;
 mod bucket;
 mod egg;
 mod ender_eye;
-mod fire_charge;
-mod flint_and_steel;
 mod hoe;
 mod honeycomb;
 mod shovel;
