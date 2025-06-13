@@ -1911,13 +1911,24 @@ impl NBTStorage for PlayerInventory {
         nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::new();
-
-        for i in 0..self.main_inventory.len() {
-            let stack = self.main_inventory[i].lock().await;
+        let mut vec: Vec<NbtTag> = Vec::with_capacity(41);
+        for (i, item) in self.main_inventory.iter().enumerate() {
+            let stack = item.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", i as i8);
+                stack.write_item_stack(&mut item_compound);
+                vec.push(NbtTag::Compound(item_compound));
+            }
+        }
+
+        for (i, slot) in &self.equipment_slots {
+            let equipment_binding = self.entity_equipment.lock().await;
+            let stack_binding = equipment_binding.get(slot);
+            let stack = stack_binding.lock().await;
+            if !stack.is_empty() {
+                let mut item_compound = NbtCompound::new();
+                item_compound.put_byte("Slot", *i as i8);
                 stack.write_item_stack(&mut item_compound);
                 vec.push(NbtTag::Compound(item_compound));
             }
