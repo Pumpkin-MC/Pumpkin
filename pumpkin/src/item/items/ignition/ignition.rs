@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub struct Ignition {}
 
 impl Ignition {
-    pub async fn ignite_block<F>(
+    pub async fn ignite_block<F, Fut>(
         ignite_logic: F,
         _item: &Item,
         player: &Player,
@@ -20,7 +20,8 @@ impl Ignition {
         block: &Block,
         _server: &Server,
     ) where
-        F: FnOnce(Arc<World>, BlockPos, &Option<Block>),
+        F: FnOnce(Arc<World>, BlockPos, Option<Block>) -> Fut,
+        Fut: Future<Output = ()>,
     {
         // TODO: check CampfireBlock, CandleBlock and CandleCakeBlock
 
@@ -31,10 +32,10 @@ impl Ignition {
 
         let replacement_block = get_ignite_result(block).unwrap_or(fire_block.id);
 
-        let result_block = &Block::from_id(replacement_block);
+        let result_block = Block::from_id(replacement_block);
 
         if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
-            ignite_logic(world, pos, result_block);
+            ignite_logic(world, pos, result_block).await;
         }
     }
 }
