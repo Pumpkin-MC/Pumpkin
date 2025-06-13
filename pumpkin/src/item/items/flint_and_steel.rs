@@ -26,9 +26,13 @@ impl PumpkinItem for FlintAndSteelItem {
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
-        _block: &Block,
+        block: &Block,
         _server: &Server,
     ) {
+        if block.eq(&Block::TNT) {
+            // if use on tnt block, do not generate a new fire block
+            return;
+        }
         // TODO: check CampfireBlock, CandleBlock and CandleCakeBlock
         let world = player.world().await;
         let pos = location.offset(face.to_offset());
