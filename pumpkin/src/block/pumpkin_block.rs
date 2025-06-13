@@ -113,6 +113,7 @@ pub trait PumpkinBlock: Send + Sync {
         true
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn can_update_at(
         &self,
         _world: &World,
@@ -121,6 +122,7 @@ pub trait PumpkinBlock: Send + Sync {
         _block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: &SUseItemOn,
+        _player: &Player,
     ) -> bool {
         false
     }

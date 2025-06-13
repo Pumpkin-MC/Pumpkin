@@ -62,6 +62,7 @@ impl PumpkinBlock for SlabBlock {
         slab_props.to_state_id(block)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn can_update_at(
         &self,
         _world: &World,
@@ -70,6 +71,7 @@ impl PumpkinBlock for SlabBlock {
         _block_pos: &BlockPos,
         face: BlockDirection,
         use_item_on: &SUseItemOn,
+        _player: &Player,
     ) -> bool {
         let slab_props = SlabProperties::from_state_id(state_id, block);
 
