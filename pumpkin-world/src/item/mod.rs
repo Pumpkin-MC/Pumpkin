@@ -1,4 +1,5 @@
 use pumpkin_data::item::Item;
+use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_nbt::compound::NbtCompound;
 use std::hash::Hash;
@@ -203,5 +204,15 @@ impl ItemStack {
         }
 
         Some(item_stack)
+    }
+}
+
+impl From<&RecipeResultStruct> for ItemStack {
+    fn from(value: &RecipeResultStruct) -> Self {
+        Self {
+            item_count: value.count,
+            item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
+                .expect("Crafting recipe gives invalid item"),
+        }
     }
 }

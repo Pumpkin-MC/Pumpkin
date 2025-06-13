@@ -16,22 +16,13 @@ use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 // This is a trait due to crafting slots being a thing
 #[async_trait]
 pub trait Slot: Send + Sync + Debug {
-    fn get_inventory(&self) -> &Arc<dyn Inventory>;
+    fn get_inventory(&self) -> Arc<dyn Inventory>;
 
     fn get_index(&self) -> usize;
 
     fn set_id(&self, index: usize);
 
-    fn on_quick_transfer(&self, new_item: ItemStack, original: ItemStack) {
-        let diff = new_item.item_count - original.item_count;
-        if diff > 0 {
-            self.on_crafted(original, diff);
-        }
-    }
-
-    fn on_crafted(&self, _stack: ItemStack, _amount: u8) {}
-
-    fn on_crafted_single(&self, _stack: ItemStack) {}
+    async fn on_crafted(&self, _stack: ItemStack, _amount: u8) {}
 
     fn on_take(&self, _amount: u8) {}
 
@@ -51,7 +42,7 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn get_cloned_stack(&self) -> ItemStack {
-        let stack = self.get_inventory().get_stack(self.get_index()).await;
+        let stack = self.get_stack().await;
         let lock = timeout(Duration::from_secs(5), stack.lock())
             .await
             .expect("Timed out while trying to acquire lock");
@@ -196,8 +187,8 @@ impl NormalSlot {
 }
 #[async_trait]
 impl Slot for NormalSlot {
-    fn get_inventory(&self) -> &Arc<dyn Inventory> {
-        &self.inventory
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
     }
 
     fn get_index(&self) -> usize {
@@ -236,8 +227,8 @@ impl ArmorSlot {
 
 #[async_trait]
 impl Slot for ArmorSlot {
-    fn get_inventory(&self) -> &Arc<dyn Inventory> {
-        &self.inventory
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
     }
 
     fn get_index(&self) -> usize {

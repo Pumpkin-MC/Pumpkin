@@ -24,6 +24,10 @@ mod sound_category;
 #[path = "generated/sound.rs"]
 mod sound_enum;
 
+pub mod recipes {
+    include!(concat!(env!("OUT_DIR"), "/recipes.rs"));
+}
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;

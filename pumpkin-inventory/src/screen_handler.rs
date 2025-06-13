@@ -1,27 +1,26 @@
-use std::{any::Any, collections::HashMap, sync::Arc};
+use std::any::Any;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
-use pumpkin_protocol::{
-    client::play::{
-        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-        CSetPlayerInventory,
-    },
-    codec::item_stack_seralizer::OptionalItemStackHash,
-    server::play::SlotActionType,
+use pumpkin_protocol::client::play::{
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    CSetPlayerInventory,
 };
+use pumpkin_protocol::codec::item_stack_seralizer::OptionalItemStackHash;
+use pumpkin_protocol::server::play::SlotActionType;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{
-    container_click::MouseClick,
-    player::player_inventory::PlayerInventory,
-    slot::{NormalSlot, Slot},
-    sync_handler::{SyncHandler, TrackedStack},
-};
+use crate::container_click::MouseClick;
+use crate::player::player_inventory::PlayerInventory;
+use crate::slot::{NormalSlot, Slot};
+use crate::sync_handler::{SyncHandler, TrackedStack};
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
@@ -269,7 +268,7 @@ pub trait ScreenHandler: Send + Sync {
             behaviour.tracked_stacks[slot] = stack;
 
             for listener in behaviour.listeners.iter() {
-                listener.on_slot_update(behaviour, slot as u8, stack);
+                listener.on_slot_update(behaviour, slot as u8, stack).await;
             }
         }
     }
@@ -334,7 +333,7 @@ pub trait ScreenHandler: Send + Sync {
 
     async fn get_slot_index(&self, inventory: &Arc<dyn Inventory>, slot: usize) -> Option<usize> {
         for i in 0..self.get_behaviour().slots.len() {
-            if Arc::ptr_eq(self.get_behaviour().slots[i].get_inventory(), inventory)
+            if Arc::ptr_eq(&self.get_behaviour().slots[i].get_inventory(), inventory)
                 && self.get_behaviour().slots[i].get_index() == slot
             {
                 return Some(i);
@@ -674,8 +673,9 @@ pub trait ScreenHandler: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait ScreenHandlerListener: Send + Sync {
-    fn on_slot_update(
+    async fn on_slot_update(
         &self,
         _screen_handler: &ScreenHandlerBehaviour,
         _slot: u8,
@@ -711,7 +711,7 @@ pub struct ScreenHandlerBehaviour {
     pub cursor_stack: Arc<Mutex<ItemStack>>,
     pub previous_tracked_stacks: Vec<TrackedStack>,
     pub previous_cursor_stack: TrackedStack,
-    pub revision: u32,
+    pub revision: AtomicU32,
     pub disable_sync: bool,
     pub properties: Vec<ScreenProperty>,
     pub tracked_property_values: Vec<i32>,
@@ -729,7 +729,7 @@ impl ScreenHandlerBehaviour {
             cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
             previous_tracked_stacks: Vec::new(),
             previous_cursor_stack: TrackedStack::EMPTY,
-            revision: 0,
+            revision: AtomicU32::new(0),
             disable_sync: false,
             properties: Vec::new(),
             tracked_property_values: Vec::new(),
@@ -737,8 +737,8 @@ impl ScreenHandlerBehaviour {
         }
     }
 
-    pub fn next_revision(&mut self) -> u32 {
-        self.revision = (self.revision + 1) & 32767;
-        self.revision
+    pub fn next_revision(&self) -> u32 {
+        self.revision.fetch_add(1, Ordering::Relaxed);
+        self.revision.fetch_and(32767, Ordering::Relaxed) & 32767
     }
 }
