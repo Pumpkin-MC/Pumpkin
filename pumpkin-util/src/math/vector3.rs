@@ -148,6 +148,18 @@ impl<T: Math + Copy + Float> Vector3<T> {
             z: self.z / length,
         }
     }
+
+    pub fn rotation_vector(pitch: T, yaw: T) -> Self {
+        let h = pitch.to_radians();
+        let i = (-yaw).to_radians();
+
+        let l = h.cos();
+        Self {
+            x: i.sin() * l,
+            y: -h.sin(),
+            z: i.cos() * l,
+        }
+    }
 }
 
 impl<T: Math + Copy> Mul<T> for Vector3<T> {
