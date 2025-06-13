@@ -41,9 +41,14 @@ impl Ignition {
 
 fn get_ignite_result(block: &Block) -> Option<u16> {
     match &block.id {
-        id if id == &Block::CAMPFIRE
-            .is_tagged_with("#minecraft:extinguished")?
-            .then_some(Block::CAMPFIRE)?.id => Some(Block::CAMPFIRE.id),
+        id if id
+            == &Block::CAMPFIRE
+                .is_tagged_with("#minecraft:extinguished")?
+                .then_some(Block::CAMPFIRE)?
+                .id =>
+        {
+            Some(Block::CAMPFIRE.id)
+        }
 
         _ => None,
     }

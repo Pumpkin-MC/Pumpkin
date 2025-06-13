@@ -4,11 +4,11 @@ mod egg;
 mod ender_eye;
 mod hoe;
 mod honeycomb;
+mod ignition;
 mod shovel;
 mod snowball;
 mod sword;
 mod trident;
-mod ignition;
 
 use super::registry::ItemRegistry;
 use axe::AxeItem;
@@ -17,12 +17,12 @@ use egg::EggItem;
 use ender_eye::EnderEyeItem;
 use hoe::HoeItem;
 use honeycomb::HoneyCombItem;
+use ignition::flint_and_steel::FlintAndSteelItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
 use std::sync::Arc;
 use sword::SwordItem;
 use trident::TridentItem;
-use ignition::flint_and_steel::FlintAndSteelItem;
 
 #[must_use]
 pub fn default_registry() -> Arc<ItemRegistry> {

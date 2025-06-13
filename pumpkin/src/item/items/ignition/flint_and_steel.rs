@@ -33,7 +33,6 @@ impl PumpkinItem for FlintAndSteelItem {
     ) {
         Ignition::ignite_block(
             async |world, pos, block| {
-
                 let state_block = match block {
                     Some(block) => block,
                     None => return,
@@ -42,7 +41,6 @@ impl PumpkinItem for FlintAndSteelItem {
                 world
                     .set_block_state(&pos, state_block.default_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
-
 
                 // TODO
             },
@@ -53,6 +51,6 @@ impl PumpkinItem for FlintAndSteelItem {
             _block,
             _server,
         )
-            .await;
+        .await;
     }
 }
