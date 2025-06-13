@@ -2,6 +2,7 @@ mod axe;
 mod bucket;
 mod egg;
 mod ender_eye;
+mod fire_charge;
 mod flint_and_steel;
 mod hoe;
 mod honeycomb;
@@ -9,12 +10,13 @@ mod shovel;
 mod snowball;
 mod sword;
 mod trident;
+mod ignition;
 
+use super::registry::ItemRegistry;
 use axe::AxeItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
 use egg::EggItem;
 use ender_eye::EnderEyeItem;
-use flint_and_steel::FlintAndSteelItem;
 use hoe::HoeItem;
 use honeycomb::HoneyCombItem;
 use shovel::ShovelItem;
@@ -22,8 +24,8 @@ use snowball::SnowBallItem;
 use std::sync::Arc;
 use sword::SwordItem;
 use trident::TridentItem;
+use ignition::flint_and_steel::FlintAndSteelItem;
 
-use super::registry::ItemRegistry;
 #[must_use]
 pub fn default_registry() -> Arc<ItemRegistry> {
     let mut manager = ItemRegistry::default();
