@@ -32,11 +32,14 @@ impl PumpkinItem for FireChargeItem {
         _server: &Server,
     ) {
         Ignition::ignite_block(
-            async |world, pos| {
-                let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+            async |world, pos, block| {
+                let state_block = match block {
+                    Some(block) => block,
+                    None => return,
+                };
 
                 world
-                    .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
+                    .set_block_state(&pos, state_block.default_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
 
                 world
