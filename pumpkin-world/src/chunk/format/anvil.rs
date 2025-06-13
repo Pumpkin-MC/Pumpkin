@@ -3,6 +3,7 @@ use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use futures::future::join_all;
 use itertools::Itertools;
+use lz4_java_wrc::Context;
 use pumpkin_config::advanced_config;
 use pumpkin_data::{Block, chunk::ChunkStatus};
 use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
@@ -65,7 +66,7 @@ pub enum Compression {
 pub enum CompressionRead<R: Read> {
     GZip(GzDecoder<R>),
     ZLib(ZlibDecoder<R>),
-    LZ4(lz4::Decoder<R>),
+    LZ4(lz4_java_wrc::Lz4BlockInput<R>),
 }
 
 impl<R: Read> Read for CompressionRead<R> {
@@ -149,8 +150,7 @@ impl Compression {
                 Ok(chunk_data.into_boxed_slice())
             }
             Compression::LZ4 => {
-                let mut decoder =
-                    lz4::Decoder::new(compressed_data).map_err(CompressionError::LZ4Error)?;
+                let mut decoder = lz4_java_wrc::Lz4BlockInput::new(compressed_data);
                 let mut decompressed_data = Vec::new();
                 decoder
                     .read_to_end(&mut decompressed_data)
@@ -161,6 +161,7 @@ impl Compression {
         }
     }
 
+    const LZ4_COMPRESSION_LEVEL_BASE: u32 = 10;
     fn compress_data(
         &self,
         uncompressed_data: &[u8],
@@ -189,19 +190,19 @@ impl Compression {
                     .map_err(CompressionError::ZlibError)?;
                 Ok(chunk_data)
             }
-
             Compression::LZ4 => {
                 let mut compressed_data = Vec::new();
-                let mut encoder = lz4::EncoderBuilder::new()
-                    .level(compression_level)
-                    .build(&mut compressed_data)
+                let block_size = 1 << (Self::LZ4_COMPRESSION_LEVEL_BASE + compression_level);
+                let mut encoder = lz4_java_wrc::Lz4BlockOutput::with_context(
+                    &mut compressed_data,
+                    Context::default(),
+                    block_size,
+                )
+                .map_err(CompressionError::LZ4Error)?;
+                encoder
+                    .write_all(uncompressed_data)
                     .map_err(CompressionError::LZ4Error)?;
-                if let Err(err) = encoder.write_all(uncompressed_data) {
-                    return Err(CompressionError::LZ4Error(err));
-                }
-                if let (_output, Err(err)) = encoder.finish() {
-                    return Err(CompressionError::LZ4Error(err));
-                }
+                drop(encoder);
                 Ok(compressed_data)
             }
             Compression::Custom => todo!(),

@@ -120,4 +120,4 @@ Consider joining [our Discord server](https://discord.gg/wT8XjrjKkf) to stay up-
 
 ## Funding
 
-If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii) or my [PayPal](https://www.paypal.me/alexxmedvedev).
+If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii).

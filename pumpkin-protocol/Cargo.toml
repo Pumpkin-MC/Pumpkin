@@ -29,11 +29,11 @@ aes = "0.8"
 cfb8 = "0.8"
 
 # compression
-async-compression = { version = "0.4.23", features = ["tokio", "zlib"] }
+async-compression = { version = "0.4.24", features = ["tokio", "zlib"] }
 
 take_mut = "0.2.2"
 bitflags = "2.9.1"
 
 [dev-dependencies]
 # Validate correctness
-flate2 = "1.1.1"
+flate2 = "1.1.2"

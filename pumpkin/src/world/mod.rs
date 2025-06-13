@@ -81,7 +81,7 @@ use pumpkin_world::{
     world::GetBlockError,
 };
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::{Rng, thread_rng};
+use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;
@@ -366,7 +366,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = thread_rng().r#gen::<f64>();
+        let seed = rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
