@@ -17,7 +17,7 @@ pub struct FireChargeItem;
 
 impl ItemMetadata for FireChargeItem {
     fn ids() -> Box<[u16]> {
-        [Item::FLINT_AND_STEEL.id].into()
+        [Item::FIRE_CHARGE.id].into()
     }
 }
 
