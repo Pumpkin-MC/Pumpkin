@@ -42,7 +42,7 @@ impl PumpkinItem for FireChargeItem {
                     .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
                     .await;
 
-                Ignition::run_fire_spread(world,&pos).await;
+                Ignition::run_fire_spread(world, &pos).await;
                 // TODO
             },
             _item,
