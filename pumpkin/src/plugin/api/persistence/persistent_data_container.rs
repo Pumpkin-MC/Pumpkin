@@ -207,12 +207,12 @@ impl<'a, T: HasUuid> PersistentDataHolder<'a, T> {
 // Tests
 #[cfg(test)]
 mod tests {
-    use crate::uuid::Uuid;
     use crate::plugin::{
         NamespacedKey,
         api::persistence::HasUuid,
         api::persistence::persistent_data_container::{PersistentDataHolder, PersistentValue},
     };
+    use crate::uuid::Uuid;
 
     #[derive(Debug)]
     struct Dummy;
