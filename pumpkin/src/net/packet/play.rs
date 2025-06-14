@@ -1346,18 +1346,6 @@ impl Player {
             return Ok(());
         }
         if !sneaking {
-            server
-                .item_registry
-                .use_on_block(
-                    held_item.lock().await.item,
-                    self,
-                    location,
-                    face,
-                    &block,
-                    server,
-                )
-                .await;
-            self.update_sequence(use_item_on.sequence.0);
             let item_stack = held_item.lock().await;
             let item = item_stack.item;
             drop(item_stack);
@@ -1371,6 +1359,18 @@ impl Player {
                     return Ok(());
                 }
             }
+            server
+                .item_registry
+                .use_on_block(
+                    held_item.lock().await.item,
+                    self,
+                    location,
+                    face,
+                    &block,
+                    server,
+                )
+                .await;
+            self.update_sequence(use_item_on.sequence.0);
         }
 
         // Check if the item is a block, because not every item can be placed :D
