@@ -162,6 +162,37 @@ where
     }
 }
 
+impl<'de: 'a, 'a, T> Deserialize<'de> for PersistentDataHolder<'a, T>
+where
+    T: HasUuid + Default,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PersistentDataHolderHelper {
+            uuid: Option<Uuid>,
+            container: Option<PersistentDataContainer>,
+        }
+
+        let helper = PersistentDataHolderHelper::deserialize(deserializer)?;
+
+        let uuid = helper
+            .uuid
+            .ok_or_else(|| serde::de::Error::custom("Missing UUID"))?;
+
+        let inner = T::get_by_uuid(&uuid)
+            .ok_or_else(|| serde::de::Error::custom("Could not find instance for UUID"))?;
+
+        Ok(PersistentDataHolder {
+            inner,
+            uuid: Some(uuid),
+            container: helper.container,
+        })
+    }
+}
+
 #[allow(dead_code)]
 impl<'a, T> PersistentDataHolder<'a, T>
 where
