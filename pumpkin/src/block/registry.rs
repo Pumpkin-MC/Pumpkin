@@ -192,6 +192,7 @@ impl BlockRegistry {
         true
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn can_update_at(
         &self,
         world: &World,
@@ -200,11 +201,12 @@ impl BlockRegistry {
         block_pos: &BlockPos,
         face: BlockDirection,
         use_item_on: &SUseItemOn,
+        player: &Player,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .can_update_at(world, block, state_id, block_pos, face, use_item_on)
+                .can_update_at(world, block, state_id, block_pos, face, use_item_on, player)
                 .await;
         }
         false
