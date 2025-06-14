@@ -52,17 +52,17 @@ impl PumpkinBlock for SeaPickleBlock {
         //TODO use pumpkin random
 
         //let mut i = 5;
-        let mut j = 1;
+        //let mut j = 1;
         //let mut k = 2;
-        let mut l = 0;
-        let m = location.0.x - 2;
-        let mut n = 0;
-        for o in 0..5 {
-            for p in 0..j {
-                let q = 2 + location.0.y - 1;
-                for r in (q - 2)..q {
+        let mut count = 0;
+        let base_x = location.0.x - 2;
+        let mut removed_z = 0;
+        for added_x in 0..5 {
+            for added_z in 0..1 {
+                let temp_y = 2 + location.0.y - 1;
+                for y in (temp_y - 2)..temp_y {
                     //let mut lv2: BlockState;
-                    let lv = BlockPos::new(m + o, r, location.0.z - n + p);
+                    let lv = BlockPos::new(base_x + added_x, y, location.0.z - removed_z + added_z);
                     if lv == location
                         || rand::thread_rng().gen_range(0..6) != 0
                         || !world.get_block(&lv).await.eq(&Block::WATER)
@@ -91,14 +91,14 @@ impl PumpkinBlock for SeaPickleBlock {
                         .await;
                 }
             }
-            if l < 2 {
-                j += 2;
-                n += 1;
+            if count < 2 {
+                //j += 2;
+                removed_z += 1;
             } else {
-                j -= 2;
-                n -= 1;
+                //j -= 2;
+                removed_z -= 1;
             }
-            l += 1;
+            count += 1;
         }
         let mut sea_pickle_prop = SeaPickleProperties::default(block);
         sea_pickle_prop.pickles = Integer1To4::L4;
