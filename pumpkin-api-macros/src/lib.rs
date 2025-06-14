@@ -3,7 +3,6 @@ use quote::quote;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use syn::{DeriveInput, ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
-use uuid::Uuid;
 
 static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
