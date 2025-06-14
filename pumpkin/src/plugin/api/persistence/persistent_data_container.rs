@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::plugin::NamespacedKey;
+use crate::plugin::api::persistence::HasUuid;
+use uuid::Uuid;
 
 /// The supported persistent data types.
 #[allow(dead_code)]
@@ -112,12 +114,15 @@ pub struct PersistentDataHolder<'a, T> {
     /// A reference to the wrapped inner struct.
     pub inner: &'a T,
 
+    /// The `UUID` that links the `PersistentDataHolder` to the actual object.
+    pub uuid: Option<Uuid>,
+
     /// The optional persistent data container associated with the struct.
     pub container: Option<PersistentDataContainer>,
 }
 
 #[allow(dead_code)]
-impl<'a, T> PersistentDataHolder<'a, T> {
+impl<'a, T: HasUuid> PersistentDataHolder<'a, T> {
     /// Creates a new `PersistentDataHolder` for a given struct reference.
     ///
     /// # Parameters
@@ -128,6 +133,7 @@ impl<'a, T> PersistentDataHolder<'a, T> {
     pub fn new(inner: &'a T) -> Self {
         Self {
             inner,
+            uuid: Some(inner.get_uuid()),
             container: Some(PersistentDataContainer::new()),
         }
     }
@@ -201,13 +207,21 @@ impl<'a, T> PersistentDataHolder<'a, T> {
 // Tests
 #[cfg(test)]
 mod tests {
+    use crate::uuid::Uuid;
     use crate::plugin::{
         NamespacedKey,
+        api::persistence::HasUuid,
         api::persistence::persistent_data_container::{PersistentDataHolder, PersistentValue},
     };
 
     #[derive(Debug)]
     struct Dummy;
+
+    impl HasUuid for Dummy {
+        fn get_uuid(&self) -> Uuid {
+            Uuid::new_v4()
+        }
+    }
 
     fn test_key() -> NamespacedKey {
         NamespacedKey::new("example", "test_key").expect("Invalid NamespacedKey.")

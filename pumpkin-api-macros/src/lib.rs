@@ -2,7 +2,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use std::sync::LazyLock;
 use std::sync::Mutex;
-use syn::{ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
+use syn::{DeriveInput, ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
+use uuid::Uuid;
 
 static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
@@ -100,4 +101,22 @@ pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     TokenStream::from(quote!(#input))
+}
+
+#[proc_macro_derive(HasUuid)]
+pub fn derive_has_uuid(input: TokenStream) -> TokenStream {
+    // Parse the struct the macro is applied to
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    // Generate the HasUuid impl using a fully-qualified uuid path
+    let expanded = quote! {
+        impl HasUuid for #name {
+            fn get_uuid(&self) -> ::uuid::Uuid {
+                self.uuid
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
 }
