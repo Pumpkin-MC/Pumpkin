@@ -45,6 +45,8 @@ use blocks::redstone::redstone_torch::RedstoneTorchBlock;
 use blocks::redstone::redstone_wire::RedstoneWireBlock;
 use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
+use blocks::redstone::tripwire::TripwireBlock;
+use blocks::redstone::tripwire_hook::TripwireHookBlock;
 use blocks::signs::SignBlock;
 use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
@@ -140,6 +142,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ButtonBlock);
     manager.register(LeverBlock);
     manager.register(ObserverBlock);
+    manager.register(TripwireBlock);
+    manager.register(TripwireHookBlock);
 
     // Piston
     manager.register(PistonBlock);

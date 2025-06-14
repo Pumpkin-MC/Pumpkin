@@ -20,6 +20,8 @@ pub mod redstone_torch;
 pub mod redstone_wire;
 pub mod repeater;
 pub mod target_block;
+pub mod tripwire;
+pub mod tripwire_hook;
 pub mod turbo;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
