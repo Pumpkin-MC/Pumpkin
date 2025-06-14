@@ -61,9 +61,9 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            let max_stack = item.components.max_stack_size as i32;
+            let max_stack = i32::from(item.components.max_stack_size);
             let mut remaining = item_count;
-            
+
             while remaining > 0 {
                 let take = remaining.min(max_stack);
                 let mut stack = ItemStack::new(take as u8, item);
