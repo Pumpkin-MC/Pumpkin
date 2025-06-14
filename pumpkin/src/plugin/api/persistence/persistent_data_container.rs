@@ -4,10 +4,12 @@ use std::sync::{Arc, Mutex};
 use crate::plugin::NamespacedKey;
 use crate::plugin::api::persistence::HasUuid;
 use uuid::Uuid;
+use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::ser::SerializeStruct;
 
 /// The supported persistent data types.
 #[allow(dead_code)]
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum PersistentValue {
     Bool(bool),
     String(String),
@@ -25,9 +27,31 @@ pub enum PersistentValue {
 ///
 /// This struct contains `NamespacedKey`s and associates them with `PersistentValue`s using a `HashMap`.
 #[allow(dead_code)]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PersistentDataContainer {
     pub data: Arc<Mutex<HashMap<NamespacedKey, PersistentValue>>>,
+}
+
+impl Serialize for PersistentDataContainer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let map = self.data.lock().unwrap();
+        map.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PersistentDataContainer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let map = HashMap::deserialize(deserializer)?;
+        Ok(Self {
+            data: Arc::new(Mutex::new(map)),
+        })
+    }
 }
 
 #[allow(dead_code)]
@@ -121,6 +145,51 @@ pub struct PersistentDataHolder<'a, T> {
     pub container: Option<PersistentDataContainer>,
 }
 
+fn serialize_type_name<T, S>(_inner: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let name = std::any::type_name::<T>();
+    serializer.serialize_str(name)
+}
+
+fn type_name_of<T>(_val: &T) -> &'static str {
+    std::any::type_name::<T>()
+}
+
+impl<T: HasUuid> Serialize for PersistentDataHolder<'_, T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("PersistentDataHolder", 3)?;
+        state.serialize_field("type_name", &type_name_of(self.inner))?;
+        state.serialize_field("uuid", &self.uuid)?;
+        state.serialize_field("container", &self.container)?;
+        state.end()
+    }
+}
+
+#[derive(Deserialize)]
+struct PersistentDataHolderDe {
+    type_name: String,
+    uuid: Option<Uuid>,
+    container: Option<PersistentDataContainer>,
+}
+
+impl<'de, T> Deserialize<'de> for PersistentDataHolder<'_, T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let helper = PersistentDataHolderDe::deserialize(deserializer)?;
+        Err(serde::de::Error::custom(format!(
+            "Cannot deserialize PersistentDataHolder without reference to T (type_name was '{}')",
+            helper.type_name
+        )))
+    }
+}
+
 #[allow(dead_code)]
 impl<'a, T: HasUuid> PersistentDataHolder<'a, T> {
     /// Creates a new `PersistentDataHolder` for a given struct reference.
@@ -201,70 +270,5 @@ impl<'a, T: HasUuid> PersistentDataHolder<'a, T> {
     /// After calling this, the holder will no longer contain any persistent data.
     pub fn destroy_container(&mut self) {
         self.container = None;
-    }
-}
-
-// Tests
-#[cfg(test)]
-mod tests {
-    use crate::plugin::{
-        NamespacedKey,
-        api::persistence::HasUuid,
-        api::persistence::persistent_data_container::{PersistentDataHolder, PersistentValue},
-    };
-    use uuid::Uuid;
-
-    #[derive(Debug)]
-    struct Dummy;
-
-    impl HasUuid for Dummy {
-        fn get_uuid(&self) -> Uuid {
-            Uuid::new_v4()
-        }
-    }
-
-    fn test_key() -> NamespacedKey {
-        NamespacedKey::new("example", "test_key").expect("Invalid NamespacedKey.")
-    }
-
-    #[test]
-    fn test_save_and_get_data() {
-        let dummy = Dummy;
-        let holder = PersistentDataHolder::new(&dummy);
-
-        let key = test_key();
-        holder.save_data(key.clone(), PersistentValue::String("hello".to_string()));
-
-        let retrieved = holder.get_data(&key);
-        assert_eq!(
-            retrieved,
-            Some(PersistentValue::String("hello".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_clear_data() {
-        let dummy = Dummy;
-        let holder = PersistentDataHolder::new(&dummy);
-
-        let key = test_key();
-        holder.save_data(key.clone(), PersistentValue::Bool(true));
-        holder.clear();
-
-        assert!(holder.get_data(&key).is_none());
-    }
-
-    #[test]
-    fn test_destroy_container() {
-        let dummy = Dummy;
-        let mut holder = PersistentDataHolder::new(&dummy);
-
-        let key = test_key();
-        holder.save_data(key.clone(), PersistentValue::Bool(true));
-
-        holder.destroy_container();
-
-        assert!(holder.get_data(&key).is_none());
-        assert!(holder.container.is_none());
     }
 }

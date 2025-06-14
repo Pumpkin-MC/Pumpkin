@@ -5,6 +5,7 @@ mod persistence;
 use async_trait::async_trait;
 pub use context::*;
 pub use events::*;
+use serde::{Deserialize, Serialize};
 
 /// Struct representing metadata for a plugin.
 ///
@@ -59,7 +60,7 @@ pub trait Plugin: Send + Sync + 'static {
 
 /// The `NamespacedKey` struct
 #[allow(dead_code)]
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct NamespacedKey {
     namespace: String,
     key: String,
