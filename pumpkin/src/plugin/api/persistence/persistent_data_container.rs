@@ -134,7 +134,7 @@ impl PersistentDataContainer {
 /// holder.save_data(key, PersistentValue::String("value".to_string()));
 /// ```
 #[allow(dead_code)]
-pub struct PersistentDataHolder<'a, T> {
+pub struct PersistentDataHolder<'a, T: HasUuid + Default> {
     /// A reference to the wrapped inner struct.
     pub inner: &'a T,
 
@@ -145,53 +145,28 @@ pub struct PersistentDataHolder<'a, T> {
     pub container: Option<PersistentDataContainer>,
 }
 
-fn serialize_type_name<T, S>(_inner: &T, serializer: S) -> Result<S::Ok, S::Error>
+impl<T> Serialize for PersistentDataHolder<'_, T>
 where
-    S: serde::Serializer,
+    T: HasUuid + Default,
 {
-    let name = std::any::type_name::<T>();
-    serializer.serialize_str(name)
-}
-
-fn type_name_of<T>(_val: &T) -> &'static str {
-    std::any::type_name::<T>()
-}
-
-impl<T: HasUuid> Serialize for PersistentDataHolder<'_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("PersistentDataHolder", 3)?;
-        state.serialize_field("type_name", &type_name_of(self.inner))?;
+        let type_name = std::any::type_name::<T>();
+        state.serialize_field("inner", &type_name)?;
         state.serialize_field("uuid", &self.uuid)?;
         state.serialize_field("container", &self.container)?;
         state.end()
     }
 }
 
-#[derive(Deserialize)]
-struct PersistentDataHolderDe {
-    type_name: String,
-    uuid: Option<Uuid>,
-    container: Option<PersistentDataContainer>,
-}
-
-impl<'de, T> Deserialize<'de> for PersistentDataHolder<'_, T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let helper = PersistentDataHolderDe::deserialize(deserializer)?;
-        Err(serde::de::Error::custom(format!(
-            "Cannot deserialize PersistentDataHolder without reference to T (type_name was '{}')",
-            helper.type_name
-        )))
-    }
-}
-
 #[allow(dead_code)]
-impl<'a, T: HasUuid> PersistentDataHolder<'a, T> {
+impl<'a, T> PersistentDataHolder<'a, T>
+where
+    T: HasUuid + Default,
+{
     /// Creates a new `PersistentDataHolder` for a given struct reference.
     ///
     /// # Parameters

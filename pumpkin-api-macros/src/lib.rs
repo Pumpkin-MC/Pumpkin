@@ -111,7 +111,7 @@ pub fn derive_has_uuid(input: TokenStream) -> TokenStream {
     // Generate the HasUuid impl using a fully-qualified uuid path
     let expanded = quote! {
         impl HasUuid for #name {
-            fn get_uuid(&self) -> ::uuid::Uuid {
+            fn get_uuid(&self) -> uuid::Uuid {
                 self.uuid
             }
         }
