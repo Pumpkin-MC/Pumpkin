@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::plugin::NamespacedKey;
 use crate::plugin::api::persistence::HasUuid;
-use uuid::Uuid;
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use uuid::Uuid;
 
 /// The supported persistent data types.
 #[allow(dead_code)]
