@@ -7,7 +7,7 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
-pub struct Ignition {}
+pub struct Ignition;
 
 impl Ignition {
     pub async fn ignite_block<F, Fut>(
@@ -31,9 +31,8 @@ impl Ignition {
             .await
             .unwrap_or(fire_block.default_state_id);
 
-        let result_block = match Block::from_state_id(result_block_id) {
-            Some(block) => block,
-            _ => return,
+        let Some(result_block) = Block::from_state_id(result_block_id) else {
+            return;
         };
 
         // checking by item_id because it always is similar
@@ -53,7 +52,7 @@ impl Ignition {
         ignite_logic(world, location, result_block_id).await;
     }
 
-    pub async fn run_fire_spread(_world: Arc<World>, _start_pos: &BlockPos) {
+    pub fn run_fire_spread(_world: Arc<World>, _start_pos: &BlockPos) {
         tokio::spawn(async move {
             // todo
         });
@@ -81,9 +80,5 @@ async fn get_ignite_result(block: &Block, world: &Arc<World>, location: &BlockPo
 
     let new_state_id = block.from_properties(props_vec).unwrap().to_state_id(block);
 
-    if new_state_id != state_id {
-        Some(new_state_id)
-    } else {
-        None
-    }
+    (new_state_id != state_id).then_some(new_state_id)
 }
