@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use async_trait::async_trait;
 use crate::world::World;
-use pumpkin_data::item::Item;
+use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use std::sync::Arc;
 
 use crate::entity::player::Player;
 use crate::item::items::ignition::ignition::Ignition;
@@ -32,14 +32,9 @@ impl PumpkinItem for FlintAndSteelItem {
         _server: &Server,
     ) {
         Ignition::ignite_block(
-            |world: Arc<World>, pos: BlockPos, block: Option<Block>| async move {
-                let state_block = match &block {
-                    Some(block) => block,
-                    None => return,
-                };
-
+            |world: Arc<World>, pos: BlockPos, new_state_id: u16| async move {
                 world
-                    .set_block_state(&pos, state_block.default_state_id, BlockFlags::NOTIFY_ALL)
+                    .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
 
                 // TODO

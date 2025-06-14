@@ -11,6 +11,7 @@ mod sword;
 mod trident;
 
 use super::registry::ItemRegistry;
+use crate::item::items::ignition::fire_charge::FireChargeItem;
 use axe::AxeItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
 use egg::EggItem;
@@ -40,6 +41,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(AxeItem);
     manager.register(HoneyCombItem);
     manager.register(EnderEyeItem);
+    manager.register(FireChargeItem);
 
     Arc::new(manager)
 }
