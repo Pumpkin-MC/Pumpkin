@@ -21,11 +21,28 @@ use pumpkin_data::item::Item;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
-pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> BlockStateId {
+pub async fn toggle_fence_gate(
+    world: &Arc<World>,
+    block_pos: &BlockPos,
+    player: &Player,
+) -> BlockStateId {
     let (block, state) = world.get_block_and_block_state(block_pos).await;
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
-    fence_gate_props.open = !fence_gate_props.open;
+    if fence_gate_props.open {
+        fence_gate_props.open = false;
+    } else {
+        if fence_gate_props.facing
+            == player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite()
+        {
+            fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
+        }
+        fence_gate_props.open = true;
+    }
     world
         .set_block_state(
             block_pos,
@@ -33,7 +50,7 @@ pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos) -> Bloc
             BlockFlags::NOTIFY_LISTENERS,
         )
         .await;
-
+    // TODO playSound depend on WoodType
     fence_gate_props.to_state_id(&block)
 }
 
@@ -69,24 +86,24 @@ impl PumpkinBlock for FenceGateBlock {
     async fn use_with_item(
         &self,
         _block: &Block,
-        _player: &Player,
+        player: &Player,
         location: BlockPos,
         _item: &Item,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        toggle_fence_gate(world, &location).await;
+        toggle_fence_gate(world, &location, player).await;
         BlockActionResult::Consume
     }
 
     async fn normal_use(
         &self,
         _block: &Block,
-        _player: &Player,
+        player: &Player,
         location: BlockPos,
         _server: &Server,
         world: &Arc<World>,
     ) {
-        toggle_fence_gate(world, &location).await;
+        toggle_fence_gate(world, &location, player).await;
     }
 }
