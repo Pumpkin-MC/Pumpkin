@@ -53,7 +53,7 @@ impl Ignition {
         ignite_logic(world, location, result_block_id).await;
     }
 
-    pub async fn run_fire_distribute(_world: Arc<World>, _start_pos: &BlockPos) {
+    pub async fn run_fire_spread(_world: Arc<World>, _start_pos: &BlockPos) {
         tokio::spawn(async move {
             // todo
         });
