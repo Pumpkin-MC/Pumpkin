@@ -8,7 +8,7 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
-use crate::item::items::ignition::ignition::Ignition;
+use crate::item::items::ignite::ignition::Ignition;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 
