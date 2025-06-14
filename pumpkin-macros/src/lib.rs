@@ -2,13 +2,13 @@ use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
+use syn::spanned::Spanned;
 use syn::{self};
 use syn::{
     Block, Expr, Field, Fields, ItemStruct, Stmt,
     parse::{Nothing, Parser},
     parse_macro_input,
 };
-use syn::spanned::Spanned;
 
 extern crate proc_macro;
 
@@ -238,7 +238,10 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                 Fields::Unit => abort!(s.fields.span(), "Block properties must have fields"),
             };
             if fields.len() != 1 {
-                abort!(fields.span(), "Block properties `struct`s must have exactly one field");
+                abort!(
+                    fields.span(),
+                    "Block properties `struct`s must have exactly one field"
+                );
             }
             let field = fields.first().unwrap();
             let ty = &field.ty;
@@ -246,7 +249,10 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                 syn::Type::Path(ref type_path) => {
                     type_path.path.segments.first().unwrap().ident.to_string()
                 }
-                ref other => abort!(other.span(), "Block properties can only have primitive types"),
+                ref other => abort!(
+                    other.span(),
+                    "Block properties can only have primitive types"
+                ),
             };
             match struct_type.as_str() {
                 "bool" => (
@@ -256,7 +262,10 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                     ],
                     false,
                 ),
-                other => abort!(ty.span(), format!("`{other}` is not supported (why not implement it yourself?)")),
+                other => abort!(
+                    ty.span(),
+                    format!("`{other}` is not supported (why not implement it yourself?)")
+                ),
             }
         }
         _ => abort_call_site!("Block properties can only be `enum`s or `struct`s"),

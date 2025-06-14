@@ -1,10 +1,10 @@
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
 use proc_macro_error2::{abort, proc_macro_error};
+use proc_macro2::Ident;
 use quote::quote;
 use std::sync::LazyLock;
 use std::sync::Mutex;
-use syn::{parse_macro_input, parse_quote, ImplItem, ItemFn, ItemImpl, ItemStruct};
+use syn::{ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
 
 static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
@@ -43,8 +43,14 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let methods: Vec<proc_macro2::TokenStream> = methods
         .iter()
-        .map(|s| s.parse::<proc_macro2::TokenStream>()
-            .unwrap_or_else(|e| abort!(struct_ident, format!("re-parsing cached method failed: {e}"))))
+        .map(|s| {
+            s.parse::<proc_macro2::TokenStream>().unwrap_or_else(|e| {
+                abort!(
+                    struct_ident,
+                    format!("re-parsing cached method failed: {e}")
+                )
+            })
+        })
         .collect();
 
     // Combine the original struct definition with the impl block and plugin() function
@@ -76,17 +82,16 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemImpl);
-    
+
     let mode: Ident = parse_macro_input!(attr as Ident);
     let use_global = match mode.to_string().as_str() {
         "global" => true,
-        "local"  => false,
-        other => abort!(mode, format!("expected `global` or `local`, got `{other:?}`")),
+        "local" => false,
+        other => abort!(mode, format!("expected `global` or `local`, got `{other}`")),
     };
 
     for item in &mut input.items {
