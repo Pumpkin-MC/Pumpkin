@@ -64,7 +64,7 @@ impl PumpkinBlock for SeaPickleBlock {
                     //let mut lv2: BlockState;
                     let lv = BlockPos::new(base_x + added_x, y, location.0.z - removed_z + added_z);
                     if lv == location
-                        || rand::thread_rng().gen_range(0..6) != 0
+                        || rand::rng().random_range(0..6) != 0
                         || !world.get_block(&lv).await.eq(&Block::WATER)
                         || !world
                             .get_block(&lv.down())
@@ -76,7 +76,7 @@ impl PumpkinBlock for SeaPickleBlock {
                     }
                     let mut sea_pickle_prop = SeaPickleProperties::default(block);
 
-                    sea_pickle_prop.pickles = match rand::thread_rng().gen_range(0..4) + 1 {
+                    sea_pickle_prop.pickles = match rand::rng().random_range(0..4) + 1 {
                         1 => Integer1To4::L1,
                         2 => Integer1To4::L2,
                         3 => Integer1To4::L3,
