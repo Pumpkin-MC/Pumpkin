@@ -21,16 +21,26 @@ use pumpkin_data::item::Item;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
-pub async fn toggle_fence_gate(world: &Arc<World>, block_pos: &BlockPos, player: &Player) -> BlockStateId {
+pub async fn toggle_fence_gate(
+    world: &Arc<World>,
+    block_pos: &BlockPos,
+    player: &Player,
+) -> BlockStateId {
     let (block, state) = world.get_block_and_block_state(block_pos).await;
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
     if fence_gate_props.open {
         fence_gate_props.open = false;
     } else {
-         if fence_gate_props.facing == player.living_entity.entity.get_horizontal_facing().opposite() {
-             fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
-         }
+        if fence_gate_props.facing
+            == player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite()
+        {
+            fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
+        }
         fence_gate_props.open = true;
     }
     world
