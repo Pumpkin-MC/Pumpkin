@@ -10,20 +10,20 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 
-pub struct BushBlock;
+pub struct RootsBlock;
 
-impl BlockMetadata for BushBlock {
+impl BlockMetadata for RootsBlock {
     fn namespace(&self) -> &'static str {
         "minecraft"
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &[Block::BUSH.name, Block::FIREFLY_BUSH.name]
+        &[Block::WARPED_ROOTS.name, Block::CRIMSON_ROOTS.name]
     }
 }
 
 #[async_trait]
-impl PumpkinBlock for BushBlock {
+impl PumpkinBlock for RootsBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
@@ -36,6 +36,9 @@ impl PumpkinBlock for BushBlock {
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let block_below = block_accessor.get_block(&block_pos.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == Block::FARMLAND
+        block_below.is_tagged_with("minecraft:nylium").unwrap()
+            || block_below == Block::SOUL_SOIL
+            || block_below.is_tagged_with("minecraft:dirt").unwrap()
+            || block_below == Block::FARMLAND
     }
 }

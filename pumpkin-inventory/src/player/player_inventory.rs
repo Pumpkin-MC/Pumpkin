@@ -44,6 +44,19 @@ impl PlayerInventory {
             .clone()
     }
 
+    pub async fn swap_item(&self) -> (ItemStack, ItemStack) {
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        let mut equipment = self.entity_equipment.lock().await;
+        let binding = self.held_item();
+        let mut main_hand_item = binding.lock().await;
+        let off_hand_item = *main_hand_item;
+        *main_hand_item = equipment.put(slot, off_hand_item).await;
+        (*main_hand_item, off_hand_item)
+    }
+
     pub fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
     }
@@ -66,7 +79,7 @@ impl PlayerInventory {
             EquipmentSlot::HEAD.get_offset_entity_slot_id(Self::MAIN_SIZE as i32) as usize,
             EquipmentSlot::HEAD,
         );
-        equipment_slots.insert(40, EquipmentSlot::OFF_HAND);
+        equipment_slots.insert(PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND);
         equipment_slots
     }
 

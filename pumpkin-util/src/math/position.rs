@@ -68,15 +68,114 @@ impl Iterator for BlockPosIterator {
     }
 }
 
+pub struct OutwardIterator {
+    center_x: i32,
+    center_y: i32,
+    center_z: i32,
+    range_x: i32,
+    range_y: i32,
+    range_z: i32,
+    max_manhattan_distance: i32,
+
+    pos: BlockPos,
+    manhattan_distance: i32,
+    limit_x: i32,
+    limit_y: i32,
+    dx: i32,
+    dy: i32,
+    swap_z: bool,
+}
+
+impl OutwardIterator {
+    pub fn new(center: BlockPos, range_x: i32, range_y: i32, range_z: i32) -> Self {
+        let max_manhattan_distance = range_x + range_y + range_z;
+        OutwardIterator {
+            center_x: center.0.x,
+            center_y: center.0.y,
+            center_z: center.0.z,
+            range_x,
+            range_y,
+            range_z,
+            max_manhattan_distance,
+            pos: BlockPos::ZERO,
+            manhattan_distance: 0,
+            limit_x: 0,
+            limit_y: 0,
+            dx: 0,
+            dy: 0,
+            swap_z: false,
+        }
+    }
+}
+
+impl Iterator for OutwardIterator {
+    type Item = BlockPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.swap_z {
+            self.swap_z = false;
+            self.pos.0.z = self.center_z - (self.pos.0.z - self.center_z);
+            return Some(self.pos);
+        }
+
+        loop {
+            if self.dy > self.limit_y {
+                self.dx += 1;
+                if self.dx > self.limit_x {
+                    self.manhattan_distance += 1;
+                    if self.manhattan_distance > self.max_manhattan_distance {
+                        return None; // endOfData()
+                    }
+                    self.limit_x = self.range_x.min(self.manhattan_distance);
+                    self.dx = -self.limit_x;
+                }
+                self.limit_y = self.range_y.min(self.manhattan_distance - self.dx.abs());
+                self.dy = -self.limit_y;
+            }
+
+            let i2 = self.dx;
+            let j2 = self.dy;
+            let k2 = self.manhattan_distance - i2.abs() - j2.abs();
+
+            if k2 <= self.range_z {
+                self.swap_z = k2 != 0;
+                self.pos =
+                    BlockPos::new(self.center_x + i2, self.center_y + j2, self.center_z + k2);
+                self.dy += 1;
+                return Some(self.pos);
+            }
+            self.dy += 1;
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Aka Block Position
 pub struct BlockPos(pub Vector3<i32>);
 
 impl BlockPos {
-    pub fn new(x: i32, y: i32, z: i32) -> Self {
+    pub const ZERO: Self = Self::new(0, 0, 0);
+
+    pub const fn new(x: i32, y: i32, z: i32) -> Self {
         Self(Vector3::new(x, y, z))
     }
 
+    /// Iterates through all `BlockPos` within a cuboid region defined by two corner points,
+    /// `start` and `end`. The iteration covers all blocks inclusively between the minimum
+    /// and maximum coordinates of the two provided positions.
+    ///
+    /// This function ensures that the iteration always proceeds from the smallest to the
+    /// largest coordinate in each dimension, regardless of whether `start` or `end` has a
+    /// higher value for a given axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - One corner of the cuboid region.
+    /// * `end` - The opposite corner of the cuboid region.
+    ///
+    /// # Returns
+    ///
+    /// A `BlockPosIterator` that yields each `BlockPos` within the defined cuboid.
     pub fn iterate(start: BlockPos, end: BlockPos) -> BlockPosIterator {
         BlockPosIterator::new(
             start.0.x.min(end.0.x),
@@ -86,6 +185,33 @@ impl BlockPos {
             start.0.y.max(end.0.y),
             start.0.z.max(end.0.z),
         )
+    }
+
+    // Iterates through `BlockPos` objects outward from a specified `center` point.
+    /// The iteration order is primarily based on the **Manhattan distance** from the center.
+    ///
+    /// For positions with the same Manhattan distance, the iteration prioritizes:
+    /// 1.  **Y-offset**: From negative to positive.
+    /// 2.  **X-offset**: From negative to positive (for the same Y-offset).
+    /// 3.  **Z-offset**: Positive Z-offset before negative Z-offset (for the same X and Y offsets).
+    ///
+    /// # Arguments
+    ///
+    /// * `center` - The central `BlockPos` from which to start iterating.
+    /// * `range_x` - The maximum absolute difference allowed in the X-coordinate from the center.
+    /// * `range_y` - The maximum absolute difference allowed in the Y-coordinate from the center.
+    /// * `range_z` - The maximum absolute difference allowed in the Z-coordinate from the center.
+    ///
+    /// # Returns
+    ///
+    /// An `OutwardIterator` that yields `BlockPos` instances in the described outward order.
+    pub fn iterate_outwards(
+        center: BlockPos,
+        range_x: i32,
+        range_y: i32,
+        range_z: i32,
+    ) -> OutwardIterator {
+        OutwardIterator::new(center, range_x, range_y, range_z)
     }
 
     pub fn iterate_block_pos(
@@ -190,6 +316,13 @@ impl BlockPos {
 
     pub fn down_height(&self, height: i32) -> Self {
         self.offset(Vector3::new(0, -height, 0))
+    }
+
+    pub fn manhattan_distance(&self, other: Self) -> i32 {
+        let x = (other.0.x - self.0.x).abs();
+        let y = (other.0.y - self.0.y).abs();
+        let z = (other.0.z - self.0.z).abs();
+        x + y + z
     }
 }
 

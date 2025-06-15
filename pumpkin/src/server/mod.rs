@@ -16,9 +16,11 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::client::play::CChangeDifficulty;
+use pumpkin_protocol::client::play::CSetSelectedSlot;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
 use pumpkin_registry::{DimensionType, Registry};
 use pumpkin_util::Difficulty;
@@ -31,7 +33,7 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::prelude::SliceRandom;
+use rand::seq::IndexedRandom;
 use rsa::RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
@@ -322,6 +324,10 @@ impl Server {
                         }
                     }
 
+                    player.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                        player.get_inventory().get_selected_slot() as i8,
+                    )).await;
+
                     Some((player, world.clone()))
                 } else {
                     None
@@ -497,7 +503,7 @@ impl Server {
     pub async fn get_random_player(&self) -> Option<Arc<Player>> {
         let players = self.get_all_players().await;
 
-        players.choose(&mut rand::thread_rng()).map(Arc::<_>::clone)
+        players.choose(&mut rand::rng()).map(Arc::<_>::clone)
     }
 
     /// Searches for a player by their UUID across all worlds.

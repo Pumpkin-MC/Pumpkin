@@ -59,7 +59,7 @@ const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
 /// 2. Mojang's servers verify the client's credentials and add the player to the their Servers
 /// 3. Now our server will send a Request to the Session servers and check if the Player has joined the Session Server .
 ///
-/// See <https://pumpkinmc.org/developer/authentication.html>
+/// See <https://pumpkinmc.org/developer/networking/authentication>
 pub async fn authenticate(
     username: &str,
     server_hash: &str,
