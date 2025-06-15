@@ -75,12 +75,11 @@ impl PumpkinBlock for CandleBlock {
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        println!("use_with_item");
         let (block, state) = world.get_block_and_block_state(&location).await;
         let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
 
         match item.id {
-            id if id >= Item::CANDLE.id && id <= Item::BLACK_CANDLE.id => {
+            id if (id >= Item::CANDLE.id && id <= Item::BLACK_CANDLE.id) && item.id == block.id => {
                 if properties.candles.to_index() < 3 {
                     properties.candles = Integer1To4::from_index(properties.candles.to_index() + 1);
                 }
@@ -121,7 +120,6 @@ impl PumpkinBlock for CandleBlock {
         _server: &Server,
         world: &Arc<World>,
     ) {
-        println!("normal_use");
         let (block, state) = world.get_block_and_block_state(&location).await;
         let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
 
@@ -155,14 +153,17 @@ impl PumpkinBlock for CandleBlock {
 
     async fn can_update_at(
         &self,
-        _world: &World,
+        world: &World,
         block: &Block,
         state_id: BlockStateId,
-        _block_pos: &BlockPos,
+        block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: &SUseItemOn,
+        player: &Player,
     ) -> bool {
+        let b = world.get_block(&block_pos).await;
         player.get_entity().pose.load() != EntityPose::Crouching
             && CandleLikeProperties::from_state_id(state_id, block).candles != Integer1To4::L4
+            && block.id == b.id // only the same color can update
     }
 }
