@@ -22,6 +22,7 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
+use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -39,9 +40,9 @@ use pumpkin_protocol::client::play::{
     CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
     CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition,
     CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
+    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
+    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -1477,6 +1478,16 @@ impl Player {
         }
     }
 
+    pub async fn swap_item(&self) {
+        let (main_hand_item, off_hand_item) = self.inventory.swap_item().await;
+        let equipment = &[
+            (EquipmentSlot::MAIN_HAND, main_hand_item),
+            (EquipmentSlot::OFF_HAND, off_hand_item),
+        ];
+        self.living_entity.send_equipment_changes(equipment).await;
+        // todo this.player.stopUsingItem();
+    }
+
     pub async fn send_system_message(&self, text: &TextComponent) {
         self.send_system_message_raw(text, false).await;
     }
@@ -1900,13 +1911,24 @@ impl NBTStorage for PlayerInventory {
         nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::new();
-
-        for i in 0..self.main_inventory.len() {
-            let stack = self.main_inventory[i].lock().await;
+        let mut vec: Vec<NbtTag> = Vec::with_capacity(41);
+        for (i, item) in self.main_inventory.iter().enumerate() {
+            let stack = item.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", i as i8);
+                stack.write_item_stack(&mut item_compound);
+                vec.push(NbtTag::Compound(item_compound));
+            }
+        }
+
+        for (i, slot) in &self.equipment_slots {
+            let equipment_binding = self.entity_equipment.lock().await;
+            let stack_binding = equipment_binding.get(slot);
+            let stack = stack_binding.lock().await;
+            if !stack.is_empty() {
+                let mut item_compound = NbtCompound::new();
+                item_compound.put_byte("Slot", *i as i8);
                 stack.write_item_stack(&mut item_compound);
                 vec.push(NbtTag::Compound(item_compound));
             }
@@ -1919,7 +1941,6 @@ impl NBTStorage for PlayerInventory {
     async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
         // Read selected hotbar slot
         self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
-
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
             for tag in inventory_list {
@@ -2450,6 +2471,10 @@ impl InventoryPlayer for Player {
     }
 
     async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory) {
+        self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot) {
         self.client.enqueue_packet(packet).await;
     }
 }

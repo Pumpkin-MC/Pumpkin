@@ -1245,8 +1245,11 @@ impl Player {
                 Status::DropItemStack => {
                     self.drop_held_item(true).await;
                 }
-                Status::ShootArrowOrFinishEating | Status::SwapItem => {
+                Status::ShootArrowOrFinishEating => {
                     log::debug!("todo");
+                }
+                Status::SwapItem => {
+                    self.swap_item().await;
                 }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
@@ -1343,18 +1346,6 @@ impl Player {
             return Ok(());
         }
         if !sneaking {
-            server
-                .item_registry
-                .use_on_block(
-                    held_item.lock().await.item,
-                    self,
-                    location,
-                    face,
-                    &block,
-                    server,
-                )
-                .await;
-            self.update_sequence(use_item_on.sequence.0);
             let item_stack = held_item.lock().await;
             let item = item_stack.item;
             drop(item_stack);
@@ -1368,6 +1359,18 @@ impl Player {
                     return Ok(());
                 }
             }
+            server
+                .item_registry
+                .use_on_block(
+                    held_item.lock().await.item,
+                    self,
+                    location,
+                    face,
+                    &block,
+                    server,
+                )
+                .await;
+            self.update_sequence(use_item_on.sequence.0);
         }
 
         // Check if the item is a block, because not every item can be placed :D
@@ -1548,7 +1551,7 @@ impl Player {
     }
 
     const WORLD_LOWEST_Y: i8 = -64;
-    const WORLD_MAX_Y: u16 = 384;
+    const WORLD_MAX_Y: u16 = 320;
 
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(

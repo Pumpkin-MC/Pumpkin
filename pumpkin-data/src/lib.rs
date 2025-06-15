@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 #[rustfmt::skip]
 #[path = "generated/item.rs"]
 pub mod item;

@@ -139,10 +139,9 @@ impl Weather {
                 }
             } else if self.thundering {
                 self.thunder_time =
-                    rand::thread_rng().gen_range(THUNDER_DURATION_MIN..=THUNDER_DURATION_MAX);
+                    rand::rng().random_range(THUNDER_DURATION_MIN..=THUNDER_DURATION_MAX);
             } else {
-                self.thunder_time =
-                    rand::thread_rng().gen_range(THUNDER_DELAY_MIN..=THUNDER_DELAY_MAX);
+                self.thunder_time = rand::rng().random_range(THUNDER_DELAY_MIN..=THUNDER_DELAY_MAX);
             }
 
             // Handle rain timing
@@ -152,10 +151,9 @@ impl Weather {
                     self.raining = !self.raining;
                 }
             } else if self.raining {
-                self.rain_time =
-                    rand::thread_rng().gen_range(RAIN_DURATION_MIN..=RAIN_DURATION_MAX);
+                self.rain_time = rand::rng().random_range(RAIN_DURATION_MIN..=RAIN_DURATION_MAX);
             } else {
-                self.rain_time = rand::thread_rng().gen_range(RAIN_DELAY_MIN..=RAIN_DELAY_MAX);
+                self.rain_time = rand::rng().random_range(RAIN_DELAY_MIN..=RAIN_DELAY_MAX);
             }
         }
     }

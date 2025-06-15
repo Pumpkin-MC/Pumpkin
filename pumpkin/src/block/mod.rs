@@ -204,9 +204,9 @@ pub async fn drop_loot(
 async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
     let height = EntityType::ITEM.dimension[1] / 2.0;
     let pos = Vector3::new(
-        f64::from(pos.0.x) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
-        f64::from(pos.0.y) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25) - f64::from(height),
-        f64::from(pos.0.z) + 0.5 + rand::thread_rng().gen_range(-0.25..0.25),
+        f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
+        f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
+        f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
     );
 
     let entity = world.create_entity(pos, EntityType::ITEM);
