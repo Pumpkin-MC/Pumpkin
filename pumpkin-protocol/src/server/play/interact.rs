@@ -52,7 +52,7 @@ impl ServerPacket for SInteract {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ActionType {
     Interact,
     Attack,
