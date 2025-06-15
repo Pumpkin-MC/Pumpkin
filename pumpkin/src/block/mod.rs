@@ -72,6 +72,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
+use crate::block::blocks::candle::CandleBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
@@ -135,6 +136,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
     manager.register(EndPortalFrameBlock);
+    manager.register(CandleBlock);
 
     // Fire
     manager.register(SoulFireBlock);
