@@ -6,7 +6,9 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties, CandleLikeProperties};
+use pumpkin_data::block_properties::{
+    BlockProperties, CampfireLikeProperties, CandleLikeProperties,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
@@ -85,7 +87,7 @@ impl PumpkinItem for FlintAndSteelItem {
             }
             _ => {
                 let pos = location.offset(face.to_offset());
-                
+
                 if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                     place_fire(&pos, &world).await;
                     play_flint_and_steel_use_sound(&player, &pos).await;

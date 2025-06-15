@@ -28,9 +28,9 @@ impl FireBlockBase {
     pub fn can_place_on(block: &Block) -> bool {
         // Make sure the block below is not a fire block or fluid block
         block.id != Block::SOUL_FIRE.id
-        && block.id != Block::FIRE.id
-        && block.id != Block::WATER.id
-        && block.id != Block::LAVA.id
+            && block.id != Block::FIRE.id
+            && block.id != Block::WATER.id
+            && block.id != Block::LAVA.id
     }
 
     pub async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
