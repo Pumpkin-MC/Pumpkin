@@ -1,83 +1,63 @@
-use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
-use pumpkin_data::item::Item;
-use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
-use pumpkin_inventory::screen_handler::ScreenHandler;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
-use pumpkin_world::world::BlockFlags;
-use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
-use rsa::signature::Verifier;
-use sha1::Sha1;
-
 use std::num::NonZeroU8;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
+use rsa::signature::Verifier;
+use sha1::Sha1;
+use thiserror::Error;
+
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_data::block_properties::{
+    BlockProperties, WaterLikeProperties, get_block_by_item, get_block_collision_shapes,
+};
+use pumpkin_data::entity::{EntityType, entity_from_egg};
+use pumpkin_data::item::Item;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockDirection};
+use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::equipment_slot::EquipmentSlot;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::client::play::{
+    Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
+    COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
+    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
+    PlayerAction,
+};
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::server::play::{
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChatCommand, SChatMessage, SChunkBatch,
+    SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
+    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+};
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::{GameMode, text::TextComponent};
+use pumpkin_world::block::entities::BlockEntity;
+use pumpkin_world::block::entities::command_block::CommandBlockEntity;
+use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
+
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
+use crate::command::CommandSender;
 use crate::entity::mob;
-use crate::entity::player::ChatSession;
+use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
+use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::server::seasonal_events;
-use crate::world::World;
-use crate::{
-    command::CommandSender,
-    entity::player::{ChatMode, Hand, Player},
-    error::PumpkinError,
-    server::Server,
-    world::chunker,
-};
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::entity::{EntityType, entity_from_egg};
-use pumpkin_data::sound::Sound;
-use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{
-    Block,
-    block_properties::{get_block_by_item, get_block_collision_shapes},
-};
-
-use pumpkin_data::BlockDirection;
-use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::client::play::{
-    CBlockUpdate, CEntityPositionSync, COpenSignEditor, CPlayerInfoUpdate, CPlayerPosition,
-    CSetSelectedSlot, CSystemChatMessage, InitChat, PlayerAction,
-};
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::server::play::{
-    CommandBlockMode, FLAG_ON_GROUND, SChunkBatch, SCookieResponse as SPCookieResponse,
-    SPlayerSession, SSetCommandBlock, SUpdateSign,
-};
-use pumpkin_protocol::{
-    client::play::{
-        Animation, CCommandSuggestions, CEntityAnimation, CHeadRot, CPingResponse,
-        CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
-    },
-    server::play::{
-        Action, ActionType, SChatCommand, SChatMessage, SClientCommand, SClientInformationPlay,
-        SCloseContainer, SCommandSuggestion, SConfirmTeleport, SInteract, SKeepAlive,
-        SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
-        SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SSetCreativeSlot, SSetHeldItem,
-        SSetPlayerGround, SSwingArm, SUseItem, SUseItemOn, Status,
-    },
-};
-use pumpkin_util::math::polynomial_rolling_hash;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::text::color::NamedColor;
-use pumpkin_util::{
-    GameMode,
-    math::{vector3::Vector3, wrap_degrees},
-    text::TextComponent,
-};
-use pumpkin_world::block::entities::sign::SignBlockEntity;
-use pumpkin_world::item::ItemStack;
-
-use thiserror::Error;
+use crate::server::{Server, seasonal_events};
+use crate::world::{World, chunker};
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -663,8 +643,9 @@ impl Player {
                         entity.set_sprinting(false).await;
                     }
                 }
-                pumpkin_protocol::server::play::Action::LeaveBed
-                | pumpkin_protocol::server::play::Action::StartHorseJump
+                pumpkin_protocol::server::play::Action::LeaveBed => self.wake_up().await,
+
+                pumpkin_protocol::server::play::Action::StartHorseJump
                 | pumpkin_protocol::server::play::Action::StopHorseJump
                 | pumpkin_protocol::server::play::Action::OpenVehicleInventory => {
                     log::debug!("todo");
@@ -710,7 +691,7 @@ impl Player {
         world
             .broadcast_packet_except(
                 &[self.gameprofile.id],
-                &CEntityAnimation::new(id.into(), animation as u8),
+                &CEntityAnimation::new(id.into(), animation),
             )
             .await;
     }
@@ -1264,8 +1245,11 @@ impl Player {
                 Status::DropItemStack => {
                     self.drop_held_item(true).await;
                 }
-                Status::ShootArrowOrFinishEating | Status::SwapItem => {
+                Status::ShootArrowOrFinishEating => {
                     log::debug!("todo");
+                }
+                Status::SwapItem => {
+                    self.swap_item().await;
                 }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
@@ -1362,18 +1346,6 @@ impl Player {
             return Ok(());
         }
         if !sneaking {
-            server
-                .item_registry
-                .use_on_block(
-                    held_item.lock().await.item,
-                    self,
-                    location,
-                    face,
-                    &block,
-                    server,
-                )
-                .await;
-            self.update_sequence(use_item_on.sequence.0);
             let item_stack = held_item.lock().await;
             let item = item_stack.item;
             drop(item_stack);
@@ -1387,6 +1359,18 @@ impl Player {
                     return Ok(());
                 }
             }
+            server
+                .item_registry
+                .use_on_block(
+                    held_item.lock().await.item,
+                    self,
+                    location,
+                    face,
+                    &block,
+                    server,
+                )
+                .await;
+            self.update_sequence(use_item_on.sequence.0);
         }
 
         // Check if the item is a block, because not every item can be placed :D
@@ -1475,9 +1459,7 @@ impl Player {
                 .await
                 .set_stack(item_stack)
                 .await;
-            player_screen_handler
-                .set_received_stack(packet.slot as usize, item_stack)
-                .await;
+            player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
         } else if is_negative && is_legal {
             // Item drop
@@ -1567,7 +1549,7 @@ impl Player {
     }
 
     const WORLD_LOWEST_Y: i8 = -64;
-    const WORLD_MAX_Y: u16 = 384;
+    const WORLD_MAX_Y: u16 = 320;
 
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(

@@ -12,12 +12,12 @@ use pumpkin_data::{
 };
 use pumpkin_macros::default_block_state;
 use pumpkin_util::{
+    HeightMap,
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
 
 use crate::{
-    HeightMap,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
     block::RawBlockState,
     chunk::CHUNK_AREA,
@@ -139,7 +139,12 @@ impl<'a> ProtoChunk<'a> {
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(settings.sea_level, WATER_BLOCK),
+            FluidLevel::new(
+                settings.sea_level,
+                RawBlockState {
+                    state_id: settings.default_fluid.get_state().unwrap().id,
+                },
+            ),
             FluidLevel::new(-54, LAVA_BLOCK), // this is always the same for every dimension
         ));
 
@@ -545,6 +550,24 @@ impl<'a> ProtoChunk<'a> {
 
             self.noise_sampler.swap_buffers();
         }
+    }
+
+    pub fn generate_entities(&self) {
+        let start_x = self.start_block_x();
+        let start_z = self.start_block_z();
+
+        let population_seed =
+            Xoroshiro::get_population_seed(self.random_config.seed, start_x, start_z);
+        let _random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(population_seed));
+        let _biome = self.get_biome(&Vector3::new(
+            start_x,
+            self.bottom_section_coord() as i32 + self.height() as i32 - 1,
+            start_z,
+        ));
+        // while random.next_f32() < biome.creature_spawn_probability {
+
+        // }
+        todo!()
     }
 
     pub fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {

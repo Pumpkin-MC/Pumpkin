@@ -3,6 +3,7 @@ use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
 use num_traits::{Float, Num};
 
+use super::position::BlockPos;
 use super::vector2::Vector2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
@@ -46,6 +47,14 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
             x: self.x - other.x,
             y: self.y - other.y,
             z: self.z - other.z,
+        }
+    }
+
+    pub fn sub_raw(&self, x: T, y: T, z: T) -> Self {
+        Vector3 {
+            x: self.x - x,
+            y: self.y - y,
+            z: self.z - z,
         }
     }
 
@@ -103,6 +112,22 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         let delta_y = self.y - y;
         let delta_z = self.z - z;
         delta_x * delta_x + delta_y * delta_y + delta_z * delta_z
+    }
+
+    pub fn is_within_bounds(&self, block_pos: Self, x: T, y: T, z: T) -> bool {
+        let min_x = block_pos.x - x;
+        let max_x = block_pos.x + x;
+        let min_y = block_pos.y - y;
+        let max_y = block_pos.y + y;
+        let min_z = block_pos.z - z;
+        let max_z = block_pos.z + z;
+
+        self.x >= min_x
+            && self.x <= max_x
+            && self.y >= min_y
+            && self.y <= max_y
+            && self.z >= min_z
+            && self.z <= max_z
     }
 }
 
@@ -219,6 +244,15 @@ where
             x: x.round() as i32,
             z: z.round() as i32,
         }
+    }
+}
+
+impl<T: Math + Copy> Vector3<T>
+where
+    T: Into<f64>,
+{
+    pub fn to_block_pos(&self) -> BlockPos {
+        BlockPos(self.to_i32())
     }
 }
 

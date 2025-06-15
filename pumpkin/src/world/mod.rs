@@ -41,11 +41,9 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
+use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::client::play::{
-    CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
-};
 use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
@@ -56,6 +54,12 @@ use pumpkin_protocol::{
         FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
     },
     server::play::SChatMessage,
+};
+use pumpkin_protocol::{
+    client::play::{
+        CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, CSetEquipment, MetaDataType, Metadata,
+    },
+    codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_protocol::{
     client::play::{
@@ -81,7 +85,7 @@ use pumpkin_world::{
     world::GetBlockError,
 };
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::{Rng, thread_rng};
+use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;
@@ -324,6 +328,15 @@ impl World {
     where
         P: ClientPacket,
     {
+        let current_players = self.players.read().await;
+        let players: Vec<_> = current_players
+            .iter()
+            .filter(|c| !except.contains(c.0))
+            .collect();
+        if players.is_empty() {
+            return;
+        }
+
         let mut packet_buf = Vec::new();
         if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
@@ -331,8 +344,7 @@ impl World {
         }
         let packet_data: Bytes = packet_buf.into();
 
-        let current_players = self.players.read().await;
-        for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
+        for (_, player) in players {
             player.client.enqueue_packet_data(packet_data.clone()).await;
         }
     }
@@ -366,7 +378,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = thread_rng().r#gen::<f64>();
+        let seed = rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
     }
@@ -393,18 +405,28 @@ impl World {
         self.flush_synced_block_events().await;
 
         // world ticks
-        {
-            let mut level_time = self.level_time.lock().await;
-            level_time.tick_time();
-            if level_time.world_age % 20 == 0 {
-                level_time.send_time(self).await;
-            }
-        }
+        let mut level_time = self.level_time.lock().await;
+        level_time.tick_time();
+        let mut weather = self.weather.lock().await;
+        weather.tick_weather(self).await;
 
-        {
-            let mut weather = self.weather.lock().await;
-            weather.tick_weather(self).await;
-        };
+        if self.should_skip_night().await {
+            let time = level_time.time_of_day + 24000;
+            level_time.set_time(time - time % 24000);
+            level_time.send_time(self).await;
+
+            for player in self.players.read().await.values() {
+                player.wake_up().await;
+            }
+
+            if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                weather.reset_weather_cycle(self).await;
+            }
+        } else if level_time.world_age % 20 == 0 {
+            level_time.send_time(self).await;
+        }
+        drop(level_time);
+        drop(weather);
 
         self.tick_scheduled_block_ticks().await;
 
@@ -563,7 +585,7 @@ impl World {
                 false,
                 false,
                 None,
-                0.into(),
+                VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                 self.sea_level.into(),
                 // This should stay true even when reports are disabled.
                 // It prevents the annoying popup when joining the server.
@@ -725,8 +747,8 @@ impl World {
                     gameprofile.id,
                     i32::from(EntityType::PLAYER.id).into(),
                     pos,
-                    entity.yaw.load(),
                     entity.pitch.load(),
+                    entity.yaw.load(),
                     entity.head_yaw.load(),
                     0.into(),
                     entity.velocity.load(),
@@ -752,6 +774,7 @@ impl World {
                 meta.serialize(&mut serializer).unwrap();
                 buf.extend(serializer_buf);
             }
+            // END
             buf.put_u8(255);
             player
                 .client
@@ -817,6 +840,32 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        self.send_player_equipment(&player).await;
+    }
+
+    async fn send_player_equipment(&self, from: &Player) {
+        let mut equipment_list = Vec::new();
+
+        equipment_list.push((
+            EquipmentSlot::MAIN_HAND.discriminant(),
+            *from.inventory.held_item().lock().await,
+        ));
+
+        for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
+            let item_guard = item_arc_mutex.lock().await;
+            let item_stack = *item_guard;
+            equipment_list.push((slot.discriminant(), item_stack));
+        }
+
+        let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
+            .iter()
+            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(*stack)))
+            .collect();
+        self.broadcast_packet_except(
+            &[from.get_entity().entity_uuid],
+            &CSetEquipment::new(from.entity_id().into(), equipment),
+        )
+        .await;
     }
 
     pub async fn send_world_info(
@@ -927,27 +976,46 @@ impl World {
 
         // Teleport
         let info = &self.level_info.read().await;
-        let mut position = Vector3::new(
-            f64::from(info.spawn_x),
-            f64::from(info.spawn_y),
-            f64::from(info.spawn_z),
-        );
-        let yaw = info.spawn_angle;
         let pitch = 0.0;
+        let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
+            respawn
+        } else {
+            let top = self
+                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                .await;
 
-        let top = self
-            .get_top_block(Vector2::new(position.x as i32, position.z as i32))
-            .await;
-        position.y = f64::from(top + 1);
+            (
+                Vector3::new(info.spawn_x.into(), (top + 1).into(), info.spawn_z.into()),
+                info.spawn_angle,
+            )
+        };
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.clone().request_teleport(position, yaw, pitch).await;
-
+        player.request_teleport(position, yaw, pitch).await;
         player.living_entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
         self.send_world_info(player, position, yaw, pitch).await;
+    }
+
+    /// Returns true if enough players are sleeping and we should skip the night.
+    async fn should_skip_night(&self) -> bool {
+        let players = self.players.read().await;
+
+        let player_count = players.len();
+        let sleeping_player_count = players
+            .values()
+            .filter(|player| {
+                player
+                    .sleeping_since
+                    .load()
+                    .is_some_and(|since| since >= 100)
+            })
+            .count();
+
+        // TODO: sleep ratio
+        sleeping_player_count == player_count
     }
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
@@ -1097,9 +1165,8 @@ impl World {
 
     /// Gets a `Player` by a username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
-        let lowercase = name.to_lowercase();
         for player in self.players.read().await.values() {
-            if player.gameprofile.name.to_lowercase() == lowercase {
+            if player.gameprofile.name.eq_ignore_ascii_case(name) {
                 return Some(player.clone());
             }
         }

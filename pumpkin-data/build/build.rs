@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use std::{fs, path::Path, process::Command};
+use std::{fs, io::Write, path::Path, process::Command};
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
@@ -76,9 +76,17 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     let path = Path::new(OUT_DIR).join(out_file);
     let code = content.to_string();
 
-    fs::write(&path, code).expect("Failed to write to fs");
+    let mut file = fs::File::create(&path).unwrap();
+    if let Err(e) = file.write_all(code.as_bytes()) {
+        println!("cargo::error={}", e);
+    }
 
     // Try to format the output for debugging purposes.
     // Doesn't matter if rustfmt is unavailable.
-    let _ = Command::new("rustfmt").arg(path).output();
+    let _ = Command::new("rustfmt").arg(&path).output();
+    // Try to auto optimize using clippy.
+    // Doesn't matter if rustfmt is unavailable.
+    let _ = Command::new("cargo clippy --fix --allow-dirty")
+        .arg(&path)
+        .output();
 }

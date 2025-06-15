@@ -5,6 +5,7 @@ pub mod flowerbed;
 pub mod leaf_litter;
 pub mod lily_pad;
 pub mod mushroom_plant;
+pub mod roots;
 pub mod sapling;
 pub mod short_plant;
 pub mod tall_plant;

@@ -114,7 +114,7 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
         match self {
             Self::Empty => Vec::new(),
             Self::Item(item_entry) => {
-                let key = &item_entry.name.replace("minecraft:", "");
+                let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
                 vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
             }
             Self::LootTable => todo!(),
@@ -160,9 +160,9 @@ impl LootFunctionNumberProviderExt for LootFunctionNumberProvider {
     fn generate(&self) -> f32 {
         match self {
             Self::Constant { value } => *value,
-            Self::Uniform { min, max } => rand::thread_rng().gen_range(*min..=*max),
+            Self::Uniform { min, max } => rand::rng().random_range(*min..=*max),
             Self::Binomial { n, p } => (0..n.floor() as u32).fold(0.0, |c, _| {
-                if rand::thread_rng().gen_bool(f64::from(*p)) {
+                if rand::rng().random_bool(f64::from(*p)) {
                     c + 1.0
                 } else {
                     c

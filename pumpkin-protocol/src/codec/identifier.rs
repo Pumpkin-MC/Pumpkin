@@ -26,6 +26,9 @@ impl Identifier {
             path: path.to_string(),
         }
     }
+    pub fn get(&self) -> String {
+        format!("{}:{}", self.namespace, self.path)
+    }
 }
 impl Identifier {
     /// The maximum number of bytes an `Identifier` is the same as for a normal `String`.
