@@ -4,7 +4,9 @@ use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::block_properties::{BlockProperties, CandleLikeProperties};
+use pumpkin_data::block_properties::{
+    BlockProperties, CampfireLikeProperties, CandleLikeProperties,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection};
@@ -50,6 +52,27 @@ impl PumpkinItem for FireChargeItem {
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
+                } else {
+                    let pos = location.offset(face.to_offset());
+
+                    place_fire(&pos, &world).await;
+                    play_fire_charge_use_sound(&player, &pos).await;
+                }
+            }
+            id if id == Block::CAMPFIRE.id || id == Block::SOUL_CAMPFIRE.id => {
+                let mut properties = CampfireLikeProperties::from_state_id(state.id, &block);
+                if !properties.lit && !properties.waterlogged {
+                    properties.lit = true;
+
+                    world
+                        .set_block_state(
+                            &location,
+                            properties.to_state_id(&block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+
+                    play_fire_charge_use_sound(&player, &location).await;
                 } else {
                     let pos = location.offset(face.to_offset());
 
