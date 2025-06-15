@@ -26,13 +26,11 @@ impl FireBlockBase {
 
     #[must_use]
     pub fn can_place_on(block: &Block) -> bool {
-        let block = block.clone();
-
         // Make sure the block below is not a fire block or fluid block
-        block != Block::SOUL_FIRE
-            && block != Block::FIRE
-            && block != Block::WATER
-            && block != Block::LAVA
+        block.id != Block::SOUL_FIRE.id
+        && block.id != Block::FIRE.id
+        && block.id != Block::WATER.id
+        && block.id != Block::LAVA.id
     }
 
     pub async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {

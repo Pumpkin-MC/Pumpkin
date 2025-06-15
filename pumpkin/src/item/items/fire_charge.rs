@@ -5,7 +5,7 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{
-    BlockProperties, CampfireLikeProperties, CandleLikeProperties, WaterCauldronLikeProperties, WaterLikeProperties
+    BlockProperties, CampfireLikeProperties, CandleLikeProperties
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -55,8 +55,10 @@ impl PumpkinItem for FireChargeItem {
                 } else {
                     let pos = location.offset(face.to_offset());
 
-                    place_fire(&pos, &world).await;
-                    play_fire_charge_use_sound(&player, &pos).await;
+                    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                        place_fire(&pos, &world).await;
+                        play_fire_charge_use_sound(&player, &pos).await;
+                    }
                 }
             }
             id if id == Block::CAMPFIRE.id || id == Block::SOUL_CAMPFIRE.id => {
@@ -76,30 +78,30 @@ impl PumpkinItem for FireChargeItem {
                 } else {
                     let pos = location.offset(face.to_offset());
 
-                    place_fire(&pos, &world).await;
-                    play_fire_charge_use_sound(&player, &pos).await;
+                    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                        place_fire(&pos, &world).await;
+                        play_fire_charge_use_sound(&player, &pos).await;
+                    }
                 }
             }
             _ => {
                 let pos = location.offset(face.to_offset());
                 
-                // FIXME: placing underwater and on top of waterlogged blocks
-
-                place_fire(&pos, &world).await;
-                play_fire_charge_use_sound(&player, &pos).await;
+                if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                    place_fire(&pos, &world).await;
+                    play_fire_charge_use_sound(&player, &pos).await;
+                }
             }
         }
     }
 }
 
 pub(crate) async fn place_fire(pos: &BlockPos, world: &Arc<World>) {
-    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
-        let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+    let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
 
-        world
-            .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
-            .await;
-    }
+    world
+        .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
+        .await;
 }
 
 async fn play_fire_charge_use_sound(player: &Player, pos: &BlockPos) {

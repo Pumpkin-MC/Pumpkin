@@ -1,3 +1,4 @@
+use crate::block::blocks::fire::FireBlockBase;
 use crate::entity::player::Player;
 use crate::item::items::fire_charge::place_fire;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -53,8 +54,10 @@ impl PumpkinItem for FlintAndSteelItem {
                 } else {
                     let pos = location.offset(face.to_offset());
 
-                    place_fire(&pos, &world).await;
-                    play_flint_and_steel_use_sound(&player, &pos).await;
+                    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                        place_fire(&pos, &world).await;
+                        play_flint_and_steel_use_sound(&player, &pos).await;
+                    }
                 }
             }
             id if id == Block::CAMPFIRE.id || id == Block::SOUL_CAMPFIRE.id => {
@@ -74,17 +77,19 @@ impl PumpkinItem for FlintAndSteelItem {
                 } else {
                     let pos = location.offset(face.to_offset());
 
-                    place_fire(&pos, &world).await;
-                    play_flint_and_steel_use_sound(&player, &pos).await;
+                    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                        place_fire(&pos, &world).await;
+                        play_flint_and_steel_use_sound(&player, &pos).await;
+                    }
                 }
             }
             _ => {
                 let pos = location.offset(face.to_offset());
                 
-                // FIXME: placing underwater and on top of waterlogged blocks
-                
-                place_fire(&pos, &world).await;
-                play_flint_and_steel_use_sound(&player, &pos).await;
+                if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                    place_fire(&pos, &world).await;
+                    play_flint_and_steel_use_sound(&player, &pos).await;
+                }
             }
         }
     }
