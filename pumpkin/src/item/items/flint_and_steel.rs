@@ -5,7 +5,7 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, CandleLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties, CandleLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
@@ -57,8 +57,32 @@ impl PumpkinItem for FlintAndSteelItem {
                     play_flint_and_steel_use_sound(&player, &pos).await;
                 }
             }
+            id if id == Block::CAMPFIRE.id || id == Block::SOUL_CAMPFIRE.id => {
+                let mut properties = CampfireLikeProperties::from_state_id(state.id, &block);
+                if !properties.lit && !properties.waterlogged {
+                    properties.lit = true;
+
+                    world
+                        .set_block_state(
+                            &location,
+                            properties.to_state_id(&block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+
+                    play_flint_and_steel_use_sound(&player, &location).await;
+                } else {
+                    let pos = location.offset(face.to_offset());
+
+                    place_fire(&pos, &world).await;
+                    play_flint_and_steel_use_sound(&player, &pos).await;
+                }
+            }
             _ => {
                 let pos = location.offset(face.to_offset());
+                
+                // FIXME: placing underwater and on top of waterlogged blocks
+                
                 place_fire(&pos, &world).await;
                 play_flint_and_steel_use_sound(&player, &pos).await;
             }

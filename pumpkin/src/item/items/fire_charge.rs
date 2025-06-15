@@ -5,7 +5,7 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{
-    BlockProperties, CampfireLikeProperties, CandleLikeProperties,
+    BlockProperties, CampfireLikeProperties, CandleLikeProperties, WaterCauldronLikeProperties, WaterLikeProperties
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -82,6 +82,8 @@ impl PumpkinItem for FireChargeItem {
             }
             _ => {
                 let pos = location.offset(face.to_offset());
+                
+                // FIXME: placing underwater and on top of waterlogged blocks
 
                 place_fire(&pos, &world).await;
                 play_fire_charge_use_sound(&player, &pos).await;
