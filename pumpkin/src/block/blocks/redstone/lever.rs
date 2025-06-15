@@ -10,7 +10,10 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -65,6 +68,26 @@ impl PumpkinBlock for LeverBlock {
         }
 
         lever_props.to_state_id(block)
+    }
+
+    async fn can_place_at(
+        &self,
+        _server: Option<&Server>,
+        world: Option<&World>,
+        _block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
+        _block: &Block,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        _use_item_on: Option<&SUseItemOn>,
+    ) -> bool {
+        if let Some(world) = world {
+            let place_block_pos = block_pos.offset(face.to_offset());
+            let place_block_state = world.get_block_state(&place_block_pos).await;
+            place_block_state.is_side_solid(face)
+        } else {
+            false
+        }
     }
 
     async fn use_with_item(
