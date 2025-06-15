@@ -1454,6 +1454,8 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
+        // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
+        let screen_binding = self.current_screen_handler.lock().await;
         let binding = self.inventory.held_item();
         let mut item_stack = binding.lock().await;
 
@@ -1464,8 +1466,7 @@ impl Player {
             item_stack.decrement(drop_amount);
             let selected_slot = self.inventory.get_selected_slot();
             let inv: Arc<dyn Inventory> = self.inventory.clone();
-            let binding = self.current_screen_handler.lock().await;
-            let mut screen_handler = binding.lock().await;
+            let mut screen_handler = screen_binding.lock().await;
             let slot_index = screen_handler
                 .get_slot_index(&inv, selected_slot as usize)
                 .await;
