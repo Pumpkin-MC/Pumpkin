@@ -1472,9 +1472,7 @@ impl Player {
                 .await;
 
             if let Some(slot_index) = slot_index {
-                screen_handler
-                    .set_received_stack(slot_index, *item_stack)
-                    .await;
+                screen_handler.set_received_stack(slot_index, *item_stack);
             }
         }
     }
@@ -1822,12 +1820,10 @@ impl Player {
             .await;
 
         for (key, value) in packet.array_of_changed_slots {
-            screen_handler.set_received_hash(key as usize, value).await;
+            screen_handler.set_received_hash(key as usize, value);
         }
 
-        screen_handler
-            .set_received_cursor_hash(packet.carried_item)
-            .await;
+        screen_handler.set_received_cursor_hash(packet.carried_item);
         screen_handler.enable_sync().await;
 
         if not_in_sync {
