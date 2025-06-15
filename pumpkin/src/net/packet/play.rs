@@ -1603,6 +1603,7 @@ impl Player {
                     &clicked_block_pos,
                     face,
                     &use_item_on,
+                    self,
                 )
                 .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
@@ -1636,6 +1637,7 @@ impl Player {
                             &block_pos,
                             face.opposite(),
                             &use_item_on,
+                            self,
                         )
                         .await
                         .then_some(BlockIsReplacing::Itself(previous_block_state.id))
