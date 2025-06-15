@@ -4,10 +4,13 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
 use pumpkin_data::item::Item;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use rand::{Rng, rng};
 
 pub struct ShovelItem;
 
@@ -58,7 +61,33 @@ impl PumpkinItem for ShovelItem {
             }
         }
         if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
-            // TODO Implements campfire
+            let world = player.world().await;
+            let state = world.get_block_state(&location).await;
+            let mut properties = CampfireLikeProperties::from_state_id(state.id, &block);
+
+            if properties.lit {
+                properties.lit = false;
+
+                world
+                    .set_block_state(
+                        &location,
+                        properties.to_state_id(&block),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+
+                let seed = rng().random::<f64>();
+                player
+                    .play_sound(
+                        Sound::BlockFireExtinguish as u16,
+                        SoundCategory::Ambient,
+                        &location.to_f64(),
+                        0.5,
+                        2.0,
+                        seed,
+                    )
+                    .await;
+            }
         }
     }
 }
