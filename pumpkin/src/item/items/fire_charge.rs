@@ -1,17 +1,14 @@
-use crate::block::blocks::fire::FireBlockBase;
-use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use crate::world::World;
+use crate::{block::blocks::fire::FireBlockBase, item::pumpkin_item::PumpkinItem};
+use crate::entity::player::Player;
+use crate::item::pumpkin_item::ItemMetadata;
 use async_trait::async_trait;
-use pumpkin_data::block_properties::{
-    BlockProperties, CampfireLikeProperties, CandleLikeProperties,
-};
-use pumpkin_data::item::Item;
-use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::BlockDirection;
+use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties, CandleLikeProperties};
+use pumpkin_data::{item::Item, sound::{Sound, SoundCategory}, Block};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockFlags, SimpleWorld};
+use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
 use std::sync::Arc;
 
@@ -38,8 +35,8 @@ impl PumpkinItem for FireChargeItem {
         let (block, state) = world.get_block_and_block_state(&location).await;
 
         match block.id {
-            id if (id >= Block::CANDLE.id && id <= Block::BLACK_CANDLE.id)
-                || (id >= Block::CANDLE_CAKE.id && id <= Block::BLACK_CANDLE_CAKE.id) =>
+            id if (Block::CANDLE.id..=Block::BLACK_CANDLE.id).contains(&id)
+                || (Block::CANDLE_CAKE.id..=Block::BLACK_CANDLE_CAKE.id).contains(&id) =>
             {
                 let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
                 if !properties.lit && !properties.waterlogged {
@@ -57,7 +54,7 @@ impl PumpkinItem for FireChargeItem {
 
                     if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                         place_fire(&pos, &world).await;
-                        play_fire_charge_use_sound(&player, &pos).await;
+                        play_fire_charge_use_sound(player, &pos).await;
                     }
                 }
             }
@@ -74,13 +71,13 @@ impl PumpkinItem for FireChargeItem {
                         )
                         .await;
 
-                    play_fire_charge_use_sound(&player, &location).await;
+                    play_fire_charge_use_sound(player, &location).await;
                 } else {
                     let pos = location.offset(face.to_offset());
 
                     if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                         place_fire(&pos, &world).await;
-                        play_fire_charge_use_sound(&player, &pos).await;
+                        play_fire_charge_use_sound(player, &pos).await;
                     }
                 }
             }
@@ -89,7 +86,7 @@ impl PumpkinItem for FireChargeItem {
 
                 if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                     place_fire(&pos, &world).await;
-                    play_fire_charge_use_sound(&player, &pos).await;
+                    play_fire_charge_use_sound(player, &pos).await;
                 }
             }
         }
@@ -97,10 +94,10 @@ impl PumpkinItem for FireChargeItem {
 }
 
 pub(crate) async fn place_fire(pos: &BlockPos, world: &Arc<World>) {
-    let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+    let fire_block = FireBlockBase::get_fire_type(world, pos).await;
 
     world
-        .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
+        .set_block_state(pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
         .await;
 }
 

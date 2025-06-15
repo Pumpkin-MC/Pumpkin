@@ -39,8 +39,8 @@ impl PumpkinItem for FlintAndSteelItem {
         let (block, state) = world.get_block_and_block_state(&location).await;
 
         match block.id {
-            id if (id >= Block::CANDLE.id && id <= Block::BLACK_CANDLE.id)
-                || (id >= Block::CANDLE_CAKE.id && id <= Block::BLACK_CANDLE_CAKE.id) =>
+            id if (Block::CANDLE.id..=Block::BLACK_CANDLE.id).contains(&id)
+                || (Block::CANDLE_CAKE.id..=Block::BLACK_CANDLE_CAKE.id).contains(&id) =>
             {
                 let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
                 if !properties.lit && !properties.waterlogged {
@@ -58,7 +58,7 @@ impl PumpkinItem for FlintAndSteelItem {
 
                     if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                         place_fire(&pos, &world).await;
-                        play_flint_and_steel_use_sound(&player, &pos).await;
+                        play_flint_and_steel_use_sound(player, &pos).await;
                     }
                 }
             }
@@ -75,13 +75,13 @@ impl PumpkinItem for FlintAndSteelItem {
                         )
                         .await;
 
-                    play_flint_and_steel_use_sound(&player, &location).await;
+                    play_flint_and_steel_use_sound(player, &location).await;
                 } else {
                     let pos = location.offset(face.to_offset());
 
                     if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                         place_fire(&pos, &world).await;
-                        play_flint_and_steel_use_sound(&player, &pos).await;
+                        play_flint_and_steel_use_sound(player, &pos).await;
                     }
                 }
             }
@@ -90,7 +90,7 @@ impl PumpkinItem for FlintAndSteelItem {
 
                 if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                     place_fire(&pos, &world).await;
-                    play_flint_and_steel_use_sound(&player, &pos).await;
+                    play_flint_and_steel_use_sound(player, &pos).await;
                 }
             }
         }

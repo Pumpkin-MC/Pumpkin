@@ -63,7 +63,7 @@ impl PumpkinItem for ShovelItem {
         if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
             let world = player.world().await;
             let state = world.get_block_state(&location).await;
-            let mut properties = CampfireLikeProperties::from_state_id(state.id, &block);
+            let mut properties = CampfireLikeProperties::from_state_id(state.id, block);
 
             if properties.lit {
                 properties.lit = false;
@@ -71,7 +71,7 @@ impl PumpkinItem for ShovelItem {
                 world
                     .set_block_state(
                         &location,
-                        properties.to_state_id(&block),
+                        properties.to_state_id(block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
