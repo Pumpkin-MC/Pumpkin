@@ -1456,9 +1456,7 @@ impl Player {
                 .await
                 .set_stack(item_stack)
                 .await;
-            player_screen_handler
-                .set_received_stack(packet.slot as usize, item_stack)
-                .await;
+            player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
         } else if is_negative && is_legal {
             // Item drop
