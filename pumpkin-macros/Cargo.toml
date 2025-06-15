@@ -12,6 +12,8 @@ pumpkin-data = { path = "../pumpkin-data" }
 serde.workspace = true
 serde_json.workspace = true
 
+proc-macro-error2.workspace = true
+
 heck = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
