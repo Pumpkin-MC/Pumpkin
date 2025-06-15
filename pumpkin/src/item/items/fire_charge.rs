@@ -1,27 +1,28 @@
+use crate::block::blocks::fire::FireBlockBase;
 use crate::entity::player::Player;
-use crate::item::items::fire_charge::place_fire;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
+use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockProperties, CandleLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockFlags, SimpleWorld};
 use rand::{Rng, rng};
+use std::sync::Arc;
 
-pub struct FlintAndSteelItem;
+pub struct FireChargeItem;
 
-impl ItemMetadata for FlintAndSteelItem {
+impl ItemMetadata for FireChargeItem {
     fn ids() -> Box<[u16]> {
-        [Item::FLINT_AND_STEEL.id].into()
+        [Item::FIRE_CHARGE.id].into()
     }
 }
 
 #[async_trait]
-impl PumpkinItem for FlintAndSteelItem {
+impl PumpkinItem for FireChargeItem {
     async fn use_on_block(
         &self,
         _item: &Item,
@@ -31,7 +32,6 @@ impl PumpkinItem for FlintAndSteelItem {
         _block: &Block,
         _server: &Server,
     ) {
-        // TODO: check CampfireBlock, CandleBlock and CandleCakeBlock
         let world = player.world().await;
         let (block, state) = world.get_block_and_block_state(&location).await;
 
@@ -54,19 +54,30 @@ impl PumpkinItem for FlintAndSteelItem {
                     let pos = location.offset(face.to_offset());
 
                     place_fire(&pos, &world).await;
-                    play_flint_and_steel_use_sound(&player, &pos).await;
+                    play_fire_charge_use_sound(&player, &pos).await;
                 }
             }
             _ => {
                 let pos = location.offset(face.to_offset());
+
                 place_fire(&pos, &world).await;
-                play_flint_and_steel_use_sound(&player, &pos).await;
+                play_fire_charge_use_sound(&player, &pos).await;
             }
         }
     }
 }
 
-async fn play_flint_and_steel_use_sound(player: &Player, pos: &BlockPos) {
+pub(crate) async fn place_fire(pos: &BlockPos, world: &Arc<World>) {
+    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+        let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+
+        world
+            .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
+            .await;
+    }
+}
+
+async fn play_fire_charge_use_sound(player: &Player, pos: &BlockPos) {
     let seed = rng().random::<f64>();
     let pitch = rng().random_range(0.8f32..1.2f32);
     player
