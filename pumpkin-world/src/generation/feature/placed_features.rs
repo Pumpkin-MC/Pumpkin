@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::BlockDirection;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::HeightMap;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -15,6 +15,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
 use crate::ProtoChunk;
+use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::height_provider::HeightProvider;
@@ -144,7 +145,7 @@ pub enum PlacementModifier {
     #[serde(rename = "minecraft:noise_threshold_count")]
     NoiseThresholdCount(NoiseThresholdCountPlacementModifier),
     #[serde(rename = "minecraft:count_on_every_layer")]
-    CountOnEveryLayer,
+    CountOnEveryLayer(CountOnEveryLayerPlacementModifier),
     #[serde(rename = "minecraft:environment_scan")]
     EnvironmentScan(EnvironmentScanPlacementModifier),
     #[serde(rename = "minecraft:heightmap")]
@@ -202,7 +203,9 @@ impl PlacementModifier {
                 Box::new(modifier.get_positions(random, pos))
             }
             PlacementModifier::NoiseThresholdCount(modifier) => modifier.get_positions(random, pos),
-            PlacementModifier::CountOnEveryLayer => Box::new(iter::empty()),
+            PlacementModifier::CountOnEveryLayer(modifier) => {
+                modifier.get_positions(random, chunk, pos)
+            }
             PlacementModifier::EnvironmentScan(modifier) => {
                 modifier.get_positions(chunk, block_registry, pos).await
             }
@@ -333,6 +336,74 @@ impl RandomOffsetPlacementModifier {
         let y = pos.0.y + self.y_spread.get(random);
         let z = pos.0.z + self.xz_spread.get(random);
         Box::new(iter::once(BlockPos(Vector3::new(x, y, z))))
+    }
+}
+
+#[derive(Deserialize)]
+pub struct CountOnEveryLayerPlacementModifier {
+    count: IntProvider,
+}
+
+impl CountOnEveryLayerPlacementModifier {
+    pub fn get_positions(
+        &self,
+        random: &mut RandomGenerator,
+        chunk: &ProtoChunk,
+        pos: BlockPos,
+    ) -> Box<dyn Iterator<Item = BlockPos>> {
+        let mut positions = Vec::new(); // Using a Vec to collect results, analogous to Stream.builder()
+        let mut i = 0; // Represents the 'targetY' in findPos
+        let mut bl;
+
+        loop {
+            bl = false;
+            for _j in 0..self.count.get(random) {
+                let x = random.next_bounded_i32(16) + pos.0.x;
+                let z = random.next_bounded_i32(16) + pos.0.z;
+                let y = chunk.top_motion_blocking_block_height_exclusive(&Vector2::new(x, z));
+
+                let n = Self::find_pos(chunk, x, y as i32, z, i);
+
+                if n == i32::MAX {
+                    continue;
+                }
+                positions.push(BlockPos::new(x, n, z));
+                bl = true;
+            }
+            i += 1;
+            if !bl {
+                break;
+            }
+        }
+        Box::new(positions.into_iter())
+    }
+
+    fn find_pos(chunk: &ProtoChunk, x: i32, y: i32, z: i32, target_y: i32) -> i32 {
+        let mut mutable_pos = BlockPos::new(x, y, z);
+        let mut found_count = 0;
+        let mut current_block_state = chunk.get_block_state(&mutable_pos.0);
+
+        for j in (chunk.bottom_y() as i32 + 1..=y).rev() {
+            mutable_pos.0.y = j - 1;
+            let next_block_state = chunk.get_block_state(&mutable_pos.0);
+
+            if !Self::blocks_spawn(&next_block_state)
+                && Self::blocks_spawn(&current_block_state)
+                && next_block_state.to_block() != Block::BEDROCK
+            {
+                if found_count == target_y {
+                    return mutable_pos.0.y + 1;
+                }
+                found_count += 1;
+            }
+            current_block_state = next_block_state;
+        }
+        i32::MAX
+    }
+
+    fn blocks_spawn(state: &RawBlockState) -> bool {
+        let block = state.to_block();
+        state.to_state().is_air() || block == Block::WATER || block == Block::LAVA
     }
 }
 

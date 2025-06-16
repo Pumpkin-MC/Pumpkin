@@ -29,7 +29,7 @@ pub struct FireBlock;
 impl FireBlock {
     #[must_use]
     pub fn get_fire_tick_delay() -> i32 {
-        30 + rand::thread_rng().gen_range(0..10)
+        30 + rand::rng().random_range(0..10)
     }
 }
 
@@ -84,7 +84,7 @@ impl PumpkinBlock for FireBlock {
             if ticks < 0 {
                 base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
             } else if base_entity.entity_type == EntityType::PLAYER {
-                let rnd_ticks = rand::thread_rng().gen_range(1..3);
+                let rnd_ticks = rand::rng().random_range(1..3);
                 base_entity
                     .fire_ticks
                     .store(ticks + rnd_ticks, Ordering::Relaxed);

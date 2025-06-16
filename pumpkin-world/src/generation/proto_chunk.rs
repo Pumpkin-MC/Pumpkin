@@ -139,7 +139,12 @@ impl<'a> ProtoChunk<'a> {
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(settings.sea_level, WATER_BLOCK),
+            FluidLevel::new(
+                settings.sea_level,
+                RawBlockState {
+                    state_id: settings.default_fluid.get_state().unwrap().id,
+                },
+            ),
             FluidLevel::new(-54, LAVA_BLOCK), // this is always the same for every dimension
         ));
 

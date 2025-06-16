@@ -6,7 +6,7 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-        CSetPlayerInventory,
+        CSetPlayerInventory, CSetSelectedSlot,
     },
     codec::item_stack_seralizer::OptionalItemStackHash,
     server::play::SlotActionType,
@@ -50,6 +50,7 @@ pub trait InventoryPlayer: Send + Sync {
     async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
     async fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
     async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
+    async fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot);
 }
 
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
