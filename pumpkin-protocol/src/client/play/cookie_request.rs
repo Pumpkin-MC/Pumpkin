@@ -1,8 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_COOKIE_REQUEST;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 use serde::Serialize;
-
-use crate::codec::resource_location::ResourceLocation;
 
 #[derive(Serialize)]
 #[packet(PLAY_COOKIE_REQUEST)]

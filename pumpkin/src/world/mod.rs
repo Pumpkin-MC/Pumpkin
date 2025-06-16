@@ -44,7 +44,7 @@ use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::codec::resource_location::ResourceLocation;
+use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
@@ -68,7 +68,7 @@ use pumpkin_protocol::{
     },
     codec::var_int::VarInt,
 };
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
@@ -141,7 +141,7 @@ pub struct World {
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in.
-    pub dimension_type: DimensionType,
+    pub dimension_type: VanillaDimensionType,
     pub sea_level: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
@@ -157,17 +157,17 @@ impl World {
     pub fn load(
         level: Level,
         level_info: LevelData,
-        dimension_type: DimensionType,
+        dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
         // TODO
         let generation_settings = match dimension_type {
-            DimensionType::Overworld => GENERATION_SETTINGS
+            VanillaDimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
-            DimensionType::OverworldCaves => todo!(),
-            DimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
-            DimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+            VanillaDimensionType::OverworldCaves => todo!(),
+            VanillaDimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+            VanillaDimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
         };
 
         Self {
@@ -521,12 +521,12 @@ impl World {
     pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
         // TODO: this is bad
         let generation_settings = match self.dimension_type {
-            DimensionType::Overworld => GENERATION_SETTINGS
+            VanillaDimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
-            DimensionType::OverworldCaves => todo!(),
-            DimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
-            DimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+            VanillaDimensionType::OverworldCaves => todo!(),
+            VanillaDimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+            VanillaDimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
         };
         for y in (i32::from(generation_settings.shape.min_y)
             ..=i32::from(generation_settings.shape.height))
@@ -550,7 +550,7 @@ impl World {
         server: &Server,
     ) {
         let dimensions: Vec<ResourceLocation> =
-            server.dimensions.iter().map(DimensionType::name).collect();
+            server.dimensions.iter().map(VanillaDimensionType::resource_location).collect();
 
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
@@ -575,7 +575,7 @@ impl World {
                 true,
                 false,
                 (self.dimension_type as u8).into(),
-                self.dimension_type.name(),
+                self.dimension_type.resource_location(),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -941,7 +941,7 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.last_pos.load();
-        let death_dimension = player.world().await.dimension_type.name();
+        let death_dimension = player.world().await.dimension_type.resource_location();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -956,7 +956,7 @@ impl World {
             .client
             .enqueue_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
-                self.dimension_type.name(),
+                self.dimension_type.resource_location(),
                 biome::hash_seed(self.level.seed.0), // seed
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,

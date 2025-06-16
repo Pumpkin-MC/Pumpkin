@@ -2,9 +2,10 @@ use std::io::Write;
 
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkWriteExt, WritingError};
-use crate::{ClientPacket, codec::resource_location::ResourceLocation};
+use crate::ClientPacket;
 use pumpkin_data::{packet::clientbound::PLAY_STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(PLAY_STOP_SOUND)]
 pub struct CStopSound {

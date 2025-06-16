@@ -15,7 +15,8 @@ use instrument::Instrument;
 use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pig::PigVariant;
-use pumpkin_protocol::{client::config::RegistryEntry, codec::resource_location::ResourceLocation};
+use pumpkin_protocol::client::config::RegistryEntry;
+use pumpkin_util::resource_location::ResourceLocation;
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;
@@ -72,22 +73,23 @@ pub struct SyncedRegistry {
     instrument: IndexMap<String, Instrument>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DimensionType {
-    Overworld,
-    OverworldCaves,
-    TheEnd,
-    TheNether,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DataPool<T> {
     data: T,
     weight: i32,
 }
 
-impl DimensionType {
-    pub fn name(&self) -> ResourceLocation {
+// TODO: remove in favor of numerical registry ids for `minecraft:dimension_type`
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VanillaDimensionType {
+    Overworld,
+    OverworldCaves,
+    TheEnd,
+    TheNether,
+}
+
+impl VanillaDimensionType {
+    pub fn resource_location(&self) -> ResourceLocation {
         match self {
             Self::Overworld => ResourceLocation::vanilla("overworld"),
             Self::OverworldCaves => ResourceLocation::vanilla("overworld_caves"),
@@ -96,8 +98,8 @@ impl DimensionType {
         }
     }
 
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
+    pub fn from_resource_location_string(resource_location: &str) -> Option<Self> {
+        match resource_location {
             "minecraft:overworld" => Some(Self::Overworld),
             "minecraft:overworld_caves" => Some(Self::OverworldCaves),
             "minecraft:the_end" => Some(Self::TheEnd),

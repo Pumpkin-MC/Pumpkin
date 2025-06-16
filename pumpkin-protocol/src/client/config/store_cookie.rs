@@ -1,6 +1,6 @@
-use crate::codec::resource_location::ResourceLocation;
 use pumpkin_data::packet::clientbound::CONFIG_STORE_COOKIE;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 #[derive(serde::Serialize)]
 #[packet(CONFIG_STORE_COOKIE)]

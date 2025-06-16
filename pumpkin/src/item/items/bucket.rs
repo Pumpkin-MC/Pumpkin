@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockState, fluid::Fluid, item::Item};
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
@@ -211,7 +211,7 @@ impl PumpkinItem for FilledBucketItem {
             return;
         };
 
-        if item.id != Item::LAVA_BUCKET.id && world.dimension_type == DimensionType::TheNether {
+        if item.id != Item::LAVA_BUCKET.id && world.dimension_type == VanillaDimensionType::TheNether {
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;

@@ -2,10 +2,10 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 use crate::{
     ServerPacket,
-    codec::resource_location::ResourceLocation,
     ser::{NetworkReadExt, ReadingError},
 };
 

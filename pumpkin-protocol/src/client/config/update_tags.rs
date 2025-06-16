@@ -2,7 +2,6 @@ use std::io::Write;
 
 use crate::{
     ClientPacket,
-    codec::resource_location::ResourceLocation,
     ser::{NetworkWriteExt, WritingError},
 };
 
@@ -13,6 +12,7 @@ use pumpkin_data::{
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {

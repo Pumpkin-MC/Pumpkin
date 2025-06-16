@@ -1,6 +1,6 @@
-use crate::codec::resource_location::ResourceLocation;
 use pumpkin_data::packet::clientbound::PLAY_STORE_COOKIE;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 use serde::Serialize;
 
 /// Stores some arbitrary data on the client, which persists between server transfers.

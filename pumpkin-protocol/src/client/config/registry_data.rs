@@ -1,8 +1,9 @@
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 use serde::Serialize;
 
-use crate::{codec::resource_location::ResourceLocation, ser::network_serialize_no_prefix};
+use crate::ser::network_serialize_no_prefix;
 
 #[derive(Serialize)]
 #[packet(CONFIG_REGISTRY_DATA)]

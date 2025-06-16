@@ -2,11 +2,11 @@ use std::io::Read;
 
 use crate::{
     ServerPacket,
-    codec::resource_location::ResourceLocation,
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(PLAY_COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (play) from the server.

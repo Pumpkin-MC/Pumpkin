@@ -1,11 +1,6 @@
-use std::{
-    io::{Read, Write},
-    num::NonZeroUsize,
-};
+use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
-
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceLocation {
@@ -14,39 +9,31 @@ pub struct ResourceLocation {
 }
 
 impl ResourceLocation {
+/// The maximum number of bytes for a [`ResourceLocation`] is the same as for a normal [`String`].
+    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
+
     pub fn vanilla(path: &str) -> Self {
         Self {
             namespace: "minecraft".to_string(),
             path: path.to_string(),
         }
     }
+
     pub fn pumpkin(path: &str) -> Self {
         Self {
             namespace: "pumpkin".to_string(),
             path: path.to_string(),
         }
     }
-    pub fn get(&self) -> String {
+
+    pub fn as_string(&self) -> String {
         format!("{}:{}", self.namespace, self.path)
     }
 }
-impl ResourceLocation {
-    /// The maximum number of bytes for a [`ResourceLocation`] is the same as for a normal [`String`].
-    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
 
-    pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
-        write.write_string_bounded(&self.to_string(), Self::MAX_SIZE.get())
-    }
-
-    pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
-        let resource_location = read.get_string_bounded(Self::MAX_SIZE.get())?;
-        match resource_location.split_once(":") {
-            Some((namespace, path)) => Ok(ResourceLocation {
-                namespace: namespace.to_string(),
-                path: path.to_string(),
-            }),
-            None => Err(ReadingError::Incomplete("ResourceLocation".to_string())),
-        }
+impl std::fmt::Display for ResourceLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.namespace, self.path)
     }
 }
 
@@ -94,11 +81,5 @@ impl<'de> Deserialize<'de> for ResourceLocation {
             }
         }
         deserializer.deserialize_str(ResourceLocationVisitor)
-    }
-}
-
-impl std::fmt::Display for ResourceLocation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.namespace, self.path)
     }
 }

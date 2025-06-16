@@ -4,12 +4,13 @@ use std::io::{Read, Write};
 use crate::{
     FixedBitSet,
     codec::{
-        bit_set::BitSet, resource_location::ResourceLocation, var_int::VarInt, var_long::VarLong,
+        bit_set::BitSet, var_int::VarInt, var_long::VarLong,
     },
 };
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
+use pumpkin_util::resource_location::ResourceLocation;
 use thiserror::Error;
 pub mod packet;
 pub mod serializer;
@@ -240,7 +241,14 @@ impl<R: Read> NetworkReadExt for R {
     }
 
     fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
-        ResourceLocation::decode(self)
+        let resource_location = self.get_string_bounded(ResourceLocation::MAX_SIZE.get())?;
+        match resource_location.split_once(":") {
+            Some((namespace, path)) => Ok(ResourceLocation {
+                namespace: namespace.to_string(),
+                path: path.to_string(),
+            }),
+            None => Err(ReadingError::Incomplete("ResourceLocation".to_string())),
+        }
     }
 
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
@@ -423,7 +431,7 @@ impl<W: Write> NetworkWriteExt for W {
     }
 
     fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {
-        data.encode(self)
+        self.write_string_bounded(&data.to_string(), ResourceLocation::MAX_SIZE.get())
     }
 
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {

@@ -2,10 +2,10 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::CONFIG_CUSTOM_PAYLOAD;
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 use crate::{
     ServerPacket,
-    codec::resource_location::ResourceLocation,
     ser::{NetworkReadExt, ReadingError},
 };
 const MAX_PAYLOAD_SIZE: usize = 1048576;

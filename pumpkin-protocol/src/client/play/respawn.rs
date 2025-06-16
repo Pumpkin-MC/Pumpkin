@@ -1,9 +1,12 @@
 use pumpkin_data::packet::clientbound::PLAY_RESPAWN;
 use pumpkin_macros::packet;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{
+    math::position::BlockPos,
+    resource_location::ResourceLocation
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{VarInt, codec::resource_location::ResourceLocation};
+use crate::VarInt;
 
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_RESPAWN)]

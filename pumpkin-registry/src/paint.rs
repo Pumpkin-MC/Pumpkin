@@ -1,4 +1,4 @@
-use pumpkin_protocol::codec::resource_location::ResourceLocation;
+use pumpkin_util::resource_location::ResourceLocation;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
