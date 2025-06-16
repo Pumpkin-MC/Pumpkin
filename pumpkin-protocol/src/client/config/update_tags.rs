@@ -29,7 +29,9 @@ impl ClientPacket for CUpdateTags<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(self.tags, |p, registry_key| {
-            p.write_resource_location(&ResourceLocation::vanilla(registry_key.identifier_string()))?;
+            p.write_resource_location(&ResourceLocation::vanilla(
+                registry_key.identifier_string(),
+            ))?;
 
             let values = get_registry_key_tags(registry_key);
             p.write_var_int(&values.len().try_into().map_err(|_| {

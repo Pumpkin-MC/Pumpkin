@@ -681,7 +681,11 @@ impl Player {
     ///
     /// * `sound_id`: An optional [`ResourceLocation`] specifying the sound to stop. If [`None`], all sounds in the specified category (if any) will be stopped.
     /// * `category`: An optional [`SoundCategory`] specifying the sound category to stop. If [`None`], all sounds with the specified resource location (if any) will be stopped.
-    pub async fn stop_sound(&self, sound_id: Option<ResourceLocation>, category: Option<SoundCategory>) {
+    pub async fn stop_sound(
+        &self,
+        sound_id: Option<ResourceLocation>,
+        category: Option<SoundCategory>,
+    ) {
         self.client
             .enqueue_packet(&CStopSound::new(sound_id, category))
             .await;

@@ -3,7 +3,9 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, resource_location::ResourceLocation, var_int::VarInt, var_long::VarLong},
+    codec::{
+        bit_set::BitSet, resource_location::ResourceLocation, var_int::VarInt, var_long::VarLong,
+    },
 };
 
 pub mod deserializer;
