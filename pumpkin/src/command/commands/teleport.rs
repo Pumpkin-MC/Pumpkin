@@ -63,7 +63,7 @@ struct EntitiesToEntityExecutor;
 impl CommandExecutor for EntitiesToEntityExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -79,7 +79,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             if dest_in_range(&pos) {
                 target.teleport(pos, yaw, pitch).await;
             } else {
-                _sender
+                sender
                     .send_message(TextComponent::translate(
                         "commands.teleport.invalidPosition",
                         [],
@@ -98,7 +98,7 @@ struct EntitiesToPosFacingPosExecutor;
 impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -114,7 +114,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
                 target.teleport(pos, yaw, pitch).await;
             }
         } else {
-            _sender
+            sender
                 .send_message(TextComponent::translate(
                     "commands.teleport.invalidPosition",
                     [],
@@ -132,7 +132,7 @@ struct EntitiesToPosFacingEntityExecutor;
 impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -150,7 +150,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
                 target.teleport(pos, yaw, pitch).await;
             }
         } else {
-            _sender
+            sender
                 .send_message(TextComponent::translate(
                     "commands.teleport.invalidPosition",
                     [],
@@ -168,7 +168,7 @@ struct EntitiesToPosWithRotationExecutor;
 impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -183,7 +183,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
                 target.teleport(pos, yaw, pitch).await;
             }
         } else {
-            _sender
+            sender
                 .send_message(TextComponent::translate(
                     "commands.teleport.invalidPosition",
                     [],
@@ -201,7 +201,7 @@ struct EntitiesToPosExecutor;
 impl CommandExecutor for EntitiesToPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -216,7 +216,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
                 target.teleport(pos, yaw, pitch).await;
             }
         } else {
-            _sender
+            sender
                 .send_message(TextComponent::translate(
                     "commands.teleport.invalidPosition",
                     [],
