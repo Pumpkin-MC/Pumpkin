@@ -51,9 +51,7 @@ impl PumpkinBlock for SeaPickleBlock {
         //1:1 vanilla algorithm
         //TODO use pumpkin random
 
-        //let mut i = 5;
         //let mut j = 1;
-        //let mut k = 2;
         let mut count = 0;
         let base_x = location.0.x - 2;
         let mut removed_z = 0;
