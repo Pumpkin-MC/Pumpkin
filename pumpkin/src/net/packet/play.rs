@@ -988,6 +988,10 @@ impl Player {
                 }
                 self.world().await.respawn_player(self, false).await;
 
+                let screen_handler = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler.lock().await;
+                screen_handler.sync_state().await;
+
                 // Restore abilities based on gamemode after respawn
                 let mut abilities = self.abilities.lock().await;
                 abilities.set_for_gamemode(self.gamemode.load());
