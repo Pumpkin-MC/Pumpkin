@@ -346,7 +346,6 @@ impl BlockPos {
                 return Ok(());
             }
 
-            // Calculate bounds
             let min_x = start.0.x.min(end.0.x);
             let max_x = start.0.x.max(end.0.x);
             let min_y = start.0.y.min(end.0.y);
@@ -354,7 +353,6 @@ impl BlockPos {
             let min_z = start.0.z.min(end.0.z);
             let max_z = start.0.z.max(end.0.z);
 
-            // Recursively visit adjacent positions within bounds
             for dx in -1..=1 {
                 for dy in -1..=1 {
                     for dz in -1..=1 {
@@ -365,7 +363,6 @@ impl BlockPos {
                         let next =
                             BlockPos::new(current.0.x + dx, current.0.y + dy, current.0.z + dz);
 
-                        // Check bounds
                         if next.0.x >= min_x
                             && next.0.x <= max_x
                             && next.0.y >= min_y
