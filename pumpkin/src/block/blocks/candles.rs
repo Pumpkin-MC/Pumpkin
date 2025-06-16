@@ -68,15 +68,15 @@ impl PumpkinBlock for CandleBlock {
 
     async fn use_with_item(
         &self,
-        _block: &Block,
+        block: &Block,
         _player: &Player,
         location: BlockPos,
         item: &Item,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let (block, state) = world.get_block_and_block_state(&location).await;
-        let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
+        let state = world.get_block_state(&location).await;
+        let mut properties = CandleLikeProperties::from_state_id(state.id, block);
 
         match item.id {
             id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)
@@ -89,7 +89,7 @@ impl PumpkinBlock for CandleBlock {
                 world
                     .set_block_state(
                         &location,
-                        properties.to_state_id(&block),
+                        properties.to_state_id(block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
@@ -105,7 +105,7 @@ impl PumpkinBlock for CandleBlock {
                 world
                     .set_block_state(
                         &location,
-                        properties.to_state_id(&block),
+                        properties.to_state_id(block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
@@ -116,14 +116,14 @@ impl PumpkinBlock for CandleBlock {
 
     async fn normal_use(
         &self,
-        _block: &Block,
+        block: &Block,
         _player: &Player,
         location: BlockPos,
         _server: &Server,
         world: &Arc<World>,
     ) {
-        let (block, state) = world.get_block_and_block_state(&location).await;
-        let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
+        let state_id = world.get_block_state_id(&location).await;
+        let mut properties = CandleLikeProperties::from_state_id(state_id, block);
 
         if properties.lit {
             properties.lit = false;
@@ -132,7 +132,7 @@ impl PumpkinBlock for CandleBlock {
         world
             .set_block_state(
                 &location,
-                properties.to_state_id(&block),
+                properties.to_state_id(block),
                 BlockFlags::NOTIFY_ALL,
             )
             .await;

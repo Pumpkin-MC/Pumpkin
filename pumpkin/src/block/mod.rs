@@ -73,7 +73,8 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
-use crate::block::blocks::candle::CandleBlock;
+use crate::block::blocks::cake::CakeBlock;
+use crate::block::blocks::candles::CandleBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
@@ -139,6 +140,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndPortalFrameBlock);
     manager.register(CandleBlock);
     manager.register(SeaPickleBlock);
+    manager.register(CakeBlock);
 
     // Fire
     manager.register(SoulFireBlock);

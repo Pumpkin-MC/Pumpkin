@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
-    BlockProperties, CampfireLikeProperties, CandleLikeProperties,
+    BlockProperties, CampfireLikeProperties, CandleLikeProperties, RedstoneOreLikeProperties,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -39,9 +39,7 @@ impl PumpkinItem for FlintAndSteelItem {
         let (block, state) = world.get_block_and_block_state(&location).await;
 
         match block.id {
-            id if (Block::CANDLE.id..=Block::BLACK_CANDLE.id).contains(&id)
-                || (Block::CANDLE_CAKE.id..=Block::BLACK_CANDLE_CAKE.id).contains(&id) =>
-            {
+            id if (Block::CANDLE.id..=Block::BLACK_CANDLE.id).contains(&id) => {
                 let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
                 if !properties.lit && !properties.waterlogged {
                     properties.lit = true;
@@ -60,6 +58,19 @@ impl PumpkinItem for FlintAndSteelItem {
                         place_fire(&pos, &world).await;
                         play_flint_and_steel_use_sound(player, &pos).await;
                     }
+                }
+            }
+            id if (Block::CANDLE_CAKE.id..=Block::BLACK_CANDLE_CAKE.id).contains(&id) => {
+                let mut properties = RedstoneOreLikeProperties::from_state_id(state.id, &block);
+                if !properties.lit {
+                    properties.lit = true;
+                    world
+                        .set_block_state(
+                            &location,
+                            properties.to_state_id(&block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
                 }
             }
             id if id == Block::CAMPFIRE.id || id == Block::SOUL_CAMPFIRE.id => {
