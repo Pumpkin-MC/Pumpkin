@@ -17,7 +17,7 @@ use crate::command::{
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
 ///
 /// Plays a sound at specified position for target players.
-/// - sound: The sound identifier to play
+/// - sound: The sound resource location to play
 /// - source: Sound category (master, music, record, etc.)
 /// - targets: Players who will hear the sound
 /// - pos: Position to play the sound from

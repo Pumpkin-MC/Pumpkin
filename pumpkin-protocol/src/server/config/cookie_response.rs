@@ -5,7 +5,7 @@ use pumpkin_macros::packet;
 
 use crate::{
     ServerPacket,
-    codec::identifier::Identifier,
+    codec::resource_location::ResourceLocation,
     ser::{NetworkReadExt, ReadingError},
 };
 
@@ -13,7 +13,7 @@ use crate::{
 /// Response to a `CCookieRequest` (configuration) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
 pub struct SConfigCookieResponse {
-    pub key: Identifier,
+    pub key: ResourceLocation,
     pub has_payload: bool,
     pub payload: Option<Box<[u8]>>, // 5120,
 }
@@ -24,7 +24,7 @@ impl ServerPacket for SConfigCookieResponse {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 
-        let key = read.get_identifier()?;
+        let key = read.get_resource_location()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {

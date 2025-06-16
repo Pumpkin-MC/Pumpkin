@@ -3,19 +3,19 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
 
-use crate::{VarInt, codec::identifier::Identifier};
+use crate::{VarInt, codec::resource_location::ResourceLocation};
 
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_RESPAWN)]
 pub struct CRespawn {
     dimension_type: VarInt,
-    dimension_name: Identifier,
+    dimension_name: ResourceLocation,
     hashed_seed: i64,
     game_mode: u8,
     previous_gamemode: i8,
     debug: bool,
     is_flat: bool,
-    death_dimension_name: Option<(Identifier, BlockPos)>,
+    death_dimension_name: Option<(ResourceLocation, BlockPos)>,
     portal_cooldown: VarInt,
     sealevel: VarInt,
     data_kept: u8,
@@ -25,13 +25,13 @@ impl CRespawn {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         dimension_type: VarInt,
-        dimension_name: Identifier,
+        dimension_name: ResourceLocation,
         hashed_seed: i64,
         game_mode: u8,
         previous_gamemode: i8,
         debug: bool,
         is_flat: bool,
-        death_dimension_name: Option<(Identifier, BlockPos)>,
+        death_dimension_name: Option<(ResourceLocation, BlockPos)>,
         portal_cooldown: VarInt,
         sealevel: VarInt,
         data_kept: u8,

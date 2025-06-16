@@ -44,7 +44,7 @@ use pumpkin_protocol::client::play::{
     CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
     GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::codec::identifier::Identifier;
+use pumpkin_protocol::codec::resource_location::ResourceLocation;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::packet::Packet;
 use pumpkin_protocol::server::play::{
@@ -679,9 +679,9 @@ impl Player {
     ///
     /// # Arguments
     ///
-    /// * `sound_id`: An optional `Identifier` specifying the sound to stop. If `None`, all sounds in the specified category (if any) will be stopped.
-    /// * `category`: An optional `SoundCategory` specifying the sound category to stop. If `None`, all sounds with the specified identifier (if any) will be stopped.
-    pub async fn stop_sound(&self, sound_id: Option<Identifier>, category: Option<SoundCategory>) {
+    /// * `sound_id`: An optional [`ResourceLocation`] specifying the sound to stop. If [`None`], all sounds in the specified category (if any) will be stopped.
+    /// * `category`: An optional [`SoundCategory`] specifying the sound category to stop. If [`None`], all sounds with the specified resource location (if any) will be stopped.
+    pub async fn stop_sound(&self, sound_id: Option<ResourceLocation>, category: Option<SoundCategory>) {
         self.client
             .enqueue_packet(&CStopSound::new(sound_id, category))
             .await;

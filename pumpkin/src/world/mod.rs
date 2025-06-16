@@ -44,7 +44,7 @@ use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::codec::identifier::Identifier;
+use pumpkin_protocol::codec::resource_location::ResourceLocation;
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
@@ -549,7 +549,7 @@ impl World {
         player: Arc<Player>,
         server: &Server,
     ) {
-        let dimensions: Vec<Identifier> =
+        let dimensions: Vec<ResourceLocation> =
             server.dimensions.iter().map(DimensionType::name).collect();
 
         // This code follows the vanilla packet order

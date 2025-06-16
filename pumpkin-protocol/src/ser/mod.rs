@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, identifier::Identifier, var_int::VarInt, var_long::VarLong},
+    codec::{bit_set::BitSet, resource_location::ResourceLocation, var_int::VarInt, var_long::VarLong},
 };
 
 pub mod deserializer;
@@ -67,7 +67,7 @@ pub trait NetworkReadExt {
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
-    fn get_identifier(&mut self) -> Result<Identifier, ReadingError>;
+    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -237,8 +237,8 @@ impl<R: Read> NetworkReadExt for R {
         self.get_string_bounded(i16::MAX as usize)
     }
 
-    fn get_identifier(&mut self) -> Result<Identifier, ReadingError> {
-        Identifier::decode(self)
+    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
+        ResourceLocation::decode(self)
     }
 
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
@@ -301,7 +301,7 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_identifier(&mut self, data: &Identifier) -> Result<(), WritingError>;
+    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError>;
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
         let (first, second) = data.as_u64_pair();
@@ -420,7 +420,7 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
-    fn write_identifier(&mut self, data: &Identifier) -> Result<(), WritingError> {
+    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {
         data.encode(self)
     }
 

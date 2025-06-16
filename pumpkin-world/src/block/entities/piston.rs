@@ -55,7 +55,7 @@ const SOURCE: &str = "source";
 
 #[async_trait]
 impl BlockEntity for PistonBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 

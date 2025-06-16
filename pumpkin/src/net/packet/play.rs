@@ -591,7 +591,7 @@ impl Player {
         if let Some((nbt, block_entity)) = self.world().await.get_block_entity(&pos).await {
             let command_entity = CommandBlockEntity::from_nbt(&nbt, pos);
 
-            if block_entity.identifier() != command_entity.identifier() {
+            if block_entity.resource_location() != command_entity.resource_location() {
                 log::warn!(
                     "Client tried to change Command block but not Command block entity found"
                 );
