@@ -44,7 +44,6 @@ use pumpkin_protocol::client::play::{
     CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
     GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::packet::Packet;
 use pumpkin_protocol::server::play::{
@@ -62,6 +61,7 @@ use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
@@ -1871,7 +1871,14 @@ impl NBTStorage for Player {
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt).await;
 
-        nbt.put_string("Dimension", self.world().await.dimension_type.resource_location().to_string());
+        nbt.put_string(
+            "Dimension",
+            self.world()
+                .await
+                .dimension_type
+                .resource_location()
+                .to_string(),
+        );
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {

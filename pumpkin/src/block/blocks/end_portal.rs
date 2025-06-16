@@ -30,7 +30,9 @@ impl PumpkinBlock for EndPortalBlock {
                 .get_world_from_dimension(VanillaDimensionType::Overworld)
                 .await
         } else {
-            server.get_world_from_dimension(VanillaDimensionType::TheEnd).await
+            server
+                .get_world_from_dimension(VanillaDimensionType::TheEnd)
+                .await
         };
         entity.get_entity().try_use_portal(0, world, pos).await;
     }

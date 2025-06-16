@@ -211,7 +211,9 @@ impl PumpkinItem for FilledBucketItem {
             return;
         };
 
-        if item.id != Item::LAVA_BUCKET.id && world.dimension_type == VanillaDimensionType::TheNether {
+        if item.id != Item::LAVA_BUCKET.id
+            && world.dimension_type == VanillaDimensionType::TheNether
+        {
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;

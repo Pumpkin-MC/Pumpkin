@@ -1,8 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_LOGIN;
-use pumpkin_util::{
-    math::position::BlockPos,
-    resource_location::ResourceLocation
-};
+use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 
 use pumpkin_macros::packet;
 use serde::Serialize;

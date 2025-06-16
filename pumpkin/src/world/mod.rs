@@ -44,7 +44,6 @@ use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
@@ -70,6 +69,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
+use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
     Difficulty,
@@ -166,8 +166,12 @@ impl World {
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
             VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
-            VanillaDimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+            VanillaDimensionType::TheEnd => {
+                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
+            }
+            VanillaDimensionType::TheNether => {
+                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
+            }
         };
 
         Self {
@@ -525,8 +529,12 @@ impl World {
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
             VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
-            VanillaDimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
+            VanillaDimensionType::TheEnd => {
+                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
+            }
+            VanillaDimensionType::TheNether => {
+                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
+            }
         };
         for y in (i32::from(generation_settings.shape.min_y)
             ..=i32::from(generation_settings.shape.height))
@@ -549,8 +557,11 @@ impl World {
         player: Arc<Player>,
         server: &Server,
     ) {
-        let dimensions: Vec<ResourceLocation> =
-            server.dimensions.iter().map(VanillaDimensionType::resource_location).collect();
+        let dimensions: Vec<ResourceLocation> = server
+            .dimensions
+            .iter()
+            .map(VanillaDimensionType::resource_location)
+            .collect();
 
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();

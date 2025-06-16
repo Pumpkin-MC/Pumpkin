@@ -22,7 +22,7 @@ use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::client::play::CChangeDifficulty;
 use pumpkin_protocol::client::play::CSetSelectedSlot;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
-use pumpkin_registry::{VanillaDimensionType, Registry};
+use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
@@ -272,7 +272,9 @@ impl Server {
 
         let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&uuid) {
             if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = VanillaDimensionType::from_resource_location_string(dimension_key) {
+                if let Some(dimension) =
+                    VanillaDimensionType::from_resource_location_string(dimension_key)
+                {
                     let world = self.get_world_from_dimension(dimension).await;
                     (world, Some(data))
                 } else {
