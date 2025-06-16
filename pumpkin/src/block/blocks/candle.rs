@@ -79,7 +79,9 @@ impl PumpkinBlock for CandleBlock {
         let mut properties = CandleLikeProperties::from_state_id(state.id, &block);
 
         match item.id {
-            id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) && item.id == block.id => {
+            id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)
+                && item.id == block.id =>
+            {
                 if properties.candles.to_index() < 3 {
                     properties.candles = Integer1To4::from_index(properties.candles.to_index() + 1);
                 }
@@ -147,8 +149,11 @@ impl PumpkinBlock for CandleBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let support_block = block_accessor.get_block_state(&block_pos.down()).await;
-        support_block.is_center_solid(BlockDirection::Up)
+        let (support_block, state) = block_accessor
+            .get_block_and_block_state(&block_pos.down())
+            .await;
+        support_block.is_waterlogged(state.id)
+            && state.is_center_solid(BlockDirection::Up)
     }
 
     async fn can_update_at(

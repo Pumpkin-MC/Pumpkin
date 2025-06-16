@@ -1,12 +1,18 @@
+use crate::entity::player::Player;
+use crate::item::pumpkin_item::ItemMetadata;
 use crate::server::Server;
 use crate::world::World;
 use crate::{block::blocks::fire::FireBlockBase, item::pumpkin_item::PumpkinItem};
-use crate::entity::player::Player;
-use crate::item::pumpkin_item::ItemMetadata;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties, CandleLikeProperties};
-use pumpkin_data::{item::Item, sound::{Sound, SoundCategory}, Block};
+use pumpkin_data::block_properties::{
+    BlockProperties, CampfireLikeProperties, CandleLikeProperties,
+};
+use pumpkin_data::{
+    Block,
+    item::Item,
+    sound::{Sound, SoundCategory},
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
