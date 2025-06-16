@@ -1,0 +1,144 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use pumpkin_data::{
+    Block,
+    entity::{EntityPose, EntityType},
+    item::Item,
+    tag::{RegistryKey, get_tag_values},
+};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{item::ItemStack, world::BlockFlags};
+
+use crate::{
+    block::{
+        blocks::cake::CakeBlock,
+        pumpkin_block::{BlockMetadata, PumpkinBlock},
+        registry::BlockActionResult,
+    },
+    entity::{EntityBase, item::ItemEntity, player::Player},
+    server::Server,
+    world::World,
+};
+
+const CANDLE_MAP: [(&Item, &Block); 17] = [
+    (&Item::CANDLE, &Block::CANDLE_CAKE),
+    (&Item::WHITE_CANDLE, &Block::WHITE_CANDLE_CAKE),
+    (&Item::ORANGE_CANDLE, &Block::ORANGE_CANDLE_CAKE),
+    (&Item::MAGENTA_CANDLE, &Block::MAGENTA_CANDLE_CAKE),
+    (&Item::LIGHT_BLUE_CANDLE, &Block::LIGHT_BLUE_CANDLE_CAKE),
+    (&Item::YELLOW_CANDLE, &Block::YELLOW_CANDLE_CAKE),
+    (&Item::LIME_CANDLE, &Block::LIME_CANDLE_CAKE),
+    (&Item::PINK_CANDLE, &Block::PINK_CANDLE_CAKE),
+    (&Item::GRAY_CANDLE, &Block::GRAY_CANDLE_CAKE),
+    (&Item::LIGHT_GRAY_CANDLE, &Block::LIGHT_GRAY_CANDLE_CAKE),
+    (&Item::CYAN_CANDLE, &Block::CYAN_CANDLE_CAKE),
+    (&Item::PURPLE_CANDLE, &Block::PURPLE_CANDLE_CAKE),
+    (&Item::BLUE_CANDLE, &Block::BLUE_CANDLE_CAKE),
+    (&Item::BROWN_CANDLE, &Block::BROWN_CANDLE_CAKE),
+    (&Item::GREEN_CANDLE, &Block::GREEN_CANDLE_CAKE),
+    (&Item::RED_CANDLE, &Block::RED_CANDLE_CAKE),
+    (&Item::BLACK_CANDLE, &Block::BLACK_CANDLE_CAKE),
+];
+
+#[must_use]
+pub fn cake_from_candle(item: &Item) -> &'static Block {
+    CANDLE_MAP
+        .binary_search_by_key(&item.id, |(key, _)| key.id)
+        .map_or_else(
+            |_| panic!("Expected a candle item, got {}", item.id),
+            |index| CANDLE_MAP[index].1,
+        )
+}
+
+#[must_use]
+pub fn candle_from_cake(block: &Block) -> &'static Item {
+    CANDLE_MAP
+        .binary_search_by_key(&block.id, |(_, value)| value.id)
+        .map_or_else(
+            |_| panic!("Expected a candle cake block, got {}", block.id),
+            |index| CANDLE_MAP[index].0,
+        )
+}
+
+pub struct CandleCakeBlock;
+
+impl BlockMetadata for CandleCakeBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
+
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "minecraft:candle_cakes").unwrap()
+    }
+}
+
+impl CandleCakeBlock {
+    async fn consume_and_drop_candle(
+        block: &Block,
+        player: &Player,
+        location: &BlockPos,
+        world: &Arc<World>,
+    ) {
+        if player.hunger_manager.level.load() >= 20 {
+            return;
+        }
+
+        let entity = world.create_entity(location.up().to_f64(), EntityType::ITEM);
+
+        let candle_item = candle_from_cake(block);
+
+        let item_stack = ItemStack::new(1, candle_item);
+        let item_entity = ItemEntity::new(entity, item_stack).await;
+
+        world.spawn_entity(Arc::new(item_entity)).await;
+
+        world
+            .set_block_state(
+                location,
+                Block::CAKE.default_state_id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await;
+
+        let (block, state) = world.get_block_and_block_state(location).await;
+
+        CakeBlock::consume_if_hungry(world, player, &block, location, state.id).await;
+    }
+}
+
+#[async_trait]
+impl PumpkinBlock for CandleCakeBlock {
+    async fn use_with_item(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        item: &Item,
+        _server: &Server,
+        world: &Arc<World>,
+    ) -> BlockActionResult {
+        if player.get_entity().pose.load() == EntityPose::Crouching {
+            return BlockActionResult::Continue;
+        }
+
+        return match item.id {
+            1150 | 838 => BlockActionResult::Continue, // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
+            _ => {
+                Self::consume_and_drop_candle(block, player, &location, world).await;
+                BlockActionResult::Consume
+            }
+        };
+    }
+
+    async fn normal_use(
+        &self,
+        block: &Block,
+        player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: &Arc<World>,
+    ) {
+        Self::consume_and_drop_candle(block, player, &location, world).await;
+    }
+}

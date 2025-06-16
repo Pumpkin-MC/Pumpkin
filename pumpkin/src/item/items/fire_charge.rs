@@ -64,7 +64,14 @@ impl PumpkinItem for FireChargeItem {
             }
             id if (Block::CANDLE_CAKE.id..=Block::BLACK_CANDLE_CAKE.id).contains(&id) => {
                 let mut properties = RedstoneOreLikeProperties::from_state_id(state.id, &block);
-                if !properties.lit {
+                if properties.lit {
+                    let pos = location.offset(face.to_offset());
+
+                    if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
+                        place_fire(&pos, &world).await;
+                        play_fire_charge_use_sound(player, &pos).await;
+                    }
+                } else {
                     properties.lit = true;
                     world
                         .set_block_state(

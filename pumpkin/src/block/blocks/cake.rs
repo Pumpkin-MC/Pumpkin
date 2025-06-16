@@ -14,7 +14,10 @@ use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
 
 use crate::{
-    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
+    block::{
+        blocks::candle_cakes::cake_from_candle, pumpkin_block::PumpkinBlock,
+        registry::BlockActionResult,
+    },
     entity::{EntityBase, player::Player},
     server::Server,
     world::World,
@@ -24,8 +27,7 @@ use crate::{
 pub struct CakeBlock;
 
 impl CakeBlock {
-    async fn consume_if_hungry(
-        &self,
+    pub async fn consume_if_hungry(
         world: &Arc<World>,
         player: &Player,
         block: &Block,
@@ -68,29 +70,6 @@ impl CakeBlock {
             }
         }
     }
-
-    fn candle_cake_from_candle(item: &Item) -> Block {
-        match item.id {
-            1305 => Block::CANDLE_CAKE,            // Item::CANDLE.id
-            1306 => Block::WHITE_CANDLE_CAKE,      // Item::WHITE_CANDLE.id
-            1307 => Block::ORANGE_CANDLE_CAKE,     // Item::ORANGE_CANDLE.id
-            1308 => Block::MAGENTA_CANDLE_CAKE,    // Item::MAGENTA_CANDLE.id
-            1309 => Block::LIGHT_BLUE_CANDLE_CAKE, // Item::LIGHT_BLUE_CANDLE.id
-            1310 => Block::YELLOW_CANDLE_CAKE,     // Item::YELLOW_CANDLE.id
-            1311 => Block::LIME_CANDLE_CAKE,       // Item::LIME_CANDLE.id
-            1312 => Block::PINK_CANDLE_CAKE,       // Item::PINK_CANDLE.id
-            1313 => Block::GRAY_CANDLE_CAKE,       // Item::GRAY_CANDLE.id
-            1314 => Block::LIGHT_GRAY_CANDLE_CAKE, // Item::LIGHT_GRAY_CANDLE.id
-            1315 => Block::CYAN_CANDLE_CAKE,       // Item::CYAN_CANDLE.id
-            1316 => Block::PURPLE_CANDLE_CAKE,     // Item::PURPLE_CANDLE.id
-            1317 => Block::BLUE_CANDLE_CAKE,       // Item::BLUE_CANDLE.id
-            1318 => Block::BROWN_CANDLE_CAKE,      // Item::BROWN_CANDLE.id
-            1319 => Block::GREEN_CANDLE_CAKE,      // Item::GREEN_CANDLE.id
-            1320 => Block::RED_CANDLE_CAKE,        // Item::RED_CANDLE.id
-            1321 => Block::BLACK_CANDLE_CAKE,      // Item::BLACK_CANDLE.id
-            other => panic!("Expected a candle block, got {other:?}"),
-        }
-    }
 }
 
 #[async_trait]
@@ -115,7 +94,7 @@ impl PumpkinBlock for CakeBlock {
                     world
                         .set_block_state(
                             &location,
-                            Self::candle_cake_from_candle(item).default_state_id,
+                            cake_from_candle(item).default_state_id,
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
@@ -130,14 +109,15 @@ impl PumpkinBlock for CakeBlock {
                             seed,
                         )
                         .await;
+                    let held_item = &player.inventory.held_item();
+                    let mut held_item_guard = held_item.lock().await;
+                    held_item_guard.decrement(1);
                 } else {
-                    self.consume_if_hungry(world, player, block, &location, state_id)
-                        .await;
+                    Self::consume_if_hungry(world, player, block, &location, state_id).await;
                 }
             }
             _ => {
-                self.consume_if_hungry(world, player, block, &location, state_id)
-                    .await;
+                Self::consume_if_hungry(world, player, block, &location, state_id).await;
             }
         }
         BlockActionResult::Consume
@@ -152,7 +132,6 @@ impl PumpkinBlock for CakeBlock {
         world: &Arc<World>,
     ) {
         let state_id = world.get_block_state_id(&location).await;
-        self.consume_if_hungry(world, player, block, &location, state_id)
-            .await;
+        Self::consume_if_hungry(world, player, block, &location, state_id).await;
     }
 }

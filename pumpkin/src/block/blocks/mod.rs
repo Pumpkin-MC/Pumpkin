@@ -3,6 +3,7 @@ pub mod barrel;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
+pub mod candle_cakes;
 pub mod candles;
 pub mod chest;
 pub mod command;
