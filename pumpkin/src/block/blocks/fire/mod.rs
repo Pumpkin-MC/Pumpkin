@@ -27,7 +27,7 @@ impl FireBlockBase {
     #[must_use]
     pub async fn can_place_on(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         // Make sure the block below is not a fire block or fluid block
-        let (support_block, state) = &block_accessor.get_block_and_block_state(&block_pos).await;
+        let (support_block, state) = &block_accessor.get_block_and_block_state(block_pos).await;
         support_block.id != Block::SOUL_FIRE.id
             && support_block.id != Block::FIRE.id
             && support_block.id != Block::WATER.id
