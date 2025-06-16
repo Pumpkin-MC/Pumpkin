@@ -71,23 +71,23 @@ impl CakeBlock {
 
     fn candle_cake_from_candle(item: &Item) -> Block {
         match item.id {
-            id if id == Item::CANDLE.id => Block::CANDLE_CAKE,
-            id if id == Item::WHITE_CANDLE.id => Block::WHITE_CANDLE_CAKE,
-            id if id == Item::ORANGE_CANDLE.id => Block::ORANGE_CANDLE_CAKE,
-            id if id == Item::MAGENTA_CANDLE.id => Block::MAGENTA_CANDLE_CAKE,
-            id if id == Item::LIGHT_BLUE_CANDLE.id => Block::LIGHT_BLUE_CANDLE_CAKE,
-            id if id == Item::YELLOW_CANDLE.id => Block::YELLOW_CANDLE_CAKE,
-            id if id == Item::LIME_CANDLE.id => Block::LIME_CANDLE_CAKE,
-            id if id == Item::PINK_CANDLE.id => Block::PINK_CANDLE_CAKE,
-            id if id == Item::GRAY_CANDLE.id => Block::GRAY_CANDLE_CAKE,
-            id if id == Item::LIGHT_GRAY_CANDLE.id => Block::LIGHT_GRAY_CANDLE_CAKE,
-            id if id == Item::CYAN_CANDLE.id => Block::CYAN_CANDLE_CAKE,
-            id if id == Item::PURPLE_CANDLE.id => Block::PURPLE_CANDLE_CAKE,
-            id if id == Item::BLUE_CANDLE.id => Block::BLUE_CANDLE_CAKE,
-            id if id == Item::BROWN_CANDLE.id => Block::BROWN_CANDLE_CAKE,
-            id if id == Item::GREEN_CANDLE.id => Block::GREEN_CANDLE_CAKE,
-            id if id == Item::RED_CANDLE.id => Block::RED_CANDLE_CAKE,
-            id if id == Item::BLACK_CANDLE.id => Block::BLACK_CANDLE_CAKE,
+            1305 => Block::CANDLE_CAKE,            // Item::CANDLE.id
+            1306 => Block::WHITE_CANDLE_CAKE,      // Item::WHITE_CANDLE.id
+            1307 => Block::ORANGE_CANDLE_CAKE,     // Item::ORANGE_CANDLE.id
+            1308 => Block::MAGENTA_CANDLE_CAKE,    // Item::MAGENTA_CANDLE.id
+            1309 => Block::LIGHT_BLUE_CANDLE_CAKE, // Item::LIGHT_BLUE_CANDLE.id
+            1310 => Block::YELLOW_CANDLE_CAKE,     // Item::YELLOW_CANDLE.id
+            1311 => Block::LIME_CANDLE_CAKE,       // Item::LIME_CANDLE.id
+            1312 => Block::PINK_CANDLE_CAKE,       // Item::PINK_CANDLE.id
+            1313 => Block::GRAY_CANDLE_CAKE,       // Item::GRAY_CANDLE.id
+            1314 => Block::LIGHT_GRAY_CANDLE_CAKE, // Item::LIGHT_GRAY_CANDLE.id
+            1315 => Block::CYAN_CANDLE_CAKE,       // Item::CYAN_CANDLE.id
+            1316 => Block::PURPLE_CANDLE_CAKE,     // Item::PURPLE_CANDLE.id
+            1317 => Block::BLUE_CANDLE_CAKE,       // Item::BLUE_CANDLE.id
+            1318 => Block::BROWN_CANDLE_CAKE,      // Item::BROWN_CANDLE.id
+            1319 => Block::GREEN_CANDLE_CAKE,      // Item::GREEN_CANDLE.id
+            1320 => Block::RED_CANDLE_CAKE,        // Item::RED_CANDLE.id
+            1321 => Block::BLACK_CANDLE_CAKE,      // Item::BLACK_CANDLE.id
             other => panic!("Expected a candle block, got {other:?}"),
         }
     }
