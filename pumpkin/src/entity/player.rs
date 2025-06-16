@@ -1871,7 +1871,7 @@ impl NBTStorage for Player {
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt).await;
 
-        nbt.put_string("Dimension", self.world().await.dimension_type.resource_location().as_string());
+        nbt.put_string("Dimension", self.world().await.dimension_type.resource_location().to_string());
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {

@@ -9,7 +9,7 @@ pub struct ResourceLocation {
 }
 
 impl ResourceLocation {
-/// The maximum number of bytes for a [`ResourceLocation`] is the same as for a normal [`String`].
+    /// The maximum number of bytes for a [`ResourceLocation`] is the same as for a normal [`String`].
     pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
 
     pub fn vanilla(path: &str) -> Self {
@@ -24,10 +24,6 @@ impl ResourceLocation {
             namespace: "pumpkin".to_string(),
             path: path.to_string(),
         }
-    }
-
-    pub fn as_string(&self) -> String {
-        format!("{}:{}", self.namespace, self.path)
     }
 }
 
