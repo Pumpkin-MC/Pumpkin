@@ -391,7 +391,7 @@ impl BlockPos {
         let x = (other.0.x - self.0.x).abs();
         let y = (other.0.y - self.0.y).abs();
         let z = (other.0.z - self.0.z).abs();
-            x + y + z
+        x + y + z
     }
 }
 
