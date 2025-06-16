@@ -152,8 +152,7 @@ impl PumpkinBlock for CandleBlock {
         let (support_block, state) = block_accessor
             .get_block_and_block_state(&block_pos.down())
             .await;
-        support_block.is_waterlogged(state.id)
-            && state.is_center_solid(BlockDirection::Up)
+        support_block.is_waterlogged(state.id) && state.is_center_solid(BlockDirection::Up)
     }
 
     async fn can_update_at(

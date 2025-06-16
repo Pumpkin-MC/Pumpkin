@@ -31,7 +31,8 @@ impl FireBlockBase {
         support_block.id != Block::SOUL_FIRE.id
             && support_block.id != Block::FIRE.id
             && support_block.id != Block::WATER.id
-            && support_block.id != Block::LAVA.id && !support_block.is_waterlogged(state.id)
+            && support_block.id != Block::LAVA.id
+            && !support_block.is_waterlogged(state.id)
     }
 
     pub async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
