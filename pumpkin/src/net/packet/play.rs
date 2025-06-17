@@ -991,6 +991,7 @@ impl Player {
                 let screen_handler = self.current_screen_handler.lock().await;
                 let mut screen_handler = screen_handler.lock().await;
                 screen_handler.sync_state().await;
+                drop(screen_handler);
 
                 // Restore abilities based on gamemode after respawn
                 let mut abilities = self.abilities.lock().await;
