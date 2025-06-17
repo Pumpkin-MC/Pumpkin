@@ -169,11 +169,7 @@ impl WetSpongeBlock {
             .await;
 
         world
-            .play_block_sound(
-                Sound::BlockFireExtinguish,
-                SoundCategory::Blocks,
-                pos,
-            )
+            .play_block_sound(Sound::BlockFireExtinguish, SoundCategory::Blocks, pos)
             .await;
 
         Ok(())

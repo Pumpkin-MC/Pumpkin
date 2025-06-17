@@ -164,9 +164,9 @@ impl RecursiveIterator {
     pub fn new(start: BlockPos, end: BlockPos) -> Self {
         let mut queue = std::collections::VecDeque::new();
         let visited = std::collections::HashSet::new();
-        
+
         queue.push_back(start);
-        
+
         RecursiveIterator {
             queue,
             visited,
@@ -199,7 +199,8 @@ impl Iterator for RecursiveIterator {
                             continue;
                         }
 
-                        let next = BlockPos::new(current.0.x + dx, current.0.y + dy, current.0.z + dz);
+                        let next =
+                            BlockPos::new(current.0.x + dx, current.0.y + dy, current.0.z + dz);
 
                         if next.0.x >= self.min_x
                             && next.0.x <= self.max_x
