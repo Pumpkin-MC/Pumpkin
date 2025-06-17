@@ -8,7 +8,10 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::BlockStateId;
+use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use std::sync::Arc;
 
 pub struct CarpetBlock;
 
@@ -27,19 +30,39 @@ impl PumpkinBlock for CarpetBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        !world
-            .unwrap()
-            .get_block(&block_pos.down())
-            .await
-            .eq(&Block::AIR)
+        can_place_at(block_accessor, block_pos).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        _direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        if !can_place_at(world, pos).await {
+            world
+                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
+                .await;
+        }
+        state
+    }
+
+    async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
+        if !can_place_at(world.as_ref(), pos).await {
+            world.break_block(pos, None, BlockFlags::empty()).await;
+        }
     }
 }
 
@@ -51,19 +74,39 @@ impl PumpkinBlock for MossCarpetBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        !world
-            .unwrap()
-            .get_block(&block_pos.down())
-            .await
-            .eq(&Block::AIR)
+        can_place_at(block_accessor, block_pos).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        _direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        if !can_place_at(world, pos).await {
+            world
+                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
+                .await;
+        }
+        state
+    }
+
+    async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
+        if !can_place_at(world.as_ref(), pos).await {
+            world.break_block(pos, None, BlockFlags::empty()).await;
+        }
     }
 }
 
@@ -75,18 +118,45 @@ impl PumpkinBlock for PaleMossCarpetBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
-        world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
         _player: Option<&Player>,
         _block: &Block,
         block_pos: &BlockPos,
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        !world
-            .unwrap()
-            .get_block(&block_pos.down())
-            .await
-            .eq(&Block::AIR)
+        can_place_at(block_accessor, block_pos).await
     }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        _direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        if !can_place_at(world, pos).await {
+            world
+                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
+                .await;
+        }
+        state
+    }
+
+    async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
+        if !can_place_at(world.as_ref(), pos).await {
+            world.break_block(pos, None, BlockFlags::empty()).await;
+        }
+    }
+}
+
+async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    !block_accessor
+        .get_block(&block_pos.down())
+        .await
+        .eq(&Block::AIR)
 }
