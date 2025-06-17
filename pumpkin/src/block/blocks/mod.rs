@@ -2,6 +2,7 @@ pub mod bamboo;
 pub mod barrel;
 pub mod bed;
 pub mod cactus;
+pub mod carpet;
 pub mod chest;
 pub mod command;
 pub mod crafting_table;
