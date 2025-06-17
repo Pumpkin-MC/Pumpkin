@@ -118,7 +118,6 @@ impl SpongeBlock {
         block == &Block::WATER
     }
 
-    // Plays the sponge absorption sound effect
     async fn play_absorption_sound(&self, world: &Arc<World>, pos: BlockPos) {
         world
             .play_block_sound(Sound::BlockSpongeAbsorb, SoundCategory::Blocks, pos)
@@ -141,7 +140,6 @@ impl PumpkinBlock for WetSpongeBlock {
         _old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        // When a wet sponge is placed, check if it should immediately dry out
         if let Err(e) = self.tick(world, *block_pos).await {
             log::warn!("Failed to check wet sponge drying conditions at {block_pos:?}: {e}");
         }
@@ -188,7 +186,6 @@ impl WetSpongeBlock {
                     let check_pos = BlockPos::new(pos.0.x + dx, pos.0.y + dy, pos.0.z + dz);
                     let block = world.get_block(&check_pos).await;
 
-                    // Dry out if there's fire or lava nearby
                     if block == Block::FIRE || block == Block::LAVA {
                         return Ok(true);
                     }
@@ -199,7 +196,6 @@ impl WetSpongeBlock {
         Ok(false)
     }
 
-    /// Tick function to check if wet sponge should dry out
     pub async fn tick(
         &self,
         world: &Arc<World>,
