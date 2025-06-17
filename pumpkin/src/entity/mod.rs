@@ -20,7 +20,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     ser::serializer::Serializer,
 };
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
     get_section_cord,
@@ -324,15 +324,16 @@ impl Entity {
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
                 let pos = self.pos.load();
                 // TODO: this is bad
-                let scale_factor_new =
-                    if portal_manager.portal_world.dimension_type == DimensionType::TheNether {
-                        8.0
-                    } else {
-                        1.0
-                    };
+                let scale_factor_new = if portal_manager.portal_world.dimension_type
+                    == VanillaDimensionType::TheNether
+                {
+                    8.0
+                } else {
+                    1.0
+                };
                 // TODO: this is bad
                 let scale_factor_current =
-                    if self.world.read().await.dimension_type == DimensionType::TheNether {
+                    if self.world.read().await.dimension_type == VanillaDimensionType::TheNether {
                         8.0
                     } else {
                         1.0

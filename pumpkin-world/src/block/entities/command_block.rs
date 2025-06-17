@@ -28,7 +28,7 @@ impl CommandBlockEntity {
 
 #[async_trait]
 impl BlockEntity for CommandBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
     fn get_position(&self) -> BlockPos {
