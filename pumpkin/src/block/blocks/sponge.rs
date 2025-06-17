@@ -6,7 +6,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 use std::sync::Arc;
 
@@ -121,14 +120,8 @@ impl SpongeBlock {
 
     // Plays the sponge absorption sound effect
     async fn play_absorption_sound(&self, world: &Arc<World>, pos: BlockPos) {
-        let sound_pos = Vector3::new(
-            f64::from(pos.0.x) + 0.5,
-            f64::from(pos.0.y) + 0.5,
-            f64::from(pos.0.z) + 0.5,
-        );
-
         world
-            .play_sound(Sound::BlockSpongeAbsorb, SoundCategory::Blocks, &sound_pos)
+            .play_block_sound(Sound::BlockSpongeAbsorb, SoundCategory::Blocks, pos)
             .await;
     }
 }
@@ -175,17 +168,11 @@ impl WetSpongeBlock {
             .sync_world_event(WorldEvent::WetSpongeDriesOut, pos, 0)
             .await;
 
-        let sound_pos = Vector3::new(
-            f64::from(pos.0.x) + 0.5,
-            f64::from(pos.0.y) + 0.5,
-            f64::from(pos.0.z) + 0.5,
-        );
-
         world
-            .play_sound(
+            .play_block_sound(
                 Sound::BlockFireExtinguish,
                 SoundCategory::Blocks,
-                &sound_pos,
+                pos,
             )
             .await;
 

@@ -149,6 +149,79 @@ impl Iterator for OutwardIterator {
     }
 }
 
+pub struct RecursiveIterator {
+    queue: std::collections::VecDeque<BlockPos>,
+    visited: std::collections::HashSet<BlockPos>,
+    min_x: i32,
+    max_x: i32,
+    min_y: i32,
+    max_y: i32,
+    min_z: i32,
+    max_z: i32,
+}
+
+impl RecursiveIterator {
+    pub fn new(start: BlockPos, end: BlockPos) -> Self {
+        let mut queue = std::collections::VecDeque::new();
+        let visited = std::collections::HashSet::new();
+        
+        queue.push_back(start);
+        
+        RecursiveIterator {
+            queue,
+            visited,
+            min_x: start.0.x.min(end.0.x),
+            max_x: start.0.x.max(end.0.x),
+            min_y: start.0.y.min(end.0.y),
+            max_y: start.0.y.max(end.0.y),
+            min_z: start.0.z.min(end.0.z),
+            max_z: start.0.z.max(end.0.z),
+        }
+    }
+}
+
+impl Iterator for RecursiveIterator {
+    type Item = BlockPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(current) = self.queue.pop_front() {
+            if self.visited.contains(&current) {
+                continue;
+            }
+
+            self.visited.insert(current);
+
+            // Add all valid adjacent positions to the queue
+            for dx in -1..=1 {
+                for dy in -1..=1 {
+                    for dz in -1..=1 {
+                        if dx == 0 && dy == 0 && dz == 0 {
+                            continue;
+                        }
+
+                        let next = BlockPos::new(current.0.x + dx, current.0.y + dy, current.0.z + dz);
+
+                        if next.0.x >= self.min_x
+                            && next.0.x <= self.max_x
+                            && next.0.y >= self.min_y
+                            && next.0.y <= self.max_y
+                            && next.0.z >= self.min_z
+                            && next.0.z <= self.max_z
+                            && !self.visited.contains(&next)
+                        {
+                            self.queue.push_back(next);
+                        }
+                    }
+                }
+            }
+
+            return Some(current);
+        }
+
+        None
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 /// Aka Block Position
 pub struct BlockPos(pub Vector3<i32>);
@@ -318,70 +391,20 @@ impl BlockPos {
         self.offset(Vector3::new(0, -height, 0))
     }
 
-    pub fn iterate_recursively<F>(
-        start: BlockPos,
-        end: BlockPos,
-        mut visitor: F,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-    where
-        F: FnMut(BlockPos) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>,
-    {
-        fn recurse_visit<F>(
-            current: BlockPos,
-            start: BlockPos,
-            end: BlockPos,
-            visitor: &mut F,
-            visited: &mut std::collections::HashSet<BlockPos>,
-        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-        where
-            F: FnMut(BlockPos) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>,
-        {
-            if visited.contains(&current) {
-                return Ok(());
-            }
-
-            visited.insert(current); // Visit current position
-            let should_continue = visitor(current)?;
-            if !should_continue {
-                return Ok(());
-            }
-
-            let min_x = start.0.x.min(end.0.x);
-            let max_x = start.0.x.max(end.0.x);
-            let min_y = start.0.y.min(end.0.y);
-            let max_y = start.0.y.max(end.0.y);
-            let min_z = start.0.z.min(end.0.z);
-            let max_z = start.0.z.max(end.0.z);
-
-            for dx in -1..=1 {
-                for dy in -1..=1 {
-                    for dz in -1..=1 {
-                        if dx == 0 && dy == 0 && dz == 0 {
-                            continue;
-                        }
-
-                        let next =
-                            BlockPos::new(current.0.x + dx, current.0.y + dy, current.0.z + dz);
-
-                        if next.0.x >= min_x
-                            && next.0.x <= max_x
-                            && next.0.y >= min_y
-                            && next.0.y <= max_y
-                            && next.0.z >= min_z
-                            && next.0.z <= max_z
-                        {
-                            recurse_visit(next, start, end, visitor, visited)?;
-                        }
-                    }
-                }
-            }
-
-            Ok(())
-        }
-
-        let mut visited = std::collections::HashSet::new();
-        recurse_visit(start, start, end, &mut visitor, &mut visited)?;
-        Ok(())
+    /// Iterates recursively through all `BlockPos` within a cuboid region defined by two corner points,
+    /// using flood-fill algorithm starting from `start` position. Only positions within the bounds
+    /// defined by `start` and `end` are included.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Starting position for the flood-fill algorithm (also defines one corner of bounds).
+    /// * `end` - Defines the opposite corner of the cuboid bounds.
+    ///
+    /// # Returns
+    ///
+    /// A `RecursiveIterator` that yields each `BlockPos` found through recursive traversal.
+    pub fn iterate_recursively(start: BlockPos, end: BlockPos) -> RecursiveIterator {
+        RecursiveIterator::new(start, end)
     }
 
     pub fn manhattan_distance(&self, other: Self) -> i32 {
