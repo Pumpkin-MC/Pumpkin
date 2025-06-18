@@ -47,6 +47,7 @@ use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
 use blocks::redstone::tripwire::TripwireBlock;
 use blocks::redstone::tripwire_hook::TripwireHookBlock;
+use blocks::sea_pickles::SeaPickleBlock;
 use blocks::signs::SignBlock;
 use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
@@ -135,6 +136,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
     manager.register(EndPortalFrameBlock);
+    manager.register(SeaPickleBlock);
 
     // Fire
     manager.register(SoulFireBlock);

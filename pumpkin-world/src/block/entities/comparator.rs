@@ -16,7 +16,7 @@ const OUTPUT_SIGNAL: &str = "OutputSignal";
 
 #[async_trait]
 impl BlockEntity for ComparatorBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 

@@ -44,7 +44,6 @@ use pumpkin_protocol::client::play::{
     CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
     GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::packet::Packet;
 use pumpkin_protocol::server::play::{
@@ -56,12 +55,13 @@ use pumpkin_protocol::server::play::{
     SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::{IdOr, RawPacket, ServerPacket};
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
@@ -512,7 +512,7 @@ impl Player {
 
     pub async fn set_respawn_point(
         &self,
-        dimension: DimensionType,
+        dimension: VanillaDimensionType,
         block_pos: BlockPos,
         yaw: f32,
     ) -> bool {
@@ -544,12 +544,12 @@ impl Player {
             .get_block_and_block_state(&respawn_point.position)
             .await;
 
-        if respawn_point.dimension == DimensionType::Overworld
+        if respawn_point.dimension == VanillaDimensionType::Overworld
             && block.is_tagged_with("#minecraft:beds").unwrap()
         {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
-        } else if respawn_point.dimension == DimensionType::TheNether
+        } else if respawn_point.dimension == VanillaDimensionType::TheNether
             && block == Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
@@ -679,9 +679,13 @@ impl Player {
     ///
     /// # Arguments
     ///
-    /// * `sound_id`: An optional `Identifier` specifying the sound to stop. If `None`, all sounds in the specified category (if any) will be stopped.
-    /// * `category`: An optional `SoundCategory` specifying the sound category to stop. If `None`, all sounds with the specified identifier (if any) will be stopped.
-    pub async fn stop_sound(&self, sound_id: Option<Identifier>, category: Option<SoundCategory>) {
+    /// * `sound_id`: An optional [`ResourceLocation`] specifying the sound to stop. If [`None`], all sounds in the specified category (if any) will be stopped.
+    /// * `category`: An optional [`SoundCategory`] specifying the sound category to stop. If [`None`], all sounds with the specified resource location (if any) will be stopped.
+    pub async fn stop_sound(
+        &self,
+        sound_id: Option<ResourceLocation>,
+        category: Option<SoundCategory>,
+    ) {
         self.client
             .enqueue_packet(&CStopSound::new(sound_id, category))
             .await;
@@ -1049,7 +1053,7 @@ impl Player {
                 self.unload_watched_chunks(&current_world).await;
 
                 let last_pos = self.living_entity.last_pos.load();
-                let death_dimension = self.world().await.dimension_type.name();
+                let death_dimension = self.world().await.dimension_type.resource_location();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -1058,7 +1062,7 @@ impl Player {
                 self.client
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension_type as u8).into(),
-                        new_world.dimension_type.name(),
+                        new_world.dimension_type.resource_location(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -1867,7 +1871,14 @@ impl NBTStorage for Player {
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt).await;
 
-        nbt.put_string("Dimension", self.world().await.dimension_type.name().get());
+        nbt.put_string(
+            "Dimension",
+            self.world()
+                .await
+                .dimension_type
+                .resource_location()
+                .to_string(),
+        );
     }
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
@@ -2059,9 +2070,7 @@ impl Player {
                 self.handle_client_status(SClientCommand::read(payload)?)
                     .await;
             }
-            SPlayerInput::PACKET_ID => {
-                // TODO
-            }
+            SPlayerInput::PACKET_ID => self.handle_player_input(SPlayerInput::read(payload)?).await,
             SInteract::PACKET_ID => {
                 self.handle_interact(SInteract::read(payload)?).await;
             }
@@ -2282,7 +2291,7 @@ impl TryFrom<i32> for Hand {
 /// Represents the player's respawn point.
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
-    pub dimension: DimensionType,
+    pub dimension: VanillaDimensionType,
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,

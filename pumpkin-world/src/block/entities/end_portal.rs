@@ -16,7 +16,7 @@ impl EndPortalBlockEntity {
 
 #[async_trait]
 impl BlockEntity for EndPortalBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 
