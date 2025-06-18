@@ -117,7 +117,14 @@ pub trait FlowingFluid {
                     )
                     .await;
             }
-            self.spread(world, fluid, block_pos, &new_fluid_state).await;
+            if let Some(new_fluid) = Fluid::from_state_id(new_fluid_state.to_state_id(fluid)) {
+                if new_fluid.name != Fluid::EMPTY.name {
+                    self.spread(world, &new_fluid, block_pos, &new_fluid_state)
+                        .await;
+                }
+
+                return;
+            }
         } else if self.is_waterlogged(world, block_pos).await.is_some() {
             self.spread(
                 world,
@@ -406,7 +413,6 @@ pub trait FlowingFluid {
         pos: &BlockPos,
         state_id: BlockStateId,
     ) {
-        //TODO Implement lava water mix
         if self.is_waterlogged(world, pos).await.is_some() {
             return;
         }
@@ -429,20 +435,14 @@ pub trait FlowingFluid {
     async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, _fluid: &Fluid) -> bool {
         let block = world.get_block(pos).await;
 
-        if self.can_be_replaced(world, pos, block.id).await {
-            return true;
-        }
-
-        false
+        self.can_be_replaced(world, pos, block.id).await
     }
 
     async fn can_be_replaced(&self, world: &Arc<World>, pos: &BlockPos, block_id: BlockId) -> bool {
         let block_state_id = world.get_block_state_id(pos).await;
 
-        if let Some(fluid) = Fluid::from_state_id(block_state_id) {
-            if fluid.is_source(block_state_id) && fluid.is_falling(block_state_id) {
-                return true;
-            }
+        if Fluid::from_state_id(block_state_id).is_some() {
+            return true;
         }
 
         //TODO Add check for blocks that aren't solid

@@ -681,12 +681,11 @@ impl Entity {
                                 .block_registry
                                 .on_entity_collision(block, &world, entity, pos, state, server)
                                 .await;
-                            if let Ok(fluid) = world.get_fluid(&pos).await {
-                                world
-                                    .block_registry
-                                    .on_entity_collision_fluid(&fluid, entity)
-                                    .await;
-                            }
+                            let fluid = world.get_fluid(&pos).await;
+                            world
+                                .block_registry
+                                .on_entity_collision_fluid(&fluid, entity)
+                                .await;
                             continue;
                         }
                         for outline in outlines {
@@ -696,12 +695,11 @@ impl Entity {
                                     .block_registry
                                     .on_entity_collision(block, &world, entity, pos, state, server)
                                     .await;
-                                if let Ok(fluid) = world.get_fluid(&pos).await {
-                                    world
-                                        .block_registry
-                                        .on_entity_collision_fluid(&fluid, entity)
-                                        .await;
-                                }
+                                let fluid = world.get_fluid(&pos).await;
+                                world
+                                    .block_registry
+                                    .on_entity_collision_fluid(&fluid, entity)
+                                    .await;
                                 break;
                             }
                         }
@@ -710,12 +708,11 @@ impl Entity {
                             .block_registry
                             .on_entity_collision(block, &world, entity, pos, state, server)
                             .await;
-                        if let Ok(fluid) = world.get_fluid(&pos).await {
-                            world
-                                .block_registry
-                                .on_entity_collision_fluid(&fluid, entity)
-                                .await;
-                        }
+                        let fluid = world.get_fluid(&pos).await;
+                        world
+                            .block_registry
+                            .on_entity_collision_fluid(&fluid, entity)
+                            .await;
                     }
                 }
             }

@@ -510,9 +510,7 @@ impl World {
         }
 
         for scheduled_tick in fluids_to_tick {
-            let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
-                continue;
-            };
+            let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
                 pumpkin_fluid
                     .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
@@ -1467,7 +1465,7 @@ impl World {
 
         let block_state = self.get_block_state(position).await;
         let new_block = Block::from_state_id(block_state_id).unwrap();
-        let new_fluid = self.get_fluid(position).await.unwrap_or(Fluid::EMPTY);
+        let new_fluid = self.get_fluid(position).await;
 
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
@@ -1633,16 +1631,13 @@ impl World {
         get_block_by_state_id(id).unwrap_or(Block::AIR)
     }
 
-    pub async fn get_fluid(
-        &self,
-        position: &BlockPos,
-    ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
+    pub async fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
         let id = self.get_block_state_id(position).await;
-        let fluid = Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId);
+        let fluid = Fluid::from_state_id(id).ok_or(Fluid::EMPTY);
         if let Ok(fluid) = fluid {
-            return Ok(fluid);
+            return fluid;
         }
-        let block = get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)?;
+        let block = get_block_by_state_id(id).unwrap_or(Block::AIR);
         block
             .properties(id)
             .and_then(|props| {
@@ -1652,13 +1647,13 @@ impl World {
                     .find(|p| p.0 == "waterlogged")
                     .map(|(_, value)| {
                         if value == true.to_string() {
-                            Ok(Fluid::FLOWING_WATER)
+                            Fluid::FLOWING_WATER
                         } else {
-                            Err(GetBlockError::InvalidBlockId)
+                            Fluid::EMPTY
                         }
                     })
             })
-            .unwrap_or(Err(GetBlockError::InvalidBlockId))
+            .unwrap_or(Fluid::EMPTY)
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -1708,14 +1703,12 @@ impl World {
                     .await;
             }
 
-            if let Ok(neighbor_fluid) = neighbor_fluid {
-                if let Some(neighbor_pumpkin_fluid) =
-                    self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
-                {
-                    neighbor_pumpkin_fluid
-                        .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
-                        .await;
-                }
+            if let Some(neighbor_pumpkin_fluid) =
+                self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
+            {
+                neighbor_pumpkin_fluid
+                    .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
+                    .await;
             }
         }
     }
