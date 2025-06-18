@@ -9,7 +9,7 @@ pub struct BedBlockEntity {
 
 #[async_trait]
 impl BlockEntity for BedBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 

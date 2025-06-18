@@ -2041,6 +2041,42 @@
               "type": "minecraft:item"
             }
           ]
+        },
+        {
+          "functions": [
+            {
+              "count": 1.0,
+              "add": false,
+              "function": "minecraft:set_count"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0,
+          "entries": [
+            {
+              "name": "minecraft:music_disc_tears",
+              "type": "minecraft:item"
+            }
+          ],
+          "conditions": [
+            {
+              "predicate": {
+                "tags": [
+                  {
+                    "id": "minecraft:is_projectile",
+                    "expected": true
+                  }
+                ],
+                "direct_entity": {
+                  "type": "minecraft:fireball"
+                }
+              },
+              "condition": "minecraft:damage_source_properties"
+            },
+            {
+              "condition": "minecraft:killed_by_player"
+            }
+          ]
         }
       ]
     },
@@ -2049,8 +2085,28 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "giant": {
+  "happy_ghast": {
     "id": 56,
+    "max_health": 20.0,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      4.0,
+      4.0
+    ],
+    "eye_height": 2.6,
+    "loot_table": {
+      "type": "minecraft:entity",
+      "random_sequence": "minecraft:entities/happy_ghast"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "giant": {
+    "id": 57,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -2070,7 +2126,7 @@
     }
   },
   "glow_item_frame": {
-    "id": 57,
+    "id": 58,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2085,7 +2141,7 @@
     }
   },
   "glow_squid": {
-    "id": 58,
+    "id": 59,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -2137,7 +2193,7 @@
     }
   },
   "goat": {
-    "id": 59,
+    "id": 60,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -2157,7 +2213,7 @@
     }
   },
   "guardian": {
-    "id": 60,
+    "id": 61,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -2349,7 +2405,7 @@
     }
   },
   "hoglin": {
-    "id": 61,
+    "id": 62,
     "max_health": 40.0,
     "attackable": true,
     "summonable": true,
@@ -2467,7 +2523,7 @@
     }
   },
   "hopper_minecart": {
-    "id": 62,
+    "id": 63,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2482,7 +2538,7 @@
     }
   },
   "horse": {
-    "id": 63,
+    "id": 64,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -2534,7 +2590,7 @@
     }
   },
   "husk": {
-    "id": 64,
+    "id": 65,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -2657,7 +2713,7 @@
     }
   },
   "illusioner": {
-    "id": 65,
+    "id": 66,
     "max_health": 32.0,
     "attackable": true,
     "summonable": true,
@@ -2677,7 +2733,7 @@
     }
   },
   "interaction": {
-    "id": 66,
+    "id": 67,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2692,7 +2748,7 @@
     }
   },
   "iron_golem": {
-    "id": 67,
+    "id": 68,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -2756,7 +2812,7 @@
     }
   },
   "item": {
-    "id": 68,
+    "id": 69,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -2771,7 +2827,7 @@
     }
   },
   "item_display": {
-    "id": 69,
+    "id": 70,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2786,7 +2842,7 @@
     }
   },
   "item_frame": {
-    "id": 70,
+    "id": 71,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2801,21 +2857,6 @@
     }
   },
   "jungle_boat": {
-    "id": 71,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "jungle_chest_boat": {
     "id": 72,
     "attackable": true,
     "summonable": true,
@@ -2830,8 +2871,23 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "leash_knot": {
+  "jungle_chest_boat": {
     "id": 73,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "leash_knot": {
+    "id": 74,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2846,7 +2902,7 @@
     }
   },
   "lightning_bolt": {
-    "id": 74,
+    "id": 75,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2861,7 +2917,7 @@
     }
   },
   "llama": {
-    "id": 75,
+    "id": 76,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -2913,7 +2969,7 @@
     }
   },
   "llama_spit": {
-    "id": 76,
+    "id": 77,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2928,7 +2984,7 @@
     }
   },
   "magma_cube": {
-    "id": 77,
+    "id": 78,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -3077,21 +3133,6 @@
     }
   },
   "mangrove_boat": {
-    "id": 78,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "mangrove_chest_boat": {
     "id": 79,
     "attackable": true,
     "summonable": true,
@@ -3106,8 +3147,23 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "marker": {
+  "mangrove_chest_boat": {
     "id": 80,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "marker": {
+    "id": 81,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -3122,7 +3178,7 @@
     }
   },
   "minecart": {
-    "id": 81,
+    "id": 82,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -3137,7 +3193,7 @@
     }
   },
   "mooshroom": {
-    "id": 82,
+    "id": 83,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -3255,7 +3311,7 @@
     }
   },
   "mule": {
-    "id": 83,
+    "id": 84,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -3307,21 +3363,6 @@
     }
   },
   "oak_boat": {
-    "id": 84,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "oak_chest_boat": {
     "id": 85,
     "attackable": true,
     "summonable": true,
@@ -3336,8 +3377,23 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "ocelot": {
+  "oak_chest_boat": {
     "id": 86,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "ocelot": {
+    "id": 87,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -3357,7 +3413,7 @@
     }
   },
   "ominous_item_spawner": {
-    "id": 87,
+    "id": 88,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -3372,7 +3428,7 @@
     }
   },
   "painting": {
-    "id": 88,
+    "id": 89,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -3387,21 +3443,6 @@
     }
   },
   "pale_oak_boat": {
-    "id": 89,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "pale_oak_chest_boat": {
     "id": 90,
     "attackable": true,
     "summonable": true,
@@ -3416,8 +3457,23 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "panda": {
+  "pale_oak_chest_boat": {
     "id": 91,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "panda": {
+    "id": 92,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -3456,7 +3512,7 @@
     }
   },
   "parrot": {
-    "id": 92,
+    "id": 93,
     "max_health": 6.0,
     "attackable": true,
     "summonable": true,
@@ -3508,7 +3564,7 @@
     }
   },
   "phantom": {
-    "id": 93,
+    "id": 94,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -3565,7 +3621,7 @@
     }
   },
   "pig": {
-    "id": 94,
+    "id": 95,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -3653,7 +3709,7 @@
     }
   },
   "piglin": {
-    "id": 95,
+    "id": 96,
     "max_health": 16.0,
     "attackable": true,
     "summonable": true,
@@ -3673,7 +3729,7 @@
     }
   },
   "piglin_brute": {
-    "id": 96,
+    "id": 97,
     "max_health": 50.0,
     "attackable": true,
     "summonable": true,
@@ -3693,7 +3749,7 @@
     }
   },
   "pillager": {
-    "id": 97,
+    "id": 98,
     "max_health": 24.0,
     "attackable": true,
     "summonable": true,
@@ -3752,7 +3808,7 @@
     }
   },
   "polar_bear": {
-    "id": 98,
+    "id": 99,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -3901,21 +3957,6 @@
     }
   },
   "splash_potion": {
-    "id": 99,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      0.25,
-      0.25
-    ],
-    "eye_height": 0.2125,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "lingering_potion": {
     "id": 100,
     "attackable": true,
     "summonable": true,
@@ -3930,8 +3971,23 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "pufferfish": {
+  "lingering_potion": {
     "id": 101,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      0.25,
+      0.25
+    ],
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "pufferfish": {
+    "id": 102,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3986,7 +4042,7 @@
     }
   },
   "rabbit": {
-    "id": 102,
+    "id": 103,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -4125,7 +4181,7 @@
     }
   },
   "ravager": {
-    "id": 103,
+    "id": 104,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -4164,7 +4220,7 @@
     }
   },
   "salmon": {
-    "id": 104,
+    "id": 105,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -4250,7 +4306,7 @@
     }
   },
   "sheep": {
-    "id": 105,
+    "id": 106,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -4653,7 +4709,7 @@
     }
   },
   "shulker": {
-    "id": 106,
+    "id": 107,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -4697,7 +4753,7 @@
     }
   },
   "shulker_bullet": {
-    "id": 107,
+    "id": 108,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4712,7 +4768,7 @@
     }
   },
   "silverfish": {
-    "id": 108,
+    "id": 109,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -4732,7 +4788,7 @@
     }
   },
   "skeleton": {
-    "id": 109,
+    "id": 110,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4814,7 +4870,7 @@
     }
   },
   "skeleton_horse": {
-    "id": 110,
+    "id": 111,
     "max_health": 15.0,
     "attackable": true,
     "summonable": true,
@@ -4866,7 +4922,7 @@
     }
   },
   "slime": {
-    "id": 111,
+    "id": 112,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4964,7 +5020,7 @@
     }
   },
   "small_fireball": {
-    "id": 112,
+    "id": 113,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4979,7 +5035,7 @@
     }
   },
   "sniffer": {
-    "id": 113,
+    "id": 114,
     "max_health": 14.0,
     "attackable": true,
     "summonable": true,
@@ -4999,7 +5055,7 @@
     }
   },
   "snowball": {
-    "id": 114,
+    "id": 115,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5014,7 +5070,7 @@
     }
   },
   "snow_golem": {
-    "id": 115,
+    "id": 116,
     "max_health": 4.0,
     "attackable": true,
     "summonable": true,
@@ -5057,7 +5113,7 @@
     }
   },
   "spawner_minecart": {
-    "id": 116,
+    "id": 117,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5072,7 +5128,7 @@
     }
   },
   "spectral_arrow": {
-    "id": 117,
+    "id": 118,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -5087,7 +5143,7 @@
     }
   },
   "spider": {
-    "id": 118,
+    "id": 119,
     "max_health": 16.0,
     "attackable": true,
     "summonable": true,
@@ -5174,21 +5230,6 @@
     }
   },
   "spruce_boat": {
-    "id": 119,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "spruce_chest_boat": {
     "id": 120,
     "attackable": true,
     "summonable": true,
@@ -5203,8 +5244,23 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "squid": {
+  "spruce_chest_boat": {
     "id": 121,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "squid": {
+    "id": 122,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -5256,7 +5312,7 @@
     }
   },
   "stray": {
-    "id": 122,
+    "id": 123,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5378,7 +5434,7 @@
     }
   },
   "strider": {
-    "id": 123,
+    "id": 124,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5430,7 +5486,7 @@
     }
   },
   "tadpole": {
-    "id": 124,
+    "id": 125,
     "max_health": 6.0,
     "attackable": true,
     "summonable": true,
@@ -5450,7 +5506,7 @@
     }
   },
   "text_display": {
-    "id": 125,
+    "id": 126,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5465,7 +5521,7 @@
     }
   },
   "tnt": {
-    "id": 126,
+    "id": 127,
     "attackable": true,
     "summonable": true,
     "fire_immune": true,
@@ -5480,7 +5536,7 @@
     }
   },
   "tnt_minecart": {
-    "id": 127,
+    "id": 128,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5495,7 +5551,7 @@
     }
   },
   "trader_llama": {
-    "id": 128,
+    "id": 129,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -5547,7 +5603,7 @@
     }
   },
   "trident": {
-    "id": 129,
+    "id": 130,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -5562,7 +5618,7 @@
     }
   },
   "tropical_fish": {
-    "id": 130,
+    "id": 131,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -5617,7 +5673,7 @@
     }
   },
   "turtle": {
-    "id": 131,
+    "id": 132,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -5693,7 +5749,7 @@
     }
   },
   "vex": {
-    "id": 132,
+    "id": 133,
     "max_health": 14.0,
     "attackable": true,
     "summonable": true,
@@ -5713,7 +5769,7 @@
     }
   },
   "villager": {
-    "id": 133,
+    "id": 134,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5733,7 +5789,7 @@
     }
   },
   "vindicator": {
-    "id": 134,
+    "id": 135,
     "max_health": 24.0,
     "attackable": true,
     "summonable": true,
@@ -5790,7 +5846,7 @@
     }
   },
   "wandering_trader": {
-    "id": 135,
+    "id": 136,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5810,7 +5866,7 @@
     }
   },
   "warden": {
-    "id": 136,
+    "id": 137,
     "max_health": 500.0,
     "attackable": true,
     "summonable": true,
@@ -5842,7 +5898,7 @@
     }
   },
   "wind_charge": {
-    "id": 137,
+    "id": 138,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5857,7 +5913,7 @@
     }
   },
   "witch": {
-    "id": 138,
+    "id": 139,
     "max_health": 26.0,
     "attackable": true,
     "summonable": true,
@@ -6064,7 +6120,7 @@
     }
   },
   "wither": {
-    "id": 139,
+    "id": 140,
     "max_health": 300.0,
     "attackable": true,
     "summonable": true,
@@ -6084,7 +6140,7 @@
     }
   },
   "wither_skeleton": {
-    "id": 140,
+    "id": 141,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -6191,7 +6247,7 @@
     }
   },
   "wither_skull": {
-    "id": 141,
+    "id": 142,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -6206,7 +6262,7 @@
     }
   },
   "wolf": {
-    "id": 142,
+    "id": 143,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -6226,7 +6282,7 @@
     }
   },
   "zoglin": {
-    "id": 143,
+    "id": 144,
     "max_health": 40.0,
     "attackable": true,
     "summonable": true,
@@ -6278,7 +6334,7 @@
     }
   },
   "zombie": {
-    "id": 144,
+    "id": 145,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -6401,7 +6457,7 @@
     }
   },
   "zombie_horse": {
-    "id": 145,
+    "id": 146,
     "max_health": 15.0,
     "attackable": true,
     "summonable": true,
@@ -6453,7 +6509,7 @@
     }
   },
   "zombie_villager": {
-    "id": 146,
+    "id": 147,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -6576,7 +6632,7 @@
     }
   },
   "zombified_piglin": {
-    "id": 147,
+    "id": 148,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -6683,7 +6739,7 @@
     }
   },
   "player": {
-    "id": 148,
+    "id": 149,
     "summonable": false,
     "fire_immune": false,
     "dimension": [
@@ -6701,7 +6757,7 @@
     }
   },
   "fishing_bobber": {
-    "id": 149,
+    "id": 150,
     "attackable": true,
     "summonable": false,
     "fire_immune": false,
