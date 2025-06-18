@@ -117,14 +117,7 @@ pub trait FlowingFluid {
                     )
                     .await;
             }
-            if let Some(new_fluid) = Fluid::from_state_id(new_fluid_state.to_state_id(fluid)) {
-                if new_fluid.name != Fluid::EMPTY.name {
-                    self.spread(world, &new_fluid, block_pos, &new_fluid_state)
-                        .await;
-                }
-
-                return;
-            }
+            self.spread(world, fluid, block_pos, &new_fluid_state).await;
         } else if self.is_waterlogged(world, block_pos).await.is_some() {
             self.spread(
                 world,
@@ -259,7 +252,11 @@ pub trait FlowingFluid {
     ) -> bool {
         let block = world.get_block(block_pos).await;
 
-        if block.id != 0 && !self.can_be_replaced(world, block_pos, block.id).await {
+        if block.id != 0
+            && !self
+                .can_be_replaced(world, block_pos, block.id, fluid)
+                .await
+        {
             return true;
         }
 
@@ -432,17 +429,29 @@ pub trait FlowingFluid {
         self.can_replace_block(world, pos, fluid).await
     }
 
-    async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, _fluid: &Fluid) -> bool {
+    async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, fluid: &Fluid) -> bool {
         let block = world.get_block(pos).await;
 
-        self.can_be_replaced(world, pos, block.id).await
+        self.can_be_replaced(world, pos, block.id, fluid).await
     }
 
-    async fn can_be_replaced(&self, world: &Arc<World>, pos: &BlockPos, block_id: BlockId) -> bool {
-        let block_state_id = world.get_block_state_id(pos).await;
+    async fn can_be_replaced(
+        &self,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        block_id: BlockId,
+        fluid: &Fluid,
+    ) -> bool {
+        // let block_state_id = world.get_block_state_id(pos).await;
+        let block_state = world.get_block_state(pos).await;
 
-        if Fluid::from_state_id(block_state_id).is_some() {
-            return true;
+        if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
+            if fluid.id != other_fluid.id {
+                return true;
+            }
+            if other_fluid.is_source(block_state.id) && other_fluid.is_falling(block_state.id) {
+                return true;
+            }
         }
 
         //TODO Add check for blocks that aren't solid
