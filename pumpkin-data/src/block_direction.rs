@@ -131,6 +131,16 @@ impl BlockDirection {
         ]
     }
 
+    pub fn flow_directions() -> [BlockDirection; 5] {
+        [
+            BlockDirection::Down,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ]
+    }
+
     pub fn is_horizontal(&self) -> bool {
         matches!(
             self,

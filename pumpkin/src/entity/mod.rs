@@ -20,6 +20,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     ser::serializer::Serializer,
 };
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
     get_section_cord,
@@ -321,9 +322,33 @@ impl Entity {
                 // reset cooldown
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
+                let pos = self.pos.load();
+                // TODO: this is bad
+                let scale_factor_new = if portal_manager.portal_world.dimension_type
+                    == VanillaDimensionType::TheNether
+                {
+                    8.0
+                } else {
+                    1.0
+                };
+                // TODO: this is bad
+                let scale_factor_current =
+                    if self.world.read().await.dimension_type == VanillaDimensionType::TheNether {
+                        8.0
+                    } else {
+                        1.0
+                    };
+                let scale_factor = scale_factor_current / scale_factor_new;
+                // TODO
+                let pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
                 caller
                     .clone()
-                    .teleport(None, None, None, portal_manager.portal_world.clone())
+                    .teleport(
+                        Some(pos.0.to_f64()),
+                        None,
+                        None,
+                        portal_manager.portal_world.clone(),
+                    )
                     .await;
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
@@ -656,12 +681,11 @@ impl Entity {
                                 .block_registry
                                 .on_entity_collision(block, &world, entity, pos, state, server)
                                 .await;
-                            if let Ok(fluid) = world.get_fluid(&pos).await {
-                                world
-                                    .block_registry
-                                    .on_entity_collision_fluid(&fluid, entity)
-                                    .await;
-                            }
+                            let fluid = world.get_fluid(&pos).await;
+                            world
+                                .block_registry
+                                .on_entity_collision_fluid(&fluid, entity)
+                                .await;
                             continue;
                         }
                         for outline in outlines {
@@ -671,12 +695,11 @@ impl Entity {
                                     .block_registry
                                     .on_entity_collision(block, &world, entity, pos, state, server)
                                     .await;
-                                if let Ok(fluid) = world.get_fluid(&pos).await {
-                                    world
-                                        .block_registry
-                                        .on_entity_collision_fluid(&fluid, entity)
-                                        .await;
-                                }
+                                let fluid = world.get_fluid(&pos).await;
+                                world
+                                    .block_registry
+                                    .on_entity_collision_fluid(&fluid, entity)
+                                    .await;
                                 break;
                             }
                         }
@@ -685,12 +708,11 @@ impl Entity {
                             .block_registry
                             .on_entity_collision(block, &world, entity, pos, state, server)
                             .await;
-                        if let Ok(fluid) = world.get_fluid(&pos).await {
-                            world
-                                .block_registry
-                                .on_entity_collision_fluid(&fluid, entity)
-                                .await;
-                        }
+                        let fluid = world.get_fluid(&pos).await;
+                        world
+                            .block_registry
+                            .on_entity_collision_fluid(&fluid, entity)
+                            .await;
                     }
                 }
             }

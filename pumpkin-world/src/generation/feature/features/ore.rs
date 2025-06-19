@@ -89,7 +89,7 @@ impl OreFeature {
     ) -> bool {
         let mut placed_blocks_count = 0;
         let mut bit_set = HashSet::new();
-        let mut mutable_pos = BlockPos::new(0, 0, 0);
+        let mut mutable_pos = BlockPos::ZERO;
         let j = self.size;
         let mut ds = vec![0.0; (j * 4) as usize];
         for k in 0..j {

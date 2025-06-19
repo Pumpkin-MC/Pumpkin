@@ -225,6 +225,28 @@ impl ConfiguredFeature {
         pos: BlockPos,
     ) -> bool {
         match self {
+            Self::NetherrackReplaceBlobs(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::NetherForestVegetation(feature) => {
+                feature
+                    .generate(
+                        chunk,
+                        block_registry,
+                        min_y,
+                        height,
+                        feature_name,
+                        random,
+                        pos,
+                    )
+                    .await
+            }
             Self::PointedDripstone(feature) => feature.generate(chunk, random, pos),
             Self::CoralMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)

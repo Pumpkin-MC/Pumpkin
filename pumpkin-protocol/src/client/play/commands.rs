@@ -129,7 +129,7 @@ impl ProtoNode<'_> {
                 } => {
                     // suggestion type
                     let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not `None`.");
-                    write.write_string(suggestion_type.identifier())?;
+                    write.write_string(suggestion_type.resource_location())?;
                 }
                 _ => unimplemented!(
                     "`ProtoNode::FLAG_HAS_SUGGESTION_TYPE` is only implemented for `ProtoNodeType::Argument`"
@@ -161,6 +161,7 @@ pub enum ArgumentType<'a> {
     ItemStack,
     ItemPredicate,
     Color,
+    HexColor,
     Component,
     Style,
     Message,
@@ -197,6 +198,7 @@ pub enum ArgumentType<'a> {
     LootTable,
     LootPredicate,
     LootModifier,
+    Dialog,
     Uuid,
 }
 
@@ -316,7 +318,7 @@ pub enum SuggestionProviders {
 }
 
 impl SuggestionProviders {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         match self {
             Self::AskServer => "minecraft:ask_server",
             Self::AllRecipes => "minecraft:all_recipes",

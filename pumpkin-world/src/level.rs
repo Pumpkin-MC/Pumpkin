@@ -721,6 +721,13 @@ impl Level {
 
     pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: &BlockPos, delay: u16) {
         let mut fluid_ticks = self.fluid_ticks.lock().await;
+        if fluid_ticks
+            .iter()
+            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
+        {
+            // If a fluid tick is already scheduled for this block, we don't need to schedule it again
+            return;
+        }
         fluid_ticks.push(ScheduledTick {
             block_pos: *block_pos,
             delay,

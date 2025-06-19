@@ -7,7 +7,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::entities::end_portal::EndPortalBlockEntity;
 
@@ -25,12 +25,14 @@ impl PumpkinBlock for EndPortalBlock {
         _state: BlockState,
         server: &Server,
     ) {
-        let world = if world.dimension_type == DimensionType::TheEnd {
+        let world = if world.dimension_type == VanillaDimensionType::TheEnd {
             server
-                .get_world_from_dimension(DimensionType::Overworld)
+                .get_world_from_dimension(VanillaDimensionType::Overworld)
                 .await
         } else {
-            server.get_world_from_dimension(DimensionType::TheEnd).await
+            server
+                .get_world_from_dimension(VanillaDimensionType::TheEnd)
+                .await
         };
         entity.get_entity().try_use_portal(0, world, pos).await;
     }
