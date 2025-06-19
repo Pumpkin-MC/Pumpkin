@@ -156,7 +156,7 @@ impl PumpkinBlock for PaleMossCarpetBlock {
 
 async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     !block_accessor
-        .get_block(&block_pos.down())
+        .get_block_state(&block_pos.down())
         .await
-        .eq(&Block::AIR)
+        .is_air()
 }
