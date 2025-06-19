@@ -41,12 +41,11 @@ impl Tagable for Block {
 
 impl Block {
     pub fn is_waterlogged(&self, state_id: u16) -> bool {
-        if let Some(properties) = self.properties(state_id) {
-            return properties
+        self.properties(state_id).is_some_and(|properties| {
+            properties
                 .to_props()
                 .iter()
-                .any(|(key, value)| key == "waterlogged" && value == "true");
-        }
-        false
+                .any(|(key, value)| key == "waterlogged" && value == "true")
+        })
     }
 }
