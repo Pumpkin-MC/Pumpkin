@@ -51,7 +51,7 @@ mod key_store;
 pub mod seasonal_events;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.5";
+pub const CURRENT_MC_VERSION: &str = "1.21.6";
 
 /// Represents a Minecraft server instance.
 pub struct Server {

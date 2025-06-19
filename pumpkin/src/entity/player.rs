@@ -2070,9 +2070,7 @@ impl Player {
                 self.handle_client_status(SClientCommand::read(payload)?)
                     .await;
             }
-            SPlayerInput::PACKET_ID => {
-                // TODO
-            }
+            SPlayerInput::PACKET_ID => self.handle_player_input(SPlayerInput::read(payload)?).await,
             SInteract::PACKET_ID => {
                 self.handle_interact(SInteract::read(payload)?).await;
             }

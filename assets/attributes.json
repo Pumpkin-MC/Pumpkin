@@ -7,6 +7,7 @@
   "block_break_speed": 1.0,
   "block_interaction_range": 4.5,
   "burning_time": 1.0,
+  "camera_distance": 4.0,
   "explosion_knockback_resistance": 0.0,
   "entity_interaction_range": 3.0,
   "fall_damage_multiplier": 1.0,
@@ -30,5 +31,7 @@
   "submerged_mining_speed": 0.2,
   "sweeping_damage_ratio": 0.0,
   "tempt_range": 10.0,
-  "water_movement_efficiency": 0.0
+  "water_movement_efficiency": 0.0,
+  "waypoint_transmit_range": 0.0,
+  "waypoint_receive_range": 0.0
 }

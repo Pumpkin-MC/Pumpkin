@@ -32,9 +32,10 @@ use pumpkin_protocol::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChatCommand, SChatMessage, SChunkBatch,
     SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerPosition,
-    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot,
-    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
+    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
+    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -49,8 +50,8 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
-use crate::entity::mob;
 use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
+use crate::entity::{EntityBase, mob};
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
@@ -624,16 +625,6 @@ impl Player {
         if let Ok(action) = Action::try_from(command.action.0) {
             let entity = &self.living_entity.entity;
             match action {
-                pumpkin_protocol::server::play::Action::StartSneaking => {
-                    if !entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
-                        entity.set_sneaking(true).await;
-                    }
-                }
-                pumpkin_protocol::server::play::Action::StopSneaking => {
-                    if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
-                        entity.set_sneaking(false).await;
-                    }
-                }
                 pumpkin_protocol::server::play::Action::StartSprinting => {
                     if !entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
                         entity.set_sprinting(true).await;
@@ -665,6 +656,18 @@ impl Player {
         } else {
             self.kick(TextComponent::text("Invalid player command"))
                 .await;
+        }
+    }
+
+    pub async fn handle_player_input(&self, input: SPlayerInput) {
+        let sneak = input.input & SPlayerInput::SNEAK != 0;
+        if self
+            .get_entity()
+            .sneaking
+            .load(std::sync::atomic::Ordering::Relaxed)
+            != sneak
+        {
+            self.get_entity().set_sneaking(sneak).await;
         }
     }
 
@@ -1024,6 +1027,11 @@ impl Player {
                     return;
                 }
                 self.world().await.respawn_player(self, false).await;
+
+                let screen_handler = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler.lock().await;
+                screen_handler.sync_state().await;
+                drop(screen_handler);
 
                 // Restore abilities based on gamemode after respawn
                 let mut abilities = self.abilities.lock().await;

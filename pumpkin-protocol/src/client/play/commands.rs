@@ -161,6 +161,7 @@ pub enum ArgumentType<'a> {
     ItemStack,
     ItemPredicate,
     Color,
+    HexColor,
     Component,
     Style,
     Message,
@@ -197,6 +198,7 @@ pub enum ArgumentType<'a> {
     LootTable,
     LootPredicate,
     LootModifier,
+    Dialog,
     Uuid,
 }
 
