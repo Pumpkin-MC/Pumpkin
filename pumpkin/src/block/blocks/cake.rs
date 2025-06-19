@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
-    entity::EntityPose,
     item::Item,
     sound::{Sound, SoundCategory},
 };
@@ -18,7 +17,7 @@ use crate::{
         blocks::candle_cakes::cake_from_candle, pumpkin_block::PumpkinBlock,
         registry::BlockActionResult,
     },
-    entity::{EntityBase, player::Player},
+    entity::player::Player,
     server::Server,
     world::World,
 };
@@ -83,9 +82,6 @@ impl PumpkinBlock for CakeBlock {
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        if player.get_entity().pose.load() == EntityPose::Crouching {
-            return BlockActionResult::Continue;
-        }
         let state_id = world.get_block_state_id(&location).await;
         let properties = CakeLikeProperties::from_state_id(state_id, block);
         match item.id {

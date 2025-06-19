@@ -3,20 +3,20 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block,
-    entity::{EntityPose, EntityType},
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{item::ItemStack, world::BlockFlags};
 
+use crate::block::drop_stack;
 use crate::{
     block::{
         blocks::cake::CakeBlock,
         pumpkin_block::{BlockMetadata, PumpkinBlock},
         registry::BlockActionResult,
     },
-    entity::{EntityBase, item::ItemEntity, player::Player},
+    entity::player::Player,
     server::Server,
     world::World,
 };
@@ -83,15 +83,11 @@ impl CandleCakeBlock {
         if player.hunger_manager.level.load() >= 20 {
             return;
         }
-
-        let entity = world.create_entity(location.up().to_f64(), EntityType::ITEM);
-
         let candle_item = candle_from_cake(block);
 
         let item_stack = ItemStack::new(1, candle_item);
-        let item_entity = ItemEntity::new(entity, item_stack).await;
 
-        world.spawn_entity(Arc::new(item_entity)).await;
+        drop_stack(world, location, item_stack).await;
 
         world
             .set_block_state(
@@ -118,17 +114,13 @@ impl PumpkinBlock for CandleCakeBlock {
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        if player.get_entity().pose.load() == EntityPose::Crouching {
-            return BlockActionResult::Continue;
-        }
-
-        return match item.id {
+        match item.id {
             1150 | 838 => BlockActionResult::Continue, // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
             _ => {
                 Self::consume_and_drop_candle(block, player, &location, world).await;
                 BlockActionResult::Consume
             }
-        };
+        }
     }
 
     async fn normal_use(
