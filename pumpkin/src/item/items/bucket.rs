@@ -115,9 +115,6 @@ impl PumpkinItem for EmptyBucketItem {
             return;
         };
 
-        // let state_id = world.get_block_state_id(&block_pos).await;
-        //
-        // let block = Block::from_state_id(state_id).unwrap();
         let (block, state) = world.get_block_and_block_state(&block_pos).await;
 
         if block
@@ -225,11 +222,9 @@ impl PumpkinItem for FilledBucketItem {
                     SoundCategory::Blocks,
                     &player.position(),
                     0.5,
-                    2.6,
+                    2.6 + (rand::random::<f32>() - rand::random::<f32>()) * 0.8,
                 )
                 .await;
-            // TODO pitch should be 2.6F + (world.random.nextFloat() - world.random.nextFloat()) * 0.8F,
-            // but we don't have a global world random yet
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;
