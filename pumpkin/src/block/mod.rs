@@ -2,6 +2,7 @@ use blocks::bamboo::BambooBlock;
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
+use blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use blocks::command::CommandBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
@@ -99,6 +100,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BedBlock);
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
+    manager.register(CarpetBlock);
+    manager.register(MossCarpetBlock);
+    manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
     manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);

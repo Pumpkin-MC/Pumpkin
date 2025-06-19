@@ -5,6 +5,7 @@ pub mod cactus;
 pub mod cake;
 pub mod candle_cakes;
 pub mod candles;
+pub mod carpet;
 pub mod chest;
 pub mod command;
 pub mod crafting_table;
