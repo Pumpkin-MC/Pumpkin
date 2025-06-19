@@ -22,6 +22,7 @@ impl Default for FuelRegistry {
 impl FuelRegistry {
     const ITEM_SMELT_TIME: i32 = 200;
 
+    #[must_use]
     pub fn is_fuel(&self, item: &Item) -> bool {
         if self.fuel_values.contains_key(item.registry_key()) {
             return true;
@@ -36,6 +37,7 @@ impl FuelRegistry {
         false
     }
 
+    #[must_use]
     pub fn get_fuel_tick(&self, item: &Item) -> Option<i32> {
         if let Some(fuel_tick) = self.fuel_values.get(item.registry_key) {
             return Some(*fuel_tick);

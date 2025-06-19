@@ -13,14 +13,14 @@ use super::furnace_screen_handler::FurnaceScreenHandler;
 
 struct FurnaceScreenFactory {
     inventory: Arc<dyn Inventory>,
-    fuel_registery: Arc<FuelRegistry>,
+    fuel_registry: Arc<FuelRegistry>,
 }
 
 impl FurnaceScreenFactory {
-    fn new(inventory: Arc<dyn Inventory>, fuel_registery: Arc<FuelRegistry>) -> Self {
+    fn new(inventory: Arc<dyn Inventory>, fuel_registry: Arc<FuelRegistry>) -> Self {
         Self {
             inventory,
-            fuel_registery,
+            fuel_registry,
         }
     }
 }
@@ -36,7 +36,7 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
             sync_id,
             player_inventory,
             self.inventory.clone(),
-            self.fuel_registery.clone(),
+            self.fuel_registry.clone(),
         ))))
     }
 
@@ -60,8 +60,8 @@ impl PumpkinBlock for FurnaceBlock {
     ) {
         if let Some((_, block_entity)) = world.get_block_entity(&location).await {
             if let Some(inventory) = block_entity.get_inventory() {
-                let fuel_registery = server.fuel_registry.clone();
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, fuel_registery);
+                let fuel_registry = server.fuel_registry.clone();
+                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, fuel_registry);
                 player.open_handled_screen(&furnace_screen_factory).await;
             }
         }
@@ -78,8 +78,8 @@ impl PumpkinBlock for FurnaceBlock {
     ) -> crate::block::registry::BlockActionResult {
         if let Some((_, block_entity)) = world.get_block_entity(&location).await {
             if let Some(inventory) = block_entity.get_inventory() {
-                let fuel_registery = server.fuel_registry.clone();
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, fuel_registery);
+                let fuel_registry = server.fuel_registry.clone();
+                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, fuel_registry);
                 player.open_handled_screen(&furnace_screen_factory).await;
             }
         }
@@ -122,4 +122,3 @@ impl PumpkinBlock for FurnaceBlock {
         world.remove_block_entity(&location).await;
     }
 }
-
