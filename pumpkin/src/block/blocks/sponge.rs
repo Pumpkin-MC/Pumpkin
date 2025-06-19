@@ -2,6 +2,7 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_macros::pumpkin_block;
@@ -35,6 +36,37 @@ impl SpongeBlock {
     const ABSORPTION_RADIUS: i32 = 6;
     const MAX_ABSORBED_BLOCKS: usize = 65;
 
+    // Helper function to remove waterlogged property (not async)
+    fn remove_waterlogged_property(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
+        if let Some(properties) = block.properties(state_id) {
+            let original_props = properties.to_props();
+            let is_waterlogged = original_props
+                .iter()
+                .any(|(key, value)| key == "waterlogged" && value == "true");
+
+            if is_waterlogged {
+                let mut props_vec: Vec<(&str, String)> = Vec::with_capacity(original_props.len());
+
+                for (key, value) in &original_props {
+                    if key == "waterlogged" {
+                        props_vec.push((key.as_str(), "false".to_string()));
+                    } else {
+                        props_vec.push((key.as_str(), value.clone()));
+                    }
+                }
+
+                // Convert to the format expected by from_properties
+                let props_refs: Vec<(&str, &str)> =
+                    props_vec.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+                if let Some(new_props) = block.from_properties(props_refs) {
+                    return Some(new_props.to_state_id(block));
+                }
+            }
+        }
+        None
+    }
+
     // Absorbs water in a radius around the sponge block
     pub async fn absorb_water(
         &self,
@@ -63,11 +95,12 @@ impl SpongeBlock {
             {
                 continue;
             }
-            let block = world.get_block(&current_pos).await;
-            if Self::is_water_block(&block) {
+
+            if Self::is_water_block(world, &current_pos).await {
                 water_blocks.push(current_pos);
             }
 
+            // Add adjacent blocks to the queue
             for dx in -1..=1 {
                 for dy in -1..=1 {
                     for dz in -1..=1 {
@@ -89,15 +122,18 @@ impl SpongeBlock {
                 }
             }
         }
+
+        water_blocks.sort_by_key(|pos| {
+            let dx = (pos.0.x - sponge_pos.0.x).abs();
+            let dy = (pos.0.y - sponge_pos.0.y).abs();
+            let dz = (pos.0.z - sponge_pos.0.z).abs();
+            dx + dy + dz
+        });
+
         if !water_blocks.is_empty() {
+            // Remove water blocks starting from closest to sponge
             for water_pos in water_blocks {
-                world
-                    .set_block_state(
-                        &water_pos,
-                        Block::AIR.default_state_id,
-                        BlockFlags::NOTIFY_LISTENERS,
-                    )
-                    .await;
+                Self::remove_water_at_position(world, &water_pos).await;
                 world.update_neighbors(&water_pos, None).await;
             }
 
@@ -113,9 +149,52 @@ impl SpongeBlock {
 
         Ok(())
     }
-    // Checks if a block represents water
-    fn is_water_block(block: &Block) -> bool {
-        block == &Block::WATER
+    async fn remove_water_at_position(world: &Arc<World>, pos: &BlockPos) {
+        let block = world.get_block(pos).await;
+        let state_id = world.get_block_state_id(pos).await;
+
+        // Try to remove waterlogged property first
+        if let Some(new_state_id) = Self::remove_waterlogged_property(&block, state_id) {
+            world
+                .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS)
+                .await;
+            return;
+        }
+
+        world
+            .set_block_state(
+                pos,
+                Block::AIR.default_state_id,
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+    }
+
+    fn is_waterlogged(block: &Block, state_id: BlockStateId) -> bool {
+        if let Some(properties) = block.properties(state_id) {
+            properties
+                .to_props()
+                .iter()
+                .any(|(key, value)| key == "waterlogged" && value == "true")
+        } else {
+            false
+        }
+    }
+
+    async fn is_water_block(world: &Arc<World>, pos: &BlockPos) -> bool {
+        let block = world.get_block(pos).await;
+        let state_id = world.get_block_state_id(pos).await;
+
+        if block == Block::WATER {
+            return true;
+        }
+
+        if let Some(fluid) = Fluid::from_state_id(state_id) {
+            if fluid.name.contains("water") {
+                return true;
+            }
+        }
+        Self::is_waterlogged(&block, state_id)
     }
 
     async fn play_absorption_sound(&self, world: &Arc<World>, pos: BlockPos) {

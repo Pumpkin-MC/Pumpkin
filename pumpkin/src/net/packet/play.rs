@@ -29,18 +29,18 @@ use pumpkin_protocol::client::play::{
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChatCommand, SChatMessage, SChunkBatch,
-    SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-    Status,
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
+    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
+    SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_util::{GameMode, text::TextComponent};
+use pumpkin_util::{GameMode, PermissionLvl, text::TextComponent};
 use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
@@ -1047,6 +1047,30 @@ impl Player {
                 self.kick(TextComponent::text("Invalid client status"))
                     .await;
             }
+        }
+    }
+    pub async fn handle_change_game_mode(
+        self: &Arc<Self>,
+        _server: &Arc<Server>,
+        change_game_mode: SChangeGameMode,
+    ) {
+        // Check if player has permission to change gamemode (op level 2 or higher)
+        if self.permission_lvl.load() < PermissionLvl::Two {
+            return;
+        }
+
+        // Convert VarInt to GameMode
+        let gamemode = match GameMode::try_from(change_game_mode.gamemode.0 as i8) {
+            Ok(gamemode) => gamemode,
+            Err(_) => {
+                log::warn!("Invalid gamemode received: {}", change_game_mode.gamemode.0);
+                return;
+            }
+        };
+
+        // Only change if it's different from current gamemode
+        if self.gamemode.load() != gamemode {
+            self.set_gamemode(gamemode).await;
         }
     }
 
