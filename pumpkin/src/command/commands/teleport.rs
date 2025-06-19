@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use std::ops::RangeInclusive;
 
 use crate::command::CommandError;
 use crate::command::args::ConsumedArgs;
@@ -13,6 +12,7 @@ use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
 const DESCRIPTION: &str = "Teleports entities, including players."; // todo
@@ -35,9 +35,6 @@ const ARG_FACING_ENTITY: &str = "facingEntity";
 /// position
 const ARG_FACING_LOCATION: &str = "facingLocation";
 
-/// Max tp range
-const RANGE: RangeInclusive<f64> = -30_000_000.0..=30_000_000.0;
-
 fn yaw_pitch_facing_position(
     looking_from: &Vector3<f64>,
     looking_towards: &Vector3<f64>,
@@ -51,10 +48,6 @@ fn yaw_pitch_facing_position(
     let pitch_degrees = pitch_radians.to_degrees();
 
     (yaw_degrees as f32, pitch_degrees as f32)
-}
-
-fn dest_in_range(dest: &Vector3<f64>) -> bool {
-    RANGE.contains(&dest.x) && RANGE.contains(&dest.y) && RANGE.contains(&dest.z)
 }
 
 struct EntitiesToEntityExecutor;
@@ -76,7 +69,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             let yaw = target.living_entity.entity.yaw.load();
             let pitch = target.living_entity.entity.pitch.load();
 
-            if dest_in_range(&pos) {
+            if World::is_valid(&pos) {
                 target.teleport(pos, yaw, pitch).await;
             } else {
                 sender
@@ -109,7 +102,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
 
-        if dest_in_range(&pos) {
+        if World::is_valid(&pos) {
             for target in targets {
                 target.teleport(pos, yaw, pitch).await;
             }
@@ -145,7 +138,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             .entity;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
 
-        if dest_in_range(&pos) {
+        if World::is_valid(&pos) {
             for target in targets {
                 target.teleport(pos, yaw, pitch).await;
             }
@@ -178,7 +171,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
 
         let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
-        if dest_in_range(&pos) {
+        if World::is_valid(&pos) {
             for target in targets {
                 target.teleport(pos, yaw, pitch).await;
             }
@@ -209,7 +202,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-        if dest_in_range(&pos) {
+        if World::is_valid(&pos) {
             for target in targets {
                 let yaw = target.living_entity.entity.yaw.load();
                 let pitch = target.living_entity.entity.pitch.load();
@@ -246,7 +239,7 @@ impl CommandExecutor for SelfToEntityExecutor {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
 
-                if dest_in_range(&pos) {
+                if World::is_valid(&pos) {
                     player.teleport(pos, yaw, pitch).await;
                 } else {
                     sender
@@ -284,7 +277,7 @@ impl CommandExecutor for SelfToPosExecutor {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
 
-                if dest_in_range(&pos) {
+                if World::is_valid(&pos) {
                     player.teleport(pos, yaw, pitch).await;
                 } else {
                     sender

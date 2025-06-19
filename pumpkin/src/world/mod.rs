@@ -1,3 +1,4 @@
+use std::ops::RangeInclusive;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -41,9 +42,12 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_protocol::client::play::{
+    CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, MetaDataType, Metadata,
+};
+use pumpkin_protocol::codec::identifier::Identifier;
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
@@ -56,20 +60,13 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{
     client::play::{
-        CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, CSetEquipment, MetaDataType, Metadata,
-    },
-    codec::item_stack_seralizer::ItemStackSerializer,
-};
-use pumpkin_protocol::{
-    client::play::{
         CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
         CWorldEvent,
     },
     codec::var_int::VarInt,
 };
-use pumpkin_registry::VanillaDimensionType;
+use pumpkin_registry::DimensionType;
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
     Difficulty,
@@ -99,6 +96,10 @@ pub mod scoreboard;
 pub mod weather;
 
 use weather::Weather;
+
+/// Max tp range
+const RANGE_XZ: RangeInclusive<f64> = -30_000_000.0..=30_000_000.0;
+const RANGE_Y: RangeInclusive<f64> = -20_000_000.0..=20_000_000.0;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
@@ -141,7 +142,7 @@ pub struct World {
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in.
-    pub dimension_type: VanillaDimensionType,
+    pub dimension_type: DimensionType,
     pub sea_level: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
@@ -157,21 +158,17 @@ impl World {
     pub fn load(
         level: Level,
         level_info: LevelData,
-        dimension_type: VanillaDimensionType,
+        dimension_type: DimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
         // TODO
         let generation_settings = match dimension_type {
-            VanillaDimensionType::Overworld => GENERATION_SETTINGS
+            DimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
-            VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
-            }
-            VanillaDimensionType::TheNether => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
-            }
+            DimensionType::OverworldCaves => todo!(),
+            DimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+            DimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
         };
 
         Self {
@@ -207,7 +204,7 @@ impl World {
             entity.entity_id.into(),
             VarInt(effect_type as i32),
         ))
-        .await;
+            .await;
     }
 
     pub async fn set_difficulty(&self, difficulty: Difficulty) {
@@ -243,7 +240,7 @@ impl World {
                 event.data,
                 VarInt(i32::from(block.id)),
             ))
-            .await;
+                .await;
         }
     }
 
@@ -272,7 +269,7 @@ impl World {
             sender_name,
             target_name,
         ))
-        .await;
+            .await;
     }
 
     pub async fn broadcast_secure_player_chat(
@@ -332,15 +329,6 @@ impl World {
     where
         P: ClientPacket,
     {
-        let current_players = self.players.read().await;
-        let players: Vec<_> = current_players
-            .iter()
-            .filter(|c| !except.contains(c.0))
-            .collect();
-        if players.is_empty() {
-            return;
-        }
-
         let mut packet_buf = Vec::new();
         if let Err(err) = packet.write(&mut packet_buf) {
             log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
@@ -348,7 +336,8 @@ impl World {
         }
         let packet_data: Bytes = packet_buf.into();
 
-        for (_, player) in players {
+        let current_players = self.players.read().await;
+        for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
             player.client.enqueue_packet_data(packet_data.clone()).await;
         }
     }
@@ -485,7 +474,7 @@ impl World {
                     block_pos,
                     i32::from(block_state_id).into(),
                 ))
-                .await;
+                    .await;
             } else {
                 self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
                     .await;
@@ -510,7 +499,9 @@ impl World {
         }
 
         for scheduled_tick in fluids_to_tick {
-            let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
+            let Ok(fluid) = self.get_fluid(&scheduled_tick.block_pos).await else {
+                continue;
+            };
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
                 pumpkin_fluid
                     .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
@@ -523,16 +514,12 @@ impl World {
     pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
         // TODO: this is bad
         let generation_settings = match self.dimension_type {
-            VanillaDimensionType::Overworld => GENERATION_SETTINGS
+            DimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
-            VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
-            }
-            VanillaDimensionType::TheNether => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
-            }
+            DimensionType::OverworldCaves => todo!(),
+            DimensionType::TheEnd => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
+            DimensionType::TheNether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
         };
         for y in (i32::from(generation_settings.shape.min_y)
             ..=i32::from(generation_settings.shape.height))
@@ -555,11 +542,8 @@ impl World {
         player: Arc<Player>,
         server: &Server,
     ) {
-        let dimensions: Vec<ResourceLocation> = server
-            .dimensions
-            .iter()
-            .map(VanillaDimensionType::resource_location)
-            .collect();
+        let dimensions: Vec<Identifier> =
+            server.dimensions.iter().map(DimensionType::name).collect();
 
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
@@ -584,7 +568,7 @@ impl World {
                 true,
                 false,
                 (self.dimension_type as u8).into(),
-                self.dimension_type.resource_location(),
+                self.dimension_type.name(),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -594,7 +578,7 @@ impl World {
                 false,
                 false,
                 None,
-                VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
+                0.into(),
                 self.sea_level.into(),
                 // This should stay true even when reports are disabled.
                 // It prevents the annoying popup when joining the server.
@@ -667,7 +651,7 @@ impl World {
                 ],
             }],
         ))
-        .await;
+            .await;
 
         // Here, we send all the infos of players who already joined.
         {
@@ -739,7 +723,7 @@ impl World {
                 velocity,
             ),
         )
-        .await;
+            .await;
 
         // Spawn players for our client.
         let id = player.gameprofile.id;
@@ -756,8 +740,8 @@ impl World {
                     gameprofile.id,
                     i32::from(EntityType::PLAYER.id).into(),
                     pos,
-                    entity.pitch.load(),
                     entity.yaw.load(),
+                    entity.pitch.load(),
                     entity.head_yaw.load(),
                     0.into(),
                     entity.velocity.load(),
@@ -783,7 +767,6 @@ impl World {
                 meta.serialize(&mut serializer).unwrap();
                 buf.extend(serializer_buf);
             }
-            // END
             buf.put_u8(255);
             player
                 .client
@@ -849,32 +832,6 @@ impl World {
             .await;
 
         player.send_active_effects().await;
-        self.send_player_equipment(&player).await;
-    }
-
-    async fn send_player_equipment(&self, from: &Player) {
-        let mut equipment_list = Vec::new();
-
-        equipment_list.push((
-            EquipmentSlot::MAIN_HAND.discriminant(),
-            *from.inventory.held_item().lock().await,
-        ));
-
-        for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
-            let item_guard = item_arc_mutex.lock().await;
-            let item_stack = *item_guard;
-            equipment_list.push((slot.discriminant(), item_stack));
-        }
-
-        let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
-            .iter()
-            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(*stack)))
-            .collect();
-        self.broadcast_packet_except(
-            &[from.get_entity().entity_uuid],
-            &CSetEquipment::new(from.entity_id().into(), equipment),
-        )
-        .await;
     }
 
     pub async fn send_world_info(
@@ -914,7 +871,7 @@ impl World {
                 Vector3::new(0.0, 0.0, 0.0),
             ),
         )
-        .await;
+            .await;
         player.send_client_information().await;
 
         chunker::player_join(player).await;
@@ -950,7 +907,7 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.last_pos.load();
-        let death_dimension = player.world().await.dimension_type.resource_location();
+        let death_dimension = player.world().await.dimension_type.name();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -965,7 +922,7 @@ impl World {
             .client
             .enqueue_packet(&CRespawn::new(
                 (self.dimension_type as u8).into(),
-                self.dimension_type.resource_location(),
+                self.dimension_type.name(),
                 biome::hash_seed(self.level.seed.0), // seed
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
@@ -1174,8 +1131,9 @@ impl World {
 
     /// Gets a `Player` by a username
     pub async fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
+        let lowercase = name.to_lowercase();
         for player in self.players.read().await.values() {
-            if player.gameprofile.name.eq_ignore_ascii_case(name) {
+            if player.gameprofile.name.to_lowercase() == lowercase {
                 return Some(player.clone());
             }
         }
@@ -1307,7 +1265,7 @@ impl World {
                 "multiplayer.player.joined",
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
-            .color_named(NamedColor::Yellow);
+                .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
             let event = PLUGIN_MANAGER.read().await.fire(event).await;
@@ -1360,7 +1318,7 @@ impl World {
                 "multiplayer.player.left",
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
-            .color_named(NamedColor::Yellow);
+                .color_named(NamedColor::Yellow);
             let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
             let event = PLUGIN_MANAGER.read().await.fire(event).await;
@@ -1405,7 +1363,7 @@ impl World {
             &[from.entity_uuid],
             &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
         )
-        .await;
+            .await;
     }
 
     /// Sets a block and returns the old block id
@@ -1465,7 +1423,7 @@ impl World {
 
         let block_state = self.get_block_state(position).await;
         let new_block = Block::from_state_id(block_state_id).unwrap();
-        let new_fluid = self.get_fluid(position).await;
+        let new_fluid = self.get_fluid(position).await.unwrap_or(Fluid::EMPTY);
 
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
@@ -1631,13 +1589,16 @@ impl World {
         get_block_by_state_id(id).unwrap_or(Block::AIR)
     }
 
-    pub async fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
+    pub async fn get_fluid(
+        &self,
+        position: &BlockPos,
+    ) -> Result<pumpkin_data::fluid::Fluid, GetBlockError> {
         let id = self.get_block_state_id(position).await;
-        let fluid = Fluid::from_state_id(id).ok_or(Fluid::EMPTY);
+        let fluid = Fluid::from_state_id(id).ok_or(GetBlockError::InvalidBlockId);
         if let Ok(fluid) = fluid {
-            return fluid;
+            return Ok(fluid);
         }
-        let block = get_block_by_state_id(id).unwrap_or(Block::AIR);
+        let block = get_block_by_state_id(id).ok_or(GetBlockError::InvalidBlockId)?;
         block
             .properties(id)
             .and_then(|props| {
@@ -1647,13 +1608,13 @@ impl World {
                     .find(|p| p.0 == "waterlogged")
                     .map(|(_, value)| {
                         if value == true.to_string() {
-                            Fluid::FLOWING_WATER
+                            Ok(Fluid::FLOWING_WATER)
                         } else {
-                            Fluid::EMPTY
+                            Err(GetBlockError::InvalidBlockId)
                         }
                     })
             })
-            .unwrap_or(Fluid::EMPTY)
+            .unwrap_or(Err(GetBlockError::InvalidBlockId))
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -1703,12 +1664,14 @@ impl World {
                     .await;
             }
 
-            if let Some(neighbor_pumpkin_fluid) =
-                self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
-            {
-                neighbor_pumpkin_fluid
-                    .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
-                    .await;
+            if let Ok(neighbor_fluid) = neighbor_fluid {
+                if let Some(neighbor_pumpkin_fluid) =
+                    self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
+                {
+                    neighbor_pumpkin_fluid
+                        .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
+                        .await;
+                }
             }
         }
     }
@@ -1799,7 +1762,7 @@ impl World {
                 VarInt(block_entity.get_id() as i32),
                 bytes.into_boxed_slice(),
             ))
-            .await;
+                .await;
         }
 
         chunk.block_entities.insert(
@@ -1955,22 +1918,22 @@ impl World {
         let mut next = Vector3::new(
             delta.x
                 * (if step.x > 0 {
-                    1.0 - (from.x - from.x.floor())
-                } else {
-                    from.x - from.x.floor()
-                }),
+                1.0 - (from.x - from.x.floor())
+            } else {
+                from.x - from.x.floor()
+            }),
             delta.y
                 * (if step.y > 0 {
-                    1.0 - (from.y - from.y.floor())
-                } else {
-                    from.y - from.y.floor()
-                }),
+                1.0 - (from.y - from.y.floor())
+            } else {
+                from.y - from.y.floor()
+            }),
             delta.z
                 * (if step.z > 0 {
-                    1.0 - (from.z - from.z.floor())
-                } else {
-                    from.z - from.z.floor()
-                }),
+                1.0 - (from.z - from.z.floor())
+            } else {
+                from.z - from.z.floor()
+            }),
         );
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
@@ -2016,6 +1979,10 @@ impl World {
         }
 
         None
+    }
+
+    pub fn is_valid(dest: &Vector3<f64>) -> bool {
+        RANGE_XZ.contains(&dest.x) && RANGE_Y.contains(&dest.y) && RANGE_XZ.contains(&dest.z)
     }
 }
 
