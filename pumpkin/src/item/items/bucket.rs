@@ -2,11 +2,15 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockState, fluid::Fluid, item::Item};
+use pumpkin_data::{
+    Block, BlockState,
+    fluid::Fluid,
+    item::Item,
+    sound::{Sound, SoundCategory},
+};
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3}, random::{get_seed, xoroshiro128::Xoroshiro, RandomGenerator}, GameMode
 };
 use pumpkin_world::{inventory::Inventory, item::ItemStack, world::BlockFlags};
 
@@ -214,6 +218,17 @@ impl PumpkinItem for FilledBucketItem {
         if item.id != Item::LAVA_BUCKET.id
             && world.dimension_type == VanillaDimensionType::TheNether
         {
+            world
+                .play_sound_raw(
+                    Sound::BlockFireExtinguish as u16,
+                    SoundCategory::Blocks,
+                    &player.position(),
+                    0.5,
+                    2.6,
+                )
+                .await;
+            // TODO pitch should be 2.6F + (world.random.nextFloat() - world.random.nextFloat()) * 0.8F,
+            // but we don't have a global world random yet
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;
@@ -244,7 +259,7 @@ impl PumpkinItem for FilledBucketItem {
                 world
                     .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
                     .await;
-            } else if state.id == Block::AIR.default_state_id {
+            } else if state.id == Block::AIR.default_state_id || state.is_liquid() {
                 world
                     .set_block_state(
                         &pos.offset(direction.to_offset()),

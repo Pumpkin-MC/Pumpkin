@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection,
     fluid::{Falling, Fluid, FluidProperties, Level},
+    world::WorldEvent,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -46,6 +47,9 @@ impl FlowingLava {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
+                world
+                    .sync_world_event(WorldEvent::LavaExtinguished, *block_pos, 0)
+                    .await;
                 return false;
             }
             if below_is_soul_soil && world.get_block(&neighbor_pos).await == Block::BLUE_ICE {
@@ -55,6 +59,9 @@ impl FlowingLava {
                         Block::BASALT.default_state_id,
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
+                    .await;
+                world
+                    .sync_world_event(WorldEvent::LavaExtinguished, *block_pos, 0)
                     .await;
                 return false;
             }
@@ -140,6 +147,9 @@ impl FlowingFluid for FlowingLava {
             if world.get_block(pos).await == Block::WATER {
                 world
                     .set_block_state(pos, Block::STONE.default_state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
+                world
+                    .sync_world_event(WorldEvent::LavaExtinguished, *pos, 0)
                     .await;
                 return;
             }
