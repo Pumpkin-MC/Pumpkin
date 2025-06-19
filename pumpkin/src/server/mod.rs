@@ -3,6 +3,7 @@ use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::NBTStorage;
+use crate::item::fuel_registry::FuelRegistry;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -89,6 +90,7 @@ pub struct Server {
     // Whether the server whitelist is on or off
     pub white_list: AtomicBool,
     tasks: TaskTracker,
+    pub fuel_registry: Arc<FuelRegistry>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<RwLock<LevelData>>,
@@ -199,6 +201,7 @@ impl Server {
             ),
             white_list: AtomicBool::new(BASIC_CONFIG.white_list),
             tasks: TaskTracker::new(),
+            fuel_registry: Arc::new(FuelRegistry::default()),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: Arc::new(RwLock::new(level_info)),
