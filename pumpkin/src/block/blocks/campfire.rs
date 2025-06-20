@@ -37,9 +37,7 @@ impl PumpkinBlock for CampfireBlock {
         state: BlockState,
         _server: &Server,
     ) {
-        println!("hi");
         if CampfireLikeProperties::from_state_id(state.id, &block).lit && entity.get_living_entity().is_some() {
-            println!("THE SOLVER HAS FOUND A NEW HOST");
             entity.damage(1.0, DamageType::CAMPFIRE).await;
         }
     }
