@@ -2057,7 +2057,7 @@ impl Player {
             }
             SChangeGameMode::PACKET_ID => {
                 self.set_gamemode(SChangeGameMode::read(payload)?.game_mode)
-                    .await
+                    .await;
             }
             SChatCommand::PACKET_ID => {
                 self.handle_chat_command(server, &(SChatCommand::read(payload)?))
