@@ -45,7 +45,11 @@ impl PumpkinItem for ShovelItem {
             || block == &Block::DIRT
             || block == &Block::COARSE_DIRT
             || block == &Block::ROOTED_DIRT
-            || block == &Block::PODZOL || block == &Block::MYCELIUM) && face != BlockDirection::Down && world.get_block_state(&location.up()).await.is_air() {
+            || block == &Block::PODZOL
+            || block == &Block::MYCELIUM)
+            && face != BlockDirection::Down
+            && world.get_block_state(&location.up()).await.is_air()
+        {
             world
                 .set_block_state(
                     &location,
