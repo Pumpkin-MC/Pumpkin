@@ -221,7 +221,7 @@ impl World {
         queue.push(BlockEvent { pos, r#type, data });
     }
 
-    async fn flush_synced_block_events(self: &Arc<Self>) {
+    pub async fn flush_synced_block_events(self: &Arc<Self>) {
         let mut queue = self.synced_block_event_queue.lock().await;
         let events: Vec<BlockEvent> = queue.clone();
         queue.clear();
@@ -1009,7 +1009,7 @@ impl World {
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
-    async fn should_skip_night(&self) -> bool {
+    pub async fn should_skip_night(&self) -> bool {
         let players = self.players.read().await;
 
         let player_count = players.len();

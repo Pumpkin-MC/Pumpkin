@@ -1,39 +1,63 @@
-use std::time::{Duration, Instant};
-
+use crate::{SHOULD_STOP, server::Server};
+use std::{
+    sync::atomic::Ordering,
+    time::{Duration, Instant},
+};
 use tokio::time::sleep;
 
-use crate::SHOULD_STOP;
-
-use super::Server;
-
 pub struct Ticker {
-    tick_interval: Duration,
     last_tick: Instant,
 }
 
 impl Ticker {
     #[must_use]
-    pub fn new(tps: f32) -> Self {
+    pub fn new() -> Self {
         Self {
-            tick_interval: Duration::from_millis((1000.0 / tps) as u64),
             last_tick: Instant::now(),
         }
     }
 
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(&mut self, server: &Server) {
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
-            let now = Instant::now();
-            let elapsed = now - self.last_tick;
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
+            let manager = &server.tick_rate_manager;
 
-            if elapsed >= self.tick_interval {
+            manager.tick();
+            
+            // Now server.tick() handles both player/network ticking (always) 
+            // and world logic ticking (conditionally based on freeze state)
+            if manager.is_sprinting() {
+                // A sprint is active, so we tick.
+                manager.start_sprint_tick_work();
                 server.tick().await;
-                self.last_tick = now;
+
+                // After ticking, end the work and check if the sprint is over.
+                if manager.end_sprint_tick_work() {
+                    // This was the last sprint tick. Finish the sprint and restore the previous state.
+                    manager.finish_tick_sprint(server).await;
+                }
             } else {
-                // Wait for the remaining time until the next tick.
-                let sleep_time = self.tick_interval - elapsed;
-                sleep(sleep_time).await;
+                // Always call tick - it will internally decide what to tick based on frozen state
+                server.tick().await;
             }
+
+            // Sleep logic remains the same
+            let now = Instant::now();
+            let elapsed = now.duration_since(self.last_tick);
+
+            let tick_interval = if manager.is_sprinting() {
+                Duration::ZERO
+            } else {
+                Duration::from_nanos(manager.nanoseconds_per_tick() as u64)
+            };
+
+            if let Some(sleep_time) = tick_interval.checked_sub(elapsed) {
+                if !sleep_time.is_zero() {
+                    sleep(sleep_time).await;
+                }
+            }
+
+            self.last_tick = Instant::now();
         }
         log::debug!("Ticker stopped");
     }

@@ -7,6 +7,7 @@ use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
+use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
@@ -49,6 +50,7 @@ use tokio_util::task::TaskTracker;
 mod connection_cache;
 mod key_store;
 pub mod seasonal_events;
+pub mod tick_rate_manager;
 pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.6";
@@ -88,6 +90,8 @@ pub struct Server {
     pub player_data_storage: ServerPlayerData,
     // Whether the server whitelist is on or off
     pub white_list: AtomicBool,
+    /// Manages the server's tick rate, freezing, and sprinting
+    pub tick_rate_manager: Arc<ServerTickRateManager>,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -198,6 +202,7 @@ impl Server {
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
             white_list: AtomicBool::new(BASIC_CONFIG.white_list),
+            tick_rate_manager: Arc::new(ServerTickRateManager::default()),
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
@@ -329,6 +334,9 @@ impl Server {
                     player.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
                         player.get_inventory().get_selected_slot() as i8,
                     )).await;
+
+                    // Send tick rate information to the new player
+                    self.tick_rate_manager.update_joining_player(&player).await;
 
                     Some((player, world.clone()))
                 } else {
@@ -586,11 +594,84 @@ impl Server {
         self.key_store.get_digest(secret)
     }
 
-    async fn tick(&self) {
+    /// Main server tick method. This now handles both player/network ticking (which always runs)
+    /// and world/game logic ticking (which is affected by freeze state).
+    pub async fn tick(&self) {
+        // Always run player and network ticking, even when game is frozen
+        self.tick_players_and_network().await;
+
+        // Only run world/game logic if the tick rate manager allows it
+        if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+            self.tick_worlds(self).await;
+        }
+    }
+
+    /// Ticks essential server functions that must run even when the game is frozen.
+    /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
+    pub async fn tick_players_and_network(&self) {
+        // First, flush pending block updates and synced block events to clients
         for world in self.worlds.read().await.iter() {
-            world.tick(self).await;
+            world.flush_block_updates().await;
+            world.flush_synced_block_events().await;
         }
 
+        let players_to_tick: Vec<_> = self.get_all_players().await;
+        for player in players_to_tick {
+            player.tick(self).await;
+        }
+    }
+
+    /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
+    pub async fn tick_worlds(&self, server: &Server) {
+        for world in self.worlds.read().await.iter() {
+            // Tick world-specific logic like time and weather
+            world.level_time.lock().await.tick_time();
+            world.weather.lock().await.tick_weather(world).await;
+
+            if world.should_skip_night().await {
+                let mut level_time = world.level_time.lock().await;
+                let time = level_time.time_of_day + 24000;
+                level_time.set_time(time - time % 24000);
+                level_time.send_time(world).await;
+
+                for player in world.players.read().await.values() {
+                    player.wake_up().await;
+                }
+
+                let mut weather = world.weather.lock().await;
+                if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                    weather.reset_weather_cycle(world).await;
+                }
+            } else if world.level_time.lock().await.world_age % 20 == 0 {
+                world.level_time.lock().await.send_time(world).await;
+            }
+
+            // Tick scheduled block/fluid updates
+            world.tick_scheduled_block_ticks().await;
+
+            // Tick non-player entities
+            let entities_to_tick: Vec<_> = world.entities.read().await.values().cloned().collect();
+            for entity in entities_to_tick {
+                entity.tick(entity.clone(), server).await;
+                // Handle entity-player collision detection
+                for player in world.players.read().await.values() {
+                    if player
+                        .living_entity
+                        .entity
+                        .bounding_box
+                        .load()
+                        // This is vanilla, but TODO: change this when is in a vehicle
+                        .expand(1.0, 0.5, 1.0)
+                        .intersects(&entity.get_entity().bounding_box.load())
+                    {
+                        entity.on_player_collision(player).await;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Global periodic tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
             log::error!("Error ticking player data: {e}");
         }
