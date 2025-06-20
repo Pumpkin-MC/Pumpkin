@@ -2,12 +2,12 @@ use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
-use pumpkin_data::world::WorldEvent;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
@@ -60,12 +60,23 @@ impl PumpkinItem for ShovelItem {
             }
         }
         if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
-            let mut campfire_props = CampfireLikeProperties::from_state_id(world.get_block_state(&location).await.id, block);
+            let mut campfire_props = CampfireLikeProperties::from_state_id(
+                world.get_block_state(&location).await.id,
+                block,
+            );
             if campfire_props.lit {
-                world.sync_world_event(WorldEvent::FireExtinguished, location, 0).await;
+                world
+                    .sync_world_event(WorldEvent::FireExtinguished, location, 0)
+                    .await;
 
                 campfire_props.lit = false;
-                world.set_block_state(&location, campfire_props.to_state_id(block), BlockFlags::NOTIFY_ALL_AND_REDRAW).await;
+                world
+                    .set_block_state(
+                        &location,
+                        campfire_props.to_state_id(block),
+                        BlockFlags::NOTIFY_ALL_AND_REDRAW,
+                    )
+                    .await;
             }
         }
     }

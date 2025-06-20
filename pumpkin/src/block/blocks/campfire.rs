@@ -1,13 +1,24 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::{block_properties::{BlockProperties, CampfireLikeProperties}, damage::DamageType, fluid::Fluid, Block, BlockDirection, BlockState};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState,
+    block_properties::{BlockProperties, CampfireLikeProperties},
+    damage::DamageType,
+    fluid::Fluid,
+};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 use crate::{
-    block::{pumpkin_block::{BlockMetadata, PumpkinBlock}, BlockIsReplacing}, entity::{player::Player, EntityBase}, server::Server, world::World
+    block::{
+        BlockIsReplacing,
+        pumpkin_block::{BlockMetadata, PumpkinBlock},
+    },
+    entity::{EntityBase, player::Player},
+    server::Server,
+    world::World,
 };
 
 pub struct CampfireBlock;
@@ -18,10 +29,7 @@ impl BlockMetadata for CampfireBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &[
-            Block::CAMPFIRE.name,
-            Block::SOUL_CAMPFIRE.name,
-        ]
+        &[Block::CAMPFIRE.name, Block::SOUL_CAMPFIRE.name]
     }
 }
 
@@ -37,7 +45,9 @@ impl PumpkinBlock for CampfireBlock {
         state: BlockState,
         _server: &Server,
     ) {
-        if CampfireLikeProperties::from_state_id(state.id, &block).lit && entity.get_living_entity().is_some() {
+        if CampfireLikeProperties::from_state_id(state.id, &block).lit
+            && entity.get_living_entity().is_some()
+        {
             entity.damage(1.0, DamageType::CAMPFIRE).await;
         }
     }
@@ -76,7 +86,9 @@ impl PumpkinBlock for CampfireBlock {
         let mut props = CampfireLikeProperties::from_state_id(state, block);
         if props.waterlogged {
             props.lit = false;
-            world.schedule_fluid_tick(block.id, *pos, Fluid::WATER.flow_speed as u16).await;
+            world
+                .schedule_fluid_tick(block.id, *pos, Fluid::WATER.flow_speed as u16)
+                .await;
         }
 
         if direction == BlockDirection::Down {

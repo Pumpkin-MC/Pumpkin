@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::CampfireLikeProperties;
-use pumpkin_data::sound::Sound;
-use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::CampfireLikeProperties;
 use pumpkin_data::item::Item;
+use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
@@ -36,12 +36,18 @@ impl PumpkinItem for FlintAndSteelItem {
         // TODO: check CampfireBlock, CandleBlock and CandleCakeBlock
         let world = player.world().await;
         let state = world.get_block_state(&location).await;
-        if !CampfireLikeProperties::handles_block_id(block.id) || (CampfireLikeProperties::from_state_id(state.id, block).lit) {
+        if !CampfireLikeProperties::handles_block_id(block.id)
+            || (CampfireLikeProperties::from_state_id(state.id, block).lit)
+        {
             let pos = location.offset(face.to_offset());
             if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                 let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
                 world
-                    .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL_AND_REDRAW)
+                    .set_block_state(
+                        &pos,
+                        fire_block.default_state_id,
+                        BlockFlags::NOTIFY_ALL_AND_REDRAW,
+                    )
                     .await;
                 // TODO
             }
@@ -50,8 +56,20 @@ impl PumpkinItem for FlintAndSteelItem {
             if !props.waterlogged && !props.lit {
                 props.lit = true;
             }
-            world.play_sound(Sound::ItemFlintandsteelUse, SoundCategory::Blocks, &location.to_centered_f64()).await;
-            world.set_block_state(&location, props.to_state_id(block), BlockFlags::NOTIFY_ALL_AND_REDRAW).await;
+            world
+                .play_sound(
+                    Sound::ItemFlintandsteelUse,
+                    SoundCategory::Blocks,
+                    &location.to_centered_f64(),
+                )
+                .await;
+            world
+                .set_block_state(
+                    &location,
+                    props.to_state_id(block),
+                    BlockFlags::NOTIFY_ALL_AND_REDRAW,
+                )
+                .await;
         }
     }
 }
