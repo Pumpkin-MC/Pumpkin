@@ -41,23 +41,18 @@ impl PumpkinItem for ShovelItem {
     ) {
         let world = player.world().await;
         // Yes, Minecraft does hardcode these
-        if block == &Block::GRASS_BLOCK
+        if (block == &Block::GRASS_BLOCK
             || block == &Block::DIRT
             || block == &Block::COARSE_DIRT
             || block == &Block::ROOTED_DIRT
-            || block == &Block::PODZOL
-            || block == &Block::MYCELIUM
-        {
-            if face != BlockDirection::Down && world.get_block_state(&location.up()).await.is_air()
-            {
-                world
-                    .set_block_state(
-                        &location,
-                        Block::DIRT_PATH.default_state_id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
+            || block == &Block::PODZOL || block == &Block::MYCELIUM) && face != BlockDirection::Down && world.get_block_state(&location.up()).await.is_air() {
+            world
+                .set_block_state(
+                    &location,
+                    Block::DIRT_PATH.default_state_id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
         }
         if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
             let mut campfire_props = CampfireLikeProperties::from_state_id(
