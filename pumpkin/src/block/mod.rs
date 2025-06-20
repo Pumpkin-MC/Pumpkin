@@ -74,6 +74,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
+use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
@@ -98,6 +99,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(CarpetBlock);
+    manager.register(CampfireBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
