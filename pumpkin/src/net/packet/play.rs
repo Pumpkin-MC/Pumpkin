@@ -1057,15 +1057,10 @@ impl Player {
         // Check if player has permission to change gamemode (op level 2 or higher)
         if self.permission_lvl.load() < PermissionLvl::Two {
             return;
-        }
-
-        // Convert VarInt to GameMode
-        let gamemode = match GameMode::try_from(change_game_mode.gamemode.0 as i8) {
-            Ok(gamemode) => gamemode,
-            Err(_) => {
-                log::warn!("Invalid gamemode received: {}", change_game_mode.gamemode.0);
-                return;
-            }
+        } // Convert VarInt to GameMode
+        let Ok(gamemode) = GameMode::try_from(change_game_mode.gamemode.0 as i8) else {
+            log::warn!("Invalid gamemode received: {}", change_game_mode.gamemode.0);
+            return;
         };
 
         // Only change if it's different from current gamemode

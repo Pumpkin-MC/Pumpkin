@@ -171,14 +171,12 @@ impl SpongeBlock {
     }
 
     fn is_waterlogged(block: &Block, state_id: BlockStateId) -> bool {
-        if let Some(properties) = block.properties(state_id) {
+        block.properties(state_id).is_some_and(|properties| {
             properties
                 .to_props()
                 .iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
-        } else {
-            false
-        }
+        })
     }
 
     async fn is_water_block(world: &Arc<World>, pos: &BlockPos) -> bool {
