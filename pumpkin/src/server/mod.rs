@@ -670,7 +670,7 @@ impl Server {
                 }
             }
         }
-        
+
         // Global periodic tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
             log::error!("Error ticking player data: {e}");

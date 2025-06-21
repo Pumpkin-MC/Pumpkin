@@ -23,8 +23,8 @@ impl Ticker {
             let manager = &server.tick_rate_manager;
 
             manager.tick();
-            
-            // Now server.tick() handles both player/network ticking (always) 
+
+            // Now server.tick() handles both player/network ticking (always)
             // and world logic ticking (conditionally based on freeze state)
             if manager.is_sprinting() {
                 // A sprint is active, so we tick.

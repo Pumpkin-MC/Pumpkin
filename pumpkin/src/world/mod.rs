@@ -602,6 +602,12 @@ impl World {
             ))
             .await;
 
+        // Send the current ticking state to the new player so they are in sync.
+        server
+            .tick_rate_manager
+            .update_joining_player(&player)
+            .await;
+
         // Permissions, i.e. the commands a player may use.
         player.send_permission_lvl_update().await;
 
