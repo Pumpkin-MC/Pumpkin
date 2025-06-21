@@ -75,6 +75,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
+use crate::block::blocks::flower_pot::FlowerPotBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
@@ -108,6 +109,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FarmLandBlock);
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);
+    manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
     manager.register(GlassPaneBlock);
     manager.register(IronBarsBlock);
