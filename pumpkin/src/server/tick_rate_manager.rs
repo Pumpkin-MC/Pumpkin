@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
 use std::time::Instant;
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_protocol::client::play::{CTickingState, CTickingStep};
-use pumpkin_util::text::TextComponent;
+use pumpkin_protocol::client::play::{CSystemChatMessage, CTickingState, CTickingStep};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -156,30 +156,37 @@ impl ServerTickRateManager {
         let total_sprinted_ticks = self.scheduled_current_sprint_ticks.load(Ordering::Relaxed)
             - self.remaining_sprint_ticks.load(Ordering::Relaxed);
         let time_spent_nanos = self.sprint_time_spend.load(Ordering::Relaxed);
-        let time_spent_ms = time_spent_nanos as f64 / 1_000_000.0;
 
-        let tps = if time_spent_ms > 0.0 && total_sprinted_ticks > 0 {
-            (total_sprinted_ticks as f64 * 1000.0) / time_spent_ms
+        let inner_message = if total_sprinted_ticks > 0 && time_spent_nanos > 0 {
+            let time_spent_ms = time_spent_nanos as f64 / 1_000_000.0;
+            let tps = (total_sprinted_ticks as f64 * 1000.0) / time_spent_ms;
+            let mspt = time_spent_ms / total_sprinted_ticks as f64;
+
+            TextComponent::translate(
+                "commands.tick.sprint.report",
+                [
+                    TextComponent::text(format!("{tps:.2}")),
+                    TextComponent::text(format!("{mspt:.2}")),
+                ],
+            )
         } else {
-            0.0 // Avoid division by zero
+            // This is the message for `/tick sprint stop` or a zero-tick sprint.
+            TextComponent::translate("commands.tick.sprint.stop.success", [])
         };
 
-        let mspt = if total_sprinted_ticks > 0 {
-            time_spent_ms / total_sprinted_ticks as f64
-        } else {
-            0.0
-        };
-        let report = TextComponent::translate(
-            "commands.tick.sprint.report",
-            [
-                TextComponent::text(format!("{tps:.2}")),
-                TextComponent::text(format!("{mspt:.2}")),
-            ],
-        );
+        // Construct the final component with the [Server: ...] wrapper
+        let final_report = TextComponent::text("[Server: ")
+            .add_child(inner_message)
+            .add_child(TextComponent::text("]"))
+            .italic()
+            .color_named(NamedColor::Gray);
+
+        // Send as a system chat message, which does not add a sender prefix.
         server
-            .broadcast_message(&report, &TextComponent::text("Server"), 0, None)
+            .broadcast_packet_all(&CSystemChatMessage::new(&final_report, false))
             .await;
 
+        // Reset state after sending the report
         self.scheduled_current_sprint_ticks
             .store(0, Ordering::Relaxed);
         self.sprint_time_spend.store(0, Ordering::Relaxed);

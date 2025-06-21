@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::text::{
+    TextComponent,
+    color::{Color, NamedColor},
+};
 use std::sync::atomic::Ordering;
 
 use crate::command::{
@@ -237,10 +240,10 @@ impl CommandExecutor for TickExecutor {
                         .await;
                 } else {
                     sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.sprint.stop.fail",
-                            [],
-                        ))
+                        .send_message(
+                            TextComponent::translate("commands.tick.sprint.stop.fail", [])
+                                .color(Color::Named(NamedColor::Red)),
+                        )
                         .await;
                 }
             }
