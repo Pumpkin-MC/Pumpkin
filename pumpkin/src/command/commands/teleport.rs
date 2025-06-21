@@ -12,6 +12,7 @@ use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
 const DESCRIPTION: &str = "Teleports entities, including players."; // todo
@@ -55,7 +56,7 @@ struct EntitiesToEntityExecutor;
 impl CommandExecutor for EntitiesToEntityExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -67,7 +68,17 @@ impl CommandExecutor for EntitiesToEntityExecutor {
         for target in targets {
             let yaw = target.living_entity.entity.yaw.load();
             let pitch = target.living_entity.entity.pitch.load();
-            target.teleport(pos, yaw, pitch).await;
+
+            if World::is_valid(&pos) {
+                target.teleport(pos, yaw, pitch).await;
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.teleport.invalidPosition",
+                        [],
+                    ))
+                    .await;
+            }
         }
 
         Ok(())
@@ -80,7 +91,7 @@ struct EntitiesToPosFacingPosExecutor;
 impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -91,8 +102,17 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
 
-        for target in targets {
-            target.teleport(pos, yaw, pitch).await;
+        if World::is_valid(&pos) {
+            for target in targets {
+                target.teleport(pos, yaw, pitch).await;
+            }
+        } else {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.teleport.invalidPosition",
+                    [],
+                ))
+                .await;
         }
 
         Ok(())
@@ -105,7 +125,7 @@ struct EntitiesToPosFacingEntityExecutor;
 impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -118,8 +138,17 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             .entity;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
 
-        for target in targets {
-            target.teleport(pos, yaw, pitch).await;
+        if World::is_valid(&pos) {
+            for target in targets {
+                target.teleport(pos, yaw, pitch).await;
+            }
+        } else {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.teleport.invalidPosition",
+                    [],
+                ))
+                .await;
         }
 
         Ok(())
@@ -132,7 +161,7 @@ struct EntitiesToPosWithRotationExecutor;
 impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -142,8 +171,17 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
 
         let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
-        for target in targets {
-            target.teleport(pos, yaw, pitch).await;
+        if World::is_valid(&pos) {
+            for target in targets {
+                target.teleport(pos, yaw, pitch).await;
+            }
+        } else {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.teleport.invalidPosition",
+                    [],
+                ))
+                .await;
         }
 
         Ok(())
@@ -156,7 +194,7 @@ struct EntitiesToPosExecutor;
 impl CommandExecutor for EntitiesToPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
+        sender: &mut CommandSender,
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
@@ -164,10 +202,19 @@ impl CommandExecutor for EntitiesToPosExecutor {
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-        for target in targets {
-            let yaw = target.living_entity.entity.yaw.load();
-            let pitch = target.living_entity.entity.pitch.load();
-            target.teleport(pos, yaw, pitch).await;
+        if World::is_valid(&pos) {
+            for target in targets {
+                let yaw = target.living_entity.entity.yaw.load();
+                let pitch = target.living_entity.entity.pitch.load();
+                target.teleport(pos, yaw, pitch).await;
+            }
+        } else {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.teleport.invalidPosition",
+                    [],
+                ))
+                .await;
         }
 
         Ok(())
@@ -191,7 +238,17 @@ impl CommandExecutor for SelfToEntityExecutor {
             CommandSender::Player(player) => {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                player.teleport(pos, yaw, pitch).await;
+
+                if World::is_valid(&pos) {
+                    player.teleport(pos, yaw, pitch).await;
+                } else {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.teleport.invalidPosition",
+                            [],
+                        ))
+                        .await;
+                }
             }
             _ => {
                 sender
@@ -219,7 +276,17 @@ impl CommandExecutor for SelfToPosExecutor {
                 let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                player.teleport(pos, yaw, pitch).await;
+
+                if World::is_valid(&pos) {
+                    player.teleport(pos, yaw, pitch).await;
+                } else {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.teleport.invalidPosition",
+                            [],
+                        ))
+                        .await;
+                }
             }
             _ => {
                 sender
