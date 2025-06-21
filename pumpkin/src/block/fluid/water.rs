@@ -49,8 +49,9 @@ impl PumpkinFluid for FlowingWater {
             .await;
     }
 
-    async fn on_entity_collision(&self, entity: &dyn EntityBase) {
-        entity.get_entity().extinguish();
+    async fn on_entity_collision(&self, entity_base: &dyn EntityBase) {
+        let entity = entity_base.get_entity();
+        entity.extinguish();
     }
 }
 

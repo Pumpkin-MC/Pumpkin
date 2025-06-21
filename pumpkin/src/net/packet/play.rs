@@ -173,7 +173,7 @@ impl Player {
             if id == &confirm_teleport.teleport_id {
                 // We should set the position now to what we requested in the teleport packet.
                 // This may fix issues when the client sends the position while being teleported.
-                self.living_entity.set_pos(*position);
+                self.set_pos(*position);
 
                 *awaiting_teleport = None;
             } else {
@@ -265,7 +265,7 @@ impl Player {
                 let pos = event.to;
                 let entity = &self.living_entity.entity;
                 let last_pos = entity.pos.load();
-                self.living_entity.set_pos(pos);
+                self.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
@@ -362,7 +362,7 @@ impl Player {
                 let pos = event.to;
                 let entity = &self.living_entity.entity;
                 let last_pos = entity.pos.load();
-                self.living_entity.set_pos(pos);
+                self.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)

@@ -49,6 +49,10 @@ impl EntityBase for MobEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
     }
+
+    fn get_gravity(&self) -> f64 {
+        self.living_entity.get_gravity()
+    }
 }
 
 pub async fn from_type(

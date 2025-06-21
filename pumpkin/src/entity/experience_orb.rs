@@ -97,4 +97,7 @@ impl EntityBase for ExperienceOrbEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
+    fn get_gravity(&self) -> f64 {
+        0.03
+    }
 }

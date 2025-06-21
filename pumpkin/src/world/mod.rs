@@ -13,7 +13,7 @@ use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
     command::client_suggestions,
-    entity::{Entity, EntityBase, EntityId, player::Player},
+    entity::{Entity, EntityBase, EntityId, item::ItemEntity, player::Player},
     error::PumpkinError,
     plugin::{
         block::block_break::BlockBreakEvent,
@@ -30,17 +30,17 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
-    Block,
+    Block, BlockDirection, BlockState,
     block_properties::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
+        get_block_and_state_by_state_id, get_block_by_state_id, get_block_collision_shapes,
+        get_block_outline_shapes, get_state_by_state_id,
     },
     entity::{EntityStatus, EntityType},
-    fluid::Fluid,
+    fluid::{Fluid, FluidState},
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -84,7 +84,7 @@ use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
     world::GetBlockError,
 };
-use pumpkin_world::{world::BlockFlags, world_info::LevelData};
+use pumpkin_world::{item::ItemStack, world::BlockFlags, world_info::LevelData};
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
@@ -644,7 +644,7 @@ impl World {
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
         // Firstly, send an info update to our new player, so they can see their skin
@@ -949,7 +949,7 @@ impl World {
     }
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
-        let last_pos = player.living_entity.last_pos.load();
+        let last_pos = player.living_entity.entity.last_pos.load();
         let death_dimension = player.world().await.dimension_type.resource_location();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
@@ -1001,7 +1001,7 @@ impl World {
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
-        player.living_entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
@@ -1660,6 +1660,31 @@ impl World {
         self.level.get_block_state(position).await.state_id
     }
 
+    pub async fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (Fluid, FluidState) {
+        let id = self.get_block_state_id(position).await;
+        let Some(fluid) = Fluid::from_state_id(id) else {
+            if let Some(block) = get_block_by_state_id(id) {
+                if let Some(properties) = block.properties(id) {
+                    for (name, value) in properties.to_props() {
+                        if name == *"waterlogged" {
+                            if value == true.to_string() {
+                                let fluid = Fluid::FLOWING_WATER;
+                                let state = fluid.default_state().clone();
+                                return (fluid, state);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            let fluid = Fluid::EMPTY;
+            let state = fluid.default_state().clone();
+            return (fluid, state);
+        };
+        let state = fluid.get_state(id);
+        (fluid, state)
+    }
+
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
         let id = self.get_block_state_id(position).await;
@@ -1921,7 +1946,7 @@ impl World {
         let to = end_pos.lerp(&start_pos, adjust);
         let from = start_pos.lerp(&end_pos, adjust);
 
-        let mut block = BlockPos::floored(from.x, from.y, from.z);
+        let mut block = BlockPos::floored(from);
 
         let (collision, direction) = self.ray_outline_check(&block, from, to).await;
         if let Some(dir) = direction {
@@ -2016,6 +2041,285 @@ impl World {
         }
 
         None
+    }
+
+    pub async fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<Fluid> {
+        let mut collisions = Vec::new();
+
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let pos = BlockPos::new(x, y, z);
+                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos).await;
+                    if fluid.id != Fluid::EMPTY.id {
+                        let height = f64::from(state.height);
+                        if height >= bounding_box.min.y {
+                            collisions.push(fluid);
+                        }
+                    }
+                }
+            }
+        }
+
+        collisions
+    }
+
+    pub async fn check_fluid_collision(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let pos = BlockPos::new(x, y, z);
+                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos).await;
+                    if fluid.id != Fluid::EMPTY.id {
+                        let height = f64::from(state.height);
+                        if height >= bounding_box.min.y {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    // FlowableFluid.getVelocity()
+    pub async fn get_fluid_velocity(
+        &self,
+        pos0: BlockPos,
+        fluid0: &Fluid,
+        state0: &FluidState,
+    ) -> Vector3<f64> {
+        let mut velo = Vector3::default();
+
+        for dir in BlockDirection::horizontal() {
+            let mut amplitude = 0.0;
+
+            let offset = dir.to_offset();
+            let pos = pos0.offset(offset);
+            let block_state_id = self.get_block_state_id(&pos).await;
+
+            let fluid = Fluid::from_state_id(block_state_id).unwrap_or(Fluid::EMPTY);
+            if fluid.id == Fluid::EMPTY.id {
+                let (block, block_state) = get_block_and_state_by_state_id(block_state_id)
+                    .unwrap_or((
+                        Block::AIR,
+                        get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
+                    ));
+                let blocks_movement = block_state.is_solid()
+                    && block != Block::COBWEB
+                    && block != Block::BAMBOO_SAPLING;
+                if !blocks_movement {
+                    let down_pos = pos.down();
+                    let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos).await;
+                    if down_fluid.id == fluid0.id {
+                        amplitude = f64::from(state0.height - down_state.height) + 0.888_888_9;
+                    }
+                }
+            } else {
+                if fluid.id != fluid0.id {
+                    continue;
+                }
+                let state = fluid.get_state(block_state_id);
+                amplitude = f64::from(state0.height - state.height);
+            }
+
+            if amplitude == 0.0 {
+                continue;
+            }
+            velo.x += f64::from(offset.x) * amplitude;
+            velo.z += f64::from(offset.z) * amplitude;
+        }
+
+        // TODO: FALLING
+        if state0.falling {
+            for dir in BlockDirection::horizontal() {
+                let pos = pos0.offset(dir.to_offset());
+                if self.is_flow_blocked(fluid0.id, pos, dir).await
+                    || self.is_flow_blocked(fluid0.id, pos.up(), dir).await
+                {
+                    if velo.length_squared() != 0.0 {
+                        velo = velo.normalize();
+                    }
+                    velo.y -= 6.0;
+                    break;
+                }
+            }
+        }
+        if velo.length_squared() == 0.0 {
+            velo
+        } else {
+            velo.normalize()
+        }
+    }
+
+    // FlowableFluid.isFlowBlocked()
+    async fn is_flow_blocked(
+        &self,
+        fluid0_id: u16,
+        pos: BlockPos,
+        direction: BlockDirection,
+    ) -> bool {
+        let id = self.get_block_state_id(&pos).await;
+        let fluid = Fluid::from_state_id(id).unwrap_or(Fluid::EMPTY);
+
+        if fluid.id == fluid0_id {
+            return false;
+        }
+
+        if direction == BlockDirection::Up {
+            return true;
+        }
+
+        let Some((block, state)) = get_block_and_state_by_state_id(id) else {
+            // Air
+            return false;
+        };
+
+        // Doesn't count blue ice or packed ice
+        if block == Block::ICE || block == Block::FROSTED_ICE {
+            return false;
+        }
+
+        state.is_side_solid(direction)
+    }
+
+    pub fn check_outline<F>(
+        bounding_box: &BoundingBox,
+        pos: BlockPos,
+        state: &BlockState,
+        use_outline_shape: bool,
+        mut using_outline_shape: F,
+    ) -> bool
+    where
+        F: FnMut(&BoundingBox),
+    {
+        let Some(shapes) = get_block_outline_shapes(state.id) else {
+            return false;
+        };
+        if shapes.is_empty() {
+            // Apparently we need this for air and moving pistons?
+            return true;
+        }
+        let mut collided = false;
+        'shapes: for shape in shapes {
+            let collision_shape = shape.at_pos(pos);
+            if collision_shape.intersects(bounding_box) {
+                collided = true;
+
+                if !use_outline_shape {
+                    break 'shapes;
+                }
+                using_outline_shape(&collision_shape);
+            }
+        }
+        collided
+    }
+
+    pub fn check_collision<F>(
+        bounding_box: &BoundingBox,
+        pos: BlockPos,
+        state: &BlockState,
+        use_collision_shape: bool,
+        mut using_collision_shape: F,
+    ) -> bool
+    where
+        F: FnMut(&BoundingBox),
+    {
+        if state.is_full_cube() {
+            if use_collision_shape {
+                let Some(shapes) = get_block_collision_shapes(state.id) else {
+                    return false;
+                };
+                if let Some(shape) = shapes.into_iter().next() {
+                    using_collision_shape(&shape.at_pos(pos));
+                }
+            }
+            return true;
+        }
+        let mut collided = false;
+        if !state.is_air() && !state.collision_shapes.is_empty() {
+            let Some(shapes) = get_block_collision_shapes(state.id) else {
+                return false;
+            };
+            'shapes: for shape in shapes {
+                let collision_shape = shape.at_pos(pos);
+                if collision_shape.intersects(bounding_box) {
+                    collided = true;
+
+                    if !use_collision_shape {
+                        break 'shapes;
+                    }
+                    using_collision_shape(&collision_shape);
+                }
+            }
+        }
+        collided
+    }
+
+    // For adjusting movement
+    pub async fn get_block_collisions(
+        self: &Arc<Self>,
+        bounding_box: BoundingBox,
+    ) -> (Vec<BoundingBox>, Vec<(usize, BlockPos)>) {
+        let mut collisions = Vec::new();
+        let mut positions = Vec::new();
+
+        // Include downwards for fences
+        let min = BlockPos::floored(bounding_box.min.sub_raw(0.0, -0.50001, 0.0));
+        let max = bounding_box.max_block_pos();
+        for x in min.0.x..=max.0.x {
+            for y in min.0.y..=max.0.y {
+                for z in min.0.z..=max.0.z {
+                    let pos = BlockPos::new(x, y, z);
+                    let state = self.get_block_state(&pos).await;
+                    let collided = Self::check_collision(
+                        &bounding_box,
+                        pos,
+                        &state,
+                        true,
+                        |collision_shape: &BoundingBox| {
+                            collisions.push(*collision_shape);
+                        },
+                    );
+                    if collided {
+                        positions.push((collisions.len(), pos));
+                    }
+                }
+            }
+        }
+        (collisions, positions)
+    }
+
+    pub async fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
+        for pos in BlockPos::iterate(min, max) {
+            let state = self.get_block_state(&pos).await;
+            let collided = Self::check_collision(&bounding_box, pos, &state, false, |_| ());
+            if collided {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
+        let height = EntityType::ITEM.dimension[1] / 2.0;
+        let pos = Vector3::new(
+            f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
+            f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
+            f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
+        );
+
+        let entity = self.create_entity(pos, EntityType::ITEM);
+        let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
+        self.spawn_entity(item_entity as Arc<dyn EntityBase>).await;
     }
 }
 
