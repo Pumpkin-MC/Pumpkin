@@ -17,6 +17,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
+use pumpkin_data::recipes::init_recipe_registry;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
@@ -173,6 +174,8 @@ impl Server {
         let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
+
+        init_recipe_registry();
 
         Self {
             cached_registry: Registry::get_synced(),
