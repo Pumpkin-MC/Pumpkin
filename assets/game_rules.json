@@ -30,6 +30,7 @@
   "globalSoundEvents": "true",
   "keepInventory": "false",
   "lavaSourceConversion": "false",
+  "locatorBar": "true",
   "logAdminCommands": "true",
   "maxCommandChainLength": "65536",
   "maxCommandForkCount": "65536",

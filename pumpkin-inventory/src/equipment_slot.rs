@@ -125,7 +125,7 @@ impl EquipmentSlot {
         )
     }
 
-    pub fn discriminant(&self) -> i8 {
+    pub const fn discriminant(&self) -> i8 {
         match self {
             Self::MainHand(_) => 0,
             Self::OffHand(_) => 1,

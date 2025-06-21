@@ -6,11 +6,14 @@ use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use syn::LitInt;
 
+use crate::loot::LootTableStruct;
+
 #[derive(Deserialize)]
 pub struct EntityType {
     pub id: u16,
     pub max_health: Option<f32>,
     pub attackable: Option<bool>,
+    pub loot_table: Option<LootTableStruct>,
     pub summonable: bool,
     pub fire_immune: bool,
     pub dimension: [f32; 2],
@@ -79,6 +82,14 @@ impl ToTokens for NamedEntityType<'_> {
         let dimension0 = entity.dimension[0];
         let dimension1 = entity.dimension[1];
 
+        let loot_table = match &entity.loot_table {
+            Some(table) => {
+                let table_tokens = table.to_token_stream();
+                quote! { Some(#table_tokens) }
+            }
+            None => quote! { None },
+        };
+
         tokens.extend(quote! {
             EntityType {
                 id: #id,
@@ -86,6 +97,7 @@ impl ToTokens for NamedEntityType<'_> {
                 attackable: #attackable,
                 summonable: #summonable,
                 fire_immune: #fire_immune,
+                loot_table: #loot_table,
                 dimension: [#dimension0, #dimension1], // Correctly construct the array
                 eye_height: #eye_height,
                 spawn_restriction: #spawn_restriction,
@@ -126,6 +138,7 @@ pub(crate) fn build() -> TokenStream {
         });
     }
     quote! {
+        use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
 
         #[derive(Clone, Copy, Debug, PartialEq)]
@@ -135,6 +148,7 @@ pub(crate) fn build() -> TokenStream {
             pub attackable: Option<bool>,
             pub summonable: bool,
             pub fire_immune: bool,
+            pub loot_table: Option<LootTable>,
             pub dimension: [f32; 2],
             pub eye_height: f32,
             pub spawn_restriction: SpawnRestriction,

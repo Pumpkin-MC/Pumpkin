@@ -16,8 +16,6 @@ pub struct SPlayerCommand {
 }
 
 pub enum Action {
-    StartSneaking = 0,
-    StopSneaking,
     LeaveBed,
     StartSprinting,
     StopSprinting,
@@ -34,15 +32,13 @@ impl TryFrom<i32> for Action {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::StartSneaking),
-            1 => Ok(Self::StopSneaking),
-            2 => Ok(Self::LeaveBed),
-            3 => Ok(Self::StartSprinting),
-            4 => Ok(Self::StopSprinting),
-            5 => Ok(Self::StartHorseJump),
-            6 => Ok(Self::StopHorseJump),
-            7 => Ok(Self::OpenVehicleInventory),
-            8 => Ok(Self::StartFlyingElytra),
+            0 => Ok(Self::LeaveBed),
+            1 => Ok(Self::StartSprinting),
+            2 => Ok(Self::StopSprinting),
+            3 => Ok(Self::StartHorseJump),
+            4 => Ok(Self::StopHorseJump),
+            5 => Ok(Self::OpenVehicleInventory),
+            6 => Ok(Self::StartFlyingElytra),
             _ => Err(InvalidAction),
         }
     }

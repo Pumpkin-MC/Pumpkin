@@ -252,7 +252,11 @@ pub trait FlowingFluid {
     ) -> bool {
         let block = world.get_block(block_pos).await;
 
-        if block.id != 0 && !self.can_be_replaced(world, block_pos, block.id).await {
+        if block.id != 0
+            && !self
+                .can_be_replaced(world, block_pos, block.id, fluid)
+                .await
+        {
             return true;
         }
 
@@ -406,7 +410,6 @@ pub trait FlowingFluid {
         pos: &BlockPos,
         state_id: BlockStateId,
     ) {
-        //TODO Implement lava water mix
         if self.is_waterlogged(world, pos).await.is_some() {
             return;
         }
@@ -426,21 +429,27 @@ pub trait FlowingFluid {
         self.can_replace_block(world, pos, fluid).await
     }
 
-    async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, _fluid: &Fluid) -> bool {
+    async fn can_replace_block(&self, world: &Arc<World>, pos: &BlockPos, fluid: &Fluid) -> bool {
         let block = world.get_block(pos).await;
 
-        if self.can_be_replaced(world, pos, block.id).await {
-            return true;
-        }
-
-        false
+        self.can_be_replaced(world, pos, block.id, fluid).await
     }
 
-    async fn can_be_replaced(&self, world: &Arc<World>, pos: &BlockPos, block_id: BlockId) -> bool {
-        let block_state_id = world.get_block_state_id(pos).await;
+    async fn can_be_replaced(
+        &self,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        block_id: BlockId,
+        fluid: &Fluid,
+    ) -> bool {
+        // let block_state_id = world.get_block_state_id(pos).await;
+        let block_state = world.get_block_state(pos).await;
 
-        if let Some(fluid) = Fluid::from_state_id(block_state_id) {
-            if fluid.is_source(block_state_id) && fluid.is_falling(block_state_id) {
+        if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
+            if fluid.id != other_fluid.id {
+                return true;
+            }
+            if other_fluid.is_source(block_state.id) && other_fluid.is_falling(block_state.id) {
                 return true;
             }
         }

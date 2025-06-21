@@ -1,6 +1,6 @@
 use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::entity::EntityType;
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_world::world::BlockAccessor;
 use rand::Rng;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ pub struct FireBlock;
 impl FireBlock {
     #[must_use]
     pub fn get_fire_tick_delay() -> i32 {
-        30 + rand::thread_rng().gen_range(0..10)
+        30 + rand::rng().random_range(0..10)
     }
 }
 
@@ -51,7 +51,9 @@ impl PumpkinBlock for FireBlock {
 
         let dimension = world.dimension_type;
         // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-        if dimension == DimensionType::Overworld || dimension == DimensionType::TheNether {
+        if dimension == VanillaDimensionType::Overworld
+            || dimension == VanillaDimensionType::TheNether
+        {
             if let Some(portal) = NetherPortal::get_new_portal(world, pos, HorizontalAxis::X).await
             {
                 portal.create(world).await;
@@ -84,7 +86,7 @@ impl PumpkinBlock for FireBlock {
             if ticks < 0 {
                 base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
             } else if base_entity.entity_type == EntityType::PLAYER {
-                let rnd_ticks = rand::thread_rng().gen_range(1..3);
+                let rnd_ticks = rand::rng().random_range(1..3);
                 base_entity
                     .fire_ticks
                     .store(ticks + rnd_ticks, Ordering::Relaxed);

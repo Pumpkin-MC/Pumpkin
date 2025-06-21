@@ -7,7 +7,7 @@ use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{BlockState, block_properties::BedPart};
 use pumpkin_protocol::server::play::SUseItemOn;
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
@@ -159,7 +159,7 @@ impl PumpkinBlock for BedBlock {
         };
 
         // Explode if not in the overworld
-        if world.dimension_type != DimensionType::Overworld {
+        if world.dimension_type != VanillaDimensionType::Overworld {
             world
                 .break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS)
                 .await;

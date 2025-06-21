@@ -6,7 +6,7 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-        CSetPlayerInventory,
+        CSetPlayerInventory, CSetSelectedSlot,
     },
     codec::item_stack_seralizer::OptionalItemStackHash,
     server::play::SlotActionType,
@@ -50,6 +50,7 @@ pub trait InventoryPlayer: Send + Sync {
     async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
     async fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
     async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
+    async fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot);
 }
 
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
@@ -164,7 +165,7 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    async fn set_received_hash(&mut self, slot: usize, hash: OptionalItemStackHash) {
+    fn set_received_hash(&mut self, slot: usize, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
         if slot < behaviour.previous_tracked_stacks.len() {
             behaviour.previous_tracked_stacks[slot].set_received_hash(hash);
@@ -177,12 +178,12 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    async fn set_received_stack(&mut self, slot: usize, stack: ItemStack) {
+    fn set_received_stack(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
         behaviour.previous_tracked_stacks[slot].set_received_stack(stack);
     }
 
-    async fn set_received_cursor_hash(&mut self, hash: OptionalItemStackHash) {
+    fn set_received_cursor_hash(&mut self, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
         behaviour.previous_cursor_stack.set_received_hash(hash);
     }
