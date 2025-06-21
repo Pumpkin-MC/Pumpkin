@@ -71,6 +71,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
+use crate::block::blocks::cake::CakeBlock;
+use crate::block::blocks::candle_cakes::CandleCakeBlock;
+use crate::block::blocks::candles::CandleBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
@@ -137,7 +140,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
     manager.register(EndPortalFrameBlock);
+    manager.register(CandleBlock);
     manager.register(SeaPickleBlock);
+    manager.register(CakeBlock);
+    manager.register(CandleCakeBlock);
 
     // Fire
     manager.register(SoulFireBlock);

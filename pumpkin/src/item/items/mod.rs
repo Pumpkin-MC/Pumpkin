@@ -2,6 +2,7 @@ mod axe;
 mod bucket;
 mod egg;
 mod ender_eye;
+mod fire_charge;
 mod flint_and_steel;
 mod hoe;
 mod honeycomb;
@@ -10,6 +11,8 @@ mod snowball;
 mod sword;
 mod trident;
 
+use super::registry::ItemRegistry;
+use crate::item::items::fire_charge::FireChargeItem;
 use axe::AxeItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
 use egg::EggItem;
@@ -22,8 +25,6 @@ use snowball::SnowBallItem;
 use std::sync::Arc;
 use sword::SwordItem;
 use trident::TridentItem;
-
-use super::registry::ItemRegistry;
 #[must_use]
 pub fn default_registry() -> Arc<ItemRegistry> {
     let mut manager = ItemRegistry::default();
@@ -40,6 +41,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(AxeItem);
     manager.register(HoneyCombItem);
     manager.register(EnderEyeItem);
+    manager.register(FireChargeItem);
 
     Arc::new(manager)
 }

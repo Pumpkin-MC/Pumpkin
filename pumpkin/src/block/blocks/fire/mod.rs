@@ -25,20 +25,19 @@ impl FireBlockBase {
     }
 
     #[must_use]
-    pub fn can_place_on(block: &Block) -> bool {
-        let block = block.clone();
-
+    pub async fn can_place_on(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         // Make sure the block below is not a fire block or fluid block
-        block != Block::SOUL_FIRE
-            && block != Block::FIRE
-            && block != Block::WATER
-            && block != Block::LAVA
+        let (support_block, state) = &block_accessor.get_block_and_block_state(block_pos).await;
+        support_block.id != Block::SOUL_FIRE.id
+            && support_block.id != Block::FIRE.id
+            && support_block.id != Block::WATER.id
+            && support_block.id != Block::LAVA.id
+            && !support_block.is_waterlogged(state.id)
     }
 
     pub async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         let block_state = block_accessor.get_block_state(block_pos).await;
-        block_state.is_air()
-            && Self::can_place_on(&block_accessor.get_block(&block_pos.down()).await)
+        block_state.is_air() && Self::can_place_on(block_accessor, &block_pos.down()).await
     }
 
     async fn broken(world: Arc<World>, block_pos: BlockPos) {

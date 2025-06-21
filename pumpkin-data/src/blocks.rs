@@ -38,3 +38,14 @@ impl Tagable for Block {
         self.name
     }
 }
+
+impl Block {
+    pub fn is_waterlogged(&self, state_id: u16) -> bool {
+        self.properties(state_id).is_some_and(|properties| {
+            properties
+                .to_props()
+                .iter()
+                .any(|(key, value)| key == "waterlogged" && value == "true")
+        })
+    }
+}
