@@ -47,8 +47,8 @@ use pumpkin_protocol::client::play::{
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::packet::Packet;
 use pumpkin_protocol::server::play::{
-    SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay,
-    SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
+    SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
     SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
     SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
@@ -2054,6 +2054,19 @@ impl Player {
             SConfirmTeleport::PACKET_ID => {
                 self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
                     .await;
+            }
+            SChangeGameMode::PACKET_ID => {
+                if self.permission_lvl.load() >= PermissionLvl::Two {
+                    let data = SChangeGameMode::read(payload)?;
+                    self.set_gamemode(data.game_mode).await;
+                    let gamemode_string = format!("{:?}", data.game_mode).to_lowercase();
+                    let gamemode_string = format!("gameMode.{gamemode_string}");
+                    self.send_system_message(&TextComponent::translate(
+                        "commands.gamemode.success.self",
+                        [TextComponent::translate(gamemode_string, [])],
+                    ))
+                    .await;
+                }
             }
             SChatCommand::PACKET_ID => {
                 self.handle_chat_command(server, &(SChatCommand::read(payload)?))
