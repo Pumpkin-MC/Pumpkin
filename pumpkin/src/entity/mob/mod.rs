@@ -51,29 +51,24 @@ impl EntityBase for MobEntity {
     }
 }
 
-pub async fn from_type(
+pub fn from_type(
     entity_type: EntityType,
     position: Vector3<f64>,
     world: &Arc<World>,
 ) -> Arc<dyn EntityBase> {
     let entity = world.create_entity(position, entity_type);
-    let mob = MobEntity {
-        living_entity: LivingEntity::new(entity),
-        goals: Mutex::new(vec![]),
-        navigator: Mutex::new(Navigator::default()),
-    };
 
     #[allow(clippy::single_match)]
-    match entity_type {
-        EntityType::ZOMBIE => Zombie::make(&mob).await,
+    let mob = match entity_type {
+        EntityType::ZOMBIE => Zombie::make(entity),
         // TODO
-        _ => (),
-    }
+        _ => MobEntity {
+            living_entity: LivingEntity::new(entity),
+            goals: Mutex::new(vec![]),
+            navigator: Mutex::new(Navigator::default()),
+        },
+    };
     Arc::new(mob)
 }
 
-impl MobEntity {
-    pub async fn goal<T: Goal + 'static>(&self, goal: T) {
-        self.goals.lock().await.push((Arc::new(goal), false));
-    }
-}
+impl MobEntity {}

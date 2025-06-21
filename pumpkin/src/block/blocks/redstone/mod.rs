@@ -10,6 +10,7 @@ use pumpkin_util::math::position::BlockPos;
 use crate::world::World;
 
 pub mod buttons;
+pub mod comparator;
 pub mod lever;
 pub mod observer;
 pub mod pressure_plate;
@@ -23,6 +24,9 @@ pub mod target_block;
 pub mod tripwire;
 pub mod tripwire_hook;
 pub mod turbo;
+
+// abstruct
+pub mod abstruct_redstone_gate;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     for direction in BlockDirection::all() {

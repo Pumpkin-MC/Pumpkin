@@ -241,4 +241,14 @@ pub trait PumpkinBlock: Send + Sync {
     ) -> u8 {
         0
     }
+
+    async fn get_comparator_output(
+        &self,
+        _block: &Block,
+        _world: &World,
+        _pos: &BlockPos,
+        _state: &BlockState,
+    ) -> Option<u8> {
+        None
+    }
 }

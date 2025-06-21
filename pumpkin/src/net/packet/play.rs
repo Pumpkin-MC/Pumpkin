@@ -1623,7 +1623,7 @@ impl Player {
 
         let world = self.world().await;
         // Create a new mob and UUID based on the spawn egg id
-        let mob = mob::from_type(EntityType::from_raw(entity_type.id).unwrap(), pos, &world).await;
+        let mob = mob::from_type(EntityType::from_raw(entity_type.id).unwrap(), pos, &world);
 
         // Set the rotation
         mob.get_entity().set_rotation(yaw, 0.0);

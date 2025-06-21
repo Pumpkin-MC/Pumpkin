@@ -1,26 +1,40 @@
-use pumpkin_data::item::Item;
-use pumpkin_util::loot_table::{
-    LootCondition, LootFunctionNumberProvider, LootFunctionTypes, LootPoolEntry,
-    LootPoolEntryTypes, LootTable,
+use pumpkin_data::{Block, BlockState, block_properties::get_block_by_state_id, item::Item};
+use pumpkin_util::{
+    loot_table::{
+        LootCondition, LootFunctionNumberProvider, LootFunctionTypes, LootPoolEntry,
+        LootPoolEntryTypes, LootTable,
+    },
+    random::{RandomGenerator, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
-pub(super) trait LootTableExt {
-    fn get_loot(&self, block_props: &[(String, String)]) -> Vec<ItemStack>;
+#[derive(Default)]
+pub struct LootContextParameters {
+    pub explosion_radius: Option<f32>,
+    pub block_state: Option<BlockState>,
+}
+
+pub trait LootTableExt {
+    fn get_loot(&self, params: LootContextParameters) -> Vec<ItemStack>;
 }
 
 impl LootTableExt for LootTable {
-    fn get_loot(&self, block_props: &[(String, String)]) -> Vec<ItemStack> {
+    fn get_loot(&self, params: LootContextParameters) -> Vec<ItemStack> {
         let mut stacks = Vec::new();
 
         if let Some(pools) = self.pools {
             for pool in pools {
-                let rolls = pool.rolls.round() + pool.bonus_rolls.floor(); // TODO: multiply by luck
+                // TODO
+                let rolls = pool
+                    .rolls
+                    .get(&mut RandomGenerator::Xoroshiro(Xoroshiro::from_seed(123)))
+                    .round()
+                    + pool.bonus_rolls.floor(); // TODO: multiply by luck
 
                 for _ in 0..(rolls as i32) {
                     for entry in pool.entries {
-                        if let Some(loot) = entry.get_loot(block_props) {
+                        if let Some(loot) = entry.get_loot(&params) {
                             stacks.extend(loot);
                         }
                     }
@@ -33,23 +47,23 @@ impl LootTableExt for LootTable {
 }
 
 trait LootPoolEntryExt {
-    fn get_loot(&self, block_props: &[(String, String)]) -> Option<Vec<ItemStack>>;
+    fn get_loot(&self, params: &LootContextParameters) -> Option<Vec<ItemStack>>;
 }
 
 impl LootPoolEntryExt for LootPoolEntry {
-    fn get_loot(&self, block_props: &[(String, String)]) -> Option<Vec<ItemStack>> {
+    fn get_loot(&self, params: &LootContextParameters) -> Option<Vec<ItemStack>> {
         if let Some(conditions) = self.conditions {
-            if !conditions.iter().all(|cond| cond.is_fulfilled(block_props)) {
+            if !conditions.iter().all(|cond| cond.is_fulfilled(params)) {
                 return None;
             }
         }
 
-        let mut stacks = self.content.get_stacks(block_props);
+        let mut stacks = self.content.get_stacks(params);
 
         if let Some(functions) = self.functions {
             for function in functions {
                 if let Some(conditions) = function.conditions {
-                    if !conditions.iter().all(|cond| cond.is_fulfilled(block_props)) {
+                    if !conditions.iter().all(|cond| cond.is_fulfilled(params)) {
                         continue;
                     }
                 }
@@ -94,6 +108,10 @@ impl LootPoolEntryExt for LootPoolEntry {
                         block: _,
                         properties: _,
                     }
+                    | LootFunctionTypes::EnchantedCountIncrease
+                    | LootFunctionTypes::SetOminousBottleAmplifier
+                    | LootFunctionTypes::SetPotion
+                    | LootFunctionTypes::FurnaceSmelt
                     | LootFunctionTypes::ExplosionDecay => {
                         // TODO: shouldnt crash here but needs to be implemented someday
                     }
@@ -106,11 +124,11 @@ impl LootPoolEntryExt for LootPoolEntry {
 }
 
 trait LootPoolEntryTypesExt {
-    fn get_stacks(&self, block_props: &[(String, String)]) -> Vec<ItemStack>;
+    fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack>;
 }
 
 impl LootPoolEntryTypesExt for LootPoolEntryTypes {
-    fn get_stacks(&self, block_props: &[(String, String)]) -> Vec<ItemStack> {
+    fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack> {
         match self {
             Self::Empty => Vec::new(),
             Self::Item(item_entry) => {
@@ -123,7 +141,7 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
             Self::Alternatives(alternative_entry) => alternative_entry
                 .children
                 .iter()
-                .filter_map(|entry| entry.get_loot(block_props))
+                .filter_map(|entry| entry.get_loot(params))
                 .flatten()
                 .collect(),
             Self::Sequence => todo!(),
@@ -133,20 +151,34 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
 }
 
 trait LootConditionExt {
-    fn is_fulfilled(&self, block_props: &[(String, String)]) -> bool;
+    fn is_fulfilled(&self, params: &LootContextParameters) -> bool;
 }
 
 impl LootConditionExt for LootCondition {
     // TODO: This is trash. Make this right
-    fn is_fulfilled(&self, block_props: &[(String, String)]) -> bool {
+    fn is_fulfilled(&self, params: &LootContextParameters) -> bool {
         match self {
-            Self::SurvivesExplosion => true,
+            Self::SurvivesExplosion => {
+                if let Some(radius) = params.explosion_radius {
+                    return rand::rng().random::<f32>() <= 1.0 / radius;
+                }
+                true
+            }
             Self::BlockStateProperty {
                 block: _,
                 properties,
-            } => properties
-                .iter()
-                .all(|(key, value)| block_props.iter().any(|(k, v)| k == key && v == value)),
+            } => {
+                if let Some(state) = &params.block_state {
+                    let props =
+                        Block::properties(&get_block_by_state_id(state.id).unwrap(), state.id)
+                            .map_or_else(Vec::new, |props| props.to_props());
+
+                    return properties
+                        .iter()
+                        .all(|(key, value)| props.iter().any(|(k, v)| k == key && v == value));
+                }
+                false
+            }
             _ => false,
         }
     }

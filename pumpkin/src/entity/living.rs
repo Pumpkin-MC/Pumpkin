@@ -4,6 +4,7 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
 use super::{Entity, EntityId, NBTStorage, effect::Effect};
+use crate::block::loot::{LootContextParameters, LootTableExt};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -268,6 +269,20 @@ impl LivingEntity {
                 EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
             )
             .await;
+        self.drop_loot().await;
+    }
+
+    async fn drop_loot(&self) {
+        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+            let world = self.entity.world.read().await;
+            let pos = self.entity.block_pos.load();
+            let params = LootContextParameters {
+                ..Default::default()
+            };
+            for stack in loot_table.get_loot(params) {
+                world.drop_stack(&pos, stack).await;
+            }
+        }
     }
 
     async fn tick_move(&self, entity: &dyn EntityBase, server: &Server) {
