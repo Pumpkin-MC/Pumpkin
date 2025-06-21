@@ -38,8 +38,9 @@ use rand::seq::IndexedRandom;
 use rsa::RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{
+    future::Future,
     sync::{Arc, atomic::Ordering},
     time::Duration,
 };
@@ -92,6 +93,12 @@ pub struct Server {
     pub white_list: AtomicBool,
     /// Manages the server's tick rate, freezing, and sprinting
     pub tick_rate_manager: Arc<ServerTickRateManager>,
+    /// Stores the duration of the last 100 ticks for performance analysis
+    pub tick_times_nanos: Mutex<[i64; 100]>,
+    /// Aggregated tick times for efficient rolling average calculation
+    pub aggregated_tick_times_nanos: AtomicI64,
+    /// Total number of ticks processed by the server
+    pub tick_count: AtomicI32,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -203,6 +210,9 @@ impl Server {
             ),
             white_list: AtomicBool::new(BASIC_CONFIG.white_list),
             tick_rate_manager: Arc::new(ServerTickRateManager::default()),
+            tick_times_nanos: Mutex::new([0; 100]),
+            aggregated_tick_times_nanos: AtomicI64::new(0),
+            tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
@@ -675,5 +685,34 @@ impl Server {
         if let Err(e) = self.player_data_storage.tick(self).await {
             log::error!("Error ticking player data: {e}");
         }
+    }
+
+    /// Updates the tick time statistics with the duration of the last tick.
+    pub async fn update_tick_times(&self, tick_duration_nanos: i64) {
+        let tick_count = self.tick_count.fetch_add(1, Ordering::Relaxed);
+        let index = (tick_count % 100) as usize;
+
+        let mut tick_times = self.tick_times_nanos.lock().await;
+        let old_time = tick_times[index];
+        tick_times[index] = tick_duration_nanos;
+        drop(tick_times); // Release lock
+
+        self.aggregated_tick_times_nanos
+            .fetch_add(tick_duration_nanos - old_time, Ordering::Relaxed);
+    }
+
+    /// Gets the rolling average tick time over the last 100 ticks, in nanoseconds.
+    pub fn get_average_tick_time_nanos(&self) -> i64 {
+        let tick_count = self.tick_count.load(Ordering::Relaxed);
+        let sample_size = (tick_count as usize).min(100);
+        if sample_size == 0 {
+            return 0;
+        }
+        self.aggregated_tick_times_nanos.load(Ordering::Relaxed) / sample_size as i64
+    }
+
+    /// Returns a copy of the last 100 tick times.
+    pub async fn get_tick_times_nanos_copy(&self) -> [i64; 100] {
+        *self.tick_times_nanos.lock().await
     }
 }

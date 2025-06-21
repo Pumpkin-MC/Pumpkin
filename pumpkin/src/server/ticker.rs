@@ -20,6 +20,7 @@ impl Ticker {
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(&mut self, server: &Server) {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
+            let tick_start_time = Instant::now();
             let manager = &server.tick_rate_manager;
 
             manager.tick();
@@ -40,6 +41,10 @@ impl Ticker {
                 // Always call tick - it will internally decide what to tick based on frozen state
                 server.tick().await;
             }
+
+            // Record the total time this tick took
+            let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
+            server.update_tick_times(tick_duration_nanos).await;
 
             // Sleep logic remains the same
             let now = Instant::now();
