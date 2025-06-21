@@ -73,7 +73,7 @@ impl PumpkinItem for ShovelItem {
                     .set_block_state(
                         &location,
                         campfire_props.to_state_id(block),
-                        BlockFlags::NOTIFY_ALL_AND_REDRAW,
+                        BlockFlags::NOTIFY_ALL,
                     )
                     .await;
             }

@@ -43,11 +43,7 @@ impl PumpkinItem for FlintAndSteelItem {
             if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
                 let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
                 world
-                    .set_block_state(
-                        &pos,
-                        fire_block.default_state_id,
-                        BlockFlags::NOTIFY_ALL_AND_REDRAW,
-                    )
+                    .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
                 // TODO
             }
@@ -64,11 +60,7 @@ impl PumpkinItem for FlintAndSteelItem {
                 )
                 .await;
             world
-                .set_block_state(
-                    &location,
-                    props.to_state_id(block),
-                    BlockFlags::NOTIFY_ALL_AND_REDRAW,
-                )
+                .set_block_state(&location, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                 .await;
         }
     }
