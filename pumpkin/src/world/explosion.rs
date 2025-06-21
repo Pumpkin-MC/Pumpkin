@@ -1,9 +1,13 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use pumpkin_data::block_properties::get_state_by_state_id;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use crate::{block::drop_loot, server::Server};
+use crate::{
+    block::{drop_loot, loot::LootContextParameters},
+    server::Server,
+};
 
 use super::{BlockFlags, World};
 
@@ -83,7 +87,11 @@ impl Explosion {
             world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                drop_loot(world, &block, &pos, false, block_state.id).await;
+                let params = LootContextParameters {
+                    block_state: get_state_by_state_id(block_state.id),
+                    explosion_radius: Some(self.power),
+                };
+                drop_loot(world, &block, &pos, false, params).await;
             }
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block.explode(&block, world, pos).await;
