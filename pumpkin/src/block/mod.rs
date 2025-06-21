@@ -103,7 +103,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
-    manager.register(DoorBlock);
+    for i in DoorBlock::DOOR_BLOCKS {
+        manager.register(*i);
+    }
     manager.register(FarmLandBlock);
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);

@@ -35,3 +35,4 @@ pub mod torches;
 pub mod trapdoor;
 pub mod vine;
 pub mod walls;
+mod block_set_type;
