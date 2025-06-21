@@ -1,12 +1,14 @@
+use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use std::sync::Arc;
 
-use crate::block::blocks::fire::FireBlockBase;
 use crate::entity::player::Player;
+use crate::item::items::ignite::ignition::Ignition;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 
@@ -29,16 +31,22 @@ impl PumpkinItem for FlintAndSteelItem {
         _block: &Block,
         _server: &Server,
     ) {
-        // TODO: check CampfireBlock, CandleBlock and CandleCakeBlock
-        let world = player.world().await;
-        let pos = location.offset(face.to_offset());
-        if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
-            let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+        Ignition::ignite_block(
+            |world: Arc<World>, pos: BlockPos, new_state_id: u16| async move {
+                world
+                    .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
 
-            world
-                .set_block_state(&pos, fire_block.default_state_id, BlockFlags::NOTIFY_ALL)
-                .await;
-            // TODO
-        }
+                Ignition::run_fire_spread(world, &pos);
+                // TODO
+            },
+            _item,
+            player,
+            location,
+            face,
+            _block,
+            _server,
+        )
+        .await;
     }
 }
