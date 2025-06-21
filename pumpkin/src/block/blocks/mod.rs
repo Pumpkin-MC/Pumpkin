@@ -1,6 +1,7 @@
 pub mod bamboo;
 pub mod barrel;
 pub mod bed;
+mod block_set_type;
 pub mod cactus;
 pub mod carpet;
 pub mod chest;
@@ -35,4 +36,3 @@ pub mod torches;
 pub mod trapdoor;
 pub mod vine;
 pub mod walls;
-mod block_set_type;

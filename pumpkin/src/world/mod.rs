@@ -374,7 +374,13 @@ impl World {
             .await;
     }
 
-    pub async fn play_sound_expect(&self, player: &Player, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
+    pub async fn play_sound_expect(
+        &self,
+        player: &Player,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
         self.play_sound_raw_expect(player, sound as u16, category, position, 1.0, 1.0)
             .await;
     }
@@ -403,7 +409,8 @@ impl World {
     ) {
         let seed = rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
-        self.broadcast_packet_except(&[player.gameprofile.id], &packet).await;
+        self.broadcast_packet_except(&[player.gameprofile.id], &packet)
+            .await;
     }
 
     pub async fn play_block_sound(
@@ -432,7 +439,8 @@ impl World {
             f64::from(position.0.y) + 0.5,
             f64::from(position.0.z) + 0.5,
         );
-        self.play_sound_expect(player, sound, category, &new_vec).await;
+        self.play_sound_expect(player, sound, category, &new_vec)
+            .await;
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {

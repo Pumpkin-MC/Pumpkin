@@ -34,7 +34,6 @@ type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 #[inline]
 async fn get_hinge(
     world: &World,
-    block: &Block,
     pos: &BlockPos,
     use_item: &SUseItemOn,
     facing: HorizontalFacing,
@@ -63,7 +62,8 @@ async fn get_hinge(
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(right_state.id, &right_block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(right_state.id, &right_block).half
+            == DoubleBlockHalf::Lower;
 
     let score = -(left_state.is_full_cube() as i32) - (top_state.is_full_cube() as i32)
         + right_state.is_full_cube() as i32
@@ -160,7 +160,12 @@ impl DoorBlock {
         other_door_props.open = door_props.open;
 
         world
-            .play_block_sound_expect(player, self.get_sound(door_props.open), SoundCategory::Blocks, *block_pos)
+            .play_block_sound_expect(
+                player,
+                self.get_sound(door_props.open),
+                SoundCategory::Blocks,
+                *block_pos,
+            )
             .await;
 
         world
@@ -215,7 +220,7 @@ impl PumpkinBlock for DoorBlock {
             || block_receives_redstone_power(world, &block_pos.up()).await;
 
         let direction = player.living_entity.entity.get_horizontal_facing();
-        let hinge = get_hinge(world, block, block_pos, use_item_on, direction).await;
+        let hinge = get_hinge(world, block_pos, use_item_on, direction).await;
 
         let mut door_props = DoorProperties::default(block);
         door_props.half = DoubleBlockHalf::Lower;

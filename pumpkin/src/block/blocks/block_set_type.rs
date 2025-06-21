@@ -9,26 +9,28 @@ pub enum PressurePlateSensitivity {
 }
 
 #[derive(Copy, Clone)]
+#[allow(dead_code)]
 pub struct BlockSetType {
-    pub name: &'static str,
+    // pub name: &'static str, unused
     pub can_open_by_hand: bool,
     pub can_open_by_wind_charge: bool,
     pub can_button_be_activated_by_arrows: bool,
     pub pressure_plate_sensitivity: PressurePlateSensitivity,
     // TODO pub soundType: SoundType,
-    pub door_close: Sound, //java SoundEvent
-    pub door_open: Sound, //java SoundEvent
-    pub trapdoor_close: Sound, //java SoundEvent
-    pub trapdoor_open: Sound, //java SoundEvent
+    pub door_close: Sound,               //java SoundEvent
+    pub door_open: Sound,                //java SoundEvent
+    pub trapdoor_close: Sound,           //java SoundEvent
+    pub trapdoor_open: Sound,            //java SoundEvent
     pub pressure_plate_click_off: Sound, //java SoundEvent
-    pub pressure_plate_click_on: Sound, //java SoundEvent
-    pub button_click_off: Sound, //java SoundEvent
-    pub button_click_on: Sound, //java SoundEvent
+    pub pressure_plate_click_on: Sound,  //java SoundEvent
+    pub button_click_off: Sound,         //java SoundEvent
+    pub button_click_on: Sound,          //java SoundEvent
 }
 
+#[allow(dead_code)]
 impl BlockSetType {
     pub const IRON: Self = Self {
-        name: "iron",
+        // name: "iron",
         can_open_by_hand: false,
         can_open_by_wind_charge: false,
         can_button_be_activated_by_arrows: false,
@@ -45,7 +47,7 @@ impl BlockSetType {
     };
 
     pub const COPPER: Self = Self {
-        name: "copper",
+        // name: "copper",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: false,
@@ -62,7 +64,7 @@ impl BlockSetType {
     };
 
     pub const GOLD: Self = Self {
-        name: "gold",
+        // name: "gold",
         can_open_by_hand: false,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: false,
@@ -79,7 +81,7 @@ impl BlockSetType {
     };
 
     pub const STONE: Self = Self {
-        name: "stone",
+        // name: "stone",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: false,
@@ -96,7 +98,7 @@ impl BlockSetType {
     };
 
     pub const POLISHED_BLACKSTONE: Self = Self {
-        name: "polished_blackstone",
+        // name: "polished_blackstone",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: false,
@@ -113,7 +115,7 @@ impl BlockSetType {
     };
 
     pub const OAK: Self = Self {
-        name: "oak",
+        // name: "oak",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -130,7 +132,7 @@ impl BlockSetType {
     };
 
     pub const SPRUCE: Self = Self {
-        name: "spruce",
+        // name: "spruce",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -147,7 +149,7 @@ impl BlockSetType {
     };
 
     pub const BIRCH: Self = Self {
-        name: "birch",
+        // name: "birch",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -164,7 +166,7 @@ impl BlockSetType {
     };
 
     pub const ACACIA: Self = Self {
-        name: "acacia",
+        // name: "acacia",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -181,7 +183,7 @@ impl BlockSetType {
     };
 
     pub const CHERRY: Self = Self {
-        name: "cherry",
+        // name: "cherry",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -198,7 +200,7 @@ impl BlockSetType {
     };
 
     pub const JUNGLE: Self = Self {
-        name: "jungle",
+        // name: "jungle",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -215,7 +217,7 @@ impl BlockSetType {
     };
 
     pub const DARK_OAK: Self = Self {
-        name: "dark_oak",
+        // name: "dark_oak",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -232,7 +234,7 @@ impl BlockSetType {
     };
 
     pub const PALE_OAK: Self = Self {
-        name: "pale_oak",
+        // name: "pale_oak",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -249,7 +251,7 @@ impl BlockSetType {
     };
 
     pub const CRIMSON: Self = Self {
-        name: "crimson",
+        // name: "crimson",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -266,7 +268,7 @@ impl BlockSetType {
     };
 
     pub const WARPED: Self = Self {
-        name: "warped",
+        // name: "warped",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -283,7 +285,7 @@ impl BlockSetType {
     };
 
     pub const MANGROVE: Self = Self {
-        name: "mangrove",
+        // name: "mangrove",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
@@ -300,7 +302,7 @@ impl BlockSetType {
     };
 
     pub const BAMBOO: Self = Self {
-        name: "bamboo",
+        // name: "bamboo",
         can_open_by_hand: true,
         can_open_by_wind_charge: true,
         can_button_be_activated_by_arrows: true,
