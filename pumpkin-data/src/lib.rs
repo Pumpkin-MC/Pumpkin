@@ -120,6 +120,7 @@ mod block_direction;
 pub mod block_state;
 mod blocks;
 mod collision_shape;
+pub mod recipes;
 
 pub use block_direction::BlockDirection;
 pub use block_direction::FacingExt;
