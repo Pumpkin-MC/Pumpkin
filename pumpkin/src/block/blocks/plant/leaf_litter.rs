@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{BlockProperties, HorizontalFacing, Integer1To4},
-};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
@@ -12,6 +9,8 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+
+use super::segmented::{PlaceContext, Segmented, UpdateContext};
 
 type LeafLitterProperties = pumpkin_data::block_properties::LeafLitterLikeProperties;
 
@@ -46,92 +45,51 @@ impl PumpkinBlock for LeafLitterBlock {
 
     async fn can_update_at(
         &self,
-        _world: &World,
+        world: &World,
         block: &Block,
         state_id: BlockStateId,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+        use_item_on: &SUseItemOn,
+        player: &Player,
     ) -> bool {
-        // Allow placing multiple leaf litter in same position
-        let current_props = LeafLitterProperties::from_state_id(state_id, block);
-        can_add_segment(current_props)
+        let ctx = UpdateContext {
+            world,
+            block,
+            state_id,
+            block_pos,
+            face,
+            use_item_on,
+            player,
+        };
+        Segmented::can_update_at(self, &ctx).await
     }
 
     async fn on_place(
         &self,
-        _server: &Server,
-        _world: &World,
+        server: &Server,
+        world: &World,
         player: &Player,
         block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
+        block_pos: &BlockPos,
+        face: BlockDirection,
         replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
+        use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        if let BlockIsReplacing::Itself(existing_state_id) = replacing {
-            let mut props = LeafLitterProperties::from_state_id(existing_state_id, block);
-
-            if can_add_segment(props) {
-                props.segment_amount = get_next_segment_amount(props.segment_amount);
-                props.to_state_id(block)
-            } else {
-                existing_state_id
-            }
-        } else {
-            // Set first segment orientation based on player direction
-            let player_facing = player.living_entity.entity.get_horizontal_facing();
-            let mut props = LeafLitterProperties::default(block);
-            props.segment_amount = Integer1To4::L1;
-            props.facing = get_facing_for_segment(player_facing, Integer1To4::L1);
-            props.to_state_id(block)
-        }
+        let ctx = PlaceContext {
+            server,
+            world,
+            player,
+            block,
+            block_pos,
+            face,
+            replacing,
+            use_item_on,
+        };
+        Segmented::on_place(self, &ctx).await
     }
 }
 
-fn can_add_segment(props: LeafLitterProperties) -> bool {
-    matches!(
-        props.segment_amount,
-        Integer1To4::L1 | Integer1To4::L2 | Integer1To4::L3
-    )
-}
-
-fn get_next_segment_amount(current: Integer1To4) -> Integer1To4 {
-    match current {
-        Integer1To4::L1 => Integer1To4::L2,
-        Integer1To4::L2 => Integer1To4::L3,
-        Integer1To4::L3 | Integer1To4::L4 => Integer1To4::L4,
-    }
-}
-
-/// Minecraft leaf litter quadrant sequence: bottom right -> top right -> top left -> bottom left
-fn get_facing_for_segment(
-    player_facing: HorizontalFacing,
-    segment_amount: Integer1To4,
-) -> HorizontalFacing {
-    match (player_facing, segment_amount) {
-        // Returns South
-        (HorizontalFacing::North, Integer1To4::L1)
-        | (HorizontalFacing::South, Integer1To4::L3)
-        | (HorizontalFacing::East, Integer1To4::L2)
-        | (HorizontalFacing::West, Integer1To4::L4) => HorizontalFacing::South,
-
-        // Returns East
-        (HorizontalFacing::North, Integer1To4::L2)
-        | (HorizontalFacing::South, Integer1To4::L4)
-        | (HorizontalFacing::East, Integer1To4::L3)
-        | (HorizontalFacing::West, Integer1To4::L1) => HorizontalFacing::East,
-
-        // Returns North
-        (HorizontalFacing::North, Integer1To4::L3)
-        | (HorizontalFacing::South, Integer1To4::L1)
-        | (HorizontalFacing::East, Integer1To4::L4)
-        | (HorizontalFacing::West, Integer1To4::L2) => HorizontalFacing::North,
-
-        // Returns West
-        (HorizontalFacing::North, Integer1To4::L4)
-        | (HorizontalFacing::South, Integer1To4::L2)
-        | (HorizontalFacing::East, Integer1To4::L1)
-        | (HorizontalFacing::West, Integer1To4::L3) => HorizontalFacing::West,
-    }
+impl Segmented for LeafLitterBlock {
+    type Properties = LeafLitterProperties;
 }
