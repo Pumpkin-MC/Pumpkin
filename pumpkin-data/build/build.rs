@@ -14,6 +14,7 @@ mod entity_type;
 mod fluid;
 mod game_event;
 mod item;
+pub mod loot;
 mod message_type;
 mod noise_parameter;
 mod noise_router;
