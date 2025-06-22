@@ -19,6 +19,7 @@ pub mod fences;
 pub mod fire;
 pub mod furnace;
 pub mod glass_panes;
+pub mod grindstone;
 pub mod iron_bars;
 pub mod jukebox;
 pub mod logs;
@@ -38,3 +39,6 @@ pub mod torches;
 pub mod trapdoor;
 pub mod vine;
 pub mod walls;
+
+// abstruct
+pub mod abstruct_wall_mounting;

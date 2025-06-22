@@ -9,7 +9,6 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{item::ItemStack, world::BlockFlags};
 
-use crate::block::drop_stack;
 use crate::{
     block::{
         blocks::cake::CakeBlock,
@@ -87,7 +86,7 @@ impl CandleCakeBlock {
 
         let item_stack = ItemStack::new(1, candle_item);
 
-        drop_stack(world, location, item_stack).await;
+        world.drop_stack(location, item_stack).await;
 
         world
             .set_block_state(
@@ -115,7 +114,9 @@ impl PumpkinBlock for CandleCakeBlock {
         world: &Arc<World>,
     ) -> BlockActionResult {
         match item.id {
-            1150 | 838 => BlockActionResult::Continue, // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
+            id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
+                BlockActionResult::Continue
+            } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
             _ => {
                 Self::consume_and_drop_candle(block, player, &location, world).await;
                 BlockActionResult::Consume
