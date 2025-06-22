@@ -1,4 +1,4 @@
-use crate::block_properties::{Axis, Facing, HorizontalFacing};
+use crate::block_properties::{Axis, Facing, HorizontalAxis, HorizontalFacing};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl},
@@ -61,6 +61,10 @@ impl BlockDirection {
 
     pub fn random(random: &mut RandomGenerator) -> Self {
         Self::all()[random.next_bounded_i32(Self::all().len() as i32 - 1) as usize]
+    }
+
+    pub fn random_horizontal(random: &mut RandomGenerator) -> Self {
+        Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32 - 1) as usize]
     }
 
     pub fn by_index(index: usize) -> Option<Self> {
@@ -164,6 +168,15 @@ impl BlockDirection {
             _ => None,
         }
     }
+
+    pub fn to_horizontal_axis(&self) -> Option<HorizontalAxis> {
+        match self {
+            BlockDirection::North | BlockDirection::South => Some(HorizontalAxis::Z),
+            BlockDirection::West | BlockDirection::East => Some(HorizontalAxis::X),
+            _ => None,
+        }
+    }
+
     pub fn to_cardinal_direction(&self) -> HorizontalFacing {
         match self {
             BlockDirection::North => HorizontalFacing::North,
@@ -209,6 +222,17 @@ impl BlockDirection {
             BlockDirection::West => BlockDirection::North,
             BlockDirection::Up => BlockDirection::East,
             BlockDirection::Down => BlockDirection::West,
+        }
+    }
+
+    pub fn rotate_counter_clockwise(&self) -> BlockDirection {
+        match self {
+            BlockDirection::North => BlockDirection::West,
+            BlockDirection::West => BlockDirection::South,
+            BlockDirection::South => BlockDirection::East,
+            BlockDirection::East => BlockDirection::North,
+            BlockDirection::Up => BlockDirection::West,
+            BlockDirection::Down => BlockDirection::East,
         }
     }
 }

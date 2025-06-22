@@ -1,4 +1,5 @@
 use crate::block::blocks::fire::FireBlockBase;
+use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
@@ -42,20 +43,15 @@ impl Ignition {
         if result_is_fire {
             // calling if result is fire block.
             // will be contained fire direction logic
-            if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
-                ignite_logic(world, pos, result_block_id).await;
+            let state_id = FireBlock.get_state_for_position(&world, block, &pos).await;
+            if FireBlockBase::can_place_at(&world, &pos).await {
+                ignite_logic(world, pos, state_id).await;
             }
             return;
         }
 
         // ignite candles, campfire
         ignite_logic(world, location, result_block_id).await;
-    }
-
-    pub fn run_fire_spread(_world: Arc<World>, _start_pos: &BlockPos) {
-        tokio::spawn(async move {
-            // todo
-        });
     }
 }
 

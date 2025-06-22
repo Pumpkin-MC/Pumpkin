@@ -18,6 +18,7 @@ pub struct Block {
     pub item_id: u16,
     pub default_state: BlockState,
     pub states: &'static [BlockStateRef],
+    pub flammable: Option<Flammable>,
     pub loot_table: Option<LootTable>,
     pub experience: Option<Experience>,
 }
@@ -38,4 +39,10 @@ impl Tagable for Block {
     fn registry_key(&self) -> &str {
         self.name
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Flammable {
+    pub spread_chance: u8,
+    pub burn_chance: u8,
 }

@@ -58,8 +58,11 @@ impl PumpkinBlock for SoulFireBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        FireBlockBase::can_place_at(block_accessor, block_pos).await
-            && Self::is_soul_base(&block_accessor.get_block(&block_pos.down()).await)
+        block_accessor
+            .get_block(&block_pos.down())
+            .await
+            .is_tagged_with("minecraft:soul_fire_base_blocks")
+            == Some(true)
     }
 
     async fn broken(
