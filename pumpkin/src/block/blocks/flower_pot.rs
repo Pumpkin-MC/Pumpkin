@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -6,19 +6,47 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::item::Item;
-use pumpkin_macros::pumpkin_block;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
-#[pumpkin_block("minecraft:flower_pot")]
 pub struct FlowerPotBlock;
+
+impl BlockMetadata for FlowerPotBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
+
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "minecraft:flower_pots").unwrap()
+    }
+}
 
 #[async_trait]
 impl PumpkinBlock for FlowerPotBlock {
+    async fn normal_use(
+        &self,
+        block: &Block,
+        _player: &Player,
+        location: BlockPos,
+        _server: &Server,
+        world: &Arc<World>,
+    ) {
+        if !block.eq(&Block::FLOWER_POT) {
+            world
+                .set_block_state(
+                    &location,
+                    Block::FLOWER_POT.default_state_id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+        }
+    }
+
     async fn use_with_item(
         &self,
-        _block: &Block,
+        block: &Block,
         _player: &Player,
         location: BlockPos,
         item: &Item,
@@ -122,11 +150,22 @@ impl PumpkinBlock for FlowerPotBlock {
             item if item.eq(&Item::WARPED_ROOTS) => {
                 next = Block::POTTED_WARPED_ROOTS.default_state_id
             }
-            _ => return BlockActionResult::Continue,
+            _ => {
+                world
+                    .set_block_state(
+                        &location,
+                        Block::FLOWER_POT.default_state_id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                return BlockActionResult::Consume;
+            }
         }
-        world
-            .set_block_state(&location, next, BlockFlags::NOTIFY_ALL)
-            .await;
+        if block.eq(&Block::FLOWER_POT) {
+            world
+                .set_block_state(&location, next, BlockFlags::NOTIFY_ALL)
+                .await;
+        }
         BlockActionResult::Consume
     }
 }
