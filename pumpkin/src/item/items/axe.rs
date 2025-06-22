@@ -109,22 +109,25 @@ fn try_use_axe(block: &Block) -> Option<u16> {
 
 fn get_stripped_equivalent(block: &Block) -> Option<u16> {
     let new_block_id = match &block.id {
-        id if id == &Block::CHERRY_LOG.id => Block::STRIPPED_CHERRY_LOG.id,
+        id if id == &Block::OAK_LOG.id => Block::STRIPPED_OAK_LOG.id,
+        id if id == &Block::SPRUCE_LOG.id => Block::STRIPPED_SPRUCE_LOG.id,
+        id if id == &Block::BIRCH_LOG.id => Block::STRIPPED_BIRCH_LOG.id,
         id if id == &Block::JUNGLE_LOG.id => Block::STRIPPED_JUNGLE_LOG.id,
+        id if id == &Block::ACACIA_LOG.id => Block::STRIPPED_ACACIA_LOG.id,
+        id if id == &Block::DARK_OAK_LOG.id => Block::STRIPPED_DARK_OAK_LOG.id,
+        id if id == &Block::MANGROVE_LOG.id => Block::STRIPPED_MANGROVE_LOG.id,
+        id if id == &Block::CHERRY_LOG.id => Block::STRIPPED_CHERRY_LOG.id,
         id if id == &Block::PALE_OAK_LOG.id => Block::STRIPPED_PALE_OAK_LOG.id,
 
-        id if id == &Block::DARK_OAK_LOG.id => Block::STRIPPED_DARK_OAK_LOG.id,
-
-        id if id == &Block::MANGROVE_LOG.id => Block::STRIPPED_MANGROVE_LOG.id,
         id if id == &Block::OAK_WOOD.id => Block::STRIPPED_OAK_WOOD.id,
-        id if id == &Block::BIRCH_WOOD.id => Block::STRIPPED_BIRCH_WOOD.id,
         id if id == &Block::SPRUCE_WOOD.id => Block::STRIPPED_SPRUCE_WOOD.id,
-        id if id == &Block::ACACIA_WOOD.id => Block::STRIPPED_ACACIA_WOOD.id,
-        id if id == &Block::CHERRY_WOOD.id => Block::STRIPPED_CHERRY_WOOD.id,
+        id if id == &Block::BIRCH_WOOD.id => Block::STRIPPED_BIRCH_WOOD.id,
         id if id == &Block::JUNGLE_WOOD.id => Block::STRIPPED_JUNGLE_WOOD.id,
-        id if id == &Block::PALE_OAK_WOOD.id => Block::STRIPPED_PALE_OAK_WOOD.id,
+        id if id == &Block::ACACIA_WOOD.id => Block::STRIPPED_ACACIA_WOOD.id,
         id if id == &Block::DARK_OAK_WOOD.id => Block::STRIPPED_DARK_OAK_WOOD.id,
         id if id == &Block::MANGROVE_WOOD.id => Block::STRIPPED_MANGROVE_WOOD.id,
+        id if id == &Block::CHERRY_WOOD.id => Block::STRIPPED_CHERRY_WOOD.id,
+        id if id == &Block::PALE_OAK_WOOD.id => Block::STRIPPED_PALE_OAK_WOOD.id,
         _ => block.id,
     };
     if new_block_id == block.id {
