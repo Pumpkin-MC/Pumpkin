@@ -89,6 +89,27 @@ impl PumpkinBlock for FlowerbedBlock {
         };
         Segmented::on_place(self, &ctx).await
     }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        _block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        if direction == BlockDirection::Down {
+            let block_below = world.get_block(&pos.down()).await;
+            if !(block_below.is_tagged_with("minecraft:dirt").unwrap()
+                || block_below == Block::FARMLAND)
+            {
+                return Block::AIR.default_state_id;
+            }
+        }
+        state
+    }
 }
 
 impl Segmented for FlowerbedBlock {

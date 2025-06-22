@@ -88,6 +88,25 @@ impl PumpkinBlock for LeafLitterBlock {
         };
         Segmented::on_place(self, &ctx).await
     }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        _block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        if direction == BlockDirection::Down {
+            let block_below_state = world.get_block_state(&pos.down()).await;
+            if !block_below_state.is_side_solid(BlockDirection::Up) {
+                return Block::AIR.default_state_id;
+            }
+        }
+        state
+    }
 }
 
 impl Segmented for LeafLitterBlock {
