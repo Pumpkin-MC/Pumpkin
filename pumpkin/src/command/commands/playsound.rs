@@ -17,7 +17,7 @@ use crate::command::{
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
 ///
 /// Plays a sound at specified position for target players.
-/// - sound: The sound identifier to play
+/// - sound: The sound resource location to play
 /// - source: Sound category (master, music, record, etc.)
 /// - targets: Players who will hear the sound
 /// - pos: Position to play the sound from
@@ -103,7 +103,7 @@ impl CommandExecutor for Executor {
         };
 
         // Get optional minimum volume (currently unused in implementation)
-        let _min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME) {
+        let min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME) {
             Ok(Ok(v)) => v,
             _ => 0.0, // Default minimum volume
         };
@@ -121,9 +121,9 @@ impl CommandExecutor for Executor {
             // Check if player can hear the sound based on volume and distance
             let player_pos = target.living_entity.entity.pos.load();
             let distance = player_pos.squared_distance_to_vec(pos);
-            let max_distance = 16.0 * volume; // 16 blocks is base distance at volume 1.0
+            let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
 
-            if distance <= max_distance.into() || _min_volume > 0.0 {
+            if distance <= max_distance || min_volume > 0.0 {
                 target
                     .play_sound(sound as u16, source, &pos, volume, pitch, seed)
                     .await;

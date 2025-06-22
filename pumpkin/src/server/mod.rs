@@ -22,7 +22,7 @@ use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::client::play::CChangeDifficulty;
 use pumpkin_protocol::client::play::CSetSelectedSlot;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
-use pumpkin_registry::{DimensionType, Registry};
+use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
@@ -51,7 +51,7 @@ mod key_store;
 pub mod seasonal_events;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.5";
+pub const CURRENT_MC_VERSION: &str = "1.21.6";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -70,7 +70,7 @@ pub struct Server {
     /// Manages multiple worlds within the server.
     pub worlds: RwLock<Vec<Arc<World>>>,
     /// All the dimensions that exist on the server.
-    pub dimensions: Vec<DimensionType>,
+    pub dimensions: Vec<VanillaDimensionType>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
@@ -148,21 +148,21 @@ impl Server {
         let overworld = World::load(
             Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
-            DimensionType::Overworld,
+            VanillaDimensionType::Overworld,
             block_registry.clone(),
         );
         log::info!("Loading Nether: {seed}");
         let nether = World::load(
             Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
-            DimensionType::TheNether,
+            VanillaDimensionType::TheNether,
             block_registry.clone(),
         );
         log::info!("Loading End: {seed}");
         let end = World::load(
             Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
-            DimensionType::TheEnd,
+            VanillaDimensionType::TheEnd,
             block_registry.clone(),
         );
 
@@ -177,10 +177,10 @@ impl Server {
             container_id: 0.into(),
             worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
             dimensions: vec![
-                DimensionType::Overworld,
-                DimensionType::OverworldCaves,
-                DimensionType::TheNether,
-                DimensionType::TheEnd,
+                VanillaDimensionType::Overworld,
+                VanillaDimensionType::OverworldCaves,
+                VanillaDimensionType::TheNether,
+                VanillaDimensionType::TheEnd,
             ],
             command_dispatcher,
             block_registry,
@@ -228,14 +228,14 @@ impl Server {
         self.tasks.spawn(task)
     }
 
-    pub async fn get_world_from_dimension(&self, dimension: DimensionType) -> Arc<World> {
+    pub async fn get_world_from_dimension(&self, dimension: VanillaDimensionType) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.read().await;
         let world = match dimension {
-            DimensionType::Overworld => world_guard.first(),
-            DimensionType::OverworldCaves => todo!(),
-            DimensionType::TheEnd => world_guard.get(2),
-            DimensionType::TheNether => world_guard.get(1),
+            VanillaDimensionType::Overworld => world_guard.first(),
+            VanillaDimensionType::OverworldCaves => todo!(),
+            VanillaDimensionType::TheEnd => world_guard.get(2),
+            VanillaDimensionType::TheNether => world_guard.get(1),
         };
         world.cloned().unwrap()
     }
@@ -272,7 +272,9 @@ impl Server {
 
         let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&uuid) {
             if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = DimensionType::from_name(dimension_key) {
+                if let Some(dimension) =
+                    VanillaDimensionType::from_resource_location_string(dimension_key)
+                {
                     let world = self.get_world_from_dimension(dimension).await;
                     (world, Some(data))
                 } else {

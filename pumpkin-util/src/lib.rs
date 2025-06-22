@@ -14,6 +14,7 @@ pub mod noise;
 pub mod permission;
 pub mod random;
 pub mod registry;
+pub mod resource_location;
 pub mod serde_enum_as_integer;
 pub mod text;
 pub mod translation;

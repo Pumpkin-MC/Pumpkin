@@ -1,6 +1,6 @@
 use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::entity::EntityType;
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_world::world::BlockAccessor;
 use rand::Rng;
 use std::sync::Arc;
@@ -51,7 +51,9 @@ impl PumpkinBlock for FireBlock {
 
         let dimension = world.dimension_type;
         // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-        if dimension == DimensionType::Overworld || dimension == DimensionType::TheNether {
+        if dimension == VanillaDimensionType::Overworld
+            || dimension == VanillaDimensionType::TheNether
+        {
             if let Some(portal) = NetherPortal::get_new_portal(world, pos, HorizontalAxis::X).await
             {
                 portal.create(world).await;

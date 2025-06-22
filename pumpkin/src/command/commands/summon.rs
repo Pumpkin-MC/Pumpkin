@@ -57,7 +57,7 @@ impl CommandExecutor for Executor {
                 (player.world().await, pos)
             }
         };
-        let mob = mob::from_type(entity, pos, &world).await;
+        let mob = mob::from_type(entity, pos, &world);
         world.spawn_entity(mob).await;
 
         sender
