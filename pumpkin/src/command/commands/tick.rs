@@ -39,11 +39,14 @@ fn time_consumer() -> TimeArgumentConsumer {
 enum SubCommand {
     Query,
     Rate,
+    RateLiteral(f32),
     Freeze(bool),
     StepDefault,
     StepTimed,
+    StepLiteral(i32),
     StepStop,
     SprintTimed,
+    SprintLiteral(i32),
     SprintStop,
 }
 
@@ -153,6 +156,15 @@ impl CommandExecutor for TickExecutor {
                     ))
                     .await;
             }
+            SubCommand::RateLiteral(rate) => {
+                manager.set_tick_rate(server, rate).await;
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.tick.rate.success",
+                        [TextComponent::text(format!("{rate:.1}"))],
+                    ))
+                    .await;
+            }
             SubCommand::Freeze(freeze) => {
                 manager.set_frozen(server, freeze).await;
                 let message_key = if freeze {
@@ -183,6 +195,23 @@ impl CommandExecutor for TickExecutor {
             }
             SubCommand::StepTimed => {
                 let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
+                if manager.step_game_if_paused(server, ticks).await {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.tick.step.success",
+                            [TextComponent::text(ticks.to_string())],
+                        ))
+                        .await;
+                } else {
+                    sender
+                        .send_message(
+                            TextComponent::translate("commands.tick.step.fail", [])
+                                .color_named(NamedColor::Red),
+                        )
+                        .await;
+                }
+            }
+            SubCommand::StepLiteral(ticks) => {
                 if manager.step_game_if_paused(server, ticks).await {
                     sender
                         .send_message(TextComponent::translate(
@@ -230,6 +259,22 @@ impl CommandExecutor for TickExecutor {
                     ))
                     .await;
             }
+            SubCommand::SprintLiteral(ticks) => {
+                if manager.request_game_to_sprint(server, ticks as i64).await {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.tick.sprint.stop.success",
+                            [],
+                        ))
+                        .await;
+                }
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.tick.status.sprinting",
+                        [],
+                    ))
+                    .await;
+            }
             SubCommand::SprintStop => {
                 if manager.stop_sprinting(server).await {
                     sender
@@ -257,6 +302,7 @@ pub fn init_command_tree() -> CommandTree {
         .then(literal("query").execute(TickExecutor(SubCommand::Query)))
         .then(
             literal("rate")
+                .then(literal("20").execute(TickExecutor(SubCommand::RateLiteral(20.0))))
                 .then(argument("rate", rate_consumer()).execute(TickExecutor(SubCommand::Rate))),
         )
         .then(literal("freeze").execute(TickExecutor(SubCommand::Freeze(true))))
@@ -264,6 +310,8 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("step")
                 .then(literal("stop").execute(TickExecutor(SubCommand::StepStop)))
+                .then(literal("1s").execute(TickExecutor(SubCommand::StepLiteral(20))))
+                .then(literal("1t").execute(TickExecutor(SubCommand::StepLiteral(1))))
                 .then(
                     argument("time", time_consumer()).execute(TickExecutor(SubCommand::StepTimed)),
                 )
@@ -272,6 +320,9 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("sprint")
                 .then(literal("stop").execute(TickExecutor(SubCommand::SprintStop)))
+                .then(literal("1d").execute(TickExecutor(SubCommand::SprintLiteral(24000))))
+                .then(literal("3d").execute(TickExecutor(SubCommand::SprintLiteral(72000))))
+                .then(literal("60s").execute(TickExecutor(SubCommand::SprintLiteral(1200))))
                 .then(
                     argument("time", time_consumer())
                         .execute(TickExecutor(SubCommand::SprintTimed)),
