@@ -7,8 +7,10 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 pub struct FlowerPotBlock;
@@ -167,5 +169,35 @@ impl PumpkinBlock for FlowerPotBlock {
                 .await;
         }
         BlockActionResult::Consume
+    }
+
+    async fn random_tick(&self, block: &Block, world: &Arc<World>, pos: &BlockPos) {
+        if world.dimension_type.eq(&VanillaDimensionType::Overworld)
+            || world
+                .dimension_type
+                .eq(&VanillaDimensionType::OverworldCaves)
+        {
+            if block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
+                && world.level_time.blocking_lock().time_of_day > 14500
+            {
+                world
+                    .set_block_state(
+                        pos,
+                        Block::POTTED_OPEN_EYEBLOSSOM.default_state_id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+            }
+        } else if block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
+            && world.level_time.blocking_lock().time_of_day <= 14500
+        {
+            world
+                .set_block_state(
+                    pos,
+                    Block::POTTED_CLOSED_EYEBLOSSOM.default_state_id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+        }
     }
 }
