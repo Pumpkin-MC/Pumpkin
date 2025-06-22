@@ -45,6 +45,7 @@ impl PumpkinBlock for FlowerPotBlock {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn use_with_item(
         &self,
         block: &Block,
@@ -54,35 +55,23 @@ impl PumpkinBlock for FlowerPotBlock {
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let next= match item {
+        let next = match item {
             //FLOWERS
             item if item.eq(&Item::DANDELION) => Block::POTTED_DANDELION.default_state.id,
             item if item.eq(&Item::POPPY) => Block::POTTED_POPPY.default_state.id,
-            item if item.eq(&Item::BLUE_ORCHID) => {
-                Block::POTTED_BLUE_ORCHID.default_state.id
-            }
+            item if item.eq(&Item::BLUE_ORCHID) => Block::POTTED_BLUE_ORCHID.default_state.id,
             item if item.eq(&Item::ALLIUM) => Block::POTTED_ALLIUM.default_state.id,
-            item if item.eq(&Item::AZURE_BLUET) => {
-                Block::POTTED_AZURE_BLUET.default_state.id
-            }
+            item if item.eq(&Item::AZURE_BLUET) => Block::POTTED_AZURE_BLUET.default_state.id,
             item if item.eq(&Item::RED_TULIP) => Block::POTTED_RED_TULIP.default_state.id,
-            item if item.eq(&Item::ORANGE_TULIP) => {
-                Block::POTTED_ORANGE_TULIP.default_state.id
-            }
-            item if item.eq(&Item::WHITE_TULIP) => {
-                Block::POTTED_WHITE_TULIP.default_state.id
-            }
+            item if item.eq(&Item::ORANGE_TULIP) => Block::POTTED_ORANGE_TULIP.default_state.id,
+            item if item.eq(&Item::WHITE_TULIP) => Block::POTTED_WHITE_TULIP.default_state.id,
             item if item.eq(&Item::PINK_TULIP) => Block::POTTED_PINK_TULIP.default_state.id,
-            item if item.eq(&Item::OXEYE_DAISY) => {
-                Block::POTTED_OXEYE_DAISY.default_state.id
-            }
+            item if item.eq(&Item::OXEYE_DAISY) => Block::POTTED_OXEYE_DAISY.default_state.id,
             item if item.eq(&Item::CORNFLOWER) => Block::POTTED_CORNFLOWER.default_state.id,
             item if item.eq(&Item::LILY_OF_THE_VALLEY) => {
                 Block::POTTED_LILY_OF_THE_VALLEY.default_state.id
             }
-            item if item.eq(&Item::WITHER_ROSE) => {
-                Block::POTTED_WITHER_ROSE.default_state.id
-            }
+            item if item.eq(&Item::WITHER_ROSE) => Block::POTTED_WITHER_ROSE.default_state.id,
             item if item.eq(&Item::OPEN_EYEBLOSSOM) => {
                 Block::POTTED_OPEN_EYEBLOSSOM.default_state.id
             }
@@ -91,27 +80,15 @@ impl PumpkinBlock for FlowerPotBlock {
             }
 
             //SAPLING
-            item if item.eq(&Item::OAK_SAPLING) => {
-                Block::POTTED_OAK_SAPLING.default_state.id
-            }
-            item if item.eq(&Item::SPRUCE_SAPLING) => {
-                Block::POTTED_SPRUCE_SAPLING.default_state.id
-            }
-            item if item.eq(&Item::BIRCH_SAPLING) => {
-                Block::POTTED_BIRCH_SAPLING.default_state.id
-            }
-            item if item.eq(&Item::JUNGLE_SAPLING) => {
-                Block::POTTED_JUNGLE_SAPLING.default_state.id
-            }
-            item if item.eq(&Item::ACACIA_SAPLING) => {
-                Block::POTTED_ACACIA_SAPLING.default_state.id
-            }
+            item if item.eq(&Item::OAK_SAPLING) => Block::POTTED_OAK_SAPLING.default_state.id,
+            item if item.eq(&Item::SPRUCE_SAPLING) => Block::POTTED_SPRUCE_SAPLING.default_state.id,
+            item if item.eq(&Item::BIRCH_SAPLING) => Block::POTTED_BIRCH_SAPLING.default_state.id,
+            item if item.eq(&Item::JUNGLE_SAPLING) => Block::POTTED_JUNGLE_SAPLING.default_state.id,
+            item if item.eq(&Item::ACACIA_SAPLING) => Block::POTTED_ACACIA_SAPLING.default_state.id,
             item if item.eq(&Item::DARK_OAK_SAPLING) => {
                 Block::POTTED_DARK_OAK_SAPLING.default_state.id
             }
-            item if item.eq(&Item::CHERRY_SAPLING) => {
-                Block::POTTED_CHERRY_SAPLING.default_state.id
-            }
+            item if item.eq(&Item::CHERRY_SAPLING) => Block::POTTED_CHERRY_SAPLING.default_state.id,
             item if item.eq(&Item::MANGROVE_PROPAGULE) => {
                 Block::POTTED_MANGROVE_PROPAGULE.default_state.id
             }
@@ -120,12 +97,8 @@ impl PumpkinBlock for FlowerPotBlock {
             }
 
             //MUSHROOM
-            item if item.eq(&Item::RED_MUSHROOM) => {
-                Block::POTTED_RED_MUSHROOM.default_state.id
-            }
-            item if item.eq(&Item::BROWN_MUSHROOM) => {
-                Block::POTTED_BROWN_MUSHROOM.default_state.id
-            }
+            item if item.eq(&Item::RED_MUSHROOM) => Block::POTTED_RED_MUSHROOM.default_state.id,
+            item if item.eq(&Item::BROWN_MUSHROOM) => Block::POTTED_BROWN_MUSHROOM.default_state.id,
 
             //PLANTS
             item if item.eq(&Item::FERN) => Block::POTTED_FERN.default_state.id,
@@ -138,18 +111,10 @@ impl PumpkinBlock for FlowerPotBlock {
             }
 
             //NETHER
-            item if item.eq(&Item::CRIMSON_FUNGUS) => {
-                Block::POTTED_CRIMSON_FUNGUS.default_state.id
-            }
-            item if item.eq(&Item::WARPED_FUNGUS) => {
-                Block::POTTED_WARPED_FUNGUS.default_state.id
-            }
-            item if item.eq(&Item::CRIMSON_ROOTS) => {
-                Block::POTTED_CRIMSON_ROOTS.default_state.id
-            }
-            item if item.eq(&Item::WARPED_ROOTS) => {
-                Block::POTTED_WARPED_ROOTS.default_state.id
-            }
+            item if item.eq(&Item::CRIMSON_FUNGUS) => Block::POTTED_CRIMSON_FUNGUS.default_state.id,
+            item if item.eq(&Item::WARPED_FUNGUS) => Block::POTTED_WARPED_FUNGUS.default_state.id,
+            item if item.eq(&Item::CRIMSON_ROOTS) => Block::POTTED_CRIMSON_ROOTS.default_state.id,
+            item if item.eq(&Item::WARPED_ROOTS) => Block::POTTED_WARPED_ROOTS.default_state.id,
             _ => {
                 world
                     .set_block_state(
