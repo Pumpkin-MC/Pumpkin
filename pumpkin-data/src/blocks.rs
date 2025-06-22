@@ -1,5 +1,6 @@
 use crate::{
-    BlockStateRef,
+    BlockState, BlockStateRef,
+    block_properties::get_state_by_state_id,
     tag::{RegistryKey, Tagable},
 };
 use pumpkin_util::{loot_table::LootTable, math::experience::Experience};
@@ -15,7 +16,7 @@ pub struct Block {
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
     pub item_id: u16,
-    pub default_state_id: u16,
+    pub default_state: BlockState,
     pub states: &'static [BlockStateRef],
     pub loot_table: Option<LootTable>,
     pub experience: Option<Experience>,

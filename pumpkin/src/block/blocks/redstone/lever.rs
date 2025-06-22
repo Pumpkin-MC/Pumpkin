@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{block::BlockIsReplacing, entity::player::Player};
+use crate::{
+    block::{BlockIsReplacing, blocks::abstruct_wall_mounting::WallMountedBlock},
+    entity::player::Player,
+};
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
@@ -10,7 +13,10 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -39,34 +45,6 @@ pub struct LeverBlock;
 
 #[async_trait]
 impl PumpkinBlock for LeverBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut lever_props = LeverLikeProperties::from_state_id(block.default_state_id, block);
-
-        match face {
-            BlockDirection::Up => lever_props.face = BlockFace::Ceiling,
-            BlockDirection::Down => lever_props.face = BlockFace::Floor,
-            _ => lever_props.face = BlockFace::Wall,
-        }
-
-        if face == BlockDirection::Up || face == BlockDirection::Down {
-            lever_props.facing = player.living_entity.entity.get_horizontal_facing();
-        } else {
-            lever_props.facing = face.opposite().to_cardinal_direction();
-        }
-
-        lever_props.to_state_id(block)
-    }
-
     async fn use_with_item(
         &self,
         _block: &Block,
@@ -141,6 +119,64 @@ impl PumpkinBlock for LeverBlock {
             if lever_props.powered {
                 Self::update_neighbors(world, &location, &lever_props).await;
             }
+        }
+    }
+
+    async fn on_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        direction: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
+    ) -> BlockStateId {
+        let mut props = LeverLikeProperties::from_state_id(block.default_state.id, block);
+        (props.face, props.facing) = WallMountedBlock::get_placement_face(self, player, direction);
+
+        props.to_state_id(block)
+    }
+
+    async fn can_place_at(
+        &self,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
+        _block: &Block,
+        pos: &BlockPos,
+        face: BlockDirection,
+        _use_item_on: Option<&SUseItemOn>,
+    ) -> bool {
+        WallMountedBlock::can_place_at(self, block_accessor, pos, face).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        WallMountedBlock::get_state_for_neighbor_update(self, state, block, direction, world, pos)
+            .await
+            .unwrap_or(state)
+    }
+}
+
+#[async_trait]
+impl WallMountedBlock for LeverBlock {
+    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
+        let props = LeverLikeProperties::from_state_id(state_id, block);
+        match props.face {
+            BlockFace::Floor => BlockDirection::Up,
+            BlockFace::Ceiling => BlockDirection::Down,
+            BlockFace::Wall => props.facing.to_block_direction(),
         }
     }
 }

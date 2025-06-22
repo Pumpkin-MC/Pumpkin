@@ -14,6 +14,7 @@ mod entity_type;
 mod fluid;
 mod game_event;
 mod item;
+pub mod loot;
 mod message_type;
 mod noise_parameter;
 mod noise_router;
@@ -78,7 +79,7 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
 
     let mut file = fs::File::create(&path).unwrap();
     if let Err(e) = file.write_all(code.as_bytes()) {
-        println!("cargo::error={}", e);
+        println!("cargo::error={e}");
     }
 
     // Try to format the output for debugging purposes.

@@ -6,11 +6,7 @@ use crate::random::{RandomGenerator, RandomImpl};
 pub struct Pool;
 
 impl Pool {
-    pub fn get<E: Clone>(
-        &self,
-        distribution: &[Weighted<E>],
-        random: &mut RandomGenerator,
-    ) -> Option<E> {
+    pub fn get<E: Clone>(distribution: &[Weighted<E>], random: &mut RandomGenerator) -> Option<E> {
         let mut total_weight = 0;
         for dist in distribution {
             total_weight += dist.weight;

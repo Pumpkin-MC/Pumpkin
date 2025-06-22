@@ -14,6 +14,7 @@ use blocks::fences::FenceBlock;
 use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
 use blocks::glass_panes::GlassPaneBlock;
+use blocks::grindstone::GrindstoneBlock;
 use blocks::iron_bars::IronBarsBlock;
 use blocks::logs::LogBlock;
 use blocks::nether_portal::NetherPortalBlock;
@@ -65,20 +66,16 @@ use fluid::lava::FlowingLava;
 use fluid::water::FlowingWater;
 use loot::LootTableExt;
 use pumpkin_data::block_properties::Integer0To15;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
-use pumpkin_world::item::ItemStack;
-use rand::Rng;
 
 use crate::block::blocks::flower_pot::FlowerPotBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
+use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
-use crate::entity::item::ItemEntity;
 use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
@@ -86,7 +83,7 @@ use std::sync::Arc;
 
 pub mod blocks;
 mod fluid;
-mod loot;
+pub mod loot;
 pub mod pumpkin_block;
 pub mod pumpkin_fluid;
 pub mod registry;
@@ -112,6 +109,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
     manager.register(GlassPaneBlock);
+    manager.register(GrindstoneBlock);
     manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
@@ -194,14 +192,11 @@ pub async fn drop_loot(
     block: &Block,
     pos: &BlockPos,
     experience: bool,
-    state_id: BlockStateId,
+    params: LootContextParameters,
 ) {
     if let Some(loot_table) = &block.loot_table {
-        let props =
-            Block::properties(block, state_id).map_or_else(Vec::new, |props| props.to_props());
-
-        for stack in loot_table.get_loot(&props) {
-            drop_stack(world, pos, stack).await;
+        for stack in loot_table.get_loot(params) {
+            world.drop_stack(pos, stack).await;
         }
     }
 
@@ -215,19 +210,6 @@ pub async fn drop_loot(
             }
         }
     }
-}
-
-async fn drop_stack(world: &Arc<World>, pos: &BlockPos, stack: ItemStack) {
-    let height = EntityType::ITEM.dimension[1] / 2.0;
-    let pos = Vector3::new(
-        f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
-        f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
-        f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
-    );
-
-    let entity = world.create_entity(pos, EntityType::ITEM);
-    let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
-    world.spawn_entity(item_entity).await;
 }
 
 pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {

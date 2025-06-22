@@ -58,7 +58,7 @@ impl PumpkinItem for HoneyCombItem {
                 new_door_properties.powered = door_props.powered;
                 new_door_properties.to_state_id(new_block)
             } else {
-                new_block.default_state_id
+                new_block.default_state.id
             };
 
             // TODO Implements trapdoors
