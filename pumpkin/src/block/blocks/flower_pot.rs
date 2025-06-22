@@ -10,7 +10,6 @@ use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 pub struct FlowerPotBlock;
