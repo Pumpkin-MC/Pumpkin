@@ -45,8 +45,8 @@ impl HungerManager {
         }
 
         // Heal when hunger is full
-        let natural_regn = true; // TODO: Get the actual value when this will be implemented.
-        if natural_regn && saturation > 0.0 && player.can_food_heal() && level >= 20 {
+        let natural_regen = true; // TODO: Get the actual value when this will be implemented.
+        if natural_regen && saturation > 0.0 && player.can_food_heal() && level >= 20 {
             self.tick_timer.fetch_add(1);
             if self.tick_timer.load() >= 10 {
                 let saturation = saturation.min(6.0);
@@ -54,11 +54,11 @@ impl HungerManager {
                 self.add_exhaustion(saturation);
                 self.tick_timer.store(0);
             }
-        } else if natural_regn && level >= 18 && player.can_food_heal() {
+        } else if natural_regen && level >= 18 && player.can_food_heal() {
             self.tick_timer.fetch_add(1);
             if self.tick_timer.load() >= 80 {
                 player.heal(1.0).await;
-                self.add_exhaustion(saturation);
+                self.add_exhaustion(6.0);
                 self.tick_timer.store(0);
             }
         } else if level == 0 {
