@@ -54,7 +54,7 @@ impl PumpkinBlock for FlowerBlock {
                 world
                     .set_block_state(
                         pos,
-                        Block::OPEN_EYEBLOSSOM.default_state_id,
+                        Block::OPEN_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
@@ -64,7 +64,7 @@ impl PumpkinBlock for FlowerBlock {
                 world
                     .set_block_state(
                         pos,
-                        Block::CLOSED_EYEBLOSSOM.default_state_id,
+                        Block::CLOSED_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
