@@ -87,7 +87,7 @@ impl ServerTickRateManager {
             (NANOSECONDS_PER_SECOND as f64 / f64::from(self.tickrate.load())) as i64,
             Ordering::Relaxed,
         );
-        // server.on_tick_rate_changed(); // You might need this hook if autosave interval depends on it
+        // server.on_tick_rate_changed(); // Might need this hook if autosave interval depends on it
         self.update_state_to_clients(server).await;
     }
 

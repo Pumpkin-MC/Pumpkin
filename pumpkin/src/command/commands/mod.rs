@@ -237,13 +237,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
     registry
         .register_permission(Permission::new(
-            "minecraft:command.tick",
-            "Triggers the tick event",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
             "minecraft:command.give",
             "Gives an item to a player",
             PermissionDefault::Op(PermissionLvl::Two),
@@ -453,6 +446,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.whitelist",
             "Manages server whitelist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.tick",
+            "Triggers the tick event",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

@@ -670,7 +670,7 @@ impl Server {
                         .entity
                         .bounding_box
                         .load()
-                        // This is vanilla, but TODO: change this when is in a vehicle
+                        // TODO: change this when is in a vehicle
                         .expand(1.0, 0.5, 1.0)
                         .intersects(&entity.get_entity().bounding_box.load())
                     {
@@ -695,7 +695,7 @@ impl Server {
         let mut tick_times = self.tick_times_nanos.lock().await;
         let old_time = tick_times[index];
         tick_times[index] = tick_duration_nanos;
-        drop(tick_times); // Release lock
+        drop(tick_times);
 
         self.aggregated_tick_times_nanos
             .fetch_add(tick_duration_nanos - old_time, Ordering::Relaxed);

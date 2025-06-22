@@ -456,7 +456,7 @@ impl World {
                     .entity
                     .bounding_box
                     .load()
-                    // This is vanilla, but TODO: change this when is in a vehicle
+                    // TODO: change this when is in a vehicle
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
