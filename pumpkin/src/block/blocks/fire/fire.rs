@@ -383,9 +383,7 @@ impl PumpkinBlock for FireBlock {
                                     FireProperties::from_state_id(fire_state_id, &Block::FIRE);
                                 new_fire_props.age = EnumVariants::from_index(new_age);
 
-                                world
-                                    .break_block(&offset_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
-                                    .await;
+                                //TODO drop items for burned blocks
                                 world
                                     .set_block_state(
                                         &offset_pos,
