@@ -79,7 +79,7 @@ impl FireBlock {
                     BlockDirection::East => fire_props.east = true,
                     BlockDirection::West => fire_props.west = true,
                     BlockDirection::Up => fire_props.up = true,
-                    BlockDirection::Down => {},
+                    BlockDirection::Down => {}
                 }
             }
         }
