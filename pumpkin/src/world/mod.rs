@@ -8,7 +8,6 @@ pub mod explosion;
 pub mod portal;
 pub mod time;
 
-use crate::block::BlockEvent;
 use crate::{
     PLUGIN_MANAGER,
     block::{self, registry::BlockRegistry},
@@ -22,11 +21,16 @@ use crate::{
     },
     server::Server,
 };
+use crate::{
+    block::{BlockEvent, loot::LootContextParameters},
+    entity::item::ItemEntity,
+};
 use async_trait::async_trait;
 use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
@@ -40,7 +44,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -77,6 +80,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
+    item::ItemStack,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{chunk::TickPriority, level::Level};
@@ -1464,7 +1468,6 @@ impl World {
         }
 
         let block_state = self.get_block_state(position).await;
-        let new_block = Block::from_state_id(block_state_id).unwrap();
         let new_fluid = self.get_fluid(position).await;
 
         // WorldChunk.java line 318
@@ -1607,7 +1610,11 @@ impl World {
             );
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
-                block::drop_loot(self, &broken_block, position, true, broken_state_id).await;
+                let params = LootContextParameters {
+                    block_state: get_state_by_state_id(broken_state_id),
+                    ..Default::default()
+                };
+                block::drop_loot(self, &broken_block, position, true, params).await;
             }
 
             match cause {
@@ -1618,6 +1625,19 @@ impl World {
                 None => self.broadcast_packet_all(&particles_packet).await,
             }
         }
+    }
+
+    pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
+        let height = EntityType::ITEM.dimension[1] / 2.0;
+        let pos = Vector3::new(
+            f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
+            f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
+            f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
+        );
+
+        let entity = self.create_entity(pos, EntityType::ITEM);
+        let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
+        self.spawn_entity(item_entity).await;
     }
 
     pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
@@ -1657,14 +1677,13 @@ impl World {
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        self.level.get_block_state(position).await.state_id
+        self.level.get_block_state(position).await.0
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
         let id = self.get_block_state_id(position).await;
-        get_state_by_state_id(id)
-            .unwrap_or(get_state_by_state_id(Block::AIR.default_state_id).unwrap())
+        get_state_by_state_id(id).unwrap_or(Block::AIR.default_state)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
@@ -1673,10 +1692,7 @@ impl World {
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 
     /// Updates neighboring blocks of a block
@@ -1765,7 +1781,12 @@ impl World {
             .await;
 
         if new_state_id != block_state.id {
-            self.set_block_state(block_pos, new_state_id, flags).await;
+            let flags = flags & !BlockFlags::SKIP_DROPS;
+            if get_state_by_state_id(new_state_id).is_some_and(|new_state| new_state.is_air()) {
+                self.break_block(block_pos, None, flags).await;
+            } else {
+                self.set_block_state(block_pos, new_state_id, flags).await;
+            }
         }
     }
 
@@ -1884,9 +1905,9 @@ impl World {
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> (bool, Option<BlockDirection>) {
-        let state_id = self.get_block_state_id(block_pos).await;
+        let state = self.get_block_state(block_pos).await;
 
-        let Some(bounding_boxes) = get_block_outline_shapes(state_id) else {
+        let Some(bounding_boxes) = state.get_block_outline_shapes() else {
             return (false, None);
         };
 
@@ -2061,9 +2082,6 @@ impl BlockAccessor for World {
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
         let id = self.get_block_state(position).await.id;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 }

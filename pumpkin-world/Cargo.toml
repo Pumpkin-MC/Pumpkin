@@ -7,7 +7,6 @@ edition.workspace = true
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
-pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-data = { path = "../pumpkin-data" }
 
 async-trait.workspace = true

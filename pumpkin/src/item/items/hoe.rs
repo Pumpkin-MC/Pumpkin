@@ -74,7 +74,7 @@ impl PumpkinItem for HoeItem {
             world
                 .set_block_state(
                     &location,
-                    future_block.default_state_id,
+                    future_block.default_state.id,
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;

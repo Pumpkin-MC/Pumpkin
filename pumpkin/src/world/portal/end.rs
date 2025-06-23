@@ -94,7 +94,7 @@ impl EndPortal {
                 world
                     .set_block_state(
                         &pos.offset(Vector3::new(x, 0, z)),
-                        Block::END_PORTAL.default_state_id,
+                        Block::END_PORTAL.default_state.id,
                         BlockFlags::empty(),
                     )
                     .await;

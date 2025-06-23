@@ -379,12 +379,10 @@ impl Level {
             relative.y,
             relative.z as usize,
         ) else {
-            return RawBlockState {
-                state_id: Block::AIR.default_state_id,
-            };
+            return RawBlockState(Block::AIR.default_state.id);
         };
 
-        RawBlockState { state_id: id }
+        RawBlockState(id)
     }
 
     pub async fn set_block_state(

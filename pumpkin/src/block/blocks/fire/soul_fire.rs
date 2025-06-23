@@ -41,7 +41,7 @@ impl PumpkinBlock for SoulFireBlock {
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
         if !Self::is_soul_base(&world.get_block(&block_pos.down()).await) {
-            return Block::AIR.default_state_id;
+            return Block::AIR.default_state.id;
         }
 
         state_id

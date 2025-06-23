@@ -93,7 +93,6 @@ fn get_sound(block: &Block, open: bool) -> Sound {
 #[inline]
 async fn get_hinge(
     world: &World,
-    block: &Block,
     pos: &BlockPos,
     use_item: &SUseItemOn,
     facing: HorizontalFacing,
@@ -101,12 +100,12 @@ async fn get_hinge(
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
-    let left_state = world.get_block_state(&left_pos).await;
+    let (left_block, left_state) = world.get_block_and_block_state(&left_pos).await;
     let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
     let top_state = world.get_block_state(&top_facing).await;
     let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
-    let right_state = world.get_block_state(&right_pos).await;
+    let (right_block, right_state) = world.get_block_and_block_state(&right_pos).await;
     let top_right = top_pos.offset(facing.to_block_direction().to_offset());
     let top_right_state = world.get_block_state(&top_right).await;
 
@@ -115,14 +114,15 @@ async fn get_hinge(
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(left_state.id, block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(left_state.id, &left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(right_state.id, block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(right_state.id, &right_block).half
+            == DoubleBlockHalf::Lower;
 
     let score = -(left_state.is_full_cube() as i32) - (top_state.is_full_cube() as i32)
         + right_state.is_full_cube() as i32
@@ -177,7 +177,7 @@ impl PumpkinBlock for DoorBlock {
             || block_receives_redstone_power(world, &block_pos.up()).await;
 
         let direction = player.living_entity.entity.get_horizontal_facing();
-        let hinge = get_hinge(world, block, block_pos, use_item_on, direction).await;
+        let hinge = get_hinge(world, block_pos, use_item_on, direction).await;
 
         let mut door_props = DoorProperties::default(block);
         door_props.half = DoubleBlockHalf::Lower;
