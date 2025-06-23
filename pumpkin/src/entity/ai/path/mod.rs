@@ -1,4 +1,3 @@
-use pumpkin_data::block_properties::get_block_collision_shapes;
 use pumpkin_protocol::client::play::CUpdateEntityPos;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -48,13 +47,10 @@ impl Navigator {
                         goal.current_progress.y,
                         goal.current_progress.z + z,
                     );
-                    let shapes = get_block_collision_shapes(
-                        world
-                            .get_block_state(&BlockPos(potential_pos.to_i32()))
-                            .await
-                            .id,
-                    )
-                    .unwrap();
+                    let state = world
+                        .get_block_state(&BlockPos(potential_pos.to_i32()))
+                        .await;
+                    let shapes = state.get_block_collision_shapes();
                     if !shapes.is_empty() {
                         continue;
                     }

@@ -30,6 +30,7 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
@@ -43,7 +44,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -1474,7 +1474,6 @@ impl World {
         }
 
         let block_state = self.get_block_state(position).await;
-        let new_block = Block::from_state_id(block_state_id).unwrap();
         let new_fluid = self.get_fluid(position).await;
 
         // WorldChunk.java line 318
@@ -1684,14 +1683,13 @@ impl World {
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        self.level.get_block_state(position).await.state_id
+        self.level.get_block_state(position).await.0
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
         let id = self.get_block_state_id(position).await;
-        get_state_by_state_id(id)
-            .unwrap_or(get_state_by_state_id(Block::AIR.default_state_id).unwrap())
+        get_state_by_state_id(id).unwrap_or(Block::AIR.default_state)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
@@ -1700,10 +1698,7 @@ impl World {
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 
     /// Updates neighboring blocks of a block
@@ -1916,9 +1911,9 @@ impl World {
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> (bool, Option<BlockDirection>) {
-        let state_id = self.get_block_state_id(block_pos).await;
+        let state = self.get_block_state(block_pos).await;
 
-        let Some(bounding_boxes) = get_block_outline_shapes(state_id) else {
+        let Some(bounding_boxes) = state.get_block_outline_shapes() else {
             return (false, None);
         };
 
@@ -2093,9 +2088,6 @@ impl BlockAccessor for World {
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
         let id = self.get_block_state(position).await.id;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 }

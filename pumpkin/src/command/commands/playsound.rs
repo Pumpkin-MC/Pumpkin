@@ -82,7 +82,7 @@ impl CommandExecutor for Executor {
         let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS) {
             players
         } else if let Some(player) = sender.as_player() {
-            &[player.clone()]
+            &[player]
         } else {
             return Ok(());
         };

@@ -1,5 +1,4 @@
-use pumpkin_data::{BlockState, chunk::Biome};
-use pumpkin_macros::default_block_state;
+use pumpkin_data::{Block, BlockState, block_properties::get_block_by_state_id, chunk::Biome};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl},
@@ -50,13 +49,16 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    const ORANGE_TERRACOTTA: RawBlockState = default_block_state!("orange_terracotta");
-    const YELLOW_TERRACOTTA: RawBlockState = default_block_state!("yellow_terracotta");
-    const BROWN_TERRACOTTA: RawBlockState = default_block_state!("brown_terracotta");
-    const RED_TERRACOTTA: RawBlockState = default_block_state!("red_terracotta");
-    const WHITE_TERRACOTTA: RawBlockState = default_block_state!("white_terracotta");
-    const LIGHT_GRAY_TERRACOTTA: RawBlockState = default_block_state!("light_gray_terracotta");
-    const TERRACOTTA: RawBlockState = default_block_state!("terracotta");
+    const ORANGE_TERRACOTTA: RawBlockState =
+        RawBlockState(Block::ORANGE_TERRACOTTA.default_state.id);
+    const YELLOW_TERRACOTTA: RawBlockState =
+        RawBlockState(Block::YELLOW_TERRACOTTA.default_state.id);
+    const BROWN_TERRACOTTA: RawBlockState = RawBlockState(Block::BROWN_TERRACOTTA.default_state.id);
+    const RED_TERRACOTTA: RawBlockState = RawBlockState(Block::RED_TERRACOTTA.default_state.id);
+    const WHITE_TERRACOTTA: RawBlockState = RawBlockState(Block::WHITE_TERRACOTTA.default_state.id);
+    const LIGHT_GRAY_TERRACOTTA: RawBlockState =
+        RawBlockState(Block::LIGHT_GRAY_TERRACOTTA.default_state.id);
+    const TERRACOTTA: RawBlockState = RawBlockState(Block::TERRACOTTA.default_state.id);
 
     fn create_terracotta_bands(mut random: RandomGenerator) -> Box<[RawBlockState]> {
         let mut block_states = [Self::TERRACOTTA; 192];
@@ -125,7 +127,6 @@ impl SurfaceTerrainBuilder {
         global_x: i32,
         global_z: i32,
         surface_y: i32,
-        default_state: RawBlockState,
     ) {
         let surface_noise =
             (self
@@ -156,11 +157,11 @@ impl SurfaceTerrainBuilder {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
                     let block_state = chunk.get_block_state(&pos).to_block();
-                    if block_state == default_state.to_block() {
+                    if block_state == get_block_by_state_id(chunk.default_block.id).unwrap() {
                         break;
                     }
 
-                    if block_state == WATER_BLOCK.to_block() {
+                    if block_state == WATER_BLOCK {
                         return;
                     }
                 }
@@ -172,14 +173,15 @@ impl SurfaceTerrainBuilder {
                         break;
                     }
 
-                    chunk.set_block_state(&pos, &default_state.to_state());
+                    let default_block = &chunk.default_block;
+                    chunk.set_block_state(&pos, &default_block.clone());
                 }
             }
         }
     }
 
-    const SNOW_BLOCK: RawBlockState = default_block_state!("snow_block");
-    const PACKED_ICE: RawBlockState = default_block_state!("packed_ice");
+    const SNOW_BLOCK: Block = Block::SNOW_BLOCK;
+    const PACKED_ICE: Block = Block::PACKED_ICE;
 
     #[expect(clippy::too_many_arguments)]
     pub fn place_iceberg(
@@ -240,17 +242,17 @@ impl SurfaceTerrainBuilder {
                 let pos = Vector3::new(x, y, z);
                 let block_state = chunk.get_block_state(&pos);
                 if (block_state.to_state().is_air() && y < top_block && rand.next_f64() > 0.01)
-                    || (block_state.to_block() == WATER_BLOCK.to_block()
+                    || (block_state.to_block() == WATER_BLOCK
                         && y > bottom_block
                         && y < sea_level
                         && bottom_block != 0
                         && rand.next_f64() > 0.15)
                 {
                     if snow_blocks <= snow_block_count && y > snow_bottom {
-                        chunk.set_block_state(&pos, &Self::SNOW_BLOCK.to_state());
+                        chunk.set_block_state(&pos, &Self::SNOW_BLOCK.default_state);
                         snow_blocks += 1;
                     } else {
-                        chunk.set_block_state(&pos, &Self::PACKED_ICE.to_state());
+                        chunk.set_block_state(&pos, &Self::PACKED_ICE.default_state);
                     }
                 }
             }

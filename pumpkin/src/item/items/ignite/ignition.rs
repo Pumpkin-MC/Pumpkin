@@ -29,7 +29,7 @@ impl Ignition {
 
         let result_block_id = get_ignite_result(block, &world, &location)
             .await
-            .unwrap_or(fire_block.default_state_id);
+            .unwrap_or(fire_block.default_state.id);
 
         let Some(result_block) = Block::from_state_id(result_block_id) else {
             return;

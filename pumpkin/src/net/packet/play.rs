@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{
-    BlockProperties, WaterLikeProperties, get_block_by_item, get_block_collision_shapes,
+    BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
 };
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
@@ -1119,7 +1119,6 @@ impl Player {
                         [],
                     ))
                     .await;
-                    return;
                 }
             }
             ActionType::Interact | ActionType::InteractAt => {
@@ -1782,7 +1781,9 @@ impl Player {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
+        let shapes = get_state_by_state_id(new_state)
+            .unwrap()
+            .get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {

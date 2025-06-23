@@ -247,7 +247,7 @@ impl BlockRegistry {
                 )
                 .await;
         }
-        block.default_state_id
+        block.default_state.id
     }
 
     pub async fn player_placed(

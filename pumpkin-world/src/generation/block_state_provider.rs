@@ -131,7 +131,7 @@ pub struct WeightedBlockStateProvider {
 
 impl WeightedBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator) -> BlockState {
-        Pool.get(&self.entries, random)
+        Pool::get(&self.entries, random)
             .unwrap()
             .get_state()
             .unwrap()

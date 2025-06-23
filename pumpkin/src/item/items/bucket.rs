@@ -102,13 +102,13 @@ impl PumpkinItem for EmptyBucketItem {
 
             let block = Block::from_state_id(state_id).unwrap();
 
-            if state_id == Block::AIR.default_state_id {
+            if state_id == Block::AIR.default_state.id {
                 return false;
             }
 
             (block.id != Block::WATER.id && block.id != Block::LAVA.id)
-                || ((block.id == Block::WATER.id && state_id == Block::WATER.default_state_id)
-                    || (block.id == Block::LAVA.id && state_id == Block::LAVA.default_state_id))
+                || ((block.id == Block::WATER.id && state_id == Block::WATER.default_state.id)
+                    || (block.id == Block::LAVA.id && state_id == Block::LAVA.default_state.id))
         };
 
         let Some((block_pos, direction)) = world.raycast(start_pos, end_pos, checker).await else {
@@ -133,8 +133,8 @@ impl PumpkinItem for EmptyBucketItem {
                 .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
             world.schedule_fluid_tick(block.id, block_pos, 5).await;
-        } else if state.id == Block::LAVA.default_state_id
-            || state.id == Block::WATER.default_state_id
+        } else if state.id == Block::LAVA.default_state.id
+            || state.id == Block::WATER.default_state.id
         {
             world
                 .break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
@@ -142,7 +142,7 @@ impl PumpkinItem for EmptyBucketItem {
             world
                 .set_block_state(
                     &block_pos,
-                    Block::AIR.default_state_id,
+                    Block::AIR.default_state.id,
                     BlockFlags::NOTIFY_NEIGHBORS,
                 )
                 .await;
@@ -167,7 +167,7 @@ impl PumpkinItem for EmptyBucketItem {
             }
         }
 
-        let item = if state.id == Block::LAVA.default_state_id {
+        let item = if state.id == Block::LAVA.default_state.id {
             &Item::LAVA_BUCKET
         } else {
             &Item::WATER_BUCKET
@@ -255,14 +255,14 @@ impl PumpkinItem for FilledBucketItem {
                 world
                     .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
                     .await;
-            } else if state.id == Block::AIR.default_state_id || state.is_liquid() {
+            } else if state.id == Block::AIR.default_state.id || state.is_liquid() {
                 world
                     .set_block_state(
                         &pos.offset(direction.to_offset()),
                         if item.id == Item::LAVA_BUCKET.id {
-                            Block::LAVA.default_state_id
+                            Block::LAVA.default_state.id
                         } else {
-                            Block::WATER.default_state_id
+                            Block::WATER.default_state.id
                         },
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )

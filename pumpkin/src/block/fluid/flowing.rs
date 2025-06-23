@@ -133,7 +133,7 @@ pub trait FlowingFluid {
             world
                 .set_block_state(
                     block_pos,
-                    Block::AIR.default_state_id,
+                    Block::AIR.default_state.id,
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;

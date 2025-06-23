@@ -1,5 +1,7 @@
-use crate::BlockDirection;
-use crate::block_properties::Instrument;
+use pumpkin_util::math::vector3::Vector3;
+
+use crate::block_properties::{COLLISION_SHAPES, Instrument, get_block_by_state_id};
+use crate::{Block, BlockDirection, CollisionShape};
 
 #[derive(Clone, Debug)]
 pub struct BlockState {
@@ -16,6 +18,12 @@ pub struct BlockState {
     pub opacity: u8,
     /// u16::MAX is used as None
     pub block_entity_type: u16,
+}
+
+impl PartialEq for BlockState {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,6 +90,41 @@ impl BlockState {
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
             _ => unreachable!(),
         }
+    }
+
+    pub fn block(&self) -> Block {
+        get_block_by_state_id(self.id).unwrap()
+    }
+
+    pub fn get_block_collision_shapes(&self) -> Vec<CollisionShape> {
+        self.collision_shapes
+            .iter()
+            .map(|&id| COLLISION_SHAPES[id as usize])
+            .collect()
+    }
+
+    pub fn get_block_outline_shapes(&self) -> Option<Vec<CollisionShape>> {
+        let mut shapes: Vec<CollisionShape> = self
+            .outline_shapes
+            .iter()
+            .map(|&id| COLLISION_SHAPES[id as usize])
+            .collect();
+        let block = get_block_by_state_id(self.id)?;
+        if block.properties(self.id).and_then(|properties| {
+            properties
+                .to_props()
+                .into_iter()
+                .find(|p| p.0 == "waterlogged")
+                .map(|(_, value)| value == true.to_string())
+        }) == Some(true)
+        {
+            // If the block is waterlogged, add a water shape
+            let shape =
+                &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
+            shapes.push(*shape);
+        }
+
+        Some(shapes)
     }
 }
 

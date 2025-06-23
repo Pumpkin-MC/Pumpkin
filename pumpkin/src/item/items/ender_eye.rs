@@ -58,7 +58,7 @@ impl PumpkinItem for EnderEyeItem {
         let (start_pos, end_pos) = self.get_start_and_end_pos(player);
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos).await;
-            state_id != Block::AIR.default_state_id
+            state_id != Block::AIR.default_state.id
         };
 
         let Some((block_pos, _direction)) = world.raycast(start_pos, end_pos, checker).await else {

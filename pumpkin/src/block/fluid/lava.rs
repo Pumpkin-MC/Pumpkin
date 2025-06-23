@@ -30,7 +30,7 @@ impl FlowingLava {
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
             .await
             == Block::SOUL_SOIL;
-        let is_still = world.get_block_state_id(block_pos).await == Block::LAVA.default_state_id;
+        let is_still = world.get_block_state_id(block_pos).await == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::flow_directions() {
             let neighbor_pos = block_pos.offset(dir.opposite().to_offset());
@@ -43,7 +43,7 @@ impl FlowingLava {
                 world
                     .set_block_state(
                         block_pos,
-                        block.default_state_id,
+                        block.default_state.id,
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
@@ -56,7 +56,7 @@ impl FlowingLava {
                 world
                     .set_block_state(
                         block_pos,
-                        Block::BASALT.default_state_id,
+                        Block::BASALT.default_state.id,
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
@@ -146,7 +146,7 @@ impl FlowingFluid for FlowingLava {
             // STONE creation
             if world.get_block(pos).await == Block::WATER {
                 world
-                    .set_block_state(pos, Block::STONE.default_state_id, BlockFlags::NOTIFY_ALL)
+                    .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
                     .await;
                 world
                     .sync_world_event(WorldEvent::LavaExtinguished, *pos, 0)
