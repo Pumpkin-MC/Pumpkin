@@ -46,9 +46,7 @@ impl FireBlock {
                     .to_props()
                     .into_iter()
                     .find(|p| p.0 == "waterlogged")
-                    .map(|(_, v)| {
-                        v == true.to_string()
-                    })
+                    .map(|(_, v)| v == true.to_string())
             })
             .unwrap_or(false)
         {
