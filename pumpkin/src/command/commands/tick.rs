@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -304,7 +305,9 @@ pub fn init_command_tree() -> CommandTree {
         .then(literal("query").execute(TickExecutor(SubCommand::Query)))
         .then(
             literal("rate")
-                .then(literal("20").execute(TickExecutor(SubCommand::RateLiteral(20.0))))
+                .then(
+                    literal("20").execute(TickExecutor(SubCommand::RateLiteral(BASIC_CONFIG.tps))),
+                )
                 .then(argument("rate", rate_consumer()).execute(TickExecutor(SubCommand::Rate))),
         )
         .then(literal("freeze").execute(TickExecutor(SubCommand::Freeze(true))))

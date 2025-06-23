@@ -2,13 +2,12 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
 use std::time::Instant;
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::client::play::{CSystemChatMessage, CTickingState, CTickingStep};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 use crate::entity::player::Player;
 use crate::server::Server;
-
-pub const DEFAULT_TICK_RATE: f32 = 20.0;
 const NANOSECONDS_PER_SECOND: i64 = 1_000_000_000;
 
 #[derive(Debug)]
@@ -29,7 +28,7 @@ pub struct ServerTickRateManager {
 
 impl Default for ServerTickRateManager {
     fn default() -> Self {
-        let tickrate = DEFAULT_TICK_RATE;
+        let tickrate = BASIC_CONFIG.tps;
         Self {
             tickrate: AtomicCell::new(tickrate),
             nanoseconds_per_tick: AtomicI64::new(NANOSECONDS_PER_SECOND / tickrate as i64),
