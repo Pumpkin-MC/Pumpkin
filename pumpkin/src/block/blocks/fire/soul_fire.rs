@@ -58,7 +58,7 @@ impl PumpkinBlock for SoulFireBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        SoulFireBlock::is_soul_base(&block_accessor.get_block(&block_pos.down()).await)
+        Self::is_soul_base(&block_accessor.get_block(&block_pos.down()).await)
     }
 
     async fn broken(

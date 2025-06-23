@@ -125,6 +125,23 @@ impl FireBlock {
             }
         }
     }
+
+    pub async fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> u8 {
+        let block_state = world.get_block_state(pos).await;
+        if !block_state.is_air() {
+            return 0;
+        }
+        let mut total_burn_chance = 0;
+
+        for dir in BlockDirection::all() {
+            let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
+            if let Some(flammable) = neighbor_block.flammable {
+                total_burn_chance += flammable.burn_chance;
+            }
+        }
+
+        total_burn_chance
+    }
 }
 
 #[async_trait]
@@ -362,11 +379,7 @@ impl PumpkinBlock for FireBlock {
                 for n in -1..=4 {
                     if l != 0 || n != 0 || m != 0 {
                         let offset_pos = pos.offset(Vector3::new(l, n, m));
-                        let burn_chance = world
-                            .get_block(&offset_pos)
-                            .await
-                            .flammable
-                            .map_or(0, |f| f.burn_chance);
+                        let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
                         if burn_chance > 0 {
                             let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
                             let p: i32 = i32::from(
