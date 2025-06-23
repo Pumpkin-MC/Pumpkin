@@ -1,5 +1,6 @@
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -36,9 +37,27 @@ impl FireBlock {
         30 + rand::rng().random_range(0..10)
     }
 
-    fn is_flammable(block: Block) -> bool {
-        // block.flammable.map_or(false, |f| f.burn_chance > 0)
-        block.flammable.is_some_and(|f| f.burn_chance > 0)
+    fn is_flammable(block_state: &BlockState) -> bool {
+        if block_state
+            .block()
+            .properties(block_state.id)
+            .and_then(|props| {
+                props
+                    .to_props()
+                    .into_iter()
+                    .find(|p| p.0 == "waterlogged")
+                    .map(|(_, v)| {
+                        v == true.to_string()
+                    })
+            })
+            .unwrap_or(false)
+        {
+            return false;
+        }
+        block_state
+            .block()
+            .flammable
+            .is_some_and(|f| f.burn_chance > 0)
     }
 
     async fn are_blocks_around_flammable(
@@ -48,8 +67,8 @@ impl FireBlock {
     ) -> bool {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let block = block_accessor.get_block(&neighbor_pos).await;
-            if Self::is_flammable(block) {
+            let block_state = block_accessor.get_block_state(&neighbor_pos).await;
+            if Self::is_flammable(&block_state) {
                 return true;
             }
         }
@@ -63,16 +82,16 @@ impl FireBlock {
         pos: &BlockPos,
     ) -> BlockStateId {
         let down_pos = pos.down();
-        let (down_block, down_state) = world.get_block_and_block_state(&down_pos).await;
-        if Self::is_flammable(down_block) || down_state.is_side_solid(BlockDirection::Up) {
+        let down_state = world.get_block_state(&down_pos).await;
+        if Self::is_flammable(&down_state) || down_state.is_side_solid(BlockDirection::Up) {
             return Block::FIRE.default_state.id;
         }
         let mut fire_props =
             FireProperties::from_state_id(Block::FIRE.default_state.id, &Block::FIRE);
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let neighbor_block = world.get_block(&neighbor_pos).await;
-            if Self::is_flammable(neighbor_block) {
+            let neighbor_state = world.get_block_state(&neighbor_pos).await;
+            if Self::is_flammable(&neighbor_state) {
                 match direction {
                     BlockDirection::North => fire_props.north = true,
                     BlockDirection::South => fire_props.south = true,
@@ -93,11 +112,14 @@ impl FireBlock {
         spread_factor: i32,
         current_age: u16,
     ) {
+        if world.get_fluid(pos).await.name != Fluid::EMPTY.name {
+            return; // Skip if there is a fluid
+        }
         let spread_chance: i32 = world
             .get_block(pos)
             .await
             .flammable
-            .map_or(0, |f| f.burn_chance)
+            .map_or(0, |f| f.spread_chance)
             .into();
         if rand::rng().random_range(0..spread_factor) < spread_chance {
             let block = world.get_block(pos).await;
@@ -135,6 +157,9 @@ impl FireBlock {
 
         for dir in BlockDirection::all() {
             let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
+            if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
+                continue; // Skip if there is a fluid
+            }
             if let Some(flammable) = neighbor_block.flammable {
                 total_burn_chance += flammable.burn_chance;
             }
@@ -324,7 +349,7 @@ impl PumpkinBlock for FireBlock {
 
         if age == 15
             && rand::rng().random_range(0..4) == 0
-            && !Self::is_flammable(world.get_block(&pos.down()).await)
+            && !Self::is_flammable(&world.get_block_state(&pos.down()).await)
         {
             world
                 .set_block_state(
