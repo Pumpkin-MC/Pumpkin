@@ -140,7 +140,7 @@ impl SpongeBlock {
             world
                 .set_block_state(
                     &sponge_pos,
-                    Block::WET_SPONGE.default_state_id,
+                    Block::WET_SPONGE.default_state,
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
@@ -164,7 +164,7 @@ impl SpongeBlock {
         world
             .set_block_state(
                 pos,
-                Block::AIR.default_state_id,
+                Block::AIR.default_state,
                 BlockFlags::NOTIFY_LISTENERS,
             )
             .await;
@@ -233,7 +233,7 @@ impl WetSpongeBlock {
         world
             .set_block_state(
                 &pos,
-                Block::SPONGE.default_state_id,
+                Block::SPONGE.default_state,
                 BlockFlags::NOTIFY_LISTENERS,
             )
             .await;
