@@ -9,6 +9,12 @@ pub struct Ticker {
     last_tick: Instant,
 }
 
+impl Default for Ticker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ticker {
     #[must_use]
     pub fn new() -> Self {

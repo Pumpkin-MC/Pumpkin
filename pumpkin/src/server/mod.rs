@@ -630,9 +630,8 @@ impl Server {
             player.tick(self).await;
         }
     }
-
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
-    pub async fn tick_worlds(&self, server: &Server) {
+    pub async fn tick_worlds(&self, server: &Self) {
         for world in self.worlds.read().await.iter() {
             // Tick world-specific logic like time and weather
             world.level_time.lock().await.tick_time();

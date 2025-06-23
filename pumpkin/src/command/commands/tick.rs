@@ -52,6 +52,152 @@ enum SubCommand {
 
 struct TickExecutor(SubCommand);
 
+impl TickExecutor {
+    async fn handle_query(
+        &self,
+        sender: &mut CommandSender,
+        server: &crate::server::Server,
+        manager: &crate::server::tick_rate_manager::ServerTickRateManager,
+    ) -> Result<(), CommandError> {
+        let tickrate = manager.tickrate();
+        let avg_tick_nanos = server.get_average_tick_time_nanos();
+        let avg_mspt_str = nanos_to_millis_string(avg_tick_nanos);
+
+        if manager.is_sprinting() {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.tick.status.sprinting",
+                    [],
+                ))
+                .await;
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.tick.query.rate.sprinting",
+                    [
+                        TextComponent::text(format!("{tickrate:.1}")),
+                        TextComponent::text(avg_mspt_str),
+                    ],
+                ))
+                .await;
+        } else {
+            self.handle_non_sprinting_status(sender, manager, avg_tick_nanos)
+                .await;
+
+            let target_mspt_str = nanos_to_millis_string(manager.nanoseconds_per_tick());
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.tick.query.rate.running",
+                    [
+                        TextComponent::text(format!("{tickrate:.1}")),
+                        TextComponent::text(avg_mspt_str),
+                        TextComponent::text(target_mspt_str),
+                    ],
+                ))
+                .await;
+        }
+
+        self.send_percentiles(sender, server).await;
+        Ok(())
+    }
+    async fn handle_non_sprinting_status(
+        &self,
+        sender: &mut CommandSender,
+        manager: &crate::server::tick_rate_manager::ServerTickRateManager,
+        avg_tick_nanos: i64,
+    ) {
+        if manager.is_frozen() {
+            sender
+                .send_message(TextComponent::translate("commands.tick.status.frozen", []))
+                .await;
+        } else if avg_tick_nanos > manager.nanoseconds_per_tick() {
+            sender
+                .send_message(TextComponent::translate("commands.tick.status.lagging", []))
+                .await;
+        } else {
+            sender
+                .send_message(TextComponent::translate("commands.tick.status.running", []))
+                .await;
+        }
+    }
+
+    async fn send_percentiles(&self, sender: &mut CommandSender, server: &crate::server::Server) {
+        let tick_count = server.tick_count.load(Ordering::Relaxed);
+        let sample_size = (tick_count as usize).min(100);
+
+        if sample_size > 0 {
+            let mut tick_times = server.get_tick_times_nanos_copy().await;
+            let relevant_ticks = &mut tick_times[..sample_size];
+            relevant_ticks.sort_unstable();
+
+            let p50_nanos = relevant_ticks[sample_size / 2];
+            let p95_nanos = relevant_ticks[(sample_size as f32 * 0.95).floor() as usize];
+            let p99_nanos = relevant_ticks[(sample_size as f32 * 0.99).floor() as usize];
+
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.tick.query.percentiles",
+                    [
+                        TextComponent::text(nanos_to_millis_string(p50_nanos)),
+                        TextComponent::text(nanos_to_millis_string(p95_nanos)),
+                        TextComponent::text(nanos_to_millis_string(p99_nanos)),
+                        TextComponent::text(sample_size.to_string()),
+                    ],
+                ))
+                .await;
+        }
+    }
+    async fn handle_step_command(
+        &self,
+        sender: &mut CommandSender,
+        server: &crate::server::Server,
+        manager: &crate::server::tick_rate_manager::ServerTickRateManager,
+        ticks: i32,
+    ) -> Result<(), CommandError> {
+        if manager.step_game_if_paused(server, ticks).await {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.tick.step.success",
+                    [TextComponent::text(ticks.to_string())],
+                ))
+                .await;
+        } else {
+            sender
+                .send_message(
+                    TextComponent::translate("commands.tick.step.fail", [])
+                        .color_named(NamedColor::Red),
+                )
+                .await;
+        }
+        Ok(())
+    }
+    async fn handle_sprint_command(
+        &self,
+        sender: &mut CommandSender,
+        server: &crate::server::Server,
+        manager: &crate::server::tick_rate_manager::ServerTickRateManager,
+        ticks: i32,
+    ) -> Result<(), CommandError> {
+        if manager
+            .request_game_to_sprint(server, i64::from(ticks))
+            .await
+        {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.tick.sprint.stop.success",
+                    [],
+                ))
+                .await;
+        }
+        sender
+            .send_message(TextComponent::translate(
+                "commands.tick.status.sprinting",
+                [],
+            ))
+            .await;
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl CommandExecutor for TickExecutor {
     async fn execute<'a>(
@@ -63,89 +209,7 @@ impl CommandExecutor for TickExecutor {
         let manager = &server.tick_rate_manager;
 
         match self.0 {
-            SubCommand::Query => {
-                let tickrate = manager.tickrate();
-                let avg_tick_nanos = server.get_average_tick_time_nanos();
-                let avg_mspt_str = nanos_to_millis_string(avg_tick_nanos);
-
-                if manager.is_sprinting() {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.status.sprinting",
-                            [],
-                        ))
-                        .await;
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.query.rate.sprinting",
-                            [
-                                TextComponent::text(format!("{:.1}", tickrate)),
-                                TextComponent::text(avg_mspt_str),
-                            ],
-                        ))
-                        .await;
-                } else {
-                    if manager.is_frozen() {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.tick.status.frozen",
-                                [],
-                            ))
-                            .await;
-                    } else if avg_tick_nanos > manager.nanoseconds_per_tick() {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.tick.status.lagging",
-                                [],
-                            ))
-                            .await;
-                    } else {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.tick.status.running",
-                                [],
-                            ))
-                            .await;
-                    }
-
-                    let target_mspt_str = nanos_to_millis_string(manager.nanoseconds_per_tick());
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.query.rate.running",
-                            [
-                                TextComponent::text(format!("{:.1}", tickrate)),
-                                TextComponent::text(avg_mspt_str),
-                                TextComponent::text(target_mspt_str),
-                            ],
-                        ))
-                        .await;
-                }
-
-                let tick_count = server.tick_count.load(Ordering::Relaxed);
-                let sample_size = (tick_count as usize).min(100);
-
-                if sample_size > 0 {
-                    let mut tick_times = server.get_tick_times_nanos_copy().await;
-                    let relevant_ticks = &mut tick_times[..sample_size];
-                    relevant_ticks.sort_unstable();
-
-                    let p50_nanos = relevant_ticks[sample_size / 2];
-                    let p95_nanos = relevant_ticks[(sample_size as f32 * 0.95).floor() as usize];
-                    let p99_nanos = relevant_ticks[(sample_size as f32 * 0.99).floor() as usize];
-
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.query.percentiles",
-                            [
-                                TextComponent::text(nanos_to_millis_string(p50_nanos)),
-                                TextComponent::text(nanos_to_millis_string(p95_nanos)),
-                                TextComponent::text(nanos_to_millis_string(p99_nanos)),
-                                TextComponent::text(sample_size.to_string()),
-                            ],
-                        ))
-                        .await;
-                }
-            }
+            SubCommand::Query => self.handle_query(sender, server, manager).await,
             SubCommand::Rate => {
                 let rate = BoundedNumArgumentConsumer::<f32>::find_arg(args, "rate")??;
                 manager.set_tick_rate(server, rate).await;
@@ -155,6 +219,7 @@ impl CommandExecutor for TickExecutor {
                         [TextComponent::text(format!("{rate:.1}"))],
                     ))
                     .await;
+                Ok(())
             }
             SubCommand::RateLiteral(rate) => {
                 manager.set_tick_rate(server, rate).await;
@@ -164,6 +229,7 @@ impl CommandExecutor for TickExecutor {
                         [TextComponent::text(format!("{rate:.1}"))],
                     ))
                     .await;
+                Ok(())
             }
             SubCommand::Freeze(freeze) => {
                 manager.set_frozen(server, freeze).await;
@@ -175,58 +241,17 @@ impl CommandExecutor for TickExecutor {
                 sender
                     .send_message(TextComponent::translate(message_key, []))
                     .await;
+                Ok(())
             }
-            SubCommand::StepDefault => {
-                if manager.step_game_if_paused(server, 1).await {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.step.success",
-                            [TextComponent::text("1")],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(
-                            TextComponent::translate("commands.tick.step.fail", [])
-                                .color_named(NamedColor::Red),
-                        )
-                        .await;
-                }
-            }
+            SubCommand::StepDefault => self.handle_step_command(sender, server, manager, 1).await,
             SubCommand::StepTimed => {
                 let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                if manager.step_game_if_paused(server, ticks).await {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.step.success",
-                            [TextComponent::text(ticks.to_string())],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(
-                            TextComponent::translate("commands.tick.step.fail", [])
-                                .color_named(NamedColor::Red),
-                        )
-                        .await;
-                }
+                self.handle_step_command(sender, server, manager, ticks)
+                    .await
             }
             SubCommand::StepLiteral(ticks) => {
-                if manager.step_game_if_paused(server, ticks).await {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.step.success",
-                            [TextComponent::text(ticks.to_string())],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(
-                            TextComponent::translate("commands.tick.step.fail", [])
-                                .color_named(NamedColor::Red),
-                        )
-                        .await;
-                }
+                self.handle_step_command(sender, server, manager, ticks)
+                    .await
             }
             SubCommand::StepStop => {
                 if manager.stop_stepping(server).await {
@@ -241,39 +266,16 @@ impl CommandExecutor for TickExecutor {
                         .send_message(TextComponent::translate("commands.tick.step.stop.fail", []))
                         .await;
                 }
+                Ok(())
             }
             SubCommand::SprintTimed => {
                 let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                if manager.request_game_to_sprint(server, ticks as i64).await {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.sprint.stop.success",
-                            [],
-                        ))
-                        .await;
-                }
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.tick.status.sprinting",
-                        [],
-                    ))
-                    .await;
+                self.handle_sprint_command(sender, server, manager, ticks)
+                    .await
             }
             SubCommand::SprintLiteral(ticks) => {
-                if manager.request_game_to_sprint(server, ticks as i64).await {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.sprint.stop.success",
-                            [],
-                        ))
-                        .await;
-                }
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.tick.status.sprinting",
-                        [],
-                    ))
-                    .await;
+                self.handle_sprint_command(sender, server, manager, ticks)
+                    .await
             }
             SubCommand::SprintStop => {
                 if manager.stop_sprinting(server).await {
@@ -291,9 +293,9 @@ impl CommandExecutor for TickExecutor {
                         )
                         .await;
                 }
+                Ok(())
             }
         }
-        Ok(())
     }
 }
 
