@@ -1,9 +1,21 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
+use async_trait::async_trait;
+use bytes::Bytes;
+use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus};
 use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 
-use crate::{block::entities::block_entity_from_nbt, generation::section_coords};
+use crate::{
+    block::entities::block_entity_from_nbt,
+    chunk::{
+        ChunkReadingError, ChunkSerializingError,
+        format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
+        io::{Dirtiable, file_manager::PathFromLevelFolder},
+    },
+    generation::section_coords,
+    level::LevelFolder,
+};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
@@ -25,8 +37,45 @@ pub struct ChunkStatusWrapper {
     status: ChunkStatus,
 }
 
+#[async_trait]
+impl SingleChunkDataSerializer for ChunkData {
+    #[inline]
+    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(&bytes, pos).map_err(ChunkReadingError::ParsingError)
+    }
+
+    #[inline]
+    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        self.internal_to_bytes().await
+    }
+
+    #[inline]
+    fn position(&self) -> &Vector2<i32> {
+        &self.position
+    }
+}
+
+impl PathFromLevelFolder for ChunkData {
+    #[inline]
+    fn file_path(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.region_folder.join(file_name)
+    }
+}
+
+impl Dirtiable for ChunkData {
+    #[inline]
+    fn mark_dirty(&mut self, flag: bool) {
+        self.dirty = flag;
+    }
+
+    #[inline]
+    fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+}
+
 impl ChunkData {
-    pub fn from_bytes(
+    pub fn internal_from_bytes(
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
@@ -180,6 +229,90 @@ impl ChunkData {
             },
             light_engine,
         })
+    }
+
+    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        let sections: Vec<_> = (0..self.section.sections.len() + 2)
+            .map(|i| {
+                let has_blocks = i >= 1 && i - 1 < self.section.sections.len();
+                let section = has_blocks.then(|| &self.section.sections[i - 1]);
+
+                ChunkSectionNBT {
+                    y: (i as i8) - 1i8 + section_coords::block_to_section(self.section.min_y) as i8,
+                    block_states: section.map(|section| section.block_states.to_disk_nbt()),
+                    biomes: section.map(|section| section.biomes.to_disk_nbt()),
+                    block_light: match self.light_engine.block_light[i].clone() {
+                        LightContainer::Empty(_) => None,
+                        LightContainer::Full(data) => Some(data),
+                    },
+                    sky_light: match self.light_engine.sky_light[i].clone() {
+                        LightContainer::Empty(_) => None,
+                        LightContainer::Full(data) => Some(data),
+                    },
+                }
+            })
+            .filter(|nbt| {
+                nbt.block_states.is_some()
+                    || nbt.biomes.is_some()
+                    || nbt.block_light.is_some()
+                    || nbt.sky_light.is_some()
+            })
+            .collect();
+
+        let nbt = ChunkNbt {
+            data_version: WORLD_DATA_VERSION,
+            x_pos: self.position.x,
+            z_pos: self.position.z,
+            min_y_section: section_coords::block_to_section(self.section.min_y),
+            status: ChunkStatus::Full,
+            heightmaps: self.heightmap.clone(),
+            sections,
+            block_ticks: {
+                self.block_ticks
+                    .iter()
+                    .map(|tick| SerializedScheduledTick {
+                        x: tick.block_pos.0.x,
+                        y: tick.block_pos.0.y,
+                        z: tick.block_pos.0.z,
+                        delay: tick.delay as i32,
+                        priority: tick.priority as i32,
+                        target_block: format!(
+                            "minecraft:{}",
+                            Block::from_id(tick.target_block_id).unwrap().name
+                        ),
+                    })
+                    .collect()
+            },
+            fluid_ticks: {
+                self.fluid_ticks
+                    .iter()
+                    .map(|tick| SerializedScheduledTick {
+                        x: tick.block_pos.0.x,
+                        y: tick.block_pos.0.y,
+                        z: tick.block_pos.0.z,
+                        delay: tick.delay as i32,
+                        priority: tick.priority as i32,
+                        target_block: format!(
+                            "minecraft:{}",
+                            Block::from_id(tick.target_block_id).unwrap().name
+                        ),
+                    })
+                    .collect()
+            },
+            block_entities: join_all(self.block_entities.values().map(|block_entity| async move {
+                let mut nbt = NbtCompound::new();
+                block_entity.1.write_internal(&mut nbt).await;
+                nbt
+            }))
+            .await,
+            // we have not implemented light engine
+            light_correct: false,
+        };
+
+        let mut result = Vec::new();
+        pumpkin_nbt::to_bytes(&nbt, &mut result)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        Ok(result.into())
     }
 }
 
