@@ -180,7 +180,7 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    const SNOW_BLOCK: Block = Block::SNOW;
+    const SNOW_BLOCK: Block = Block::SNOW_BLOCK;
     const PACKED_ICE: Block = Block::PACKED_ICE;
 
     #[expect(clippy::too_many_arguments)]
