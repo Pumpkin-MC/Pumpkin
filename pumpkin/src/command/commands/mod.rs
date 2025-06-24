@@ -38,6 +38,7 @@ mod pumpkin;
 mod say;
 mod seed;
 mod setblock;
+mod setworldspawn;
 mod stop;
 mod stopsound;
 mod summon;
@@ -109,6 +110,8 @@ pub async fn default_dispatcher() -> CommandDispatcher {
         defaultgamemode::init_command_tree(),
         "minecraft:command.defaultgamemode",
     );
+    dispatcher.register(
+        setworldspawn::init_command_tree(), "minecraft.command.setworldspawn");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
