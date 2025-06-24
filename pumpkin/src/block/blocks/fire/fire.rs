@@ -107,7 +107,7 @@ impl PumpkinBlock for FireBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !FireBlockBase::can_place_on(&world.get_block(&block_pos.down()).await) {
+        if !FireBlockBase::can_place_on(world, &block_pos.down()).await {
             return Block::AIR.default_state.id;
         }
 

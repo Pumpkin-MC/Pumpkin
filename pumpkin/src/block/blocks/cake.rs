@@ -59,7 +59,7 @@ impl CakeBlock {
                 world
                     .set_block_state(
                         location,
-                        Block::AIR.default_state_id,
+                        Block::AIR.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
@@ -90,7 +90,7 @@ impl PumpkinBlock for CakeBlock {
                     world
                         .set_block_state(
                             &location,
-                            cake_from_candle(item).default_state_id,
+                            cake_from_candle(item).default_state.id,
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;

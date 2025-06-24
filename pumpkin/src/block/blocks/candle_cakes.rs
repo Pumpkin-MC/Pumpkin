@@ -91,7 +91,7 @@ impl CandleCakeBlock {
         world
             .set_block_state(
                 location,
-                Block::CAKE.default_state_id,
+                Block::CAKE.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
