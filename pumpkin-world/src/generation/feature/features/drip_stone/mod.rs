@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, block_properties::get_state_by_state_id, tag::Tagable};
+use pumpkin_data::{Block, tag::Tagable};
 use pumpkin_util::math::position::BlockPos;
 
 use crate::ProtoChunk;
@@ -20,10 +20,7 @@ pub(super) fn gen_dripstone(chunk: &mut ProtoChunk, pos: BlockPos) -> bool {
         .is_tagged_with("minecraft:dripstone_replaceable_blocks")
         .unwrap()
     {
-        chunk.set_block_state(
-            &pos.0,
-            &get_state_by_state_id(Block::DRIPSTONE_BLOCK.default_state_id).unwrap(),
-        );
+        chunk.set_block_state(&pos.0, &Block::DRIPSTONE_BLOCK.default_state);
         return true;
     }
     false

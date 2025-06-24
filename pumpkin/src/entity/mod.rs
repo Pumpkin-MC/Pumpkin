@@ -6,7 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::{
-    block_properties::{Facing, HorizontalFacing, get_block_outline_shapes},
+    block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
@@ -673,7 +673,7 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_block_state(&pos).await;
-                    let block_outlines = get_block_outline_shapes(state.id);
+                    let block_outlines = state.get_block_outline_shapes();
 
                     if let Some(outlines) = block_outlines {
                         if outlines.is_empty() {

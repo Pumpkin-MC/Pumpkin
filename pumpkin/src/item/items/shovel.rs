@@ -54,7 +54,7 @@ impl PumpkinItem for ShovelItem {
                 world
                     .set_block_state(
                         &location,
-                        Block::DIRT_PATH.default_state_id,
+                        Block::DIRT_PATH.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;

@@ -50,15 +50,12 @@ impl BambooFeature {
                             if !block.to_block().is_tagged_with("minecraft:dirt").unwrap() {
                                 continue;
                             }
-                            chunk.set_block_state(
-                                &block_below.0,
-                                &get_state_by_state_id(Block::PODZOL.id).unwrap(),
-                            );
+                            chunk.set_block_state(&block_below.0, &Block::PODZOL.default_state);
                         }
                     }
                 }
                 let mut bpos = pos;
-                let bamboo = get_state_by_state_id(Block::BAMBOO.default_state_id).unwrap();
+                let bamboo = Block::BAMBOO.default_state;
                 for _ in 0..height {
                     if chunk.is_air(&bpos.0) {
                         chunk.set_block_state(&bpos.0, &bamboo);

@@ -154,7 +154,7 @@ impl PumpkinBlock for ComparatorBlock {
                 if !RedstoneGateBlock::can_place_above(self, world, *neighbor_pos, &neighbor_state)
                     .await
                 {
-                    return Block::AIR.default_state_id;
+                    return Block::AIR.default_state.id;
                 }
             }
         }

@@ -308,7 +308,7 @@ impl ToTokens for BlockPropertyStruct {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
-                    Self::from_state_id(block.default_state_id, block)
+                    Self::from_state_id(block.default_state.id, block)
                 }
 
                 #[allow(clippy::vec_init_then_push)]
@@ -506,15 +506,14 @@ pub struct OptimizedBlock {
     pub experience: Option<Experience>,
 }
 
-impl ToTokens for OptimizedBlock {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+impl OptimizedBlock {
+    fn to_tokens(&self, tokens: &mut TokenStream, all_states: &[BlockState]) {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let name = LitStr::new(&self.name, Span::call_site());
         let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
         let blast_resistance = &self.blast_resistance;
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
-        let default_state_id = LitInt::new(&self.default_state_id.to_string(), Span::call_site());
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
@@ -535,6 +534,14 @@ impl ToTokens for OptimizedBlock {
             None => quote! { None },
         };
 
+        let default_state_ref: &BlockStateRef = self
+            .states
+            .iter()
+            .find(|state| state.id == self.default_state_id)
+            .unwrap();
+        let mut default_state = all_states[default_state_ref.state_idx as usize].clone();
+        default_state.id = default_state_ref.id;
+        let default_state = default_state.to_tokens();
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -546,7 +553,7 @@ impl ToTokens for OptimizedBlock {
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
                 item_id: #item_id,
-                default_state_id: #default_state_id,
+                default_state: #default_state,
                 states: &[#(#states),*],
                 loot_table: #loot_table,
                 experience: #experience,
@@ -787,7 +794,7 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let unique_states = unique_states.iter().map(|state| state.to_tokens());
+    let unique_states_tokens = unique_states.iter().map(|state| state.to_tokens());
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
@@ -801,7 +808,8 @@ pub(crate) fn build() -> TokenStream {
     // Generate constants and `match` arms for each block.
     for (name, block) in optimized_blocks {
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
-        let block_tokens = block.to_token_stream();
+        let mut block_tokens = TokenStream::new();
+        block.to_tokens(&mut block_tokens, &unique_states);
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let state_start = block.states.iter().map(|state| state.id).min().unwrap();
         let state_end = block.states.iter().map(|state| state.id).max().unwrap();
@@ -882,7 +890,7 @@ pub(crate) fn build() -> TokenStream {
         ];
 
         pub static BLOCK_STATES: &[BlockState] = &[
-            #(#unique_states),*
+            #(#unique_states_tokens),*
         ];
 
         pub static BLOCK_ENTITY_TYPES: &[&str] = &[
@@ -922,39 +930,6 @@ pub(crate) fn build() -> TokenStream {
 
         pub fn get_block_by_item(item_id: u16) -> Option<Block> {
             Block::from_item_id(item_id)
-        }
-
-        pub fn get_block_collision_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
-            let state = get_state_by_state_id(state_id)?;
-            let shapes: Vec<CollisionShape> = state.collision_shapes
-                            .iter()
-                            .map(|&id| COLLISION_SHAPES[id as usize])
-                            .collect();
-            Some(shapes)
-        }
-
-        pub fn get_block_outline_shapes(state_id: u16) -> Option<Vec<CollisionShape>> {
-            let state = get_state_by_state_id(state_id)?;
-            let mut shapes: Vec<CollisionShape> = state.outline_shapes
-                            .iter()
-                            .map(|&id| COLLISION_SHAPES[id as usize])
-                            .collect();
-            let block = get_block_by_state_id(state_id)?;
-            if block.properties(state.id).and_then(|properties| {
-                properties
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| value == true.to_string())
-            }) == Some(true)
-            {
-                // If the block is waterlogged, add a water shape
-                let shape =
-                    &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
-                shapes.push(*shape);
-            }
-
-            Some(shapes)
         }
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {

@@ -108,7 +108,7 @@ impl WorldGenerator for VanillaGenerator {
                     let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
                     let block =
                         proto_chunk.get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
-                    sections.set_relative_block(x, y as usize, z, block.state_id);
+                    sections.set_relative_block(x, y as usize, z, block.0);
                 }
             }
         }

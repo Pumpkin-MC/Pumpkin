@@ -219,7 +219,7 @@ impl PumpkinServer {
 
         let rcon = advanced_config().networking.rcon.clone();
 
-        let mut ticker = Ticker::new(BASIC_CONFIG.tps);
+        let mut ticker = Ticker::new();
 
         if advanced_config().commands.use_console {
             if let Some((wrapper, _)) = &*LOGGER_IMPL {

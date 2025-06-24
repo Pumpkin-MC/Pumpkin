@@ -30,6 +30,7 @@ use border::Worldborder;
 use bytes::{BufMut, Bytes};
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
@@ -43,7 +44,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, block_properties::get_block_outline_shapes};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -225,7 +225,7 @@ impl World {
         queue.push(BlockEvent { pos, r#type, data });
     }
 
-    async fn flush_synced_block_events(self: &Arc<Self>) {
+    pub async fn flush_synced_block_events(self: &Arc<Self>) {
         let mut queue = self.synced_block_event_queue.lock().await;
         let events: Vec<BlockEvent> = queue.clone();
         queue.clear();
@@ -378,6 +378,17 @@ impl World {
             .await;
     }
 
+    pub async fn play_sound_expect(
+        &self,
+        player: &Player,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        self.play_sound_raw_expect(player, sound as u16, category, position, 1.0, 1.0)
+            .await;
+    }
+
     pub async fn play_sound_raw(
         &self,
         sound_id: u16,
@@ -389,6 +400,21 @@ impl World {
         let seed = rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.broadcast_packet_all(&packet).await;
+    }
+
+    pub async fn play_sound_raw_expect(
+        &self,
+        player: &Player,
+        sound_id: u16,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let seed = rng().random::<f64>();
+        let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
+        self.broadcast_packet_except(&[player.gameprofile.id], &packet)
+            .await;
     }
 
     pub async fn play_block_sound(
@@ -403,6 +429,22 @@ impl World {
             f64::from(position.0.z) + 0.5,
         );
         self.play_sound(sound, category, &new_vec).await;
+    }
+
+    pub async fn play_block_sound_expect(
+        &self,
+        player: &Player,
+        sound: Sound,
+        category: SoundCategory,
+        position: BlockPos,
+    ) {
+        let new_vec = Vector3::new(
+            f64::from(position.0.x) + 0.5,
+            f64::from(position.0.y) + 0.5,
+            f64::from(position.0.z) + 0.5,
+        );
+        self.play_sound_expect(player, sound, category, &new_vec)
+            .await;
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
@@ -604,6 +646,12 @@ impl World {
                 // It prevents the annoying popup when joining the server.
                 true,
             ))
+            .await;
+
+        // Send the current ticking state to the new player so they are in sync.
+        server
+            .tick_rate_manager
+            .update_joining_player(&player)
             .await;
 
         // Permissions, i.e. the commands a player may use.
@@ -1013,7 +1061,7 @@ impl World {
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
-    async fn should_skip_night(&self) -> bool {
+    pub async fn should_skip_night(&self) -> bool {
         let players = self.players.read().await;
 
         let player_count = players.len();
@@ -1468,7 +1516,6 @@ impl World {
         }
 
         let block_state = self.get_block_state(position).await;
-        let new_block = Block::from_state_id(block_state_id).unwrap();
         let new_fluid = self.get_fluid(position).await;
 
         // WorldChunk.java line 318
@@ -1678,14 +1725,13 @@ impl World {
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        self.level.get_block_state(position).await.state_id
+        self.level.get_block_state(position).await.0
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
         let id = self.get_block_state_id(position).await;
-        get_state_by_state_id(id)
-            .unwrap_or(get_state_by_state_id(Block::AIR.default_state_id).unwrap())
+        get_state_by_state_id(id).unwrap_or(Block::AIR.default_state)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
@@ -1694,10 +1740,7 @@ impl World {
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 
     /// Updates neighboring blocks of a block
@@ -1910,9 +1953,9 @@ impl World {
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> (bool, Option<BlockDirection>) {
-        let state_id = self.get_block_state_id(block_pos).await;
+        let state = self.get_block_state(block_pos).await;
 
-        let Some(bounding_boxes) = get_block_outline_shapes(state_id) else {
+        let Some(bounding_boxes) = state.get_block_outline_shapes() else {
             return (false, None);
         };
 
@@ -2087,9 +2130,6 @@ impl BlockAccessor for World {
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
         let id = self.get_block_state(position).await.id;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 }

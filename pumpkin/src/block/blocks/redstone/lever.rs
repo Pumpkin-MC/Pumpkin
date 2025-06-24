@@ -133,7 +133,7 @@ impl PumpkinBlock for LeverBlock {
         _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        let mut props = LeverLikeProperties::from_state_id(block.default_state_id, block);
+        let mut props = LeverLikeProperties::from_state_id(block.default_state.id, block);
         (props.face, props.facing) = WallMountedBlock::get_placement_face(self, player, direction);
 
         props.to_state_id(block)

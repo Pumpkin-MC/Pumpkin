@@ -28,7 +28,7 @@ use crate::{
     chunk::{
         ChunkData, ChunkParsingError, ChunkReadingError, ScheduledTick, TickPriority,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{ChunkIO, LoadedData, chunk_file_manager::ChunkFileManager},
+        io::{FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
     generation::{Seed, get_world_gen, implementation::WorldGenerator},
@@ -59,7 +59,7 @@ pub struct Level {
     loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>>,
+    chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
     world_gen: Arc<dyn WorldGenerator>,
 
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
@@ -99,10 +99,11 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn ChunkIO<Data = SyncChunk>> = match advanced_config().chunk.format {
-            //ChunkFormat::Anvil => (Arc::new(AnvilChunkFormat), Arc::new(AnvilChunkFormat)),
-            ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile>::default()),
-            ChunkFormat::Anvil => Arc::new(ChunkFileManager::<AnvilChunkFile>::default()),
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
+            ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
+            ChunkFormat::Anvil => {
+                Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
+            }
         };
 
         Self {
@@ -379,12 +380,10 @@ impl Level {
             relative.y,
             relative.z as usize,
         ) else {
-            return RawBlockState {
-                state_id: Block::AIR.default_state_id,
-            };
+            return RawBlockState(Block::AIR.default_state.id);
         };
 
-        RawBlockState { state_id: id }
+        RawBlockState(id)
     }
 
     pub async fn set_block_state(

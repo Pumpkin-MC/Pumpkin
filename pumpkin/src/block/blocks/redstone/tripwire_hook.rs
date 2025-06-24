@@ -49,7 +49,7 @@ impl PumpkinBlock for TripwireHookBlock {
             props.facing = face.opposite().to_cardinal_direction();
             return props.to_state_id(block);
         }
-        block.default_state_id
+        block.default_state.id
     }
 
     async fn can_place_at(
@@ -97,7 +97,7 @@ impl PumpkinBlock for TripwireHookBlock {
             facing.opposite() == props.facing
         }) && !Self::can_place_at(world, pos, direction).await
         {
-            Block::AIR.default_state_id
+            Block::AIR.default_state.id
         } else {
             state
         }

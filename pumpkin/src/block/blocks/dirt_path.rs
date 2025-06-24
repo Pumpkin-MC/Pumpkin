@@ -24,7 +24,7 @@ impl PumpkinBlock for DirtPathBlock {
     async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
         // TODO: push up entities
         world
-            .set_block_state(pos, Block::DIRT.default_state_id, BlockFlags::NOTIFY_ALL)
+            .set_block_state(pos, Block::DIRT.default_state.id, BlockFlags::NOTIFY_ALL)
             .await;
     }
 
@@ -40,10 +40,10 @@ impl PumpkinBlock for DirtPathBlock {
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         if !can_place_at(world, block_pos).await {
-            return Block::DIRT.default_state_id;
+            return Block::DIRT.default_state.id;
         }
 
-        block.default_state_id
+        block.default_state.id
     }
 
     async fn get_state_for_neighbor_update(

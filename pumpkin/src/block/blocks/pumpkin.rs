@@ -32,7 +32,7 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
         world
             .set_block_state(
                 &pos,
-                Block::CARVED_PUMPKIN.default_state_id,
+                Block::CARVED_PUMPKIN.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             )
             .await;

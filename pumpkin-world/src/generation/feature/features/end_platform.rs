@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, block_properties::get_state_by_state_id};
+use pumpkin_data::Block;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
@@ -22,13 +22,12 @@ impl EndPlatformFeature {
         for _ in -2..2 {
             for _ in -2..2 {
                 for t in -1..3 {
-                    let block = if t == -1 {
-                        Block::OBSIDIAN.default_state_id
+                    let state = if t == -1 {
+                        Block::OBSIDIAN.default_state
                     } else {
-                        Block::AIR.default_state_id
+                        Block::AIR.default_state
                     };
-                    let state = get_state_by_state_id(block).unwrap();
-                    if chunk.get_block_state(&pos.0).state_id == state.id {
+                    if chunk.get_block_state(&pos.0).0 == state.id {
                         continue;
                     }
                     chunk.set_block_state(&pos.0, &state);

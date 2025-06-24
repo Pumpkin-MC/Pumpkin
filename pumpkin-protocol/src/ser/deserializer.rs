@@ -361,8 +361,7 @@ impl<'de, R: Read> de::EnumAccess<'de> for &mut Deserializer<R> {
         let variant_index_i32 = self.inner.get_var_int()?.0;
         let variant_index_u32: u32 = variant_index_i32.try_into().map_err(|_| {
             ReadingError::Message(format!(
-                "Invalid variant index {} for enum, cannot convert to u32",
-                variant_index_i32
+                "Invalid variant index {variant_index_i32} for enum, cannot convert to u32"
             ))
         })?;
         let val = seed.deserialize(variant_index_u32.into_deserializer())?;

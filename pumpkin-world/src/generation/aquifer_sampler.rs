@@ -1,10 +1,9 @@
 use enum_dispatch::enum_dispatch;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector2::Vector2, vector3::Vector3},
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
-
-use crate::block::RawBlockState;
 
 use super::{
     chunk_noise::{LAVA_BLOCK, WATER_BLOCK},
@@ -22,23 +21,23 @@ use super::{
 #[derive(Clone)]
 pub struct FluidLevel {
     max_y: i32,
-    state: RawBlockState,
+    block: Block,
 }
 
 impl FluidLevel {
-    pub fn new(max_y: i32, state: RawBlockState) -> Self {
-        Self { max_y, state }
+    pub fn new(max_y: i32, block: Block) -> Self {
+        Self { max_y, block }
     }
 
     pub fn max_y_exclusive(&self) -> i32 {
         self.max_y
     }
 
-    fn get_block_state(&self, y: i32) -> RawBlockState {
+    fn get_block(&self, y: i32) -> Block {
         if y < self.max_y {
-            self.state
+            self.block.clone()
         } else {
-            RawBlockState::AIR
+            Block::AIR
         }
     }
 }
@@ -51,18 +50,18 @@ pub enum FluidLevelSampler {
 
 pub struct StaticFluidLevelSampler {
     y: i32,
-    state: RawBlockState,
+    block: Block,
 }
 
 impl StaticFluidLevelSampler {
-    pub fn new(y: i32, state: RawBlockState) -> Self {
-        Self { y, state }
+    pub fn new(y: i32, block: Block) -> Self {
+        Self { y, block }
     }
 }
 
 impl FluidLevelSamplerImpl for StaticFluidLevelSampler {
     fn get_fluid_level(&self, _x: i32, _y: i32, _z: i32) -> FluidLevel {
-        FluidLevel::new(self.y, self.state)
+        FluidLevel::new(self.y, self.block.clone())
     }
 }
 
@@ -196,11 +195,11 @@ impl WorldAquiferSampler {
         level_2: FluidLevel,
     ) -> f64 {
         let y = pos.y();
-        let block_state1 = level_1.get_block_state(y).to_block();
-        let block_state2 = level_2.get_block_state(y).to_block();
+        let block_state1 = level_1.get_block(y);
+        let block_state2 = level_2.get_block(y);
 
-        if (block_state1 != LAVA_BLOCK.to_block() || block_state2 != WATER_BLOCK.to_block())
-            && (block_state1 != WATER_BLOCK.to_block() || block_state2 != LAVA_BLOCK.to_block())
+        if (block_state1 != LAVA_BLOCK || block_state2 != WATER_BLOCK)
+            && (block_state1 != WATER_BLOCK || block_state2 != LAVA_BLOCK)
         {
             let level_diff = (level_1.max_y - level_2.max_y).abs();
             if level_diff == 0 {
@@ -287,7 +286,7 @@ impl WorldAquiferSampler {
             let bl3 = j > o;
             if bl3 || bl2 {
                 let fluid_level = self.fluid_level.get_fluid_level(x, o, z);
-                if !fluid_level.get_block_state(o).to_state().is_air() {
+                if !fluid_level.get_block(o).default_state.is_air() {
                     if bl2 {
                         bl = true;
                     }
@@ -411,11 +410,8 @@ impl WorldAquiferSampler {
         level: i32,
         router: &mut ChunkNoiseRouter,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> RawBlockState {
-        if level <= -10
-            && level != MIN_HEIGHT_CELL
-            && default_level.state.to_block() != LAVA_BLOCK.to_block()
-        {
+    ) -> Block {
+        if level <= -10 && level != MIN_HEIGHT_CELL && default_level.block != LAVA_BLOCK {
             let x = floor_div(block_x, 64);
             let y = floor_div(block_y, 40);
             let z = floor_div(block_z, 64);
@@ -427,7 +423,7 @@ impl WorldAquiferSampler {
             }
         }
 
-        default_level.state
+        default_level.block
     }
 
     fn apply_internal(
@@ -437,7 +433,7 @@ impl WorldAquiferSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
-    ) -> Option<RawBlockState> {
+    ) -> Option<BlockState> {
         if density > 0f64 {
             None
         } else {
@@ -446,8 +442,8 @@ impl WorldAquiferSampler {
             let k = pos.z();
 
             let fluid_level = self.fluid_level.get_fluid_level(i, j, k);
-            if fluid_level.get_block_state(j).to_block() == LAVA_BLOCK.to_block() {
-                Some(LAVA_BLOCK)
+            if fluid_level.get_block(j) == LAVA_BLOCK {
+                Some(LAVA_BLOCK.default_state)
             } else {
                 let scaled_x = floor_div(i - 5, 16);
                 let scaled_y = floor_div(j + 1, 12);
@@ -501,21 +497,20 @@ impl WorldAquiferSampler {
                 );
                 let d =
                     Self::max_distance(packed_block_and_hypots[0].1, packed_block_and_hypots[1].1);
-                let block_state = fluid_level2.get_block_state(j);
+                let block_state = fluid_level2.get_block(j);
 
                 if d <= 0f64 {
                     // TODO: Handle fluid tick
 
-                    Some(block_state)
-                } else if block_state.to_block() == WATER_BLOCK.to_block()
+                    Some(block_state.default_state)
+                } else if block_state == WATER_BLOCK
                     && self
                         .fluid_level
                         .get_fluid_level(i, j - 1, k)
-                        .get_block_state(j - 1)
-                        .to_block()
-                        == LAVA_BLOCK.to_block()
+                        .get_block(j - 1)
+                        == LAVA_BLOCK
                 {
-                    Some(block_state)
+                    Some(block_state.default_state)
                 } else {
                     let barrier_sample = router.barrier_noise(pos, sample_options);
                     let fluid_level3 = self.get_water_level(
@@ -578,7 +573,7 @@ impl WorldAquiferSampler {
 
                         //TODO Handle fluid tick
 
-                        Some(block_state)
+                        Some(block_state.default_state)
                     }
                 }
             }
@@ -594,7 +589,7 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<RawBlockState> {
+    ) -> Option<BlockState> {
         let density = router.final_density(pos, sample_options);
         self.apply_internal(router, pos, sample_options, height_estimator, density)
     }
@@ -617,7 +612,7 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<RawBlockState> {
+    ) -> Option<BlockState> {
         let sample = router.final_density(pos, sample_options);
         //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
         if sample > 0f64 {
@@ -626,7 +621,8 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
             Some(
                 self.level_sampler
                     .get_fluid_level(pos.x(), pos.y(), pos.z())
-                    .get_block_state(pos.y()),
+                    .get_block(pos.y())
+                    .default_state,
             )
         }
     }
@@ -640,7 +636,7 @@ pub trait AquiferSamplerImpl {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<RawBlockState>;
+    ) -> Option<BlockState>;
 }
 
 #[cfg(test)]
@@ -728,7 +724,7 @@ mod test {
             BlockStateSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),
         };
-        let aquifer = match sampler {
+        let aquifer = match *sampler {
             AquiferSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),
         };
@@ -1445,7 +1441,7 @@ mod test {
         for ((x, y, z), (y1, state)) in values {
             let level = aquifer.get_fluid_level(x, y, z, &mut router, &mut height_estimator, &env);
             assert_eq!(level.max_y, y1);
-            assert_eq!(level.state, state);
+            assert_eq!(level.block, state);
         }
     }
 
@@ -1720,8 +1716,14 @@ mod test {
             ((114, -20, 70, 0.11121282163190734), None),
             ((114, -20, 72, 0.11433776346079558), None),
             ((114, -20, 74, 0.11770444723497474), None),
-            ((114, 0, 64, -0.0026209759846139574), Some(WATER_BLOCK)),
-            ((114, 0, 66, -0.0011869543056835608), Some(WATER_BLOCK)),
+            (
+                (114, 0, 64, -0.0026209759846139574),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (114, 0, 66, -0.0011869543056835608),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((114, 0, 68, 3.9347454816496854E-4), None),
             ((114, 0, 70, 0.002068623223791626), None),
             ((114, 0, 72, 0.0038193250297024243), None),
@@ -1807,9 +1809,18 @@ mod test {
             ((116, -20, 70, 0.11589560860382501), None),
             ((116, -20, 72, 0.11889599517563405), None),
             ((116, -20, 74, 0.12214992807094607), None),
-            ((116, 0, 64, -0.003764380972543319), Some(WATER_BLOCK)),
-            ((116, 0, 66, -0.002339168705169207), Some(WATER_BLOCK)),
-            ((116, 0, 68, -7.530784033722614E-4), Some(WATER_BLOCK)),
+            (
+                (116, 0, 64, -0.003764380972543319),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (116, 0, 66, -0.002339168705169207),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (116, 0, 68, -7.530784033722614E-4),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((116, 0, 70, 9.517226455286942E-4), None),
             ((116, 0, 72, 0.0027605740566328273), None),
             ((116, 0, 74, 0.0046712919320928475), None),
@@ -1906,10 +1917,22 @@ mod test {
             ((118, -20, 70, 0.12038440430256446), None),
             ((118, -20, 72, 0.12325317705242089), None),
             ((118, -20, 74, 0.12637678353248477), None),
-            ((118, 0, 64, -0.00501589634392619), Some(WATER_BLOCK)),
-            ((118, 0, 66, -0.003601631485605401), Some(WATER_BLOCK)),
-            ((118, 0, 68, -0.0020166185756455924), Some(WATER_BLOCK)),
-            ((118, 0, 70, -2.901294172670075E-4), Some(WATER_BLOCK)),
+            (
+                (118, 0, 64, -0.00501589634392619),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (118, 0, 66, -0.003601631485605401),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (118, 0, 68, -0.0020166185756455924),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (118, 0, 70, -2.901294172670075E-4),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((118, 0, 72, 0.0015704124446037308), None),
             ((118, 0, 74, 0.0035605198020311826), None),
             ((118, 20, 64, 0.040232966220497414), None),
@@ -2017,10 +2040,22 @@ mod test {
             ((120, -20, 70, 0.12469970986670785), None),
             ((120, -20, 72, 0.1274266324562779), None),
             ((120, -20, 74, 0.13039812171785095), None),
-            ((120, 0, 64, -0.006329576321547214), Some(WATER_BLOCK)),
-            ((120, 0, 66, -0.004930192503238298), Some(WATER_BLOCK)),
-            ((120, 0, 68, -0.003355964670343278), Some(WATER_BLOCK)),
-            ((120, 0, 70, -0.0016206542469077872), Some(WATER_BLOCK)),
+            (
+                (120, 0, 64, -0.006329576321547214),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 0, 66, -0.004930192503238298),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 0, 68, -0.003355964670343278),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 0, 70, -0.0016206542469077872),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((120, 0, 72, 2.77535008128212E-4), None),
             ((120, 0, 74, 0.002332419553726638), None),
             ((120, 20, 64, 0.04783863627983937), None),
@@ -2050,12 +2085,30 @@ mod test {
                 (120, 40, 74, -0.013001583733654043),
                 Some(RawBlockState::AIR),
             ),
-            ((120, 60, 64, -0.010805185122555435), Some(WATER_BLOCK)),
-            ((120, 60, 66, -0.011684313707812422), Some(WATER_BLOCK)),
-            ((120, 60, 68, -0.007705484690135335), Some(WATER_BLOCK)),
-            ((120, 60, 70, -0.012326309226980426), Some(WATER_BLOCK)),
-            ((120, 60, 72, -0.019043795741958334), Some(WATER_BLOCK)),
-            ((120, 60, 74, -0.023185441889689514), Some(WATER_BLOCK)),
+            (
+                (120, 60, 64, -0.010805185122555435),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 60, 66, -0.011684313707812422),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 60, 68, -0.007705484690135335),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 60, 70, -0.012326309226980426),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 60, 72, -0.019043795741958334),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (120, 60, 74, -0.023185441889689514),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((120, 80, 64, -0.3611328625547435), Some(RawBlockState::AIR)),
             ((120, 80, 66, -0.3586517592327399), Some(RawBlockState::AIR)),
             ((120, 80, 68, -0.3524534485283812), Some(RawBlockState::AIR)),
@@ -2122,11 +2175,26 @@ mod test {
             ((122, -20, 70, 0.12884021810202248), None),
             ((122, -20, 72, 0.13141636494496137), None),
             ((122, -20, 74, 0.13421609155559988), None),
-            ((122, 0, 64, -0.007667256303541582), Some(WATER_BLOCK)),
-            ((122, 0, 66, -0.006288822820341533), Some(WATER_BLOCK)),
-            ((122, 0, 68, -0.004737470102527975), Some(WATER_BLOCK)),
-            ((122, 0, 70, -0.0030099389619020873), Some(WATER_BLOCK)),
-            ((122, 0, 72, -0.0010942861750551764), Some(WATER_BLOCK)),
+            (
+                (122, 0, 64, -0.007667256303541582),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 0, 66, -0.006288822820341533),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 0, 68, -0.004737470102527975),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 0, 70, -0.0030099389619020873),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 0, 72, -0.0010942861750551764),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((122, 0, 74, 0.001001992078975999), None),
             ((122, 20, 64, 0.05535892661135848), None),
             ((122, 20, 66, 0.05444413322973901), None),
@@ -2152,12 +2220,30 @@ mod test {
                 Some(RawBlockState::AIR),
             ),
             ((122, 40, 74, -0.02133677750482264), None),
-            ((122, 60, 64, -0.02580014098083049), Some(WATER_BLOCK)),
-            ((122, 60, 66, -0.027410062228040422), Some(WATER_BLOCK)),
-            ((122, 60, 68, -0.02425659570836858), Some(WATER_BLOCK)),
-            ((122, 60, 70, -0.03261718168256943), Some(WATER_BLOCK)),
-            ((122, 60, 72, -0.04369665936638442), Some(WATER_BLOCK)),
-            ((122, 60, 74, -0.04490159197647781), Some(WATER_BLOCK)),
+            (
+                (122, 60, 64, -0.02580014098083049),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 60, 66, -0.027410062228040422),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 60, 68, -0.02425659570836858),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 60, 70, -0.03261718168256943),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 60, 72, -0.04369665936638442),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (122, 60, 74, -0.04490159197647781),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             (
                 (122, 80, 64, -0.37247525946547166),
                 Some(RawBlockState::AIR),
@@ -2224,11 +2310,26 @@ mod test {
             ((124, -20, 70, 0.1327707947453995), None),
             ((124, -20, 72, 0.13519345838131658), None),
             ((124, -20, 74, 0.13781110986582973), None),
-            ((124, 0, 64, -0.009009809178163559), Some(WATER_BLOCK)),
-            ((124, 0, 66, -0.007660237459532607), Some(WATER_BLOCK)),
-            ((124, 0, 68, -0.0061446463166489424), Some(WATER_BLOCK)),
-            ((124, 0, 70, -0.004442459854201204), Some(WATER_BLOCK)),
-            ((124, 0, 72, -0.0025318494505197223), Some(WATER_BLOCK)),
+            (
+                (124, 0, 64, -0.009009809178163559),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 0, 66, -0.007660237459532607),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 0, 68, -0.0061446463166489424),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 0, 70, -0.004442459854201204),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 0, 72, -0.0025318494505197223),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((124, 0, 74, -4.216225767843497E-4), None),
             ((124, 20, 64, 0.06277697412858188), None),
             ((124, 20, 66, 0.06182400117210263), None),
@@ -2239,15 +2340,42 @@ mod test {
             ((124, 40, 64, -0.004596793013348681), None),
             ((124, 40, 66, -0.007881293688553023), None),
             ((124, 40, 68, -0.010851313478373932), None),
-            ((124, 40, 70, -0.013513605008223933), Some(WATER_BLOCK)),
-            ((124, 40, 72, -0.015880866729427373), Some(WATER_BLOCK)),
-            ((124, 40, 74, -0.017978317799117856), Some(WATER_BLOCK)),
-            ((124, 60, 64, -0.033729060298063454), Some(WATER_BLOCK)),
-            ((124, 60, 66, -0.04062740064249005), Some(WATER_BLOCK)),
-            ((124, 60, 68, -0.03660634922712756), Some(WATER_BLOCK)),
-            ((124, 60, 70, -0.04106936165998065), Some(WATER_BLOCK)),
-            ((124, 60, 72, -0.048715160337165046), Some(WATER_BLOCK)),
-            ((124, 60, 74, -0.053817378732386144), Some(WATER_BLOCK)),
+            (
+                (124, 40, 70, -0.013513605008223933),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 40, 72, -0.015880866729427373),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 40, 74, -0.017978317799117856),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 60, 64, -0.033729060298063454),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 60, 66, -0.04062740064249005),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 60, 68, -0.03660634922712756),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 60, 70, -0.04106936165998065),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 60, 72, -0.048715160337165046),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (124, 60, 74, -0.053817378732386144),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((124, 80, 64, -0.378513110274629), Some(RawBlockState::AIR)),
             (
                 (124, 80, 66, -0.37887533037235366),
@@ -2317,12 +2445,30 @@ mod test {
             ((126, -20, 70, 0.13641807828631622), None),
             ((126, -20, 72, 0.13869641277763253), None),
             ((126, -20, 74, 0.1411390651002113), None),
-            ((126, 0, 64, -0.010355206926252296), Some(WATER_BLOCK)),
-            ((126, 0, 66, -0.009043874021560911), Some(WATER_BLOCK)),
-            ((126, 0, 68, -0.007576245457331987), Some(WATER_BLOCK)),
-            ((126, 0, 70, -0.005915269354878528), Some(WATER_BLOCK)),
-            ((126, 0, 72, -0.0040306175772153365), Some(WATER_BLOCK)),
-            ((126, 0, 74, -0.0019328609472880898), Some(WATER_BLOCK)),
+            (
+                (126, 0, 64, -0.010355206926252296),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 0, 66, -0.009043874021560911),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 0, 68, -0.007576245457331987),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 0, 70, -0.005915269354878528),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 0, 72, -0.0040306175772153365),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 0, 74, -0.0019328609472880898),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             ((126, 20, 64, 0.0700499260773044), None),
             ((126, 20, 66, 0.06908003164862005), None),
             ((126, 20, 68, 0.0681425614589177), None),
@@ -2331,16 +2477,46 @@ mod test {
             ((126, 20, 74, 0.06551116407146489), None),
             ((126, 40, 64, 0.004497597038868666), None),
             ((126, 40, 66, 0.0013502912778844962), None),
-            ((126, 40, 68, -0.0015191728313191184), Some(WATER_BLOCK)),
-            ((126, 40, 70, -0.0041188588354404134), Some(WATER_BLOCK)),
-            ((126, 40, 72, -0.006463772144671846), Some(WATER_BLOCK)),
-            ((126, 40, 74, -0.008581034519921562), Some(WATER_BLOCK)),
-            ((126, 60, 64, -0.03471424652823008), Some(WATER_BLOCK)),
-            ((126, 60, 66, -0.04732045558891548), Some(WATER_BLOCK)),
-            ((126, 60, 68, -0.04568337003176991), Some(WATER_BLOCK)),
-            ((126, 60, 70, -0.0428377824231183), Some(WATER_BLOCK)),
-            ((126, 60, 72, -0.04738820166968918), Some(WATER_BLOCK)),
-            ((126, 60, 74, -0.05663750895047857), Some(WATER_BLOCK)),
+            (
+                (126, 40, 68, -0.0015191728313191184),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 40, 70, -0.0041188588354404134),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 40, 72, -0.006463772144671846),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 40, 74, -0.008581034519921562),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 60, 64, -0.03471424652823008),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 60, 66, -0.04732045558891548),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 60, 68, -0.04568337003176991),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 60, 70, -0.0428377824231183),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 60, 72, -0.04738820166968918),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
+            (
+                (126, 60, 74, -0.05663750895047857),
+                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+            ),
             (
                 (126, 80, 64, -0.37931742687180287),
                 Some(RawBlockState::AIR),
@@ -2386,7 +2562,7 @@ mod test {
             let pos = UnblendedNoisePos::new(x, y, z);
             assert_eq!(
                 aquifer.apply_internal(&mut router, &pos, &env, &mut height_estimator, sample),
-                result
+                result.map(|r| r.to_state())
             );
         }
     }
