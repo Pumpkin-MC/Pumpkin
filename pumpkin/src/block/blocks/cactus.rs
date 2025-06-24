@@ -37,13 +37,14 @@ impl PumpkinBlock for CactusBlock {
             let age = CactusLikeProperties::from_state_id(state_id, block).age;
             if age == Integer0To15::L15 {
                 world
-                    .set_block_state(&pos.up(), state_id, BlockFlags::empty())
+                    .set_block_state(
+                        &pos.up(),
+                        Block::CACTUS.default_state.id,
+                        BlockFlags::empty(),
+                    )
                     .await;
-                let props = CactusLikeProperties {
-                    age: Integer0To15::L0,
-                };
                 world
-                    .set_block_state(pos, props.to_state_id(block), BlockFlags::empty())
+                    .set_block_state(pos, Block::CACTUS.default_state.id, BlockFlags::empty())
                     .await;
             } else {
                 let props = CactusLikeProperties {

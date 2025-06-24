@@ -2,7 +2,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_data::Block;
+use pumpkin_data::{Block, block_properties::get_state_by_state_id};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use std::{
     collections::VecDeque,
@@ -295,6 +295,30 @@ impl Level {
                 block_entity.1.1.tick(&world).await;
             }
         }
+    }
+
+    pub async fn get_random_ticks(&self) -> Vec<ScheduledTick> {
+        let mut ticks = Vec::new();
+        for chunk in self.loaded_chunks.iter() {
+            let chunk = chunk.read().await;
+            for (i, _) in chunk.section.sections.iter().enumerate() {
+                //TODO use game rules to determine how many random ticks to perform
+                for _ in 0..3 {
+                    let random_pos = BlockPos::new(
+                        chunk.position.x * 16 + rand::random::<u8>() as i32 % 16,
+                        i as i32 * 16 + rand::random::<u8>() as i32 % 16 - 32,
+                        chunk.position.z * 16 + rand::random::<u8>() as i32 % 16,
+                    );
+                    ticks.push(ScheduledTick {
+                        block_pos: random_pos,
+                        delay: 0,
+                        priority: TickPriority::Normal, // Random ticks are all the same priority
+                        target_block_id: 0,             // Does not matter for random ticks,
+                    });
+                }
+            }
+        }
+        ticks
     }
 
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
