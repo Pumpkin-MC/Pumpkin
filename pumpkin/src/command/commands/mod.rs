@@ -42,6 +42,8 @@ mod stop;
 mod stopsound;
 mod summon;
 mod teleport;
+mod tellraw;
+mod tick;
 mod time;
 mod title;
 mod transfer;
@@ -51,7 +53,6 @@ mod worldborder;
 
 #[cfg(feature = "dhat-heap")]
 mod profile;
-mod tellraw;
 
 #[must_use]
 pub async fn default_dispatcher() -> CommandDispatcher {
@@ -75,6 +76,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
+    dispatcher.register(tick::init_command_tree(), "minecraft:command.tick");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
@@ -444,6 +446,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.whitelist",
             "Manages server whitelist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.tick",
+            "Triggers the tick event",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
