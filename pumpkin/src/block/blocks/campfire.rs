@@ -29,10 +29,7 @@ impl BlockMetadata for CampfireBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &[
-            Block::CAMPFIRE.name,
-            Block::SOUL_CAMPFIRE.name,
-        ]
+        &[Block::CAMPFIRE.name, Block::SOUL_CAMPFIRE.name]
     }
 }
 
