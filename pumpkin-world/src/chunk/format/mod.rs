@@ -227,6 +227,8 @@ impl ChunkData {
                 }
                 block_entities
             },
+            random_ticks: 0,
+            has_calculated_random_ticks: false,
             light_engine,
         })
     }

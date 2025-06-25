@@ -300,7 +300,10 @@ impl Level {
     pub async fn get_random_ticks(&self) -> Vec<ScheduledTick> {
         let mut ticks = Vec::new();
         for chunk in self.loaded_chunks.iter() {
-            let chunk = chunk.read().await;
+            let mut chunk = chunk.write().await;
+            if !chunk.has_random_ticks() {
+                continue; // Skip chunks that do not have random ticks
+            }
             for (i, _) in chunk.section.sections.iter().enumerate() {
                 //TODO use game rules to determine how many random ticks to perform
                 for _ in 0..3 {
@@ -309,12 +312,26 @@ impl Level {
                         i as i32 * 16 + rand::random::<u8>() as i32 % 16 - 32,
                         chunk.position.z * 16 + rand::random::<u8>() as i32 % 16,
                     );
-                    ticks.push(ScheduledTick {
-                        block_pos: random_pos,
-                        delay: 0,
-                        priority: TickPriority::Normal, // Random ticks are all the same priority
-                        target_block_id: 0,             // Does not matter for random ticks,
-                    });
+                    if RawBlockState(
+                        chunk
+                            .section
+                            .get_block_absolute_y(
+                                random_pos.0.x as usize % 16,
+                                random_pos.0.y,
+                                random_pos.0.z as usize % 16,
+                            )
+                            .unwrap_or(Block::AIR.default_state.id),
+                    )
+                    .to_state()
+                    .has_random_tick
+                    {
+                        ticks.push(ScheduledTick {
+                            block_pos: random_pos,
+                            delay: 0,
+                            priority: TickPriority::Normal, // Random ticks are all the same priority
+                            target_block_id: 0,             // Does not matter for random ticks,
+                        });
+                    }
                 }
             }
         }

@@ -371,6 +371,7 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
     pub outline_shapes: Vec<u16>,
+    pub has_random_ticks: bool,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -436,6 +437,7 @@ impl BlockState {
             .outline_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let has_random_ticks = self.has_random_ticks;
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -449,6 +451,7 @@ impl BlockState {
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
                 outline_shapes: &[#(#outline_shapes),*],
+                has_random_tick: #has_random_ticks,
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }

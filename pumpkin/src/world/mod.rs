@@ -93,8 +93,8 @@ use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;
-use tokio::sync::Mutex;
 use tokio::sync::RwLock;
+use tokio::{sync::Mutex, time::Instant};
 
 pub mod border;
 pub mod bossbar;
@@ -566,21 +566,26 @@ impl World {
     }
 
     pub async fn perform_random_ticks(self: &Arc<Self>) {
+        let first = Instant::now();
         let random_ticks = self.level.get_random_ticks().await;
+        let random_ticks_len = random_ticks.len();
+        let second = Instant::now();
         for scheduled_tick in random_ticks {
             let block = self.get_block(&scheduled_tick.block_pos).await;
-            let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
                 pumpkin_block
                     .random_tick(&block, self, &scheduled_tick.block_pos)
                     .await;
             }
-            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
-                pumpkin_fluid
-                    .random_tick(&fluid, self, &scheduled_tick.block_pos)
-                    .await;
-            }
         }
+        let third = Instant::now();
+        log::info!(
+            "Gathering took {}ms, processing {} random ticks took {}ms, total: {}ms",
+            second.duration_since(first).as_millis(),
+            random_ticks_len,
+            third.duration_since(second).as_millis(),
+            third.duration_since(first).as_millis()
+        );
     }
 
     /// Gets the y position of the first non air block from the top down
