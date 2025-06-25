@@ -70,11 +70,7 @@ impl PumpkinItem for FlintAndSteelItem {
                 )
                 .await;
             world
-                .set_block_state(
-                    &location,
-                    props.to_state_id(block),
-                    BlockFlags::NOTIFY_ALL,
-                )
+                .set_block_state(&location, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                 .await;
         }
     }
