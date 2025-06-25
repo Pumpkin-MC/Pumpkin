@@ -2056,17 +2056,8 @@ impl Player {
                     .await;
             }
             SChangeGameMode::PACKET_ID => {
-                if self.permission_lvl.load() >= PermissionLvl::Two {
-                    let data = SChangeGameMode::read(payload)?;
-                    self.set_gamemode(data.game_mode).await;
-                    let gamemode_string = format!("{:?}", data.game_mode).to_lowercase();
-                    let gamemode_string = format!("gameMode.{gamemode_string}");
-                    self.send_system_message(&TextComponent::translate(
-                        "commands.gamemode.success.self",
-                        [TextComponent::translate(gamemode_string, [])],
-                    ))
+                self.handle_change_game_mode(SChangeGameMode::read(payload)?)
                     .await;
-                }
             }
             SChatCommand::PACKET_ID => {
                 self.handle_chat_command(server, &(SChatCommand::read(payload)?))
