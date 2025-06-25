@@ -73,7 +73,7 @@ impl PumpkinItem for FlintAndSteelItem {
                 .set_block_state(
                     &location,
                     props.to_state_id(block),
-                    BlockFlags::NOTIFY_ALL_AND_REDRAW,
+                    BlockFlags::NOTIFY_ALL,
                 )
                 .await;
         }
