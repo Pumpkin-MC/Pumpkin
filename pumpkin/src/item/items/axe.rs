@@ -46,8 +46,8 @@ impl PumpkinItem for AxeItem {
         // First we try to strip the block. by getting his equivalent and applying it the axis.
 
         // If there is a strip equivalent.
-        if replacement_block.is_some() {
-            let new_block = Block::from_id(replacement_block.unwrap());
+        if let Some(replacement_block) = replacement_block {
+            let new_block = Block::from_id(replacement_block);
             let new_block = &new_block.unwrap();
             let new_state_id = if block.is_tagged_with("#minecraft:logs") == Some(true) {
                 let log_information = world.get_block_state_id(&location).await;
@@ -78,7 +78,7 @@ impl PumpkinItem for AxeItem {
                 new_door_properties.powered = door_props.powered;
                 new_door_properties.to_state_id(new_block)
             } else {
-                new_block.default_state_id
+                new_block.default_state.id
             };
             // TODO Implements trapdoors when It's implemented
             world

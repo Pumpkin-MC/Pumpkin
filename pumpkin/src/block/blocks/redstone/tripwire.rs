@@ -78,7 +78,7 @@ impl PumpkinBlock for TripwireBlock {
             Self::should_connect_to(state_id, dir)
         });
 
-        let mut props = TripwireProperties::from_state_id(block.default_state_id, block);
+        let mut props = TripwireProperties::from_state_id(block.default_state.id, block);
 
         props.north = connect_north.await;
         props.south = connect_south.await;

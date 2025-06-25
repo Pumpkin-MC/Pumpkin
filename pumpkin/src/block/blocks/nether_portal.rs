@@ -58,7 +58,7 @@ impl PumpkinBlock for NetherPortalBlock {
         {
             return state;
         }
-        Block::AIR.default_state_id
+        Block::AIR.default_state.id
     }
 
     async fn on_entity_collision(

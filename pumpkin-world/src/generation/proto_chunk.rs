@@ -3,21 +3,18 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{
-        blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id,
-        get_state_by_state_id,
-    },
+    block_properties::{blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id},
     chunk::Biome,
     tag::Tagable,
 };
-use pumpkin_macros::default_block_state;
 use pumpkin_util::{
     HeightMap,
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
-    random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
+    random::{RandomGenerator, RandomImpl, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
 
 use crate::{
+    BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
     block::RawBlockState,
     chunk::CHUNK_AREA,
@@ -47,7 +44,7 @@ use super::{
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
 
-const AIR_BLOCK: RawBlockState = default_block_state!("air");
+const AIR_BLOCK: Block = Block::AIR;
 
 pub struct StandardChunkFluidLevelSampler {
     top_fluid: FluidLevel,
@@ -110,12 +107,12 @@ pub struct ProtoChunk<'a> {
     // TODO: These can technically go to an even higher level and we can reuse them across chunks
     pub multi_noise_sampler: MultiNoiseSampler<'a>,
     pub surface_height_estimate_sampler: SurfaceHeightEstimateSampler<'a>,
+    pub default_block: BlockState,
     random_config: &'a GlobalRandomConfig,
     settings: &'a GenerationSettings,
-    default_block: RawBlockState,
     biome_mixer_seed: i64,
     // These are local positions
-    flat_block_map: Box<[RawBlockState]>,
+    flat_block_map: Box<[BlockStateId]>,
     flat_biome_map: Box<[&'static Biome]>,
     /// HEIGHTMAPS
     ///
@@ -141,9 +138,7 @@ impl<'a> ProtoChunk<'a> {
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(
                 settings.sea_level,
-                RawBlockState {
-                    state_id: settings.default_fluid.get_state().unwrap().id,
-                },
+                settings.default_fluid.get_state().unwrap().block(),
             ),
             FluidLevel::new(-54, LAVA_BLOCK), // this is always the same for every dimension
         ));
@@ -190,7 +185,7 @@ impl<'a> ProtoChunk<'a> {
         let surface_height_estimate_sampler =
             SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
-        let default_block = RawBlockState::new(&settings.default_block.name).unwrap();
+        let default_block = settings.default_block.get_state().unwrap();
         let default_heightmap = vec![i64::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
             chunk_pos,
@@ -200,8 +195,7 @@ impl<'a> ProtoChunk<'a> {
             noise_sampler: sampler,
             multi_noise_sampler,
             surface_height_estimate_sampler,
-            flat_block_map: vec![RawBlockState::AIR; CHUNK_AREA * height as usize]
-                .into_boxed_slice(),
+            flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
             flat_biome_map: vec![
                 &Biome::PLAINS;
                 biome_coords::from_block(CHUNK_DIM as usize)
@@ -364,7 +358,7 @@ impl<'a> ProtoChunk<'a> {
             return RawBlockState::AIR;
         }
         let index = self.local_pos_to_block_index(&local_pos);
-        self.flat_block_map[index]
+        RawBlockState(self.flat_block_map[index])
     }
 
     pub fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
@@ -384,15 +378,15 @@ impl<'a> ProtoChunk<'a> {
             self.maybe_update_motion_blocking_height_map(pos);
             if let Some(block) = get_block_by_state_id(block_state.id) {
                 if !block.is_tagged_with("minecraft:leaves").unwrap() {
-                    self.maybe_update_motion_blocking_no_leaves_height_map(pos);
+                    {
+                        self.maybe_update_motion_blocking_no_leaves_height_map(pos);
+                    }
                 }
             }
         }
 
         let index = self.local_pos_to_block_index(&local_pos);
-        self.flat_block_map[index] = RawBlockState {
-            state_id: block_state.id,
-        };
+        self.flat_block_map[index] = block_state.id;
     }
 
     #[inline]
@@ -537,10 +531,10 @@ impl<'a> ProtoChunk<'a> {
                                         Vector3::new(cell_offset_x, cell_offset_y, cell_offset_z),
                                         &mut self.surface_height_estimate_sampler,
                                     )
-                                    .unwrap_or(self.default_block);
+                                    .unwrap_or(self.default_block.clone());
                                 self.set_block_state(
                                     &Vector3::new(block_x, block_y, block_z),
-                                    &block_state.to_state(),
+                                    &block_state,
                                 );
                             }
                         }
@@ -558,15 +552,13 @@ impl<'a> ProtoChunk<'a> {
 
         let population_seed =
             Xoroshiro::get_population_seed(self.random_config.seed, start_x, start_z);
-        let _random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(population_seed));
-        let _biome = self.get_biome(&Vector3::new(
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(population_seed));
+        let biome = self.get_biome(&Vector3::new(
             start_x,
             self.bottom_section_coord() as i32 + self.height() as i32 - 1,
             start_z,
         ));
-        // while random.next_f32() < biome.creature_spawn_probability {
-
-        // }
+        while random.next_f32() < biome.creature_spawn_probability {}
         todo!()
     }
 
@@ -616,13 +608,7 @@ impl<'a> ProtoChunk<'a> {
 
                 let this_biome = self.get_biome_for_terrain_gen(&Vector3::new(x, biome_y, z));
                 if this_biome == &Biome::ERODED_BADLANDS {
-                    terrain_builder.place_badlands_pillar(
-                        self,
-                        x,
-                        z,
-                        top_block,
-                        self.default_block,
-                    );
+                    terrain_builder.place_badlands_pillar(self, x, z, top_block);
                     // Get the top block again if we placed a pillar!
 
                     top_block =
@@ -663,9 +649,7 @@ impl<'a> ProtoChunk<'a> {
                                 .to_block();
 
                             // TODO: Is there a better way to check that its not a fluid?
-                            if !(state != AIR_BLOCK.to_block()
-                                && state != WATER_BLOCK.to_block()
-                                && state != LAVA_BLOCK.to_block())
+                            if !(state != AIR_BLOCK && state != WATER_BLOCK && state != LAVA_BLOCK)
                             {
                                 min = search_y + 1;
                                 break;
@@ -679,7 +663,7 @@ impl<'a> ProtoChunk<'a> {
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
                     // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
 
-                    if state.id == self.default_block.state_id {
+                    if state.id == self.default_block.id {
                         context.biome = self.get_biome_for_terrain_gen(&context.block_pos);
                         let new_state = self.settings.surface_rule.try_apply(self, &mut context);
 
@@ -789,11 +773,8 @@ impl BlockAccessor for ProtoChunk<'_> {
         &self,
         position: &BlockPos,
     ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
-        let id = self.get_block_state(&position.0).state_id;
-        get_block_and_state_by_state_id(id).unwrap_or((
-            Block::AIR,
-            get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-        ))
+        let id = self.get_block_state(&position.0);
+        get_block_and_state_by_state_id(id.0).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
 }
 
@@ -881,8 +862,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!("{} vs {} ({})", expected, actual.state_id, index);
+                if expected != actual {
+                    panic!("{} vs {} ({})", expected, actual, index);
                 }
             });
     }
@@ -938,8 +919,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!("{} vs {} ({})", expected, actual.state_id, index);
+                if expected != actual {
+                    panic!("{} vs {} ({})", expected, actual, index);
                 }
             });
     }
@@ -995,8 +976,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!("{} vs {} ({})", expected, actual.state_id, index);
+                if expected != actual {
+                    panic!("{} vs {} ({})", expected, actual, index);
                 }
             });
     }
@@ -1052,8 +1033,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!("{} vs {} ({})", expected, actual.state_id, index);
+                if expected != actual {
+                    panic!("{} vs {} ({})", expected, actual, index);
                 }
             });
     }
@@ -1109,8 +1090,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!("{} vs {} ({})", expected, actual.state_id, index);
+                if expected != actual {
+                    panic!("{} vs {} ({})", expected, actual, index);
                 }
             });
     }
@@ -1132,11 +1113,7 @@ mod test {
 
         assert_eq!(
             expected_data,
-            chunk
-                .flat_block_map
-                .into_iter()
-                .map(|state| state.state_id)
-                .collect::<Vec<u16>>()
+            chunk.flat_block_map.into_iter().collect::<Vec<u16>>()
         );
     }
 
@@ -1157,11 +1134,7 @@ mod test {
 
         assert_eq!(
             expected_data,
-            chunk
-                .flat_block_map
-                .into_iter()
-                .map(|state| state.state_id)
-                .collect::<Vec<u16>>()
+            chunk.flat_block_map.into_iter().collect::<Vec<u16>>()
         );
     }
 
@@ -1185,11 +1158,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1214,11 +1184,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1243,11 +1210,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1272,11 +1236,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1304,11 +1265,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1336,11 +1294,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1368,11 +1323,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1400,11 +1352,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1432,11 +1381,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }
@@ -1465,11 +1411,8 @@ mod test {
             .zip(chunk.flat_block_map)
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual.state_id {
-                    panic!(
-                        "expected {}, was {} (at {})",
-                        expected, actual.state_id, index
-                    );
+                if expected != actual {
+                    panic!("expected {}, was {} (at {})", expected, actual, index);
                 }
             });
     }

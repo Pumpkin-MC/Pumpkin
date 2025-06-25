@@ -1,3 +1,4 @@
+use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
@@ -12,6 +13,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub struct HoeItem;
 
@@ -74,7 +76,7 @@ impl PumpkinItem for HoeItem {
             world
                 .set_block_state(
                     &location,
-                    future_block.default_state_id,
+                    future_block.default_state.id,
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
@@ -89,7 +91,13 @@ impl PumpkinItem for HoeItem {
                     BlockDirection::West => location.up().to_f64().add_raw(-1.0, -0.4, 0.0),
                     BlockDirection::East => location.up().to_f64().add_raw(1.0, -0.4, 0.0),
                 };
-                let entity = world.create_entity(location, EntityType::ITEM);
+                let entity = Entity::new(
+                    Uuid::new_v4(),
+                    world.clone(),
+                    location,
+                    EntityType::SNOWBALL,
+                    false,
+                );
                 // TODO: Merge stacks together
                 let item_entity = Arc::new(
                     ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,

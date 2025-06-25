@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, block_properties::get_state_by_state_id};
+use pumpkin_data::Block;
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -98,19 +98,13 @@ impl EndSpikeFeature {
                 <= (radius * radius + 1)
                 && pos.0.y < spike.height
             {
-                chunk.set_block_state(
-                    &pos.0,
-                    &get_state_by_state_id(Block::OBSIDIAN.default_state_id).unwrap(),
-                );
+                chunk.set_block_state(&pos.0, &Block::OBSIDIAN.default_state);
                 continue;
             }
             if pos.0.y <= 65 {
                 continue;
             }
-            chunk.set_block_state(
-                &pos.0,
-                &get_state_by_state_id(Block::AIR.default_state_id).unwrap(),
-            );
+            chunk.set_block_state(&pos.0, &Block::AIR.default_state);
         }
         // TODO
     }

@@ -14,6 +14,7 @@ use blocks::fences::FenceBlock;
 use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
 use blocks::glass_panes::GlassPaneBlock;
+use blocks::grindstone::GrindstoneBlock;
 use blocks::iron_bars::IronBarsBlock;
 use blocks::logs::LogBlock;
 use blocks::nether_portal::NetherPortalBlock;
@@ -106,6 +107,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceBlock);
     manager.register(FurnaceBlock);
     manager.register(GlassPaneBlock);
+    manager.register(GrindstoneBlock);
     manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);

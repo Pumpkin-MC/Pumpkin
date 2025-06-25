@@ -65,7 +65,7 @@ impl EntityBase for TNTEntity {
                 Metadata::new(
                     9,
                     MetaDataType::BlockState,
-                    VarInt(i32::from(Block::TNT.default_state_id)),
+                    VarInt(i32::from(Block::TNT.default_state.id)),
                 ),
             ])
             .await;

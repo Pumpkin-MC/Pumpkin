@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{
-    BlockProperties, WaterLikeProperties, get_block_by_item, get_block_collision_shapes,
+    BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
 };
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
@@ -40,12 +40,14 @@ use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
+use uuid::Uuid;
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
+use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
-use crate::entity::{EntityBase, mob};
+use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::plugin::player::player_chat::PlayerChatEvent;
@@ -1126,7 +1128,6 @@ impl Player {
                         [],
                     ))
                     .await;
-                    return;
                 }
             }
             ActionType::Interact | ActionType::InteractAt => {
@@ -1630,7 +1631,7 @@ impl Player {
 
         let world = self.world().await;
         // Create a new mob and UUID based on the spawn egg id
-        let mob = mob::from_type(EntityType::from_raw(entity_type.id).unwrap(), pos, &world);
+        let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
 
         // Set the rotation
         mob.get_entity().set_rotation(yaw, 0.0);
@@ -1789,7 +1790,9 @@ impl Player {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_block_collision_shapes(new_state).unwrap_or_default();
+        let shapes = get_state_by_state_id(new_state)
+            .unwrap()
+            .get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {

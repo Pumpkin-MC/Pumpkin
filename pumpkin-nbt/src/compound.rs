@@ -112,7 +112,7 @@ impl NbtCompound {
         self.put(name, NbtTag::String(value));
     }
 
-    pub fn put_list(&mut self, name: &str, value: Box<[NbtTag]>) {
+    pub fn put_list(&mut self, name: &str, value: Vec<NbtTag>) {
         self.put(name, NbtTag::List(value));
     }
 
@@ -153,12 +153,10 @@ impl NbtCompound {
 
     #[inline]
     pub fn get(&self, name: &str) -> Option<&NbtTag> {
-        for (key, value) in &self.child_tags {
-            if key.as_str() == name {
-                return Some(value);
-            }
-        }
-        None
+        self.child_tags
+            .iter()
+            .find(|k| k.0.as_str() == name)
+            .map(|r| &r.1)
     }
 
     pub fn get_short(&self, name: &str) -> Option<i16> {

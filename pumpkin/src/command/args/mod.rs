@@ -58,7 +58,7 @@ pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
         args: &mut RawArgs<'a>,
     ) -> Option<Arg>;
 
-    /// Used for tab completion (but only if argument suggestion type is "minecraft:ask_server"!).
+    /// Used for tab completion (but only if argument suggestion type is "`minecraft:ask_server`"!).
     ///
     /// NOTE: This is called after this consumer's [`ArgumentConsumer::consume`] method returned None, so if args is used here, make sure [`ArgumentConsumer::consume`] never returns None after mutating args.
     async fn suggest<'a>(

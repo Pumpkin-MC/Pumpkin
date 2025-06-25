@@ -370,7 +370,9 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         } else {
             return Err(Error::UnsupportedType("newtype variant".to_string()));
         }
-        value.serialize(self)
+        value.serialize(self)?;
+
+        Ok(())
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {

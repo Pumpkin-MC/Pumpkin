@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{
-    Block, BlockDirection, BlockState,
-    block_properties::{get_block_by_state_id, get_state_by_state_id},
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::get_block_by_state_id};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -32,7 +29,7 @@ impl PistonBlockEntity {
             world.remove_block_entity(&pos).await;
             if world.get_block(&pos).await == Block::MOVING_PISTON {
                 let state = if self.source {
-                    Block::AIR.default_state_id
+                    Block::AIR.default_state.id
                 } else {
                     self.pushed_block_state.id
                 };
@@ -109,7 +106,7 @@ impl BlockEntity for PistonBlockEntity {
         Self: Sized,
     {
         // TODO
-        let pushed_block_state = get_state_by_state_id(Block::AIR.default_state_id).unwrap();
+        let pushed_block_state = Block::AIR.default_state;
         let facing = nbt.get_byte(FACING).unwrap_or(0);
         let last_progress = nbt.get_float(LAST_PROGRESS).unwrap_or(0.0);
         let extending = nbt.get_bool(EXTENDING).unwrap_or(false);

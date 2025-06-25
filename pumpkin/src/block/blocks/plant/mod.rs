@@ -7,5 +7,6 @@ pub mod lily_pad;
 pub mod mushroom_plant;
 pub mod roots;
 pub mod sapling;
+pub mod segmented;
 pub mod short_plant;
 pub mod tall_plant;

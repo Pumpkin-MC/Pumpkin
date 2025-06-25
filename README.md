@@ -83,10 +83,10 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
   - [x] Entity AI (W.I.P)
-  - [ ] Entity Saving
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
+  - [X] Entity Saving
 - Server
   - [x] Plugins (W.I.P)
   - [x] Query

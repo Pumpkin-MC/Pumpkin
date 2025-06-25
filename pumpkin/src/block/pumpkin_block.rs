@@ -93,7 +93,7 @@ pub trait PumpkinBlock: Send + Sync {
         _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        block.default_state_id
+        block.default_state.id
     }
 
     async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}

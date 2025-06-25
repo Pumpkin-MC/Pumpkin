@@ -162,7 +162,7 @@ impl PumpkinBlock for NoteBlock {
         _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        Self::get_state_with_instrument(world, pos, Block::NOTE_BLOCK.default_state_id, block).await
+        Self::get_state_with_instrument(world, pos, Block::NOTE_BLOCK.default_state.id, block).await
     }
 
     async fn get_state_for_neighbor_update(

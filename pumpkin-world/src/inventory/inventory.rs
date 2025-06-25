@@ -53,7 +53,7 @@ pub trait Inventory: Send + Sync + Debug + Clearable {
             return;
         }
 
-        nbt.put("Items", NbtTag::List(slots.into_boxed_slice()));
+        nbt.put("Items", NbtTag::List(slots));
     }
 
     fn read_data(
