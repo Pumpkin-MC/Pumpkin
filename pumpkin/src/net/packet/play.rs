@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use pumpkin_util::PermissionLvl;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -183,7 +184,7 @@ impl Player {
         }
     }
 
-    pub async fn handle_change_game_mode(&self, change_game_mode: SChangeGameMode) {
+    pub async fn handle_change_game_mode(self: &Arc<Self>, change_game_mode: SChangeGameMode) {
         if self.permission_lvl.load() >= PermissionLvl::Two {
             self.set_gamemode(change_game_mode.game_mode).await;
             let gamemode_string = format!("{:?}", change_game_mode.game_mode).to_lowercase();
