@@ -14,6 +14,7 @@ bitflags! {
         const NOTIFY_NEIGHBORS                      = 0b000_0000_0001;
         const NOTIFY_LISTENERS                      = 0b000_0000_0010;
         const NOTIFY_ALL                            = 0b000_0000_0011;
+        const NOTIFY_ALL_AND_REDRAW                 = 0b000_0000_1011;
         const FORCE_STATE                           = 0b000_0000_0100;
         const SKIP_DROPS                            = 0b000_0000_1000;
         const MOVED                                 = 0b000_0001_0000;
