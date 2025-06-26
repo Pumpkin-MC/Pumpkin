@@ -182,14 +182,12 @@ impl ToTokens for BlockPropertyStruct {
                 let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
                 match &entry.property_type {
                     PropertyType::Bool => quote! {
-                        index += !self.#field_name as u16 * multiplier;
-                        multiplier *= 2;
+                        (!self.#field_name as u16, 2)
                     },
                     PropertyType::Enum { name } => {
                         let enum_ident = Ident::new(name, Span::call_site());
                         quote! {
-                            index += self.#field_name.to_index() * multiplier;
-                            multiplier *= #enum_ident::variant_count();
+                            (self.#field_name.to_index(), #enum_ident::variant_count())
                         }
                     }
                 }
@@ -230,10 +228,10 @@ impl ToTokens for BlockPropertyStruct {
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_string()));
+                    (#key.to_string(), self.#field_name.to_string()),
                 },
                 PropertyType::Enum { name: _ } => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_value().to_string()));
+                    (#key.to_string(), self.#field_name.to_value().to_string()),
                 },
             }
         });
@@ -265,11 +263,12 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
-                #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
-                    let mut index = 0;
-                    let mut multiplier = 1;
-                    #(#to_index_body)*
+                    let (index, _) = [#(#to_index_body),*]
+                    .iter()
+                    .fold((0, 1), |(current_index, multiplier), &(value, count)| {
+                      (current_index + value * multiplier, multiplier * count)
+                    });
                     index
                 }
 
@@ -311,13 +310,10 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
-                fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-                    #(#to_props_values)*
-                    props
+                fn to_props(&self) -> HashMap<String, String> {
+                   HashMap::from([#(#to_props_values)*])
                 }
-                fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
+                fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
@@ -847,6 +843,8 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
+        use std::collections::HashMap;
+
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
@@ -871,10 +869,10 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> Vec<(String, String)>;
+            fn to_props(&self) -> HashMap<String, String>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -986,7 +984,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: Vec<(&str, &str)>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: HashMap<&str, &str>) -> Option<Box<dyn BlockProperties>> {
                 match self.id {
                     #block_properties_from_props_and_name
                     _ => None
