@@ -102,7 +102,6 @@ pub struct DataPacks {
 }
 
 fn get_or_create_seed() -> Seed {
-    // TODO: if there is a seed in the config (!= "") use it. Otherwise make a random one
     Seed::from(BASIC_CONFIG.seed.as_str())
 }
 
