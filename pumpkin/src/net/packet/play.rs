@@ -29,16 +29,17 @@ use pumpkin_protocol::client::play::{
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChatCommand, SChatMessage, SChunkBatch,
-    SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-    Status,
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
+    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
+    SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
+use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::block::entities::BlockEntity;
@@ -1567,6 +1568,46 @@ impl Player {
 
     pub async fn handle_close_container(&self, _server: &Server, _packet: SCloseContainer) {
         self.on_handled_screen_closed().await;
+    }
+
+    pub async fn handle_change_game_mode(self: &Arc<Self>, change_game_mode: SChangeGameMode) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
+        let game_mode_id = change_game_mode.game_mode.0;
+        let Ok(requested_gamemode) = GameMode::try_from(game_mode_id as i8) else {
+            log::debug!(
+                "Player {} sent invalid game mode ID: {}",
+                self.gameprofile.name,
+                game_mode_id
+            );
+            return;
+        };
+
+        if self.permission_lvl.load() < PermissionLvl::Two {
+            log::warn!(
+                "Player {} tried to change game mode to {:?} without required permissions",
+                self.gameprofile.name,
+                requested_gamemode
+            );
+            return;
+        }
+
+        if self.gamemode.load() == requested_gamemode {
+            return;
+        }
+
+        self.set_gamemode(requested_gamemode).await;
+
+        // Send success message like the gamemode command does
+        let gamemode_string = format!("{requested_gamemode:?}").to_lowercase();
+        let gamemode_string = format!("gameMode.{gamemode_string}");
+        self.send_system_message(&TextComponent::translate(
+            "commands.gamemode.success.self",
+            [TextComponent::translate(gamemode_string, [])],
+        ))
+        .await;
     }
 
     pub async fn handle_command_suggestion(
