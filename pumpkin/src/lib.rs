@@ -332,13 +332,14 @@ impl PumpkinServer {
 
             tasks.spawn(async move {
                 let timeout_duration = advanced_config().networking.client.connection_timeout;
-                
+
                 if timeout_duration > 0 {
                     let process_result = tokio::time::timeout(
                         tokio::time::Duration::from_secs(timeout_duration as u64),
-                        client.process_packets(&server)
-                    ).await;
-                    
+                        client.process_packets(&server),
+                    )
+                    .await;
+
                     if process_result.is_err() {
                         log::warn!("Client {} timed out during packet processing", id);
                         client.close();
