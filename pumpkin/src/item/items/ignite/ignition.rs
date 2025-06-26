@@ -67,18 +67,18 @@ async fn get_ignite_result(block: &Block, world: &Arc<World>, location: &BlockPo
         None => return None,
     };
 
-    let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
-    for (key, _value) in &original_props {
-        if key == "extinguished" {
-            // campfire
-            props_vec.push((key.as_str(), "true"));
-        } else if key == "lit" {
-            // candles
-            props_vec.push((key.as_str(), "true"));
-        }
-    }
+    let props = original_props
+        .iter()
+        .filter_map(|(key, _value)| {
+            match key.as_str() {
+                "extinguished" => Some(("extinguished", "true")),
+                "lit" => Some(("lit", "true")),
+                _ => None, // Discard other keys
+            }
+        })
+        .collect();
 
-    let new_state_id = block.from_properties(props_vec).unwrap().to_state_id(block);
+    let new_state_id = block.from_properties(props).unwrap().to_state_id(block);
 
     (new_state_id != state_id).then_some(new_state_id)
 }

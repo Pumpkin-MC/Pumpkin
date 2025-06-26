@@ -62,7 +62,7 @@ impl CoralFeature {
                 .to_props();
             let facing = dir.to_facing();
             // Set the right Axis
-            let props_vec: Vec<(&str, &str)> = original_props
+            let props = original_props
                 .iter()
                 .map(|(key, value)| {
                     if key == "facing" {
@@ -76,7 +76,7 @@ impl CoralFeature {
                 &dir_pos.0,
                 &get_state_by_state_id(
                     wall_coral
-                        .from_properties(props_vec)
+                        .from_properties(props)
                         .unwrap()
                         .to_state_id(&wall_coral),
                 )

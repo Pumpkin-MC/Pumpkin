@@ -1185,22 +1185,6 @@ impl World {
 
                 let position = chunk.read().await.position;
 
-                #[cfg(debug_assertions)]
-                if position == (0, 0).into() {
-                    use pumpkin_protocol::client::play::CChunkData;
-                    let binding = chunk.read().await;
-                    let packet = CChunkData(&binding);
-                    let mut test = Vec::new();
-                    packet.write_packet_data(&mut test).unwrap();
-                    let len = test.len();
-                    log::debug!(
-                        "Chunk packet size: {}B {}KB {}MB",
-                        len,
-                        len / 1024,
-                        len / (1024 * 1024)
-                    );
-                }
-
                 let (world, chunk) = if level.is_chunk_watched(&position) {
                     (world.clone(), chunk)
                 } else {
@@ -1523,7 +1507,7 @@ impl World {
                 for player in players.values() {
                     player.send_system_message(&event.join_message).await;
                 }
-                log::info!("{}", event.join_message.clone().to_pretty_console());
+                log::info!("{}", event.join_message.to_pretty_console());
             }
         });
         Ok(())
@@ -1575,7 +1559,7 @@ impl World {
                 for player in players.values() {
                     player.send_system_message(&event.leave_message).await;
                 }
-                log::info!("{}", event.leave_message.clone().to_pretty_console());
+                log::info!("{}", event.leave_message.to_pretty_console());
             }
         }
     }
