@@ -331,8 +331,23 @@ impl PumpkinServer {
             let server = self.server.clone();
 
             tasks.spawn(async move {
-                // TODO: We need to add a time-out here for un-cooperative clients
-                client.process_packets(&server).await;
+                let timeout_duration = advanced_config().networking.client.connection_timeout;
+                
+                if timeout_duration > 0 {
+                    let process_result = tokio::time::timeout(
+                        tokio::time::Duration::from_secs(timeout_duration as u64),
+                        client.process_packets(&server)
+                    ).await;
+                    
+                    if process_result.is_err() {
+                        log::warn!("Client {} timed out during packet processing", id);
+                        client.close();
+                        client.await_tasks().await;
+                        return;
+                    }
+                } else {
+                    client.process_packets(&server).await;
+                }
 
                 if client
                     .make_player
