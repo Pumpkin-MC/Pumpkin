@@ -93,8 +93,8 @@ use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;
+use tokio::sync::Mutex;
 use tokio::sync::RwLock;
-use tokio::{sync::Mutex, time::Instant};
 
 pub mod border;
 pub mod bossbar;
@@ -620,9 +620,7 @@ impl World {
     }
 
     pub async fn perform_random_ticks(self: &Arc<Self>) {
-        let random_ticks = self.level.get_random_ticks().await;
-        let random_ticks_len = random_ticks.len();
-        for scheduled_tick in random_ticks {
+        for scheduled_tick in self.level.get_random_ticks().await {
             let block = self.get_block(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
                 pumpkin_block
