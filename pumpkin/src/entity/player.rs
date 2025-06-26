@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
+use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -47,8 +48,8 @@ use pumpkin_protocol::client::play::{
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::packet::Packet;
 use pumpkin_protocol::server::play::{
-    SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay,
-    SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
+    SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
     SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
     SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
@@ -69,7 +70,7 @@ use pumpkin_world::entity::entity_data_flags::{
     DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
 };
 use pumpkin_world::item::ItemStack;
-use pumpkin_world::level::SyncChunk;
+use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
@@ -104,6 +105,7 @@ enum BatchState {
 pub struct ChunkManager {
     chunks_per_tick: usize,
     chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
+    entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
 }
 
@@ -115,6 +117,7 @@ impl ChunkManager {
         Self {
             chunks_per_tick,
             chunk_queue: VecDeque::new(),
+            entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
         }
     }
@@ -126,6 +129,10 @@ impl ChunkManager {
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
         self.chunk_queue.push_back((position, chunk));
+    }
+
+    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
+        self.entity_chunk_queue.push_back((position, chunk));
     }
 
     #[must_use]
@@ -141,12 +148,30 @@ impl ChunkManager {
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
-        let mut chunks = Vec::with_capacity(chunk_size);
-        chunks.extend(
-            self.chunk_queue
-                .drain(0..chunk_size)
-                .map(|(_, chunk)| chunk),
-        );
+        let chunks: Vec<Arc<RwLock<ChunkData>>> = self
+            .chunk_queue
+            .drain(0..chunk_size)
+            .map(|(_, chunk)| chunk)
+            .collect();
+
+        match &mut self.batches_sent_since_ack {
+            BatchState::Count(count) => {
+                count.add_assign(1);
+            }
+            state @ BatchState::Initial => *state = BatchState::Waiting,
+            BatchState::Waiting => unreachable!(),
+        }
+
+        chunks.into_boxed_slice()
+    }
+
+    pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
+        let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
+        let chunks: Vec<Arc<RwLock<ChunkEntityData>>> = self
+            .entity_chunk_queue
+            .drain(0..chunk_size)
+            .map(|(_, chunk)| chunk)
+            .collect();
 
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
@@ -404,6 +429,7 @@ impl Player {
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
+        level.clean_entity_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -970,17 +996,6 @@ impl Player {
             .await;
     }
 
-    /// Sends a world's mobs to only this player.
-    // TODO: This should be optimized for larger servers based on the player's current chunk.
-    pub async fn send_mobs(&self, world: &World) {
-        let entities = world.entities.read().await.clone();
-        for entity in entities.values() {
-            self.client
-                .enqueue_packet(&entity.get_entity().create_spawn_packet())
-                .await;
-        }
-    }
-
     async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
@@ -1430,10 +1445,14 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
-        let entity = self.world().await.create_entity(
-            self.living_entity.entity.pos.load()
-                + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0),
+        let item_pos = self.living_entity.entity.pos.load()
+            + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
+        let entity = Entity::new(
+            Uuid::new_v4(),
+            self.world().await,
+            item_pos,
             EntityType::ITEM,
+            false,
         );
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
@@ -1945,7 +1964,7 @@ impl NBTStorage for PlayerInventory {
         }
 
         // Save the inventory list
-        nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
+        nbt.put("Inventory", NbtTag::List(vec));
     }
 
     async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
@@ -2053,6 +2072,10 @@ impl Player {
         match packet.id {
             SConfirmTeleport::PACKET_ID => {
                 self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
+                    .await;
+            }
+            SChangeGameMode::PACKET_ID => {
+                self.handle_change_game_mode(SChangeGameMode::read(payload)?)
                     .await;
             }
             SChatCommand::PACKET_ID => {

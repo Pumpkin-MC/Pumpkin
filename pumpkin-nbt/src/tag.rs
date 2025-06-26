@@ -18,10 +18,10 @@ pub enum NbtTag {
     Double(f64) = DOUBLE_ID,
     ByteArray(Box<[u8]>) = BYTE_ARRAY_ID,
     String(String) = STRING_ID,
-    List(Box<[NbtTag]>) = LIST_ID,
+    List(Vec<NbtTag>) = LIST_ID,
     Compound(NbtCompound) = COMPOUND_ID,
-    IntArray(Box<[i32]>) = INT_ARRAY_ID,
-    LongArray(Box<[i64]>) = LONG_ARRAY_ID,
+    IntArray(Vec<i32>) = INT_ARRAY_ID,
+    LongArray(Vec<i64>) = LONG_ARRAY_ID,
 }
 
 impl NbtTag {
@@ -232,7 +232,7 @@ impl NbtTag {
                     assert_eq!(tag.get_type_id(), tag_type_id);
                     list.push(tag);
                 }
-                Ok(NbtTag::List(list.into_boxed_slice()))
+                Ok(NbtTag::List(list))
             }
             COMPOUND_ID => Ok(NbtTag::Compound(NbtCompound::deserialize_content(reader)?)),
             INT_ARRAY_ID => {
@@ -247,7 +247,7 @@ impl NbtTag {
                     let int = reader.get_i32_be()?;
                     int_array.push(int);
                 }
-                Ok(NbtTag::IntArray(int_array.into_boxed_slice()))
+                Ok(NbtTag::IntArray(int_array))
             }
             LONG_ARRAY_ID => {
                 let len = reader.get_i32_be()?;
@@ -261,7 +261,7 @@ impl NbtTag {
                     let long = reader.get_i64_be()?;
                     long_array.push(long);
                 }
-                Ok(NbtTag::LongArray(long_array.into_boxed_slice()))
+                Ok(NbtTag::LongArray(long_array))
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }
@@ -500,7 +500,7 @@ impl<'de> Deserialize<'de> for NbtTag {
                 while let Some(value) = seq.next_element()? {
                     vec.push(value);
                 }
-                Ok(NbtTag::List(vec.into_boxed_slice()))
+                Ok(NbtTag::List(vec))
             }
 
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>

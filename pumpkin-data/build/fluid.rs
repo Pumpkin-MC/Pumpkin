@@ -173,7 +173,7 @@ impl ToTokens for FluidPropertyStruct {
             let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
 
             quote! {
-                props.push((#key.to_string(), self.#key2.to_value().to_string()));
+                (#key.to_string(), self.#key2.to_value().to_string()),
             }
         });
 
@@ -255,13 +255,8 @@ impl ToTokens for FluidPropertyStruct {
                     Self::from_state_id(fluid.default_state_index, fluid)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
                 fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-
-                    #(#to_props_values)*
-
-                    props
+                   vec![#(#to_props_values)*]
                 }
 
                 fn from_props(props: Vec<(String, String)>, fluid: &Fluid) -> Self {

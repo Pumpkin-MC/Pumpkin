@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
-use crate::chunk::{ChunkData, ChunkReadingError, ChunkWritingError};
+use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
@@ -164,7 +164,7 @@ impl<S: SingleChunkDataSerializer> Default for LinearFile<S> {
 
 #[async_trait]
 impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
-    type Data = ChunkData;
+    type Data = S;
     type WriteBackend = PathBuf;
 
     fn should_write(&self, is_watched: bool) -> bool {
@@ -320,7 +320,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         })
     }
 
-    async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
+    async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
         let index = LinearFile::<S>::get_chunk_index(chunk.position());
         let chunk_raw: Bytes = chunk
             .to_bytes()
@@ -343,7 +343,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
     async fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
@@ -352,9 +352,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
             let linear_chunk_data = &self.chunks_data[index];
 
             let result = if let Some(data) = linear_chunk_data {
-                match ChunkData::internal_from_bytes(data, chunk)
-                    .map_err(ChunkReadingError::ParsingError)
-                {
+                match S::from_bytes(data.clone(), chunk) {
                     Ok(chunk) => LoadedData::Loaded(chunk),
                     Err(err) => LoadedData::Error((chunk, err)),
                 }
@@ -420,6 +418,7 @@ mod tests {
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
+                    entities_folder: PathBuf::from(""),
                 },
                 &[Vector2::new(0, 0)],
                 send,
@@ -443,6 +442,7 @@ mod tests {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: PathBuf::from("entities"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<LinearFile<ChunkData>>::default();

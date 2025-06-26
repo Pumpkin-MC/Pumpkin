@@ -27,11 +27,11 @@ impl BlockStateCodec {
         let mut state_id = block.default_state.id;
 
         if let Some(properties) = &self.properties {
-            let properties_vec: Vec<(&str, &str)> = properties
+            let props = properties
                 .iter()
-                .map(|(key, value)| (key.as_str(), value.as_str()))
+                .map(|(k, v)| (k.as_str(), v.as_str()))
                 .collect();
-            let block_properties = block.from_properties(properties_vec).unwrap();
+            let block_properties = block.from_properties(props).unwrap();
             state_id = block_properties.to_state_id(&block);
         }
 
