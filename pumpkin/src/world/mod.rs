@@ -1803,12 +1803,21 @@ impl World {
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
-            let particles_packet = CWorldEvent::new(
-                WorldEvent::BlockBroken as i32,
-                *position,
-                broken_state_id.into(),
-                false,
-            );
+            if Block::from_state_id(broken_state_id) != Some(Block::FIRE) {
+                let particles_packet = CWorldEvent::new(
+                    WorldEvent::BlockBroken as i32,
+                    *position,
+                    broken_state_id.into(),
+                    false,
+                );
+                match cause {
+                    Some(player) => {
+                        self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
+                            .await;
+                    }
+                    None => self.broadcast_packet_all(&particles_packet).await,
+                }
+            }
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
                 let params = LootContextParameters {
@@ -1816,14 +1825,6 @@ impl World {
                     ..Default::default()
                 };
                 block::drop_loot(self, &broken_block, position, true, params).await;
-            }
-
-            match cause {
-                Some(player) => {
-                    self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
-                        .await;
-                }
-                None => self.broadcast_packet_all(&particles_packet).await,
             }
         }
     }
