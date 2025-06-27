@@ -479,7 +479,7 @@ pub trait ScreenHandler: Send + Sync {
 
                 let stack_lock = slot.get_stack().await;
                 let item_stack = stack_lock.lock().await;
-                if item_stack.are_items_and_components_equal(&cursor_stack) {
+                if !item_stack.are_items_and_components_equal(&cursor_stack) {
                     continue;
                 }
 
