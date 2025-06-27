@@ -527,16 +527,17 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 let mut cursor_stack = behaviour.cursor_stack.lock().await;
+                let initial_count = cursor_stack.item_count;
                 for slot_index in behaviour.drag_slots.iter() {
                     let slot = behaviour.slots[*slot_index as usize].clone();
                     let stack_lock = slot.get_stack().await;
-                    let mut stack = stack_lock.lock().await;
+                    let stack = stack_lock.lock().await;
 
                     if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                         && slot.can_insert(&cursor_stack).await
                     {
                         let mut insertion_count = if drag_button == 0 {
-                            cursor_stack.item_count / behaviour.drag_slots.len() as u8
+                            initial_count / behaviour.drag_slots.len() as u8
                         } else if drag_button == 1 {
                             1
                         } else if drag_button == 2 {
@@ -551,8 +552,10 @@ pub trait ScreenHandler: Send + Sync {
                             ))
                             .min(cursor_stack.item_count);
                         if insertion_count > 0 {
-                            stack.increment(insertion_count);
-                            slot.set_stack(*stack).await;
+                            let mut stack_clone = stack.clone();
+                            drop(stack);
+                            stack_clone.increment(insertion_count);
+                            slot.set_stack(stack_clone).await;
                             if drag_button != 2 {
                                 cursor_stack.decrement(insertion_count);
                             }
@@ -573,7 +576,7 @@ pub trait ScreenHandler: Send + Sync {
                 if !target_stack.is_empty() {
                     if button == 1 {
                         player.drop_item(*target_stack, true).await;
-                        *target_stack = ItemStack::EMPTY;
+                        slot.set_stack(ItemStack::EMPTY).await;
                     } else {
                         player.drop_item(target_stack.split(1), true).await;
                     }
